@@ -1,0 +1,18 @@
+# Inform the enclosing instance (if any) of the URI's for this instance
+
+update_parent() {
+    local parent_uri=$(flux getattr parent-uri)
+    local key_prefix=${FLUX_JOB_KVSPATH}.flux
+    local local_uri=${FLUX_URI}
+    local remote_uri="ssh://$(hostname)/$(echo $local_uri|sed 's,^.*://,,')"
+
+    FLUX_URI=${parent_uri} \
+        flux kvs put --json ${key_prefix}.local_uri=${local_uri}
+    FLUX_URI=${parent_uri} \
+        flux kvs put --json ${key_prefix}.remote_uri=${remote_uri}
+}
+
+# Only run this on rank 0
+if test -n "${FLUX_JOB_KVSPATH}" -a $(flux getattr rank) -eq 0; then
+    update_parent
+fi

@@ -160,7 +160,7 @@ end
 function Command:SubCommand (t)
     assert (t and t.name and t.handler)
     t.shortprog = t.name
-    t.prog = self.name.." "..t.name
+    t.prog = self.prog.." "..t.name
     t.parent = self
 
     if not self.Commands then self.Commands = {} end

@@ -17,9 +17,13 @@ dir['simpleval'] = "xxx"
 dir:commit()
 local iow, err = f:iowatcher {
     key = "simpleval",
-    handler = function (iow, lines) end
+    handler = function (iow, lines, err)
+        if err then f:reactor_stop_error () end
+    end
 }
-is (iow, nil, "iowatcher returns error correctly")
+local r, err = f:reactor()
+is (r, nil, "reactor returned error")
+is (err, "Not a directory", "error is ENOTDIR")
 
 dir['iowatcher'] = nil
 dir:commit()
@@ -39,7 +43,7 @@ type_ok (iow, 'userdata', "succesfully create iowatcher")
 is (err, nil, "error is nil")
 type_ok (iow.kz, 'userdata', "iowatcher kz available as index")
 
-os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzutil --copy - iowatcher.test.stdout')
+os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzcopy - iowatcher.test.stdout')
 
 f:timer {
     timeout = 250,

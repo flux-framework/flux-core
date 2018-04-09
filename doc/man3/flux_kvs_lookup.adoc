@@ -51,9 +51,11 @@ static set of content within the KVS, effectively a snapshot.
 See `flux_kvs_lookup_get_treeobj()` below.
 
 By default, both `flux_kvs_lookup()` and `flux_kvs_lookupat()` operate
-on the default KVS namespace.  To use a different namespace, see the
-`flux_kvs_set_namespace()` function or set the environment variable
-FLUX_KVS_NAMESPACE to the namespace you wish to use.
+on the default KVS namespace.  A different namespace can be chosen
+several ways.  A namespace can be set via a special prefix to a key,
+using the format 'ns:<NAMESPACE>/<KEY>', using the
+`flux_kvs_set_namespace()` function, or set via the environment
+variable FLUX_KVS_NAMESPACE.
 
 All the functions below are variations on a common theme.  First they
 complete the lookup RPC by blocking on the response, if not already received.

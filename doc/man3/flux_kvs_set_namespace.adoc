@@ -22,7 +22,8 @@ DESCRIPTION
 `flux_kvs_set_namespace()` sets the KVS namespace to use for all
 KVS operations within a flux handle.  By setting a KVS namespace
 in the flux handle, this namespace will override any KVS namespace
-specified in the environment variable FLUX_KVS_NAMESPACE.
+specified in the environment variable FLUX_KVS_NAMESPACE.  However,
+a namespace specified via a key prefix will override this setting.
 
 `flux_kvs_get_namespace()` will determine the current namespace to
 use, whether set via `flux_kvs_set_namespace()` or the environment

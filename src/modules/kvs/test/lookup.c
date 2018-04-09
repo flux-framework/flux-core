@@ -122,6 +122,7 @@ int lookup_ref_error (lookup_t *c,
 }
 
 void setup_kvsroot (kvsroot_mgr_t *krm,
+                    const char *namespace,
                     struct cache *cache,
                     const char *ref,
                     uint32_t owner)
@@ -131,7 +132,7 @@ void setup_kvsroot (kvsroot_mgr_t *krm,
     ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
-                                         KVS_PRIMARY_NAMESPACE,
+                                         namespace,
                                          owner,
                                          0)) != NULL,
         "kvsroot_mgr_create_root works");
@@ -150,7 +151,7 @@ void basic_api (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
-    setup_kvsroot (krm, cache, "root.ref.foo", 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -216,7 +217,7 @@ void basic_api_errors (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
-    setup_kvsroot (krm, cache, "root.ref.foo", 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -469,7 +470,7 @@ void lookup_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
@@ -625,7 +626,7 @@ void lookup_basic (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* lookup dir via dirref */
     ok ((lh = lookup_create (cache,
@@ -917,7 +918,7 @@ void lookup_errors (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
      * decides what to do with entry not found */
@@ -1262,7 +1263,8 @@ void lookup_security (void) {
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 5);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 5);
+    setup_kvsroot (krm, "altnamespace", cache, root_ref, 6);
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -1309,6 +1311,85 @@ void lookup_security (void) {
                              NULL)) != NULL,
         "lookup_create on val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner");
+
+    /* if root_ref is set, namespace checks won't occur */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "val",
+                             FLUX_ROLE_USER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and invalid owner w/ root_ref");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup val with rolemask user and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:altnamespace/val",
+                             FLUX_ROLE_OWNER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on ns:altnamespace/val with rolemask owner and valid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup ns:altnamespace/val with rolemask owner and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:altnamespace/val",
+                             FLUX_ROLE_OWNER,
+                             7,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on ns:altnamespace/val with rolemask owner and invalid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup ns:altnamespace/val with rolemask owner and invalid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:altnamespace/val",
+                             FLUX_ROLE_USER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on ns:altnamespace/val with rolemask user and valid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup ns:altnamespace/val with rolemask user and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:altnamespace/val",
+                             FLUX_ROLE_USER,
+                             7,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on ns:altnamespace/val with rolemask user and invalid owner");
+    check_error (lh, EPERM, "lookup_create on ns:altnamespace/val with rolemask user and invalid owner");
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
@@ -1398,7 +1479,7 @@ void lookup_links (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* lookup val, follow two links */
     ok ((lh = lookup_create (cache,
@@ -1630,7 +1711,7 @@ void lookup_alt_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
@@ -1716,7 +1797,7 @@ void lookup_root_symlink (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
@@ -1831,14 +1912,478 @@ void lookup_root_symlink (void) {
     kvsroot_mgr_destroy (krm);
 }
 
-/* lookup stall namespace tests */
-void lookup_stall_namespace (void) {
-    json_t *root;
+/* lookup namespace prefix tests */
+void lookup_namespace_prefix (void) {
+    json_t *root1;
+    json_t *root2;
     json_t *test;
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_ref;
+    blobref_t root_ref1;
+    blobref_t root_ref2;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-ref1
+     * "val" : val to "foo"
+     *
+     * root-ref2
+     * "val" : val to "bar"
+     */
+
+    root1 = treeobj_create_dir ();
+    treeobj_insert_entry (root1, "val", treeobj_create_val ("foo", 3));
+    treeobj_hash ("sha1", root1, root_ref1);
+
+    cache_insert (cache, root_ref1, create_cache_entry_treeobj (root1));
+
+    root2 = treeobj_create_dir ();
+    treeobj_insert_entry (root2, "val", treeobj_create_val ("bar", 3));
+    treeobj_hash ("sha1", root2, root_ref2);
+
+    cache_insert (cache, root_ref2, create_cache_entry_treeobj (root2));
+
+    setup_kvsroot (krm, "foo", cache, root_ref1, 0);
+    setup_kvsroot (krm, "bar", cache, root_ref2, 0);
+
+    ok (lookup_create (cache,
+                       krm,
+                       1,
+                       KVS_PRIMARY_NAMESPACE,
+                       NULL,
+                       "ns:namespace/",
+                       FLUX_ROLE_OWNER,
+                       0,
+                       0,
+                       NULL,
+                       NULL) == NULL
+        && errno == EINVAL,
+        "lookup_create fails with EINVAL on namespace prefix and no key suffix");
+
+    ok (lookup_create (cache,
+                       krm,
+                       1,
+                       KVS_PRIMARY_NAMESPACE,
+                       NULL,
+                       "ns:/val",
+                       FLUX_ROLE_OWNER,
+                       0,
+                       0,
+                       NULL,
+                       NULL) == NULL
+        && errno == EINVAL,
+        "lookup_create fails with EINVAL on bad namespace prefix");
+
+    ok (lookup_create (cache,
+                       krm,
+                       1,
+                       KVS_PRIMARY_NAMESPACE,
+                       NULL,
+                       "ns:foo/ns:bar/val",
+                       FLUX_ROLE_OWNER,
+                       0,
+                       0,
+                       NULL,
+                       NULL) == NULL
+        && errno == EINVAL,
+        "lookup_create fails with EINVAL on namespace chains");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:foo/val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create val on namespace foo");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "val on namespace foo");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:bar/val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create val on namespace bar");
+    test = treeobj_create_val ("bar", 3);
+    check_value (lh, test, "val on namespace bar");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:foo/.",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_TREEOBJ,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create . on namespace foo");
+    test = treeobj_create_dirref (root_ref1);
+    check_value (lh, test, ". on namespace foo");
+    json_decref (test);
+
+    ok (lookup_create (cache,
+                       krm,
+                       1,
+                       "foo",
+                       root_ref1,
+                       "ns:bar/val",
+                       FLUX_ROLE_OWNER,
+                       0,
+                       0,
+                       NULL,
+                       NULL) == NULL
+        && errno == EINVAL,
+        "lookup_create fails with EINVAL on namespace prefix and root_ref");
+
+    /* Unlike above test, one exception, if namespace & prefix identical */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "foo",
+                             root_ref1,
+                             "ns:foo/val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create val on namespace foo with root_ref");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "val on namespace foo with root_ref");
+    json_decref (test);
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+/* lookup namespace prefix symlink tests */
+void lookup_namespace_prefix_symlink (void) {
+    json_t *rootA;
+    json_t *rootB;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_refA;
+    blobref_t root_refB;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-ref1
+     * "val" : val to "1"
+     * "symlink2BAD" : symlink to "ns:A/"
+     * "symlink2chain" : symlink to "ns:A/ns:A/."
+     * "symlink2A" : symlink to "ns:A/."
+     * "symlink2B" : symlink to "ns:B/."
+     * "symlink2A-val" : symlink to "ns:A/val"
+     * "symlink2B-val" : symlink to "ns:B/val"
+     *
+     * root-ref2
+     * "val" : val to "2"
+     */
+
+    rootA = treeobj_create_dir ();
+    treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
+    treeobj_insert_entry (rootA, "symlink2BAD", treeobj_create_symlink ("ns:A/"));
+    treeobj_insert_entry (rootA, "symlink2chain", treeobj_create_symlink ("ns:A/ns:B/."));
+    treeobj_insert_entry (rootA, "symlink2A", treeobj_create_symlink ("ns:A/."));
+    treeobj_insert_entry (rootA, "symlink2B", treeobj_create_symlink ("ns:B/."));
+    treeobj_insert_entry (rootA, "symlink2A-val", treeobj_create_symlink ("ns:A/val"));
+    treeobj_insert_entry (rootA, "symlink2B-val", treeobj_create_symlink ("ns:B/val"));
+    treeobj_hash ("sha1", rootA, root_refA);
+
+    cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
+
+    rootB = treeobj_create_dir ();
+    treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
+    treeobj_hash ("sha1", rootB, root_refB);
+
+    cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
+
+    setup_kvsroot (krm, "A", cache, root_refA, 0);
+    setup_kvsroot (krm, "B", cache, root_refB, 0);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2BAD",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2BAD on namespace A");
+    check_error (lh, EINVAL, "symlink2BAD on namespace A");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2chain",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2chain on namespace A");
+    check_error (lh, EINVAL, "symlink2chain on namespace A");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2A.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2A.val on namespace A");
+    test = treeobj_create_val ("1", 1);
+    check_value (lh, test, "symlink2A.val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2B.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2B.val on namespace A");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "symlink2B.val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2A-val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2A-val on namespace A");
+    test = treeobj_create_val ("1", 1);
+    check_value (lh, test, "symlink2A-val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2B-val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2B-val on namespace A");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "symlink2B-val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2A",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2A on namespace A, readdir");
+    check_value (lh, rootA, "symlink2A on namespace A, readdir");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2B",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create symlink2B on namespace A, readdir");
+    check_value (lh, rootB, "symlink2B on namespace A, readdir");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+void lookup_namespace_prefix_symlink_security (void) {
+    json_t *rootA;
+    json_t *rootB;
+    json_t *rootC;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_refA;
+    blobref_t root_refB;
+    blobref_t root_refC;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-refA
+     * "val" : val to "1"
+     * "symlink2B" : symlink to "ns:B/."
+     * "symlink2C" : symlink to "ns:C/."
+     *
+     * root-refB
+     * "val" : val to "2"
+     *
+     * root-refC
+     * "val" : val to "3"
+     */
+
+    rootA = treeobj_create_dir ();
+    treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
+    treeobj_insert_entry (rootA, "symlink2B", treeobj_create_symlink ("ns:B/."));
+    treeobj_insert_entry (rootA, "symlink2C", treeobj_create_symlink ("ns:C/."));
+    treeobj_hash ("sha1", rootA, root_refA);
+
+    cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
+
+    rootB = treeobj_create_dir ();
+    treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
+    treeobj_hash ("sha1", rootB, root_refB);
+
+    cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
+
+    rootC = treeobj_create_dir ();
+    treeobj_insert_entry (rootC, "val", treeobj_create_val ("3", 1));
+    treeobj_hash ("sha1", rootC, root_refC);
+
+    cache_insert (cache, root_refC, create_cache_entry_treeobj (rootC));
+
+    setup_kvsroot (krm, "A", cache, root_refA, 1000);
+    setup_kvsroot (krm, "B", cache, root_refB, 1000);
+    setup_kvsroot (krm, "C", cache, root_refC, 2000);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2B.val",
+                             FLUX_ROLE_OWNER,
+                             1000,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlink2B.val with rolemask owner");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "lookup symlink2B.val with rolemask owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2C.val",
+                             FLUX_ROLE_OWNER,
+                             1000,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlink2C.val with rolemask owner");
+    test = treeobj_create_val ("3", 1);
+    check_value (lh, test, "lookup symlink2C.val with rolemask owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2B.val",
+                             FLUX_ROLE_USER,
+                             1000,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlink2B.val with rolemask user and valid owner");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "lookup symlink2B.val with rolemask user and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink2C.val",
+                             FLUX_ROLE_USER,
+                             1000,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlink2C.val with rolemask user and invalid owner");
+    check_error (lh, EPERM, "lookup_create on symlink2C.val with rolemask user and invalid owner");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+/* lookup stall namespace tests */
+void lookup_stall_namespace (void) {
+    json_t *root1;
+    json_t *root2;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_ref1;
+    blobref_t root_ref2;
     const char *tmp;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1848,17 +2393,27 @@ void lookup_stall_namespace (void) {
 
     /* This cache is
      *
-     * root-ref
+     * root-ref1
      * "val" : val to "foo"
+     *
+     * root-ref2
+     * "val" : val to "bar"
      */
 
-    root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", root, root_ref);
+    root1 = treeobj_create_dir ();
+    treeobj_insert_entry (root1, "val", treeobj_create_val ("foo", 3));
+    treeobj_hash ("sha1", root1, root_ref1);
 
-    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    root2 = treeobj_create_dir ();
+    treeobj_insert_entry (root2, "val", treeobj_create_val ("bar", 3));
+    treeobj_hash ("sha1", root2, root_ref2);
+
+    cache_insert (cache, root_ref1, create_cache_entry_treeobj (root1));
+    cache_insert (cache, root_ref2, create_cache_entry_treeobj (root2));
 
     /* do not insert root into kvsroot_mgr until later for these stall tests */
+
+    /* First test for stall on normal namespace input */
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -1879,7 +2434,7 @@ void lookup_stall_namespace (void) {
     ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
         "lookup_missing_namespace returned correct namespace");
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref1, 0);
 
     /* lookup "val", should succeed now */
     test = treeobj_create_val ("foo", 3);
@@ -1901,6 +2456,79 @@ void lookup_stall_namespace (void) {
         "lookup_create stalltest #2");
     test = treeobj_create_val ("foo", 3);
     check_value (lh, test, "val #2");
+    json_decref (test);
+
+    /* Second test for stall on namespace prefix input */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:foo/val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest");
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
+        "lookup stalled on missing namespace");
+    ok ((tmp = lookup_missing_namespace (lh)) != NULL,
+        "lookup_missing_namespace returned non-NULL");
+    ok (!strcmp (tmp, "foo"),
+        "lookup_missing_namespace returned correct namespace");
+
+    setup_kvsroot (krm, "foo", cache, root_ref2, 0);
+
+    /* lookup "val", should succeed now */
+    test = treeobj_create_val ("bar", 3);
+    check_value (lh, test, "val");
+    json_decref (test);
+
+    /* lookup "ns:foo/val" should succeed cleanly */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:foo/val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest #2");
+    test = treeobj_create_val ("bar", 3);
+    check_value (lh, test, "val #2");
+    json_decref (test);
+
+    /* Third, stall on root of kvs */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "ns:roottest/.",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_TREEOBJ,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest on root .");
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
+        "lookup stalled on missing namespace");
+    ok ((tmp = lookup_missing_namespace (lh)) != NULL,
+        "lookup_missing_namespace returned non-NULL");
+    ok (!strcmp (tmp, "roottest"),
+        "lookup_missing_namespace returned correct namespace");
+
+    setup_kvsroot (krm, "roottest", cache, root_ref1, 0);
+
+    /* lookup ".", should succeed now */
+    test = treeobj_create_dirref (root_ref1);
+    check_value (lh, test, ".");
     json_decref (test);
 
     cache_destroy (cache);
@@ -1930,7 +2558,7 @@ void lookup_stall_ref_root (void) {
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
     treeobj_hash ("sha1", root, root_ref);
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -2067,7 +2695,7 @@ void lookup_stall_ref (void) {
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
     treeobj_hash ("sha1", root, root_ref);
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -2329,6 +2957,7 @@ void lookup_stall_namespace_removed (void) {
     json_t *root;
     json_t *valref;
     json_t *dirref;
+    json_t *test;
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
@@ -2366,7 +2995,7 @@ void lookup_stall_namespace_removed (void) {
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
     treeobj_hash ("sha1", root, root_ref);
 
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -2402,7 +3031,7 @@ void lookup_stall_namespace_removed (void) {
     check_error (lh, ENOTSUP, "namespace removed on root ref results in ENOTSUP");
 
     /* reset test */
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* lookup dirref.valref, should stall on dirref */
     ok ((lh = lookup_create (cache,
@@ -2429,7 +3058,7 @@ void lookup_stall_namespace_removed (void) {
     check_error (lh, ENOTSUP, "namespace removed on dirref results in ENOTSUP");
 
     /* reset test */
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* lookup dirref.valref, should stall on valref */
     ok ((lh = lookup_create (cache,
@@ -2446,7 +3075,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
@@ -2459,7 +3088,7 @@ void lookup_stall_namespace_removed (void) {
     cache_remove_entry (cache, root_ref);
     cache_remove_entry (cache, dirref_ref);
     cache_remove_entry (cache, valref_ref);
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /*
      * Check for each stall situation and that if namespace is
@@ -2488,7 +3117,7 @@ void lookup_stall_namespace_removed (void) {
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
 
-    setup_kvsroot (krm, cache, root_ref, 2);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 2);
 
     /* lookup should EPERM b/c owner of new namespace is different */
 
@@ -2496,7 +3125,7 @@ void lookup_stall_namespace_removed (void) {
 
     /* reset test */
     kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     /* lookup dirref.valref, should stall on dirref */
     ok ((lh = lookup_create (cache,
@@ -2518,7 +3147,7 @@ void lookup_stall_namespace_removed (void) {
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
 
-    setup_kvsroot (krm, cache, root_ref, 2);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 2);
 
     /* lookup should EPERM b/c owner of new namespace is different */
 
@@ -2526,7 +3155,7 @@ void lookup_stall_namespace_removed (void) {
 
     /* reset test */
     kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
-    setup_kvsroot (krm, cache, root_ref, 0);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
 
     /* lookup dirref.valref, should stall on valref */
@@ -2544,12 +3173,12 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
 
-    setup_kvsroot (krm, cache, root_ref, 2);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 2);
 
     /* lookup should EPERM b/c owner of new namespace is different */
 
@@ -2557,7 +3186,201 @@ void lookup_stall_namespace_removed (void) {
 
     /* reset test */
     kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
-    setup_kvsroot (krm, cache, root_ref, 0);
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    /*
+     * Now, similar tests to above, but we pass in a root_ref.  So the
+     * checks on namespaces before is now no longer necessary and we
+     * should eventually read the end value.
+     */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref w/ root_ref");
+
+    /* Now remove namespace */
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* Check for stalls, insert refs until should all succeed */
+
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1 w/ root_ref");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2 w/ root_ref");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref");
+
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+
+    test = treeobj_create_val ("abcd", 4);
+    check_value (lh, test, "lookup_create dirref.valref w/ root_ref");
+    json_decref (test);
+
+    /* reset test */
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref w/ root_ref & role user ");
+
+    /* Now remove namespace and re-insert with different owner */
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 2);
+
+    /* Check for stalls, insert refs until should all succeed */
+
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1 w/ root_ref & role user");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2 w/ root_ref & role user");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref & role user");
+
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+
+    test = treeobj_create_val ("abcd", 4);
+    check_value (lh, test, "lookup_create dirref.valref w/ root_ref & role user");
+    json_decref (test);
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+/* lookup stall namespace prefix in symlink tests */
+void lookup_stall_namespace_prefix_in_symlink (void) {
+    json_t *rootA;
+    json_t *rootB;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_refA;
+    blobref_t root_refB;
+    const char *tmp;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-refA
+     * "val" : val to "1"
+     * "symlink" : symlink to "ns:B/."
+     *
+     * root-refB
+     * "val" : val to "2"
+     */
+
+    rootA = treeobj_create_dir ();
+    treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
+    treeobj_insert_entry (rootA, "symlink", treeobj_create_symlink ("ns:B/."));
+    treeobj_hash ("sha1", rootA, root_refA);
+
+    cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
+
+    rootB = treeobj_create_dir ();
+    treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
+    treeobj_hash ("sha1", rootB, root_refB);
+
+    cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
+
+    /* do not insert root into kvsroot_mgr until later for these stall tests */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest on symlink.val");
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
+        "lookup stalled on missing namespace");
+    ok ((tmp = lookup_missing_namespace (lh)) != NULL,
+        "lookup_missing_namespace returned non-NULL");
+    ok (!strcmp (tmp, "A"),
+        "lookup_missing_namespace returned correct namespace A");
+
+    setup_kvsroot (krm, "A", cache, root_refA, 0);
+
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
+        "lookup stalled on missing namespace");
+    ok ((tmp = lookup_missing_namespace (lh)) != NULL,
+        "lookup_missing_namespace returned non-NULL");
+    ok (!strcmp (tmp, "B"),
+        "lookup_missing_namespace returned correct namespace B");
+
+    setup_kvsroot (krm, "B", cache, root_refB, 0);
+
+    /* lookup "symlink.val", should succeed now */
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "symlink.val");
+    json_decref (test);
+
+    /* lookup "symlink.val" should succeed cleanly */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             "symlink.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest #2");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "symlink.val #2");
+    json_decref (test);
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
@@ -2577,10 +3400,14 @@ int main (int argc, char *argv[])
     lookup_links ();
     lookup_alt_root ();
     lookup_root_symlink ();
+    lookup_namespace_prefix ();
+    lookup_namespace_prefix_symlink ();
+    lookup_namespace_prefix_symlink_security ();
     lookup_stall_namespace ();
     lookup_stall_ref_root ();
     lookup_stall_ref ();
     lookup_stall_namespace_removed ();
+    lookup_stall_namespace_prefix_in_symlink ();
     done_testing ();
     return (0);
 }

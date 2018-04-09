@@ -348,6 +348,47 @@ prog:SubCommand {
 }
 
 prog:SubCommand {
+ name = "uri",
+ usage = "[OPTIONS] [JOBIDs]",
+ options = {
+  { name = "max", char = 'n', arg="COUNT",
+    usage = "Display at most COUNT jobs",
+  },
+  { name = "bare", char = 'b',
+    usage = "Dispaly only the URI",
+  }
+ },
+ description = "List FLUX_URI for jobs that are Flux instances",
+ handler = function (self, arg)
+    local dirs,err = joblist_from_args (self, arg)
+    if not dirs then self:die (err) end
+    if #dirs == 0 then return end
+    local fmt = "%6s %6s %-9s %-40s %-.13s\n";
+    if self.opt.b then
+        if #dirs > 1 then self:die ("--bare only works with one job") end
+    else
+        printf (fmt, "ID", "NTASKS", "STATE", "FLUX_URI", "COMMAND")
+    end
+    for _,dir in pairs (dirs) do
+        local id = dir:match ("(%d+)$")
+        if tonumber (id) then
+            local j, err = LWJ.open (f, id, dir)
+            if not j then self:die ("job%d: %s", id, err) end
+            local uri, err = f:kvs_get (kvs_path (id, "flux.remote_uri"))
+            if self.opt.b then
+                if err then self:die ("job%d: not a Flux instance", id) end
+                printf ("%s\n", uri)
+            else
+               if err then uri = "" end
+                printf (fmt, id, j.ntasks, j:state_string(), uri,
+                        j.command:match ("([^/]+)$"))
+           end
+        end
+    end
+ end
+}
+
+prog:SubCommand {
  name = "timing",
  usage = "[OPTIONS] [JOBIDs]...",
  options = {
