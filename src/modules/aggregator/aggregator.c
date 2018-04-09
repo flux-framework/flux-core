@@ -198,7 +198,7 @@ static int aggregate_forward (flux_t *h, struct aggregate *ag)
     int rc = 0;
     flux_future_t *f;
     json_object *o = aggregate_tojson (ag);
-    flux_log (h, LOG_INFO, "forward: %s: count=%d total=%d\n",
+    flux_log (h, LOG_DEBUG, "forward: %s: count=%d total=%d\n",
                  ag->key, ag->count, ag->total);
     if (!(f = flux_rpc (h, "aggregator.push", Jtostr (o),
                              FLUX_NODEID_UPSTREAM, 0)) ||
@@ -240,7 +240,7 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
-    flux_log (h, LOG_INFO, "sink: %s: count=%d total=%d",
+    flux_log (h, LOG_DEBUG, "sink: %s: count=%d total=%d",
                 ag->key, ag->count, ag->total);
 
     /* Fail on key == "." */
@@ -294,7 +294,7 @@ static void aggregate_try_sink (flux_t *h, struct aggregate *ag)
         double t = ag->timeout;
         if (t <= 1e-3)
             t = .250;
-        flux_log (h, LOG_INFO, "sink: %s: retry  in %.3fs", ag->key, t);
+        flux_log (h, LOG_DEBUG, "sink: %s: retry  in %.3fs", ag->key, t);
         /* On failure, retry just once, then abort */
         w = flux_timer_watcher_create (flux_get_reactor (h),
                                        t, 0.,
@@ -511,7 +511,7 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
     if ((rc = aggregate_push_json (ag, in)) < 0)
         goto done;
 
-    flux_log (ctx->h, LOG_INFO, "push: %s: count=%d fwd_count=%d total=%d",
+    flux_log (ctx->h, LOG_DEBUG, "push: %s: count=%d fwd_count=%d total=%d",
                       ag->key, ag->count, ag->fwd_count, ag->total);
     if (ctx->rank > 0) {
         if ((ag->count == ag->total
