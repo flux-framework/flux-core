@@ -578,7 +578,7 @@ static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
     snprintf (key, sizeof (key), "%s.rank", kvspath);
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
             || flux_kvs_lookup_get_dir (f, &dir) < 0) {
-        flux_log (h, LOG_INFO, "No dir %s.rank: %s",
+        flux_log (h, LOG_DEBUG, "No dir %s.rank: %s",
                   kvspath, flux_strerror (errno));
         goto done;
     }
@@ -601,12 +601,14 @@ static bool Rlite_targets_this_node (flux_t *h, const char *kvspath)
     snprintf (key, sizeof (key), "%s.R_lite", kvspath);
     if (!(f = flux_kvs_lookup (h, 0, key))
        || flux_kvs_lookup_get (f, &R_lite) < 0)  {
-        flux_log (h, LOG_INFO, "No %s.R_lite: %s",
-                 kvspath, flux_strerror (errno));
+        if (broker_rank == 0)
+            flux_log (h, LOG_INFO, "No %s.R_lite: %s",
+                      kvspath, flux_strerror (errno));
         goto done;
     }
     if (!(r = rcalc_create (R_lite))) {
-        flux_log (h, LOG_ERR, "Unable to parse %s.R_lite", kvspath);
+        if (broker_rank == 0)
+            flux_log (h, LOG_ERR, "Unable to parse %s.R_lite", kvspath);
         goto done;
     }
     if (rcalc_has_rank (r, broker_rank))
