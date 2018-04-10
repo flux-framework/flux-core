@@ -1054,6 +1054,27 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+static char *process_key (const char *key, char **key_suffix)
+{
+    char *nkey;
+    char *ptr;
+
+    if (!(nkey = malloc (strlen (key) + 2))) // room for decoration char + null
+        log_err_exit ("malloc");
+    strcpy (nkey, key);
+
+    if (!strncmp (nkey, "ns:", 3)
+        && (ptr = strchr (nkey + 3, '/'))) {
+        /* No key suffix, decorate with default '.' */
+        if (*(ptr + 1) == '\0')
+            strcat (nkey, ".");
+        if (key_suffix)
+            (*key_suffix) = ptr + 1;
+    }
+
+    return nkey;
+}
+
 static void dump_kvs_val (const char *key, int maxcol, const char *value)
 {
     json_t *o;
@@ -1130,7 +1151,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     int maxcol = get_window_width (p, STDOUT_FILENO);
     bool Ropt;
     bool dopt;
-    const char *key;
+    char *key;
     flux_future_t *f;
     const flux_kvsdir_t *dir;
     int optindex;
@@ -1139,9 +1160,9 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
     if (optindex == argc)
-        key = ".";
+        key = process_key (".", NULL);
     else if (optindex == (argc - 1))
-        key = argv[optindex];
+        key = process_key (argv[optindex], NULL);
     else
         log_msg_exit ("dir: specify zero or one directory");
 
@@ -1158,6 +1179,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
         log_err_exit ("%s", key);
     dump_kvs_dir (dir, maxcol, Ropt, dopt);
     flux_future_destroy (f);
+    free (key);
     return (0);
 }
 
@@ -1347,21 +1369,6 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
-static void contains_namespace_prefix (const char *key, char **key_suffix)
-{
-    char *ptr;
-
-    if (!strncmp (key, "ns:", 3)
-        && (ptr = strchr (key, '/'))) {
-
-        /* No key suffix */
-        if (*(ptr + 1) == '\0')
-            log_err_exit ("%s: %s\n", key, flux_strerror (EINVAL));
-
-        (*key_suffix) = ptr + 1;
-    }
-}
-
 /* Put key in 'dirs' or 'singles' list, depending on whether
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
@@ -1375,15 +1382,12 @@ static int categorize_key (optparse_t *p, const char *key,
     char *nkey;
     json_t *treeobj = NULL;
     bool require_directory = false;
-    char *key_ptr;
+    char *key_ptr = NULL;
 
-    if (!(nkey = malloc (strlen (key) + 2))) // room for decoration char + null
-        log_err_exit ("malloc");
-    strcpy (nkey, key);
+    nkey = process_key (key, &key_ptr);
 
-    key_ptr = nkey;
-
-    contains_namespace_prefix (nkey, &key_ptr);
+    if (!key_ptr)
+        key_ptr = nkey;
 
     /* If the key has a "." suffix, strip it off, but require
      * that the key be a directory type.

@@ -419,11 +419,26 @@ EOF
         test_cmp expected output
 '
 
+# Note double period, will be resolved in issue #1391 fix
+test_expect_success 'kvs: namespace prefix works with dir, no key specified' '
+        flux kvs dir ns:${NAMESPACEPREFIX}-1/ | sort >output &&
+        cat >expected <<EOF &&
+ns:${NAMESPACEPREFIX}-1/..test.
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with ls, no key specified' '
+        flux kvs ls ns:${NAMESPACEPREFIX}-1/ | sort >output &&
+        cat >expected <<EOF &&
+test
+EOF
+        test_cmp expected output
+'
+
 test_expect_success 'kvs: namespace prefix with key suffix fails' '
         ! flux kvs get ns:${NAMESPACEPREFIX}-1/ &&
         ! flux kvs put ns:${NAMESPACEPREFIX}-1/ &&
-        ! flux kvs dir ns:${NAMESPACEPREFIX}-1/ &&
-        ! flux kvs ls ns:${NAMESPACEPREFIX}-1/ &&
         ! flux kvs watch ns:${NAMESPACEPREFIX}-1/
 '
 
