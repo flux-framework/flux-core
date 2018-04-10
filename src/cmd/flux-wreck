@@ -142,6 +142,57 @@ prog:SubCommand {
 }
 
 prog:SubCommand {
+ name = "exclude",
+ description = "Exclude a node from running future jobs",
+ usage = "NODENAME",
+ options = {
+   { name = "kill", char = "k",
+     usage = "kill the jobs to which the node is allocated"
+   }
+ },
+ handler = function (self, arg)
+    local function toboolean(X)
+         return not not X
+    end
+
+    local nodename = arg[1]
+    if not nodename then
+        self:die ("Required argument NODENAME missing.")
+    end
+    local resp, err = f:rpc ("sched.exclude", { node = nodename, kill = toboolean (self.opt.k) })
+
+    if not resp then
+        if err == "Function not implemented" then
+            prog:die ("Node exclusion is not supported when scheduler not loaded")
+        else
+            prog:die ("Unable to exclude node %s: %s\n", nodename, err)
+        end
+    end
+ end
+}
+
+prog:SubCommand {
+ name = "include",
+ description = "Include a node for scheduling",
+ usage = "NODENAME",
+ handler = function (self, arg)
+    local nodename = arg[1]
+    if not nodename then
+        self:die ("Required argument NODENAME missing.")
+    end
+    local resp, err = f:rpc ("sched.include", { node = nodename })
+    if not resp then
+        if err == "Function not implemented" then
+            prog:die ("Node inclusion is not supported when scheduler not loaded")
+        else
+            prog:die ("Unable to include node %s: %s\n", nodename, err)
+        end
+    end
+ end
+}
+
+
+prog:SubCommand {
  name = "kill",
  description = "Kill a running job",
  usage = "[OPTIONS] JOBID",
