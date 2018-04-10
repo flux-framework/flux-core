@@ -368,7 +368,8 @@ static void getroot_completion (flux_future_t *f, void *arg)
                              "rootseq", &rootseq,
                              "rootref", &ref,
                              "flags", &flags) < 0) {
-        flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+        if (errno != ENOTSUP)
+            flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
     }
 
@@ -468,8 +469,6 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
 
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, namespace))) {
         if (ctx->rank == 0) {
-            flux_log (ctx->h, LOG_DEBUG, "namespace %s not available",
-                      namespace);
             errno = ENOTSUP;
             return NULL;
         }
@@ -2632,10 +2631,8 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (owner == FLUX_USERID_UNKNOWN)
         owner = geteuid ();
 
-    if (namespace_create (ctx, namespace, owner, flags) < 0) {
-        flux_log_error (h, "%s: namespace_create", __FUNCTION__);
+    if (namespace_create (ctx, namespace, owner, flags) < 0)
         goto error;
-    }
 
     errno = 0;
 error:
