@@ -85,6 +85,12 @@ prog:SubCommand {
     if not taskio then
         self:die ("Failed to connect to job %d: %s\n", id, err)
     end
+
+    local log, err = wreck.logstream { flux = f, jobid = id }
+    if not log then
+        self:die ("Failed to open logstream to job %d: %s\n", id, err)
+    end
+
     if state ~= "complete" and state ~= "reaped" then
         local kz, err = f:kz_open (kvs_path (id, "input.files.stdin"), "w")
         if kz then
@@ -99,6 +105,7 @@ prog:SubCommand {
         end
     end
     if not taskio:complete() then f:reactor () end
+    log:dump()
     if self.opt.s then
         self.parent:run {"status", id}
     end
