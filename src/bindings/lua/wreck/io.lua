@@ -100,6 +100,7 @@ function ioplex.create (arg)
         labelio       = arg.labelio,
         kvspath       = arg.kvspath,
         on_completion = arg.on_completion,
+        log_err       = arg.log_err,
         removed = {},
         output = {},
         files = {}
@@ -127,6 +128,15 @@ function ioplex:log (fmt, ...)
     end
 end
 
+function ioplex:err (fmt, ...)
+    if self.log_err then
+        self.log_err (fmt, ...)
+    else
+        io.stderr:write (string.format (fmt, ...))
+    end
+end
+
+
 local function ioplex_set_stream (self, taskid, name, f)
     if not self.output[taskid] then
         self.output[taskid] ={}
@@ -153,10 +163,13 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     local key = string.format ("%s.%d.%s", self.kvspath, taskid, stream)
     local iow, err = f:iowatcher {
         key = key,
-        handler =  function (iow, data)
-            if not data then
+        handler =  function (iow, data, err)
+            if err or not data then
                 -- protect against multiple close callback calls
                 if self.removed [key] then return end
+                if err then
+                    self:err ("Read error: task%d %s: %s", taskid, stream, err)
+                end
                 of:close()
                 if not of.fp then
                     self:log ("closed path %s", of.filename)
