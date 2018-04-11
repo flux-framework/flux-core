@@ -402,11 +402,10 @@ test_expect_success 'kvs: put - fails across multiple namespaces' '
         ! flux kvs put ns:${NAMESPACEPREFIX}-1/$DIR.puttest.a=1 ns:${NAMESPACEPREFIX}-2/$DIR.puttest.b=2
 '
 
-# Note double period, will be resolved in issue #1391 fix
 test_expect_success 'kvs: namespace prefix works with dir' '
         flux kvs dir ns:${NAMESPACEPREFIX}-1/. | sort >output &&
         cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/..test.
+ns:${NAMESPACEPREFIX}-1/test.
 EOF
         test_cmp expected output
 '
@@ -419,11 +418,10 @@ EOF
         test_cmp expected output
 '
 
-# Note double period, will be resolved in issue #1391 fix
 test_expect_success 'kvs: namespace prefix works with dir, no key specified' '
         flux kvs dir ns:${NAMESPACEPREFIX}-1/ | sort >output &&
         cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/..test.
+ns:${NAMESPACEPREFIX}-1/test.
 EOF
         test_cmp expected output
 '
@@ -432,6 +430,66 @@ test_expect_success 'kvs: namespace prefix works with ls, no key specified' '
         flux kvs ls ns:${NAMESPACEPREFIX}-1/ | sort >output &&
         cat >expected <<EOF &&
 test
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with dir -R' '
+        flux kvs dir -R ns:${NAMESPACEPREFIX}-1/. | sort >output &&
+        cat >expected <<EOF &&
+ns:${NAMESPACEPREFIX}-1/$DIR.prefixtest = 1
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with ls -R' '
+        flux kvs ls -R ns:${NAMESPACEPREFIX}-1/. >output &&
+        cat >expected <<EOF &&
+ns:namespaceprefix-1/.:
+test
+
+ns:namespaceprefix-1/test:
+a
+
+ns:namespaceprefix-1/test.a:
+b
+
+ns:namespaceprefix-1/test.a.b:
+prefixtest
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with dir -R DIR' '
+        flux kvs dir -R ns:${NAMESPACEPREFIX}-1/$DIR | sort >output &&
+        cat >expected <<EOF &&
+ns:${NAMESPACEPREFIX}-1/$DIR.prefixtest = 1
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with ls -R DIR' '
+        flux kvs ls -R ns:${NAMESPACEPREFIX}-1/$DIR | sort >output &&
+        cat >expected <<EOF &&
+ns:${NAMESPACEPREFIX}-1/$DIR:
+prefixtest
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with dir -R DIR.' '
+        flux kvs dir -R ns:${NAMESPACEPREFIX}-1/$DIR. | sort >output &&
+        cat >expected <<EOF &&
+ns:${NAMESPACEPREFIX}-1/$DIR.prefixtest = 1
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: namespace prefix works with ls -R DIR.' '
+        flux kvs ls -R ns:${NAMESPACEPREFIX}-1/$DIR | sort >output &&
+        cat >expected <<EOF &&
+ns:${NAMESPACEPREFIX}-1/$DIR:
+prefixtest
 EOF
         test_cmp expected output
 '

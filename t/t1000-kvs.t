@@ -152,7 +152,7 @@ $DIR.d.
 EOF
 	test_cmp expected output
 '
-test_expect_success 'kvs: dir -R' '
+test_expect_success 'kvs: dir -R DIR' '
 	flux kvs put --json $DIR.a=42 $DIR.b=3.14 $DIR.c=foo $DIR.d=true $DIR.e="[1,3,5]" $DIR.f="{\"a\":42}" &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
@@ -165,7 +165,7 @@ $DIR.f = {"a": 42}
 EOF
 	test_cmp expected output
 '
-test_expect_success 'kvs: dir -R -d' '
+test_expect_success 'kvs: dir -R -d DIR' '
 	flux kvs dir -R -d $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a
@@ -176,6 +176,58 @@ $DIR.e
 $DIR.f
 EOF
 	test_cmp expected output
+'
+
+test_expect_success 'kvs: kvs dir -R DIR with period end' '
+	flux kvs dir -R $DIR. | sort >output &&
+        cat >expected <<EOF &&
+$DIR.a = 42
+$DIR.b = 3.140000
+$DIR.c = foo
+$DIR.d = true
+$DIR.e = [1, 3, 5]
+$DIR.f = {"a": 42}
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: kvs dir -R -d DIR with period end' '
+	flux kvs dir -R -d $DIR. | sort >output &&
+        cat >expected <<EOF &&
+$DIR.a
+$DIR.b
+$DIR.c
+$DIR.d
+$DIR.e
+$DIR.f
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: kvs dir -R on root "."' '
+	flux kvs dir -R "." | sort >output &&
+        cat >expected <<EOF &&
+$DIR.a = 42
+$DIR.b = 3.140000
+$DIR.c = foo
+$DIR.d = true
+$DIR.e = [1, 3, 5]
+$DIR.f = {"a": 42}
+EOF
+        test_cmp expected output
+'
+
+test_expect_success 'kvs: kvs dir -R -d on root "."' '
+	flux kvs dir -R -d "." | sort >output &&
+        cat >expected <<EOF &&
+$DIR.a
+$DIR.b
+$DIR.c
+$DIR.d
+$DIR.e
+$DIR.f
+EOF
+        test_cmp expected output
 '
 
 test_expect_success 'kvs: unlink dir works' '
@@ -540,12 +592,35 @@ EOF
 #
 # ls tests
 #
+test_expect_success 'kvs: ls -1F works' '
+	flux kvs ls -1F >output &&
+	cat >expected <<-EOF &&
+	test.
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls -1F . works' '
+	flux kvs ls -1F . >output &&
+	cat >expected <<-EOF &&
+	test.
+	EOF
+	test_cmp expected output
+'
 test_expect_success 'kvs: ls -1F DIR works' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a=69 &&
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
 	flux kvs ls -1F $DIR >output &&
+	cat >expected <<-EOF &&
+	a
+	b.
+	c@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls -1F DIR. works' '
+	flux kvs ls -1F $DIR. >output &&
 	cat >expected <<-EOF &&
 	a
 	b.
