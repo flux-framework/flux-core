@@ -482,7 +482,6 @@ static int lookup_next (kz_t *kz)
         if (!kz->watching) {
             kz->watching = true; // N.B. careful to avoid infinite loop here!
             const char *key = clear_key (kz);
-            flux_log (kz->h, LOG_DEBUG, "%s: watch %s", __FUNCTION__, key);
             if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
                 return -1;
         }
