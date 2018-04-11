@@ -47,6 +47,7 @@ function ostream:open ()
             self.fp = io[self.filename]
         else
             self.fp, err = io.open (self.filename, self.flag)
+            self.fp:setvbuf 'line'
         end
         if not self.fp then return nil, self.filename..": "..err end
     end
