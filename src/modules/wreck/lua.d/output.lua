@@ -80,7 +80,13 @@ end
 function rexecd_exit ()
     if wreck.nodeid ~= 0 or not taskio then return end
     while not taskio:complete() do
-        wreck.flux:reactor ("once")
+        local rc, err = wreck.flux:reactor ("once")
+        if not rc then
+            log_err ("rexecd_exit: reactor once failed: %s", err or "No error")
+            return
+        end
     end
     wreck:log_msg ("File io complete")
 end
+
+-- vi: ts=4 sw=4 expandtab
