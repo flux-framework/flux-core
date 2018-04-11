@@ -402,14 +402,6 @@ test_expect_success 'kvs: put - fails across multiple namespaces' '
         ! flux kvs put ns:${NAMESPACEPREFIX}-1/$DIR.puttest.a=1 ns:${NAMESPACEPREFIX}-2/$DIR.puttest.b=2
 '
 
-test_expect_success 'kvs: namespace prefix works with ls' '
-        flux kvs ls ns:${NAMESPACEPREFIX}-1/. | sort >output &&
-        cat >expected <<EOF &&
-test
-EOF
-        test_cmp expected output
-'
-
 # Note double period, will be resolved in issue #1391 fix
 test_expect_success 'kvs: namespace prefix works with dir' '
         flux kvs dir ns:${NAMESPACEPREFIX}-1/. | sort >output &&
