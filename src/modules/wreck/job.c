@@ -304,10 +304,29 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
     char key[MAX_JOB_PATH];
+    char ns[64];
     int rc = -1;
 
+    if (snprintf (ns, sizeof (ns), "job%lu", jobid) >= sizeof (ns)) {
+        flux_log (h, LOG_ERR, "%s: buffer overflow", __FUNCTION__);
+        goto done;
+    }
+    if (!(f = flux_kvs_namespace_create (h, ns , FLUX_USERID_UNKNOWN, 0))
+                                            || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "%s: flux_kvs_namespace_create", __FUNCTION__);
+        goto done;
+    }
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "%s: id_to_path", __FUNCTION__);
+        goto done;
+    }
+    if (snprintf (key, sizeof (key), "%s.guest", kvs_path) >= sizeof (key)
+          || snprintf (ns, sizeof (ns), "ns:job%lu/.", jobid) >= sizeof (ns)) {
+        flux_log (h, LOG_ERR, "%s: buffer overflow", __FUNCTION__);
+        goto done;
+    }
+    if (flux_kvs_txn_symlink (txn, 0, key, ns) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_symlink", __FUNCTION__);
         goto done;
     }
     if (snprintf (key, sizeof (key), "%s.state", kvs_path) >= sizeof (key)) {
@@ -323,6 +342,7 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
         goto done;
     }
     flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
+    flux_future_destroy (f);
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
