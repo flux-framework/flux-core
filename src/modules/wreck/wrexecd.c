@@ -38,6 +38,7 @@
 #include <envz.h>
 #include <sys/ptrace.h>
 #include <inttypes.h>
+#include <sys/resource.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -2326,6 +2327,15 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
     return (0);
 }
 
+static int increase_nofile_limit (void)
+{
+    struct rlimit rlim;
+    if (getrlimit (RLIMIT_NOFILE, &rlim) < 0)
+        return (-1);
+    rlim.rlim_cur = rlim.rlim_max;
+    return (setrlimit (RLIMIT_NOFILE, &rlim));
+}
+
 int main (int ac, char **av)
 {
     int code = 0;
@@ -2368,6 +2378,9 @@ int main (int ac, char **av)
 
     ctx = prog_ctx_create ();
     signalfd_setup (ctx);
+
+    if (increase_nofile_limit () < 0)
+        wlog_fatal (ctx, 1, "Failed to increase RLIMIT_NOFILE");
 
     if (prog_ctx_get_id (ctx, p) < 0)
         wlog_fatal (ctx, 1, "Failed to get lwj id from cmdline");
