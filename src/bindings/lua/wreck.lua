@@ -465,8 +465,8 @@ function wreck.logstream (arg)
     local f = arg.flux
     if not f then return nil, "flux argument member required" end
     local rc, err = initialize_args (arg)
-    if not arg.nnodes then return nil, "nnodes argument required" end
     if not rc then return nil, err end
+    if not arg.nnodes then return nil, "nnodes argument required" end
     l.watchers = {}
     for i = 0, arg.nnodes - 1 do
         local key = kvs_path (f, arg.jobid)..".log."..i
