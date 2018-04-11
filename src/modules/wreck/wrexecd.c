@@ -420,15 +420,11 @@ static void wreck_pmi_line (struct task_info *t, const char *line)
 static int wreck_pmi_cb (zio_t *z, const char *s, int len, void *arg)
 {
     struct task_info *t = arg;
-    struct prog_ctx *ctx = t->ctx;
 
     if (len > 0) /* !eof */
         wreck_pmi_line (t, s);
-    else {
-        /* client closed connection? */
-        wlog_debug (ctx, "wreck_pmi_cb: client closed PMI_FD");
+    else /* client closed fd */
         wreck_pmi_close (t);
-    }
     return (0);
 }
 
