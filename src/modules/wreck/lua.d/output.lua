@@ -39,6 +39,10 @@ local function log (fmt, ...)
     wreck:log_msg (fmt, ...)
 end
 
+local function log_err (fmt, ...)
+    wreck:log_error (fmt, ...)
+end
+
 function rexecd_init ()
     if wreck.nodeid ~= 0 then return end
 
@@ -49,7 +53,8 @@ function rexecd_init ()
     taskio, err = ioplex.create {
         flux = wreck.flux,
         jobid = wreck.id,
-        labelio = output.labelio and output.labelio ~= false
+        labelio = output.labelio and output.labelio ~= false,
+        log_err = log_err
     }
     if not taskio then wreck:log_msg ("Error: %s", err) end
 
