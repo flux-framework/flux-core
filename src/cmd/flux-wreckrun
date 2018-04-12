@@ -54,7 +54,7 @@ end
 local function fake_resource_array (wreck, nnodes)
     local res = {}
     local total = 0
-    local ppn = wreck.tasks_per_node or math.ceil (wreck.ntasks / nnodes)
+    local ppn = math.ceil (wreck.ntasks / nnodes)
     for i = 0, nnodes - 1 do
         local n = tonumber (ppn)
         if (total + ppn) > tonumber (wreck.ntasks) then
