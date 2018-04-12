@@ -347,6 +347,22 @@ test_expect_success 'flux-wreck: attach --label-io' '
         sort expected.attach-l > x && mv x expected.attach-l &&
         test_cmp expected.attach-l output.attach-l
 '
+test_expect_success 'wreck: attach --no-follow works' '
+	flux wreckrun -d -l -n4 sh -c "echo before; sleep 30; echo after" &&
+	test_when_finished flux wreck kill $(last_job_id) &&
+	run_timeout 5 flux wreck attach --no-follow $(last_job_id) >output.attach-n &&
+	cat >expected.attach-n <<-EOF &&
+	before
+	before
+	before
+	before
+	EOF
+	test_cmp expected.attach-n output.attach-n
+'
+test_expect_success 'wreck: dumplog works' '
+	test_must_fail flux wreckrun --input=bad.file hostname &&
+	flux wreck dumplog $(last_job_id) 2>&1 | grep "^rank0: .*bad.file"
+'
 test_expect_success 'flux-wreck: status' '
         flux wreckrun -n4 /bin/true &&
         id=$(last_job_id) &&
