@@ -122,6 +122,15 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb);
 const char *jsc_job_num2state (job_state_t s);
 int jsc_job_state2num (const char *s);
 
+/**
+ * Accessor for nnodes, ntasks, ncores, walltime that circumvents
+ * JSON encode/decode.  N.B. this is a workaround for performance issu
+ * encountered when scheduling high throughput workloads.
+ */
+int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
+                                 int64_t *nnodes, int64_t *ntasks,
+                                 int64_t *ncores, int64_t *walltime);
+
 #ifdef __cplusplus
 }
 #endif
