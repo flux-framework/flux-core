@@ -13,6 +13,7 @@ enum kz_flags {
     KZ_FLAGS_MODEMASK       = 0x0003,
 
     KZ_FLAGS_NONBLOCK       = 0x0010, /* currently only applies to reads */
+    KZ_FLAGS_NOFOLLOW       = 0x0020, /* currently only applies to reads */
 
     KZ_FLAGS_RAW            = 0x0200, /* use only *_json I/O methods */
     KZ_FLAGS_NOCOMMIT_OPEN  = 0x0400, /* skip commit at open (FLAGS_WRITE) */
