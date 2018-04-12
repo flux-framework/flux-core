@@ -203,6 +203,12 @@ test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	n=$(flux kvs get --json ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
+test_expect_success 'wreckrun: -t2 -N${SIZE} sets correct ntasks in kvs' '
+	flux wreckrun -l -t2 -N${SIZE} /bin/true &&
+	LWJ=$(last_job_path) &&
+	n=$(flux kvs get --json ${LWJ}.ntasks) &&
+	test "$n" = $((${SIZE}*2))
+'
 
 test_expect_success 'wreckrun: fallback to old rank.N.cores format works' '
 	flux wreckrun -N2 -n2 \
