@@ -395,6 +395,14 @@ test_expect_success 'flux-wreck: ls JOBID works' '
 	flux wreck ls $LASTID > ls-jobid.out &&
         tail -1 ls-jobid.out | grep "^ *$LASTID"
 '
+test_expect_success 'flux-wreck: ls RANGE ignores missing jobids' '
+	LASTID=$(last_job_id) &&
+	LWJ=$(last_job_path) &&
+	flux wreckrun hostname &&
+	flux kvs unlink -R $LWJ &&
+	flux wreck ls $((${LASTID}-1))-$((${LASTID}+1)) > ls-range.out &&
+	test $(cat ls-range.out | wc -l) = 3
+'
 test_expect_success 'flux-wreck: purge works' '
 	flux wreck purge &&
 	flux wreck purge -t 2 -R &&
