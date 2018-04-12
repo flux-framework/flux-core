@@ -1818,6 +1818,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
     const char *namespace;
+    zuuid_t *uuid = NULL;
     const char *name;
     int saved_errno, flags;
     bool stall = false;
@@ -1825,9 +1826,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     treq_t *tr;
     char *alt_ns = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i }",
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i }",
                              "ops", &ops,
-                             "name", &name,
                              "namespace", &namespace,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
@@ -1846,6 +1846,12 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto stall;
         goto error;
     }
+
+    if (!(uuid = zuuid_new ())) {
+        flux_log_error (h, "%s: zuuid_new", __FUNCTION__);
+        goto error;
+    }
+    name = zuuid_str (uuid);
 
     if (!(tr = treq_create (name, 1, flags))) {
         flux_log_error (h, "%s: treq_create", __FUNCTION__);
@@ -1903,6 +1909,7 @@ error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 stall:
+    zuuid_destroy (&uuid);
     free (alt_ns);
     return;
 }
