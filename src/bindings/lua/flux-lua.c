@@ -1328,6 +1328,28 @@ static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
 
 static int lua_push_kz (lua_State *L, kz_t *kz);
 
+static int get_kz_flags (lua_State *L, int index)
+{
+    int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
+    lua_getfield (L, index, "kz_flags");
+    if (!lua_isnil (L, -1)) {
+        int t = lua_gettop (L);
+        lua_pushnil (L);
+        while (lua_next (L, t)) {
+            const char *f = lua_tostring (L, -1);
+            if (strcmp (f, "nofollow") == 0)
+                flags |= KZ_FLAGS_NOFOLLOW;
+            else {
+                lua_pop (L, 2);
+                return (-1);
+            }
+            lua_pop (L, 1);
+        }
+    }
+    lua_pop (L, 1);
+    return (flags);
+}
+
 static int l_iowatcher_add (lua_State *L)
 {
     struct l_flux_ref *iow = NULL;
@@ -1360,9 +1382,12 @@ static int l_iowatcher_add (lua_State *L)
     }
     lua_getfield (L, 2, "key");
     if (!lua_isnil (L, -1)) {
-        int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
+        int flags;
         kz_t *kz;
         const char *key = lua_tostring (L, -1);
+
+        if ((flags = get_kz_flags (L, 2)) < 0)
+            return lua_pusherror (L, "kz_open: unknown kz_flags");
         if ((kz = kz_open (f, key, flags)) == NULL)
             return lua_pusherror (L, "kz_open: %s",
                                   (char *)flux_strerror (errno));
