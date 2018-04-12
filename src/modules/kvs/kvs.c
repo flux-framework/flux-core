@@ -86,6 +86,7 @@ typedef struct {
     int transaction_merge;
     bool events_init;            /* flag */
     const char *hash_name;
+    unsigned int seq;           /* for commit transactions */
 } kvs_ctx_t;
 
 struct kvs_cb_data {
@@ -1818,8 +1819,6 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
     const char *namespace;
-    zuuid_t *uuid = NULL;
-    const char *name;
     int saved_errno, flags;
     bool stall = false;
     json_t *ops = NULL;
@@ -1847,14 +1846,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(uuid = zuuid_new ())) {
-        flux_log_error (h, "%s: zuuid_new", __FUNCTION__);
-        goto error;
-    }
-    name = zuuid_str (uuid);
-
-    if (!(tr = treq_create (name, 1, flags))) {
-        flux_log_error (h, "%s: treq_create", __FUNCTION__);
+    if (!(tr = treq_create_rank (ctx->rank, ctx->seq++, 1, flags))) {
+        flux_log_error (h, "%s: treq_create_rank", __FUNCTION__);
         goto error;
     }
     if (treq_mgr_add_transaction (root->trm, tr) < 0) {
@@ -1880,7 +1873,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         treq_set_processed (tr, true);
 
         if (kvstxn_mgr_add_transaction (root->ktm,
-                                        name,
+                                        treq_get_name (tr),
                                         ops,
                                         flags) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
@@ -1895,7 +1888,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (!(f = flux_rpc_pack (h, "kvs.relaycommit", 0, FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i }",
                                  "ops", ops,
-                                 "name", name,
+                                 "name", treq_get_name (tr),
                                  "namespace", alt_ns ? alt_ns :  namespace,
                                  "flags", flags))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
@@ -1909,7 +1902,6 @@ error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 stall:
-    zuuid_destroy (&uuid);
     free (alt_ns);
     return;
 }
