@@ -476,8 +476,14 @@ function wreck.logstream (arg)
         local key = kvs_path (f, arg.jobid)..".log."..i
         local iow, err = f:iowatcher {
             key = key,
-            handler = function (iow, r)
-                if not r then return end
+            kz_flags = arg.oneshot and { "nofollow" },
+            handler = function (iow, r, err)
+                if not r then
+                    if err then
+                        io.stderr:write ("logstream kz error "..err.."\n")
+                    end
+                    return
+                end
                 logstream_print_line (iow, r)
             end
         }
