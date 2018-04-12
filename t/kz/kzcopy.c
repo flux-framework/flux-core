@@ -49,12 +49,13 @@ struct copy_context {
 static void copy (flux_t *h, const char *src, const char *dst,
                   int kzoutflags, int kzinflags, int blocksize);
 
-#define OPTIONS "hb:dn"
+#define OPTIONS "hb:dnN"
 static const struct option longopts[] = {
     {"help",         no_argument,        0, 'h'},
     {"delay-commit", no_argument,        0, 'd'},
     {"blocksize",    required_argument,  0, 'b'},
     {"non-blocking", no_argument,        0, 'n'},
+    {"no-follow",    no_argument,        0, 'N'},
     { 0, 0, 0, 0 },
 };
 
@@ -66,6 +67,7 @@ void usage (void)
 "  -b,--blocksize BYTES  set stdin blocksize (default 4096)\n"
 "  -d,--delay-commit     flush data to KVS lazily (defer commit until close)\n"
 "  -n,--non-blocking     use KZ_FLAGS_NONBLOCK and callbacks to copy\n"
+"  -N,--no-follow        use KZ_FLAGS_NOFOLLOW to copy from KVS\n"
 );
     exit (1);
 }
@@ -91,6 +93,9 @@ int main (int argc, char *argv[])
                 break;
             case 'n': /* --non-blocking */
                 kzinflags |= KZ_FLAGS_NONBLOCK;
+                break;
+            case 'N': /* --no-follow */
+                kzinflags |= KZ_FLAGS_NOFOLLOW;
                 break;
             default:  /* --help|? */
                 usage ();
@@ -184,6 +189,34 @@ static void copy_k2k (flux_t *h, const char *src, const char *dst,
      */
     if (kz_close (kzin) < 0)
         log_err_exit ("kz_close %s", src);
+    if (kz_close (kzout) < 0)
+        log_err_exit ("kz_close %s", dst);
+}
+
+static void copy_f2k_noeof (flux_t *h, const char *src, const char *dst,
+                            int kzoutflags, int blocksize)
+{
+    int srcfd = STDIN_FILENO;
+    kz_t *kzout;
+    char *data;
+    int len;
+
+    if (strcmp (src, "-") != 0) {
+        if ((srcfd = open (src, O_RDONLY)) < 0)
+            log_err_exit ("%s", src);
+    }
+    if (!(kzout = kz_open (h, dst, kzoutflags | KZ_FLAGS_RAW)))
+        log_err_exit ("kz_open %s", dst);
+    data = xzmalloc (blocksize);
+    while ((len = read (srcfd, data, blocksize)) > 0) {
+        char *json_str = zio_json_encode (data, len, false);
+        if (kz_put_json (kzout, json_str) < 0)
+            log_err_exit ("kz_put_json %s", dst);
+        free (json_str);
+    }
+    if (len < 0)
+        log_err_exit ("read %s", src);
+    free (data);
     if (kz_close (kzout) < 0)
         log_err_exit ("kz_close %s", dst);
 }
@@ -291,7 +324,10 @@ static void copy (flux_t *h, const char *src, const char *dst,
     if (!isfile (src) && !isfile (dst)) {
         copy_k2k (h, src, dst, kzinflags, kzoutflags);
     } else if (isfile (src) && !isfile (dst)) {
-        copy_f2k (h, src, dst, kzoutflags, blocksize);
+        if (kzinflags & KZ_FLAGS_NOFOLLOW)
+            copy_f2k_noeof (h, src, dst, kzoutflags, blocksize);
+        else
+            copy_f2k (h, src, dst, kzoutflags, blocksize);
     } else if (!isfile (src) && isfile (dst)) {
         copy_k2f (h, src, dst, kzinflags);
     } else {
