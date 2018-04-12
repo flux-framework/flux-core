@@ -450,11 +450,15 @@ end
 local logstream = {}
 logstream.__index = logstream
 
+local function logstream_print_line (iow, line)
+    io.stderr:write (string.format ("rank%d: Error: %s\n", iow.id, line))
+end
+
 function logstream:dump ()
     for _, iow in pairs (self.watchers) do
         local r, err = iow.kz:read ()
         while r and r.data and not r.eof do
-           io.stderr:write (r.data.."\n")
+           logstream_print_line (iow, r.data)
            r, err = iow.kz:read ()
         end
     end
@@ -474,9 +478,10 @@ function wreck.logstream (arg)
             key = key,
             handler = function (iow, r)
                 if not r then return end
-                io.stderr:write (r.."\n")
+                logstream_print_line (iow, r)
             end
         }
+        iow.id = i
         table.insert (l.watchers, iow)
     end
     return setmetatable (l, logstream)
