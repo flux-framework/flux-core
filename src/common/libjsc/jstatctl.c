@@ -1094,6 +1094,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     int ntasks = 0;
     int nnodes = 0;
     int ncores = 0;
+    int gpus = 0;
     int walltime = 0;
     int64_t js = J_NULL;
     int64_t js2 = J_SUBMITTED;
@@ -1103,10 +1104,11 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
-    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i }",
+    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i s:i }",
                            "ntasks", &ntasks,
                            "nnodes", &nnodes,
                            "ncores", &ncores,
+                           "gpus", &gpus,
                            "walltime", &walltime) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto error;
@@ -1123,6 +1125,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
     Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
     Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
+    Jadd_int64 (o2, "gpus", (int64_t)gpus);
     json_object_object_add (jcb, JSC_RDESC, o2);
 
     if (zhash_lookup (ctx->active_jobs, key)) {

@@ -171,6 +171,7 @@ static void send_create_event (flux_t *h, int64_t id,
     int nnodes = 0;
     int ntasks = 0;
     int ncores = 0;
+    int gpus = 0;
     int walltime = 0;
 
     char *topic;
@@ -190,12 +191,15 @@ static void send_create_event (flux_t *h, int64_t id,
         ncores = val;
     if (Jget_int (req, "walltime", &val))
         walltime = val;
+    if (Jget_int (req, "gpus", &val))
+        gpus = val;
 
-    msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i,s:i}",
+    msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i,s:i,s:i}",
                           "jobid", id, "kvs_path", path,
                           "ntasks", ntasks,
                           "ncores", ncores,
                           "nnodes", nnodes,
+                          "gpus", gpus,
                           "walltime", walltime);
 
     if (msg == NULL) {
