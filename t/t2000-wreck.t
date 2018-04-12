@@ -430,14 +430,14 @@ test_expect_success 'flux-wreck cancel: falls back to SIGKILL with -f' '
 
 test_expect_success NO_SCHED 'flux-wreck exclude: fails when sched not loaded' '
 	test_must_fail flux wreck exclude myhost 2>err.exclude &&
-	cat >expected.exclude <<-EOF
+	cat >expected.exclude <<-EOF &&
 	flux-wreck: Node exclusion is not supported when scheduler not loaded
 	EOF
 	test_cmp expected.exclude err.exclude
 '
 test_expect_success NO_SCHED 'flux-wreck include: fails when sched not loaded' '
 	test_must_fail flux wreck include myhost 2>err.include &&
-	cat >expected.include <<-EOF
+	cat >expected.include <<-EOF &&
 	flux-wreck: Node inclusion is not supported when scheduler not loaded
 	EOF
 	test_cmp expected.include err.include
