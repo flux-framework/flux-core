@@ -1118,7 +1118,10 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                 if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref))
                         || flux_kvs_lookup_get_dir (f, &ndir) < 0)
                     log_err_exit ("%s", key);
-                dump_kvs_dir (ndir, maxcol, Ropt, dopt);
+                if (flux_kvsdir_get_size (ndir) == 0)
+                    printf ("%s.\n", key);
+                else
+                    dump_kvs_dir (ndir, maxcol, Ropt, dopt);
                 flux_future_destroy (f);
             } else
                 printf ("%s.\n", key);

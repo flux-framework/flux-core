@@ -152,6 +152,13 @@ $DIR.d.
 EOF
 	test_cmp expected output
 '
+test_expect_success 'kvs: dir -R lists subdir' '
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.d.
+EOF
+	test_cmp expected output
+'
 test_expect_success 'kvs: dir -R DIR' '
 	flux kvs put --json $DIR.a=42 $DIR.b=3.14 $DIR.c=foo $DIR.d=true $DIR.e="[1,3,5]" $DIR.f="{\"a\":42}" &&
 	flux kvs dir -R $DIR | sort >output &&
