@@ -272,10 +272,14 @@ function wreck:parse_cmdline (arg)
 
     self.nnodes = self.opts.N and tonumber (self.opts.N)
 
+    if not self.opts.t then
+        self.opts.t = 1
+    end
+
     -- If nnodes was provided but -n, --ntasks not set, then
     --  set ntasks to nnodes.
     if self.opts.N and not self.opts.n then
-        self.ntasks = self.nnodes
+        self.ntasks = self.nnodes * self.opts.t
     else
         self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
     end
