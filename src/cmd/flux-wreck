@@ -416,11 +416,12 @@ prog:SubCommand {
         local id = dir:match ("(%d+)$")
         if tonumber (id) then
             local j, err = LWJ.open (f, id, dir)
-            if not j then self:die ("job%d: %s", id, err) end
-            printf (fmt, id, j.ntasks, j:state_string(), j.start,
+            if j then
+                printf (fmt, id, j.ntasks, j:state_string(), j.start,
                     seconds_to_string (j.runtime),
                     tostring (j:ranks()),
                     j.command:match ("([^/]+)$"))
+            end
         end
     end
  end
