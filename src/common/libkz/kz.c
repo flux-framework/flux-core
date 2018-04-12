@@ -324,12 +324,17 @@ int kz_get (kz_t *kz, char **datap)
         return -1;
     if (kz->eof)
         return 0;
-    if ((kz->flags & KZ_FLAGS_NONBLOCK))
+    if ((kz->flags & KZ_FLAGS_NONBLOCK) || (kz->flags & KZ_FLAGS_NOFOLLOW))
         json_str = getnext (kz);
     else
         json_str = getnext_blocking (kz);
-    if (!json_str)
-        return -1;
+    if (!json_str) {
+        if ((kz->flags & KZ_FLAGS_NOFOLLOW) && (errno == EAGAIN)) {
+            kz->eof = true;
+            return 0;
+        } else
+            return -1;
+    }
     if ((len = zio_json_decode (json_str, (void **) &data, &kz->eof)) < 0) {
         errno = EPROTO;
         goto error;
