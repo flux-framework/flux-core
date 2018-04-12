@@ -101,6 +101,7 @@ function ioplex.create (arg)
         kvspath       = arg.kvspath,
         on_completion = arg.on_completion,
         log_err       = arg.log_err,
+        nofollow      = arg.nofollow,
         removed = {},
         output = {},
         files = {}
@@ -159,10 +160,14 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     local of = self.output[taskid][stream]
     if not of then return nil, "No stream "..stream.." for task " .. taskid  end
 
+    local flags = {}
+    if self.nofollow then table.insert (flags, "nofollow") end
+
     local f = flux
     local key = string.format ("%s.%d.%s", self.kvspath, taskid, stream)
     local iow, err = f:iowatcher {
         key = key,
+        kz_flags = flags,
         handler =  function (iow, data, err)
             if err or not data then
                 -- protect against multiple close callback calls
@@ -204,6 +209,7 @@ function ioplex:start (h)
             ioplex_taskid_start (self, flux, taskid, stream)
         end
     end
+    self.started = true
 end
 
 --- redirect a stream from a task to named stream "path".
