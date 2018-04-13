@@ -65,7 +65,7 @@ test_under_flux() {
     personality=${2:-full}
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
-        cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
+        test "$debug" = "t" || cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         flux_module_list > module-list.initial
         cleanup check_module_list
         return
