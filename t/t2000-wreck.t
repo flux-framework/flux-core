@@ -350,14 +350,24 @@ test_expect_success 'flux-wreck: attach --label-io' '
 test_expect_success 'wreck: attach --no-follow works' '
 	flux wreckrun -d -l -n4 sh -c "echo before; sleep 30; echo after" &&
 	test_when_finished flux wreck kill $(last_job_id) &&
-	run_timeout 5 flux wreck attach --no-follow $(last_job_id) >output.attach-n &&
 	cat >expected.attach-n <<-EOF &&
 	before
 	before
 	before
 	before
 	EOF
-	test_cmp expected.attach-n output.attach-n
+	i=0 &&
+	while test $i -lt 3; do
+		run_timeout 5 \
+		flux wreck attach --no-follow $(last_job_id) >output.attach-n
+		test_cmp expected.attach-n output.attach-n
+		rc=$?
+		if test $rc = 0; then break; fi
+                # retry
+		i=$((i+1))
+		sleep 0.1
+	done &&
+	test $rc -eq 0
 '
 test_expect_success 'wreck: dumplog works' '
 	test_must_fail flux wreckrun --input=bad.file hostname &&
