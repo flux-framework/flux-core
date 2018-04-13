@@ -34,16 +34,16 @@ using namespace Flux::Jobspec;
 
 void parse_yaml_stream_docs (std::istream& js_stream)
 {
-    bool first = true;
-    for (auto&& rootnode: YAML::LoadAll (js_stream)) {
-        Jobspec js;
-        if (!first)
-            cout << endl;
-        else
-            first = false;
-        js = Jobspec (rootnode);
-        cout << js;
-    }
+    // bool first = true;
+    // for (auto&& rootnode: LoadAll (js_stream)) {
+    //     Jobspec js;
+    //     if (!first)
+    //         cout << endl;
+    //     else
+    //         first = false;
+    //     js = Jobspec (rootnode);
+    //     cout << js;
+    // }
 }
 
 int main(int argc, char *argv[])

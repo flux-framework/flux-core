@@ -335,6 +335,24 @@ static char * lwj_key (flux_t *h, int64_t id, const char *fmt, ...)
     return (key);
 }
 
+static int extract_raw_gpus (flux_t *h, int64_t j, int64_t *gpus)
+{
+    int rc = 0;
+    char *key = lwj_key (h, j, ".gpus");
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "I", gpus) < 0) {
+        flux_log_error (h, "extract %s", key);
+        rc = -1;
+    }
+    else
+        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *gpus);
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
@@ -378,7 +396,7 @@ static int extract_raw_ncores (flux_t *h, int64_t j, int64_t *ncores)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-            || flux_kvs_lookup_get_unpack (f, "I", ncores) < 0) {
+             || flux_kvs_lookup_get_unpack (f, "I", ncores) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -606,11 +624,13 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     int64_t ntasks = -1;
     int64_t ncores = -1;
     int64_t walltime = -1;
+    int64_t gpus = -1;
 
     if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
     if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
+    if (extract_raw_gpus (h, j, &gpus) < 0) return -1;
 
     *jcb = Jnew ();
     o = Jnew ();
@@ -618,7 +638,20 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
     Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
     Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
+    Jadd_int64 (o, "gpus", gpus);
     json_object_object_add (*jcb, JSC_RDESC, o);
+    return 0;
+}
+
+int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes,
+        int64_t *ntasks, int64_t *ncores, int64_t *walltime, int64_t *gpus)
+{
+    if (extract_raw_nnodes (h, j, nnodes) < 0) return -1;
+    if (extract_raw_ntasks (h, j, ntasks) < 0) return -1;
+    if (extract_raw_ncores (h, j, ncores) < 0) return -1;
+    if (extract_raw_walltime (h, j, walltime) < 0) return -1;
+    if (extract_raw_gpus (h, j, gpus) < 0) return -1;
+
     return 0;
 }
 
@@ -1061,6 +1094,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     int ntasks = 0;
     int nnodes = 0;
     int ncores = 0;
+    int gpus = 0;
     int walltime = 0;
     int64_t js = J_NULL;
     int64_t js2 = J_SUBMITTED;
@@ -1070,10 +1104,11 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
-    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i }",
+    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i s:i }",
                            "ntasks", &ntasks,
                            "nnodes", &nnodes,
                            "ncores", &ncores,
+                           "gpus", &gpus,
                            "walltime", &walltime) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto error;
@@ -1090,6 +1125,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
     Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
     Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
+    Jadd_int64 (o2, "gpus", (int64_t)gpus);
     json_object_object_add (jcb, JSC_RDESC, o2);
 
     if (zhash_lookup (ctx->active_jobs, key)) {
