@@ -2536,14 +2536,52 @@ void kvstxn_namespace_prefix (void)
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
-    /* Third, test if invalid prefix across multiple prefixes fails */
+    /* Third, test if valid & indentical prefix across multiple operations works */
 
     ops = json_array ();
     ops_append (ops, "ns:primary/key3", "3", 0);
-    ops_append (ops, "ns:foobar/key4", "4", 0);
+    ops_append (ops, "ns:primary/key4", "4", 0);
 
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "transaction3",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
+
+    json_decref (ops);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    count = 0;
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key3", "3");
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key4", "4");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    /* Fourth, test if invalid prefix across multiple prefixes fails */
+
+    ops = json_array ();
+    ops_append (ops, "ns:primary/key5", "5", 0);
+    ops_append (ops, "ns:foobar/key6", "6", 0);
+
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "transaction4",
                                     ops,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
