@@ -140,7 +140,7 @@ function fluxTest.init (...)
     end
 
     test.log_file = "lua-"..test.prog..".broker.log"
-    test.start_args = { "-o,-q,-Slog-filename=" .. test.log_file }
+    test.start_args = { "-o,-Slog-filename=" .. test.log_file }
 
     local path = fluxTest.fluxbindir .. "/flux"
     local mode = posix.stat (path, 'mode')
