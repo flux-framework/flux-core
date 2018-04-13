@@ -62,48 +62,27 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
 
 flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
 {
-    zuuid_t *uuid = NULL;
     const char *namespace;
-    const char *name;
-    flux_future_t *f = NULL;
     json_t *ops;
-    int saved_errno = 0;
 
     if (!txn) {
         errno = EINVAL;
         return NULL;
     }
 
-    if (!(uuid = zuuid_new ())) {
-        saved_errno = errno;
-        goto cleanup;
-    }
-    name = zuuid_str (uuid);
-
-    if (!(namespace = flux_kvs_get_namespace (h))) {
-        saved_errno = errno;
-        goto cleanup;
-    }
+    if (!(namespace = flux_kvs_get_namespace (h)))
+        return NULL;
 
     if (!(ops = txn_get_ops (txn))) {
-        saved_errno = EINVAL;
-        goto cleanup;
-    }
-    if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
-                             "{s:s s:s s:i s:O}",
-                             "name", name,
-                             "namespace", namespace,
-                             "flags", flags,
-                             "ops", ops))) {
-        saved_errno = errno;
-        goto cleanup;
+        errno = EINVAL;
+        return NULL;
     }
 
-cleanup:
-    zuuid_destroy (&uuid);
-    if (saved_errno)
-        errno = saved_errno;
-    return f;
+    return flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+                          "{s:s s:i s:O}",
+                          "namespace", namespace,
+                          "flags", flags,
+                          "ops", ops);
 }
 
 /*

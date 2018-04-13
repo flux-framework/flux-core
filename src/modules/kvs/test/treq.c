@@ -108,6 +108,21 @@ void treq_basic_tests (void)
     flux_msg_destroy (request);
 
     treq_destroy (tr);
+
+    ok (treq_create_rank (1, 2, -1, 0) == NULL,
+        "treq_create_rank fails on bad input");
+
+    ok ((tr = treq_create_rank (214, 3577, 2, 4)) != NULL,
+        "treq_create_rank works");
+
+    ok ((name = treq_get_name (tr)) != NULL,
+        "treq_get_name works");
+
+    ok (strstr (name, "214") != NULL,
+        "treq_get_name returns name with rank in it");
+
+    ok (strstr (name, "3577") != NULL,
+        "treq_get_name returns name with seq in it");
 }
 
 void treq_ops_tests (void)
