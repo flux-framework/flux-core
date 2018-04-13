@@ -47,6 +47,7 @@ function ostream:open ()
             self.fp = io[self.filename]
         else
             self.fp, err = io.open (self.filename, self.flag)
+            self.fp:setvbuf 'line'
         end
         if not self.fp then return nil, self.filename..": "..err end
     end
@@ -99,6 +100,8 @@ function ioplex.create (arg)
         labelio       = arg.labelio,
         kvspath       = arg.kvspath,
         on_completion = arg.on_completion,
+        log_err       = arg.log_err,
+        nofollow      = arg.nofollow,
         removed = {},
         output = {},
         files = {}
@@ -126,6 +129,15 @@ function ioplex:log (fmt, ...)
     end
 end
 
+function ioplex:err (fmt, ...)
+    if self.log_err then
+        self.log_err (fmt, ...)
+    else
+        io.stderr:write (string.format (fmt, ...))
+    end
+end
+
+
 local function ioplex_set_stream (self, taskid, name, f)
     if not self.output[taskid] then
         self.output[taskid] ={}
@@ -148,14 +160,21 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     local of = self.output[taskid][stream]
     if not of then return nil, "No stream "..stream.." for task " .. taskid  end
 
+    local flags = {}
+    if self.nofollow then table.insert (flags, "nofollow") end
+
     local f = flux
     local key = string.format ("%s.%d.%s", self.kvspath, taskid, stream)
     local iow, err = f:iowatcher {
         key = key,
-        handler =  function (iow, data)
-            if not data then
+        kz_flags = flags,
+        handler =  function (iow, data, err)
+            if err or not data then
                 -- protect against multiple close callback calls
                 if self.removed [key] then return end
+                if err then
+                    self:err ("Read error: task%d %s: %s", taskid, stream, err)
+                end
                 of:close()
                 if not of.fp then
                     self:log ("closed path %s", of.filename)
@@ -190,6 +209,7 @@ function ioplex:start (h)
             ioplex_taskid_start (self, flux, taskid, stream)
         end
     end
+    self.started = true
 end
 
 --- redirect a stream from a task to named stream "path".

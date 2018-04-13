@@ -38,6 +38,7 @@
 #include <envz.h>
 #include <sys/ptrace.h>
 #include <inttypes.h>
+#include <sys/resource.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -419,15 +420,11 @@ static void wreck_pmi_line (struct task_info *t, const char *line)
 static int wreck_pmi_cb (zio_t *z, const char *s, int len, void *arg)
 {
     struct task_info *t = arg;
-    struct prog_ctx *ctx = t->ctx;
 
     if (len > 0) /* !eof */
         wreck_pmi_line (t, s);
-    else {
-        /* client closed connection? */
-        wlog_debug (ctx, "wreck_pmi_cb: client closed PMI_FD");
+    else /* client closed fd */
         wreck_pmi_close (t);
-    }
     return (0);
 }
 
@@ -526,20 +523,27 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->f = NULL;
     t->kvs = NULL;
 
-    t->zio [OUT] = zio_pipe_reader_create ("stdout", (void *) t);
+    if (!(t->zio [OUT] = zio_pipe_reader_create ("stdout", (void *) t)))
+        wlog_fatal (ctx, 1, "task%d: zio_pipe_reader_create: %s",
+                    id, strerror (errno));
     zio_set_send_cb (t->zio [OUT], io_cb);
     zio_set_raw_output (t->zio [OUT]);
     prog_ctx_add_completion_ref (ctx, "task.%d.stdout", id);
 
-    t->zio [ERR] = zio_pipe_reader_create ("stderr", (void *) t);
+    if (!(t->zio [ERR] = zio_pipe_reader_create ("stderr", (void *) t)))
+        wlog_fatal (ctx, 1, "task%d: zio_pipe_reader_create: %s",
+                    id, strerror (errno));
     zio_set_send_cb (t->zio [ERR], io_cb);
     zio_set_raw_output (t->zio [ERR]);
     prog_ctx_add_completion_ref (ctx, "task.%d.stderr", id);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
-    for (i = 0; i < NR_IO; i++)
-        t->kz [i] = task_kz_open (t, i);
+    for (i = 0; i < NR_IO; i++) {
+        if (!(t->kz [i] = task_kz_open (t, i)))
+            wlog_fatal (ctx, 1, "task%d: task_kz_open: %s",
+                        id, strerror (errno));
+    }
     kz_set_ready_cb (t->kz [IN], (kz_ready_f) kz_stdin, t);
 
     if (!prog_ctx_getopt (ctx, "no-pmi-server"))
@@ -2319,6 +2323,15 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
     return (0);
 }
 
+static int increase_nofile_limit (void)
+{
+    struct rlimit rlim;
+    if (getrlimit (RLIMIT_NOFILE, &rlim) < 0)
+        return (-1);
+    rlim.rlim_cur = rlim.rlim_max;
+    return (setrlimit (RLIMIT_NOFILE, &rlim));
+}
+
 int main (int ac, char **av)
 {
     int code = 0;
@@ -2361,6 +2374,9 @@ int main (int ac, char **av)
 
     ctx = prog_ctx_create ();
     signalfd_setup (ctx);
+
+    if (increase_nofile_limit () < 0)
+        wlog_fatal (ctx, 1, "Failed to increase RLIMIT_NOFILE");
 
     if (prog_ctx_get_id (ctx, p) < 0)
         wlog_fatal (ctx, 1, "Failed to get lwj id from cmdline");

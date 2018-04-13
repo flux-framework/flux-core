@@ -203,6 +203,12 @@ test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	n=$(flux kvs get --json ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
+test_expect_success 'wreckrun: -t2 -N${SIZE} sets correct ntasks in kvs' '
+	flux wreckrun -l -t2 -N${SIZE} /bin/true &&
+	LWJ=$(last_job_path) &&
+	n=$(flux kvs get --json ${LWJ}.ntasks) &&
+	test "$n" = $((${SIZE}*2))
+'
 
 test_expect_success 'wreckrun: fallback to old rank.N.cores format works' '
 	flux wreckrun -N2 -n2 \
@@ -341,6 +347,22 @@ test_expect_success 'flux-wreck: attach --label-io' '
         sort expected.attach-l > x && mv x expected.attach-l &&
         test_cmp expected.attach-l output.attach-l
 '
+test_expect_success 'wreck: attach --no-follow works' '
+	flux wreckrun -d -l -n4 sh -c "echo before; sleep 30; echo after" &&
+	test_when_finished flux wreck kill $(last_job_id) &&
+	run_timeout 5 flux wreck attach --no-follow $(last_job_id) >output.attach-n &&
+	cat >expected.attach-n <<-EOF &&
+	before
+	before
+	before
+	before
+	EOF
+	test_cmp expected.attach-n output.attach-n
+'
+test_expect_success 'wreck: dumplog works' '
+	test_must_fail flux wreckrun --input=bad.file hostname &&
+	flux wreck dumplog $(last_job_id) 2>&1 | grep "^rank0: .*bad.file"
+'
 test_expect_success 'flux-wreck: status' '
         flux wreckrun -n4 /bin/true &&
         id=$(last_job_id) &&
@@ -389,6 +411,14 @@ test_expect_success 'flux-wreck: ls JOBID works' '
 	flux wreck ls $LASTID > ls-jobid.out &&
         tail -1 ls-jobid.out | grep "^ *$LASTID"
 '
+test_expect_success 'flux-wreck: ls RANGE ignores missing jobids' '
+	LASTID=$(last_job_id) &&
+	LWJ=$(last_job_path) &&
+	flux wreckrun hostname &&
+	flux kvs unlink -R $LWJ &&
+	flux wreck ls $((${LASTID}-1))-$((${LASTID}+1)) > ls-range.out &&
+	test $(cat ls-range.out | wc -l) = 3
+'
 test_expect_success 'flux-wreck: purge works' '
 	flux wreck purge &&
 	flux wreck purge -t 2 -R &&
@@ -429,18 +459,18 @@ test_expect_success 'flux-wreck cancel: falls back to SIGKILL with -f' '
 '
 
 test_expect_success NO_SCHED 'flux-wreck exclude: fails when sched not loaded' '
-    test_must_fail flux wreck exclude myhost 2>err.exclude &&
-    cat >expected.exclude <<-EOF
-    flux-wreck: Node exclusion is not supported when scheduler not loaded
-    EOF
-    test_cmp expected.exclude err.exclude
+	test_must_fail flux wreck exclude myhost 2>err.exclude &&
+	cat >expected.exclude <<-EOF &&
+	flux-wreck: Node exclusion is not supported when scheduler not loaded
+	EOF
+	test_cmp expected.exclude err.exclude
 '
 test_expect_success NO_SCHED 'flux-wreck include: fails when sched not loaded' '
-    test_must_fail flux wreck include myhost 2>err.include &&
-    cat >expected.include <<-EOF
-    flux-wreck: Node inclusion is not supported when scheduler not loaded
-    EOF
-    test_cmp expected.include err.include
+	test_must_fail flux wreck include myhost 2>err.include &&
+	cat >expected.include <<-EOF &&
+	flux-wreck: Node inclusion is not supported when scheduler not loaded
+	EOF
+	test_cmp expected.include err.include
 '
 
 check_complete_link() {

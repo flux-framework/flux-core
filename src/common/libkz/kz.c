@@ -324,12 +324,17 @@ int kz_get (kz_t *kz, char **datap)
         return -1;
     if (kz->eof)
         return 0;
-    if ((kz->flags & KZ_FLAGS_NONBLOCK))
+    if ((kz->flags & KZ_FLAGS_NONBLOCK) || (kz->flags & KZ_FLAGS_NOFOLLOW))
         json_str = getnext (kz);
     else
         json_str = getnext_blocking (kz);
-    if (!json_str)
-        return -1;
+    if (!json_str) {
+        if ((kz->flags & KZ_FLAGS_NOFOLLOW) && (errno == EAGAIN)) {
+            kz->eof = true;
+            return 0;
+        } else
+            return -1;
+    }
     if ((len = zio_json_decode (json_str, (void **) &data, &kz->eof)) < 0) {
         errno = EPROTO;
         goto error;
@@ -393,6 +398,15 @@ error:
     return -1;
 }
 
+static void kz_unwatch (kz_t *kz)
+{
+    if (kz->watching) {
+        const char *key = clear_key (kz);
+        if (flux_kvs_unwatch (kz->h, key) >= 0)
+            kz->watching = false;
+    }
+}
+
 /* Handle response for lookup of next block (kz->seq).
  * Notify user, who should call kz_get() or kz_get_json() to consume it.
  */
@@ -415,15 +429,9 @@ static void lookup_continuation (flux_future_t *f, void *arg)
      * disable the KVS watcher (if any) as we're done.
      * Otherwise, go get the next block.
      */
-    if (kz->eof) {
-        if (kz->watching) {
-            const char *key = clear_key (kz);
-            if (flux_kvs_unwatch (kz->h, key) >= 0)
-                kz->watching = false;
-        }
-        return;
-    }
-    if (lookup_next (kz) < 0)
+    if (kz->eof)
+        kz_unwatch (kz);
+    else if (lookup_next (kz) < 0)
         goto error;
     return;
 error:
@@ -475,6 +483,24 @@ static int lookup_next (kz_t *kz)
             return -1;
         }
     }
+    /* For NOFOLLOW, simulate EOF once all known blocks consumed */
+    else if (kz->flags & KZ_FLAGS_NOFOLLOW) {
+        kz->eof = true;
+         /*
+          *  Calling unwatch on the kz here may not be necessary as NOFOLLOW
+          *   implies we never needed to set the watch below. Howver, it is
+          *   harmless to call kz_unwatch() on a kz object without a watch
+          *   installed, and there may be a rare or future case where a watch
+          *   is somehow being used with NOFOLLOW, so it is safer to cover
+          *   this case here.
+          */
+        kz_unwatch (kz);
+        /*
+         *  Now call users ready_cb to process our simulated EOF
+         */
+        if (kz->ready_cb)
+            kz->ready_cb (kz, kz->ready_arg);
+    }
     /* EOF not yet reached, but all known blocks have been consumed.
      * Time to KVS watch the stream directory for more entries.
      */
@@ -482,7 +508,6 @@ static int lookup_next (kz_t *kz)
         if (!kz->watching) {
             kz->watching = true; // N.B. careful to avoid infinite loop here!
             const char *key = clear_key (kz);
-            flux_log (kz->h, LOG_DEBUG, "%s: watch %s", __FUNCTION__, key);
             if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
                 return -1;
         }

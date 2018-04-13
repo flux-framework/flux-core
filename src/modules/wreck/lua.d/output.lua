@@ -39,6 +39,10 @@ local function log (fmt, ...)
     wreck:log_msg (fmt, ...)
 end
 
+local function log_err (fmt, ...)
+    wreck:log_error (fmt, ...)
+end
+
 function rexecd_init ()
     if wreck.nodeid ~= 0 then return end
 
@@ -49,7 +53,8 @@ function rexecd_init ()
     taskio, err = ioplex.create {
         flux = wreck.flux,
         jobid = wreck.id,
-        labelio = output.labelio and output.labelio ~= false
+        labelio = output.labelio and output.labelio ~= false,
+        log_err = log_err
     }
     if not taskio then wreck:log_msg ("Error: %s", err) end
 
@@ -75,7 +80,13 @@ end
 function rexecd_exit ()
     if wreck.nodeid ~= 0 or not taskio then return end
     while not taskio:complete() do
-        wreck.flux:reactor ("once")
+        local rc, err = wreck.flux:reactor ("once")
+        if not rc then
+            log_err ("rexecd_exit: reactor once failed: %s", err or "No error")
+            return
+        end
     end
     wreck:log_msg ("File io complete")
 end
+
+-- vi: ts=4 sw=4 expandtab

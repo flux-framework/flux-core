@@ -56,4 +56,19 @@ test_expect_success 'kz: KZ_FLAGS_NONBLOCK works for kz to kz copy' '
 	test_cmp kztest.7.in kztest.7.out
 '
 
+test_expect_success 'kz: KZ_FLAGS_NOFOLLOW works in non-blocking mode' '
+	dd if=/dev/urandom bs=4096 count=32 2>/dev/null >kztest.8.in &&
+	${KZCOPY} --no-follow - kztest.8 <kztest.8.in &&
+	run_timeout 2 \
+            ${KZCOPY} --non-blocking --no-follow kztest.8 - >kztest.8.out &&
+	test_cmp kztest.8.in kztest.8.out
+'
+
+test_expect_success 'kz: KZ_FLAGS_NOFOLLOW works in blocking mode' '
+	dd if=/dev/urandom bs=4096 count=32 2>/dev/null >kztest.8.in &&
+	${KZCOPY} --no-follow - kztest.8 <kztest.8.in &&
+	run_timeout 2 \
+            ${KZCOPY} --no-follow kztest.8 - >kztest.8.out &&
+	test_cmp kztest.8.in kztest.8.out
+'
 test_done

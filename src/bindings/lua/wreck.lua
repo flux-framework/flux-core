@@ -272,10 +272,14 @@ function wreck:parse_cmdline (arg)
 
     self.nnodes = self.opts.N and tonumber (self.opts.N)
 
+    if not self.opts.t then
+        self.opts.t = 1
+    end
+
     -- If nnodes was provided but -n, --ntasks not set, then
     --  set ntasks to nnodes.
     if self.opts.N and not self.opts.n then
-        self.ntasks = self.nnodes
+        self.ntasks = self.nnodes * self.opts.t
     else
         self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
     end
@@ -450,11 +454,15 @@ end
 local logstream = {}
 logstream.__index = logstream
 
+local function logstream_print_line (iow, line)
+    io.stderr:write (string.format ("rank%d: Error: %s\n", iow.id, line))
+end
+
 function logstream:dump ()
     for _, iow in pairs (self.watchers) do
         local r, err = iow.kz:read ()
         while r and r.data and not r.eof do
-           io.stderr:write (r.data.."\n")
+           logstream_print_line (iow, r.data)
            r, err = iow.kz:read ()
         end
     end
@@ -465,18 +473,25 @@ function wreck.logstream (arg)
     local f = arg.flux
     if not f then return nil, "flux argument member required" end
     local rc, err = initialize_args (arg)
-    if not arg.nnodes then return nil, "nnodes argument required" end
     if not rc then return nil, err end
+    if not arg.nnodes then return nil, "nnodes argument required" end
     l.watchers = {}
     for i = 0, arg.nnodes - 1 do
         local key = kvs_path (f, arg.jobid)..".log."..i
         local iow, err = f:iowatcher {
             key = key,
-            handler = function (iow, r)
-                if not r then return end
-                io.stderr:write (r.."\n")
+            kz_flags = arg.oneshot and { "nofollow" },
+            handler = function (iow, r, err)
+                if not r then
+                    if err then
+                        io.stderr:write ("logstream kz error "..err.."\n")
+                    end
+                    return
+                end
+                logstream_print_line (iow, r)
             end
         }
+        iow.id = i
         table.insert (l.watchers, iow)
     end
     return setmetatable (l, logstream)
