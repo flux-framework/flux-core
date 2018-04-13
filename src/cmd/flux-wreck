@@ -454,7 +454,7 @@ prog:SubCommand {
         if tonumber (id) then
             local j, err = LWJ.open (f, id, dir)
             if not j then self:die ("job%d: %s", id, err) end
-            local uri, err = f:kvs_get (kvs_path (id, "flux.remote_uri"))
+            local uri, err = f:kvs_get (kvs_path (id, "guest.flux.remote_uri"))
             if self.opt.b then
                 if err then self:die ("job%d: not a Flux instance", id) end
                 printf ("%s\n", uri)

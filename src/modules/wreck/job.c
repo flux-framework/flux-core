@@ -527,13 +527,14 @@ static void exec_close_fd (void *arg, int fd)
 static void exec_handler (const char *exe, int64_t id, const char *kvspath)
 {
     pid_t sid;
-    int argc = 2;
+    int argc = 3;
     char **av = malloc ((sizeof (char *)) * (argc + 2));
 
     if ((av == NULL)
      || ((av [0] = strdup (exe)) == NULL)
      || (asprintf (&av[1], "--lwj-id=%"PRId64, id) < 0)
-     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)) {
+     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)
+     || (asprintf (&av[3], "--kvs-guest=ns:job%lld/.", (long long)id) < 0)) {
         fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
         exit (1);
     }
