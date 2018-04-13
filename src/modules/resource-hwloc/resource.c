@@ -70,12 +70,10 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "flux_topology_init");
         goto done;
     }
-    if (hwloc_topology_set_flags (ctx->topology,
-                                HWLOC_TOPOLOGY_FLAG_WHOLE_IO) < 0) {
-        flux_log_error (h, "hwloc_topology_set_flags");
-        goto done;
-    }
-
+    if (hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_CACHE) < 0)
+        flux_log (h, LOG_ERR, "hwloc_topology_ignore_type OBJ_CACHE failed");
+    if (hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_GROUP) < 0)
+        flux_log (h, LOG_ERR, "hwloc_topology_ignore_type OBJ_GROUP failed");
     key = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
     if (!(f = flux_kvs_lookup (h, 0, key))) {
         flux_log_error (h, "flux_kvs_lookup");

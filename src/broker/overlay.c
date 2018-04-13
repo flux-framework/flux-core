@@ -453,15 +453,9 @@ const char *overlay_get_relay (overlay_t *ov)
 
 int overlay_sendmsg_relay (overlay_t *ov, const flux_msg_t *msg)
 {
-    int rc = -1;
-
-    if (!ov->relay || !ov->relay->zs) {
-        errno = EINVAL;
-        goto done;
-    }
-    rc = flux_msg_sendzsock (ov->relay->zs, msg);
-done:
-    return rc;
+    if (!ov->relay)
+        return 0;
+    return flux_msg_sendzsock (ov->relay->zs, msg);
 }
 
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,

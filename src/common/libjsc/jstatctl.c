@@ -622,6 +622,29 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     return 0;
 }
 
+int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
+                                 int64_t *nnodes, int64_t *ntasks,
+                                 int64_t *ncores, int64_t *walltime)
+{
+    if (nnodes) {
+        if (extract_raw_nnodes (h, jobid, nnodes) < 0)
+            return -1;
+    }
+    if (ntasks) {
+        if (extract_raw_ntasks (h, jobid, ntasks) < 0)
+            return -1;
+    }
+    if (ncores) {
+        if (extract_raw_ncores (h, jobid, ncores) < 0)
+            return -1;
+    }
+    if (walltime) {
+        if (extract_raw_walltime (h, jobid, walltime) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static int query_rdl (flux_t *h, int64_t j, json_object **jcb)
 {
     char *rdlstr = NULL;
