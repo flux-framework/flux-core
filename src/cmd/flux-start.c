@@ -100,7 +100,7 @@ static struct optparse_option opts[] = {
       .usage = "Set number of ranks in new instance", },
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
-      .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
+      .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
     { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "After a broker exits, kill other brokers after SECONDS", },
     { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,

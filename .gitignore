@@ -57,6 +57,9 @@ libltdl/
 *.hex
 *.pyc
 *.pyo
+# gcov output
+*.gcno
+*.gcda
 
 # autoconf-preprocessed
 Makefile

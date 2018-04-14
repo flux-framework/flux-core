@@ -50,9 +50,6 @@ Summarize available options.
 *-v, --verbose*::
 Be annoyingly chatty.
 
-*-q, --quiet*::
-Suppress messages intended for interactive users.
-
 *-S, --setattr*='ATTR=VAL'::
 Set initial value for broker attribute.
 

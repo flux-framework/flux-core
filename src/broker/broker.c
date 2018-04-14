@@ -184,10 +184,9 @@ static const struct flux_handle_ops broker_handle_ops;
 
 static int exit_rc = 0;
 
-#define OPTIONS "+vqM:X:k:s:g:EIS:"
+#define OPTIONS "+vM:X:k:s:g:EIS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
-    {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
@@ -202,7 +201,6 @@ static void usage (void)
     fprintf (stderr,
 "Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
-" -q,--quiet                   Be mysteriously taciturn\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
@@ -237,8 +235,6 @@ void parse_command_line_arguments(int argc, char *argv[],
             break;
         case 'v':   /* --verbose */
             ctx->verbose = true;
-            break;
-        case 'q':   /* --quiet */
             break;
         case 'X':   /* --module-path PATH */
             if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)

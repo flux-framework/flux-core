@@ -308,8 +308,8 @@ test_expect_success 'builtin test_size_large () works' '
     test -n "$size" &&
     size=$(FLUX_TEST_SIZE_MAX=2 test_size_large) &&
     test "$size" = "2" &&
-    size=$(FLUX_TEST_SIZE_MIN=123 FLUX_TEST_SIZE_MAX=1000 test_size_large) &&
-    test "$size" = "123"
+    size=$(FLUX_TEST_SIZE_MIN=12345 FLUX_TEST_SIZE_MAX=23456 test_size_large) &&
+    test "$size" = "12345"
 '
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua

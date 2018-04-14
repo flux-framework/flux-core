@@ -65,15 +65,13 @@ test_under_flux() {
     personality=${2:-full}
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
-        cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
+        test "$debug" = "t" || cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         flux_module_list > module-list.initial
         cleanup check_module_list
         return
     fi
-    quiet="-o -q,-Slog-filename=${log_file},-Slog-forward-level=7"
     if test "$verbose" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --verbose"
-        quiet=""
     fi
     if test "$debug" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --debug"
@@ -105,9 +103,10 @@ test_under_flux() {
         unset FLUX_RC3_PATH
     fi
 
+    logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
-      exec flux start --bootstrap=selfpmi --size=${size} ${quiet} ${timeout} \
+      exec flux start --bootstrap=selfpmi --size=${size} ${logopts} ${timeout} \
                      "sh $0 ${flags}"
 }
 
