@@ -1042,10 +1042,6 @@ done:
     } else {
         fallback = kvstxn_fallback_mergeable (kt);
 
-        flux_log (ctx->h, LOG_ERR, "kvstxn failed: %s%s",
-                  flux_strerror (errnum),
-                  fallback ? " (is fallbackable)" : "");
-
         /* if merged transaction is fallbackable, ignore the fallback option
          * if it's an extreme "death" like error.
          */
