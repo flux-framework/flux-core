@@ -1919,7 +1919,7 @@ int rexecd_init (struct prog_ctx *ctx)
     return (errnum ? -1 : 0);
 }
 
-int exec_commands (struct prog_ctx *ctx)
+int exec_commands (struct prog_ctx *ctx, optparse_t *p)
 {
     char buf [4096];
     int i;
@@ -1933,7 +1933,8 @@ int exec_commands (struct prog_ctx *ctx)
     prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);
     prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->rankinfo.nodeid);
     prog_ctx_setenvf (ctx, "FLUX_JOB_SIZE",  1, "%d", ctx->total_ntasks);
-    prog_ctx_setenvf (ctx, "FLUX_JOB_KVSPATH", 1, "%s", ctx->kvspath);
+    prog_ctx_setenvf (ctx, "FLUX_JOB_KVSPATH", 1, "%s",
+                      optparse_get_str (p, "kvs-guest", ctx->kvspath));
     gtid_list_create (ctx, buf, sizeof (buf));
     prog_ctx_setenvf (ctx, "FLUX_LOCAL_RANKS",  1, "%s", buf);
 
@@ -2351,6 +2352,11 @@ int main (int ac, char **av)
           .arginfo = "DIR",
           .usage =   "Operate on LWJ in DIR instead of lwj.<id>",
         },
+       { .name =    "kvs-guest",
+          .has_arg = 1,
+          .arginfo = "DIR",
+          .usage =   "Setting for FLUX_JOB_KVSPATH",
+        },
         { .name =    "parent-fd",
           .key =     1001,
           .has_arg = 1,
@@ -2394,7 +2400,7 @@ int main (int ac, char **av)
     if (!prog_ctx_getopt (ctx, "no-pmi-server") && prog_ctx_initialize_pmi (ctx) < 0)
         wlog_fatal (ctx, 1, "failed to initialize pmi-server");
 
-    exec_rc = exec_commands (ctx);
+    exec_rc = exec_commands (ctx, p);
 
     if (exec_rc == 0 && flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
         wlog_err (ctx, "flux_reactor_run: %s", flux_strerror (errno));

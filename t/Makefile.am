@@ -71,6 +71,7 @@ TESTS = \
 	t2006-joblog.t \
 	t2007-caliper.t \
 	t2008-althash.t \
+	t2009-job-schema.t \
 	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
@@ -151,6 +152,7 @@ check_SCRIPTS = \
 	t2006-joblog.t \
 	t2007-caliper.t \
 	t2008-althash.t \
+	t2009-job-schema.t \
 	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
@@ -170,7 +172,8 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
-	$(top_builddir)/t/t9990-python-tests.t
+	$(top_builddir)/t/t9990-python-tests.t \
+	kvs/guestkvs
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

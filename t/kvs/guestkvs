@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec flux kvs --namespace=job${FLUX_JOB_ID} "$@"

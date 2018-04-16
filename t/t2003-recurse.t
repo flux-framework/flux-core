@@ -61,17 +61,17 @@ test_expect_success 'recurse: FLUX_JOB_KVSPATH is set in child job' '
 	test -s kvspath
 '
 
-test_expect_success 'recurse: flux.local_uri is set in enclosing KVS' '
+test_expect_success 'recurse: guest.flux.local_uri is set in enclosing KVS' '
 	flux wreckrun -n1 -N1 flux start flux getattr local-uri >curi &&
-	key=$(flux wreck kvs-path $(flux wreck last-jobid)).flux.local_uri &&
-	flux kvs get --json $key >curi.out &&
+	kvsdir=$(flux wreck kvs-path $(flux wreck last-jobid)) &&
+	flux kvs get --json ${kvsdir}.guest.flux.local_uri >curi.out &&
 	test_cmp curi curi.out
 '
 
-test_expect_success 'recurse: flux.remote_uri is set in enclosing KVS' '
+test_expect_success 'recurse: guest.flux.remote_uri is set in enclosing KVS' '
 	flux wreckrun -n1 -N1 flux start flux getattr local-uri >curi2 &&
-	key=$(flux wreck kvs-path $(flux wreck last-jobid)).flux.remote_uri &&
-	flux kvs get --json $key >ruri.out &&
+	kvsdir=$(flux wreck kvs-path $(flux wreck last-jobid)) &&
+	flux kvs get --json ${kvsdir}.guest.flux.remote_uri >ruri.out &&
 	grep -q "$(sed -e ,local://,, <curi2)" ruri.out
 '
 

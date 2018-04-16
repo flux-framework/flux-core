@@ -304,10 +304,29 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
     char key[MAX_JOB_PATH];
+    char ns[64];
     int rc = -1;
 
+    if (snprintf (ns, sizeof (ns), "job%lu", jobid) >= sizeof (ns)) {
+        flux_log (h, LOG_ERR, "%s: buffer overflow", __FUNCTION__);
+        goto done;
+    }
+    if (!(f = flux_kvs_namespace_create (h, ns , FLUX_USERID_UNKNOWN, 0))
+                                            || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "%s: flux_kvs_namespace_create", __FUNCTION__);
+        goto done;
+    }
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "%s: id_to_path", __FUNCTION__);
+        goto done;
+    }
+    if (snprintf (key, sizeof (key), "%s.guest", kvs_path) >= sizeof (key)
+          || snprintf (ns, sizeof (ns), "ns:job%lu/.", jobid) >= sizeof (ns)) {
+        flux_log (h, LOG_ERR, "%s: buffer overflow", __FUNCTION__);
+        goto done;
+    }
+    if (flux_kvs_txn_symlink (txn, 0, key, ns) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_symlink", __FUNCTION__);
         goto done;
     }
     if (snprintf (key, sizeof (key), "%s.state", kvs_path) >= sizeof (key)) {
@@ -323,6 +342,7 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
         goto done;
     }
     flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
+    flux_future_destroy (f);
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
@@ -507,13 +527,14 @@ static void exec_close_fd (void *arg, int fd)
 static void exec_handler (const char *exe, int64_t id, const char *kvspath)
 {
     pid_t sid;
-    int argc = 2;
+    int argc = 3;
     char **av = malloc ((sizeof (char *)) * (argc + 2));
 
     if ((av == NULL)
      || ((av [0] = strdup (exe)) == NULL)
      || (asprintf (&av[1], "--lwj-id=%"PRId64, id) < 0)
-     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)) {
+     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)
+     || (asprintf (&av[3], "--kvs-guest=ns:job%lld/.", (long long)id) < 0)) {
         fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
         exit (1);
     }
@@ -659,6 +680,113 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
     Jput (in);
 }
 
+/* Generic continuation for handling commit or namespace removal.
+ * In both cases we just log error, if any, and destroy future.
+ */
+static void finevent_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (h, "%s", __FUNCTION__);
+    flux_future_destroy (f);
+}
+
+/* Handle response to lookup of guestns link target (a snapshot reference).
+ * Replace link with snapshot reference and commit.
+ * This starts two more RPC's, one to commit guestns update, and one
+ * to remove namespace.
+ */
+static void finevent_lookup_continuation (flux_future_t *f, void *arg)
+{
+    const char *key = flux_kvs_lookup_get_key (f);
+    flux_t *h = flux_future_get_flux (f);
+    char *ns = arg;
+    const char *snapshot;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f_next;
+
+    if (flux_kvs_lookup_get_treeobj (f, &snapshot) < 0) {
+        flux_log_error (h, "%s: flux_kvs_lookup_get_treeobj %s",
+                        __FUNCTION__, key);
+        goto done;
+    }
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "%s: flux_kvs_txn_create", __FUNCTION__);
+        goto done;
+    }
+    if (flux_kvs_txn_put_treeobj (txn, 0, key, snapshot) < 0) {
+        flux_log_error (h, "%s: flux_lookup_put_treeobj %s", __FUNCTION__, key);
+        goto done;
+    }
+    /* start first RPC to update guestns with snapshot reference */
+    if (!(f_next = flux_kvs_commit (h, 0, txn))) {
+        flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
+        goto done;
+    }
+    if (flux_future_then (f_next, -1., finevent_continuation, NULL) < 0) {
+        flux_log_error (h, "%s: flux_future_then", __FUNCTION__);
+        flux_future_destroy (f_next);
+        goto done;
+    }
+    /* start second RPC to remove namespace, in parallel with above */
+    if (!(f_next = flux_kvs_namespace_remove (h, ns))) {
+        flux_log_error (h, "%s: flux_namespace_remove", __FUNCTION__);
+        goto done;
+    }
+    if (flux_future_then (f_next, -1., finevent_continuation, NULL) < 0) {
+        flux_log_error (h, "%s: flux_future_then", __FUNCTION__);
+        flux_future_destroy (f_next);
+        goto done;
+    }
+done:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+    free (ns);
+}
+
+/* Job entered complete or failed state.
+ * Perform cleanup:
+ * - get snapshot of job's private namespace
+ * - delete namespace
+ * - replace symlink to namespace with snapshot
+ */
+static void finevent_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg, void *arg)
+{
+    const char *topic;
+    const char *kvs_path;
+    char *ns;
+    int64_t jobid;
+    char key[MAX_JOB_PATH];
+    flux_future_t *f;
+
+    if (flux_event_unpack (msg, &topic, "{ s:I s:s }",
+                                        "jobid", &jobid,
+                                        "kvs_path", &kvs_path) < 0) {
+        flux_log_error (h, "%s: flux_event_decode", __FUNCTION__);
+        return;
+    }
+    if (snprintf (key, sizeof (key), "%s.guest", kvs_path) >= sizeof (key)) {
+        flux_log (h, LOG_ERR, "%s: buffer overflow", __FUNCTION__);
+        return;
+    }
+    if (asprintf (&ns, "job%lld", (long long)jobid) < 0) {
+        flux_log_error (h, "%s: asprintf", __FUNCTION__);
+        return;
+    }
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))) {
+        flux_log_error (h, "%s: flux_kvs_lookup", __FUNCTION__);
+        free (ns);
+        return;
+    }
+    if (flux_future_then (f, -1., finevent_lookup_continuation, ns) < 0) {
+        flux_log_error (h, "%s: flux_future_then", __FUNCTION__);
+        flux_future_destroy (f);
+        free (ns);
+        return;
+    }
+}
+
 static const struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0 },
@@ -666,6 +794,8 @@ static const struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "wreck.state.complete", finevent_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "wreck.state.failed", finevent_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -707,6 +837,13 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (flux_get_rank (h, &broker_rank) < 0) {
         flux_log_error (h, "flux_get_rank");
         goto done;
+    }
+    if (broker_rank == 0) {
+        if (flux_event_subscribe (h, "wreck.state.complete") < 0
+                    || flux_event_subscribe (h, "wreck.state.failed") < 0) {
+            flux_log_error (h, "flux_event_subscribe");
+            goto done;
+        }
     }
 
     if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
