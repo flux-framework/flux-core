@@ -385,9 +385,6 @@ static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto out;
     if (json_str && !(o = json_tokener_parse (json_str)))
         goto out;
-    if (strcmp (topic, "job.shutdown") == 0) {
-        flux_reactor_stop (flux_get_reactor (h));
-    }
     else if ((strcmp (topic, "job.create") == 0)
             || ((strcmp (topic, "job.submit") == 0)
                  && sched_loaded (h)))
@@ -663,7 +660,6 @@ static const struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.submit-nocreate", job_submit_only, 0 },
-    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
