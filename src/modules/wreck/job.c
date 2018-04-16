@@ -698,6 +698,16 @@ done:
     return result;
 }
 
+static int runevent_resource_match (flux_t *h, struct job *job)
+{
+    int rc = 0;
+    if (Rlite_targets_this_node (h, job->kvs_path)
+                                || lwj_targets_this_node (h, job->kvs_path))
+        rc = spawn_exec_handler (h, job->id, job->kvs_path);
+    job_destroy (job);
+    return rc;
+}
+
 static int64_t id_from_tag (const char *tag)
 {
     unsigned long l;
@@ -718,24 +728,26 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
                          void *arg)
 {
     const char *topic;
-    char *kvspath = NULL;
-    json_object *in = NULL;
-    int64_t id = -1;
+    struct job *job = NULL;
+    flux_future_t *f = NULL;
 
-    if (flux_msg_get_topic (msg, &topic) < 0) {
-        flux_log_error (h, "run: flux_msg_get_topic");
-        return;
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        goto error;
+    if (!(job = job_create ()))
+        goto error;
+    if ((job->id = id_from_tag (topic+11)) < 0) {
+        errno = EPROTO;
+        goto error;
     }
-    if ((id = id_from_tag (topic+11)) < 0) {
-        flux_log_error (h, "wrexec.run: invalid topic: %s\n", topic);
-        return;
-    }
-    kvspath = id_to_path (id);
-    if (Rlite_targets_this_node (h, kvspath)
-       || lwj_targets_this_node (h, kvspath))
-        spawn_exec_handler (h, id, kvspath);
-    free (kvspath);
-    Jput (in);
+    if (!(job->kvs_path = id_to_path (job->id)))
+        goto error;
+    if (runevent_resource_match (h, job))
+        goto error;
+    return;
+error:
+    job_destroy (job);
+    flux_future_destroy (f);
+    flux_log_error (h, "%s", __FUNCTION__);
 }
 
 /* (rank 0 only) job entered terminal state (complete or failed)
