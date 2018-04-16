@@ -349,7 +349,7 @@ static void job_submit_nocreate (flux_t *h, flux_msg_handler_t *w,
     const char *json_str;
     json_object *o = NULL;
 
-    if (!sched_loaded (h)) {
+    if (broker_rank > 0 || !sched_loaded (h)) {
         errno = ENOSYS;
         goto error;
     }
@@ -381,7 +381,7 @@ static void job_submit_cb (flux_t *h, flux_msg_handler_t *w,
     const char *json_str;
     json_object *o = NULL;
 
-    if (!sched_loaded (h)) {
+    if (broker_rank > 0 || !sched_loaded (h)) {
         errno = ENOSYS;
         goto error;
     }
@@ -409,6 +409,10 @@ static void job_create_cb (flux_t *h, flux_msg_handler_t *w,
     const char *json_str;
     json_object *o = NULL;
 
+    if (broker_rank > 0) {
+        errno = ENOSYS;
+        goto error;
+    }
     if (flux_msg_get_json (msg, &json_str) < 0)
         goto error;
     if (!json_str || !(o = json_tokener_parse (json_str))) {
