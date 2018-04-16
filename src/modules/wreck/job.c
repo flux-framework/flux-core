@@ -267,37 +267,6 @@ static bool sched_loaded (flux_t *h)
     return (v);
 }
 
-static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
-                             const flux_msg_t *msg, void *arg)
-{
-    int64_t jobid;
-    const char *kvs_path;
-    const char *json_str;
-    json_object *o;
-
-    if (!sched_loaded (h)) {
-        errno = ENOSYS;
-        goto err;
-    }
-    if (flux_msg_get_json (msg, &json_str) < 0)
-        goto err;
-    if (!(o = json_tokener_parse (json_str)))
-        goto err;
-    if (!Jget_int64 (o, "jobid", &jobid)
-        || !Jget_str (o, "kvs_path", &kvs_path)) {
-        errno = EINVAL;
-        goto err;
-    }
-    send_create_event (h, jobid, kvs_path, "submitted", o);
-    json_object_put (o);
-    if (flux_respond_pack (h, msg, "{s:I}", "jobid", jobid) < 0)
-        flux_log_error (h, "flux_respond");
-    return;
-err:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "flux_respond");
-}
-
 static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
                           json_object* req, const char *state)
 {
@@ -338,10 +307,9 @@ done:
 }
 
 static void handle_job_create (flux_t *h, const flux_msg_t *msg,
-                               const char *topic, json_object *req)
+                               const char *state, json_object *req)
 {
     int64_t id;
-    char *state = "reserved";
     char *kvs_path = NULL;
 
     if ((id = next_jobid (h)) < 0) {
@@ -353,9 +321,6 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
         goto error;
     }
 
-    /* If called as "job.submit", transition to "submitted" */
-    if (strcmp (topic, "job.submit") == 0)
-        state = "submitted";
     if (do_create_job (h, id, kvs_path, req, state) < 0)
         goto error;
 
@@ -372,32 +337,90 @@ error:
     free (kvs_path);
 }
 
-static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
+/* Handle job.submit-nocreate request from 'flux wreckrun'.
+ * If sched is loaded, use it to assign resources to interactive job.
+ * If sched is not loaded, wreckrun will fall back to job.create.
+ */
+static void job_submit_nocreate (flux_t *h, flux_msg_handler_t *w,
+                                 const flux_msg_t *msg, void *arg)
+{
+    int64_t jobid;
+    const char *kvs_path;
+    const char *json_str;
+    json_object *o = NULL;
+
+    if (!sched_loaded (h)) {
+        errno = ENOSYS;
+        goto error;
+    }
+    if (flux_msg_get_json (msg, &json_str) < 0)
+        goto error;
+    if (!json_str || !(o = json_tokener_parse (json_str))
+                  || !Jget_int64 (o, "jobid", &jobid)
+                  || !Jget_str (o, "kvs_path", &kvs_path)) {
+        errno = EPROTO;
+        goto error;
+    }
+    send_create_event (h, jobid, kvs_path, "submitted", o);
+    if (flux_respond_pack (h, msg, "{s:I}", "jobid", jobid) < 0)
+        flux_log_error (h, "flux_respond");
+    json_object_put (o);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond");
+    if (o)
+        json_object_put (o);
+}
+
+/* Handle job.submit request from 'flux submit'.
+ */
+static void job_submit_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     json_object *o = NULL;
-    const char *topic;
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        goto out;
-    flux_log (h, LOG_DEBUG, "got request %s", topic);
-    if (flux_msg_get_json (msg, &json_str) < 0)
-        goto out;
-    if (json_str && !(o = json_tokener_parse (json_str)))
-        goto out;
-    else if ((strcmp (topic, "job.create") == 0)
-            || ((strcmp (topic, "job.submit") == 0)
-                 && sched_loaded (h)))
-        handle_job_create (h, msg, topic, o);
-    else {
-        /* job.submit not functional due to missing sched. Return ENOSYS
-         *  for now
-         */
-        if (flux_respond (h, msg, ENOSYS, NULL) < 0)
-            flux_log_error (h, "flux_respond");
-    }
 
-out:
+    if (!sched_loaded (h)) {
+        errno = ENOSYS;
+        goto error;
+    }
+    if (flux_msg_get_json (msg, &json_str) < 0)
+        goto error;
+    if (!json_str || !(o = json_tokener_parse (json_str))) {
+        errno = EPROTO;
+        goto error;
+    }
+    handle_job_create (h, msg, "submitted", o);
+    json_object_put (o);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond");
+    if (o)
+        json_object_put (o);
+}
+
+/* Handle job.create request from 'flux wreckrun --immediate'.
+ */
+static void job_create_cb (flux_t *h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
+{
+    const char *json_str;
+    json_object *o = NULL;
+
+    if (flux_msg_get_json (msg, &json_str) < 0)
+        goto error;
+    if (!json_str || !(o = json_tokener_parse (json_str))) {
+        errno = EPROTO;
+        goto error;
+    }
+    handle_job_create (h, msg, "reserved", o);
+    json_object_put (o);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond");
     if (o)
         json_object_put (o);
 }
@@ -657,9 +680,9 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 static const struct flux_msg_handler_spec mtab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "job.submit-nocreate", job_submit_only, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.create", job_create_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.submit", job_submit_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.submit-nocreate", job_submit_nocreate, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
