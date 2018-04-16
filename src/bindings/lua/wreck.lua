@@ -43,6 +43,7 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['ngpus']  = { char = 'g', arg = "g" },
     ['cores-per-task']  = { char = 'c', arg = "N" },
     ['nnodes']  = { char = 'N', arg = "N" },
     ['tasks-per-node']  =
@@ -289,6 +290,11 @@ function wreck:parse_cmdline (arg)
         self.ncores = self.ntasks
     end
 
+    self.ngpus = 0
+    if self.opts.g then
+        self.ngpus = self.opts.g
+    end
+
     self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
@@ -355,6 +361,7 @@ function wreck:jobreq ()
         environ = self.opts.S and {} or get_job_env { flux = self.flux },
         cwd =     posix.getcwd (),
         walltime =self.walltime or 0,
+        ngpus = self.ngpus or 0,
 
         ["opts.nnodes"] = self.opts.N,
         ["opts.ntasks"]  = self.opts.n,
