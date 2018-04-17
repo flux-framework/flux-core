@@ -48,6 +48,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
 #include "rcalc.h"
+#include "wreck_job.h"
 
 #define MAX_JOB_PATH    1024
 
@@ -501,7 +502,7 @@ static void exec_close_fd (void *arg, int fd)
         (void) close (fd);
 }
 
-static void exec_handler (const char *exe, int64_t id, const char *kvspath)
+static void exec_handler (const char *exe, struct wreck_job *job)
 {
     pid_t sid;
     int argc = 2;
@@ -509,8 +510,8 @@ static void exec_handler (const char *exe, int64_t id, const char *kvspath)
 
     if ((av == NULL)
      || ((av [0] = strdup (exe)) == NULL)
-     || (asprintf (&av[1], "--lwj-id=%"PRId64, id) < 0)
-     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)) {
+     || (asprintf (&av[1], "--lwj-id=%"PRId64, job->id) < 0)
+     || (asprintf (&av[2], "--kvs-path=%s", job->kvs_path) < 0)) {
         fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
         exit (1);
     }
@@ -534,7 +535,7 @@ static void exec_handler (const char *exe, int64_t id, const char *kvspath)
     exit (255);
 }
 
-static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
+static int spawn_exec_handler (flux_t *h, struct wreck_job *job)
 {
     pid_t pid;
     const char *wrexecd_path;
@@ -557,7 +558,7 @@ static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
         if (IsHeapProfilerRunning ())
             HeapProfilerStop ();
 #endif
-        exec_handler (wrexecd_path, id, kvspath);
+        exec_handler (wrexecd_path, job);
     }
 
     // XXX: Add child watcher for pid
@@ -565,55 +566,90 @@ static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
     return (0);
 }
 
-static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
+/* Handle response to KVS look up of rank.N.
+ * If it exists, spawn wrexecd.
+ * This concludes the continuation chain started at runevent_cb().
+ */
+static void runevent_fallback_continuation (flux_future_t *f, void *arg)
 {
-    char key[MAX_JOB_PATH];
-    flux_future_t *f = NULL;
-    const flux_kvsdir_t *dir;
-    bool result = false;
+    struct wreck_job *job = arg;
+    flux_t *h = flux_future_get_flux (f);
+    const char *key = flux_kvs_lookup_get_key (f);
 
-    snprintf (key, sizeof (key), "%s.rank", kvspath);
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
-            || flux_kvs_lookup_get_dir (f, &dir) < 0) {
-        flux_log (h, LOG_DEBUG, "No dir %s.rank: %s",
-                  kvspath, flux_strerror (errno));
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (h, LOG_DEBUG, "No dir %s: %s", key, flux_strerror (errno));
         goto done;
     }
-    snprintf (key, sizeof (key), "%d", broker_rank);
-    if (flux_kvsdir_isdir (dir, key))
-        result = true;
+    if (spawn_exec_handler (h, job) < 0)
+        goto done;
 done:
     flux_future_destroy (f);
+    wreck_job_destroy (job);
+}
+
+/* Send request to look up rank.N.
+ * This function is continued in runevent_fallback_continuation().
+ */
+static int runevent_fallback (flux_t *h, struct wreck_job *job)
+{
+    char key[MAX_JOB_PATH];
+    flux_future_t *f;
+
+    snprintf (key, sizeof (key), "%s.rank.%lu",
+              job->kvs_path, (unsigned long)broker_rank);
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+        return -1;
+    if (flux_future_then (f, -1., runevent_fallback_continuation, job) < 0) {
+        flux_future_destroy (f);
+        return -1;;
+    }
+    return 0;
+}
+
+static bool Rlite_targets_this_node (flux_t *h, const char *key,
+                                     const char *R_lite)
+{
+    rcalc_t *r = NULL;
+    bool result;
+
+    if (!(r = rcalc_create (R_lite))) {
+        if (broker_rank == 0)
+            flux_log (h, LOG_ERR, "Unable to parse %s", key);
+        return false;
+    }
+    result = rcalc_has_rank (r, broker_rank);
+    rcalc_destroy (r);
     return result;
 }
 
-static bool Rlite_targets_this_node (flux_t *h, const char *kvspath)
+/* Handle response to lookup of R_lite.  If this node is targetted,
+ * spawn wrexecd.  If R_lite doesn't exist, fallback to old method
+ * of looking up rank.N, with one more continuation.
+ */
+static void runevent_continuation (flux_future_t *f, void *arg)
 {
+    struct wreck_job *job = arg;
+    flux_t *h = flux_future_get_flux (f);
+    const char *key = flux_kvs_lookup_get_key (f);
     const char *R_lite;
-    rcalc_t *r = NULL;
-    char key[MAX_JOB_PATH];
-    flux_future_t *f = NULL;
-    bool result = false;
 
-    snprintf (key, sizeof (key), "%s.R_lite", kvspath);
-    if (!(f = flux_kvs_lookup (h, 0, key))
-       || flux_kvs_lookup_get (f, &R_lite) < 0)  {
+    if (flux_kvs_lookup_get (f, &R_lite) < 0) {
         if (broker_rank == 0)
-            flux_log (h, LOG_INFO, "No %s.R_lite: %s",
-                      kvspath, flux_strerror (errno));
+            flux_log (h, LOG_INFO, "No %s: %s", key, flux_strerror (errno));
+        if (runevent_fallback (h, job) < 0) {
+            flux_log_error (h, "%s: fallback failed", __FUNCTION__);
+            goto done_destroy;
+        }
         goto done;
     }
-    if (!(r = rcalc_create (R_lite))) {
-        if (broker_rank == 0)
-            flux_log (h, LOG_ERR, "Unable to parse %s.R_lite", kvspath);
-        goto done;
-    }
-    if (rcalc_has_rank (r, broker_rank))
-        result = true;
-    rcalc_destroy (r);
+    if (!Rlite_targets_this_node (h, key, R_lite))
+        goto done_destroy;
+    if (spawn_exec_handler (h, job) < 0)
+        goto done_destroy;
+done_destroy:
+    wreck_job_destroy (job);
 done:
     flux_future_destroy (f);
-    return result;
 }
 
 static int64_t id_from_tag (const char *tag)
@@ -631,29 +667,44 @@ static int64_t id_from_tag (const char *tag)
     return l;
 }
 
+/* Handle wrexec.run.<jobid> event.
+ * Determine if assigned resources are on this broker rank, then spawn
+ * wrexecd if so.   This function sends request to read R_lite,
+ * then continues in runevent_continuation().
+ */
 static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg,
                          void *arg)
 {
     const char *topic;
-    char *kvspath = NULL;
-    json_object *in = NULL;
-    int64_t id = -1;
+    struct wreck_job *job;
+    flux_future_t *f = NULL;
+    char k[MAX_JOB_PATH];
 
-    if (flux_msg_get_topic (msg, &topic) < 0) {
-        flux_log_error (h, "run: flux_msg_get_topic");
-        return;
+    if (!(job = wreck_job_create ()))
+        goto error;
+    if (flux_event_decode (msg, &topic, NULL) < 0)
+        goto error;
+    if ((job->id = id_from_tag (topic+11)) < 0) {
+        errno = EPROTO;
+        goto error;
     }
-    if ((id = id_from_tag (topic+11)) < 0) {
-        flux_log_error (h, "wrexec.run: invalid topic: %s\n", topic);
-        return;
+    if (!(job->kvs_path = id_to_path (job->id)))
+        goto error;
+    if (snprintf (k, sizeof (k), "%s.R_lite", job->kvs_path) >= sizeof (k)) {
+        errno = EINVAL;
+        goto error;
     }
-    kvspath = id_to_path (id);
-    if (Rlite_targets_this_node (h, kvspath)
-       || lwj_targets_this_node (h, kvspath))
-        spawn_exec_handler (h, id, kvspath);
-    free (kvspath);
-    Jput (in);
+    if (!(f = flux_kvs_lookup (h, 0, k)))
+        goto error;
+    if (flux_future_then (f, -1., runevent_continuation, job) < 0)
+        goto error;
+    /* N.B. 'f' and 'job' are destroyed by runevent_continuation() */
+    return;
+error:
+    flux_log_error (h, "%s", __FUNCTION__);
+    wreck_job_destroy (job);
+    flux_future_destroy (f);
 }
 
 static const struct flux_msg_handler_spec mtab[] = {
