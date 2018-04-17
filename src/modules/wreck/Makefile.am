@@ -50,6 +50,27 @@ wrexecd_LDADD = \
 	$(wrexecd_libs) \
 	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
 
+TESTS = \
+	test_wreck_job.t
+
+test_ldadd = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD)
+
+test_cppflags = \
+	$(AM_CPPFLAGS) \
+	-I$(top_srcdir)/src/common/libtap
+
+check_PROGRAMS = $(TESTS)
+
+test_wreck_job_t_SOURCES = test/wreck_job.c
+test_wreck_job_t_CPPFLAGS = $(test_cppflags)
+test_wreck_job_t_LDADD = \
+	$(top_builddir)/src/modules/wreck/wreck_job.o \
+	$(test_ldadd)
+
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua \
 	lua.d/02-affinity.lua \
