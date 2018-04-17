@@ -30,7 +30,7 @@ fluxlibexec_PROGRAMS = \
 fluxmod_libadd = $(top_builddir)/src/common/libflux-core.la \
 		 $(top_builddir)/src/common/libflux-internal.la
 
-job_la_SOURCES = job.c rcalc.c rcalc.h
+job_la_SOURCES = job.c rcalc.c rcalc.h wreck_job.c wreck_job.h
 job_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 job_la_LIBADD = $(fluxmod_libadd)
 
