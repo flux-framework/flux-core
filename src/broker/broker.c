@@ -1276,6 +1276,46 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     /* no response */
 }
 
+/* Publish event synchronously.
+ * User sends request message with topic "cmb.pub.<topic>" to rank 0.
+ * Service publishes event with same payload as request, topic=<topic>,
+ * then responds with success or failure.
+ * The synchronization use case driving the need for this is
+ * discussed in issue #342
+ */
+static void cmb_pub_cb (flux_t *h, flux_msg_handler_t *mh,
+                        const flux_msg_t *msg, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    const char *topic;
+    const char *json_str;
+    flux_msg_t *event = NULL;
+
+    if (overlay_get_rank (ctx->overlay) > 0) {
+        errno = ENOSYS;
+        goto error;
+    }
+    if (flux_request_decode (msg, &topic, &json_str) < 0)
+        goto error;
+    if (strlen (topic) <= 8) {
+        errno = EPROTO;
+        goto error;
+    }
+    topic += 8; // push past "cmb.pub." (8 chars)
+    if (!(event = flux_event_encode (topic, json_str)))
+        goto error;
+    if (flux_send (h, event, 0) < 0)
+        goto error;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    goto done;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+done:
+    flux_msg_destroy (event);
+}
+
 static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
@@ -1346,6 +1386,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.pub.*",      cmb_pub_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
