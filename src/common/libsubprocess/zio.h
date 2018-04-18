@@ -10,9 +10,9 @@ typedef int  (*zio_close_f)  (zio_t *z, void *arg);
 typedef void (*zio_log_f)    (const char *buf);
 
 /*
- *  Create a zio "reader" object, which reads from fd [src] into a buffer
- *   (depending on buffer setting), and sends json-encoded output to
- *    [dst] zeromq socket.
+ *  Create a zio "reader" object, which reads from fd [src] into a
+ *   buffer (depending on buffer setting), and then calls a designated
+ *   callback.  Use zio_set_send_cb() to set callback.
  */
 zio_t *zio_reader_create (const char *name, int srcfd, void *arg);
 
@@ -140,8 +140,7 @@ int zio_set_quiet (zio_t *zio);
 int zio_set_raw_output (zio_t *zio);
 
 /*
- *  Override the default send() function for ZIO readers. (Default
- *   send function uses zmsg_send() to dst sock)
+ *  Set the send() function for ZIO readers.
  */
 int zio_set_send_cb (zio_t *zio, zio_send_f sendf);
 
@@ -152,7 +151,10 @@ int zio_set_send_cb (zio_t *zio, zio_send_f sendf);
  */
 int zio_set_close_cb (zio_t *zio, zio_close_f closef);
 
-
+/*
+ *  Flush buffered data.  Calls send callback for zio READER objects
+ *   or writes to dstfd on zio WRITER objects.
+ */
 int zio_flush (zio_t *zio);
 
 /*
