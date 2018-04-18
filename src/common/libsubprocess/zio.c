@@ -556,11 +556,6 @@ static int zio_writer_flush_all (zio_t *zio)
     return (n);
 }
 
-
-/*
- *   Flush any buffered output and EOF from zio READER object
- *    to destination.
- */
 int zio_flush (zio_t *zio)
 {
     int len;
