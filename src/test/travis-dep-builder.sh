@@ -14,7 +14,7 @@ https://github.com/jedisct1/libsodium/releases/download/1.0.10/libsodium-1.0.10.
 https://github.com/zeromq/zeromq4-1/releases/download/v4.1.4/zeromq-4.1.4.tar.gz \
 https://github.com/zeromq/czmq/archive/v3.0.2.tar.gz \
 http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
-http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz \
+http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.1.tar.gz \
 http://www.digip.org/jansson/releases/jansson-2.9.tar.gz \
 http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz \
 https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz \
