@@ -335,6 +335,24 @@ static char * lwj_key (flux_t *h, int64_t id, const char *fmt, ...)
     return (key);
 }
 
+static int extract_raw_ngpus (flux_t *h, int64_t j, int64_t *ngpus)
+{
+    int rc = 0;
+    char *key = lwj_key (h, j, ".ngpus");
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "I", ngpus) < 0) {
+        flux_log_error (h, "extract %s", key);
+        rc = -1;
+    }
+    else
+        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ngpus);
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
@@ -605,12 +623,14 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     int64_t nnodes = -1;
     int64_t ntasks = -1;
     int64_t ncores = -1;
+    int64_t ngpus = 0;
     int64_t walltime = -1;
 
     if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
     if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
+    if (extract_raw_ngpus (h, j, &ngpus) < 0) return -1;
 
     *jcb = Jnew ();
     o = Jnew ();
@@ -618,6 +638,7 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
     Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
     Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
+    Jadd_int64 (o, JSC_RDESC_NGPUS, ngpus);
     json_object_object_add (*jcb, JSC_RDESC, o);
     return 0;
 }
@@ -844,6 +865,7 @@ static int update_hash_1ra (flux_t *h, int64_t j, json_object *o, zhash_t *rtab)
 {
     int rc = 0;
     int64_t ncores = 0;
+    int64_t ngpus = 0;
     int64_t rank = 0;
     int64_t *curcnt;
     char *key;
@@ -852,6 +874,7 @@ static int update_hash_1ra (flux_t *h, int64_t j, json_object *o, zhash_t *rtab)
     if (!Jget_obj (o, JSC_RDL_ALLOC_CONTAINED, &c)) return -1;
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINING_RANK, &rank)) return -1;
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NCORES, &ncores)) return -1;
+    if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NGPUS, &ngpus)) return -1;
 
     key = lwj_key (h, j, ".rank.%ju.cores", rank);
     if (!(curcnt = zhash_lookup (rtab, key))) {
@@ -862,6 +885,17 @@ static int update_hash_1ra (flux_t *h, int64_t j, json_object *o, zhash_t *rtab)
     } else
         *curcnt = *curcnt + ncores;
     free (key);
+
+    key = lwj_key (h, j, ".rank.%ju.gpus", rank);
+    if (!(curcnt = zhash_lookup (rtab, key))) {
+        curcnt = xzmalloc (sizeof (*curcnt));
+        *curcnt = ngpus;
+        zhash_insert (rtab, key, curcnt);
+        zhash_freefn (rtab, key, free);
+    } else
+        *curcnt = *curcnt + ngpus;
+    free (key);
+
     return rc;
 }
 
@@ -873,7 +907,7 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
     json_object *ra_e = NULL;
     const char *key = NULL;
     zhash_t *rtab = NULL;
-    int64_t *ncores = NULL;
+    int64_t *rcount = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
@@ -885,8 +919,8 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
     for (i=0; i < (int) size; ++i) {
         if (!Jget_ar_obj (o, i, &ra_e))
             goto done;
-        /* 'o' represents an array of per-node core count to use.
-         * However, becasue the same rank can appear multiple times
+        /* 'o' represents an array of per-node core and gpu count to use.
+         * However, because the same rank can appear multiple times
          * in this array in emulation mode, update_hash_1ra is
          * used to determine the total core count per rank.
          */
@@ -898,8 +932,8 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
         flux_log_error (h, "txn_create");
         goto done;
     }
-    FOREACH_ZHASH (rtab, key, ncores) {
-        if ( (rc = flux_kvs_txn_pack (txn, 0, key, "I", *ncores)) < 0) {
+    FOREACH_ZHASH (rtab, key, rcount) {
+        if ( (rc = flux_kvs_txn_pack (txn, 0, key, "I", *rcount)) < 0) {
             flux_log_error (h, "put %s", key);
             goto done;
         }
@@ -1084,6 +1118,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     int ntasks = 0;
     int nnodes = 0;
     int ncores = 0;
+    int ngpus = 0;
     int walltime = 0;
     int64_t js = J_NULL;
     int64_t js2 = J_SUBMITTED;
@@ -1097,6 +1132,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
                            "ntasks", &ntasks,
                            "nnodes", &nnodes,
                            "ncores", &ncores,
+                           "ngpus", &ngpus,
                            "walltime", &walltime) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto error;
@@ -1112,6 +1148,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     Jadd_int64 (o2, JSC_RDESC_NNODES, (int64_t)nnodes);
     Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
     Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
+    Jadd_int64 (o2, JSC_RDESC_NGPUS, (int64_t)ngpus);
     Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
     json_object_object_add (jcb, JSC_RDESC, o2);
 

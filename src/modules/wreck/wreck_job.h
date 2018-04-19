@@ -12,6 +12,7 @@ struct wreck_job {
     int nnodes;
     int ntasks;
     int ncores;
+    int ngpus;
     int walltime;
     void *aux;
     flux_free_f aux_destroy;

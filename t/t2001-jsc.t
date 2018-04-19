@@ -239,10 +239,12 @@ EOF
 "
 
 test_expect_success 'jstat 13: update rdl_alloc' "
-    flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdrank\": 0, \"cmbdncores\": 102}}]}' &&
+    flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdrank\": 0, \"cmbdncores\": 102, \"cmbdngpus\": 4}}]}' &&
     flux kvs get --json $(flux wreck kvs-path 1).rank.0.cores > output.13.1 &&
+    flux kvs get --json $(flux wreck kvs-path 1).rank.0.gpus >> output.13.1 &&
     cat > expected.13.1 <<-EOF &&
 102
+4
 EOF
     test_cmp expected.13.1 output.13.1 
 "

@@ -43,6 +43,7 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['gpus-per-task']  = { char = 'g', arg = "g" },
     ['cores-per-task']  = { char = 'c', arg = "N" },
     ['nnodes']  = { char = 'N', arg = "N" },
     ['tasks-per-node']  =
@@ -100,6 +101,7 @@ function wreck:usage()
   -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
   -c, --cores-per-task=N     Request N cores per task
+  -g, --gpus-per-task=N      Request N GPUs per task
   -N, --nnodes=N             Force number of nodes
   -t, --tasks-per-node=N     Force number of tasks per node
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
@@ -289,6 +291,10 @@ function wreck:parse_cmdline (arg)
         self.ncores = self.ntasks
     end
 
+    if self.opts.g then
+        self.ngpus = self.opts.g * self.ntasks
+    end
+
     self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
@@ -355,10 +361,12 @@ function wreck:jobreq ()
         environ = self.opts.S and {} or get_job_env { flux = self.flux },
         cwd =     posix.getcwd (),
         walltime =self.walltime or 0,
+        ngpus = self.ngpus or 0,
 
         ["opts.nnodes"] = self.opts.N,
         ["opts.ntasks"]  = self.opts.n,
         ["opts.cores-per-task"] = self.opts.c,
+        ["opts.gpus-per-task"] = self.opts.g,
         ["opts.tasks-per-node"] = self.opts.t,
     }
     if self.opts.o then
