@@ -455,11 +455,12 @@ static lookup_process_t walk (lookup_t *lh)
                 goto done;
             }
             else {
-                char *s = json_dumps (wl->dirent, 0);
+                char *s = json_dumps (wl->dirent, JSON_ENCODE_ANY);
                 flux_log (lh->h, LOG_ERR,
                           "%s: unknown/unexpected dirent type: "
-                          "lh->path=%s pathcomp=%s: wl->dirent=%s ",
-                          __FUNCTION__, lh->path, pathcomp, s);
+                          "lh->path=%s pathcomp=%s wl->dirent(ptr)=%p "
+                          "wl->dirent(str)=%s",
+                          __FUNCTION__, lh->path, pathcomp, wl->dirent, s);
                 free (s);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;
@@ -1237,9 +1238,9 @@ lookup_process_t lookup (lookup_t *lh)
                     goto error;
                 }
             } else {
-                char *s = json_dumps (lh->wdirent, 0);
-                flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %s",
-                          __FUNCTION__, s);
+                char *s = json_dumps (lh->wdirent, JSON_ENCODE_ANY);
+                flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %p, %s",
+                          __FUNCTION__, lh->wdirent, s);
                 free (s);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;

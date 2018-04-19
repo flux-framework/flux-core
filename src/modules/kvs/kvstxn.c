@@ -529,9 +529,9 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
         return -1;
     }
     else {
-        char *s = json_dumps (entry, 0);
-        flux_log (kt->ktm->h, LOG_ERR, "%s: corrupt treeobj: %s",
-                  __FUNCTION__, s);
+        char *s = json_dumps (entry, JSON_ENCODE_ANY);
+        flux_log (kt->ktm->h, LOG_ERR, "%s: corrupt treeobj: %p, %s",
+                  __FUNCTION__, entry, s);
         free (s);
         errno = ENOTRECOVERABLE;
         return -1;
