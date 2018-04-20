@@ -174,12 +174,13 @@ static flux_future_t *send_create_event (flux_t *h, struct wreck_job *job)
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, topic, nodeid, flags,
-                             "{s:I,s:s,s:i,s:i,s:i,s:i}",
+                             "{s:I,s:s,s:i,s:i,s:i,s:i,s:i}",
                              "jobid", job->id,
                              "kvs_path", job->kvs_path,
                              "ntasks", job->ntasks,
                              "ncores", job->ncores,
                              "nnodes", job->nnodes,
+                             "ngpus", job->ngpus,
                              "walltime", job->walltime)))
         return NULL;
     return f;
@@ -262,12 +263,13 @@ static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
     }
     if (!(job = wreck_job_create ()))
         goto error;
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s?:i s?:i s?:i s?:i}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:s s?:i s?:i s?:i s?:i s?:i}",
                                           "jobid", &job->id,
                                           "kvs_path", &kvs_path,
                                           "ntasks", &job->ntasks,
                                           "nnodes", &job->nnodes,
                                           "ncores", &job->ncores,
+                                          "ngpus", &job->ngpus,
                                           "walltime", &job->walltime) < 0)
         goto error;
     wreck_job_set_state (job, "submitted");
@@ -395,10 +397,11 @@ static void job_create_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (!(job = wreck_job_create ()))
         goto error;
-    if (flux_request_unpack (msg, &topic, "{s?:i s?:i s?:i s?:i}",
+    if (flux_request_unpack (msg, &topic, "{s?:i s?:i s?:i s?:i s?:i}",
                                           "ntasks", &job->ntasks,
                                           "nnodes", &job->nnodes,
                                           "ncores", &job->ncores,
+                                          "ngpus", &job->ngpus,
                                           "walltime", &job->walltime) < 0)
         goto error;
     if (!(cpy = flux_msg_copy (msg, true)))

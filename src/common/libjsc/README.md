@@ -91,6 +91,8 @@ service.
 |------------|------------------|-----------------|---------------|
 | nnodes     | JSC_RDESC\_NNODES | 64-bit integer | Node count    |
 | ntasks     | JSC_RDESC\_NTASKS | 64-bit integer | Process count |
+| ncores     | JSC_RDESC\_NCORES | 64-bit integer | core count |
+| ngpus      | JSC_RDESC\_NGPUS | 64-bit integer | GPU count |
 | walltime   | JSC_RDESC\_WALLTIME | 64-bit integer | Walltime    |
 
 **Table 3-3** Keys and values of *rdesc* attribute
@@ -107,6 +109,7 @@ service.
 |------------|-----------------------------------|----------------|-----------------------------------|
 | cmbdrank   | JSC_RDL\_ALLOC\_CONTAINING\_RANK  | 64-bit integer | broker rank that manages the cores|
 | cmbdncores | JSC_RDL\_ALLOC\_CONTAINED\_NCORES | 64-bit integer | Core count to use for this broker |
+| cmbdngpus | JSC_RDL\_ALLOC\_CONTAINED\_NGPUS  | 64-bit integer | GPU count to use for this broker |
 
 **Table 3-4-1** Keys and values of *rsarray* attribute
 
