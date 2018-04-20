@@ -177,9 +177,12 @@ end
 -- Return kvs path to job id `id`
 --
 local kvs_paths = {}
+local function kvs_path_insert (id, path)
+    kvs_paths [id] = path
+end
 local function kvs_path (f, id)
     if not kvs_paths[id] then
-        kvs_paths [id] = job_kvspath (f, id)
+        kvs_path_insert (id, job_kvspath (f, id))
     end
     return kvs_paths [id]
 end
@@ -187,7 +190,7 @@ end
 local function kvs_path_multi (f, ids)
     local result = job_kvspath (f, ids)
     for i,id in ipairs (ids) do
-        kvs_paths [id] = result [id]
+        kvs_path_insert (id, result [id])
     end
     return result
 end
@@ -610,6 +613,12 @@ local function reverse (t)
     return r
 end
 
+-- append array t2 to t1
+local function append (t1, t2)
+    for _,v in ipairs (t2) do table.insert (t1, v) end
+    return t1
+end
+
 function wreck.jobids_to_kvspath (arg)
     local f = arg.flux
     local ids = arg.jobids
@@ -619,7 +628,53 @@ function wreck.jobids_to_kvspath (arg)
     return kvs_path_multi (f, ids)
 end
 
-function wreck.joblist (arg)
+local function include_state (conf, state)
+    -- Include all states if no state conf is supplied
+    if not conf then return true end
+
+    -- Otherwise, if there is a conf.include hash then *only* include
+    --  states that appear in this hash:
+    if conf.include then return conf.include[state] end
+
+    -- Otherwise, exclude this state if it is in the conf.exclude hash:
+    if conf.exclude then return not conf.exclude[state] end
+
+    -- No conf.include, no conf.exclude, I guess it is included:
+    return true
+end
+
+-- Convert keys of table t to a comma-separated list of strings
+local function to_string_list (t)
+    if not t then return nil end
+    local r = {}
+    for k,v in pairs (t) do
+        if v then table.insert (r, k) end
+    end
+    return table.concat (r, ",")
+end
+
+-- Return a list and hash of active jobs by kvs path
+local function joblist_active (arg)
+    local f = arg.flux
+    local conf = arg.states
+    local r, err = f:rpc ("job.list",
+                          { max = arg.max,
+                            include = to_string_list (conf and conf.include),
+                            exclude = to_string_list (conf and conf.exclude)
+                          })
+    if not r then return nil, nil, err end
+    local active = {}
+    local results = {}
+    for _,job in ipairs (r.jobs) do
+        local path = job.kvs_path
+        kvs_path_insert (job.jobid, path)
+        active[path] = true
+        table.insert (results, path)
+    end
+    return results, active
+end
+
+local function joblist_kvs (arg, exclude)
     local flux = require 'flux'
     local f = arg.flux
     if not f then f, err = flux.new () end
@@ -632,10 +687,12 @@ function wreck.joblist (arg)
         for _,k in pairs (dirs) do
             local path = tostring (d) .. "." .. k
             local dir = f:kvsdir (path)
-            if dir then
+            if dir and (not exclude or not exclude[path]) then
                 if dir.state then
                     -- This is a lwj dir, add to results table:
-                    table.insert (results, path)
+                    if include_state (arg.states, dir.state) then
+                        table.insert (results, path)
+                    end
                 else
                     -- recurse to find lwj dirs lower in the directory tree
                     visit (dir, results)
@@ -653,6 +710,23 @@ function wreck.joblist (arg)
     end
 
     return reverse (visit (dir))
+end
+
+function wreck.joblist (arg)
+    local results, active = {}, {}
+    if not arg.kvs_only then
+        results, active = joblist_active (arg)
+        if results and arg.max then
+            arg.max = arg.max - #results
+        end
+        if arg.active_only or arg.max == 0 then return results end
+    end
+
+    -- Append a list of jobs from the kvs to the active jobs
+    local r, err = joblist_kvs (arg, active)
+    if not r then return nil, err end
+
+    return append (results or {}, r)
 end
 
 local function shortprog ()
