@@ -210,6 +210,20 @@ test_expect_success 'wreckrun: -t2 -N${SIZE} sets correct ntasks in kvs' '
 	test "$n" = $((${SIZE}*2))
 '
 
++test_expect_success 'wreckrun: ngpus is 0 by default' '
+    flux wreckrun -n 2 /bin/true &&
+    LWJ=$(last_job_path) &&
+    n=$(flux kvs get --json ${LWJ}.ngpus) &&
+    test "$n" = "0"
+'
+
++test_expect_success 'wreckrun: -g, --ngpus sets ngpus in kvs' '
+    flux wreckrun -n 2 -g 4 /bin/true &&
+    LWJ=$(last_job_path) &&
+    n=$(flux kvs get --json ${LWJ}.ngpus) &&
+    test "$n" = "4"
+'
+
 test_expect_success 'wreckrun: fallback to old rank.N.cores format works' '
 	flux wreckrun -N2 -n2 \
              -P "lwj[\"rank.0.cores\"] = 1; lwj[\"rank.1.cores\"] = 1; lwj.R_lite = nil" \
