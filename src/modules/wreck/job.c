@@ -76,6 +76,8 @@ static int kvs_bits_per_dir = 7;
 uint32_t broker_rank;
 const char *local_uri = NULL;
 
+zhash_t *active_jobs = NULL;
+
 /*
  *  Return as 64bit integer the portion of integer `n`
  *   masked from bit position `a` to position `b`,
@@ -733,12 +735,77 @@ error:
     flux_future_destroy (f);
 }
 
+/* Track job state transition in active_jobs hash
+ * Currently only id, kvs_path, and state are tracked.
+ */
+static void wreck_state_cb (flux_t *h, flux_msg_handler_t *w,
+                            const flux_msg_t *msg, void *arg)
+{
+    int64_t id;
+    const char *topic;
+    const char *kvs_path;
+    struct wreck_job *job;
+
+    if (flux_event_unpack (msg, &topic, "{s:I s:s}",
+                           "jobid", &id,
+                           "kvs_path", &kvs_path) < 0)
+        goto error;
+    topic += 12; // state comes after "wreck.state." (12 chars)
+    if (strlen (topic) == 0 || strlen (topic) >= sizeof (job->state)) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(job = wreck_job_lookup (id, active_jobs))) {
+        if (!(job = wreck_job_create ()))
+            goto error;
+        job->id = id;
+        if (!(job->kvs_path = strdup (kvs_path)))
+            goto error_destroy;
+        if (wreck_job_insert (job, active_jobs) < 0)
+            goto error_destroy;
+    }
+    wreck_job_set_state (job, topic);
+    if (!strcmp (job->state, "complete") || !strcmp (job->state, "failed"))
+        wreck_job_delete (id, active_jobs);
+    return;
+error_destroy:
+    wreck_job_destroy (job);
+error:
+    flux_log_error (h, "%s", __FUNCTION__);
+}
+
+static void job_list_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg, void *arg)
+{
+    char *json_str = NULL;
+    int max = 0;
+    const char *include = NULL;
+    const char *exclude = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s?:i s?:s s?:s}",
+                                        "max", &max,
+                                        "include", &include,
+                                        "exclude", &exclude) < 0)
+        goto error;
+    if (!(json_str = wreck_job_list (active_jobs, max, include, exclude)))
+        goto error;
+    if (flux_respond (h, msg, 0, json_str) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (json_str);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+}
+
 static const struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_create_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_create_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.submit-nocreate", job_submit_only, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.list",  job_list_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "wreck.state.*", wreck_state_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -747,11 +814,19 @@ int mod_main (flux_t *h, int argc, char **argv)
     flux_msg_handler_t **handlers = NULL;
     int rc = -1;
 
-    if (flux_msg_handler_addvec (h, mtab, NULL, &handlers) < 0) {
-        flux_log_error (h, "flux_msg_handler_addvec");
+    if (!(active_jobs = zhash_new ())) {
+        flux_log_error (h, "zhash_new");
         return (-1);
     }
+    if (flux_msg_handler_addvec (h, mtab, NULL, &handlers) < 0) {
+        flux_log_error (h, "flux_msg_handler_addvec");
+        goto done;
+    }
     if ((flux_event_subscribe (h, "wrexec.run.") < 0)) {
+        flux_log_error (h, "flux_event_subscribe");
+        goto done;
+    }
+    if ((flux_event_subscribe (h, "wreck.state.") < 0)) {
         flux_log_error (h, "flux_event_subscribe");
         goto done;
     }
@@ -786,6 +861,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (handlers);
+    zhash_destroy (&active_jobs);
     return rc;
 }
 
