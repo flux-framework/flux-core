@@ -386,10 +386,17 @@ local function bracketify (args)
     return (r)
 end
 
-local function joblist_from_args (self, args)
+local function joblist_from_args (arg)
+    local self = arg.self
+    local args = arg.args
+
     local max = tonumber (self.opt.n) or 25
     if #args == 0 then
-        return wreck.joblist{ flux = f, max = max }
+        return wreck.joblist{ flux = f,
+                              max = max,
+                              states = arg.states,
+                              active_only = arg.active_only,
+                              kvs_only = arg.kvs_only  }
     end
     -- otherwise use dirs on cmdline
     local hl,err = hostlist.union (unpack (bracketify (args)))
@@ -407,7 +414,7 @@ prog:SubCommand {
  },
  description = "List jobs in kvs",
  handler = function (self, arg)
-    local dirs,err = joblist_from_args (self, arg)
+    local dirs,err = joblist_from_args { self = self, args = arg }
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
@@ -440,7 +447,8 @@ prog:SubCommand {
  },
  description = "List FLUX_URI for jobs that are Flux instances",
  handler = function (self, arg)
-    local dirs,err = joblist_from_args (self, arg)
+    local dirs, err = joblist_from_args { self = self,
+                                          args = arg }
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %-40s %-.13s\n";
@@ -478,7 +486,7 @@ prog:SubCommand {
  },
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
-    local dirs,err = joblist_from_args (self, arg)
+    local dirs,err = joblist_from_args {self = self, args = arg}
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %12s %12s %12s %12s %12s\n"
