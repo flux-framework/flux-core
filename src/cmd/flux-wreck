@@ -410,11 +410,15 @@ prog:SubCommand {
  options = {
   { name = "max", char = 'n', arg="COUNT",
     usage = "Display at most COUNT jobs",
+  },
+  { name = "exclude-complete", char = 'x',
+    usage = "Skip the listing of complete jobs in the kvs"
   }
  },
  description = "List jobs in kvs",
  handler = function (self, arg)
-    local dirs,err = joblist_from_args { self = self, args = arg }
+    local dirs,err = joblist_from_args { self = self, args = arg,
+                                         active_only = self.opt.x }
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
@@ -447,8 +451,12 @@ prog:SubCommand {
  },
  description = "List FLUX_URI for jobs that are Flux instances",
  handler = function (self, arg)
-    local dirs, err = joblist_from_args { self = self,
-                                          args = arg }
+    -- Only include running jobs:
+    local states = { include = { running = true } }
+    local dirs,err = joblist_from_args { self = self,
+                                         args = arg,
+                                         states = states,
+                                         active_only = true }
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %-40s %-.13s\n";
@@ -653,8 +661,15 @@ prog:SubCommand {
 
     ---
     -- Gather LWJ path list
-    --
-    local dirs = wreck.joblist{ flux = f } or {}
+    -- Only include complete jobs
+    local states = { include = { complete = true,
+                                 failed = true
+                               }
+                   }
+    local dirs = wreck.joblist{ flux = f,
+                                kvs_only = true,
+                                states = states
+                              }  or {}
     if verbose then
         self:log ("%4.03fs: got lwj list (%d entries)\n", tt:get0(), #dirs)
     end
