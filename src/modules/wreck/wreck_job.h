@@ -1,6 +1,7 @@
 #ifndef HAVE_WJOB_H
 #define HAVE_WJOB_H
 
+#include <time.h>
 #include <stdint.h>
 #include <czmq.h>
 #include <flux/core.h>
@@ -16,13 +17,15 @@ struct wreck_job {
     int walltime;
     void *aux;
     flux_free_f aux_destroy;
+    struct timespec mtime;
 };
 
 void wreck_job_destroy (struct wreck_job *job);
 struct wreck_job *wreck_job_create (void);
 
 /* Set job status.
- * 'status' must be a string of 15 characters or less or function will assert.
+ * 'status' must be a string of 15 characters or less.
+ * wreck_job_get_state() returns an empty string if job is NULL.
  */
 void wreck_job_set_state (struct wreck_job *job, const char *status);
 const char *wreck_job_get_state (struct wreck_job *job);
@@ -40,9 +43,22 @@ int wreck_job_insert (struct wreck_job *job, zhash_t *hash);
 void wreck_job_delete (int64_t id, zhash_t *hash);
 
 /* Look up job in hash by id.
- * Returns job on success, NULL on failure.
+ * Returns job on success, NULL on failure with errno set.
  */
 struct wreck_job *wreck_job_lookup (int64_t id, zhash_t *hash);
+
+/* List entries in a hash of jobs, returning a serialized JSON object.
+ * The object contains a single array entry under the key "jobs".
+ * The array contains entries sorted by reverse "mtime" order of the form:
+ *   {"jobid":I "kvs_path":s "state":s}
+ * If max > 0, only the first 'max' entries are added to the array.
+ * If include_states or exclude_states are non-NULL, they represent a comma-
+ * separated list of states to include or exclude from the list, respectively.
+ * Return a string-encoded JSON object (caller must free) or NULL on failure
+ * with errno set.
+ */
+char *wreck_job_list (zhash_t *hash, int max, const char *include_states,
+                                              const char *exclude_states);
 
 /* Associate data and optional destructor with job.
  */
