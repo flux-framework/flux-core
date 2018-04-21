@@ -1128,7 +1128,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
-    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i }",
+    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i s:i }",
                            "ntasks", &ntasks,
                            "nnodes", &nnodes,
                            "ncores", &ncores,
