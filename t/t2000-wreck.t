@@ -444,12 +444,34 @@ test_expect_success 'flux-wreck: ls RANGE ignores missing jobids' '
 	flux kvs move tmp $LWJ &&
 	test $(cat ls-range.out | wc -l) = 3
 '
+test_expect_success 'flux-wreck: ls lists most recent "active" job first' '
+	flux wreckrun -d sleep 100 &&
+	KILL=$(last_job_id) &&
+	flux wreckrun -d sleep 100 &&
+	LASTID=$(last_job_id) &&
+	flux wreckrun hostname && flux wreckrun hostname &&
+	flux wreck ls --max=1 > ls-active.out &&
+	flux wreck kill $KILL &&
+	flux wreck kill $LASTID &&
+	test_debug "echo expecting $LASTID" &&
+	test_debug "cat ls-active.out" &&
+	test $(cat ls-active.out | wc -l) = 2 &&
+	tail -1 ls-active.out | grep ^\ *$LASTID
+'
 test_expect_success 'flux-wreck: purge works' '
 	flux wreck purge &&
 	flux wreck purge -t 2 -R &&
 	flux wreck ls &&
 	COUNT=$(flux wreck ls | grep -v NTASKS | wc -l) &&
 	test "$COUNT" = 2
+'
+test_expect_success 'flux-wreck: purge excludes active jobs' '
+	flux wreckrun -d sleep 100 &&
+	flux wreck purge -v -t 0 -R &&
+	flux wreck kill $(last_job_id) &&
+	flux wreck ls &&
+	COUNT=$(flux wreck ls | grep -v NTASKS | wc -l) &&
+	test "$COUNT" = 1
 '
 
 flux module list | grep -q sched || test_set_prereq NO_SCHED
