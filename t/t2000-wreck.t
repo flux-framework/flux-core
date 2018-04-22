@@ -439,8 +439,9 @@ test_expect_success 'flux-wreck: ls RANGE ignores missing jobids' '
 	LASTID=$(last_job_id) &&
 	LWJ=$(last_job_path) &&
 	flux wreckrun hostname &&
-	flux kvs unlink -R $LWJ &&
+	flux kvs move $LWJ tmp &&
 	flux wreck ls $((${LASTID}-1))-$((${LASTID}+1)) > ls-range.out &&
+	flux kvs move tmp $LWJ &&
 	test $(cat ls-range.out | wc -l) = 3
 '
 test_expect_success 'flux-wreck: purge works' '
