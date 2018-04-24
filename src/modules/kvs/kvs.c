@@ -2594,6 +2594,8 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
         goto cleanup_remove_root;
     }
 
+    json_decref (rootdir);
+    free (data);
     return 0;
 
 cleanup_remove_root:
