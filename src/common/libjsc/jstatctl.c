@@ -433,7 +433,7 @@ static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "s", &s) < 0) {
+             || flux_kvs_lookup_get (f, &s) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -842,7 +842,7 @@ static int update_rdl (flux_t *h, int64_t j, const char *rs)
         flux_log_error (h, "txn_create");
         goto done;
     }
-    if (flux_kvs_txn_pack (txn, 0, key, "s", rs) < 0) {
+    if (flux_kvs_txn_put (txn, 0, key, rs) < 0) {
         flux_log_error (h, "update %s", key);
         goto done;
     }
