@@ -392,6 +392,7 @@ local function joblist_from_args (arg)
     local args = arg.args
 
     local max = tonumber (self.opt.n) or 25
+    if max <= 0 then max = math.huge end
     if #args == 0 then
         return wreck.joblist{ flux = f,
                               max = max,
