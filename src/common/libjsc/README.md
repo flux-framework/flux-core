@@ -74,6 +74,7 @@ service.
 | rdesc      | JSC_RDESC      | dictionary     | Information on the resources owned by this job. See Table 3-3.                 |
 | rdl        | JSC_RDL        | string         | RDL binary string allocated to the job                                         |
 | rdl_alloc  | JSC_RDL\_ALLOC | array of per-broker resources | Resource descriptor array (Resources allocated per broker - rank order). See Table 3-4.|
+| R_lite     | JSC_R\_LITE    | string         | R\_lite serialized JSON string allocated to the job                            |
 | pdesc      | JSC_PDESC      | dictionary     | Information on the processes spawned by this job. See Table 3-5.               |
 
 **Table 3-1** Keys and values of top-level JCB attributes

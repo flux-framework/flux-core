@@ -73,6 +73,7 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 # define JSC_RDESC_NGPUS "ngpus"
 # define JSC_RDESC_WALLTIME "walltime"
 #define JSC_RDL "rdl"
+#define JSC_R_LITE "R_lite"
 #define JSC_RDL_ALLOC "rdl_alloc"
 # define JSC_RDL_ALLOC_CONTAINED "contained"
 #  define JSC_RDL_ALLOC_CONTAINING_RANK "cmbdrank"

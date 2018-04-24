@@ -446,6 +446,27 @@ static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
     return rc;
 }
 
+static int extract_raw_r_lite (flux_t *h, int64_t j, char **rlitestr)
+{
+    int rc = 0;
+    char *key = lwj_key (h, j, ".R_lite");
+    const char *s;
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get (f, &s) < 0) {
+        flux_log_error (h, "extract %s", key);
+        rc = -1;
+    }
+    else {
+        *rlitestr = xstrdup (s);
+        flux_log (h, LOG_DEBUG, "R_lite under %s extracted", key);
+    }
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
 {
     int rc = 0;
@@ -681,6 +702,21 @@ static int query_rdl (flux_t *h, int64_t j, json_object **jcb)
     return 0;
 }
 
+static int query_r_lite (flux_t *h, int64_t j, json_object **jcb)
+{
+    char *rlitestr = NULL;
+
+    if (extract_raw_r_lite (h, j, &rlitestr) < 0) return -1;
+
+    *jcb = Jnew ();
+    Jadd_str (*jcb, JSC_R_LITE, (const char *)rlitestr);
+    /* Note: seems there is no mechanism to transfer ownership
+     * of this string to jcb */
+    if (rlitestr)
+        free (rlitestr);
+    return 0;
+}
+
 static int query_rdl_alloc (flux_t *h, int64_t j, json_object **jcb)
 {
     *jcb = Jnew ();
@@ -851,6 +887,36 @@ static int update_rdl (flux_t *h, int64_t j, const char *rs)
         goto done;
     }
     flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
+    rc = 0;
+
+done:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+    free (key);
+
+    return rc;
+}
+
+static int update_r_lite (flux_t *h, int64_t j, const char *rs)
+{
+    int rc = -1;
+    char *key = lwj_key (h, j, ".R_lite");
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "txn_create");
+        goto done;
+    }
+    if (flux_kvs_txn_put (txn, 0, key, rs) < 0) {
+        flux_log_error (h, "update %s", key);
+        goto done;
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "commit failed");
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new R_lite.", j);
     rc = 0;
 
 done:
@@ -1299,6 +1365,9 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
     } else if (!strcmp (key, JSC_RDL)) {
         if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl failed");
+    } else if (!strcmp (key, JSC_R_LITE)) {
+        if ( (rc = query_r_lite (h, jobid, &jcb)) < 0)
+            flux_log (h, LOG_ERR, "query_r_lite failed");
     } else if (!strcmp (key, JSC_RDL_ALLOC)) {
         if ( (rc = query_rdl_alloc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl_alloc failed");
@@ -1341,6 +1410,10 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
         const char *s = NULL;
         if (Jget_str (jcb, JSC_RDL, &s))
             rc = update_rdl (h, jobid, s);
+    } else if (!strcmp (key, JSC_R_LITE)) {
+        const char *s = NULL;
+        if (Jget_str (jcb, JSC_R_LITE, &s))
+            rc = update_r_lite (h, jobid, s);
     } else if (!strcmp (key, JSC_RDL_ALLOC)) {
         if (Jget_obj (jcb, JSC_RDL_ALLOC, &o))
             rc = update_rdl_alloc (h, jobid, o);
