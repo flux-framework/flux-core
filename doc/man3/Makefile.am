@@ -104,6 +104,8 @@ MAN3_FILES_SECONDARY = \
 	flux_event_unpack.3 \
 	flux_event_encode.3 \
 	flux_event_pack.3 \
+	flux_event_encode_raw.3 \
+	flux_event_decode_raw.3 \
 	flux_response_decode_raw.3 \
 	flux_request_encode_raw.3 \
 	flux_content_load_get.3 \
@@ -222,6 +224,8 @@ flux_request_decode_raw.3: flux_request_decode.3
 flux_event_unpack.3: flux_event_decode.3
 flux_event_encode.3: flux_event_decode.3
 flux_event_pack.3: flux_event_decode.3
+flux_event_encode_raw.3: flux_event_decode.3
+flux_event_decode_raw.3: flux_event_decode.3
 flux_response_decode_raw.3: flux_response_decode.3
 flux_request_encode_raw.3: flux_request_encode.3
 flux_content_load_get.3: flux_content_load.3
