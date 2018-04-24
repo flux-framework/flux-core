@@ -230,10 +230,10 @@ EOF
 "
 
 test_expect_success 'jstat 12: update rdl' "
-    flux jstat update 1 rdl '{\"rdl\": \"fake_rdl_string\"}' &&
+    flux jstat update 1 rdl '{\"rdl\": {\"cluster\": \"fake_rdl_string\"}}' &&
     flux kvs get --json $(flux wreck kvs-path 1).rdl > output.12.1 &&
     cat > expected.12.1 <<-EOF &&
-fake_rdl_string
+{\"cluster\": \"fake_rdl_string\"}
 EOF
     test_cmp expected.12.1 output.12.1 
 "
