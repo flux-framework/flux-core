@@ -8,6 +8,10 @@ int main (int argc, char *argv[])
     flux_msg_t *msg;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
+    const char data[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    int len = strlen (data);
+    const void *d;
+    int l;
     int i;
 
     plan (NO_PLAN);
@@ -16,6 +20,10 @@ int main (int argc, char *argv[])
     errno = 0;
     ok ((msg = flux_event_encode (NULL, json_str)) == NULL && errno == EINVAL,
         "flux_event_encode returns EINVAL with no topic string");
+    errno = 0;
+    ok ((msg = flux_event_encode_raw (NULL, data, len)) == NULL
+        && errno == EINVAL,
+        "flux_event_encode_raw topic=NULL fails with EINVAL");
 
     /* without payload */
     ok ((msg = flux_event_encode ("foo.bar", NULL)) != NULL,
@@ -53,6 +61,28 @@ int main (int argc, char *argv[])
         "flux_event_unpack unpacked payload object");
     ok (i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
         "unpacked payload matched packed");
+    flux_msg_destroy (msg);
+
+    /* raw */
+    ok ((msg = flux_event_encode_raw ("foo.bar", data, len)) != NULL,
+        "flux_event_encode_raw works with payload");
+    d = NULL;
+    l = 0;
+    topic = NULL;
+    ok (flux_event_decode_raw (msg, &topic, &d, &l) == 0
+        && topic != NULL && strcmp (topic, "foo.bar") == 0
+        && d != NULL && len == len && memcmp (d, data, len) == 0,
+        "flux_event_decode_raw returns encoded topic and payload");
+    ok (flux_event_decode_raw (msg, NULL, &d, &l) == 0
+        && d != NULL && len == len && memcmp (d, data, len) == 0,
+        "flux_event_decode_raw topic=NULL returns encoded payload");
+
+    errno = 0;
+    ok (flux_event_decode_raw (msg, NULL, NULL, &l) < 0 && errno == EINVAL,
+        "flux_event_decode_raw data=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_decode_raw (msg, NULL, &d, NULL) < 0 && errno == EINVAL,
+        "flux_event_decode_raw len=NULL fails with EINVAL");
     flux_msg_destroy (msg);
 
     done_testing();
