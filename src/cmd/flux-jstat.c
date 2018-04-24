@@ -41,7 +41,7 @@
 /******************************************************************************
  *                                                                            *
  *                Internal types, macros and static variables                 *
- *                                                                            * 
+ *                                                                            *
  ******************************************************************************/
 typedef struct {
     flux_t *h;
@@ -62,7 +62,7 @@ static const struct option longopts[] = {
 /******************************************************************************
  *                                                                            *
  *                              Utilities                                     *
- *                                                                            * 
+ *                                                                            *
  ******************************************************************************/
 static void usage (int code)
 {
@@ -104,9 +104,9 @@ static void sig_handler (int s)
 static FILE *open_test_outfile (const char *fn)
 {
     FILE *fp;
-    if (!fn) 
-        fp = NULL; 
-    else if ( !(fp = fopen (fn, "w"))) 
+    if (!fn)
+        fp = NULL;
+    else if ( !(fp = fopen (fn, "w")))
         fprintf (stderr, "Failed to open %s\n", fn);
     return fp;
 }
@@ -128,7 +128,7 @@ static inline void get_states (json_object *jcb, int64_t *os, int64_t *ns)
 /******************************************************************************
  *                                                                            *
  *                      Async notification callback                           *
- *                                                                            * 
+ *                                                                            *
  ******************************************************************************/
 
 static int job_status_cb (const char *jcbstr, void *arg, int errnum)
@@ -154,8 +154,8 @@ static int job_status_cb (const char *jcbstr, void *arg, int errnum)
     get_states (jcb, &os, &ns);
     Jput (jcb);
 
-    fprintf (ctx->op, "%s->%s\n", 
-    jsc_job_num2state ((job_state_t)os), 
+    fprintf (ctx->op, "%s->%s\n",
+    jsc_job_num2state ((job_state_t)os),
     jsc_job_num2state ((job_state_t)ns));
     fflush (ctx->op);
 
@@ -174,7 +174,7 @@ static int handle_notify_req (flux_t *h, const char *ofn)
     jstatctx_t *ctx = NULL;
 
     sig_flux_h = h;
-    if (signal (SIGINT, sig_handler) == SIG_ERR) 
+    if (signal (SIGINT, sig_handler) == SIG_ERR)
         return -1;
 
     ctx = getctx (h);
@@ -182,9 +182,9 @@ static int handle_notify_req (flux_t *h, const char *ofn)
 
     if (jsc_notify_status (h, job_status_cb, (void *)h) != 0) {
         flux_log (h, LOG_ERR, "failed to reg a job status change CB");
-        return -1; 
+        return -1;
     }
-    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) 
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         flux_log (h, LOG_ERR, "error in flux_reactor_run");
 
     return 0;
@@ -211,7 +211,7 @@ static int handle_query_req (flux_t *h, int64_t j, const char *k, const char *n)
     return 0;
 }
 
-static int handle_update_req (flux_t *h, int64_t j, const char *k, 
+static int handle_update_req (flux_t *h, int64_t j, const char *k,
                               const char *jcbstr, const char *n)
 {
     jstatctx_t *ctx = NULL;
@@ -230,7 +230,7 @@ static int handle_update_req (flux_t *h, int64_t j, const char *k,
 
 int main (int argc, char *argv[])
 {
-    flux_t *h; 
+    flux_t *h;
     int ch = 0;
     int rc = 0;
     char *cmd = NULL;
@@ -267,7 +267,7 @@ int main (int argc, char *argv[])
     else if (!strcmp ("query", cmd) && optind == argc - 2) {
         j = (const char *)(*(argv+optind));
         attr = (const char *)(*(argv+optind+1));
-        rc = handle_query_req (h, strtol (j, NULL, 10), attr, ofn); 
+        rc = handle_query_req (h, strtol (j, NULL, 10), attr, ofn);
     }
     else if (!strcmp ("update", cmd) && optind == argc - 3) {
         j = (const char *)(*(argv+optind));
@@ -275,7 +275,7 @@ int main (int argc, char *argv[])
         jcbstr = (const char *)(*(argv+optind+2));
         rc = handle_update_req (h, strtol (j, NULL, 10), attr, jcbstr, ofn);
     }
-    else 
+    else
         usage (1);
 
     flux_close (h);
