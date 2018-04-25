@@ -32,7 +32,6 @@
 #include <flux/optparse.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libjson-c/json.h"
 
 
 static int event_pub (optparse_t *p, int argc, char **argv);
@@ -84,37 +83,35 @@ static void event_pub_register (optparse_t *parent)
 
 static int event_pub (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h;
-    char *topic = argv[1];  /* "pub" should be argv0 */
-    flux_msg_t *msg = NULL;
-    char *json_str = NULL;
-    int e, n;
+    flux_t *h = optparse_get_data (p, "handle");
+    int optindex = optparse_option_index (p);
+    const char *topic;
+    char *payload = NULL;
+    flux_msg_t *msg;
 
-    if (!topic) {
+    if (optindex == argc) {
         optparse_print_usage (p);
         exit (1);
     }
+    topic = argv[optindex++];
 
-    if (!(h = optparse_get_data (p, "handle")))
-        log_err_exit ("failed to get handle");
-
-    n = optparse_option_index (p);
-    if (n < argc - 1) {
+    /* Concatenate any remaining arguments to form payload.
+     */
+    if (optindex < argc) {
         size_t len = 0;
-        json_object *o;
-        if ((e = argz_create (argv + n + 1, &json_str, &len)) != 0)
+        int e;
+        if ((e = argz_create (argv + optindex, &payload, &len)) != 0)
             log_errn_exit (e, "argz_create");
-        argz_stringify (json_str, len, ' ');
-        if (*json_str != '{' || !(o = json_tokener_parse (json_str)))
-            log_msg_exit ("JSON argument must be a valid JSON object");
-        json_object_put (o);
+        argz_stringify (payload, len, ' ');
     }
-    if (!(msg = flux_event_encode (topic, json_str))
-              || flux_send (h, msg, 0) < 0)
-        log_err_exit ("sending event");
-    if (json_str)
-        free (json_str);
+
+    if (!(msg = flux_event_encode (topic, payload)))
+        log_err_exit ("flux_event_encode");
+    if (flux_send (h, msg, 0) < 0)
+        log_err_exit ("flux_send");
+
     flux_msg_destroy (msg);
+    free (payload);
     return (0);
 }
 
