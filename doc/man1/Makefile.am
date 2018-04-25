@@ -22,7 +22,8 @@ MAN1_FILES_PRIMARY = \
 	flux-hwloc.1 \
 	flux-proxy.1 \
 	flux-cron.1 \
-	flux-user.1
+	flux-user.1 \
+	flux-event.1
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
