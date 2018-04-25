@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <libgen.h>
 #include <argz.h>
+#include <ctype.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 
@@ -128,6 +129,28 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+static char *make_printable (const char *buf, int bufsz, int maxlen)
+{
+    int i;
+    char *s;
+    int len = bufsz < maxlen ? bufsz : maxlen;
+
+    if (!(s = calloc (1, len + 1)))
+        log_err_exit ("calloc");
+    if (buf == NULL)
+        return s;
+    for (i = 0; i < len; i++) {
+        if (bufsz > maxlen && i >= len - 3) // indicate truncation w/ "..."
+            s[i] = '.';
+        else if (isprint (buf[i]))
+            s[i] = buf[i];
+        else
+            s[i] = '.';
+    }
+    s[i] = '\0';
+    return s;
+}
+
 static int subscribe_multiple (flux_t *h, int tc, char **tv)
 {
     int i;
@@ -174,13 +197,21 @@ static void event_cb (flux_t *h, flux_msg_handler_t *mh,
     optparse_t *p = arg;
     int max_count = optparse_get_int (p, "count", 0);
     static int recv_count = 0;
-    const char *json_str;
+    const char *payload;
+    int payloadsz;
     const char *topic;
 
-    if (flux_event_decode (msg, &topic, &json_str) < 0)
-        printf ("malformed message ignored\n");
+    if (flux_event_decode (msg, &topic, &payload) == 0)
+        printf ("%s\t%s\n", topic, payload ? payload : "");
+    else if (flux_event_decode_raw (msg, &topic, (const void **)&payload,
+                                                          &payloadsz) == 0) {
+        int maxlen = payloadsz; // no truncation
+        char *s = make_printable (payload, payloadsz, maxlen);
+        printf ("%s\t%s\n", topic, s);
+        free (s);
+    }
     else
-        printf ("%s\t%s\n", topic, json_str ? json_str : "");
+        printf ("malformed message ignored\n");
     if (max_count > 0 && ++recv_count == max_count)
         flux_msg_handler_stop (mh);
 }
