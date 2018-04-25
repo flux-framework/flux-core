@@ -33,4 +33,16 @@ test_expect_success "events from rank $LASTRANK received correctly on rank 0" '
         test_cmp trace.expected trace
 '
 
+test_expect_success 'publish event with no payload (loopback)' '
+	run_timeout 5 flux event pub -l foo.bar
+'
+
+test_expect_success 'publish event with JSON payload (loopback)' '
+	run_timeout 5 flux event pub -l foo.bar {}
+'
+
+test_expect_success 'publish event with raw payload (loopback)' '
+	run_timeout 5 flux event pub -l -r foo.bar foo
+'
+
 test_done
