@@ -42,10 +42,11 @@
 #endif
 #endif /* WITH_TCMALLOC */
 
+#include <jansson.h>
+
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
 #include "rcalc.h"
 #include "wreck_job.h"
@@ -192,25 +193,33 @@ static int add_jobinfo_txn (flux_kvs_txn_t *txn, struct wreck_job *job)
 {
     char buf [64];
     const char *json_str;
-    json_object_iter i;
     char key[MAX_JOB_PATH];
+    size_t keysz = sizeof (key);
     flux_msg_t *msg = wreck_job_get_aux (job);
-    json_object *o = NULL;
+
+    const char *k;
+    json_t *v;
+    json_t *o = NULL;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
-    if (!json_str || !(o = json_tokener_parse (json_str)))
+    if (!json_str || !(o = json_loads (json_str, 0, NULL)))
         goto inval;
     if (snprintf (key, sizeof (key), "%s.state", job->kvs_path) >= sizeof (key))
         goto inval;
     if (flux_kvs_txn_pack (txn, 0, key, "s", job->state) < 0)
         goto error;
-    json_object_object_foreachC (o, i) {
-        if (snprintf (key, sizeof (key), "%s.%s", job->kvs_path, i.key)
-                                                        >= sizeof (key))
+
+    json_object_foreach (o, k, v) {
+        int rc;
+        char *s;
+        if (snprintf (key, keysz, "%s.%s", job->kvs_path, k) >= keysz)
             goto inval;
-        if (flux_kvs_txn_put (txn, 0, key,
-                              json_object_to_json_string (i.val)) < 0)
+        if (!(s = json_dumps (v, JSON_COMPACT|JSON_ENCODE_ANY)))
+            goto error;
+        rc = flux_kvs_txn_put (txn, 0, key, s);
+        free (s);
+        if (rc < 0)
             goto error;
     }
     if (snprintf (key, sizeof (key), "%s.create-time", job->kvs_path)
@@ -219,13 +228,12 @@ static int add_jobinfo_txn (flux_kvs_txn_t *txn, struct wreck_job *job)
     if (flux_kvs_txn_pack (txn, 0, key, "s",
                            realtime_string (buf, sizeof (buf))) < 0)
         goto error;
-    json_object_put (o);
+    json_decref (o);
     return 0;
 inval:
     errno = EINVAL;
 error:
-    if (o)
-        json_object_put (o);
+    json_decref (o);
     return -1;
 }
 
@@ -443,69 +451,68 @@ error:
     flux_future_destroy (f);
 }
 
+static json_t *json_id_to_json_path (flux_t *h, json_t *value)
+{
+    int64_t id;
+    char *path = NULL;
+    json_t *o = NULL;
+    int errnum = EPROTO;
+
+    if (!json_is_integer (value) || (id = json_integer_value (value)) < 0)
+        goto out;
+    if (!(path = id_to_path (id))) {
+        errnum = errno;
+        flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
+        goto out;
+    }
+    if (!(o = json_string (path))) {
+        errnum = errno;
+        flux_log_error (h, "kvspath_cb: json_string");
+        goto out;
+    }
+    errnum = 0;
+out:
+    free (path);
+    errno = errnum;
+    return (o);
+}
+
 static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
     int errnum = EPROTO;
-    int i, n;
-    const char *json_str;
-    json_object *in = NULL;
-    json_object *out = NULL;
-    json_object *ar = NULL;
-    json_object *id_list = NULL;
+    size_t index;
+    json_t *id_list = NULL;
+    json_t *paths = NULL;
+    json_t *value;
 
-    if (flux_msg_get_json (msg, &json_str) < 0)
-        goto out;
-
-    if (!(in = Jfromstr (json_str))) {
-        flux_log (h, LOG_ERR, "kvspath_cb: Failed to parse JSON string");
+    if ((flux_request_unpack (msg, NULL, "{s:o}", "ids", &id_list) < 0)
+        || !json_is_array (id_list)) {
+        flux_log_error (h, "kvspath_cb failed to unpack message");
         goto out;
     }
 
-    if (!Jget_obj (in, "ids", &id_list)) {
-        flux_log (h, LOG_ERR, "kvspath_cb: required key ids missing");
-        goto out;
-    }
-
-    if (!json_object_is_type (id_list, json_type_array)) {
-        errno = EPROTO;
-        goto out;
-    }
-
-    if (!(out = json_object_new_object ())
-        || !(ar = json_object_new_array ())) {
-        flux_log (h, LOG_ERR, "kvspath_cb: json_object_new_object failed");
-        goto out;
-    }
-
-    errnum = ENOMEM;
-    n = json_object_array_length (id_list);
-    for (i = 0; i < n; i++) {
-        json_object *r;
-        json_object *v = json_object_array_get_idx (id_list, i);
-        int64_t id = json_object_get_int64 (v);
-        char * path;
-        if (!(path = id_to_path (id))) {
-            flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
+    paths = json_array ();
+    json_array_foreach (id_list, index, value) {
+        json_t *o = json_id_to_json_path (h, value);
+        if (o == NULL) {
+            errnum = errno;
             goto out;
         }
-        r = json_object_new_string (path);
-        free (path);
-        if (r == NULL) {
-            flux_log_error (h, "kvspath_cb: json_object_new_string");
+        if (json_array_append_new (paths, o) < 0) {
+            errnum = errno;
+            flux_log_error (h, "kvspath_cb: json_array_append_new");
+            json_decref (o);
             goto out;
         }
-        json_object_array_add (ar, r);
     }
-    json_object_object_add (out, "paths", ar);
-    ar = NULL; /* allow Jput below */
+    if (flux_respond_pack (h, msg, "{s:O}", "paths", paths) < 0)
+        flux_log_error (h, "kvspath_cb: flux_respond_pack");
     errnum = 0;
 out:
-    if (flux_respond (h, msg, errnum, out ? Jtostr (out) : NULL) < 0)
+    if (errnum && flux_respond (h, msg, errnum, NULL) < 0)
         flux_log_error (h, "kvspath_cb: flux_respond");
-    Jput (in);
-    Jput (ar);
-    Jput (out);
+    json_decref (paths);
 }
 
 static int flux_attr_set_int (flux_t *h, const char *attr, int val)
