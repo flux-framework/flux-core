@@ -73,9 +73,31 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+static bool match_payload (const char *s1, const char *s2)
+{
+    if (!s1 && !s2)
+        return true;
+    if (!s2 || !s1)
+        return false;
+    return !strcmp (s1, s2);
+}
+
+static bool match_payload_raw (const void *p1, int p1sz,
+                               const char *p2, int p2sz)
+{
+    if (!p1 && !p2)
+        return true;
+    if (p1sz != p2sz)
+        return false;
+    return !memcmp (p1, p2, p1sz);
+}
+
 static struct optparse_option pub_opts[] = {
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Interpret event payload as raw.",
+    },
+    { .name = "loopback", .key = 'l', .has_arg = 0,
+      .usage = "Wait for published event to be received before exiting.",
     },
     OPTPARSE_TABLE_END
 };
@@ -92,7 +114,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = optparse_get_data (p, "handle");
     int optindex = optparse_option_index (p);
-    const char *topic;
+    char *topic;
     char *payload = NULL;
     flux_msg_t *msg;
 
@@ -112,17 +134,62 @@ static int event_pub (optparse_t *p, int argc, char **argv)
         argz_stringify (payload, len, ' ');
     }
 
+    if (optparse_hasopt (p, "loopback")) {
+        if (flux_event_subscribe (h, topic) < 0)
+            log_err_exit ("flux_event_subscribe");
+    }
+
     if (optparse_hasopt (p, "raw")) {
         int payloadsz = payload ? strlen (payload) : 0;
         if (!(msg = flux_event_encode_raw (topic, payload, payloadsz)))
             log_err_exit ("flux_event_encode_raw");
+        if (flux_send (h, msg, 0) < 0)
+            log_err_exit ("flux_send");
+        if (optparse_hasopt (p, "loopback")) {
+            flux_msg_t *msg;
+            const void *data;
+            int len;
+            struct flux_match match = FLUX_MATCH_EVENT;
+            bool received = false;
+            match.topic_glob = topic;
+
+            while (!received) {
+                if (!(msg = flux_recv (h, match, 0)))
+                    log_err_exit ("flux_recv error");
+                if ((flux_event_decode_raw (msg, NULL, &data, &len) == 0
+                        && match_payload_raw (payload, payloadsz, data, len)))
+                    received = true;
+                flux_msg_destroy (msg);
+            }
+        }
     }
     else {
         if (!(msg = flux_event_encode (topic, payload)))
             log_err_exit ("flux_event_encode");
+        if (flux_send (h, msg, 0) < 0)
+            log_err_exit ("flux_send");
+        if (optparse_hasopt (p, "loopback")) {
+            flux_msg_t *recvmsg;
+            const char *data;
+            struct flux_match match = FLUX_MATCH_EVENT;
+            bool received = false;
+            match.topic_glob = topic;
+
+            while (!received) {
+                if (!(recvmsg = flux_recv (h, match, 0)))
+                    log_err_exit ("flux_recv error");
+                if ((flux_event_decode (recvmsg, NULL, &data) == 0
+                        && match_payload (payload, data)))
+                    received = true;
+                flux_msg_destroy (recvmsg);
+            }
+        }
     }
-    if (flux_send (h, msg, 0) < 0)
-        log_err_exit ("flux_send");
+
+    if (optparse_hasopt (p, "loopback")) {
+        if (flux_event_unsubscribe (h, topic) < 0)
+            log_err_exit ("flux_event_unsubscribe");
+    }
 
     flux_msg_destroy (msg);
     free (payload);
