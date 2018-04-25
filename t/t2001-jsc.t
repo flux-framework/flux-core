@@ -230,15 +230,15 @@ EOF
 "
 
 test_expect_success 'jstat 12: update rdl' "
-    flux jstat update 1 rdl '{\"rdl\": \"fake_rdl_string\"}' &&
+    flux jstat update 1 rdl '{\"rdl\": {\"cluster\": \"fake_rdl_string\"}}' &&
     flux kvs get --json $(flux wreck kvs-path 1).rdl > output.12.1 &&
     cat > expected.12.1 <<-EOF &&
-fake_rdl_string
+{\"cluster\": \"fake_rdl_string\"}
 EOF
     test_cmp expected.12.1 output.12.1 
 "
 
-test_expect_success 'jstat 13: update rdl_alloc' "
+test_expect_success 'jstat 13.1: update rdl_alloc' "
     flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdrank\": 0, \"cmbdncores\": 102, \"cmbdngpus\": 4}}]}' &&
     flux kvs get --json $(flux wreck kvs-path 1).rank.0.cores > output.13.1 &&
     flux kvs get --json $(flux wreck kvs-path 1).rank.0.gpus >> output.13.1 &&
@@ -247,6 +247,15 @@ test_expect_success 'jstat 13: update rdl_alloc' "
 4
 EOF
     test_cmp expected.13.1 output.13.1 
+"
+
+test_expect_success 'jstat 13.2: update r_lite' "
+    flux jstat update 1 R_lite '{\"R_lite\": [{\"children\": {\"core\": \"0\"}, \"rank\": 0}]}' &&
+    flux kvs get --json $(flux wreck kvs-path 1).R_lite > output.13.2 &&
+    cat > expected.13.2 <<-EOF &&
+[{\"children\": {\"core\": \"0\"}, \"rank\": 0}]
+EOF
+    test_cmp expected.13.2 output.13.2
 "
 
 test_expect_success 'jstat 14: update detects bad inputs' "
