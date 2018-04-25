@@ -168,15 +168,34 @@ void event_sub_register (optparse_t *parent)
         log_err_exit ("optparse_reg_subcommand");
 }
 
+static void event_cb (flux_t *h, flux_msg_handler_t *mh,
+                      const flux_msg_t *msg, void *arg)
+{
+    optparse_t *p = arg;
+    int max_count = optparse_get_int (p, "count", 0);
+    static int recv_count = 0;
+    const char *json_str;
+    const char *topic;
+
+    if (flux_event_decode (msg, &topic, &json_str) < 0)
+        printf ("malformed message ignored\n");
+    else
+        printf ("%s\t%s\n", topic, json_str ? json_str : "");
+    if (max_count > 0 && ++recv_count == max_count)
+        flux_msg_handler_stop (mh);
+}
+
 static int event_sub (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = optparse_get_data (p, "handle");
     int optindex = optparse_option_index (p);
-    flux_msg_t *msg;
-    int count, n;
+    flux_reactor_t *r;
+    flux_msg_handler_t *mh;
 
     if (!h)
         log_err_exit ("failed to get handle");
+    if (!(r = flux_get_reactor (h)))
+        log_err_exit ("failed to get reactor");
 
     /* Since output is line-based with undeterministic amount of time
      * between lines, force stdout to be line buffered so our output
@@ -187,23 +206,13 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     if (subscribe_multiple (h, argc - optindex, argv + optindex) < 0)
         log_err_exit ("flux_event_subscribe");
 
-    n = 0;
-    count = optparse_get_int (p, "count", 0);
-    while ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0))) {
-        const char *topic;
-        const char *json_str;
-        if (flux_event_decode (msg, &topic, &json_str) < 0)
-            printf ("malformed message ignored\n");
-        else
-            printf ("%s\t%s\n", topic, json_str ? json_str : "");
-        flux_msg_destroy (msg);
+    if (!(mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, event_cb, p)))
+        log_err_exit ("flux_msg_handler_create");
+    flux_msg_handler_start (mh);
+    if (flux_reactor_run (r, 0) < 0)
+        log_err_exit ("flux_reactor_run");
+    flux_msg_handler_destroy (mh);
 
-        /* Wait for at most count events */
-        if (count > 0 && ++n == count)
-            break;
-    }
-    /* FIXME: add SIGINT handler to exit above loop and clean up.
-     */
     if (unsubscribe_multiple (h, argc - optindex, argv + optindex) , 0)
         log_err_exit ("flux_event_subscribe");
     return (0);
