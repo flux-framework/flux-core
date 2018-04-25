@@ -128,59 +128,57 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static void subscribe_all (flux_t *h, int tc, char **tv)
+static int subscribe_multiple (flux_t *h, int tc, char **tv)
 {
     int i;
+
+    if (tc == 0)
+        return flux_event_subscribe (h, "");
     for (i = 0; i < tc; i++) {
         if (flux_event_subscribe (h, tv[i]) < 0)
-            log_err_exit ("flux_event_subscribe");
+            return -1;
     }
+    return 0;
 }
 
-static void unsubscribe_all (flux_t *h, int tc, char **tv)
+static int unsubscribe_multiple (flux_t *h, int tc, char **tv)
 {
     int i;
+    if (tc == 0)
+        return flux_event_unsubscribe (h, "");
     for (i = 0; i < tc; i++) {
         if (flux_event_unsubscribe (h, tv[i]) < 0)
-            log_err_exit ("flux_event_unsubscribe");
+            return -1;
     }
+    return 0;
 }
 
-void event_sub_register (optparse_t *op)
+static const struct optparse_option sub_opts [] = {
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N", .group = 1,
+      .usage = "Process N events then exit"
+    },
+    { .name = "raw", .key = 'r', .has_arg = 0, .group = 1,
+      .usage = "Dump raw event message"
+    },
+    OPTPARSE_TABLE_END
+};
+
+void event_sub_register (optparse_t *parent)
 {
-    optparse_err_t e;
-    optparse_t *p;
-    struct optparse_option opts [] = {
-        {
-         .name = "count", .key = 'c', .group = 1,
-         .has_arg = 1, .arginfo = "N",
-         .usage = "Process N events then exit" },
-        {
-         .name = "raw", .key = 'r', .group = 1,
-         .has_arg = 0, .arginfo = NULL,
-         .usage = "Dump raw event message" },
-        OPTPARSE_TABLE_END
-    };
-
-    if (!(p = optparse_add_subcommand (op, "sub", event_sub)))
-        log_err_exit ("optparse_add_subcommand");
-
-    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
-        log_err_exit ("event sub: optparse_add_option_table");
-
-    e = optparse_set (p, OPTPARSE_USAGE, "[options] [topic...]");
-    if (e != OPTPARSE_SUCCESS)
-        log_err_exit ("optparse_set (USAGE) failed");
+    if (optparse_reg_subcommand (parent, "sub", event_sub,
+                                 "[OPTIONS] [topic...]", NULL, 0,
+                                 sub_opts) != OPTPARSE_SUCCESS)
+        log_err_exit ("optparse_reg_subcommand");
 }
 
 static int event_sub (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h;
+    flux_t *h = optparse_get_data (p, "handle");
+    int optindex = optparse_option_index (p);
     flux_msg_t *msg;
-    int n, count;
-    bool raw = false;
+    int count, n;
 
-    if (!(h = optparse_get_data (p, "handle")))
+    if (!h)
         log_err_exit ("failed to get handle");
 
     /* Since output is line-based with undeterministic amount of time
@@ -189,17 +187,13 @@ static int event_sub (optparse_t *p, int argc, char **argv)
      */
     setlinebuf (stdout);
 
-    n = optparse_option_index (p);
-    if (n < argc)
-        subscribe_all (h, argc - n, argv + n);
-    else if (flux_event_subscribe (h, "") < 0)
+    if (subscribe_multiple (h, argc - optindex, argv + optindex) < 0)
         log_err_exit ("flux_event_subscribe");
 
     n = 0;
     count = optparse_get_int (p, "count", 0);
-    raw = optparse_hasopt (p, "raw");
     while ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0))) {
-        if (raw) {
+        if (optparse_hasopt (p, "raw")) {
             flux_msg_fprint (stdout, msg);
         } else {
             const char *topic;
@@ -219,10 +213,7 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */
-    n = optparse_option_index (p);
-    if (n < argc)
-        unsubscribe_all (h, argc - n, argv + n);
-    else if (flux_event_unsubscribe (h, "") < 0)
+    if (unsubscribe_multiple (h, argc - optindex, argv + optindex) , 0)
         log_err_exit ("flux_event_subscribe");
     return (0);
 }
