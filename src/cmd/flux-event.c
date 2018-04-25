@@ -72,13 +72,19 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+static struct optparse_option pub_opts[] = {
+    { .name = "raw", .key = 'r', .has_arg = 0,
+      .usage = "Interpret event payload as raw.",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static void event_pub_register (optparse_t *parent)
 {
-    optparse_t *p = optparse_add_subcommand (parent, "pub", event_pub);
-    if (p == NULL)
-        log_err_exit ("optparse_add_subcommand");
-    if (optparse_set (p, OPTPARSE_USAGE, "topic [json]") != OPTPARSE_SUCCESS)
-        log_err_exit ("optparse_set (USAGE)");
+    if (optparse_reg_subcommand (parent, "pub", event_pub,
+                                 "[OPTIONS] topic [payload]", NULL, 0,
+                                 pub_opts) != OPTPARSE_SUCCESS)
+        log_err_exit ("optparse_reg_subcommand");
 }
 
 static int event_pub (optparse_t *p, int argc, char **argv)
@@ -105,8 +111,15 @@ static int event_pub (optparse_t *p, int argc, char **argv)
         argz_stringify (payload, len, ' ');
     }
 
-    if (!(msg = flux_event_encode (topic, payload)))
-        log_err_exit ("flux_event_encode");
+    if (optparse_hasopt (p, "raw")) {
+        int payloadsz = payload ? strlen (payload) : 0;
+        if (!(msg = flux_event_encode_raw (topic, payload, payloadsz)))
+            log_err_exit ("flux_event_encode_raw");
+    }
+    else {
+        if (!(msg = flux_event_encode (topic, payload)))
+            log_err_exit ("flux_event_encode");
+    }
     if (flux_send (h, msg, 0) < 0)
         log_err_exit ("flux_send");
 
