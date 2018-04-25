@@ -160,6 +160,13 @@ local function get_job_env (arg)
     return (env)
 end
 
+local function array_tonumber (t)
+    for i = 1, #t do
+        t[i] = tonumber (t[i])
+    end
+    return t
+end
+
 
 local function job_kvspath (f, id)
     assert (id, "Required argument id missing!")
@@ -167,7 +174,7 @@ local function job_kvspath (f, id)
     if type (id) == "table" then
         arg = id
     end
-    local r, err = f:rpc ("job.kvspath", {ids = arg })
+    local r, err = f:rpc ("job.kvspath", {ids = array_tonumber (arg) })
     if not r then error (err) end
     if type (id) == "table" then return r.paths end
     return r.paths [1]
