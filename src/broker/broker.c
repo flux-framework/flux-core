@@ -86,6 +86,7 @@
 #include "rusage.h"
 #include "boot_config.h"
 #include "boot_pmi.h"
+#include "publisher.h"
 
 /* Generally accepted max, although some go higher (IE is 2083) */
 #define ENDPOINT_MAX 2048
@@ -122,7 +123,6 @@ typedef struct {
      */
     bool verbose;
     int event_recv_seq;
-    int event_send_seq;
     bool event_active;          /* primary event source is active */
     struct service_switch *services;
     heartbeat_t *heartbeat;
@@ -130,6 +130,7 @@ typedef struct {
     double shutdown_grace;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
+    struct publisher *publisher;
     int tbon_k;
     /* Bootstrap
      */
@@ -181,6 +182,8 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
+
+static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
 static void init_attrs (attr_t *attrs, pid_t pid);
 
@@ -333,6 +336,8 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.runlevel = runlevel_create ()))
         oom ();
+    if (!(ctx.publisher = publisher_create ()))
+        oom ();
 
     init_attrs (ctx.attrs, getpid());
 
@@ -419,6 +424,20 @@ int main (int argc, char *argv[])
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
     overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
+
+    /* Arrange for the publisher to route event messages.
+     * overlay_sendmsg_event - PGM port (or clique relay host)
+     * handle_event - local subscribers (ctx.h)
+     */
+    if (publisher_set_flux (ctx.publisher, ctx.h) < 0)
+        log_err_exit ("publisher_set_flux");
+    if (publisher_set_sender (ctx.publisher, "overlay_sendmsg_event",
+                              (publisher_send_f)overlay_sendmsg_event,
+                              ctx.overlay) < 0)
+        log_err_exit ("publisher_set_sender");
+    if (publisher_set_sender (ctx.publisher, "handle_event",
+                              (publisher_send_f)handle_event, &ctx) < 0)
+        log_err_exit ("publisher_set_sender");
 
     if (create_rundir (ctx.attrs) < 0)
         log_err_exit ("create_rundir");
@@ -689,6 +708,7 @@ int main (int argc, char *argv[])
     attr_destroy (ctx.attrs);
     shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
+    publisher_destroy (ctx.publisher);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     if (ctx.subscriptions) {
@@ -1280,46 +1300,6 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     /* no response */
 }
 
-/* Publish event synchronously.
- * User sends request message with topic "cmb.pub.<topic>" to rank 0.
- * Service publishes event with same payload as request, topic=<topic>,
- * then responds with success or failure.
- * The synchronization use case driving the need for this is
- * discussed in issue #342
- */
-static void cmb_pub_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    const char *topic;
-    const char *json_str;
-    flux_msg_t *event = NULL;
-
-    if (overlay_get_rank (ctx->overlay) > 0) {
-        errno = ENOSYS;
-        goto error;
-    }
-    if (flux_request_decode (msg, &topic, &json_str) < 0)
-        goto error;
-    if (strlen (topic) <= 8) {
-        errno = EPROTO;
-        goto error;
-    }
-    topic += 8; // push past "cmb.pub." (8 chars)
-    if (!(event = flux_event_encode (topic, json_str)))
-        goto error;
-    if (flux_send (h, event, 0) < 0)
-        goto error;
-    if (flux_respond (h, msg, 0, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    goto done;
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-done:
-    flux_msg_destroy (event);
-}
-
 static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
@@ -1390,7 +1370,6 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.pub.*",      cmb_pub_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
@@ -1409,6 +1388,7 @@ static struct internal_service services[] = {
     { "hello",              NULL },
     { "attr",               NULL },
     { "heaptrace",          NULL },
+    { "event",              "[0]" },
     { NULL, NULL, },
 };
 
@@ -1493,7 +1473,9 @@ done:
     flux_msg_destroy (msg);
 }
 
-/* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
+/* helper for event_cb, parent_cb.
+ * On rank 0, publisher is wired to send events here also.
+ */
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t seq;
@@ -1518,11 +1500,14 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     }
     ctx->event_recv_seq = seq;
 
+    /* Forward to this rank's un-muted TBON children.
+     */
     if (overlay_mcast_child (ctx->overlay, msg) < 0)
         flux_log_error (ctx->h, "%s: overlay_mcast_child", __FUNCTION__);
+    /* Forward to other ranks in local clique, if we are the clique relay.
+     */
     if (overlay_sendmsg_relay (ctx->overlay, msg) < 0)
         flux_log_error (ctx->h, "%s: overlay_sendmsg_relay", __FUNCTION__);
-
 
     /* Internal services may install message handlers for events.
      */
@@ -1535,6 +1520,8 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
         }
         s = zlist_next (ctx->subscriptions);
     }
+    /* Finally, route to local module subscribers.
+     */
     return module_event_mcast (ctx->modhash, msg);
 }
 
@@ -1843,32 +1830,29 @@ done:
 }
 
 /* Events are forwarded up the TBON to rank 0, then published from there.
- * Rank 0 doesn't (generally) receive the events it transmits so we have
- * to "loop back" here via handle_event().
+ * (This mechanism predates and is separate from the "event.pub" service).
  */
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = NULL;
-    int rc = -1;
 
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
     if (overlay_get_rank(ctx->overlay) > 0) {
-        if (flux_msg_enable_route (cpy) < 0)
-            goto done;
-        rc = overlay_sendmsg_parent (ctx->overlay, cpy);
+        flux_msg_t *cpy;
+        if (!(cpy = flux_msg_copy (msg, true)))
+            return -1;
+        if (flux_msg_enable_route (cpy) < 0) {
+            flux_msg_destroy (cpy);
+            return -1;
+        }
+        if (overlay_sendmsg_parent (ctx->overlay, cpy) < 0) {
+            flux_msg_destroy (cpy);
+            return -1;
+        }
+        flux_msg_destroy (cpy);
     } else {
-        if (flux_msg_clear_route (cpy) < 0)
-            goto done;
-        if (flux_msg_set_seq (cpy, ++ctx->event_send_seq) < 0)
-            goto done;
-        if (overlay_sendmsg_event (ctx->overlay, cpy) < 0)
-            goto done;
-        rc = handle_event (ctx, cpy);
+        if (publisher_send (ctx->publisher, msg) < 0)
+            return -1;
     }
-done:
-    flux_msg_destroy (cpy);
-    return rc;
+    return 0;
 }
 
 /**
