@@ -8,6 +8,7 @@
 
 struct wreck_job {
     int64_t id;
+    int refcount;
     char *kvs_path;
     char state[16];
     int nnodes;
@@ -22,6 +23,7 @@ struct wreck_job {
 
 void wreck_job_destroy (struct wreck_job *job);
 struct wreck_job *wreck_job_create (void);
+void wreck_job_incref (struct wreck_job *job);
 
 /* Set job status.
  * 'status' must be a string of 15 characters or less.

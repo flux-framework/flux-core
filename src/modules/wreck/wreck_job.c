@@ -46,7 +46,7 @@ static char *idkey (hashkey_t key, int64_t id)
 
 void wreck_job_destroy (struct wreck_job *job)
 {
-    if (job) {
+    if (job && (--job->refcount == 0)) {
         int saved_errno = errno;
         if (job->aux_destroy)
             job->aux_destroy (job->aux);
@@ -56,11 +56,17 @@ void wreck_job_destroy (struct wreck_job *job)
     }
 }
 
+void wreck_job_incref (struct wreck_job *job)
+{
+    job->refcount++;
+}
+
 struct wreck_job *wreck_job_create (void)
 {
     struct wreck_job *job;
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
+    wreck_job_incref (job);
     return job;
 }
 
