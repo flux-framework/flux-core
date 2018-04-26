@@ -34,6 +34,20 @@ flux_msg_t *flux_event_encode (const char *topic, const char *json_str);
  */
 flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...);
 
+/* Encode an event message with optional raw payload.
+ */
+flux_msg_t *flux_event_encode_raw (const char *topic,
+                                   const void *data, int len);
+
+/* Decode an event message, with optional raw payload.
+ * If topic is non-NULL, assign the event topic string.
+ * Data and len must be non-NULL and will be assigned the payload and length.
+ * If there is no payload, they will be assigned NULL and zero.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_event_decode_raw (const flux_msg_t *msg, const char **topic,
+                           const void **data, int *len);
+
 #ifdef __cplusplus
 }
 #endif

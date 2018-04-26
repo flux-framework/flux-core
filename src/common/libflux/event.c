@@ -76,6 +76,35 @@ done:
     return rc;
 }
 
+int flux_event_decode_raw (const flux_msg_t *msg, const char **topicp,
+                           const void **datap, int *lenp)
+{
+    const char *topic;
+    const void *data = NULL;
+    int len = 0;
+    int flags;
+    int rc = -1;
+
+    if (!datap || !lenp) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (event_decode (msg, &topic) < 0)
+        goto done;
+    if (flux_msg_get_payload (msg, &flags, &data, &len) < 0) {
+        if (errno != EPROTO)
+            goto done;
+        errno = 0;
+    }
+    if (topicp)
+        *topicp = topic;
+    *datap = data;
+    *lenp = len;
+    rc = 0;
+done:
+    return rc;
+}
+
 static int flux_event_vunpack (const flux_msg_t *msg, const char **topic,
                                const char *fmt, va_list ap)
 {
@@ -131,6 +160,20 @@ flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
     if (!msg)
         goto error;
     if (json_str && flux_msg_set_json (msg, json_str) < 0)
+        goto error;
+    return msg;
+error:
+    flux_msg_destroy (msg);
+    return NULL;
+}
+
+flux_msg_t *flux_event_encode_raw (const char *topic,
+                                   const void *data, int len)
+{
+    flux_msg_t *msg = flux_event_create (topic);
+    if (!msg)
+        goto error;
+    if (data && flux_msg_set_payload (msg, 0, data, len) < 0)
         goto error;
     return msg;
 error:
