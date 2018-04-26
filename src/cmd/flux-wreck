@@ -53,7 +53,8 @@ end
 
 
 local function kvs_path (id, fmt, ...)
-    local p = assert (wreck.id_to_path { flux = f, jobid = id })
+    local id = assert (tonumber (id))
+    local p, err = assert (wreck.id_to_path { flux = f, jobid = id })
     if fmt then
         p = p .. "." .. string.format (fmt, ...)
     end
@@ -386,10 +387,18 @@ local function bracketify (args)
     return (r)
 end
 
-local function joblist_from_args (self, args)
+local function joblist_from_args (arg)
+    local self = arg.self
+    local args = arg.args
+
     local max = tonumber (self.opt.n) or 25
+    if max <= 0 then max = math.huge end
     if #args == 0 then
-        return wreck.joblist{ flux = f, max = max }
+        return wreck.joblist{ flux = f,
+                              max = max,
+                              states = arg.states,
+                              active_only = arg.active_only,
+                              kvs_only = arg.kvs_only  }
     end
     -- otherwise use dirs on cmdline
     local hl,err = hostlist.union (unpack (bracketify (args)))
@@ -403,11 +412,15 @@ prog:SubCommand {
  options = {
   { name = "max", char = 'n', arg="COUNT",
     usage = "Display at most COUNT jobs",
+  },
+  { name = "exclude-complete", char = 'x',
+    usage = "Skip the listing of complete jobs in the kvs"
   }
  },
  description = "List jobs in kvs",
  handler = function (self, arg)
-    local dirs,err = joblist_from_args (self, arg)
+    local dirs,err = joblist_from_args { self = self, args = arg,
+                                         active_only = self.opt.x }
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
@@ -440,7 +453,12 @@ prog:SubCommand {
  },
  description = "List FLUX_URI for jobs that are Flux instances",
  handler = function (self, arg)
-    local dirs,err = joblist_from_args (self, arg)
+    -- Only include running jobs:
+    local states = { include = { running = true } }
+    local dirs,err = joblist_from_args { self = self,
+                                         args = arg,
+                                         states = states,
+                                         active_only = true }
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %-40s %-.13s\n";
@@ -478,7 +496,7 @@ prog:SubCommand {
  },
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
-    local dirs,err = joblist_from_args (self, arg)
+    local dirs,err = joblist_from_args {self = self, args = arg}
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %12s %12s %12s %12s %12s\n"
@@ -645,8 +663,15 @@ prog:SubCommand {
 
     ---
     -- Gather LWJ path list
-    --
-    local dirs = wreck.joblist{ flux = f } or {}
+    -- Only include complete jobs
+    local states = { include = { complete = true,
+                                 failed = true
+                               }
+                   }
+    local dirs = wreck.joblist{ flux = f,
+                                kvs_only = true,
+                                states = states
+                              }  or {}
     if verbose then
         self:log ("%4.03fs: got lwj list (%d entries)\n", tt:get0(), #dirs)
     end
