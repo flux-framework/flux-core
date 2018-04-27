@@ -255,40 +255,32 @@ static bool sched_loaded (flux_t *h)
 static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
+    int64_t jobid;
     struct wreck_job *job = NULL;
-    const char *kvs_path;
     flux_future_t *f;
 
     if (!sched_loaded (h)) {
         errno = ENOSYS;
         goto error;
     }
-    if (!(job = wreck_job_create ()))
+    if (flux_request_unpack (msg, NULL, "{s:I}", "jobid", &jobid) < 0)
         goto error;
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s?:i s?:i s?:i s?:i s?:i}",
-                                          "jobid", &job->id,
-                                          "kvs_path", &kvs_path,
-                                          "ntasks", &job->ntasks,
-                                          "nnodes", &job->nnodes,
-                                          "ncores", &job->ncores,
-                                          "ngpus", &job->ngpus,
-                                          "walltime", &job->walltime) < 0)
+
+    if (!(job = wreck_job_lookup (jobid, active_jobs))) {
+        errno = ENOENT;
         goto error;
+    }
     wreck_job_set_state (job, "submitted");
-    if (!(job->kvs_path = strdup (kvs_path)))
-        goto error;
     if (!(f = send_create_event (h, job)))
         goto error;
     if (flux_future_get (f, NULL) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{s:I}", "jobid", job->id) < 0)
         flux_log_error (h, "flux_respond");
-    wreck_job_destroy (job);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "flux_respond");
-    wreck_job_destroy (job);
 }
 
 /* Handle request to broadcast wreck.state.<state> event.
@@ -314,7 +306,6 @@ static void job_create_event_continuation (flux_future_t *f, void *arg)
             flux_log_error (h, "flux_respond_pack");
     }
     flux_future_destroy (f);
-    wreck_job_destroy (job);
 }
 
 
@@ -330,6 +321,14 @@ static void job_create_kvs_continuation (flux_future_t *f, void *arg)
     flux_future_t *f_next = NULL;
 
     if (flux_future_get (f, NULL) < 0)
+        goto error;
+
+    /* Preemptively insert this job into the active job hash on this
+     *  node, making it available for use by job_submit_only (). We do
+     *  this *before* we send the event so we avoid racing with the
+     *  event handler that also inserts active jobs.
+     */
+    if (wreck_job_insert (job, active_jobs) < 0)
         goto error;
     if (!(f_next = send_create_event (h, job)))
         goto error;
