@@ -221,10 +221,7 @@ local submitted = false
 if not wreck:getopt ("I") then
     -- Attempt to submit this existing job via submit-nocreate RPC:
     --
-    local rc, err = f:rpc ("job.submit-nocreate",
-                       { jobid = jobid, kvs_path = tostring (lwj),
-                         nnodes = wreck.nnodes, ntasks = wreck.ntasks,
-                         walltime  = wreck.walltime })
+    local rc, err = f:rpc ("job.submit-nocreate", { jobid = jobid })
     if rc then
         submitted = true
         wreck:verbose ("%-4.03fs: job.submit: Success\n", tt:get0());
