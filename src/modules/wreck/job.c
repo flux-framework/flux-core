@@ -257,7 +257,7 @@ static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
 {
     int64_t jobid;
     struct wreck_job *job = NULL;
-    flux_future_t *f;
+    flux_future_t *f = NULL;;
 
     if (!sched_loaded (h)) {
         errno = ENOSYS;
@@ -277,10 +277,12 @@ static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (flux_respond_pack (h, msg, "{s:I}", "jobid", job->id) < 0)
         flux_log_error (h, "flux_respond");
+    flux_future_destroy (f);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "flux_respond");
+    flux_future_destroy (f);
 }
 
 /* Handle request to broadcast wreck.state.<state> event.
