@@ -121,6 +121,7 @@ static void freectx (void *arg)
     lru_cache_destroy (ctx->kvs_paths);
     zlist_destroy (&(ctx->callbacks));
     flux_msg_handler_delvec (ctx->handlers);
+    free (ctx);
 }
 
 static jscctx_t *getctx (flux_t *h)
@@ -1171,6 +1172,7 @@ static json_object *get_reserve_jcb (flux_t *h, int64_t nj)
                   __FUNCTION__);
         goto done;
     }
+    free (key);
     return jcb;
 
 done:
@@ -1226,6 +1228,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
         goto error;
     }
 
+    free (key);
     return jcb;
 
 error:
