@@ -63,6 +63,7 @@ TESTS = \
 	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
 	t2000-wreck-env.t \
+	t2000-wreck-dummy-sched.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
@@ -143,6 +144,7 @@ check_SCRIPTS = \
 	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
 	t2000-wreck-env.t \
+	t2000-wreck-dummy-sched.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
@@ -202,7 +204,8 @@ check_PROGRAMS = \
 check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
-	request/req.la
+	request/req.la \
+	wreck/sched-dummy.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -384,3 +387,9 @@ wreck_rcalc_CPPFLAGS = $(test_cppflags)
 wreck_rcalc_LDADD = \
         $(test_ldadd) $(LIBDL) $(LIBUTIL) \
 	$(top_builddir)/src/modules/wreck/rcalc.o
+
+wreck_sched_dummy_la_SOURCES = wreck/sched-dummy.c
+wreck_sched_dummy_la_CPPFLAGS = $(test_cppflags)
+wreck_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+wreck_sched_dummy_la_LIBADD = \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)
