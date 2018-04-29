@@ -252,6 +252,17 @@ static bool sched_loaded (flux_t *h)
     return (v);
 }
 
+/*
+ *  Respond to job.submit-nocreate rpc, which allows a job previously
+ *   created by "job.create" to be submitted (The "job.submit" rpc
+ *   creates *and* submits a job). Set the job state to "submitted"
+ *   and issue the wreck.state.submitted event with appropriate payload.
+ *
+ *  This rpc is used by flux-wreckrun when a scheduler is loaded so that
+ *   "interactive" jobs are subject to normal scheduling.
+ *   (The -I, --immediate flag of flux-wreckrun can be used to disable
+ *   this behavior)
+ */
 static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
