@@ -35,8 +35,6 @@ libutil_la_SOURCES = \
 	read_all.h \
 	ev_zmq.c \
 	ev_zmq.h \
-	ev_zlist.c \
-	ev_zlist.h \
 	base64.c \
 	base64.h \
 	msglist.c \

@@ -4,7 +4,6 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"
-#include "src/common/libutil/ev_zlist.h"
 #include "src/common/libtap/tap.h"
 
 void timer_arg_cb (struct ev_loop *loop, ev_timer *w, int revents)
@@ -243,13 +242,6 @@ void test_ev_zmq (void)
     zmq_ctx_destroy (zctx);
 }
 
-void list_cb (struct ev_loop *loop, ev_zlist *w, int revents)
-{
-    zmsg_t *zmsg = zlist_pop (w->zlist);
-    assert (zmsg != NULL);
-    zmsg_destroy (&zmsg);
-}
-
 void list_timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
     static int i = 100;
@@ -263,47 +255,14 @@ void list_timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
     }
 }
 
-/* timer adds zmsgs to zlist, then stops reactor after 100.
- */
-void test_ev_zlist (void)
-{
-    struct ev_loop *loop;
-    ev_zlist list_w;
-    ev_timer timer_w;
-    zlist_t *l;
-    zmsg_t *zmsg;
-
-    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL,
-        "ev_loop_new works");
-
-    if (!(l = zlist_new ()) || !(zmsg = zmsg_new ())
-                            || zlist_append (l, zmsg) < 0)
-        oom ();
-
-    ev_zlist_init (&list_w, list_cb, l, EV_READ);
-    ev_timer_init (&timer_w, list_timer_cb, 1E-3, 1E-3);
-    timer_w.data = l;
-    ev_zlist_start (loop, &list_w);
-    ev_timer_start (loop, &timer_w);
-    ok (ev_run (loop, 0) != 0 && zlist_size (l) == 0,
-        "ev_zlist handler ran 100 times");
-    ev_zlist_stop (loop, &list_w);
-    ev_timer_stop (loop, &timer_w);
-
-    if (l)
-        zlist_destroy (&l);
-    ev_loop_destroy (loop);
-}
-
 int main (int argc, char *argv[])
 {
-    plan (29);
+    plan (27);
 
     test_libev_timer (); // 5
     test_libev_io (); // 3
     test_zmq_events (); // 13
     test_ev_zmq (); // 6
-    test_ev_zlist (); // 2
 
     done_testing ();
 }
