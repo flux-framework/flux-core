@@ -23,6 +23,8 @@ int flux_future_then (flux_future_t *f, double timeout,
 
 int flux_future_wait_for (flux_future_t *f, double timeout);
 
+void flux_future_reset (flux_future_t *f);
+
 void flux_future_destroy (flux_future_t *f);
 
 void *flux_future_aux_get (flux_future_t *f, const char *name);
