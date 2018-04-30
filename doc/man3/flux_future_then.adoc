@@ -19,7 +19,7 @@ SYNOPSIS
  int flux_future_then (flux_future_t *f, double timeout,
                        flux_continuation_f cb, void *arg);
 
- int bool flux_future_wait_for (flux_future_t *f, double timeout);
+ int flux_future_wait_for (flux_future_t *f, double timeout);
 
  int flux_future_get (flux_future_t *f, void *result);
 
@@ -85,10 +85,6 @@ RETURN VALUE
 `flux_future_then()`, `flux_future_get()`, and `flux_future_wait_for()`
 return zero on success.  On error, -1 is returned, and errno is set
 appropriately.
-
-`flux_future_check()` returns a boolean result.  If an error occurs,
-it returns true.  A subsequent call to `flux_future_get()` returns
--1 with errno set to the error that occurred during the check.
 
 
 ERRORS
