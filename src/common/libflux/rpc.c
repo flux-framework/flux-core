@@ -50,19 +50,24 @@
 struct flux_rpc {
     flux_t *h;
     uint32_t matchtag;
-    bool inflight;
+    flux_future_t *f;
 };
 
 static void rpc_destroy (struct flux_rpc *rpc)
 {
     if (rpc) {
-        if (rpc->matchtag != FLUX_MATCHTAG_NONE && !rpc->inflight)
+        /* If future is unfulilled, a response is potentially in flight.
+         * Better to leak the matchtag than reuse it prematurely.
+         */
+        if (rpc->matchtag != FLUX_MATCHTAG_NONE
+                                 && flux_future_wait_for (rpc->f, 0.) == 0) {
             flux_matchtag_free (rpc->h, rpc->matchtag);
+        }
         free (rpc);
     }
 }
 
-static struct flux_rpc *rpc_create (flux_t *h, int flags)
+static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
 {
     struct flux_rpc *rpc;
 
@@ -71,7 +76,7 @@ static struct flux_rpc *rpc_create (flux_t *h, int flags)
         goto error;
     }
     rpc->h = h;
-    rpc->inflight = false;
+    rpc->f = f;
     if ((flags & FLUX_RPC_NORESPONSE)) {
         rpc->matchtag = FLUX_MATCHTAG_NONE;
     }
@@ -149,12 +154,9 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     flux_future_t *f = arg;
-    struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
     flux_msg_t *cpy;
     int saved_errno;
 
-    flux_msg_handler_stop (mh);
-    rpc->inflight = false;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
 #endif
@@ -178,19 +180,19 @@ error:
 static void initialize_cb (flux_future_t *f, void *arg)
 {
     struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
-    flux_msg_handler_t *mh;
     flux_t *h = flux_future_get_flux (f);
+    flux_msg_handler_t *mh;
     struct flux_match m = FLUX_MATCH_RESPONSE;
 
     m.matchtag = rpc->matchtag;
     if (!(mh = flux_msg_handler_create (h, m, response_cb, f)))
         goto error;
-    flux_msg_handler_allow_rolemask (mh, FLUX_ROLE_ALL);
     if (flux_future_aux_set (f, NULL, mh,
-                             (flux_free_f)flux_msg_handler_destroy) < 0) {
+                            (flux_free_f)flux_msg_handler_destroy) < 0) {
         flux_msg_handler_destroy (mh);
         goto error;
     }
+    flux_msg_handler_allow_rolemask (mh, FLUX_ROLE_ALL);
     flux_msg_handler_start (mh);
     return;
 error:
@@ -208,7 +210,7 @@ static flux_future_t *flux_rpc_msg (flux_t *h,
 
     if (!(f = flux_future_create (initialize_cb, NULL)))
         goto error;
-    if (!(rpc = rpc_create (h, flags)))
+    if (!(rpc = rpc_create (h, f, flags)))
         goto error;
     if (flux_future_aux_set (f, "flux::rpc", rpc,
                              (flux_free_f)rpc_destroy) < 0) {
@@ -239,7 +241,6 @@ static flux_future_t *flux_rpc_msg (flux_t *h,
 #endif
     if (rc < 0)
         goto error;
-    rpc->inflight = true;
     /* Fulfill future now if one-way
      */
     if ((flags & FLUX_RPC_NORESPONSE))
