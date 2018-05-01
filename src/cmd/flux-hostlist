@@ -1,0 +1,230 @@
+#!/usr/bin/env lua
+--[[--------------------------------------------------------------------------
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+ ---------------------------------------------------------------------------]]
+--
+-- flux-hostlist: print list of hosts in hostfile format for instance or job
+--
+--
+local getopt = require 'flux.alt_getopt'.get_opts
+local hostlist = require 'flux.hostlist'
+local wreck = require 'wreck'
+local prog = "flux-hostlist"
+local hostkey = "resource.hosts"
+
+local function printf (...)
+    io.stdout:write (string.format (...))
+end
+
+local function die (...)
+    io.stderr:write (prog..": "..string.format (...))
+    os.exit (1)
+end
+
+-- Return an array of all instance hosts by rank
+-- where hosts[rank+1] == hostname (Lua arrays are 1 origin, not 0 origin)
+local instance_hosts = {}
+local function instance_host_table (arg)
+    local f = arg.flux
+
+    if #instance_hosts > 0 then
+        return instance_hosts
+    end
+
+    if arg.ranks then
+        for i=1,f.size do
+            table.insert (instance_hosts, i-1)
+        end
+        return instance_hosts
+    end
+
+    local hosts = f:kvs_get ("resource.hosts")
+    if hosts then
+        hosts = hostlist.concat (hosts):expand ()
+        return hosts
+    end
+
+    -- O/w, try using flux-exec hostname:
+    hosts = {}
+    local r, err = io.popen ("flux exec -l hostname", "r")
+    if not r then die ("flux-exec failed: %s", err) end
+    for l in r:lines () do
+        local rank, host = l:match ("^(%d+):%s+(%S+)")
+        hosts[rank+1] = host
+    end
+
+    -- Verify that information for all ranks was returned
+    for i = 1,f.size do
+        if not hosts[i] then
+            die ("flux-exec failed to return info for rank %d!\n", i)
+        end
+    end
+    instance_hosts = hosts
+    return hosts
+end
+
+-- Get R_lite at arg.kvspath and return comma-separated list of hostnames
+local function R_lite_to_hosts (arg)
+    local f = arg.flux
+    local dir = arg.kvspath
+    local hosts = {}
+    local allhosts
+
+    local R, err = f:kvs_get (dir..".R_lite")
+    if not R then die ("Failed to get R_lite at %s: %s\n", dir, err) end
+
+    for _,entry in ipairs (R) do
+        if arg.ranks then
+            table.insert (hosts, entry.rank)
+        elseif entry.node then
+            table.insert (hosts, entry.node)
+        else
+            local allhosts = instance_host_table { flux = f }
+            table.insert (hosts, allhosts [entry.rank+1])
+        end
+    end
+    return table.concat (hosts, ",")
+end
+
+-- Return a list of hosts for jobids given in arg.args list.
+local function jobs_host_table (arg)
+    local f = arg.flux
+    local args = arg.args
+    local ranks = arg.ranks
+    local function toint (t)
+        local r = {}
+        for _,v in ipairs (t) do table.insert (r, tonumber (v)) end
+        return r
+    end
+    local function bracketify (t)
+        local r = {}
+        for _,v in ipairs (t) do table.insert (r, "["..v.."]") end
+        return r
+    end
+    local hl, err = hostlist.union (unpack (bracketify (args)))
+    if not hl then die ("hostlist.union: %s\n", err) end
+
+    local kvspaths = wreck.jobids_to_kvspath { flux = f,
+                                               jobids = toint (hl:expand())
+                                             }
+    if not kvspaths then die ("wreck.jobids_to_kvspath failed") end
+
+    local hosts = hostlist.new ()
+
+    for _,p in ipairs (kvspaths) do
+        hosts:concat (R_lite_to_hosts { flux = f, kvspath = p, ranks = ranks })
+    end
+    return hosts:expand()
+end
+
+
+local function hosts_from_stream (fp)
+    local hosts = {}
+    for line in fp:lines() do
+        for w in line:gmatch ('%S+') do table.insert (hosts, w) end
+    end
+    return hosts
+end
+
+-- Set the instance hostlist at hostkey from list of hosts on stdin
+--  or a file (arg.input).
+local function set_hostlist (arg)
+    local f = arg.flux
+    local input = arg.input
+    local fp = io.stdin
+
+    -- Open input file if not using stdin:
+    if input and not input == "-" then
+        fp, err = io.open (input, "r")
+        if not fp then die ("open: %s: %s\n", input, err) end
+    end
+
+    -- create new hostlist from lines of hosts on stream fp:
+    local hosts = hosts_from_stream (fp)
+    if #hosts == 0 then
+        die ("--set: no hosts found!")
+    end
+    fp:close()
+    local hl,err = hostlist.concat (unpack (hosts))
+    if not hl then die ("hostlist set: hostlist.concat: %s\n", err) end
+
+
+    -- Put string representation of hostlist into `hostkey`:
+    local rc, err = f:kvs_put (hostkey, tostring (hl))
+    if not rc then die ("failed to put hostlist in %s: %s\n", hostkey, err) end
+    f:kvs_commit ()
+end
+
+local function usage (code)
+    printf ("Usage: %s [OPTIONS] [JOBIDS]...\n", prog)
+    printf ("Get/set a list of hosts for the current session or job(s)\n")
+    printf ("Options:\n")
+    printf (" -h, --help       Display this message.\n")
+    printf (" -r, --ranks      Output rank ids instead of hostnames.\n")
+    printf (" -c, --compressed Output in hostlist compressed format.\n")
+    printf (" -s, --set        Initialize %s for this session\n", hostkey)
+    os.exit (code or 0)
+end
+
+-----------------------------------------------------------------------------
+--  Main program:
+-----------------------------------------------------------------------------
+--
+--
+local getopt = require 'flux.alt_getopt'.get_opts
+local opts, optind = getopt (arg, "rcsh",
+                             { compressed = "c",
+                               ranks = "r",
+                               set = "s",
+                               help = "h"
+                             })
+if opts.h then usage() end
+
+local f, err = require 'flux' .new()
+if not f then die (err) end
+
+-- If --set was used then set hostlist from stdin or arg[1]:
+if opts.s then
+    set_hostlist { flux = f, input = arg[optind] }
+    os.exit (0)
+end
+
+for i = 1,optind-1 do table.remove (arg, 1) end
+
+-- Otherwise, read either the instance hosts table or job
+--  specific hosts lists and emit one host per line to stdout:
+local hosts = {}
+if #arg == 0 then
+    hosts = instance_host_table { flux = f, ranks = opts.r }
+else
+    hosts = jobs_host_table { flux = f, ranks = opts.r, args = arg }
+end
+
+-- Print result:
+if opts.c then
+    print (hostlist.concat (unpack (hosts)))
+else
+    print (table.concat (hosts, "\n"))
+end
+
+--  vi: ts=4 sw=4 expandtab
