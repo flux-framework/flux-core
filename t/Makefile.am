@@ -72,6 +72,7 @@ TESTS = \
 	t2006-joblog.t \
 	t2007-caliper.t \
 	t2008-althash.t \
+	t2009-hostlist.t \
 	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
@@ -153,6 +154,7 @@ check_SCRIPTS = \
 	t2006-joblog.t \
 	t2007-caliper.t \
 	t2008-althash.t \
+	t2009-hostlist.t \
 	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
