@@ -508,14 +508,6 @@ int main (int argc, char *argv[])
      */
     unsetenv ("FLUX_URI");
 
-    /* If Flux was launched by Flux, now that PMI bootstrap is complete,
-     * unset Flux job environment variables since they don't leak into
-     * the jobs other children of this instance.
-     */
-    unsetenv ("FLUX_JOB_ID");
-    unsetenv ("FLUX_JOB_SIZE");
-    unsetenv ("FLUX_JOB_NNODES");
-
     /* If shutdown_grace was not provided on the command line,
      * make a guess.
      */
@@ -570,6 +562,14 @@ int main (int argc, char *argv[])
         if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc3 ? strlen (rc3) + 1 : 0, uri) < 0)
             log_err_exit ("runlevel_set_rc 3");
     }
+
+    /* If Flux was launched by Flux, now that PMI bootstrap and runlevel
+     * initialization is complete, unset Flux job environment variables
+     * so that they don't leak into the jobs other children of this instance.
+     */
+    unsetenv ("FLUX_JOB_ID");
+    unsetenv ("FLUX_JOB_SIZE");
+    unsetenv ("FLUX_JOB_NNODES");
 
     /* Wire up the overlay.
      */
