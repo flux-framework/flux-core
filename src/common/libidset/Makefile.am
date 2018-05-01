@@ -18,3 +18,19 @@ libidset_la_CPPFLAGS = \
 libidset_la_LDFLAGS = \
 	-avoid-version -module -shared -export-dynamic \
 	$(AM_LDFLAGS)
+
+
+TESTS = test_idset.t
+
+check_PROGRAMS = $(TESTS)
+
+TEST_EXTENSIONS = .t
+T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+       $(top_srcdir)/config/tap-driver.sh
+
+test_idset_t_SOURCES = test/idset.c
+test_idset_t_CPPFLAGS = $(AM_CPPFLAGS)
+test_idset_t_LDADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(top_builddir)/src/common/libutil/libutil.la
