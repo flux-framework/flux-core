@@ -1,7 +1,7 @@
 #include <czmq.h>
 #include <flux/core.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libtap/tap.h"
 #include "util.h"
 
@@ -21,22 +21,21 @@ void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
 void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
     uint32_t nodeid;
-    json_object *o = NULL;
     int flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0
             || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
-        errnum = errno;
-        goto done;
+        goto error;
     }
-    o = Jnew ();
-    Jadd_int (o, "nodeid", nodeid);
-    Jadd_int (o, "flags", flags);
-done:
-    (void)flux_respond (h, msg, errnum, Jtostr (o));
-    Jput (o);
+    if (flux_respond_pack (h, msg, "s:i s:i",
+                                   "nodeid", (int)nodeid,
+                                   "flags", flags) < 0)
+        diag ("%s: flux_respond_pack: %s", __FUNCTION__, strerror (errno));
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        diag ("%s: flux_respond: %s", __FUNCTION__, strerror (errno));
 }
 
 /* request payload echoed in response */
@@ -206,7 +205,8 @@ void test_basic (flux_t *h)
 
 void test_encoding (flux_t *h)
 {
-    json_object *o;
+    json_t *o;
+    char *s;
     const char *json_str;
     flux_future_t *r;
 
@@ -240,16 +240,18 @@ void test_encoding (flux_t *h)
 
     /* flux_rpc_get is ok if user doesn't desire response payload */
     errno = 0;
-    o = Jnew ();
-    Jadd_int (o, "foo", 42);
-    json_str = Jtostr (o);
-    ok ((r = flux_rpc (h, "rpctest.echo", json_str, FLUX_NODEID_ANY, 0)) != NULL,
+    if (!(o = json_pack ("{s:i}", "foo", 42)))
+        BAIL_OUT ("json_pack failed");
+    if (!(s = json_dumps (o, JSON_COMPACT)))
+        BAIL_OUT ("json_dumps failed");
+    ok ((r = flux_rpc (h, "rpctest.echo", s, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload works");
+    free (s);
     errno = 0;
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get is ok if user doesn't desire response payload");
     flux_future_destroy (r);
-    Jput (o);
+    json_decref (o);
 
     /* working with-payload RPC */
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
