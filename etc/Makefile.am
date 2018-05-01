@@ -12,7 +12,8 @@ dist_fluxrc_SCRIPTS = \
         rc3
 
 dist_fluxrc1_SCRIPTS = \
-        rc1.d/01-enclosing-instance
+        rc1.d/01-enclosing-instance \
+	rc1.d/02-hostlist
 
 flux/curve:
 	$(AM_V_GEN)$(top_builddir)/src/cmd/flux keygen --force
