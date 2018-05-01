@@ -11,6 +11,7 @@ SUBDIRS = libtap \
 	  libsubprocess \
 	  libcompat \
 	  liboptparse \
+	  libidset \
 	  libtomlc99 \
 	  libkz
 
@@ -41,7 +42,7 @@ libflux_internal_la_LIBADD = \
 	$(LIBDL) $(LIBRT)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
-lib_LTLIBRARIES = libflux-core.la libflux-optparse.la
+lib_LTLIBRARIES = libflux-core.la libflux-optparse.la libflux-idset.la
 if ENABLE_JOBSPEC
 lib_LTLIBRARIES += libflux-jobspec.la
 endif
@@ -65,6 +66,15 @@ libflux_optparse_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-optparse.map \
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
+
+libflux_idset_la_SOURCES =
+libflux_idset_la_LIBADD = \
+	$(builddir)/libidset/libidset.la \
+	$(builddir)/libutil/veb.lo
+libflux_idset_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libflux-idset.map \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
@@ -93,4 +103,9 @@ libpmi2_la_LDFLAGS = \
 	$(san_ld_zdef_flag)
 
 
-EXTRA_DIST = libflux-core.map libflux-optparse.map libpmi.map libpmi2.map
+EXTRA_DIST = \
+	libflux-core.map \
+	libflux-optparse.map \
+	libflux-idset.map \
+	libpmi.map \
+	libpmi2.map

@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: flux-core
+Description: Flux Resource Manager ID Set Library
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lflux-idset
+Cflags: -I${includedir}
