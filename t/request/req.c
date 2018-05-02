@@ -3,10 +3,11 @@
 #endif
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 typedef struct {
     flux_t *h;
@@ -65,12 +66,10 @@ void count_request_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     t_req_ctx_t *ctx = getctx (h);
-    json_object *o = Jnew ();
 
-    Jadd_int (o, "count", zlist_size (ctx->clog_requests));
-    if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (o);
+    if (flux_respond_pack (h, msg, "{s:i}",
+                           "count", zlist_size (ctx->clog_requests)) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 }
 
 /* Don't reply to request - just queue it for later.
@@ -109,28 +108,20 @@ void flush_request_cb (flux_t *h, flux_msg_handler_t *mh,
 void sink_request_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    const char *json_str;
-    int saved_errno;
-    json_object *o = NULL;
     double d;
-    int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
+    if (flux_request_unpack (msg, NULL, "{s:f}", "pi", &d) < 0)
+        goto error;
+    if (d != 3.14) {
+        errno = EPROTO;
+        goto error;
     }
-    if (!json_str
-        || !(o = Jfromstr (json_str))
-        || !Jget_double (o, "pi", &d)
-        || d != 3.14) {
-        saved_errno = errno = EPROTO;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (o);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 /* Return a fixed json payload
@@ -138,12 +129,8 @@ done:
 void src_request_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
-    json_object *o = Jnew ();
-
-    Jadd_int (o, "wormz", 42);
-    if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (o);
+    if (flux_respond_pack (h, msg, "{s:i}", "wormz", 42) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 }
 
 /* Return 'n' sequenced responses.
@@ -151,37 +138,18 @@ void src_request_cb (flux_t *h, flux_msg_handler_t *mh,
 void nsrc_request_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    const char *json_str;
-    int saved_errno;
-    json_object *o = Jnew ();
     int i, count;
-    int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!json_str
-        || !(o = Jfromstr (json_str))
-        || !Jget_int (o, "count", &count)) {
-        saved_errno = errno = EPROTO;
-        goto done;
-    }
+    if (flux_request_unpack (msg, NULL, "{s:i}", "count", &count) < 0)
+        goto error;
     for (i = 0; i < count; i++) {
-        Jadd_int (o, "seq", i);
-        if (flux_respond (h, msg, 0, Jtostr (o)) < 0) {
-            saved_errno = errno;
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (flux_respond (h, msg, saved_errno, NULL) < 0)
+        if (flux_respond_pack (h, msg, "{s:i}", "seq", i) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
-    Jput (o);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 /* Always return an error 42
@@ -223,55 +191,33 @@ void xping_request_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     t_req_ctx_t *ctx = arg;
-    const char *json_str;
-    int saved_errno;
     int rank, seq = ctx->ping_seq++;
     const char *service;
     char *hashkey = NULL;
-    json_object *in = Jnew ();
-    json_object *o = NULL;
     flux_msg_t *cpy;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
+    if (flux_request_unpack (msg, NULL, "{s:i s:s}", "rank", &rank,
+                                                     "service", &service) < 0)
         goto error;
-    }
-    if (!json_str
-        || !(o = Jfromstr (json_str))
-        || !Jget_int (o, "rank", &rank)
-        || !Jget_str (o, "service", &service)) {
-        saved_errno = errno = EPROTO;
-        goto error;
-    }
     flux_log (h, LOG_DEBUG, "Rxping rank=%d service=%s", rank, service);
 
-    Jadd_int (in, "seq", seq);
     flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
 
     flux_future_t *f;
-    if (!(f = flux_rpc (h, service, Jtostr (in), rank,
-                                            FLUX_RPC_NORESPONSE))) {
-        saved_errno = errno;
+    if (!(f = flux_rpc_pack (h, service, rank, FLUX_RPC_NORESPONSE,
+                             "{s:i}", "seq", seq)))
         goto error;
-    }
     flux_future_destroy (f);
-    if (!(cpy = flux_msg_copy (msg, true))) {
-        saved_errno = errno;
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
-    }
     hashkey = xasprintf ("%d", seq);
     zhash_update (ctx->ping_requests, hashkey, cpy);
     zhash_freefn (ctx->ping_requests, hashkey, (zhash_free_fn *)flux_msg_destroy);
-    Jput (o);
-    Jput (in);
-    if (hashkey)
-        free (hashkey);
+    free (hashkey);
     return;
 error:
-    if (flux_respond (h, msg, saved_errno, NULL) < 0)
+    if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (o);
-    Jput (in);
 }
 
 /* Handle ping response for proxy ping.
@@ -281,42 +227,35 @@ void ping_response_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     t_req_ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *o = NULL;
-    json_object *out = Jnew ();;
     int seq;
     const char *route;
     flux_msg_t *req = NULL;
-    char *hashkey = NULL;
+    char hashkey[16];
+    const char *json_str;
+    json_t *o = NULL;
 
     if (flux_response_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (h, "%s: flux_response_decode", __FUNCTION__);
-        goto done;
+        return;
     }
-    if (!json_str
-        || !(o = Jfromstr (json_str))
-        || !Jget_int (o, "seq", &seq)
-        || !Jget_str (o, "route", &route)) {
-        errno = EPROTO;
-        flux_log_error (h, "%s: payload", __FUNCTION__);
+    if (!json_str || !(o = json_loads (json_str, 0, NULL))
+            || json_unpack (o, "{s:i s:s}", "seq", &seq,
+                                            "route", &route) < 0) {
+        flux_log (h, LOG_ERR, "%s: error decoding payload", __FUNCTION__);
         goto done;
     }
     flux_log (h, LOG_DEBUG, "Rping seq=%d %s", seq, route);
-    hashkey = xasprintf ("%d", seq);
+    snprintf (hashkey, sizeof (hashkey), "%d", seq);
     if (!(req = zhash_lookup (ctx->ping_requests, hashkey))) {
         flux_log_error (h, "%s: unsolicited ping response", __FUNCTION__);
         goto done;
     }
     flux_log (h, LOG_DEBUG, "Txping seq=%d %s", seq, route);
-    Jadd_str (out, "route", route);
-    if (flux_respond (h, req, 0, Jtostr (out)) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_pack (h, req, "{s:s}", "route", route) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     zhash_delete (ctx->ping_requests, hashkey);
 done:
-    if (hashkey)
-        free (hashkey);
-    Jput (o);
-    Jput (out);
+    json_decref (o);
 }
 
 /* Handle the simplest possible request.
