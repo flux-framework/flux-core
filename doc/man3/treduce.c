@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <flux/core.h>
-#include "src/common/libutil/shortjson.h"
+#include <jansson.h>
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/xzmalloc.h"
 
@@ -41,13 +41,11 @@ void forward (flux_reduce_t *r, int batchnum, void *arg)
     flux_future_t *f;
 
     while ((item = flux_reduce_pop (r))) {
-        json_object *out = Jnew ();
-        Jadd_int (out, "batchnum", batchnum);
-        Jadd_str (out, "nodeset", item);
-        f = flux_rpc (ctx->h, "treduce.forward", Jtostr (out),
-                        FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE);
+        f = flux_rpc_pack (ctx->h, "treduce.forward",
+                           FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE,
+			   "{s:i s:s}", "batchnum", batchnum,
+			                "nodeset", item);
         flux_future_destroy (f);
-        Jput (out);
         free (item);
     }
 }
@@ -77,21 +75,17 @@ void forward_cb (flux_t *h, flux_msg_handler_t *mh,
                  const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;
-    const char *json_str, *nodeset_str;
-    json_object *in = NULL;
+    const char *nodeset_str;
     int batchnum;
     char *item;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0
-            || !json_str
-            || !(in = Jfromstr (json_str))
-            || !Jget_int (in, "batchnum", &batchnum)
-            || !Jget_str (in, "nodeset", &nodeset_str))
+    if (flux_request_unpack (msg, NULL, "{s:i s:s}",
+			                "batchnum", &batchnum,
+			                "nodeset", &nodeset_str) < 0)
         return;
     item = xstrdup (nodeset_str);
     if (flux_reduce_append (ctx->r, item, batchnum) < 0)
         free (item);
-    Jput (in);
 }
 
 void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
