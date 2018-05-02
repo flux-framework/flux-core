@@ -31,11 +31,12 @@
 #include <signal.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <jansson.h>
+#include <inttypes.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 
 
 /******************************************************************************
@@ -111,20 +112,6 @@ static FILE *open_test_outfile (const char *fn)
     return fp;
 }
 
-static inline void get_jobid (json_object *jcb, int64_t *j)
-{
-    Jget_int64 (jcb, JSC_JOBID, j);
-}
-
-static inline void get_states (json_object *jcb, int64_t *os, int64_t *ns)
-{
-    json_object *o = NULL;
-    Jget_obj (jcb, JSC_STATE_PAIR, &o);
-    Jget_int64 (o, JSC_STATE_PAIR_OSTATE, os);
-    Jget_int64 (o, JSC_STATE_PAIR_NSTATE, ns);
-}
-
-
 /******************************************************************************
  *                                                                            *
  *                      Async notification callback                           *
@@ -133,12 +120,11 @@ static inline void get_states (json_object *jcb, int64_t *os, int64_t *ns)
 
 static int job_status_cb (const char *jcbstr, void *arg, int errnum)
 {
-    int64_t os = 0;
-    int64_t ns = 0;
-    int64_t j = 0;
+    int os;
+    int ns;
     jstatctx_t *ctx = NULL;
     flux_t *h = (flux_t *)arg;
-    json_object *jcb = NULL;
+    json_t *jcb = NULL;
 
     ctx = getctx (h);
     if (errnum > 0) {
@@ -146,19 +132,19 @@ static int job_status_cb (const char *jcbstr, void *arg, int errnum)
         return -1;
     }
 
-    if (!(jcb = Jfromstr (jcbstr))) {
+    if (!(jcb = json_loads (jcbstr, 0, NULL))
+        || json_unpack (jcb, "{s:{s:i s:i}}", JSC_STATE_PAIR,
+                                              JSC_STATE_PAIR_OSTATE, &os,
+                                              JSC_STATE_PAIR_NSTATE, &ns) < 0) {
         flux_log (ctx->h, LOG_ERR, "job_status_cb: error parsing JSON string");
+        json_decref (jcb);
         return -1;
     }
-    get_jobid (jcb, &j);
-    get_states (jcb, &os, &ns);
-    Jput (jcb);
 
-    fprintf (ctx->op, "%s->%s\n",
-    jsc_job_num2state ((job_state_t)os),
-    jsc_job_num2state ((job_state_t)ns));
+    fprintf (ctx->op, "%s->%s\n", jsc_job_num2state (os),
+                                  jsc_job_num2state (ns));
     fflush (ctx->op);
-
+    json_decref (jcb);
     return 0;
 }
 
@@ -192,21 +178,30 @@ static int handle_notify_req (flux_t *h, const char *ofn)
 
 static int handle_query_req (flux_t *h, int64_t j, const char *k, const char *n)
 {
-    json_object *jcb = NULL;
-    jstatctx_t *ctx = NULL;
-    char *jcbstr;
+    jstatctx_t *ctx = getctx (h);
+    json_t *jcb = NULL;
+    char *jcbstr = NULL;
+    char *jcbstr_pretty = NULL;
 
-    ctx = getctx (h);
-    ctx->op = n? open_test_outfile (n) : stdout;
+    ctx->op = n ? open_test_outfile (n) : stdout;
     if (jsc_query_jcb (h, j, k, &jcbstr) != 0) {
         flux_log (h, LOG_ERR, "jsc_query_jcb reported an error");
         return -1;
     }
-    jcb = Jfromstr (jcbstr);
+    if (!(jcb = json_loads (jcbstr, 0, NULL))) {
+        flux_log (h, LOG_ERR, "error loading jcbstr");
+        goto done;
+    }
+    if (!(jcbstr_pretty = json_dumps (jcb, JSON_INDENT(2)))) {
+        flux_log (h, LOG_ERR, "error dumping jcbstr");
+        goto done;
+    }
+
     fprintf (ctx->op, "Job Control Block: attribute %s for job %"PRIi64"\n", k, j);
-    fprintf (ctx->op, "%s\n", jcb == NULL ? jcbstr :
-        json_object_to_json_string_ext (jcb, JSON_C_TO_STRING_PRETTY));
-    Jput (jcb);
+    fprintf (ctx->op, "%s\n", jcbstr_pretty);
+done:
+    free (jcbstr_pretty);
+    json_decref (jcb);
     free (jcbstr);
     return 0;
 }
