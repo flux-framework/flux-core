@@ -1,0 +1,119 @@
+idset_create(3)
+===============
+:doctype: manpage
+
+
+NAME
+----
+idset_create, idset_destroy, idset_encode, idset_decode - Manipulate numerically sorted sets of non-negative integers
+
+
+SYNOPSIS
+--------
+#include <flux/idset.h>
+
+struct idset *idset_create (size_t slots, int flags);
+
+void idset_destroy (struct idset *idset);
+
+char *idset_encode (const struct idset *idset, int flags);
+
+struct idset *idset_decode (const char *s);
+
+USAGE
+-----
+
+cc [flags] files -lflux-idset [libraries]
+
+DESCRIPTION
+-----------
+
+An idset is a set of numerically sorted, non-negative integers.
+It is internally represented as a Van Embde Boas (or vEB) tree.
+Functionally it behaves like a bitmap, and has space efficiency
+comparable to a bitmap, but performs operations (insert, delete,
+lookup, findNext, findPrevious) in O(log(m)) time, where pow (2,m)
+is the number of slots in the idset.
+
+`idset_create()` creates an idset.  'slots' specifies the highest
+numbered 'id' it can hold, plus one.  The size is fixed unless
+'flags' specify otherwise (see FLAGS below).
+
+`idset_destroy()` destroys an idset.
+
+`idset_decode ()` creates an idset from a string 's'.  The string may
+have been produced by `idset_encode()`.  It must consist of comma-separated
+non-negative integer id's, and may also contain hyphenated ranges.
+If enclosed in square brackets, the brackets are ignored.  Some examples
+of valid input strings are:
+
+  1,2,5,4
+
+  1-4,7,9-10
+
+  42
+
+  [99-101]
+
+`idset_encode()` creates a string from 'idset'.  The string contains
+a comma-separated list of id's, potentially modified by 'flags'
+(see FLAGS below).
+
+FLAGS
+-----
+
+IDSET_FLAG_AUTOGROW::
+Valid for `idset_create()` only.  If set, the idset will grow to
+accommodate any id inserted into it. The internal vEB tree is doubled
+in size until until the new id can be inserted.  Resizing is a costly
+operation that requires all id's in the old tree to be inserted into
+the new one.
+
+IDSET_FLAG_BRACKETS::
+Valid for `idset_encode()` only.  If set, the encoded string will be
+enclosed in brackets, unless the idset is a singleton (contains only
+one id).
+
+IDSET_FLAG_RANGE::
+Valid for `idset_encode()` only.  If set, any consecutive id's are
+compressed into hyphenated ranges in the encoded string.
+
+RETURN VALUE
+------------
+
+`idset_create()` and `idset_encode()` return an idset on success
+which must be freed with `idset_destroy()`.  On error, NULL is
+returned with errno set.
+
+`idset_decode()` returns a string on success which must be freed
+with `free()`.  On error, NULL is returned with errno set.
+
+ERRORS
+------
+
+EINVAL::
+One or more arguments were invalid.
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-dmesg(1), flux-logger(1),
+https://tools.ietf.org/html/rfc5424[RFC 5424 The Syslog Protocol]

@@ -35,7 +35,7 @@ clean-local:
 	-rm -rf flux
 
 if WITH_PKG_CONFIG
-pkgconfig_DATA = flux-core.pc flux-pmi.pc flux-optparse.pc
+pkgconfig_DATA = flux-core.pc flux-pmi.pc flux-optparse.pc flux-idset.pc
 endif
 
 EXTRA_DIST = \

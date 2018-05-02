@@ -303,6 +303,7 @@ AC_CONFIG_FILES( \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
+  src/common/libidset/Makefile \
   src/common/libjobspec/Makefile \
   src/common/libjobspec/flux-jobspec.pc \
   src/common/libtomlc99/Makefile \
@@ -334,6 +335,7 @@ AC_CONFIG_FILES( \
   etc/flux-core.pc \
   etc/flux-pmi.pc \
   etc/flux-optparse.pc \
+  etc/flux-idset.pc \
   etc/flux.service \
   doc/Makefile \
   doc/man1/Makefile \
