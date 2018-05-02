@@ -44,7 +44,7 @@ static t_req_ctx_t *getctx (flux_t *h)
         ctx->clog_requests = zlist_new ();
         if (!ctx->clog_requests || !ctx->ping_requests) {
             saved_errno = ENOMEM;
-            goto error; 
+            goto error;
         }
         if (flux_get_rank (h, &ctx->rank) < 0) {
             saved_errno = errno;
