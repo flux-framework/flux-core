@@ -32,11 +32,12 @@
 #include <pthread.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 
 void test_null (flux_t *h, uint32_t nodeid);
 void test_echo (flux_t *h, uint32_t nodeid);
@@ -145,23 +146,15 @@ void test_null (flux_t *h, uint32_t nodeid)
 
 void test_echo (flux_t *h, uint32_t nodeid)
 {
-    json_object *in = Jnew ();
-    json_object *out = NULL;
-    const char *json_str;
     const char *s;
     flux_future_t *f;
 
-    Jadd_str (in, "mumble", "burble");
-    if (!(f = flux_rpc (h, "req.echo", Jtostr (in), nodeid, 0))
-             || flux_rpc_get (f, &json_str) < 0)
+    if (!(f = flux_rpc_pack (h, "req.echo", nodeid, 0,
+                             "{s:s}", "mumble", "burble"))
+             || flux_rpc_get_unpack (f, "{s:s}", "mumble", &s) < 0)
         log_err_exit ("%s", __FUNCTION__);
-    if (!json_str
-        || !(out = Jfromstr (json_str))
-        || !Jget_str (out, "mumble", &s)
-        || strcmp (s, "burble") != 0)
+    if (strcmp (s, "burble") != 0)
         log_msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
-    Jput (in);
-    Jput (out);
     flux_future_destroy (f);
 }
 
@@ -181,65 +174,53 @@ void test_err (flux_t *h, uint32_t nodeid)
 void test_src (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
-    const char *json_str;
-    json_object *out = NULL;
     int i;
 
     if (!(f = flux_rpc (h, "req.src", NULL, nodeid, 0))
-             || flux_rpc_get (f, &json_str) < 0)
+             || flux_rpc_get_unpack (f, "{s:i}", "wormz", &i) < 0)
         log_err_exit ("%s", __FUNCTION__);
-    if (!json_str
-        || !(out = Jfromstr (json_str))
-        || !Jget_int (out, "wormz", &i)
-        || i != 42)
+    if (i != 42)
         log_msg_exit ("%s: didn't get expected payload", __FUNCTION__);
-    Jput (out);
     flux_future_destroy (f);
 }
 
 void test_sink (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
-    json_object *in = Jnew();
 
-    Jadd_double (in, "pi", 3.14);
-    if (!(f = flux_rpc (h, "req.sink", Jtostr (in), nodeid, 0))
+    if (!(f = flux_rpc_pack (h, "req.sink", nodeid, 0, "{s:f}", "pi", 3.14))
              || flux_future_get (f, NULL) < 0)
         log_err_exit ("%s", __FUNCTION__);
-    Jput (in);
     flux_future_destroy (f);
 }
 
 void test_nsrc (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
-    const int count = 10000;
-    json_object *in = Jnew ();
     const char *json_str;
-    json_object *out = NULL;
-    int i, seq;
+    const int count = 10000;
+    int i, seq = -1;
+    json_t *o;
 
-    Jadd_int (in, "count", count);
-    if (!(f = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
-                                                      FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc_pack (h, "req.nsrc",
+                             FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE,
+                             "{s:i}", "count", count)))
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
     for (i = 0; i < count; i++) {
-        flux_msg_t *msg = flux_recv (h, FLUX_MATCH_ANY, 0);
-        if (!msg)
+        flux_msg_t *msg;
+        if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0)))
             log_err_exit ("%s", __FUNCTION__);
         if (flux_response_decode (msg, NULL, &json_str) < 0)
             log_msg_exit ("%s: decode %d", __FUNCTION__, i);
-        if (!json_str
-            || !(out = Jfromstr (json_str))
-            || !Jget_int (out, "seq", &seq))
+        if (!json_str || !(o = json_loads (json_str, 0, NULL))
+                      || json_unpack (o, "{s:i}", "seq", &seq) < 0)
             log_msg_exit ("%s: decode %d payload", __FUNCTION__, i);
         if (seq != i)
             log_msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
-        Jput (out);
+        json_decref (o);
         flux_msg_destroy (msg);
     }
-    Jput (in);
 }
 
 /* This test is to make sure that deferred responses are handled in order.
@@ -254,19 +235,18 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
     const int count = 10000;
     const int defer_start = 5000;
     const int defer_count = 500;
-    json_object *in = Jnew ();
-    json_object *out = NULL;
     int seq, myseq = 0;
     zlist_t *defer = zlist_new ();
     bool popped = false;
     flux_msg_t *z;
+    json_t *o;
 
     if (!defer)
         oom ();
 
-    Jadd_int (in, "count", count);
-    if (!(f = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
-                                                      FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc_pack (h, "req.nsrc",
+                             FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE,
+                             "{s:i}", "count", count)))
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
     do {
@@ -275,11 +255,10 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
             log_err_exit ("%s", __FUNCTION__);
         if (flux_response_decode (msg, NULL, &json_str) < 0)
             log_msg_exit ("%s: decode", __FUNCTION__);
-        if (!json_str
-            || !(out = Jfromstr (json_str))
-            || !Jget_int (out, "seq", &seq))
+        if (!json_str || !(o = json_loads (json_str, 0, NULL))
+                      || json_unpack (o, "{s:i}", "seq", &seq) < 0)
             log_msg_exit ("%s: decode - payload", __FUNCTION__);
-        Jput (out);
+        json_decref (o);
         if (seq >= defer_start && seq < defer_start + defer_count && !popped) {
             if (zlist_append (defer, msg) < 0)
                 oom ();
@@ -299,7 +278,6 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
         flux_msg_destroy (msg);
     } while (myseq < count);
     zlist_destroy (&defer);
-    Jput (in);
 }
 
 static int count_hops (const char *s)
@@ -318,23 +296,13 @@ static int count_hops (const char *s)
 static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
 {
     flux_future_t *f;
-    const char *json_str;
-    json_object *in = Jnew ();
-    json_object *out = NULL;
     const char *route;
 
-    Jadd_int (in, "rank", xnodeid);
-    Jadd_str (in, "service", svc);
-    if (!(f = flux_rpc (h, "req.xping", Jtostr (in), nodeid, 0))
-            || flux_rpc_get (f, &json_str) < 0)
+    if (!(f = flux_rpc_pack (h, "req.xping", nodeid, 0,
+                             "{s:i s:s}", "rank", xnodeid, "service", svc))
+            || flux_rpc_get_unpack (f, "{s:s}", "route", &route) < 0)
         log_err_exit ("req.xping");
-    if (!json_str
-        || !(out = Jfromstr (json_str))
-        || !Jget_str (out, "route", &route))
-        log_errn_exit (EPROTO, "req.xping");
     printf ("hops=%d\n", count_hops (route));
-    Jput (out);
-    Jput (in);
     flux_future_destroy (f);
 }
 
