@@ -27,11 +27,11 @@
 #include <glob.h>
 #include <string.h>
 #include <czmq.h>
+#include <jansson.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
-#include "src/common/libutil/shortjson.h"
 
 #include "cmdhelp.h"
 
@@ -74,44 +74,18 @@ static void cmd_list_destroy (zlist_t *zl)
     zlist_destroy (&zl);
 }
 
-static json_object *command_list_file_read (const char *path)
+static json_t *command_list_file_read (const char *path)
 {
-    FILE *fp = NULL;
-    json_object *o = NULL;
-    enum json_tokener_error e = json_tokener_success;
-    json_tokener *tok = json_tokener_new ();
+    json_t *o;
+    json_error_t error;
 
-    if (tok == NULL) {
-        log_msg ("json_tokener_new: Out of memory");
-        return (NULL);
+    if (!(o = json_load_file (path, 0, &error))) {
+        log_msg ("%s::%d: %s", path, error.line, error.text);
+        return NULL;
     }
-
-    if (!(fp = fopen (path, "r"))) {
-        log_err ("%s", path);
-        return (NULL);
-    }
-
-    do {
-        int len;
-        char buf [4096];
-        char *s;
-        if (!(s = fgets (buf, sizeof (buf), fp)))
-            break;
-        len = strlen (s);
-        o = json_tokener_parse_ex (tok, s, len);
-    } while ((e = json_tokener_get_error(tok)) == json_tokener_continue);
-
-    fclose (fp);
-    json_tokener_free (tok);
-
-    if (!o || e != json_tokener_success) {
-        log_msg ("%s: %s", path, o ? json_tokener_error_desc (e) : "premature EOF");
-        return (NULL);
-    }
-
-    if (json_object_get_type (o) != json_type_array) {
+    if (!json_is_array (o)) {
         log_msg ("%s: not a JSON array", path);
-        json_object_put (o);
+        json_decref (o);
         return (NULL);
     }
 
@@ -123,26 +97,27 @@ static int command_list_read (zhash_t *h, const char *path)
     int i;
     int rc = -1;
     int n = 0;
-    json_object *o = NULL;
-    struct array_list *l;
+    json_t *o = NULL;
 
-    o = command_list_file_read (path);
-
-    if (!(l = json_object_get_array (o))) {
-        log_msg ("%s: failed to get array list from JSON", path);
+    if (!(o = command_list_file_read (path)))
         goto out;
-    }
 
-    n = array_list_length (l);
+    n = json_array_size (o);
     for (i = 0; i < n; i++) {
-        json_object *entry = array_list_get_idx (l, i);
         const char *category;
         const char *command;
         const char *description;
+        json_t *entry;
         zlist_t *zl;
-        if (!Jget_str (entry, "category", &category)
-            || !Jget_str (entry, "command", &command)
-            || !Jget_str (entry, "description", &description)) {
+
+        if (!(entry = json_array_get (o, i))) {
+            log_msg ("%s: entry %d is not an object", path, i);
+            goto out;
+        }
+        if (json_unpack (entry, "{s:s s:s s:s}",
+                                "category", &category,
+                                "command", &command,
+                                "description", &description) < 0) {
             log_msg ("%s: Missing element in JSON entry %d", path, i);
             goto out;
         }
@@ -161,8 +136,7 @@ static int command_list_read (zhash_t *h, const char *path)
     rc = 0;
 
 out:
-    if (o)
-        json_object_put (o);
+    json_decref (o);
     return (rc);
 
 }
