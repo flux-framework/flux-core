@@ -27,7 +27,6 @@
 #endif
 #include <math.h>
 
-#include "shortjson.h"
 #include "tstat.h"
 #include "log.h"
 
