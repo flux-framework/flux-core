@@ -47,7 +47,8 @@ MAN3_FILES_PRIMARY = \
 	flux_kvs_txn_create.3 \
 	flux_kvs_namespace_create.3 \
 	flux_kvs_namespace_list.3 \
-	flux_kvs_set_namespace.3
+	flux_kvs_set_namespace.3 \
+	idset_create.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -148,7 +149,10 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_namespace_itr_next.3 \
 	flux_kvs_namespace_itr_rewind.3 \
 	flux_kvs_namespace_itr_destroy.3 \
-	flux_kvs_get_namespace.3
+	flux_kvs_get_namespace.3 \
+	idset_destroy.3 \
+	idset_encode.3 \
+	idset_decode.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -270,6 +274,9 @@ flux_kvs_namespace_itr_next.3: flux_kvs_namespace_list.3
 flux_kvs_namespace_itr_rewind.3: flux_kvs_namespace_list.3
 flux_kvs_namespace_itr_destroy.3: flux_kvs_namespace_list.3
 flux_kvs_get_namespace.3: flux_kvs_set_namespace.3
+idset_destroy.3: idset_create.3
+idset_encode.3: idset_create.3
+idset_decode.3: idset_create.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
