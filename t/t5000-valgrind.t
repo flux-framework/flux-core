@@ -16,7 +16,7 @@ fi
 #  run to be forced on the cmdline with -d, --debug.
 #
 have_valgrind_h() {
-    grep -q "^#define HAVE_VALGRIND_VALGRIND_H" ${FLUX_BUILD_DIR}/config/config.h
+    grep -q "^#define HAVE_VALGRIND 1" ${FLUX_BUILD_DIR}/config/config.h
 }
 if ! have_valgrind_h && test "$debug" = ""; then
     skip_all='skipping valgrind tests b/c valgrind.h not found. Use -d, --debug to force'

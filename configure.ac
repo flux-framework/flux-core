@@ -88,7 +88,6 @@ AC_CHECK_HEADERS( \
   xlocale.h \
   endian.h \
   inttypes.h \
-  valgrind/valgrind.h \
 )
 
 ##
@@ -202,6 +201,7 @@ PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
+AX_VALGRIND_H
 AX_CODE_COVERAGE
 
 AC_ARG_ENABLE(caliper,
