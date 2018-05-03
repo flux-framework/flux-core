@@ -49,34 +49,23 @@ DESCRIPTION
 future is not yet fulfilled, it calls `flux_future_wait_for()` internally
 with a negative _timeout_, causing it to block until the future is fulfilled.
 A pointer to the result is assigned to _result_ (caller must NOT free),
-or -1 is returned if the future was fulfilled with an error.  Often this
-function is wrapped with a class-specific result access function.
+or -1 is returned if the future was fulfilled with an error.
 
 `flux_future_then()` sets up a continuation callback _cb_ that is called
 with opaque argument _arg_ once the future is fulfilled.  The continuation
-is registered on the reactor passed to a class-specific create function
-(some create functions accept a flux_t handle, and the reactor is
-derived from that).
-
-The continuation will normally use `flux_future_get()` or a class-specific
-access function to obtain the result from the future container without
-blocking.  The continuation may call `flux_future_destroy()` or
-`flux_future_reset()`.  It is not an error to set up a continuation on
-a future that has already been fulfilled.  If _timeout_ is non-negative,
-the future must be fulfilled within the specified amount of time or the
-timeout fulfills it with an error (errno set to ETIMEDOUT).  The reactor
-must be run or re-entered in order for the timer and the future activity
-to make progress.
+will normally use `flux_future_get()` or a class-specific access function
+to obtain the result from the future container without blocking.  The
+continuation may call `flux_future_destroy()` or `flux_future_reset()`.
+If _timeout_ is non-negative, the future must be fulfilled within the
+specified amount of time or the timeout fulfills it with an error (errno
+set to ETIMEDOUT).
 
 `flux_future_wait_for()` blocks until the future is fulfilled, or _timeout_
 (if non-negative) expires.  This function may be called multiple times,
 with different values for _timeout_.  If the timeout expires before
 the future is fulfilled, an error is returned (errno set to ETIMEDOUT)
-but the future remains unfulfilled.  The timer and the future activity can
-make progress while `flux_future_wait_for()` is executing, unless _timeout_
-is zero, in which case the function times out immediately if the future
-has not already been fulfilled.  While `flux_future_wait_for()` is executing,
-unrelated reactor watchers and message handlers are not active.
+but the future remains unfulfilled.  If _timeout_ is zero, function times
+out immediately if the future has not already been fulfilled.
 
 `flux_future_reset()` unfulfills a future, invalidating any result stored
 in the container, and preparing it to be fulfilled once again.  If a
