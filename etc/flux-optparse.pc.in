@@ -3,7 +3,7 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: flux-core
+Name: flux-optparse
 Description: Flux Resource Manager Option Parser
 Version: @PACKAGE_VERSION@
 Libs: -L${libdir} -lflux-optparse
