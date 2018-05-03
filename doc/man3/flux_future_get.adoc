@@ -1,33 +1,31 @@
-flux_future_then(3)
-===================
+flux_future_get(3)
+==================
 :doctype: manpage
 
 
 NAME
 ----
-flux_future_then, flux_future_wait_for, flux_future_get, flux_future_destroy - synchronize an activity
+flux_future_get, flux_future_then, flux_future_wait_for, flux_future_destroy - synchronize an activity
 
 
 SYNOPSIS
 --------
  #include <flux/core.h>
 
- typedef struct flux_future flux_future_t;
-
  typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
+
+ int flux_future_get (flux_future_t *f, void *result);
 
  int flux_future_then (flux_future_t *f, double timeout,
                        flux_continuation_f cb, void *arg);
 
  int flux_future_wait_for (flux_future_t *f, double timeout);
 
- int flux_future_get (flux_future_t *f, void *result);
-
  void flux_future_destroy (flux_future_t *f);
 
 
-DESCRIPTION
------------
+OVERVIEW
+--------
 
 A Flux future represents some activity that may be completed with reactor
 watchers and/or message handlers.  It is both a handle for synchronization
@@ -41,6 +39,16 @@ Generally other Flux classes return futures, and may provide class-specific
 access function for results. The functions described in this page can be
 used to access, synchronize, and destroy futures returned from any such class.
 Authors of classes that return futures are referred to `flux_future_create(3)`.
+
+DESCRIPTION
+-----------
+
+`flux_future_get()` accesses the result of a fulfilled future.  If the
+future is not yet fulfilled, it calls `flux_future_wait_for()` internally
+with a negative _timeout_, causing it to block until the future is fulfilled.
+A pointer to the result is assigned to _result_ (caller must NOT free),
+or -1 is returned if the future was fulfilled with an error.  Often this
+function is wrapped with a class-specific result access function.
 
 `flux_future_then()` sets up a continuation callback _cb_ that is called
 with opaque argument _arg_ once the future is fulfilled.  The continuation
@@ -67,13 +75,6 @@ make progress while `flux_future_wait_for()` is executing, unless _timeout_
 is zero, in which case the function times out immediately if the future
 has not already been fulfilled.  While `flux_future_wait_for()` is executing,
 unrelated reactor watchers and message handlers are not active.
-
-`flux_future_get()` accesses the result of a fulfilled future.  If the
-future is not yet fulfilled, it calls `flux_future_wait_for()` internally
-with a negative _timeout_, causing it to block until the future is fulfilled.
-A pointer to the result is assigned to _result_ (caller must NOT free),
-or -1 is returned if the future was fulfilled with an error.  Often this
-function is wrapped with a class-specific result access function.
 
 `flux_future_destroy()` destroys a future, including any result contained
 within.
