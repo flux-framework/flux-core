@@ -777,7 +777,9 @@ static void wreck_state_cb (flux_t *h, flux_msg_handler_t *w,
             goto error_destroy;
     }
     wreck_job_set_state (job, topic);
-    if (!strcmp (job->state, "complete") || !strcmp (job->state, "failed"))
+    if ( !strcmp (job->state, "complete")
+      || !strcmp (job->state, "failed")
+      || !strcmp (job->state, "cancelled"))
         wreck_job_delete (id, active_jobs);
     return;
 error_destroy:
