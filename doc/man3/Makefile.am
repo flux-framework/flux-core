@@ -116,6 +116,7 @@ MAN3_FILES_SECONDARY = \
 	flux_log_set_appname.3 \
 	flux_log_set_procid.3 \
 	flux_future_wait_for.3 \
+	flux_future_reset.3 \
 	flux_future_destroy.3 \
 	flux_future_get.3 \
 	flux_future_fulfill.3 \
@@ -238,6 +239,7 @@ flux_content_store_get.3: flux_content_load.3
 flux_vlog.3: flux_log.3
 flux_log_set_appname.3: flux_log.3
 flux_log_set_procid.3: flux_log.3
+flux_future_reset.3: flux_future_get.3
 flux_future_destroy.3: flux_future_get.3
 flux_future_wait_for.3: flux_future_get.3
 flux_future_then.3: flux_future_get.3
