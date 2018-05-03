@@ -2,7 +2,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libtap/tap.h"
 
@@ -16,27 +15,25 @@ static int nodeid_fake_error = -1;
 void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
     uint32_t nodeid;
-    json_object *o = NULL;
     int flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0
             || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
-        errnum = errno;
-        goto done;
+        goto error;
     }
     if (nodeid == nodeid_fake_error) {
         nodeid_fake_error = -1;
-        errnum = EPERM; /* an error not likely to be seen */
-        goto done;
+        errno = EPERM; /* an error not likely to be seen */
+        goto error;
     }
-    o = Jnew ();
-    Jadd_int (o, "nodeid", nodeid);
-    Jadd_int (o, "flags", flags);
-done:
-    (void)flux_respond (h, msg, errnum, Jtostr (o));
-    Jput (o);
+    if (flux_respond_pack (h, msg, "{s:i s:i}", "nodeid", nodeid,
+                                                "flags", flags) < 0)
+        diag ("%s: flux_respond_pack: %s", __FUNCTION__, strerror (errno));
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        diag ("%s: flux_respond: %s", __FUNCTION__, strerror (errno));
 }
 
 void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,

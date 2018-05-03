@@ -33,7 +33,6 @@
 #include <inttypes.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 
 #define OPTIONS "+hr:"

@@ -1,7 +1,6 @@
 #include <argz.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 

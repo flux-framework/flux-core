@@ -142,58 +142,16 @@ static jscctx_t *getctx (flux_t *h)
     return ctx;
 }
 
-json_object * kvspath_request_json (int64_t id)
-{
-    json_object *o = json_object_new_object ();
-    json_object *ar = json_object_new_array ();
-    json_object *v = json_object_new_int64 (id);
-
-    if (!o || !ar || !v) {
-        Jput (o);
-        Jput (ar);
-        Jput (v);
-        return (NULL);
-    }
-    json_object_array_add (ar, v);
-    json_object_object_add (o, "ids", ar);
-    return (o);
-}
-
-const char * kvs_path_json_get (json_object *o)
-{
-    const char *p;
-    json_object *ar;
-    if (!Jget_obj (o, "paths", &ar) || !Jget_ar_str (ar, 0, &p))
-        return (NULL);
-    return (p);
-}
-
 static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
 {
     int rc = -1;
     const char *path;
-    const char *json_str;
     flux_future_t *f;
     uint32_t nodeid = FLUX_NODEID_ANY;
-    json_object *o = kvspath_request_json (id);
 
-    if (!(f = flux_rpc (h, "job.kvspath", Jtostr (o), nodeid, 0))
-        ||  (flux_rpc_get (f, &json_str) < 0)) {
+    if (!(f = flux_rpc_pack (h, "job.kvspath", nodeid, 0, "{s:[I]}", "ids", id))
+        ||  flux_rpc_get_unpack (f, "{s:[s]}", "paths", &path) < 0) {
         flux_log_error (h, "flux_rpc (job.kvspath)");
-        goto out;
-    }
-    Jput (o);
-    o = NULL;
-    if (!json_str) {
-        flux_log (h, LOG_ERR, "flux_rpc (job.kvspath): empty payload");
-        goto out;
-    }
-    if (!(o = Jfromstr (json_str))) {
-        flux_log_error (h, "flux_rpc (job.kvspath): failed to parse json");
-        goto out;
-    }
-    if (!(path = kvs_path_json_get (o))) {
-        flux_log_error (h, "flux_rpc (job.kvspath): failed to get path");
         goto out;
     }
     if (!(*pathp = strdup (path))) {
@@ -203,7 +161,6 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     rc = 0;
 out:
     flux_future_destroy (f);
-    Jput (o);
     return (rc);
 }
 
