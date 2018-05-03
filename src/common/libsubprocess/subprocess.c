@@ -35,10 +35,10 @@
 #include <czmq.h>
 #include <argz.h>
 #include <envz.h>
+#include <jansson.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
 #include "zio.h"
 #include "subprocess.h"
@@ -212,18 +212,29 @@ static int check_completion (struct subprocess *p)
 static int output_handler (zio_t *z, const char *json_str, int len, void *arg)
 {
     struct subprocess *p = (struct subprocess *) arg;
-    json_object *o;
+    json_t *o = NULL;
+    json_t *new_o;
+    char *json_str_amended;
 
     if (p->io_cb) {
-        if (!(o = json_tokener_parse (json_str))) {
+        if (!(o = json_loads (json_str, 0, NULL))) {
             errno = EINVAL;
             return -1;
         }
-        Jadd_int (o, "pid", subprocess_pid (p));
-        Jadd_str (o, "type", "io");
-        Jadd_str (o, "name", zio_name (z));
-        p->io_cb (p, json_object_to_json_string (o));
-        json_object_put (o);
+        if (!(new_o = json_pack ("{s:i s:s s:s}", "pid", subprocess_pid (p),
+                                                  "type", "io",
+                                                  "name", zio_name (z))))
+            goto error;
+        if (json_object_update (o, new_o) < 0) {
+            json_decref (new_o);
+            goto error;
+        }
+        json_decref (new_o);
+        if (!(json_str_amended = json_dumps (o, JSON_COMPACT)))
+            goto error;
+        p->io_cb (p, json_str_amended);
+        free (json_str_amended);
+        json_decref (o);
     }
     else
        send_output_to_stream (zio_name (z), json_str);
@@ -234,6 +245,10 @@ static int output_handler (zio_t *z, const char *json_str, int len, void *arg)
      */
     check_completion (p);
     return (0);
+error:
+    json_decref (o);
+    errno = EINVAL;
+    return -1;
 }
 
 static int hooks_table_init (struct subprocess *p)
