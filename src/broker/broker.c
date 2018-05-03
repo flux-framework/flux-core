@@ -48,8 +48,12 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
-#if HAVE_VALGRIND_VALGRIND_H
-# include <valgrind/valgrind.h>
+#if HAVE_VALGRIND
+# if HAVE_VALGRIND_H
+#  include <valgrind.h>
+# elif HAVE_VALGRIND_VALGRIND_H
+#  include <valgrind/valgrind.h>
+# endif
 #endif
 
 #include "src/common/libutil/log.h"
@@ -1955,7 +1959,7 @@ static const struct flux_handle_ops broker_handle_ops = {
 };
 
 
-#if HAVE_VALGRIND_VALGRIND_H
+#if HAVE_VALGRIND
 /* Disable dlclose() during valgrind operation
  */
 void I_WRAP_SONAME_FNNAME_ZZ(Za,dlclose)(void *dso) {}
