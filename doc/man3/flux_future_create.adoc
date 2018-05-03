@@ -39,12 +39,14 @@ SYNOPSIS
 DESCRIPTION
 -----------
 
+See `flux_future_get(3)` for general functions that operate on futures.
+This page covers functions primarily used when building classes that
+return futures.
+
 A Flux future represents some activity that may be completed with reactor
 watchers and/or message handlers.  It is intended to be returned by other
 classes as a handle for synchronization and a container for results.
 This page describes the future interfaces used by such classes.
-Class users and users seeking an introduction to Flux futures are referred
-to `flux_future_then(3)`.
 
 A class that returns a future usually provides a creation function
 that internally calls `flux_future_create()`, and may provide functions
@@ -182,4 +184,4 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_future_create(3), flux_clone(3)
+flux_future_get(3), flux_clone(3)

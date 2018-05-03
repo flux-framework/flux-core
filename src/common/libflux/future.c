@@ -47,6 +47,7 @@ struct then_context {
     flux_watcher_t *prepare;// doorbell for fulfill
     flux_watcher_t *check;
     flux_watcher_t *idle;
+    bool init_called;
     flux_continuation_f continuation;
     void *continuation_arg;
 };
@@ -164,24 +165,37 @@ static struct then_context *then_context_create (flux_reactor_t *r, void *arg)
         goto error;
     if (!(then->idle = flux_idle_watcher_create (r, NULL, NULL)))
         goto error;
-    flux_watcher_start (then->prepare);
-    flux_watcher_start (then->check);
     return then;
 error:
     then_context_destroy (then);
     return NULL;
 }
 
+static void then_context_start (struct then_context *then)
+{
+    flux_watcher_start (then->prepare);
+    flux_watcher_start (then->check);
+}
+
 static int then_context_set_timeout (struct then_context *then,
                                      double timeout, void *arg)
 {
-    assert (then != NULL);
-    assert (then->timer == NULL);
-    assert (timeout >= 0.);
-    if (!(then->timer = flux_timer_watcher_create (then->r, timeout, 0.,
-                                                   then_timer_cb, arg)))
-        return -1;
-    flux_watcher_start (then->timer);
+    if (then) {
+        if (timeout < 0.)       // disable
+            flux_watcher_stop (then->timer);
+        else {
+            if (!then->timer) { // set
+                then->timer = flux_timer_watcher_create (then->r, timeout, 0.,
+                                                         then_timer_cb, arg);
+                if (!then->timer)
+                    return -1;
+            }
+            else {              // reset
+                flux_timer_watcher_reset (then->timer, timeout, 0.);
+            }
+            flux_watcher_start (then->timer);
+        }
+    }
     return 0;
 }
 
@@ -225,6 +239,24 @@ error:
     flux_future_destroy (f);
     return NULL;
 }
+
+/* Reset (unfulfill) a future.
+ */
+void flux_future_reset (flux_future_t *f)
+{
+    if (f) {
+        if (f->result) {
+            if (f->result_free)
+                f->result_free (f->result);
+            f->result = NULL;
+        }
+        f->result_valid = false;
+        f->result_errnum_valid = false;
+        if (f->then)
+            then_context_start (f->then);
+    }
+}
+
 
 /* Set the flux reactor to be used for 'then' context.
  * In 'now' context, reactor will be a temporary one.
@@ -327,10 +359,8 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             if (!(f->now = now_context_create ()))
                 return -1;
         }
-        if (timeout >= 0.) {
-            if (now_context_set_timeout (f->now, timeout, f) < 0)
-                return -1;
-        }
+        if (now_context_set_timeout (f->now, timeout, f) < 0)
+            return -1;
         f->now->running = true;
         if (f->init && !f->now->init_called) {
             f->init (f, f->init_arg); // might set error
@@ -373,18 +403,23 @@ int flux_future_get (flux_future_t *f, void *result)
 int flux_future_then (flux_future_t *f, double timeout,
                       flux_continuation_f cb, void *arg)
 {
-    if (!f || !f->r || !cb || f->then != NULL) {
+    if (!f || !f->r || !cb) {
         errno = EINVAL;
         return -1;
     }
-    if (!(f->then = then_context_create (f->r, f)))
-        return -1;
-    if (timeout >= 0. && then_context_set_timeout (f->then, timeout, f) < 0)
+    if (!f->then) {
+        if (!(f->then = then_context_create (f->r, f)))
+            return -1;
+    }
+    then_context_start (f->then);
+    if (then_context_set_timeout (f->then, timeout, f) < 0)
         return -1;
     f->then->continuation = cb;
     f->then->continuation_arg = arg;
-    if (f->init)
+    if (f->init && !f->then->init_called) {
         f->init (f, f->init_arg); // might set error
+        f->then->init_called = true;
+    }
     if (f->result_errnum_valid) {
         errno = f->result_errnum;
         return -1;

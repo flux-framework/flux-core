@@ -621,6 +621,79 @@ void test_walk (void)
     flux_future_destroy (f);
 }
 
+void test_reset_continuation (flux_future_t *f, void *arg)
+{
+    int *cp = arg;
+    (*cp)++;
+}
+
+void test_reset (void)
+{
+    flux_reactor_t *r;
+    flux_future_t *f;
+    int count;
+
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    /* Check out flux_future_reset() in "now" context.
+     */
+    if (flux_future_wait_for (f, 0.) == 0 || errno != ETIMEDOUT)
+       BAIL_OUT ("flux_future_wait_for 0. succeeded on unfulfilled future");
+
+    flux_future_fulfill (f, NULL, NULL);
+    if (flux_future_wait_for (f, 0.) < 0)
+       BAIL_OUT ("flux_future_wait_for failed on fulfilled future");
+
+    flux_future_reset (f);
+    errno = 0;
+    ok (flux_future_wait_for (f, 0.) < 0 && errno == ETIMEDOUT,
+       "flux_future_wait_for 0. times out on reset future");
+
+    flux_future_fulfill (f, NULL, NULL);
+    ok (flux_future_wait_for (f, 0.) == 0,
+       "flux_future_wait_for 0. succeeds on re-fulfilled future");
+
+    /* Check out flux_future_reset() in "then" context.
+     */
+    flux_future_reset (f);
+    count = 0;
+    ok (flux_future_then (f, -1., test_reset_continuation, &count) == 0,
+        "flux_future_then works on reset future");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    ok (count == 0,
+        "continuation was not called on reset future");
+
+    flux_future_fulfill (f, NULL, NULL);
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    ok (count == 1,
+        "continuation was called on re-fulfilled future");
+
+    flux_future_reset (f);
+    count = 0;
+    ok (flux_future_then (f, -1., test_reset_continuation, &count) == 0,
+        "flux_future_then works on re-reset future");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    ok (count == 0,
+        "continuation was not called on re-reset future");
+
+    flux_future_fulfill (f, NULL, NULL);
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    ok (count == 1,
+        "continuation was called on re-re-fulfilled future");
+
+    flux_future_destroy (f);
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -635,6 +708,8 @@ int main (int argc, char *argv[])
     test_mumble ();
     test_mumble_inception ();
     test_walk ();
+
+    test_reset ();
 
     done_testing();
     return (0);
