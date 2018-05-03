@@ -132,6 +132,6 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_rpc(3), flux_future_then(3)
+flux_rpc(3), flux_future_get(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_10.adoc[RFC 10: Content Storage Service]
