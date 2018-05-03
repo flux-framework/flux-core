@@ -79,8 +79,9 @@ local function alloc_tasks (f, wreck, lwj)
     local counts = {}
     local total = 0
     while total < wreck.ntasks do
-        for i = 0, size-1 do
-            local n = tonumber (res[i].cores)
+        for i = 1, size do
+            local rank = i - 1
+            local n = tonumber (res[rank].cores)
             if (total + n) > wreck.ntasks then
                 n = wreck.ntasks - total
             end
@@ -89,14 +90,15 @@ local function alloc_tasks (f, wreck, lwj)
             if total == wreck.ntasks then break end
         end
     end
-    for i, ntasks in pairs (counts) do
+    for i, ntasks in ipairs (counts) do
+        local rank = i - 1
         local corelist = "0"
         if ntasks > 1 then
             corelist = corelist .. "-" .. ntasks - 1
         end
-        table.insert (Rlite, { rank = i, children = { core = corelist } })
+        table.insert (Rlite, { rank = rank, children = { core = corelist } })
         if not r[ntasks] then r[ntasks] = {} end
-        table.insert (r[ntasks], i)
+        table.insert (r[ntasks], rank)
     end
     wreck:verbose ("tasks per node: %s\n", summarize_tasks_per_node (r))
     lwj.R_lite = Rlite

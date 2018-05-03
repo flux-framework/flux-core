@@ -60,7 +60,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-exec \
 	flux-ps \
 	flux-cron \
-	flux-aggregate
+	flux-aggregate \
+	flux-hostlist
 
 fluxcmd_PROGRAMS = \
 	flux-ping \

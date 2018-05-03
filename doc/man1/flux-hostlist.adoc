@@ -1,0 +1,57 @@
+FLUX-HOSTLIST(1)
+================
+:doctype: manpage
+
+
+NAME
+----
+flux-hostlist - List hostnames for flux instances or jobs
+
+
+SYNOPSIS
+--------
+*flux* *hostlist* [--compressed] [JOBIDS]...
+*flux* *hostlist* [--set]
+
+
+DESCRIPTION
+-----------
+'flux hostlist' prints a list of hostnames on stdout for the current
+instance or for a set of 'JOBIDS'.
+
+Without any arguments 'flux hostlist' will attempt to read the list
+of hostnames, one per rank, from the 'resource.hosts' key in the kvs,
+and falls back to 'flux exec hostname' if the key is not found.
+
+If an optional list of 'JOBIDS' is provided as an argument to the
+command the list emitted is the union of hosts in all 'JOBIDS'.
+
+OPTIONS
+-------
+
+*-c, --compressed*::
+Output hostname list in compressed format, e.g. 'host[1-10]' instead
+of individual hostnames, one pre line.
+
+*-r, --ranks*::
+Output rank ids instead of hostnames.
+
+*--set*::
+This option is used to set the initial value for the 'resource.hosts'
+key from a file or list of hostnames on stdin. It is not meant for
+general use, but it is used by the Flux init system.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
