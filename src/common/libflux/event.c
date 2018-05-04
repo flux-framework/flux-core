@@ -28,8 +28,12 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <jansson.h>
+
+#include "src/common/libutil/base64.h"
 
 #include "event.h"
+#include "rpc.h"
 #include "message.h"
 
 static int event_decode (const flux_msg_t *msg, const char **topic)
@@ -204,6 +208,108 @@ flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...)
     msg = flux_event_vpack (topic, fmt, ap);
     va_end (ap);
     return msg;
+}
+
+static flux_future_t *wrap_event_rpc (flux_t *h,
+                                      const char *topic, int flags,
+                                      const void *src, int srclen)
+{
+    flux_future_t *f;
+
+    if (src) {
+        int dstlen = base64_encode_length (srclen);
+        void *dst;
+        if (!(dst = malloc (dstlen)))
+            return NULL;
+        base64_encode_block (dst, &dstlen, src, srclen);
+        if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
+                                 "{s:s s:i s:s}", "topic", topic,
+                                                  "flags", flags,
+                                                  "payload", dst))) {
+            int saved_errno = errno;
+            free (dst);
+            errno = saved_errno;
+            return NULL;
+        }
+        free (dst);
+    }
+    else {
+        if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
+                                    "{s:s s:i}", "topic", topic,
+                                                 "flags", flags))) {
+            return NULL;
+        }
+    }
+    return f;
+}
+
+flux_future_t *flux_event_publish (flux_t *h,
+                                   const char *topic, int flags,
+                                   const char *json_str)
+{
+    int len = 0;
+    if (!h || !topic || (flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (json_str) {
+        flags |= FLUX_MSGFLAG_JSON;
+        len = strlen (json_str) + 1;
+    }
+    return wrap_event_rpc (h, topic, flags, json_str, len);
+}
+
+flux_future_t *flux_event_publish_pack (flux_t *h,
+                                        const char *topic, int flags,
+                                        const char *fmt, ...)
+{
+    va_list ap;
+    json_t *o;
+    char *json_str;
+    flux_future_t *f;
+
+    if (!h || !topic || !fmt || (flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    va_start (ap, fmt);
+    o = json_vpack_ex (NULL, 0, fmt, ap);
+    va_end (ap);
+    if (!o) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(json_str = json_dumps (o, JSON_COMPACT))) {
+        json_decref (o);
+        errno = ENOMEM;
+        return NULL;
+    }
+    json_decref (o);
+    if (!(f = wrap_event_rpc (h,  topic, flags | FLUX_MSGFLAG_JSON,
+                              json_str, strlen (json_str) + 1))) {
+        int saved_errno = errno;
+        free (json_str);
+        errno = saved_errno;
+        return NULL;
+    }
+    free (json_str);
+    return f;
+}
+
+flux_future_t *flux_event_publish_raw (flux_t *h,
+                                       const char *topic, int flags,
+                                       const void *data, int len)
+{
+    if (!h || !topic || (flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return wrap_event_rpc (h, topic, flags, data, len);
+}
+
+int flux_event_publish_get_seq (flux_future_t *f, int *seq)
+{
+    return flux_rpc_get_unpack (f, "{s:i}", "seq", seq);
 }
 
 /*
