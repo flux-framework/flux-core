@@ -755,10 +755,10 @@ static void wreck_state_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int64_t id;
     const char *topic;
-    const char *kvs_path;
+    const char *kvs_path = NULL;
     struct wreck_job *job;
 
-    if (flux_event_unpack (msg, &topic, "{s:I s:s}",
+    if (flux_event_unpack (msg, &topic, "{s:I s?s}",
                            "jobid", &id,
                            "kvs_path", &kvs_path) < 0)
         goto error;
@@ -771,13 +771,15 @@ static void wreck_state_cb (flux_t *h, flux_msg_handler_t *w,
         if (!(job = wreck_job_create ()))
             goto error;
         job->id = id;
-        if (!(job->kvs_path = strdup (kvs_path)))
+        if (kvs_path && !(job->kvs_path = strdup (kvs_path)))
             goto error_destroy;
         if (wreck_job_insert (job, active_jobs) < 0)
             goto error_destroy;
     }
     wreck_job_set_state (job, topic);
-    if (!strcmp (job->state, "complete") || !strcmp (job->state, "failed"))
+    if ( !strcmp (job->state, "complete")
+      || !strcmp (job->state, "failed")
+      || !strcmp (job->state, "cancelled"))
         wreck_job_delete (id, active_jobs);
     return;
 error_destroy:
