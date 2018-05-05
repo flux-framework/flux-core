@@ -730,45 +730,6 @@ error:
     return (-1);
 }
 
-/* Handle response to KVS look up of rank.N.
- * If it exists, spawn wrexecd.
- * This concludes the continuation chain started at runevent_cb().
- */
-static void runevent_fallback_continuation (flux_future_t *f, void *arg)
-{
-    struct wreck_job *job = arg;
-    flux_t *h = flux_future_get_flux (f);
-    const char *key = flux_kvs_lookup_get_key (f);
-
-    if (flux_future_get (f, NULL) < 0) {
-        flux_log (h, LOG_DEBUG, "No dir %s: %s", key, flux_strerror (errno));
-        goto done;
-    }
-    if (spawn_exec_handler (h, job) < 0)
-        goto done;
-done:
-    flux_future_destroy (f);
-}
-
-/* Send request to look up rank.N.
- * This function is continued in runevent_fallback_continuation().
- */
-static int runevent_fallback (flux_t *h, struct wreck_job *job)
-{
-    char key[MAX_JOB_PATH];
-    flux_future_t *f;
-
-    snprintf (key, sizeof (key), "%s.rank.%lu",
-              job->kvs_path, (unsigned long)broker_rank);
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
-        return -1;
-    if (flux_future_then (f, -1., runevent_fallback_continuation, job) < 0) {
-        flux_future_destroy (f);
-        return -1;;
-    }
-    return 0;
-}
-
 static bool Rlite_targets_this_node (flux_t *h, const char *key,
                                      const char *R_lite)
 {
@@ -799,10 +760,6 @@ static void runevent_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get (f, &R_lite) < 0) {
         if (broker_rank == 0)
             flux_log (h, LOG_INFO, "No %s: %s", key, flux_strerror (errno));
-        if (runevent_fallback (h, job) < 0) {
-            flux_log_error (h, "%s: fallback failed", __FUNCTION__);
-            goto done;
-        }
         goto done;
     }
     if (!Rlite_targets_this_node (h, key, R_lite))
