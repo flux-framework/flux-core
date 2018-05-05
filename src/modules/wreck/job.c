@@ -365,7 +365,6 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     flux_future_destroy (f_next);
     flux_future_destroy (f);
-    wreck_job_destroy (job);
 }
 
 /* Handle next available jobid response, then issue KVS commit request
@@ -749,7 +748,6 @@ static void runevent_fallback_continuation (flux_future_t *f, void *arg)
         goto done;
 done:
     flux_future_destroy (f);
-    wreck_job_destroy (job);
 }
 
 /* Send request to look up rank.N.
@@ -803,16 +801,15 @@ static void runevent_continuation (flux_future_t *f, void *arg)
             flux_log (h, LOG_INFO, "No %s: %s", key, flux_strerror (errno));
         if (runevent_fallback (h, job) < 0) {
             flux_log_error (h, "%s: fallback failed", __FUNCTION__);
-            goto done_destroy;
+            goto done;
         }
         goto done;
     }
     if (!Rlite_targets_this_node (h, key, R_lite))
-        goto done_destroy;
+        goto done;
+
     if (spawn_exec_handler (h, job) < 0)
-        goto done_destroy;
-done_destroy:
-    wreck_job_destroy (job);
+        goto done;
 done:
     flux_future_destroy (f);
 }
@@ -841,20 +838,20 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg,
                          void *arg)
 {
+    int64_t id;
     const char *topic;
     struct wreck_job *job;
     flux_future_t *f = NULL;
     char k[MAX_JOB_PATH];
 
-    if (!(job = wreck_job_create ()))
-        goto error;
     if (flux_event_decode (msg, &topic, NULL) < 0)
         goto error;
-    if ((job->id = id_from_tag (topic+11)) < 0) {
-        errno = EPROTO;
+    id = id_from_tag (topic+11);
+    if (!(job = wreck_job_lookup (id, active_jobs))) {
+        errno = ENOENT;
         goto error;
     }
-    if (!(job->kvs_path = id_to_path (job->id)))
+    if (!job->kvs_path)
         goto error;
     if (snprintf (k, sizeof (k), "%s.R_lite", job->kvs_path) >= sizeof (k)) {
         errno = EINVAL;
@@ -868,7 +865,6 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
     return;
 error:
     flux_log_error (h, "%s", __FUNCTION__);
-    wreck_job_destroy (job);
     flux_future_destroy (f);
 }
 
