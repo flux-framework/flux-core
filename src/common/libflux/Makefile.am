@@ -101,6 +101,10 @@ libflux_la_SOURCES = \
 	tagpool.c \
 	ev_flux.h \
 	ev_flux.c \
+	ev_buffer_read.h \
+	ev_buffer_read.c \
+	ev_buffer_write.h \
+	ev_buffer_write.c \
 	heartbeat.c \
 	keepalive.c \
 	content.c \

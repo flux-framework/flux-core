@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "handle.h"
+#include "buffer.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,11 @@ enum {
 enum {
     FLUX_REACTOR_SIGCHLD = 1,  /* enable use of child watchers */
                                /*    only one thread can do this per program */
+};
+
+/* Flags for buffer watchers */
+enum {
+    FLUX_WATCHER_LINE_BUFFER = 1, /* line buffer data before invoking callback */
 };
 
 flux_reactor_t *flux_reactor_create (int flags);
@@ -73,6 +79,24 @@ flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w);
 flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r, int fd, int events,
                                         flux_watcher_f cb, void *arg);
 int flux_fd_watcher_get_fd (flux_watcher_t *w);
+
+/* buffer
+ */
+
+/* on eof, callback will be called with an empty buffer */
+/* if line buffered, second to last callback may not contain a full line */
+flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
+                                                 int size, flux_watcher_f cb,
+                                                 int flags, void *arg);
+
+flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w);
+
+/* 'cb' is used only for FLUX_POLLERR */
+flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
+                                                  int size, flux_watcher_f cb,
+                                                  int flags, void *arg);
+
+flux_buffer_t *flux_buffer_write_watcher_get_buffer (flux_watcher_t *w);
 
 /* zmq socket
  */
