@@ -73,7 +73,6 @@ service.
 | state-pair | JSC_STATE\_PAIR| dictionary     | A dictionary containing this old and new states of the job. See Table 3-2.     |
 | rdesc      | JSC_RDESC      | dictionary     | Information on the resources owned by this job. See Table 3-3.                 |
 | rdl        | JSC_RDL        | string         | RDL binary string allocated to the job                                         |
-| rdl_alloc  | JSC_RDL\_ALLOC | array of per-broker resources | Resource descriptor array (Resources allocated per broker - rank order). See Table 3-4.|
 | R_lite     | JSC_R\_LITE    | string         | R\_lite serialized JSON string allocated to the job                            |
 | pdesc      | JSC_PDESC      | dictionary     | Information on the processes spawned by this job. See Table 3-5.               |
 
@@ -98,21 +97,6 @@ service.
 
 **Table 3-3** Keys and values of *rdesc* attribute
 
-
-| Key        | Macro                        | Value Type     | Comment                         |
-|------------|------------------------------|----------------|---------------------------------|
-| contained  | JSC_RDL\_ALLOC\_CONTAINED    | dictionary     | Per cmdb resource containment See Table 3-4-1 |
-
-**Table 3-4** Keys and values of *rdl\_alloc* attribute
-
-
-| Key        | Macro                             | Value Type     | Comment                           |
-|------------|-----------------------------------|----------------|-----------------------------------|
-| cmbdrank   | JSC_RDL\_ALLOC\_CONTAINING\_RANK  | 64-bit integer | broker rank that manages the cores|
-| cmbdncores | JSC_RDL\_ALLOC\_CONTAINED\_NCORES | 64-bit integer | Core count to use for this broker |
-| cmbdngpus | JSC_RDL\_ALLOC\_CONTAINED\_NGPUS  | 64-bit integer | GPU count to use for this broker |
-
-**Table 3-4-1** Keys and values of *rsarray* attribute
 
 
 | Key        | Macro                | Value Type                  | Comment                                                             |
