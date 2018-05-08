@@ -537,35 +537,6 @@ done:
     return rc;
 }
 
-static int extract_raw_rdl_alloc (flux_t *h, int64_t j, json_object *jcb)
-{
-    int i;
-    json_object *ra = Jnew_ar ();
-    bool processing = true;
-
-    for (i=0; processing; ++i) {
-        char *key = lwj_key (h, j, ".rank.%d.cores", i);
-        flux_future_t *f = NULL;
-        int64_t cores = 0;
-        if (!key || !(f = flux_kvs_lookup (h, 0, key))
-                 || flux_kvs_lookup_get_unpack (f, "I", &cores) < 0) {
-            if (errno != EINVAL)
-                flux_log_error (h, "extract %s", key);
-            processing = false;
-        } else {
-            json_object *elem = Jnew ();
-            json_object *o = Jnew ();
-            Jadd_int64 (o, JSC_RDL_ALLOC_CONTAINED_NCORES, cores);
-            json_object_object_add (elem, JSC_RDL_ALLOC_CONTAINED, o);
-            json_object_array_add (ra, elem);
-        }
-        free (key);
-        flux_future_destroy (f);
-    }
-    json_object_object_add (jcb, JSC_RDL_ALLOC, ra);
-    return 0;
-}
-
 static int query_jobid (flux_t *h, int64_t j, json_object **jcb)
 {
     int rc = 0;
@@ -673,12 +644,6 @@ static int query_r_lite (flux_t *h, int64_t j, json_object **jcb)
     if (rlitestr)
         free (rlitestr);
     return 0;
-}
-
-static int query_rdl_alloc (flux_t *h, int64_t j, json_object **jcb)
-{
-    *jcb = Jnew ();
-    return extract_raw_rdl_alloc (h, j, *jcb);
 }
 
 static int query_pdesc (flux_t *h, int64_t j, json_object **jcb)
@@ -882,96 +847,6 @@ done:
     flux_future_destroy (f);
     free (key);
 
-    return rc;
-}
-
-static int update_hash_1ra (flux_t *h, int64_t j, json_object *o, zhash_t *rtab)
-{
-    int rc = 0;
-    int64_t ncores = 0;
-    int64_t ngpus = 0;
-    int64_t rank = 0;
-    int64_t *curcnt;
-    char *key;
-    json_object *c = NULL;
-
-    if (!Jget_obj (o, JSC_RDL_ALLOC_CONTAINED, &c)) return -1;
-    if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINING_RANK, &rank)) return -1;
-    if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NCORES, &ncores)) return -1;
-    if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NGPUS, &ngpus)) return -1;
-
-    key = lwj_key (h, j, ".rank.%ju.cores", rank);
-    if (!(curcnt = zhash_lookup (rtab, key))) {
-        curcnt = xzmalloc (sizeof (*curcnt));
-        *curcnt = ncores;
-        zhash_insert (rtab, key, curcnt);
-        zhash_freefn (rtab, key, free);
-    } else
-        *curcnt = *curcnt + ncores;
-    free (key);
-
-    key = lwj_key (h, j, ".rank.%ju.gpus", rank);
-    if (!(curcnt = zhash_lookup (rtab, key))) {
-        curcnt = xzmalloc (sizeof (*curcnt));
-        *curcnt = ngpus;
-        zhash_insert (rtab, key, curcnt);
-        zhash_freefn (rtab, key, free);
-    } else
-        *curcnt = *curcnt + ngpus;
-    free (key);
-
-    return rc;
-}
-
-static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
-{
-    int i = 0;
-    int rc = -1;
-    int size = 0;
-    json_object *ra_e = NULL;
-    const char *key = NULL;
-    zhash_t *rtab = NULL;
-    int64_t *rcount = NULL;
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-
-    if (!(rtab = zhash_new ()))
-        oom ();
-    if (!Jget_ar_len (o, &size))
-        goto done;
-
-    for (i=0; i < (int) size; ++i) {
-        if (!Jget_ar_obj (o, i, &ra_e))
-            goto done;
-        /* 'o' represents an array of per-node core and gpu count to use.
-         * However, because the same rank can appear multiple times
-         * in this array in emulation mode, update_hash_1ra is
-         * used to determine the total core count per rank.
-         */
-        if ( (rc = update_hash_1ra (h, j, ra_e, rtab)) < 0)
-            goto done;
-    }
-
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
-        goto done;
-    }
-    FOREACH_ZHASH (rtab, key, rcount) {
-        if ( (rc = flux_kvs_txn_pack (txn, 0, key, "I", *rcount)) < 0) {
-            flux_log_error (h, "put %s", key);
-            goto done;
-        }
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log (h, LOG_ERR, "update_pdesc commit failed");
-        goto done;
-    }
-    rc = 0;
-
-done:
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-    zhash_destroy (&rtab);
     return rc;
 }
 
@@ -1328,9 +1203,6 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
     } else if (!strcmp (key, JSC_R_LITE)) {
         if ( (rc = query_r_lite (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_r_lite failed");
-    } else if (!strcmp (key, JSC_RDL_ALLOC)) {
-        if ( (rc = query_rdl_alloc (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_rdl_alloc failed");
     } else if (!strcmp(key, JSC_PDESC)) {
         if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
@@ -1374,9 +1246,6 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
         const char *s = NULL;
         if (Jget_str (jcb, JSC_R_LITE, &s))
             rc = update_r_lite (h, jobid, s);
-    } else if (!strcmp (key, JSC_RDL_ALLOC)) {
-        if (Jget_obj (jcb, JSC_RDL_ALLOC, &o))
-            rc = update_rdl_alloc (h, jobid, o);
     } else if (!strcmp (key, JSC_PDESC)) {
         if (Jget_obj (jcb, JSC_PDESC, &o))
             rc = update_pdesc (h, jobid, o);
