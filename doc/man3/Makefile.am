@@ -119,6 +119,7 @@ MAN3_FILES_SECONDARY = \
 	flux_vlog.3 \
 	flux_log_set_appname.3 \
 	flux_log_set_procid.3 \
+	flux_future_then.3 \
 	flux_future_wait_for.3 \
 	flux_future_reset.3 \
 	flux_future_destroy.3 \
