@@ -96,6 +96,9 @@ static struct optparse_option pub_opts[] = {
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Interpret event payload as raw.",
     },
+    { .name = "synchronous", .key = 's', .has_arg = 0,
+      .usage = "Wait for event sequence assignment before exiting.",
+    },
     { .name = "loopback", .key = 'l', .has_arg = 0,
       .usage = "Wait for published event to be received before exiting.",
     },
@@ -116,7 +119,6 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     char *topic;
     char *payload = NULL;
-    flux_msg_t *msg;
 
     if (optindex == argc) {
         optparse_print_usage (p);
@@ -141,10 +143,24 @@ static int event_pub (optparse_t *p, int argc, char **argv)
 
     if (optparse_hasopt (p, "raw")) {
         int payloadsz = payload ? strlen (payload) : 0;
-        if (!(msg = flux_event_encode_raw (topic, payload, payloadsz)))
-            log_err_exit ("flux_event_encode_raw");
-        if (flux_send (h, msg, 0) < 0)
-            log_err_exit ("flux_send");
+        if (optparse_hasopt (p, "synchronous")) {
+            flux_future_t *f;
+            int seq;
+            if (!(f = flux_event_publish_raw (h, topic, 0, payload, payloadsz)))
+                log_err_exit ("flux_event_publish_raw");
+            if (flux_event_publish_get_seq (f, &seq) < 0)
+                log_err_exit ("flux_event_publish_get_seq");
+            printf ("seq=%d\n", seq);
+            flux_future_destroy (f);
+        }
+        else {
+            flux_msg_t *msg;
+            if (!(msg = flux_event_encode_raw (topic, payload, payloadsz)))
+                log_err_exit ("flux_event_encode_raw");
+            if (flux_send (h, msg, 0) < 0)
+                log_err_exit ("flux_send");
+            flux_msg_destroy (msg);
+        }
         if (optparse_hasopt (p, "loopback")) {
             flux_msg_t *msg;
             const void *data;
@@ -164,10 +180,24 @@ static int event_pub (optparse_t *p, int argc, char **argv)
         }
     }
     else {
-        if (!(msg = flux_event_encode (topic, payload)))
-            log_err_exit ("flux_event_encode");
-        if (flux_send (h, msg, 0) < 0)
-            log_err_exit ("flux_send");
+        if (optparse_hasopt (p, "synchronous")) {
+            flux_future_t *f;
+            int seq;
+            if (!(f = flux_event_publish (h, topic, 0, payload)))
+                log_err_exit ("flux_event_publish");
+            if (flux_event_publish_get_seq (f, &seq) < 0)
+                log_err_exit ("flux_event_publish_get_seq");
+            printf ("seq=%d\n", seq);
+            flux_future_destroy (f);
+        }
+        else {
+            flux_msg_t *msg;
+            if (!(msg = flux_event_encode (topic, payload)))
+                log_err_exit ("flux_event_encode");
+            if (flux_send (h, msg, 0) < 0)
+                log_err_exit ("flux_send");
+            flux_msg_destroy (msg);
+        }
         if (optparse_hasopt (p, "loopback")) {
             flux_msg_t *recvmsg;
             const char *data;
@@ -191,7 +221,6 @@ static int event_pub (optparse_t *p, int argc, char **argv)
             log_err_exit ("flux_event_unsubscribe");
     }
 
-    flux_msg_destroy (msg);
     free (payload);
     return (0);
 }
