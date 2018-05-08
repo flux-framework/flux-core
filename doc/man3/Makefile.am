@@ -9,6 +9,7 @@ MAN3_FILES_PRIMARY = \
 	flux_flags_set.3 \
 	flux_fatal_set.3 \
 	flux_event_subscribe.3 \
+	flux_event_publish.3 \
 	flux_pollevents.3 \
 	flux_msg_encode.3 \
 	flux_msg_sendfd.3 \
@@ -61,6 +62,9 @@ MAN3_FILES_SECONDARY = \
 	flux_fatal_error.3 \
 	FLUX_FATAL.3 \
 	flux_event_unsubscribe.3 \
+	flux_event_publish_pack.3 \
+	flux_event_publish_raw.3 \
+	flux_event_publish_get_seq.3 \
 	flux_pollfd.3 \
 	flux_msg_decode.3 \
 	flux_msg_recvfd.3 \
@@ -185,6 +189,9 @@ flux_flags_get.3: flux_flags_set.3
 flux_fatal_error.3: flux_fatal_set.3
 FLUX_FATAL.3: flux_fatal_set.3
 flux_event_unsubscribe.3: flux_event_subscribe.3
+flux_event_publish_pack.3: flux_event_publish.3
+flux_event_publish_raw.3: flux_event_publish.3
+flux_event_publish_get_seq.3: flux_event_publish.3
 flux_pollfd.3: flux_pollevents.3
 flux_msg_decode.3: flux_msg_encode.3
 flux_msg_recvfd.3: flux_msg_sendfd.3
