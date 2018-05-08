@@ -107,9 +107,10 @@ function ioplex.create (arg)
         files = {}
     }
     if not io.kvspath then
-        local r, err = io.flux:rpc ("job.kvspath", { ids = { io.id }})
+        local wreck = require 'wreck'
+        local r, err = wreck.id_to_path { flux = io.flux, jobid = io.id }
         if not r then error (err) end
-        io.kvspath = r.paths [1]
+        io.kvspath = r
     end
     setmetatable (io, ioplex)
     return io

@@ -33,6 +33,15 @@ void basic (void)
     wreck_job_set_aux (job, job, free_fun);
     ok (free_fun_count == 1,
         "wreck_job_set_aux calls destructor when aux overwritten");
+    wreck_job_incref (job);
+    ok (job->refcount == 2,
+        "wreck_job_incref increases refcount");
+    wreck_job_destroy (job);
+    ok (job->refcount== 1,
+        "wreck_job_destroy decreases refcount");
+    ok (free_fun_count == 1,
+        "wreck_job_destroy doesn't call aux destructor until refcount == 0");
+
     wreck_job_destroy (job);
     ok (free_fun_count == 2,
         "wreck_job_destroy calls aux destructor");

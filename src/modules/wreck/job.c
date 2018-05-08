@@ -42,11 +42,14 @@
 #endif
 #endif /* WITH_TCMALLOC */
 
+#include <jansson.h>
+
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libsubprocess/zio.h"
+
 #include "rcalc.h"
 #include "wreck_job.h"
 
@@ -192,25 +195,33 @@ static int add_jobinfo_txn (flux_kvs_txn_t *txn, struct wreck_job *job)
 {
     char buf [64];
     const char *json_str;
-    json_object_iter i;
     char key[MAX_JOB_PATH];
+    size_t keysz = sizeof (key);
     flux_msg_t *msg = wreck_job_get_aux (job);
-    json_object *o = NULL;
+
+    const char *k;
+    json_t *v;
+    json_t *o = NULL;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
-    if (!json_str || !(o = json_tokener_parse (json_str)))
+    if (!json_str || !(o = json_loads (json_str, 0, NULL)))
         goto inval;
     if (snprintf (key, sizeof (key), "%s.state", job->kvs_path) >= sizeof (key))
         goto inval;
     if (flux_kvs_txn_pack (txn, 0, key, "s", job->state) < 0)
         goto error;
-    json_object_object_foreachC (o, i) {
-        if (snprintf (key, sizeof (key), "%s.%s", job->kvs_path, i.key)
-                                                        >= sizeof (key))
+
+    json_object_foreach (o, k, v) {
+        int rc;
+        char *s;
+        if (snprintf (key, keysz, "%s.%s", job->kvs_path, k) >= keysz)
             goto inval;
-        if (flux_kvs_txn_put (txn, 0, key,
-                              json_object_to_json_string (i.val)) < 0)
+        if (!(s = json_dumps (v, JSON_COMPACT|JSON_ENCODE_ANY)))
+            goto error;
+        rc = flux_kvs_txn_put (txn, 0, key, s);
+        free (s);
+        if (rc < 0)
             goto error;
     }
     if (snprintf (key, sizeof (key), "%s.create-time", job->kvs_path)
@@ -219,13 +230,12 @@ static int add_jobinfo_txn (flux_kvs_txn_t *txn, struct wreck_job *job)
     if (flux_kvs_txn_pack (txn, 0, key, "s",
                            realtime_string (buf, sizeof (buf))) < 0)
         goto error;
-    json_object_put (o);
+    json_decref (o);
     return 0;
 inval:
     errno = EINVAL;
 error:
-    if (o)
-        json_object_put (o);
+    json_decref (o);
     return -1;
 }
 
@@ -355,7 +365,6 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     flux_future_destroy (f_next);
     flux_future_destroy (f);
-    wreck_job_destroy (job);
 }
 
 /* Handle next available jobid response, then issue KVS commit request
@@ -443,69 +452,68 @@ error:
     flux_future_destroy (f);
 }
 
+static json_t *json_id_to_json_path (flux_t *h, json_t *value)
+{
+    int64_t id;
+    char *path = NULL;
+    json_t *o = NULL;
+    int errnum = EPROTO;
+
+    if (!json_is_integer (value) || (id = json_integer_value (value)) < 0)
+        goto out;
+    if (!(path = id_to_path (id))) {
+        errnum = errno;
+        flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
+        goto out;
+    }
+    if (!(o = json_string (path))) {
+        errnum = errno;
+        flux_log_error (h, "kvspath_cb: json_string");
+        goto out;
+    }
+    errnum = 0;
+out:
+    free (path);
+    errno = errnum;
+    return (o);
+}
+
 static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
     int errnum = EPROTO;
-    int i, n;
-    const char *json_str;
-    json_object *in = NULL;
-    json_object *out = NULL;
-    json_object *ar = NULL;
-    json_object *id_list = NULL;
+    size_t index;
+    json_t *id_list = NULL;
+    json_t *paths = NULL;
+    json_t *value;
 
-    if (flux_msg_get_json (msg, &json_str) < 0)
-        goto out;
-
-    if (!(in = Jfromstr (json_str))) {
-        flux_log (h, LOG_ERR, "kvspath_cb: Failed to parse JSON string");
+    if ((flux_request_unpack (msg, NULL, "{s:o}", "ids", &id_list) < 0)
+        || !json_is_array (id_list)) {
+        flux_log_error (h, "kvspath_cb failed to unpack message");
         goto out;
     }
 
-    if (!Jget_obj (in, "ids", &id_list)) {
-        flux_log (h, LOG_ERR, "kvspath_cb: required key ids missing");
-        goto out;
-    }
-
-    if (!json_object_is_type (id_list, json_type_array)) {
-        errno = EPROTO;
-        goto out;
-    }
-
-    if (!(out = json_object_new_object ())
-        || !(ar = json_object_new_array ())) {
-        flux_log (h, LOG_ERR, "kvspath_cb: json_object_new_object failed");
-        goto out;
-    }
-
-    errnum = ENOMEM;
-    n = json_object_array_length (id_list);
-    for (i = 0; i < n; i++) {
-        json_object *r;
-        json_object *v = json_object_array_get_idx (id_list, i);
-        int64_t id = json_object_get_int64 (v);
-        char * path;
-        if (!(path = id_to_path (id))) {
-            flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
+    paths = json_array ();
+    json_array_foreach (id_list, index, value) {
+        json_t *o = json_id_to_json_path (h, value);
+        if (o == NULL) {
+            errnum = errno;
             goto out;
         }
-        r = json_object_new_string (path);
-        free (path);
-        if (r == NULL) {
-            flux_log_error (h, "kvspath_cb: json_object_new_string");
+        if (json_array_append_new (paths, o) < 0) {
+            errnum = errno;
+            flux_log_error (h, "kvspath_cb: json_array_append_new");
+            json_decref (o);
             goto out;
         }
-        json_object_array_add (ar, r);
     }
-    json_object_object_add (out, "paths", ar);
-    ar = NULL; /* allow Jput below */
+    if (flux_respond_pack (h, msg, "{s:O}", "paths", paths) < 0)
+        flux_log_error (h, "kvspath_cb: flux_respond_pack");
     errnum = 0;
 out:
-    if (flux_respond (h, msg, errnum, out ? Jtostr (out) : NULL) < 0)
+    if (errnum && flux_respond (h, msg, errnum, NULL) < 0)
         flux_log_error (h, "kvspath_cb: flux_respond");
-    Jput (in);
-    Jput (ar);
-    Jput (out);
+    json_decref (paths);
 }
 
 static int flux_attr_set_int (flux_t *h, const char *attr, int val)
@@ -536,114 +544,190 @@ static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
     return (0);
 }
 
-static void exec_close_fd (void *arg, int fd)
+static void spawn_io_cb (flux_t *h, struct wreck_job *job,
+                         const flux_msg_t *msg)
 {
-    if (fd >= 3)
-        (void) close (fd);
+    const char *stream = "stdout";
+    const char *json_str;
+    void *data = NULL;
+    int level = LOG_INFO;
+    int len;
+
+    if (flux_msg_get_json (msg, &json_str) < 0)
+        return;
+
+    if ((len = zio_json_decode (json_str, &data, NULL)) < 0) {
+        flux_log_error (h, "wrexecd: io decode");
+    }
+    if (len > 0) {
+        (void) flux_msg_unpack (msg, "{s:s}", "name", &stream);
+        if (strcmp (stream, "stderr") == 0)
+            level = LOG_ERR;
+        flux_log (h, level, "job%ju: wrexecd says: %s",
+                            (uintmax_t) job->id,
+                            (char *) data);
+    }
+    free (data);
+    return;
 }
 
-static void exec_handler (const char *exe, struct wreck_job *job)
+static void cmb_exec_cb (flux_future_t *f, void *arg)
 {
-    pid_t sid;
-    int argc = 2;
-    char **av = malloc ((sizeof (char *)) * (argc + 2));
+    int64_t pid = 0;
+    const char *type = NULL;
+    const char *state = NULL;
+    int status = 1;
+    const flux_msg_t *msg;
+    flux_t *h = flux_future_get_flux (f);
+    struct wreck_job *job = arg;
 
-    if ((av == NULL)
-     || ((av [0] = strdup (exe)) == NULL)
-     || (asprintf (&av[1], "--lwj-id=%"PRId64, job->id) < 0)
-     || (asprintf (&av[2], "--kvs-path=%s", job->kvs_path) < 0)) {
-        fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
-        exit (1);
+    if (flux_future_get (f, &msg) < 0) {
+        flux_log_error (h, "cmb_exec_cb: flux_future_get");
+        flux_future_destroy (f);
+        return;
     }
-    av[argc+1] = NULL;
+    if (flux_msg_unpack (msg, "{s?s,s?s,s?i,s:i}",
+                              "type", &type, "state", &state,
+                              "status", &status, "pid", &pid) < 0) {
+        flux_log_error (h, "cmb_exec_cb: flux_msg_unpack");
+        flux_future_destroy (f);
+    }
 
-    if ((sid = setsid ()) < 0)
-        fprintf (stderr, "setsid: %s\n", strerror (errno));
+    if (type && strcmp (type, "io") == 0)
+        spawn_io_cb (h, job, msg);
+    else if (state && strcmp (state, "Exited") == 0) {
+        if (WIFSIGNALED (status))
+            flux_log_error (h, "job%ju: wrexecd: %s",
+                                (uintmax_t) job->id,
+                                strsignal (WTERMSIG (status)));
+        else if (WEXITSTATUS (status) != 0)
+            flux_log_error (h, "job%ju: wrexecd: Exit %d",
+                                (uintmax_t) job->id, WEXITSTATUS (status));
 
-    /*
-     *  NOTE: There used to be a double fork here, presumably to
-     *  "daemonize" wrexecd, however I'm not sure that is warranted
-     *   nor even advisable. With the setsid above, the wrexecd
-     *   process should be reparented to init.
+        wreck_job_destroy (job);
+        /* Done with this job, it is safe to destroy future */
+        flux_future_destroy (f);
+        return;
+    }
+    else flux_log (h, LOG_ERR, "job%ju: unknown state %s",
+                               (uintmax_t) job->id, state ? state : "NULL");
+    flux_future_reset (f);
+    return;
+}
+
+static json_t *wrexecd_cmdline_create (flux_t *h, struct wreck_job *job)
+{
+    json_t *o, *s;
+    const char *wrexecd_path;
+    char buf [4096];
+    int n;
+
+    if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path", NULL))) {
+        flux_log_error (h, "wrexecd_cmdline_create: flux_attr_get");
+        return (NULL);
+    }
+    if (!(o = json_array ())) {
+        flux_log_error (h, "wrexecd_cmdline_create: json_array");
+        return (NULL);
+    }
+    if (!(s = json_string (wrexecd_path))) {
+        flux_log_error (h, "wrexecd_cmdline_create: json_string");
+        goto error;
+    }
+    if (json_array_append_new (o, s) < 0) {
+        json_decref (s);
+        flux_log_error (h, "wrexecd_cmdline_create: json_array_append_new");
+        goto error;
+    }
+
+    n = snprintf (buf, sizeof(buf), "--lwj-id=%ju", (uintmax_t) job->id);
+    if ((n >= sizeof (buf)) || (n < 0)) {
+        flux_log_error (h, "failed to append id to cmdline for job%ju\n",
+                            (uintmax_t) job->id);
+        goto error;
+    }
+    json_array_append_new (o, json_string (buf));
+
+    n = snprintf (buf, sizeof (buf), "--kvs-path=%s", job->kvs_path);
+    if ((n >= sizeof (buf)) || (n < 0)) {
+        flux_log_error (h, "failed to append kvspath to cmdline for job%ju\n",
+                            (uintmax_t) job->id);
+        goto error;
+    }
+    json_array_append_new (o, json_string (buf));
+
+    return (o);
+error:
+    json_decref (o);
+    return (NULL);
+}
+
+static void spawn_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    struct wreck_job *job = arg;
+    const char *state = NULL;
+    int rank;
+    pid_t pid;
+
+    /* State should be either "Running" or "Exec Failed". In latter
+     *  case the pid key will not be included in the message, which
+     *  is why it is optional below
      */
+    if (flux_rpc_get_unpack (f, "{s:i,s?i,s:s}",
+                            "rank", &rank, "pid", &pid,
+                            "state", &state) < 0) {
+        flux_log_error (h, "spawn: rpc_unpack");
+        goto err;
+    }
+    if (strcmp (state, "Exec Failure") == 0) {
+        flux_log_error (h, "spawn: job%ju: wrexecd exec failure",
+                           (uintmax_t) job->id);
+        // XXX: Update job state to failed
+        goto err;
+    }
+    else if (strcmp (state, "Running") != 0) {
+        flux_log_error (h, "spawn: wrexecd for job %ju unexpected state %s",
+                           (uintmax_t) job->id, state);
+        goto err;
+    }
 
-    fdwalk (exec_close_fd, NULL);
-    if (setenv ("FLUX_URI", local_uri, 1) < 0)
-        fprintf (stderr, "setenv: %s\n", strerror (errno));
-    else if (execvp (av[0], av) < 0)
-        fprintf (stderr, "wrexecd exec: %s\n", strerror (errno));
-    exit (255);
+    /* Reset future. setup continuation for remaining cmb.exec responses */
+    flux_future_reset (f);
+    if (flux_future_then (f, -1., cmb_exec_cb, job) < 0)
+        flux_log_error (h, "spawn_continuation: flux_future_then");
+    return;
+
+err:
+    flux_future_destroy (f);
+    return;
 }
 
 static int spawn_exec_handler (flux_t *h, struct wreck_job *job)
 {
-    pid_t pid;
-    const char *wrexecd_path;
+    flux_future_t *f = NULL;
+    json_t *cmdline = wrexecd_cmdline_create (h, job);
 
-    if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path", NULL))) {
-        flux_log_error (h, "spawn_exec_handler: flux_attr_get");
+    if (!cmdline)
         return (-1);
+    if (!(f = flux_rpc_pack (h, "cmb.exec", FLUX_NODEID_ANY, 0,
+                             "{s:o}", "cmdline", cmdline))) {
+        flux_log_error (h, "spawn_exec_handler: flux_rpc");
+        goto error;
     }
-
-    if ((pid = fork ()) < 0) {
-        flux_log_error (h, "spawn_exec_handler: fork");
-        return (-1);
+    if (flux_future_then (f, -1., spawn_continuation, job) < 0) {
+        flux_log_error (h, "spawn_exec_handler: flux_future_then");
+        goto error;
     }
-
-    if (pid == 0) {
-#if WITH_TCMALLOC
-        /* Child: if heap profiling is running, stop it to avoid
-         * triggering a dump when child exits.
-         */
-        if (IsHeapProfilerRunning ())
-            HeapProfilerStop ();
-#endif
-        exec_handler (wrexecd_path, job);
-    }
-
-    // XXX: Add child watcher for pid
-
+    /*  Take a reference on this job since it is now embedded in
+     *   a future.
+     */
+    wreck_job_incref (job);
     return (0);
-}
-
-/* Handle response to KVS look up of rank.N.
- * If it exists, spawn wrexecd.
- * This concludes the continuation chain started at runevent_cb().
- */
-static void runevent_fallback_continuation (flux_future_t *f, void *arg)
-{
-    struct wreck_job *job = arg;
-    flux_t *h = flux_future_get_flux (f);
-    const char *key = flux_kvs_lookup_get_key (f);
-
-    if (flux_future_get (f, NULL) < 0) {
-        flux_log (h, LOG_DEBUG, "No dir %s: %s", key, flux_strerror (errno));
-        goto done;
-    }
-    if (spawn_exec_handler (h, job) < 0)
-        goto done;
-done:
+error:
+    json_decref (cmdline);
     flux_future_destroy (f);
-    wreck_job_destroy (job);
-}
-
-/* Send request to look up rank.N.
- * This function is continued in runevent_fallback_continuation().
- */
-static int runevent_fallback (flux_t *h, struct wreck_job *job)
-{
-    char key[MAX_JOB_PATH];
-    flux_future_t *f;
-
-    snprintf (key, sizeof (key), "%s.rank.%lu",
-              job->kvs_path, (unsigned long)broker_rank);
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
-        return -1;
-    if (flux_future_then (f, -1., runevent_fallback_continuation, job) < 0) {
-        flux_future_destroy (f);
-        return -1;;
-    }
-    return 0;
+    return (-1);
 }
 
 static bool Rlite_targets_this_node (flux_t *h, const char *key,
@@ -676,18 +760,13 @@ static void runevent_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get (f, &R_lite) < 0) {
         if (broker_rank == 0)
             flux_log (h, LOG_INFO, "No %s: %s", key, flux_strerror (errno));
-        if (runevent_fallback (h, job) < 0) {
-            flux_log_error (h, "%s: fallback failed", __FUNCTION__);
-            goto done_destroy;
-        }
         goto done;
     }
     if (!Rlite_targets_this_node (h, key, R_lite))
-        goto done_destroy;
+        goto done;
+
     if (spawn_exec_handler (h, job) < 0)
-        goto done_destroy;
-done_destroy:
-    wreck_job_destroy (job);
+        goto done;
 done:
     flux_future_destroy (f);
 }
@@ -716,20 +795,20 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg,
                          void *arg)
 {
+    int64_t id;
     const char *topic;
     struct wreck_job *job;
     flux_future_t *f = NULL;
     char k[MAX_JOB_PATH];
 
-    if (!(job = wreck_job_create ()))
-        goto error;
     if (flux_event_decode (msg, &topic, NULL) < 0)
         goto error;
-    if ((job->id = id_from_tag (topic+11)) < 0) {
-        errno = EPROTO;
+    id = id_from_tag (topic+11);
+    if (!(job = wreck_job_lookup (id, active_jobs))) {
+        errno = ENOENT;
         goto error;
     }
-    if (!(job->kvs_path = id_to_path (job->id)))
+    if (!job->kvs_path)
         goto error;
     if (snprintf (k, sizeof (k), "%s.R_lite", job->kvs_path) >= sizeof (k)) {
         errno = EINVAL;
@@ -743,7 +822,6 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
     return;
 error:
     flux_log_error (h, "%s", __FUNCTION__);
-    wreck_job_destroy (job);
     flux_future_destroy (f);
 }
 
