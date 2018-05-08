@@ -129,11 +129,12 @@ test_expect_success 'wreck: job state events emitted' '
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
 	   wreck.state wreck.state.complete \
 	   flux wreckrun -n${SIZE} /bin/true > output &&
-        tail -4 output > output_states && # only care about last 4
+        tail -5 output > output_states && # only care about last 4
 	cat >expected_states <<-EOF &&
 	wreck.state.reserved
 	wreck.state.starting
 	wreck.state.running
+	wreck.state.completing
 	wreck.state.complete
 	EOF
 	test_cmp expected_states output_states

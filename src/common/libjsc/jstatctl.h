@@ -51,6 +51,7 @@ typedef enum {
     J_STOPPED,   /*!< Stopped *including init barrier hit for a tool) */
     J_RUNNING,   /*!< Running */
     J_CANCELLED, /*!< Cancelled */
+    J_COMPLETING,/*!< Completing */
     J_COMPLETE,  /*!< Completed */
     J_REAPED,    /*!< Reaped */
     J_FAILED,    /*!< Failed */

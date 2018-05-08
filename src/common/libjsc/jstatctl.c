@@ -78,6 +78,7 @@ static stab_t job_state_tab[] = {
     { J_STOPPED,    "stopped" },
     { J_RUNNING,    "running" },
     { J_CANCELLED,  "cancelled" },
+    { J_COMPLETING, "completing" },
     { J_COMPLETE,   "complete" },
     { J_REAPED,     "reaped" },
     { J_FAILED,     "failed" },

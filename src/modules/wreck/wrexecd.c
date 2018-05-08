@@ -2408,6 +2408,9 @@ int main (int ac, char **av)
     }
 
     if (exec_rc == 0) {
+        rexec_state_change (ctx, "completing");
+        lua_stack_call (ctx->lua_stack, "rexecd_complete");
+
         rexec_state_change (ctx, "complete");
         wlog_msg (ctx, "job complete. exiting...");
 

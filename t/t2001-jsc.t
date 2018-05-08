@@ -14,11 +14,13 @@ fi
 tr1="null->reserved"
 tr2="reserved->starting"
 tr3="starting->running"
-tr4="running->complete"
+tr4="running->completing"
+tr5="completing->complete"
 trans="$tr1
 $tr2
 $tr3
-$tr4"
+$tr4
+$tr5"
 
 #  Return previous job path in kvs
 last_job_path() {
