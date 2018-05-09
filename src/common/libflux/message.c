@@ -976,12 +976,20 @@ int flux_msg_set_payload (flux_msg_t *msg, int flags, const void *buf, int size)
     uint8_t msgflags;
     int rc = -1;
 
-    json_decref (msg->json);            /* invalidate cached json object */
-    msg->json = NULL;
-    if (flags != 0 && flags != FLUX_MSGFLAG_JSON) {
+    if (!msg || (flags & ~FLUX_MSGFLAG_JSON) != 0) {
         errno = EINVAL;
         goto done;
     }
+    if ((flags & FLUX_MSGFLAG_JSON)) {
+        const char *json_str = buf;
+        if (!json_str || size < 3 || json_str[size - 1] != '\0'
+                      || json_str[0] != '{' || json_str[size - 2] != '}') {
+            errno = EINVAL;
+            goto done;
+        }
+    }
+    json_decref (msg->json);            /* invalidate cached json object */
+    msg->json = NULL;
     if (flux_msg_get_flags (msg, &msgflags) < 0)
         goto done;
     if (!(msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
@@ -1124,18 +1132,10 @@ bool flux_msg_has_payload (const flux_msg_t *msg)
 
 int flux_msg_set_json (flux_msg_t *msg, const char *s)
 {
-    int rc = -1;
-    if (s) {
-        int len = strlen (s);
-        if (len == 0 || *s != '{') { /* ensure payload is json object */
-            errno = EINVAL;
-            goto done;
-        }
-        rc = flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, (char *)s, len + 1);
-    } else
-        rc = flux_msg_set_payload (msg, 0, NULL, 0);
-done:
-    return rc;
+    if (s)
+        return flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, s, strlen(s) + 1);
+    else
+        return flux_msg_set_payload (msg, 0, NULL, 0);
 }
 
 int flux_msg_get_json (const flux_msg_t *msg, const char **s)
