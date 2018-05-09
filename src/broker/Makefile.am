@@ -47,7 +47,9 @@ flux_broker_SOURCES = \
 	boot_config.h \
 	boot_config.c \
 	boot_pmi.h \
-	boot_pmi.c
+	boot_pmi.c \
+	publisher.h \
+	publisher.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-core.la \

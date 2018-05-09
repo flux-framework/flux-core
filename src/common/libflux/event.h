@@ -2,10 +2,15 @@
 #define _FLUX_CORE_EVENT_H
 
 #include "message.h"
+#include "future.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+enum event_flags {
+    FLUX_EVENT_PRIVATE = 1,
+};
 
 /* Decode an event message.
  * If topic is non-NULL, assign the event topic string.
@@ -47,6 +52,27 @@ flux_msg_t *flux_event_encode_raw (const char *topic,
  */
 int flux_event_decode_raw (const flux_msg_t *msg, const char **topic,
                            const void **data, int *len);
+
+/* Publish an event.
+ * The future is fulfilled once the event has been assigned a sequence number,
+ * and does not indicate that the event has yet reached all subscribers.
+ */
+flux_future_t *flux_event_publish (flux_t *h,
+                                   const char *topic, int flags,
+                                   const char *json_str);
+
+flux_future_t *flux_event_publish_pack (flux_t *h,
+                                        const char *topic, int flags,
+                                        const char *fmt, ...);
+
+flux_future_t *flux_event_publish_raw (flux_t *h,
+                                       const char *topic, int flags,
+                                       const void *data, int len);
+
+/* Obtain the event sequence number from the fulfilled
+ * flux_event_publish() future.
+ */
+int flux_event_publish_get_seq (flux_future_t *f, int *seq);
 
 #ifdef __cplusplus
 }

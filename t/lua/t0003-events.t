@@ -7,7 +7,7 @@ test:start_session {}
 
 local fmt = string.format
 
-plan (22)
+plan (28)
 
 local flux = require_ok ('flux')
 local f, err = flux.new()
@@ -54,6 +54,37 @@ is (tag, 'testevent.2', "recv_event: got expected event tag")
 type_ok (msg, 'table', "recv_event: got msg as a table")
 is_deeply (msg, {}, "recv_event: got empty payload as expected")
 
+
+-- poke at event.pub service
+-- good request, no payload
+local request = { topic = "foo", flags = 0 }
+local response, err = f:rpc ("event.pub", request);
+is (err, nil, "event.pub: works without payload")
+
+-- good request, with raw payload
+local request = { topic = "foo", flags = 0, payload = "aGVsbG8gd29ybGQ=" }
+local response, err = f:rpc ("event.pub", request);
+is (err, nil, "event.pub: works with payload")
+
+-- good request, with JSON "{}\0"
+local request = { topic = "foo", flags = 4, payload = "e30A" }
+local response, err = f:rpc ("event.pub", request);
+is (err, nil, "event.pub: works with json payload")
+
+-- flags missing from request
+local request = { topic = "foo" }
+local response, err = f:rpc ("event.pub", request);
+is (err, "Protocol error", "event.pub: no flags, fails with EPROTO")
+
+-- mangled base64 payload
+local request = { topic = "foo", flags = 0, payload = "aGVsbG8gd29ybGQ" }
+local response, err = f:rpc ("event.pub", request);
+is (err, "Protocol error", "event.pub: bad base64, fails with EPROTO")
+
+-- good request, mangled JSON payload "{\0"
+local request = { topic = "foo", flags = 4, payload = "ewA=" }
+local response, err = f:rpc ("event.pub", request);
+is (err, "Protocol error", "event.pub: bad json payload, fails with EPROTO")
 
 done_testing ()
 

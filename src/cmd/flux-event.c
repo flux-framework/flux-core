@@ -92,12 +92,89 @@ static bool match_payload_raw (const void *p1, int p1sz,
     return !memcmp (p1, p2, p1sz);
 }
 
+static int publish_raw_sync (flux_t *h, const char *topic, int flags,
+                             char *payload, int payloadsz)
+{
+    flux_future_t *f;
+    int seq;
+    int rc = -1;
+    if (!(f = flux_event_publish_raw (h, topic, flags, payload, payloadsz)))
+        goto done;
+    if (flux_event_publish_get_seq (f, &seq) < 0)
+        goto done;
+    printf ("seq=%d\n", seq);
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int publish_raw (flux_t *h, const char *topic, int flags,
+                        char *payload, int payloadsz)
+{
+    flux_msg_t *msg;
+    int rc = -1;
+
+    if (!(msg = flux_event_encode_raw (topic, payload, payloadsz)))
+        goto done;
+    if ((flags & FLUX_MSGFLAG_PRIVATE) && flux_msg_set_private (msg) < 0)
+        goto done;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
+static int publish_json_sync (flux_t *h, const char *topic, int flags,
+                              char *payload)
+{
+    flux_future_t *f;
+    int seq;
+    int rc = -1;
+
+    if (!(f = flux_event_publish (h, topic, 0, payload)))
+        goto done;
+    if (flux_event_publish_get_seq (f, &seq) < 0)
+        goto done;
+    printf ("seq=%d\n", seq);
+done:
+    flux_future_destroy (f);
+    rc = 0;
+    return rc;
+}
+
+static int publish_json (flux_t *h, const char *topic, int flags,
+                         char *payload)
+{
+    flux_msg_t *msg;
+    int rc = -1;
+
+    if (!(msg = flux_event_encode (topic, payload)))
+        goto done;
+    if ((flags & FLUX_MSGFLAG_PRIVATE) && flux_msg_set_private (msg) < 0)
+        goto done;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
 static struct optparse_option pub_opts[] = {
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Interpret event payload as raw.",
     },
+    { .name = "synchronous", .key = 's', .has_arg = 0,
+      .usage = "Wait for event sequence assignment before exiting.",
+    },
     { .name = "loopback", .key = 'l', .has_arg = 0,
       .usage = "Wait for published event to be received before exiting.",
+    },
+    { .name = "private", .key = 'p', .has_arg = 0,
+      .usage = "Set privacy flag on published event.",
     },
     OPTPARSE_TABLE_END
 };
@@ -116,7 +193,9 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     char *topic;
     char *payload = NULL;
-    flux_msg_t *msg;
+    int payloadsz = 0;
+    int flags = 0;
+    int rc;
 
     if (optindex == argc) {
         optparse_print_usage (p);
@@ -132,7 +211,12 @@ static int event_pub (optparse_t *p, int argc, char **argv)
         if ((e = argz_create (argv + optindex, &payload, &len)) != 0)
             log_errn_exit (e, "argz_create");
         argz_stringify (payload, len, ' ');
+        if (optparse_hasopt (p, "raw"))
+            payloadsz = strlen (payload);
     }
+
+    if (optparse_hasopt (p, "private"))
+        flags |= FLUX_MSGFLAG_PRIVATE;
 
     if (optparse_hasopt (p, "loopback")) {
         if (flux_event_subscribe (h, topic) < 0)
@@ -140,58 +224,46 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     }
 
     if (optparse_hasopt (p, "raw")) {
-        int payloadsz = payload ? strlen (payload) : 0;
-        if (!(msg = flux_event_encode_raw (topic, payload, payloadsz)))
-            log_err_exit ("flux_event_encode_raw");
-        if (flux_send (h, msg, 0) < 0)
-            log_err_exit ("flux_send");
-        if (optparse_hasopt (p, "loopback")) {
-            flux_msg_t *msg;
-            const void *data;
-            int len;
-            struct flux_match match = FLUX_MATCH_EVENT;
-            bool received = false;
-            match.topic_glob = topic;
+        if (optparse_hasopt (p, "synchronous"))
+            rc = publish_raw_sync (h, topic, flags, payload, payloadsz);
+        else
+            rc = publish_raw (h, topic, flags, payload, payloadsz);
+    }
+    else {
+        if (optparse_hasopt (p, "synchronous"))
+            rc = publish_json_sync (h, topic, flags, payload);
+        else
+            rc = publish_json (h, topic, flags, payload);
+    }
+    if (rc < 0)
+        log_err_exit ("publish failed");
 
-            while (!received) {
-                if (!(msg = flux_recv (h, match, 0)))
-                    log_err_exit ("flux_recv error");
+    if (optparse_hasopt (p, "loopback")) {
+        flux_msg_t *msg;
+        struct flux_match match = FLUX_MATCH_EVENT;
+        bool received = false;
+        match.topic_glob = topic;
+
+        while (!received) {
+            if (!(msg = flux_recv (h, match, 0)))
+                log_err_exit ("flux_recv error");
+            if (optparse_hasopt (p, "raw")) {
+                const void *data;
+                int len;
                 if ((flux_event_decode_raw (msg, NULL, &data, &len) == 0
                         && match_payload_raw (payload, payloadsz, data, len)))
                     received = true;
-                flux_msg_destroy (msg);
             }
-        }
-    }
-    else {
-        if (!(msg = flux_event_encode (topic, payload)))
-            log_err_exit ("flux_event_encode");
-        if (flux_send (h, msg, 0) < 0)
-            log_err_exit ("flux_send");
-        if (optparse_hasopt (p, "loopback")) {
-            flux_msg_t *recvmsg;
-            const char *data;
-            struct flux_match match = FLUX_MATCH_EVENT;
-            bool received = false;
-            match.topic_glob = topic;
-
-            while (!received) {
-                if (!(recvmsg = flux_recv (h, match, 0)))
-                    log_err_exit ("flux_recv error");
-                if ((flux_event_decode (recvmsg, NULL, &data) == 0
-                        && match_payload (payload, data)))
+            else {
+                const char *json_str;
+                if ((flux_event_decode (msg, NULL, &json_str) == 0
+                        && match_payload (payload, json_str)))
                     received = true;
-                flux_msg_destroy (recvmsg);
             }
+            flux_msg_destroy (msg);
         }
     }
 
-    if (optparse_hasopt (p, "loopback")) {
-        if (flux_event_unsubscribe (h, topic) < 0)
-            log_err_exit ("flux_event_unsubscribe");
-    }
-
-    flux_msg_destroy (msg);
     free (payload);
     return (0);
 }

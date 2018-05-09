@@ -45,4 +45,36 @@ test_expect_success 'publish event with raw payload (loopback)' '
 	run_timeout 5 flux event pub -l -r foo.bar foo
 '
 
+test_expect_success 'publish private event with JSON payload (loopback)' '
+	run_timeout 5 flux event pub -l foo.bar {}
+'
+
+test_expect_success 'publish private event with raw payload (loopback)' '
+	run_timeout 5 flux event pub -p -l -r foo.bar foo
+'
+
+test_expect_success 'publish event with no payload (synchronous)' '
+	run_timeout 5 flux event pub -s foo.bar
+'
+
+test_expect_success 'publish event with JSON payload (synchronous)' '
+	run_timeout 5 flux event pub -s foo.bar {}
+'
+
+test_expect_success 'publish event with raw payload (synchronous)' '
+	run_timeout 5 flux event pub -s -r foo.bar foo
+'
+
+test_expect_success 'publish private event with JSON payload (synchronous)' '
+	run_timeout 5 flux event pub -p -s foo.bar {}
+'
+
+test_expect_success 'publish private event with raw payload (synchronous)' '
+	run_timeout 5 flux event pub -p -s -r foo.bar foo
+'
+
+test_expect_success 'publish private event with no payload (synchronous,loopback)' '
+	run_timeout 5 flux event pub -p -s -l foo.bar
+'
+
 test_done

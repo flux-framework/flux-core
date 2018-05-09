@@ -155,30 +155,23 @@ static char * realtime_string (char *buf, size_t sz)
     return (buf);
 }
 
-/* Send wreck.state.<state> event.
- * Instead of the usual "fire and forget" event interface, publish
- * synchronously via the rank 0 cmb.pub service to ensure that response
- * to job create request is not sent until the event has received a
- * sequence number.  See issue #337.
+/* Publish wreck.state.<state> event.
+ * Future is fulfilled once event has received a sequence number.
+ * This ensures that response to job create request is not sent until this
+ * happens.  See issue #337.
  */
 static flux_future_t *send_create_event (flux_t *h, struct wreck_job *job)
 {
     char topic[64];
     flux_future_t *f;
-    uint32_t nodeid = 0;
     int flags = 0;
 
-    /* N.B. RPC to cmb.pub on rank 0 is an alternate event publishing
-     * mechanism that provides a response once event has obtained
-     * a sequence number.  The "cmb.pub." is stripped away and everything
-     * after becomes the event topic.
-     */
-    if (snprintf (topic, sizeof (topic), "cmb.pub.wreck.state.%s", job->state)
+    if (snprintf (topic, sizeof (topic), "wreck.state.%s", job->state)
                                                         >= sizeof (topic)) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, topic, nodeid, flags,
+    if (!(f = flux_event_publish_pack (h, topic, flags,
                              "{s:I,s:s,s:i,s:i,s:i,s:i,s:i}",
                              "jobid", job->id,
                              "kvs_path", job->kvs_path,

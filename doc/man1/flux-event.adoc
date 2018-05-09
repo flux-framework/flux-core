@@ -28,13 +28,16 @@ A subscription to the empty string matches all events.
 
 COMMANDS
 --------
-*pub* [-r] [-l] 'topic' ['payload']::
+*pub*  [-r] [-l] [-s] [-p] 'topic' ['payload']::
 Publish an event with optional payload.  If payload is specified,
 it is interpreted as raw if the '-r' option is used, otherwise it is
 interpreted as JSON.  If the payload spans multiple arguments,
 the arguments are concatenated with one space between them.
+If '-s' is specified, wait for the event's sequence number to be
+assigned before exiting.
 If '-l' is specified, subscribe to the published event and wait for
-it to be received before exiting.
+it to be received before exiting.  '-p' causes the privacy flag to
+be set on the published event.
 
 *sub* '[-c N]' ['topic'] ['topic'...]::
 Subscribe to events matching the topic string(s) provided on the
