@@ -173,6 +173,9 @@ static struct optparse_option pub_opts[] = {
     { .name = "loopback", .key = 'l', .has_arg = 0,
       .usage = "Wait for published event to be received before exiting.",
     },
+    { .name = "private", .key = 'p', .has_arg = 0,
+      .usage = "Set privacy flag on published event.",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -211,6 +214,9 @@ static int event_pub (optparse_t *p, int argc, char **argv)
         if (optparse_hasopt (p, "raw"))
             payloadsz = strlen (payload);
     }
+
+    if (optparse_hasopt (p, "private"))
+        flags |= FLUX_MSGFLAG_PRIVATE;
 
     if (optparse_hasopt (p, "loopback")) {
         if (flux_event_subscribe (h, topic) < 0)
