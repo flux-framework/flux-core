@@ -1151,7 +1151,7 @@ int flux_msg_get_json (const flux_msg_t *msg, const char **s)
     } else {
         if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)
                               || buf[size - 1] != '\0'
-                              || buf[0] != '{') {
+                              || buf[0] != '{' || buf[size - 2] != '}') {
             errno = EPROTO;
             goto done;
         }
