@@ -424,11 +424,7 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
     return 0;
 }
 
-/* There is no reason to expose flux_msg_set/get_flags()
- * outside of this module for now.
- */
-
-static int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
+int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_set_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
@@ -438,7 +434,7 @@ static int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
     return 0;
 }
 
-static int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
+int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
