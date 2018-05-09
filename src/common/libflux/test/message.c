@@ -125,6 +125,7 @@ void check_payload_json (void)
     const char *s;
     flux_msg_t *msg;
     const char *json_str = "{\"foo\"=42}";
+    uint8_t flags;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
@@ -144,17 +145,37 @@ void check_payload_json (void)
     ok (flux_msg_set_json (msg, "3.14") < 0 && errno == EINVAL,
        "flux_msg_set_json scalar fails with EINVAL");
 
-    /* Using the lower level flux_msg_set_payload with FLUX_MSGFLAG_JSON
-     * we can sneak in a malformed JSON payload and test decoding.
+    /* Sneak in a malformed JSON payloads and test decoding.
+     * 1) array
      */
+    if (flux_msg_set_payload (msg, 0, "[1,2,3]", 8) < 0)
+        BAIL_OUT ("flux_msg_set_payload failed");
+    if (flux_msg_get_flags (msg, &flags) < 0
+            || flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_JSON) < 0)
+        BAIL_OUT ("flux_msg_set_flags failed");
     errno = 0;
-    ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, "[1,2,3]", 8) == 0
-            && flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
+    ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
         "flux_msg_get_json array fails with EPROTO");
+    /* 2) bare value
+     */
+    if (flux_msg_set_payload (msg, 0, "3.14", 5) < 0)
+        BAIL_OUT ("flux_msg_set_payload failed");
+    if (flux_msg_get_flags (msg, &flags) < 0
+            || flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_JSON) < 0)
+        BAIL_OUT ("flux_msg_set_flags failed");
     errno = 0;
-    ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, "3.14", 5) == 0
-            && flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
+    ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
         "flux_msg_get_json scalar fails with EPROTO");
+    /* 3) malformed object (no trailing })
+     */
+    if (flux_msg_set_payload (msg, 0, "{\"a\":42", 8) < 0)
+        BAIL_OUT ("flux_msg_set_payload failed");
+    if (flux_msg_get_flags (msg, &flags) < 0
+            || flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_JSON) < 0)
+        BAIL_OUT ("flux_msg_set_flags failed");
+    errno = 0;
+    ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
+        "flux_msg_get_json malformed object fails with EPROTO");
 
     ok (flux_msg_set_json (msg, json_str) == 0,
        "flux_msg_set_json works");
@@ -706,6 +727,28 @@ void check_print (void)
     fclose (f);
 }
 
+void check_params (void)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        BAIL_OUT ("flux_msg_create failed");
+    errno = 0;
+    ok (flux_msg_set_payload (NULL, 0, NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_payload msg=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_payload (msg, 0xff, NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_payload flags=0xff fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, NULL, 0) < 0
+        && errno == EINVAL,
+        "flux_msg_set_payload flags=JSON, buf=NULL fails with EINVAL");
+
+    flux_msg_destroy (msg);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -726,6 +769,8 @@ int main (int argc, char *argv[])
     check_encode ();
     check_sendfd ();
     check_sendzsock ();
+
+    check_params ();
 
     //check_print ();
 
