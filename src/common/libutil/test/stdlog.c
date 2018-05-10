@@ -72,7 +72,20 @@ int main(int argc, char** argv)
         "stdlog_decode decoded structured data");
     ok (msglen == strlen (STDLOG_NILVALUE) && strncmp (msg, STDLOG_NILVALUE, msglen) == 0,
         "stdlog_decode decoded message");
-    
+
+    /* Check that trailing \n or \r in message are dropped
+     */
+    stdlog_init (&hdr);
+    len = stdlog_encode (buf, sizeof (buf), &hdr,
+                         STDLOG_NILVALUE,
+                         "Hello whorl\n\r\n");
+    ok (len >= 0,
+        "stdlog_encode worked with message");
+    diag ("%.*s", len, buf);
+    n = stdlog_decode (buf, len, &hdr, &sd, &sdlen, &msg, &msglen);
+    ok (n == 0 && strncmp (msg, "Hello whorl", msglen) == 0,
+        "trailing cr/lf chars were truncated");
+
     int i = 0;
     while (valid[i] != NULL) {
         n = stdlog_decode (valid[i], strlen (valid[i]), &hdr, &sd, &sdlen, &msg, &msglen);
