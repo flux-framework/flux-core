@@ -30,6 +30,52 @@ static char *valid[] = {
     NULL,
 };
 
+void test_split (void)
+{
+    char buf[2048];
+    char *xtra;
+    struct stdlog_header hdr;
+    int len;
+    int msglen;
+    const char *msg;
+
+    stdlog_init (&hdr);
+
+    /* orig=foo\nbar\nbaz */
+    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE,
+                         "foo\nbar\nbaz");
+    ok (len >= 0,
+        "stdlog_encode encoded foo\\nbar\\nbaz");
+    xtra = stdlog_split_message (buf, &len, "\r\n");
+    ok (xtra != NULL && !strcmp (xtra, "bar\nbaz"),
+        "stdlog_split_message got bar\\nbaz");
+    ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0
+        && msg != NULL && msglen == 3 && !strncmp (msg, "foo", msglen),
+        "and truncated orig message to foo");
+
+    /* xtra=bar\nbaz */
+    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, xtra);
+    ok (len >= 0,
+        "stdlog_encode encoded bar\\nbaz");
+    free (xtra);
+    xtra = stdlog_split_message (buf, &len, "\r\n");
+    ok (xtra != NULL && !strcmp (xtra, "baz"),
+        "stdlog_split_message got baz");
+    diag ("xtra='%s'", xtra);
+    ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0
+        && msg != NULL && msglen == 3 && !strncmp (msg, "bar", msglen),
+        "and truncated orig message to bar");
+
+    /* xtra=baz */
+    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, xtra);
+    ok (len >= 0,
+        "stdlog_encode encoded baz");
+    free (xtra);
+    xtra = stdlog_split_message (buf, &len, "\r\n");
+    ok (xtra == NULL,
+        "stdlog_split message got NULL");
+}
+
 int main(int argc, char** argv)
 {
     char buf[2048];
@@ -94,6 +140,7 @@ int main(int argc, char** argv)
         i++;
     }
 
+    test_split ();
 
     done_testing();
 }
