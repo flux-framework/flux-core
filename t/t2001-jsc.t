@@ -207,7 +207,7 @@ test_expect_success 'jstat 8: query detects bad inputs' '
 '
 
 test_expect_success 'jstat 9: update state-pair' "
-    flux jstat update 1 state-pair '{\"state-pair\": {\"ostate\": 13, \"nstate\": 12}}' &&
+    flux jstat update 1 state-pair '{\"state-pair\": {\"ostate\": 24, \"nstate\": 51}}' &&
     flux kvs get --json $(flux wreck kvs-path 1).state > output.9.1 &&
     cat >expected.9.1 <<-EOF &&
 cancelled
