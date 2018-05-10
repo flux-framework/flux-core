@@ -189,7 +189,7 @@ local function check_job_completed ()
        wreck:die ("job %d failed\n", jobid)
     end
     if (not taskio or taskio:complete()) and
-       (state == "complete" or state == "reaped") then
+       (state == "completing" or state == "complete" or state == "reaped") then
         local rc = lwj_return_code (f, wreck, jobid)
         if rc == 0 then
             wreck:verbose ("%.3fs: All tasks completed successfully.\n",

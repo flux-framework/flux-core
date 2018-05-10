@@ -39,22 +39,38 @@ extern "C" {
  * please refer to README.md
  */
 typedef enum {
-    J_NULL = 1,  /*!< The state has yet to be assigned */
-    J_RESERVED,  /*!< Reserved by the program execution service */
-    J_SUBMITTED, /*!< Submitted to the system */
-    J_PENDING,   /*!< Pending */
-    J_SCHEDREQ,  /*!< Resources requested to be selected */
-    J_SELECTED,  /*!< Assigned to requested resource in RDL */
-    J_ALLOCATED, /*!< Got allocated/contained by the program executoin service */
-    J_RUNREQUEST,/*!< Requested to be executed */
-    J_STARTING,  /*!< Starting */
-    J_STOPPED,   /*!< Stopped *including init barrier hit for a tool) */
-    J_RUNNING,   /*!< Running */
-    J_CANCELLED, /*!< Cancelled */
-    J_COMPLETE,  /*!< Completed */
-    J_REAPED,    /*!< Reaped */
-    J_FAILED,    /*!< Failed */
-    J_FOR_RENT   /*!< Space For Rent */
+    J_NULL =       0,  /*!< The state has yet to be assigned */
+
+    /* WRECK job initial condition states:
+     */
+    J_RESERVED =   1, /*!< Reserved by the program execution service */
+    J_SUBMITTED =  2, /*!< Submitted to the system */
+
+    /* Scheduler internal states:
+     */
+    J_PENDING =   11, /*!< Pending */
+    J_SCHEDREQ =  12, /*!< Resources requested to be selected */
+    J_SELECTED =  13, /*!< Assigned to requested resource in RDL */
+    J_ALLOCATED = 14, /*!< Got alloc/contained by the program exec service */
+
+    /* WRECK job execution states:
+     */
+    J_RUNREQUEST= 21, /*!< Requested to be executed */
+    J_STARTING =  22, /*!< Starting */
+    J_SYNC =      23, /*!< Tasks stopped in exec waiting for a tool */
+    J_RUNNING =   24, /*!< Running */
+    J_COMPLETING= 26, /*!< Completing (all tasks exited, epilog running) */
+
+    /* WRECK job terminal states:
+     */
+    J_CANCELLED = 51, /*!< Cancelled (before execution) */
+    J_COMPLETE =  52, /*!< Completed */
+    J_FAILED =    53, /*!< Failed (before exec) */
+
+    /* Scheduler post exec states:
+     */
+    J_REAPED =   101, /*!< Reaped */
+    J_FOR_RENT = 102, /*!< Space For Rent */
 } job_state_t;
 
 typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);

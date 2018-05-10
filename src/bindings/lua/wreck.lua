@@ -54,6 +54,9 @@ local default_opts = {
     ['input'] =    { char = "i", arg = "HOW" },
     ['label-io'] = { char = "l", },
     ['skip-env'] = { char = "S", },
+    ['epilog']  =  { char = "x", arg = "SCRIPT" },
+    ['postscript'] =
+                   { char = "p", arg = "SCRIPT" },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -123,6 +126,9 @@ function wreck:usage()
   -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
   -S, --skip-env             Skip export of environment to job
+  -x, --epilog=PATH          Execute a script after all tasks exit but before
+                             the job state is set to "complete"
+  -p, --postscript=PATH      Execute a script after job state is "complete"
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -378,6 +384,8 @@ function wreck:jobreq ()
         ["opts.cores-per-task"] = self.opts.c,
         ["opts.gpus-per-task"] = self.opts.g,
         ["opts.tasks-per-node"] = self.opts.t,
+        ["epilog.pre"] = self.opts.x,
+        ["epilog.post"] = self.opts.p,
     }
     if self.opts.o then
         for opt in self.opts.o:gmatch ('[^,]+') do
