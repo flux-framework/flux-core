@@ -57,7 +57,7 @@ typedef enum {
      */
     J_RUNREQUEST= 21, /*!< Requested to be executed */
     J_STARTING =  22, /*!< Starting */
-    J_STOPPED =   23, /*!< Stopped (including init barrier hit for a tool) */
+    J_SYNC =      23, /*!< Tasks stopped in exec waiting for a tool */
     J_RUNNING =   24, /*!< Running */
     J_COMPLETING= 26, /*!< Completing (all tasks exited, epilog running) */
 

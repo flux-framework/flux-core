@@ -75,7 +75,7 @@ static stab_t job_state_tab[] = {
     { J_ALLOCATED,  "allocated" },
     { J_RUNREQUEST, "runrequest" },
     { J_STARTING,   "starting" },
-    { J_STOPPED,    "stopped" },
+    { J_SYNC,       "sync" },
     { J_RUNNING,    "running" },
     { J_CANCELLED,  "cancelled" },
     { J_COMPLETING, "completing" },
