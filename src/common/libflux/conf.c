@@ -55,6 +55,7 @@ static struct config default_config[] = {
     { "keydir",         NULL,                       INTREE_KEYDIR },
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
     { "rundir",         INSTALLED_RUNDIR,           NULL },
+    { "bindir",         INSTALLED_BINDIR,           INTREE_BINDIR },
     { NULL, NULL, NULL },
 };
 
