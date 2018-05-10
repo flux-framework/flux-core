@@ -25,7 +25,8 @@ installed_conf_cppflags = \
 	-DINSTALLED_WREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\" \
 	-DINSTALLED_CMDHELP_PATTERN=\"${datadir}/flux/help.d/*.json\" \
 	-DINSTALLED_NO_DOCS_PATH=\"${datadir}/flux/.nodocs\" \
-	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\"
+	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\" \
+	-DINSTALLED_BINDIR=\"$(fluxcmddir)\"
 
 intree_conf_cppflags = \
 	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules\" \
@@ -43,7 +44,8 @@ intree_conf_cppflags = \
 	-DINTREE_WREXECD_PATH=\"$(abs_top_builddir)/src/modules/wreck/wrexecd\" \
 	-DINTREE_CMDHELP_PATTERN=\"${abs_top_builddir}/etc/flux/help.d/*.json\" \
 	-DINTREE_KEYDIR=\"${abs_top_builddir}/etc/flux\" \
-	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\"
+	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\" \
+	-DINTREE_BINDIR=\"${abs_top_builddir}/src/cmd\"
 
 
 fluxcoreinclude_HEADERS = \
