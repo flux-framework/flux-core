@@ -1,3 +1,95 @@
+flux-core version 0.9.0 - 2018-05-10
+------------------------------------
+
+### Fixes
+ * numerous memory leak fixes (#1494, #1322)
+ * better support for C++ code (#1225, #1223, #1204)
+ * massive scalability improvement for libkz readers (#1411, #1424)
+ * increase job submission throughput (#1472, #1389)
+ * reduce amount of information collected in resource-hwloc to
+    enhance large instance startup (#1457)
+ * i686 portability fixes (#1296)
+ * fixes for `flux-kvs dir` and `ls` usage (#1444, #1452)
+ * fix for clock_gettime workaround in Lua bindings (#1371)
+ * update minimum libhwloc to 1.11.1 to avoid assertion failure (#1478)
+ * fix incorrect output from option parsing when invalid short
+    option is grouped with valid options in many commands (#1183)
+ * fix thread cancellation in sqlite module (#1196)
+ * fix segfault on 32bit systems in cron module (#1178)
+ * log errors from event redistribution (#1457)
+ * increase number of open files in `wrexecd` (#1450)
+ * fix job hangs during final task IO output flush (#1450)
+ * fixes for `flux-wreck purge` (#1357)
+ * scalability fixes for `flux-wreck` subcommands (#1372)
+ * general reduction in log messages at INFO level (#1450)
+ * improve valgrind.h detection (#1502)
+ * fix pkg-config pc name for liboptparse (#1506)
+ * fix flux executable run-from-build-tree auto-detection (#1515)
+
+### New Features
+ * support config file boot method for broker (#1320)
+ * new `flux-kvs ls` command (#1172, #1444)
+ * new kvs transaction API (#1346, #1348, #1351)
+ * support for KVS namespaces (#1286, #1299, #1316, #1323, #1320, #1327,
+    #1336, #1390, #1423, #1432, #1436)
+ * support for node inclusion,exclusion via flux-wreck command (#1418)
+ * initial parser for jobspec (#1201, #1293, #1306)
+ * store child instance URI in enclosing instance (#1429)
+ * new `flux-wreck uri` command to fetch child instance URIs (#1429)
+ * additional states from kvs module (#1310)
+ * append support for KVS values (#1265)
+ * support multiple blobrefs per valref in kvs (#1227, #1237)
+ * add `flux_kvs_lookup_get_raw`(3) (#1218)
+ * add `flux_kvs_lookup_get_key`(3) (#1414)
+ * add `flux_event_publish`(3) to libflux API (#1512)
+ * support for composite futures in libflux (#1188)
+ * add `flux_future_reset`(3) to support multi-response RPCs (#1503)
+ * new libflux-idset library (#1498)
+ * support raw payloads in `flux-event` (#1488)
+ * add raw encode/decode to `flux_event_*` API (#1486)
+ * introduce `R_lite` format for job allocation description (#1399, #1485)
+ * new `flux-hostlist` command for listing hostnames for jobs (#1499)
+ * new `flux-wreck` environment manipulation commands (#1405)
+ * `flux-wreck ls` returns active jobs first (#1481)
+ * `flux-wreck` tools allow filtering on active,inactive jobs (#1481)
+ * `flux-wreckrun` will now block until job is scheduled by default, use the
+    new --immediate flag to get old behavior (#1399)
+ * add `flux-wreck cancel` command to cancel pending job (#1365, #1367, #1385)
+ * add `flux-wreck dumplog` command to dump error log for jobs (#1450)
+ * add new `KZ_FLAGS_NOFOLLOW` flag to avoid blocking when no data in a kz
+    file (#1450)
+ * add `-n, --no-follow` option to `flux-wreck attach` (#1450)
+ * propagate gpu and cores information for `flux-wreckrun` and `submit`
+   (#1399, #1480)
+ * use cmb.exec service to launch `wrexecd`, not direct exec (#1508)
+ * new `completing` state for jobs (#1513)
+ * support job epilog pre-complete and post-complete scripts (#1513)
+ * support output to stderr with `flux_log` functions (#1192)
+ 
+
+### Cleanup
+ * kvs: major cleanup (#1154, #1177, #1182, #1190, #1214, #1213, #1233,
+    #1235, #1242, #1243, #1244, #1246, #1248, #1253, #1257, #1262, #1263,
+    #1268, #1269, #1273, #1274, #1276, #1279, #1300, #1301, #1304, #1308,
+    #1309, #1301, #1314, #1315, #1321, #1329, #1339, #1342, #1343, #1347,
+    #1349, #1353, #1383, #1402, #1404, #1440, #1458, #1466, #1477)
+ * kvs: improved test coverage (#1291)
+ * Add const to message payload accessor functions (#1212)
+ * rename `flux_mrpcf`, `flux_mrpc_getf` to `flux_mrpc_pack`,`unpack` (#1338)
+ * cleanup bulk message hanglers in libflux (#1277)
+ * minor `flux_msg_handler` cleanup (#1171)
+ * broker: cleanup to prepare for dynamic service registration (#1189)
+ * broker: general cleanup (#1230, #1234, #1241)
+ * Change key lwj to jobid in all jsc/wreck messages (#1409)
+ * libjsc cleanup (#1374, #1395, #1509)
+ * testsuite updates (#1167, #1175, #1313, #1464, #1266)
+ * Internal libutil and libflux cleanup (#1319, #1283, #1229, #1231, #1166)
+ * build system cleanup (#1163, #1354, #1184, #1200, #1275, #1252)
+ * disable pylint by default (#1255, #1258)
+ * partial migration from json-c to jansson (#1501, #1508) 
+ * drop unused `ev_zlist` composite watcher (#1493)
+
+
 flux-core version 0.8.0 - 2017-08-23
 ------------------------------------
 
