@@ -72,8 +72,8 @@ flux_la_SOURCES = \
 	flux-lua.h \
 	kvs-lua.c \
 	kvs-lua.h \
-	json-lua.c \
-	json-lua.h \
+	jansson-lua.c \
+	jansson-lua.h \
 	zmsg-lua.c \
 	zmsg-lua.h \
 	lutil.c \
@@ -106,7 +106,7 @@ flux_hostlist_la_SOURCES = \
 libfluxlua_la_SOURCES = \
 	flux-lua.c \
 	kvs-lua.c \
-	json-lua.c \
+	jansson-lua.c \
 	zmsg-lua.c \
 	lutil.c
 
@@ -127,7 +127,7 @@ tests_jsontest_la_LIBADD = \
 
 tests_jsontest_la_SOURCES = \
 	lutil.c \
-	json-lua.c \
+	jansson-lua.c \
 	tests/json-test.c
 
 tests_zmsgtest_la_LDFLAGS = \
@@ -135,7 +135,7 @@ tests_zmsgtest_la_LDFLAGS = \
 
 tests_zmsgtest_la_SOURCES = \
 	lutil.c \
-	json-lua.c \
+	jansson-lua.c \
 	zmsg-lua.c \
 	tests/zmsg-test.c
 

@@ -32,7 +32,7 @@
 
 #include "flux/core.h"
 #include "lutil.h"
-#include "json-lua.h"
+#include "jansson-lua.h"
 #include "zmsg-lua.h"
 
 /*
@@ -40,59 +40,50 @@
  */
 
 struct zmsg_info {
-    int     typemask;
-    flux_msg_t *msg;
-    char *tag;
-    json_object *o;
-
-    zi_resp_f resp;
-    void *arg;
+    int     typemask;  /* Type of message */
+    flux_msg_t *msg;   /* Stored copy of original message */
+    char *tag;         /* Topic tag for message */
+    json_t *o;         /* Decode JSON payload, NULL if no payload */
+ 
+    zi_resp_f resp;    /* Respond handler (for msg:respond() method) */
+    void *arg;         /* data passed to respond handler */
 };
 
 static const char * zmsg_type_string (int typemask);
 
+static void zmsg_info_destroy (struct zmsg_info *zi)
+{
+    flux_msg_destroy (zi->msg);
+    json_decref (zi->o);
+    free (zi->tag);
+    free (zi);
+}
+
 struct zmsg_info * zmsg_info_create (flux_msg_t **msg, int typemask)
 {
     const char *topic;
-    const char *json_str;
-    struct zmsg_info *zi = malloc (sizeof (*zi));
+    const char *json_str = NULL;
+    struct zmsg_info *zi = calloc (1, sizeof (*zi));
     if (zi == NULL)
         return (NULL);
 
-    if (flux_msg_get_topic (*msg, &topic) < 0 || !(zi->tag = strdup (topic))) {
-        free (zi);
+    if ((flux_msg_get_topic (*msg, &topic) < 0)
+        || !(zi->tag = strdup (topic))
+        || !(zi->msg = flux_msg_copy (*msg, true))
+        || (flux_msg_get_json (zi->msg, &json_str) < 0)) {
+        zmsg_info_destroy (zi);
         return (NULL);
     }
-    zi->o = NULL;
-    if (flux_msg_get_json (*msg, &json_str) < 0
-                || (json_str && !(zi->o = json_tokener_parse (json_str)))) {
-        free (zi->tag);
-        free (zi);
+    /* If there was a payload, cache decoded JSON into zi->o */
+    if (json_str && !(zi->o = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+        zmsg_info_destroy (zi);
         return (NULL);
     }
-
-    zi->msg = flux_msg_copy (*msg, true);
     zi->typemask = typemask;
-
     zi->resp = NULL;
     zi->arg = NULL;
 
     return (zi);
-}
-
-static void zmsg_info_destroy (struct zmsg_info *zi)
-{
-    flux_msg_destroy (zi->msg);
-    if (zi->o)
-        json_object_put (zi->o);
-    if (zi->tag)
-        free (zi->tag);
-    free (zi);
-}
-
-const json_object *zmsg_info_json (struct zmsg_info *zi)
-{
-    return (zi->o);
 }
 
 flux_msg_t **zmsg_info_zmsg (struct zmsg_info *zi)
@@ -149,11 +140,16 @@ static int l_zmsg_info_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "tag") == 0) {
-        lua_pushstring (L, zi->tag);
+        if (zi->tag)
+            lua_pushstring (L, zi->tag);
+        else
+            lua_pushnil (L);
         return (1);
     }
     if (strcmp (key, "data") == 0) {
-        return json_object_to_lua (L, zi->o);
+        if (!zi->o || json_object_to_lua (L, zi->o) < 0)
+            lua_pushnil (L);
+        return (1);
     }
     if (strcmp (key, "errnum") == 0) {
         int errnum;
@@ -182,10 +178,15 @@ static int l_zmsg_info_index (lua_State *L)
 static int l_zmsg_info_respond (lua_State *L)
 {
     struct zmsg_info *zi = l_get_zmsg_info (L, 1);
-    json_object *o;
-    lua_value_to_json (L, 2, &o);
-    if (o && zi->resp)
-        return ((*zi->resp) (L, zi, o, zi->arg));
+    char *json_str = NULL;
+    int rc = -1;
+    if (lua_value_to_json_string (L, 2, &json_str) < 0)
+        return lua_pusherror (L, "JSON conversion error");
+    if (json_str && zi->resp)
+        rc = ((*zi->resp) (L, zi, json_str, zi->arg));
+    free (json_str);
+    if (rc >= 0)
+        return rc;
     return lua_pusherror (L, "zmsg_info_respond: Not implemented");
 }
 

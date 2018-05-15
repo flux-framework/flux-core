@@ -33,7 +33,7 @@
 #include <string.h>
 
 #include "flux/core.h"
-#include "json-lua.h"
+#include "jansson-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
 
@@ -41,38 +41,33 @@
 flux_msg_t *l_cmb_zmsg_encode (lua_State *L)
 {
 	const char *tag = lua_tostring (L, 1);
-	json_object *o;
+    char *json_str = NULL;
 
-    lua_value_to_json (L, 2, &o);
-	if ((o == NULL) || (tag == NULL))
+    lua_value_to_json_string (L, 2, &json_str);
+	if ((json_str == NULL) || (tag == NULL))
 		return NULL;
 
     flux_msg_t *msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-    const char *json_str = json_object_to_json_string (o);
     if (!msg || flux_msg_set_topic (msg, tag) < 0
               || flux_msg_set_json (msg, json_str) < 0) {
         flux_msg_destroy (msg);
         return NULL;
     }
+    free (json_str);
     return (msg);
 }
 
 static int l_zi_resp_cb (lua_State *L,
-    struct zmsg_info *zi, json_object *resp, void *arg)
+    struct zmsg_info *zi, const char *json_str, void *arg)
 {
     flux_msg_t **old = zmsg_info_zmsg (zi);
     flux_msg_t **msg = malloc (sizeof (*msg));
     *msg = flux_msg_copy (*old, true);
-
-    const char *json_str = NULL;
-    if (resp)
-        json_str = json_object_to_json_string (resp);
     if (flux_msg_set_json (*msg, json_str) < 0) {
         flux_msg_destroy (*msg);
         free (msg);
         return lua_pusherror (L, "flux_msg_set_json: %s", strerror (errno));
     }
-
     return lua_push_zmsg_info (L, zmsg_info_create (msg, FLUX_MSGTYPE_RESPONSE));
 }
 
@@ -119,6 +114,9 @@ static int l_cmb_zmsg_create_response_with_error (lua_State *L)
 
     zi = zmsg_info_create (&msg, FLUX_MSGTYPE_RESPONSE);
     flux_msg_destroy (msg);
+
+    if (zi == NULL)
+        return lua_pusherror (L, "zmsg_info_create failed");
 
     return lua_push_zmsg_info (L, zi);
 }

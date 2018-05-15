@@ -27,19 +27,18 @@
 #endif
 #include <math.h>
 #include <errno.h>
-#include <string.h>
 #include <lua.h>
 #include <lauxlib.h>
-#include "src/common/libjson-c/json.h"
+#include <jansson.h>
 
-static void * json_null;
+static void * json_nullptr;
 
-static int json_object_to_lua_table (lua_State *L, json_object *o);
-static int json_array_to_lua (lua_State *L, json_object *o);
+static int json_object_to_lua_table (lua_State *L, json_t *o);
+static int json_array_to_lua (lua_State *L, json_t *o);
 
 void lua_push_json_null (lua_State *L)
 {
-    lua_pushlightuserdata (L, json_null);
+    lua_pushlightuserdata (L, json_nullptr);
 }
 
 int lua_is_json_null (lua_State *L, int index)
@@ -47,30 +46,35 @@ int lua_is_json_null (lua_State *L, int index)
     return (lua_touserdata (L, index) == json_null);
 }
 
-int json_object_to_lua (lua_State *L, json_object *o)
+int json_object_to_lua (lua_State *L, json_t *o)
 {
-        if (o == NULL)
+        if (o == NULL) {
             lua_pushnil (L);
-        switch (json_object_get_type (o)) {
-        case json_type_object:
+            return (1);
+        }
+        switch (json_typeof (o)) {
+        case JSON_OBJECT:
             json_object_to_lua_table (L, o);
             break;
-        case json_type_array:
+        case JSON_ARRAY:
             json_array_to_lua (L, o);
             break;
-        case json_type_string:
-            lua_pushstring (L, json_object_get_string (o));
+        case JSON_STRING:
+            lua_pushstring (L, json_string_value (o));
             break;
-        case json_type_int:
-            lua_pushinteger (L, json_object_get_int64 (o));
+        case JSON_INTEGER:
+            lua_pushinteger (L, json_integer_value (o));
             break;
-        case json_type_double:
-            lua_pushnumber (L, json_object_get_double (o));
+        case JSON_REAL:
+            lua_pushnumber (L, json_real_value (o));
             break;
-        case json_type_boolean:
-            lua_pushboolean (L, json_object_get_boolean (o));
+        case JSON_TRUE:
+            lua_pushboolean (L, 1);
             break;
-        case json_type_null:
+        case JSON_FALSE:
+            lua_pushboolean (L, 0);
+            break;
+        case JSON_NULL:
             /* XXX: crap. */
             break;
         }
@@ -79,29 +83,25 @@ int json_object_to_lua (lua_State *L, json_object *o)
 
 int json_object_string_to_lua (lua_State *L, const char *json_str)
 {
-    json_object *o;
+    json_t *o;
     int rc;
-
-    if (!(o = json_tokener_parse (json_str))) {
-        errno = ENOMEM;
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, NULL)))
         return (-1);
-    }
     rc = json_object_to_lua (L, o);
-    json_object_put (o);
-    return rc;
+    json_decref (o);
+    return (rc);
 }
 
-static int json_array_to_lua (lua_State *L, json_object *o)
+static int json_array_to_lua (lua_State *L, json_t *o)
 {
     int i;
     int index;
-    int n = json_object_array_length (o);
+    int n = json_array_size (o);
     lua_newtable (L);
     index = lua_gettop (L);
 
-
     for (i = 0; i < n; i++) {
-        json_object *entry = json_object_array_get_idx (o, i);
+        json_t *entry = json_array_get (o, i);
         if (entry == NULL)
             continue;
         json_object_to_lua (L, entry);
@@ -110,21 +110,21 @@ static int json_array_to_lua (lua_State *L, json_object *o)
     return (1);
 }
 
-static int json_object_to_lua_table (lua_State *L, json_object *o)
+static int json_object_to_lua_table (lua_State *L, json_t *o)
 {
-    json_object_iter iter;
-
+    const char *key;
+    json_t *value;
     lua_newtable (L);
 
-    json_object_object_foreachC(o, iter) {
-        lua_pushstring (L, iter.key);
-        json_object_to_lua (L, iter.val);
+    json_object_foreach(o, key, value) {
+        lua_pushstring (L, key);
+        json_object_to_lua (L, value);
         lua_rawset (L, -3);
     }
     return (1);
 }
 
-static json_object * lua_table_to_json (lua_State *L, int i);
+static json_t * lua_table_to_json (lua_State *L, int i);
 
 static int lua_is_integer (lua_State *L, int index)
 {
@@ -136,10 +136,10 @@ static int lua_is_integer (lua_State *L, int index)
     return (0);
 }
 
-int lua_value_to_json (lua_State *L, int i, json_object **valp)
+int lua_value_to_json (lua_State *L, int i, json_t **valp)
 {
     int index = (i < 0) ? (lua_gettop (L) + 1) + i : i;
-    json_object *o = NULL;
+    json_t *o = NULL;
 
     if (lua_isnoneornil (L, i))
         return (-1);
@@ -147,21 +147,21 @@ int lua_value_to_json (lua_State *L, int i, json_object **valp)
     switch (lua_type (L, index)) {
         case LUA_TNUMBER:
             if (lua_is_integer (L, index))
-                o = json_object_new_int64 (lua_tointeger (L, index));
+                o = json_integer (lua_tointeger (L, index));
             else
-                o = json_object_new_double (lua_tonumber (L, index));
+                o = json_real (lua_tonumber (L, index));
             break;
         case LUA_TBOOLEAN:
-            o = json_object_new_boolean (lua_toboolean (L, index));
+            o = lua_toboolean (L, index) ? json_true () : json_false ();
             break;
         case LUA_TSTRING:
-            o = json_object_new_string (lua_tostring (L, index));
+            o = json_string (lua_tostring (L, index));
             break;
         case LUA_TTABLE:
             o = lua_table_to_json (L, index);
             break;
         case LUA_TNIL:
-            o = json_object_new_object ();
+            o = json_object ();
             break;
         case LUA_TLIGHTUSERDATA:
             fprintf (stderr, "Got userdata\n");
@@ -173,28 +173,22 @@ int lua_value_to_json (lua_State *L, int i, json_object **valp)
             return (-1);
     }
     *valp = o;
-    return (0);
+    return (o ? 0 : -1);
 }
 
-int lua_value_to_json_string (lua_State *L, int i, char **json_str)
+int lua_value_to_json_string (lua_State *L, int i, char **strp)
 {
-    json_object *o;
-    char *s;
-
+    json_t *o;
+    if (strp == NULL) {
+        errno = EINVAL;
+        return (-1);
+    }
     if (lua_value_to_json (L, i, &o) < 0)
         return (-1);
-    if (!o) {
-        errno = ENOMEM;
+    if (!(*strp = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY)))
         return (-1);
-    }
-    if (!(s = strdup (json_object_to_json_string (o)))) {
-        json_object_put (o);
-        errno = ENOMEM;
-        return (-1);
-    }
-    json_object_put (o);
-    *json_str = s;
-    return 0;
+    json_decref (o);
+    return (0);
 }
 
 static int lua_table_is_array (lua_State *L, int index)
@@ -213,28 +207,30 @@ static int lua_table_is_array (lua_State *L, int index)
     return (haskeys);
 }
 
-static json_object * lua_table_to_json_array (lua_State *L, int index)
+static json_t * lua_table_to_json_array (lua_State *L, int index)
 {
     int rc;
-    json_object *o = json_object_new_array ();
+    json_t *o = json_array ();
+    if (o == NULL)
+        return (NULL);
     lua_pushnil (L);
     while ((rc = lua_next (L, index))) {
-        int i = lua_tointeger (L, -2);
-        json_object *val;
+        json_t *val;
 
         if (lua_value_to_json (L, -1, &val) < 0) {
-            json_object_put (o);
+            json_decref (o);
             return (NULL);
         }
-        json_object_array_put_idx (o, i-1, val);
+        if (json_array_append_new (o, val) < 0)
+            fprintf (stderr, "json_array_append_new failed!\n");
         lua_pop (L, 1);
     }
     return (o);
 }
 
-static json_object * lua_table_to_json (lua_State *L, int index)
+static json_t * lua_table_to_json (lua_State *L, int index)
 {
-    json_object *o;
+    json_t *o;
 
     if (!lua_istable (L, index))
         fprintf (stderr, "Object at index=%d is not table, is %s\n",
@@ -243,17 +239,18 @@ static json_object * lua_table_to_json (lua_State *L, int index)
     if (lua_table_is_array (L, index))
         return lua_table_to_json_array (L, index);
 
-    o = json_object_new_object ();
+    if (!(o = json_object ()))
+        return (NULL);
     lua_pushnil (L);
     while (lua_next (L, index)) {
-        json_object *val;
+        json_t *val;
         /* -2: key, -1: value */
         const char *key = lua_tostring (L, -2);
         if (lua_value_to_json (L, -1, &val) < 0) {
-            json_object_put (o);
+            json_decref (o);
             return (NULL);
         }
-        json_object_object_add (o, key, val);
+        json_object_set_new (o, key, val);
         /* Remove value, save 'key' for next iteration: */
         lua_pop (L, 1);
     }

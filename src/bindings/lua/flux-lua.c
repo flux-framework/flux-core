@@ -42,12 +42,10 @@
 #include "flux/core.h"
 
 #include "src/common/libcompat/reactor.h"
-
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libkz/kz.h"
 #include "src/common/libsubprocess/zio.h"
 
-#include "json-lua.h"
+#include "jansson-lua.h"
 #include "kvs-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
@@ -348,13 +346,8 @@ static int l_flux_kvs_type (lua_State *L)
     flux_future_destroy (future);
     if ((future = flux_kvs_lookup (f, 0, key))
             && flux_kvs_lookup_get (future, &json_str) == 0) {
-        json_object *o;
         lua_pushstring (L, "file");
-        if (json_str && (o = json_tokener_parse (json_str))) {
-            json_object_to_lua (L, o);
-            json_object_put (o);
-        }
-        else
+        if (!json_str || json_object_string_to_lua (L, json_str) < 0)
             lua_pushnil (L);
         flux_future_destroy (future);
         return (2);
@@ -383,11 +376,11 @@ int l_flux_kvs_put (lua_State *L)
     if (lua_isnil (L, 3))
         rc = flux_kvs_put (f, key, NULL);
     else {
-        json_object *o;
-        if (lua_value_to_json (L, 3, &o) < 0)
+        char *json_str = NULL;
+        if (lua_value_to_json_string (L, 3, &json_str) < 0)
             return lua_pusherror (L, "Unable to convert to json");
-        rc = flux_kvs_put (f, key, json_object_to_json_string (o));
-        json_object_put (o);
+        rc = flux_kvs_put (f, key, json_str);
+        free (json_str);
     }
     if (rc < 0)
         return lua_pusherror (L, "flux_kvs_put (%s): %s",
@@ -401,7 +394,6 @@ int l_flux_kvs_get (lua_State *L)
 {
     flux_future_t *fut = NULL;
     const char *json_str;
-    json_object *o = NULL;
     flux_t *f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
     int rc;
@@ -416,15 +408,13 @@ int l_flux_kvs_get (lua_State *L)
                               (char *)flux_strerror (errno));
         goto done;
     }
-    if (!(o = json_tokener_parse (json_str))
-        || (json_object_to_lua (L, o) < 0)) {
-        rc = lua_pusherror (L, "json_tokener_parse: %s",
+    if (json_object_string_to_lua (L, json_str) < 0) {
+        rc = lua_pusherror (L, "JSON decode error: %s",
                               (char *)flux_strerror (errno));
         goto done;
     }
     rc = 1;
 done:
-    json_object_put (o);
     flux_future_destroy (fut);
     return (rc);
 }
@@ -521,11 +511,11 @@ static int l_flux_send (lua_State *L)
     int nargs = lua_gettop (L) - 1;
     flux_t *f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
-    json_object *o;
+    char *json_str = NULL;
     uint32_t nodeid = FLUX_NODEID_ANY;
     uint32_t matchtag;
 
-    if (lua_value_to_json (L, 3, &o) < 0)
+    if (lua_value_to_json_string (L, 3, &json_str) < 0)
         return lua_pusherror (L, "JSON conversion error");
 
     if (tag == NULL)
@@ -538,9 +528,8 @@ static int l_flux_send (lua_State *L)
     if (matchtag == FLUX_MATCHTAG_NONE)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
-    rc = send_json_request (f, nodeid, matchtag, tag,
-                            o ? json_object_to_json_string (o) : NULL);
-    json_object_put (o);
+    rc = send_json_request (f, nodeid, matchtag, tag, json_str);
+    free (json_str);
     if (rc < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
@@ -552,7 +541,6 @@ static int l_flux_recv (lua_State *L)
     flux_t *f = lua_get_flux (L, 1);
     const char *topic = NULL;
     const char *json_str = NULL;
-    json_object *o = NULL;
     int errnum;
     flux_msg_t *msg;
     struct flux_match match = {
@@ -574,13 +562,8 @@ static int l_flux_recv (lua_State *L)
                      || flux_msg_get_json (msg, &json_str) < 0))
         goto error;
 
-    if (json_str && !(o = json_tokener_parse (json_str)))
-        goto error;
-
-    if (o != NULL) {
-        json_object_to_lua (L, o);
-        json_object_put (o);
-    }
+    if (json_str)
+        json_object_string_to_lua (L, json_str);
     else {
         lua_newtable (L);
     }
@@ -611,14 +594,13 @@ static int l_flux_rpc (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
-    json_object *o = NULL;
-    json_object *resp = NULL;
     int nodeid;
     flux_future_t *fut = NULL;
-    const char *json_str;
+    char *json_str;
+    const char *s = NULL;
     int rc;
 
-    if (lua_value_to_json (L, 3, &o) < 0) {
+    if (lua_value_to_json_string (L, 3, &json_str) < 0) {
         rc = lua_pusherror (L, "JSON conversion error");
         goto done;
     }
@@ -628,25 +610,23 @@ static int l_flux_rpc (lua_State *L)
     else
         nodeid = FLUX_NODEID_ANY;
 
-    if (tag == NULL || o == NULL) {
+    if (tag == NULL || json_str == NULL) {
         rc = lua_pusherror (L, "Invalid args");
         goto done;
     }
 
-    if (!(fut = flux_rpc (f, tag, json_object_to_json_string (o), nodeid, 0))
-            || flux_rpc_get (fut, &json_str) < 0) {
+    fut = flux_rpc (f, tag, json_str, nodeid, 0);
+    free (json_str);
+    if (!fut || flux_rpc_get (fut, &s) < 0) {
         rc = lua_pusherror (L, (char *)flux_strerror (errno));
         goto done;
     }
-    if (!json_str || !(resp = json_tokener_parse (json_str))) {
-        rc = lua_pusherror (L, (char *)flux_strerror (EPROTO));
+    if (json_object_string_to_lua (L, s ? : "{}") < 0) {
+        rc = lua_pusherror (L, "response JSON conversion error");
         goto done;
     }
-    json_object_to_lua (L, resp);
-    json_object_put (resp);
     rc = 1;
 done:
-    json_object_put (o);
     flux_future_destroy (fut);
     return (rc);
 }
@@ -709,8 +689,7 @@ static int l_flux_send_event (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
     const char *event;
-    json_object *o = NULL;
-    const char *json_str = NULL;
+    char *json_str = NULL;
     int eventidx = 2;
     flux_msg_t *msg;
     int rc = 0;
@@ -721,8 +700,7 @@ static int l_flux_send_event (lua_State *L)
      */
     if ((lua_gettop (L) >= 3) && (lua_istable (L, 2))) {
         eventidx = 3;
-        lua_value_to_json (L, 2, &o);
-        json_str = json_object_to_json_string (o);
+        lua_value_to_json_string (L, 2, &json_str);
     }
 
     if ((l_format_args (L, eventidx) < 0))
@@ -731,19 +709,17 @@ static int l_flux_send_event (lua_State *L)
     event = luaL_checkstring (L, -1);
 
     msg = flux_event_encode (event, json_str);
+    free (json_str);
+
     if (!msg || flux_send (f, msg, 0) < 0)
         rc = -1;
-    if (o)
-        json_object_put (o);
     flux_msg_destroy (msg);
-
     return l_pushresult (L, rc);
 }
 
 static int l_flux_recv_event (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
-    json_object *o = NULL;
     const char *json_str = NULL;
     const char *topic;
     struct flux_match match = {
@@ -757,8 +733,7 @@ static int l_flux_recv_event (lua_State *L)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_topic (msg, &topic) < 0
-            || flux_msg_get_json (msg, &json_str) < 0
-            || (json_str && !(o = json_tokener_parse (json_str)))) {
+            || flux_msg_get_json (msg, &json_str) < 0) {
         flux_msg_destroy (msg);
         return lua_pusherror (L, (char *)flux_strerror (errno));
     }
@@ -769,15 +744,9 @@ static int l_flux_recv_event (lua_State *L)
      * isn't so.  Need to revisit that test, and find any dependencies on
      * this invariant in the lua code.
      */
-    if (!o)
-        o = json_object_new_object ();
-
-    if (o) {
-        json_object_to_lua (L, o);
-        json_object_put (o);
-    }
-
+    json_object_string_to_lua (L, json_str ? json_str : "{}");
     lua_pushstring (L, topic);
+    flux_msg_destroy (msg);
     return (2);
 }
 
@@ -897,15 +866,11 @@ static int l_flux_ref_gettable (struct l_flux_ref *r, const char *name)
 }
 
 static int l_f_zi_resp_cb (lua_State *L,
-    struct zmsg_info *zi, json_object *resp, void *arg)
+    struct zmsg_info *zi, const char *json_str, void *arg)
 {
     flux_t *f = arg;
     flux_msg_t **msgp = zmsg_info_zmsg (zi);
-    const char *json_str = NULL;
     int rc;
-
-    if (resp)
-        json_str = json_object_to_json_string (resp);
     if ((rc = flux_respond (f, *msgp, 0, json_str)) == 0) {
         flux_msg_destroy (*msgp);
         *msgp = NULL;
@@ -1086,7 +1051,7 @@ static int l_msghandler_newindex (lua_State *L)
 }
 
 static int kvswatch_cb_common (const char *key, flux_kvsdir_t *dir,
-        json_object *val, void *arg, int errnum)
+        const char *json_str, void *arg, int errnum)
 {
     int rc;
     int t;
@@ -1110,8 +1075,8 @@ static int kvswatch_cb_common (const char *key, flux_kvsdir_t *dir,
         lua_push_kvsdir_external (L, dir); // take a reference
         lua_pushnil (L);
     }
-    else if (val) {
-        json_object_to_lua (L, val);
+    else if (json_str) {
+        json_object_string_to_lua (L, json_str);
         lua_pushnil (L);
     }
     else {
@@ -1137,13 +1102,7 @@ static int l_kvsdir_watcher (const char *key, flux_kvsdir_t *dir,
 
 static int l_kvswatcher (const char *key, const char *json_str, void *arg, int errnum)
 {
-    json_object *o = NULL;
-    if (json_str && !(o = json_tokener_parse (json_str))) {
-        struct l_flux_ref *kw = arg;
-        flux_log (kw->flux, LOG_EMERG, "kvswatcher: invalid JSON: %s", json_str);
-        return (-1);
-    }
-    return kvswatch_cb_common (key, NULL, o, arg, errnum);
+    return kvswatch_cb_common (key, NULL, json_str, arg, errnum);
 }
 
 static int l_kvswatcher_remove (lua_State *L)
@@ -1240,7 +1199,6 @@ static int l_kvswatcher_newindex (lua_State *L)
 
 static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
 {
-    json_object *o = NULL;
     int rc;
     int t;
     struct l_flux_ref *iow = arg;
@@ -1262,19 +1220,22 @@ static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
     assert (lua_isuserdata (L, -1));
 
     if ((len = zio_json_decode (json_str, (void**)&pp, NULL)) >= 0) {
-        o = Jfromstr (json_str);
-        if (len > 0)
-            Jadd_str (o, "data", (const char *)pp);
+        json_t *o = json_loads (json_str, JSON_DECODE_ANY, NULL);
+        if (!o)
+            return lua_pusherror (L, "JSON decode error");
+        if (len > 0) {
+            json_t *v = json_string ((const char *) pp);
+            if (v)
+                json_object_set_new (o, "data", v);
+        }
         free (pp);
         json_object_to_lua (L, o);
+        json_decref (o);
     }
 
     rc = lua_pcall (L, 2, 1, 0);
     if (rc)
         fprintf (stderr, "lua_pcall: %s\n", lua_tostring (L, -1));
-
-    if (o)
-        json_object_put (o);
 
     return rc ? -1 : 0;
 }
