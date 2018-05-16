@@ -582,7 +582,8 @@ static int query_rdesc (flux_t *h, int64_t j, json_t **jcb)
 
 int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
                                  int64_t *nnodes, int64_t *ntasks,
-                                 int64_t *ncores, int64_t *walltime)
+                                 int64_t *ncores, int64_t *walltime,
+                                 int64_t *ngpus)
 {
     if (nnodes) {
         if (extract_raw_nnodes (h, jobid, nnodes) < 0)
@@ -598,6 +599,10 @@ int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
     }
     if (walltime) {
         if (extract_raw_walltime (h, jobid, walltime) < 0)
+            return -1;
+    }
+    if (ngpus) {
+        if (extract_raw_ngpus (h, jobid, ngpus) < 0)
             return -1;
     }
     return 0;

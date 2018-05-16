@@ -138,12 +138,13 @@ int jsc_job_state2num (const char *s);
 
 /**
  * Accessor for nnodes, ntasks, ncores, walltime that circumvents
- * JSON encode/decode.  N.B. this is a workaround for performance issu
+ * JSON encode/decode.  N.B. this is a workaround for performance issue
  * encountered when scheduling high throughput workloads.
  */
 int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
                                  int64_t *nnodes, int64_t *ntasks,
-                                 int64_t *ncores, int64_t *walltime);
+                                 int64_t *ncores, int64_t *walltime,
+                                 int64_t *ngpus);
 
 #ifdef __cplusplus
 }
