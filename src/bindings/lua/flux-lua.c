@@ -243,7 +243,11 @@ static int l_flux_destroy (lua_State *L)
 
 static int l_flux_new (lua_State *L)
 {
-    flux_t *f = flux_open (NULL, 0);
+    const char *s = NULL;
+    flux_t *f;
+    if (lua_isstring (L, 1))
+        s = lua_tostring (L, 1);
+    f = flux_open (s, 0);
     if (f == NULL)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     return (lua_push_flux_handle (L, f));
