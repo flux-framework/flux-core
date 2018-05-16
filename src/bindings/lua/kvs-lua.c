@@ -36,7 +36,7 @@
 
 #include <flux/core.h>
 
-#include "json-lua.h"
+#include "jansson-lua.h"
 #include "lutil.h"
 
 static int l_kvsdir_commit (lua_State *L);

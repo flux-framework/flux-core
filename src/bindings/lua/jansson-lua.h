@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -21,38 +21,18 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
-
-#if HAVE_CONFIG_H
-#include "config.h"
-#endif
+#ifndef HAVE_JANSSON_LUA
+#define HAVE_JANSSON_LUA
 #include <lua.h>
-#include <lauxlib.h>
+#include <jansson.h>
 
-#include "jansson-lua.h"
-#include "lutil.h"
+void lua_push_json_null (lua_State *L);
+int lua_is_json_null (lua_State *L, int index);
 
-static int l_json_test (lua_State *L)
-{
-	int rc;
-	char *json_str = NULL;
-	if (lua_value_to_json_string (L, -1, &json_str) < 0) {
-		lua_pushnil (L);
-		lua_pushstring (L, "lua_value_to_json failure");
-		return (2);
-	}
-	rc = json_object_string_to_lua (L, json_str);
-	free (json_str);
-	return (rc);
-}
+int json_object_to_lua (lua_State *L, json_t *o);
+int json_object_string_to_lua (lua_State *L, const char *json_str);
 
-static const struct luaL_Reg json_test_functions [] = {
-	{ "runtest",   l_json_test },
-	{ NULL,        NULL        }
-};
+int lua_value_to_json (lua_State *L, int index, json_t **v);
+int lua_value_to_json_string (lua_State *L, int index, char **json_str);
 
-int luaopen_jsontest (lua_State *L)
-{
-	lua_newtable (L);
-	luaL_setfuncs (L, json_test_functions, 0);
-	return (1);
-}
+#endif /* HAVE_JANSSON_LUA */
