@@ -30,8 +30,8 @@
 #include <stdio.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
 
 struct aggregator {
@@ -140,54 +140,46 @@ static int aggregate_push (struct aggregate *ag, int64_t value, const char *ids)
     return (0);
 }
 
-/*  Push JSON represenation of an aggregate onto existing aggregate `ag`
+/*  Push JSON object of aggregate entries onto aggregate `ag`
  */
-static int aggregate_push_json (struct aggregate *ag, json_object *o)
+static int aggregate_push_json (struct aggregate *ag, json_t *entries)
 {
-    json_object_iter i;
-    int64_t n64;
-    json_object *entries = NULL;
-
-    if (ag->total == 0 && (Jget_int64 (o, "total", &n64)))
-        ag->total = n64;
-
-    if (!Jget_obj (o, "entries", &entries)) {
-        flux_log_error (ag->ctx->h, "No object 'entries'");
-        return (-1);
-    }
-
-    json_object_object_foreachC (entries, i) {
-        int64_t val = json_object_get_int64 (i.val);
-        if (aggregate_push (ag, val, i.key) < 0) {
+    const char *ids;
+    json_t *val;
+    json_object_foreach (entries, ids, val) {
+        int64_t v = json_integer_value (val);
+        if (aggregate_push (ag, v, ids) < 0) {
             flux_log_error (ag->ctx->h, "aggregate_push failed");
             return (-1);
         }
     }
-
     return (0);
 }
 
-static json_object *aggregate_tojson (struct aggregate *ag)
+/*  Return json object containing all "entries" from the current
+ *   aggregate object `ag`
+ */
+static json_t *aggregate_entries_tojson (struct aggregate *ag)
 {
     struct aggregate_entry *ae;
-    json_object *entries;
-    json_object *o = Jnew ();
-    Jadd_str (o, "key", ag->key);
-    Jadd_int (o, "count", ag->count);
-    Jadd_int (o, "total", ag->total);
-    Jadd_double (o, "timeout", ag->timeout);
-    Jadd_int64 (o, "min", ag->min);
-    Jadd_int64 (o, "max", ag->max);
+    json_t *o = NULL;
+    json_t *entries = NULL;
 
-    entries = Jnew ();
+    if (!(entries = json_object ()))
+        return NULL;
+
     ae = zlist_first (ag->entries);
     while (ae) {
-        Jadd_int64 (entries, nodeset_string (ae->ids), ae->value);
+        if (!(o = json_integer (ae->value))
+          || (json_object_set_new (entries, nodeset_string (ae->ids), o) < 0))
+            goto error;
         ae = zlist_next (ag->entries);
     }
-    json_object_object_add (o, "entries", entries);
-
-    return (o);
+    return (entries);
+error:
+    json_decref (o);
+    json_decref (entries);
+    return (NULL);
 }
 
 /*
@@ -197,16 +189,27 @@ static int aggregate_forward (flux_t *h, struct aggregate *ag)
 {
     int rc = 0;
     flux_future_t *f;
-    json_object *o = aggregate_tojson (ag);
-    flux_log (h, LOG_DEBUG, "forward: %s: count=%d total=%d\n",
+    json_t *o = aggregate_entries_tojson (ag);
+
+    if (o == NULL) {
+        flux_log (h, LOG_ERR, "forward: aggregate_entries_tojson failed");
+        return (-1);
+    }
+    flux_log (h, LOG_DEBUG, "forward: %s: count=%d total=%d",
                  ag->key, ag->count, ag->total);
-    if (!(f = flux_rpc (h, "aggregator.push", Jtostr (o),
-                             FLUX_NODEID_UPSTREAM, 0)) ||
+    if (!(f = flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_UPSTREAM, 0,
+                                "{s:s,s:i,s:i,s:f,s:I,s:I,s:o}",
+                                "key", ag->key,
+                                "count", ag->count,
+                                "total", ag->total,
+                                "timeout", ag->timeout,
+                                "min", ag->min,
+                                "max", ag->max,
+                                "entries", o)) ||
         (flux_future_get (f, NULL) < 0)) {
         flux_log_error (h, "flux_rpc: aggregator.push");
         rc = -1;
     }
-    Jput (o);
     flux_future_destroy (f);
     return (rc);
 }
@@ -236,7 +239,7 @@ out:
 static int aggregate_sink (flux_t *h, struct aggregate *ag)
 {
     int rc = -1;
-    json_object *o = NULL;
+    json_t *o = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
@@ -248,18 +251,25 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
         flux_log (h, LOG_ERR, "sink: refusing to sink to rootdir");
         goto out;
     }
-    if (!(o = aggregate_tojson (ag))) {
-        flux_log (h, LOG_ERR, "sink: aggregate_tojson failed");
+    if (!(o = aggregate_entries_tojson (ag))) {
+        flux_log (h, LOG_ERR, "sink: aggregate_entries_tojson failed");
         goto out;
     }
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "sink: flux_kvs_txn_create");
         goto out;
     }
-    if (flux_kvs_txn_put (txn, 0, ag->key, Jtostr (o)) < 0) {
+    if (flux_kvs_txn_pack (txn, 0, ag->key,
+                            "{s:i,s:i,s:I,s:I,s:o}",
+                            "total", ag->total,
+                            "count", ag->count,
+                            "max", ag->max,
+                            "min", ag->min,
+                            "entries", o) < 0) {
         flux_log_error (h, "sink: flux_kvs_txn_put");
         goto out;
     }
+    o = NULL;
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "sink: flux_kvs_commit");
         goto out;
@@ -268,7 +278,7 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
 out:
     flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);
-    Jput (o);
+    json_decref (o);
     return (rc);
 }
 
@@ -357,8 +367,10 @@ static void aggregate_timer_start (struct aggregator *ctx,
         flux_reactor_t *r = flux_get_reactor (h);
         ag->tw = flux_timer_watcher_create (r, timeout, 0.,
                                             timer_cb, (void *) ag);
-        if (ag->tw == NULL)
+        if (ag->tw == NULL) {
             flux_log_error (h, "flux_timer_watcher_create");
+            return;
+        }
         flux_watcher_start (ag->tw);
     }
 }
@@ -444,6 +456,7 @@ error:
  */
 static struct aggregate *
 aggregator_new_aggregate (struct aggregator *ctx, const char *key,
+                          int64_t total,
                           double timeout)
 {
     struct aggregate *ag = aggregate_create (ctx, key);
@@ -458,6 +471,8 @@ aggregator_new_aggregate (struct aggregator *ctx, const char *key,
     ag->min = LLONG_MAX;
     ag->max = LLONG_MIN;
     ag->timeout = timeout;
+    ag->total = total;
+    ag->ctx = ctx;
     aggregate_timer_start (ctx, ag, timeout * ctx->timer_scale);
     return (ag);
 }
@@ -472,34 +487,25 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
     int rc = -1;
     struct aggregator *ctx = arg;
     struct aggregate *ag = NULL;
-    const char *json_str;
-    json_object *in = NULL;
     const char *key;
     double timeout = ctx->default_timeout;
     int64_t fwd_count = 0;
+    int64_t total = 0;
+    json_t *entries = NULL;
     int saved_errno = 0;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+    if (flux_msg_unpack (msg, "{s:s,s:I,s:o,s?F,s?I}",
+                              "key", &key,
+                              "total", &total,
+                              "entries", &entries,
+                              "timeout", &timeout,
+                              "fwd_count", &fwd_count) < 0) {
         saved_errno = EPROTO;
-        flux_log_error (h, "push: request decode");
         goto done;
     }
-    if (!json_str || !(in = Jfromstr (json_str))) {
-        saved_errno = EPROTO;
-        flux_log_error (h, "push: json decode");
-        goto done;
-    }
-    if (!(Jget_str (in, "key", &key))) {
-        saved_errno = EPROTO;
-        flux_log_error (h, "push: key missing");
-        goto done;
-    }
-    // Allow request to override default aggregate timeout
-    Jget_double (in,  "timeout", &timeout);
-    Jget_int64 (in, "fwd_count", &fwd_count);
 
     if (!(ag = zhash_lookup (ctx->aggregates, key)) &&
-        !(ag = aggregator_new_aggregate (ctx, key, timeout))) {
+        !(ag = aggregator_new_aggregate (ctx, key, total, timeout))) {
         flux_log_error (ctx->h, "failed to get new aggregate");
         saved_errno = errno;
         goto done;
@@ -508,8 +514,10 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
     if (fwd_count > 0)
         ag->fwd_count = fwd_count;
 
-    if ((rc = aggregate_push_json (ag, in)) < 0)
+    if ((rc = aggregate_push_json (ag, entries)) < 0) {
+        flux_log_error (h, "aggregate_push_json: failed");
         goto done;
+    }
 
     flux_log (ctx->h, LOG_DEBUG, "push: %s: count=%d fwd_count=%d total=%d",
                       ag->key, ag->count, ag->fwd_count, ag->total);
@@ -526,7 +534,6 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
 done:
     if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
         flux_log_error (h, "aggregator.push: flux_respond");
-    Jput (in);
 }
 
 
