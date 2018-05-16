@@ -895,11 +895,7 @@ static int l_flux_recvmsg (lua_State *L)
     flux_t *f = lua_get_flux (L, 1);
     flux_msg_t *msg;
     int type;
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .topic_glob = NULL,
-    };
+    struct flux_match match = FLUX_MATCH_ANY;
 
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
