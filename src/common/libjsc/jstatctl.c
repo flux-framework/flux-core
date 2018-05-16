@@ -1029,22 +1029,20 @@ done:
     return NULL;
 }
 
-static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj)
+static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t jobid)
 {
-    int ntasks = 0;
-    int nnodes = 0;
-    int ncores = 0;
-    int ngpus = 0;
-    int walltime = 0;
-    int64_t js = J_NULL;
-    int64_t js2 = J_SUBMITTED;
-    json_t *o = NULL;
-    json_t *o2 = NULL;
-    json_t *jcb = NULL;
-    char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
+    int64_t ntasks;
+    int64_t nnodes;
+    int64_t ncores;
+    int64_t ngpus;
+    int64_t walltime;
+    int64_t ostate = J_NULL;
+    int64_t nstate = J_SUBMITTED;
+    json_t *jcb = NULL;
+    char key[32];
 
-    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i s:i }",
+    if (flux_event_unpack (msg, NULL, "{ s:I s:I s:I s:I s:I }",
                            "ntasks", &ntasks,
                            "nnodes", &nnodes,
                            "ncores", &ncores,
@@ -1053,37 +1051,32 @@ static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj)
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto error;
     }
+    if (!(jcb = json_pack ("{s:I s:{s:I s:I} s:{s:I s:I s:I s:I s:I}}",
+                           JSC_JOBID, jobid,
+                           JSC_STATE_PAIR,
+                           JSC_STATE_PAIR_OSTATE, ostate,
+                           JSC_STATE_PAIR_NSTATE, nstate,
+                           JSC_RDESC,
+                           JSC_RDESC_NNODES, nnodes,
+                           JSC_RDESC_NTASKS, ntasks,
+                           JSC_RDESC_NCORES, ncores,
+                           JSC_RDESC_NGPUS, ngpus,
+                           JSC_RDESC_WALLTIME, walltime)))
+        goto error;
 
-    jcb = Jnew ();
-    o = Jnew ();
-    Jadd_int64 (jcb, JSC_JOBID, nj);
-    Jadd_int64 (o, JSC_STATE_PAIR_OSTATE , (int64_t)js);
-    Jadd_int64 (o, JSC_STATE_PAIR_NSTATE, (int64_t)js2);
-    if (json_object_set_new (jcb, JSC_STATE_PAIR, o) < 0)
-        oom ();
-    o2 = Jnew ();
-    Jadd_int64 (o2, JSC_RDESC_NNODES, (int64_t)nnodes);
-    Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
-    Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
-    Jadd_int64 (o2, JSC_RDESC_NGPUS, (int64_t)ngpus);
-    Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
-    if (json_object_set_new (jcb, JSC_RDESC, o2) < 0)
-        oom ();
-
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
     if (zhash_lookup (ctx->active_jobs, key)) {
         /* Note that we don't use the old state (reserved) in this case */
-        zhash_update (ctx->active_jobs, key, (void *)(intptr_t)js2);
-    } else if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
+        zhash_update (ctx->active_jobs, key, (void *)(intptr_t)nstate);
+    }
+    else if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)nstate) < 0) {
         flux_log (h, LOG_ERR, "%s: hash insertion failed", __FUNCTION__);
         goto error;
     }
 
-    free (key);
     return jcb;
-
 error:
-    Jput (jcb);
-    free (key);
+    json_decref (jcb);
     return NULL;
 }
 
