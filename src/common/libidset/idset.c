@@ -329,6 +329,10 @@ struct idset *idset_decode (const char *str)
         unsigned int hi, lo, i;
         if (parse_range (tok, &hi, &lo) < 0)
             goto inval;
+        /* Count backwards so that idset_set() can grow the
+         * idset to the maximum size on the first access,
+         * rather than possibly doing it multiple times.
+         */
         for (i = hi; i >= lo && i != UINT_MAX; i--) {
             if (idset_set (idset, i) < 0)
                 goto error;
