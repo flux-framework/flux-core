@@ -429,27 +429,6 @@ static int extract_raw_r_lite (flux_t *h, int64_t j, char **rlitestr)
     return rc;
 }
 
-static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".state");
-    const char *state;
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "s", &state) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else {
-        *s = jsc_job_state2num (state);
-        flux_log (h, LOG_DEBUG, "extract %s: %s", key, state);
-    }
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
 static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_t **o)
 {
     flux_future_t *f = NULL;
@@ -545,23 +524,33 @@ done:
     return rc;
 }
 
-static int query_state_pair (flux_t *h, int64_t j, json_t **jcb)
+/* Old state is unavailable through the query.
+ * One should use notification service instead.
+ */
+static json_t *query_state_pair (flux_t *h, int64_t jobid)
 {
-    json_t *o = NULL;
-    int64_t st = (int64_t)J_FOR_RENT;;
+    json_t *jcb = NULL;
+    char *key;
+    int64_t state;
+    const char *state_str;
+    flux_future_t *f = NULL;
 
-    if (extract_raw_state (h, j, &st) < 0) return -1;
+    if (!(key = lwj_key (h, jobid, ".state")))
+        return NULL;
 
-    *jcb = Jnew ();
-    o = Jnew ();
-    /* Old state is unavailable through the query.
-     * One should use notification service instead.
-     */
-    Jadd_int64 (o, JSC_STATE_PAIR_OSTATE, st);
-    Jadd_int64 (o, JSC_STATE_PAIR_NSTATE, st);
-    if (json_object_set_new (*jcb, JSC_STATE_PAIR, o) < 0)
-        oom ();
-    return 0;
+    if (!(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "s", &state_str) < 0)
+        goto done;
+    state = jsc_job_state2num (state_str);
+    if (!(jcb = json_pack ("{s:{s:I s:I}}",
+                           JSC_STATE_PAIR,
+                           JSC_STATE_PAIR_OSTATE, state,
+                           JSC_STATE_PAIR_NSTATE, state)))
+        goto done;
+done:
+    flux_future_destroy (f);
+    free (key);
+    return jcb;
 }
 
 static int query_rdesc (flux_t *h, int64_t j, json_t **jcb)
@@ -1189,8 +1178,8 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
         if ((jcb = json_pack ("{s:I}", JSC_JOBID, jobid)))
             rc = 0;
     } else if (!strcmp (key, JSC_STATE_PAIR)) {
-        if ( (rc = query_state_pair (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_pdesc failed");
+        if ((jcb = query_state_pair (h, jobid)))
+            rc = 0;
     } else if (!strcmp (key, JSC_RDESC)) {
         if ( (rc = query_rdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdesc failed");
