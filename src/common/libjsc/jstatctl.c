@@ -340,27 +340,6 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
     return rc;
 }
 
-static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".rdl");
-    const char *s;
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &s) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else {
-        *rdlstr = xstrdup (s);
-        flux_log (h, LOG_DEBUG, "rdl under %s extracted", key);
-    }
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
 static int extract_raw_r_lite (flux_t *h, int64_t j, char **rlitestr)
 {
     int rc = 0;
@@ -578,19 +557,27 @@ error:
     return rc;
 }
 
-static int query_rdl (flux_t *h, int64_t j, json_t **jcb)
+static json_t *query_rdl (flux_t *h, int64_t jobid)
 {
-    char *rdlstr = NULL;
+    flux_future_t *f;
+    const char *json_str;
+    json_t *rdl;
+    json_t *jcb = NULL;
 
-    if (extract_raw_rdl (h, j, &rdlstr) < 0) return -1;
-
-    *jcb = Jnew ();
-    Jadd_str (*jcb, JSC_RDL, (const char *)rdlstr);
-    /* Note: seems there is no mechanism to transfer ownership
-     * of this string to jcb */
-    if (rdlstr)
-        free (rdlstr);
-    return 0;
+    if (!(f = lookup_job_attribute (h, jobid, ".rdl")))
+        return NULL;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto error;
+    if (!(rdl = json_loads (json_str, 0, NULL)))
+        goto error;
+    if (!(jcb = json_pack ("{s:o}",
+                           JSC_RDL, rdl))) {
+        json_decref (rdl);
+        goto error;
+    }
+error:
+    flux_future_destroy (f);
+    return jcb;
 }
 
 static int query_r_lite (flux_t *h, int64_t j, json_t **jcb)
@@ -1159,8 +1146,8 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
         if ((jcb = query_rdesc (h, jobid)))
             rc = 0;
     } else if (!strcmp (key, JSC_RDL)) {
-        if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_rdl failed");
+        if ((jcb = query_rdl (h, jobid)))
+            rc = 0;
     } else if (!strcmp (key, JSC_R_LITE)) {
         if ( (rc = query_r_lite (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_r_lite failed");
