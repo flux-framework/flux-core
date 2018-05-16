@@ -32,6 +32,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/param.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -264,15 +265,18 @@ static int parse_range (const char *s, int *hi, int *lo)
 {
     char *endptr;
     int h, l;
+    unsigned long n;
 
-    h = l = strtoul (s, &endptr, 10);
-    if (endptr == s || (*endptr != '\0' && *endptr != '-'))
+    n = strtoul (s, &endptr, 10);
+    if (n >= UINT_MAX || endptr == s || (*endptr != '\0' && *endptr != '-'))
         return -1;
+    h = l = n;
     if (*endptr == '-') {
         s = endptr + 1;
-        h = strtoul (s, &endptr, 10);
-        if (endptr == s || *endptr != '\0')
+        n = strtoul (s, &endptr, 10);
+        if (n >= UINT_MAX || endptr == s || *endptr != '\0')
             return -1;
+        h = n;
     }
     *hi = h;
     *lo = l;
