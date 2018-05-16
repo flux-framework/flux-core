@@ -59,7 +59,7 @@ end
 local opts, optind = getopt (arg, "ht:c:",
                              { help = "h", timeout = "t", count = "c" })
 local key = arg[optind]
-local value = arg[optind+1]
+local value = tonumber (arg[optind+1])
 
 if opts.h then
     printf ("Usage: %s [OPTIONS] KEY VALUE\n", prog)
@@ -130,15 +130,18 @@ if f.rank == 0 then
 end
 
 tt = timer.new ()
-f:rpc ("aggregator.push", {
+local resp, err= f:rpc ("aggregator.push", {
   key = key,
-  total = f.size,
-  timeout = opts.t,
-  fwd_count = opts.c,
+  total = tonumber (f.size),
+  timeout = tonumber (opts.t),
+  fwd_count = tonumber (opts.c),
   entries = {
       [tostring (f.rank)] = tonumber (value),
   }
 })
+
+if not resp then error(err) end
+
 if f.rank == 0 then
     printf ("%s: push took %.3fms\n", shortprog, tt:get0() * 1000)
     local tt = timer.new ()
