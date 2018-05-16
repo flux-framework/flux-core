@@ -52,18 +52,18 @@ struct idset {
 
 #define ENCODE_CHUNK 1024
 
-struct idset *idset_create (size_t slots, int flags)
+struct idset *idset_create (size_t size, int flags)
 {
     struct idset *idset;
 
-    if (slots == 0 || (flags & ~IDSET_FLAG_AUTOGROW) != 0) {
+    if (size == 0 || (flags & ~IDSET_FLAG_AUTOGROW) != 0) {
         errno = EINVAL;
         return NULL;
     }
     if (!(idset = malloc (sizeof (*idset))))
         return NULL;
     idset->magic = IDSET_MAGIC;
-    idset->T = vebnew (slots, 0);
+    idset->T = vebnew (size, 0);
     if (!idset->T.D) {
         free (idset);
         errno = ENOMEM;
@@ -224,16 +224,16 @@ error:
     return NULL;
 }
 
-/* Grow idset to next power of 2 size that has at least 'slots' slots.
+/* Grow idset to next power of 2 size that has at least 'size' slots.
  * Return 0 on success, -1 on failure with errno == ENOMEM.
  */
-static int idset_grow (struct idset *idset, int slots)
+static int idset_grow (struct idset *idset, int size)
 {
     int newsize = idset->T.M;
     Veb T;
     int id;
 
-    while (newsize <= slots)
+    while (newsize <= size)
         newsize <<= 1;
 
     if (newsize > idset->T.M) {
