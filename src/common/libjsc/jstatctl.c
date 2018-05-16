@@ -340,27 +340,6 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
     return rc;
 }
 
-static int extract_raw_r_lite (flux_t *h, int64_t j, char **rlitestr)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".R_lite");
-    const char *s;
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &s) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else {
-        *rlitestr = xstrdup (s);
-        flux_log (h, LOG_DEBUG, "R_lite under %s extracted", key);
-    }
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
 static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_t **o)
 {
     flux_future_t *f = NULL;
@@ -580,19 +559,27 @@ error:
     return jcb;
 }
 
-static int query_r_lite (flux_t *h, int64_t j, json_t **jcb)
+static json_t *query_r_lite (flux_t *h, int64_t jobid)
 {
-    char *rlitestr = NULL;
+    flux_future_t *f;
+    const char *json_str;
+    json_t *r_lite;
+    json_t *jcb = NULL;
 
-    if (extract_raw_r_lite (h, j, &rlitestr) < 0) return -1;
-
-    *jcb = Jnew ();
-    Jadd_str (*jcb, JSC_R_LITE, (const char *)rlitestr);
-    /* Note: seems there is no mechanism to transfer ownership
-     * of this string to jcb */
-    if (rlitestr)
-        free (rlitestr);
-    return 0;
+    if (!(f = lookup_job_attribute (h, jobid, ".R_lite")))
+        return NULL;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto error;
+    if (!(r_lite = json_loads (json_str, 0, NULL)))
+        goto error;
+    if (!(jcb = json_pack ("{s:o}",
+                           JSC_R_LITE, r_lite))) {
+        json_decref (r_lite);
+        goto error;
+    }
+error:
+    flux_future_destroy (f);
+    return jcb;
 }
 
 static int query_pdesc (flux_t *h, int64_t j, json_t **jcb)
@@ -1149,8 +1136,8 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
         if ((jcb = query_rdl (h, jobid)))
             rc = 0;
     } else if (!strcmp (key, JSC_R_LITE)) {
-        if ( (rc = query_r_lite (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_r_lite failed");
+        if ((jcb = query_r_lite (h, jobid)))
+            rc = 0;
     } else if (!strcmp(key, JSC_PDESC)) {
         if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
