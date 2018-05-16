@@ -14,6 +14,7 @@ struct inout {
 struct inout test_inputs[] = {
     { "2",              0,          "2" },
     { "7-9",            0,          "7,8,9" },
+    { "9-7",            0,          "7,8,9" },
     { "1,7-9",          0,          "1,7,8,9" },
     { "1,7-9,16",       0,          "1,7,8,9,16" },
     { "1,7-9,14,16",    0,          "1,7,8,9,14,16" },
@@ -24,11 +25,13 @@ struct inout test_inputs[] = {
 
     { "[2]",            0,          "2" },
     { "[7-9]",          0,          "7,8,9" },
+    { "[9-7]",          0,          "7,8,9" },
     { "[3,2,4,5]",      0,          "2,3,4,5" },
     { "[]",             0,          ""},
 
     { "2",              IDSET_FLAG_RANGE,  "2" },
     { "7-9",            IDSET_FLAG_RANGE,  "7-9" },
+    { "9-7",            IDSET_FLAG_RANGE,  "7-9" },
     { "1,7-9",          IDSET_FLAG_RANGE,  "1,7-9" },
     { "1,7-9,16",       IDSET_FLAG_RANGE,  "1,7-9,16" },
     { "1,7-9,14,16",    IDSET_FLAG_RANGE,  "1,7-9,14,16" },
@@ -38,6 +41,7 @@ struct inout test_inputs[] = {
 
     { "2",             IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "2" },
     { "7-9",           IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[7-9]" },
+    { "9-7",           IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[7-9]" },
     { "1,7-9",         IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1,7-9]" },
     { "1,7-9,16",      IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1,7-9,16]" },
     { "1,7-9,14,16",   IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1,7-9,14,16]" },
@@ -89,9 +93,9 @@ void test_codec_large (void)
     struct idset *idset;
     char *s;
 
-    idset = idset_decode ("0-1023");
+    idset = idset_decode ("0-5000");
     ok (idset != NULL,
-        "idset_decode '0-1023' works");
+        "idset_decode '0-5000' works");
     s = idset_encode (idset, 0);
     int count = 0;
     if (s) {
@@ -106,9 +110,9 @@ void test_codec_large (void)
             a1 = NULL;
         }
     }
-    ok (count == 1024,
-        "idset_encode flags=0x0 '0,2,3,...,1023' works");
-    if (count != 1024)
+    ok (count == 5001,
+        "idset_encode flags=0x0 '0,2,3,...,5000' works");
+    if (count != 5001)
         diag ("count=%d", count);
     free (s);
     idset_destroy (idset);

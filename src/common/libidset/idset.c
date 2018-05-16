@@ -32,6 +32,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/param.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -51,19 +52,20 @@ struct idset {
 };
 
 #define ENCODE_CHUNK 1024
+#define DECODE_SIZE  1024 // initial idset size for idset_decode()
 
-struct idset *idset_create (size_t slots, int flags)
+struct idset *idset_create (size_t size, int flags)
 {
     struct idset *idset;
 
-    if (slots == 0 || (flags & ~IDSET_FLAG_AUTOGROW) != 0) {
+    if (size == 0 || (flags & ~IDSET_FLAG_AUTOGROW) != 0) {
         errno = EINVAL;
         return NULL;
     }
     if (!(idset = malloc (sizeof (*idset))))
         return NULL;
     idset->magic = IDSET_MAGIC;
-    idset->T = vebnew (slots, 0);
+    idset->T = vebnew (size, 0);
     if (!idset->T.D) {
         free (idset);
         errno = ENOMEM;
@@ -88,11 +90,12 @@ void idset_destroy (struct idset *idset)
  * Grow *s by ENCODE_CHUNK to allow new string to be appended.
  * Returns 0 on success, -1 on failure with errno = ENOMEM.
  */
-static int catprintf (char **s, int *sz, int *len, const char *fmt, ...)
+static int __attribute__ ((format (printf, 4, 5)))
+catprintf (char **s, size_t *sz, size_t *len, const char *fmt, ...)
 {
     va_list ap;
     char *ns;
-    int nlen;
+    size_t nlen;
     int rc;
 
     va_start (ap, fmt);
@@ -103,7 +106,7 @@ static int catprintf (char **s, int *sz, int *len, const char *fmt, ...)
     nlen = strlen (ns);
 
     while (*len + nlen + 1 > *sz) {
-        int nsz = *sz + ENCODE_CHUNK;
+        size_t nsz = *sz + ENCODE_CHUNK;
         char *p;
         if (!(p = realloc (*s, nsz)))
             goto error;
@@ -122,29 +125,32 @@ error:
     return -1;
 }
 
-static int catrange (char **s, int *sz, int *len,
-                     int lo, int hi, const char *sep)
+static int catrange (char **s, size_t *sz, size_t *len,
+                     unsigned int lo, unsigned int hi, const char *sep)
 {
     int rc;
     if (lo == hi)
-        rc = catprintf (s, sz, len, "%d%s", lo, sep);
+        rc = catprintf (s, sz, len, "%u%s", lo, sep);
     else
-        rc = catprintf (s, sz, len, "%d-%d%s", lo, hi, sep);
+        rc = catprintf (s, sz, len, "%u-%u%s", lo, hi, sep);
     return rc;
 }
 
+/* Return value: count of id's in set, or -1 on failure.
+ * N.B. if count is more than INT_MAX, return value is INT_MAX.
+ */
 static int encode_ranged (const struct idset *idset,
-                          char **s, int *sz, int *len)
+                          char **s, size_t *sz, size_t *len)
 {
     int count = 0;
-    int id;
-    int lo = 0;
-    int hi = 0;
+    unsigned int id;
+    unsigned int lo = 0;
+    unsigned int hi = 0;
     bool first = true;
 
     lo = hi = id = vebsucc (idset->T, 0);
     while (id < idset->T.M) {
-        int next = vebsucc (idset->T, id + 1);;
+        unsigned int next = vebsucc (idset->T, id + 1);;
         bool last = (next == idset->T.M);
 
         if (first)                  // first iteration
@@ -160,17 +166,21 @@ static int encode_ranged (const struct idset *idset,
             if (catrange (s, sz, len, lo, hi, last ? "" : ",") < 0)
                 return -1;
         }
-        count++;
+        if (count < INT_MAX)
+            count++;
         id = next;
     }
     return count;
 }
 
+/* Return value: count of id's in set, or -1 on failure.
+ * N.B. if count is more than INT_MAX, return value is INT_MAX.
+ */
 static int encode_simple (const struct idset *idset,
-                          char **s, int *sz, int *len)
+                          char **s, size_t *sz, size_t *len)
 {
     int count = 0;
-    int id;
+    unsigned int id;
 
     id = vebsucc (idset->T, 0);
     while (id != idset->T.M) {
@@ -178,7 +188,8 @@ static int encode_simple (const struct idset *idset,
         char *sep = next == idset->T.M ? "" : ",";
         if (catprintf (s, sz, len, "%d%s", id, sep) < 0)
             return -1;
-        count++;
+        if (count < INT_MAX)
+            count++;
         id = next;
     }
     return count;
@@ -187,8 +198,8 @@ static int encode_simple (const struct idset *idset,
 char *idset_encode (const struct idset *idset, int flags)
 {
     char *str = NULL;
-    int strsz = 0;
-    int strlength = 0;
+    size_t strsz = 0;
+    size_t strlength = 0;
     int count;
 
     if (!idset || idset->magic != IDSET_MAGIC
@@ -223,16 +234,16 @@ error:
     return NULL;
 }
 
-/* Grow idset to next power of 2 size that has at least 'slots' slots.
+/* Grow idset to next power of 2 size that has at least 'size' slots.
  * Return 0 on success, -1 on failure with errno == ENOMEM.
  */
-static int idset_grow (struct idset *idset, int slots)
+static int idset_grow (struct idset *idset, size_t size)
 {
-    int newsize = idset->T.M;
+    size_t newsize = idset->T.M;
     Veb T;
-    int id;
+    unsigned int id;
 
-    while (newsize <= slots)
+    while (newsize < size)
         newsize <<= 1;
 
     if (newsize > idset->T.M) {
@@ -251,30 +262,39 @@ static int idset_grow (struct idset *idset, int slots)
     return 0;
 }
 
-static int idset_set (struct idset *idset, int id)
+static int idset_set (struct idset *idset, unsigned int id)
 {
-    if (idset_grow (idset, id + 1) < 0)
+    if (id == UINT_MAX || idset_grow (idset, id + 1) < 0)
         return -1;
     vebput (idset->T, id);
     return 0;
 }
 
-static int parse_range (const char *s, int *hi, int *lo)
+static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
 {
     char *endptr;
-    int h, l;
+    unsigned int h, l;
+    unsigned long n;
 
-    h = l = strtoul (s, &endptr, 10);
-    if (endptr == s || (*endptr != '\0' && *endptr != '-'))
+    n = strtoul (s, &endptr, 10);
+    if (n >= UINT_MAX || endptr == s || (*endptr != '\0' && *endptr != '-'))
         return -1;
+    h = l = n;
     if (*endptr == '-') {
         s = endptr + 1;
-        h = strtoul (s, &endptr, 10);
-        if (endptr == s || *endptr != '\0')
+        n = strtoul (s, &endptr, 10);
+        if (n >= UINT_MAX || endptr == s || *endptr != '\0')
             return -1;
+        h = n;
     }
-    *hi = h;
-    *lo = l;
+    if (h >= l) {
+        *hi = h;
+        *lo = l;
+    }
+    else {
+        *hi = l;
+        *lo = h;
+    }
     return 0;
 }
 
@@ -283,7 +303,7 @@ static char *trim_brackets (char *s)
     char *p = s;
     if (*p == '[')
         p++;
-    int len = strlen (p);
+    size_t len = strlen (p);
     if (len > 0 && p[len - 1] == ']')
         p[len - 1] = '\0';
     return p;
@@ -300,17 +320,21 @@ struct idset *idset_decode (const char *str)
         errno = EINVAL;
         return NULL;
     }
-    if (!(idset = idset_create (1024, IDSET_FLAG_AUTOGROW)))
+    if (!(idset = idset_create (DECODE_SIZE, IDSET_FLAG_AUTOGROW)))
         return NULL;
     if (!(cpy = strdup (str)))
         goto error;
     a1 = trim_brackets (cpy);
     saveptr = NULL;
     while ((tok = strtok_r (a1, ",", &saveptr))) {
-        int hi, lo, i;
+        unsigned int hi, lo, i;
         if (parse_range (tok, &hi, &lo) < 0)
             goto inval;
-        for (i = hi; i >= lo; i--) {
+        /* Count backwards so that idset_set() can grow the
+         * idset to the maximum size on the first access,
+         * rather than possibly doing it multiple times.
+         */
+        for (i = hi; i >= lo && i != UINT_MAX; i--) {
             if (idset_set (idset, i) < 0)
                 goto error;
         }
