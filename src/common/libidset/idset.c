@@ -135,6 +135,9 @@ static int catrange (char **s, size_t *sz, size_t *len,
     return rc;
 }
 
+/* Return value: count of id's in set, or -1 on failure.
+ * N.B. if count is more than INT_MAX, return value is INT_MAX.
+ */
 static int encode_ranged (const struct idset *idset,
                           char **s, size_t *sz, size_t *len)
 {
@@ -162,12 +165,16 @@ static int encode_ranged (const struct idset *idset,
             if (catrange (s, sz, len, lo, hi, last ? "" : ",") < 0)
                 return -1;
         }
-        count++;
+        if (count < INT_MAX)
+            count++;
         id = next;
     }
     return count;
 }
 
+/* Return value: count of id's in set, or -1 on failure.
+ * N.B. if count is more than INT_MAX, return value is INT_MAX.
+ */
 static int encode_simple (const struct idset *idset,
                           char **s, size_t *sz, size_t *len)
 {
@@ -180,7 +187,8 @@ static int encode_simple (const struct idset *idset,
         char *sep = next == idset->T.M ? "" : ",";
         if (catprintf (s, sz, len, "%d%s", id, sep) < 0)
             return -1;
-        count++;
+        if (count < INT_MAX)
+            count++;
         id = next;
     }
     return count;
