@@ -999,33 +999,31 @@ static int invoke_cbs (flux_t *h, int64_t j, json_t *jcb, int errnum)
     return rc;
 }
 
-static json_t *get_reserve_jcb (flux_t *h, int64_t nj)
+static json_t *get_reserve_jcb (flux_t *h, int64_t jobid)
 {
-    json_t *ss = NULL;
-    json_t *jcb = NULL;
-    int64_t js = J_NULL;
-    int64_t js2 = J_RESERVED;
-    char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
+    json_t *jcb;
+    int64_t ostate = J_NULL;
+    int64_t nstate = J_RESERVED;
+    char key[32];
 
-    jcb = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (jcb, JSC_JOBID, nj);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js2);
-    if (json_object_set_new (jcb, JSC_STATE_PAIR, ss) < 0)
-        oom ();
-    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
+    if (!(jcb = json_pack ("{s:I s{s:I s:I}}",
+                           JSC_JOBID, jobid,
+                           JSC_STATE_PAIR,
+                           JSC_STATE_PAIR_OSTATE, ostate,
+                           JSC_STATE_PAIR_NSTATE, nstate)))
+        goto error;
+
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)nstate) < 0) {
         flux_log (h, LOG_ERR, "%s: inserting a job to hash failed",
                   __FUNCTION__);
-        goto done;
+        goto error;
     }
-    free (key);
     return jcb;
 
-done:
-    Jput (jcb);
-    free (key);
+error:
+    json_decref (jcb);
     return NULL;
 }
 
