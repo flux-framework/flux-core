@@ -52,6 +52,7 @@ struct idset {
 };
 
 #define ENCODE_CHUNK 1024
+#define DECODE_SIZE  1024 // initial idset size for idset_decode()
 
 struct idset *idset_create (size_t size, int flags)
 {
@@ -319,7 +320,7 @@ struct idset *idset_decode (const char *str)
         errno = EINVAL;
         return NULL;
     }
-    if (!(idset = idset_create (1024, IDSET_FLAG_AUTOGROW)))
+    if (!(idset = idset_create (DECODE_SIZE, IDSET_FLAG_AUTOGROW)))
         return NULL;
     if (!(cpy = strdup (str)))
         goto error;
