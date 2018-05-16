@@ -955,25 +955,21 @@ done:
     return rc;
 }
 
-static json_t *get_update_jcb (flux_t *h, int64_t j, const char *val)
+static json_t *get_update_jcb (flux_t *h, int64_t jobid, const char *state)
 {
-    json_t *o = NULL;
-    json_t *ss = NULL;
     jscctx_t *ctx = getctx (h);
-    int64_t ostate = (int64_t) J_FOR_RENT;
-    int64_t nstate = (int64_t) J_FOR_RENT;
+    int64_t nstate = jsc_job_state2num (state);
+    int64_t ostate = fetch_and_update_state (ctx->active_jobs, jobid, nstate);
+    json_t *o;
 
-    nstate = jsc_job_state2num (val);
-    if ( (ostate = fetch_and_update_state (ctx->active_jobs, j, nstate)) < 0) {
-        flux_log (h, LOG_INFO, "%"PRId64"'s old state unavailable", j);
+    if (ostate < 0) {
+        flux_log (h, LOG_INFO, "%"PRId64"'s old state unavailable", jobid);
         ostate = nstate;
     }
-    o = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (o, JSC_JOBID, j);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) ostate);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) nstate);
-    if (json_object_set_new (o, JSC_STATE_PAIR, ss) < 0)
+    if (!(o = json_pack ("{s:I s:{s:I s:I}}", JSC_JOBID, jobid,
+                                              JSC_STATE_PAIR,
+                                              JSC_STATE_PAIR_OSTATE, ostate,
+                                              JSC_STATE_PAIR_NSTATE, nstate)))
         oom ();
     return o;
 }
