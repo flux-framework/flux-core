@@ -545,18 +545,6 @@ done:
     return rc;
 }
 
-static int query_jobid (flux_t *h, int64_t j, json_t **jcb)
-{
-    int rc = 0;
-    if ( ( rc = jobid_exist (h, j)) != 0)
-        *jcb = NULL;
-    else {
-        *jcb = Jnew ();
-        Jadd_int64 (*jcb, JSC_JOBID, j);
-    }
-    return rc;
-}
-
 static int query_state_pair (flux_t *h, int64_t j, json_t **jcb)
 {
     json_t *o = NULL;
@@ -1198,8 +1186,8 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
     if (jobid_exist (h, jobid) != 0) return -1;
 
     if (!strcmp (key, JSC_JOBID)) {
-        if ( (rc = query_jobid (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_jobid failed");
+        if ((jcb = json_pack ("{s:I}", JSC_JOBID, jobid)))
+            rc = 0;
     } else if (!strcmp (key, JSC_STATE_PAIR)) {
         if ( (rc = query_state_pair (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
