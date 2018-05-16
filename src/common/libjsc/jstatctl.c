@@ -274,63 +274,52 @@ static int build_name_array (zhash_t *ha, const char *k, json_t *ns)
     return i;
 }
 
-static char * lwj_key (flux_t *h, int64_t id, const char *fmt, ...)
+static char *lwj_vkey (flux_t *h, int64_t jobid, const char *fmt, va_list ap)
 {
-    int rc;
-    va_list ap;
     jscctx_t *ctx = getctx (h);
     const char *base;
-    char *p = NULL;
+    char *name;
     char *key;
-    if (!(base = jscctx_jobid_path (ctx, id)))
+
+    if (!(base = jscctx_jobid_path (ctx, jobid)))
         return (NULL);
-    if (fmt != NULL) {
-        va_start (ap, fmt);
-        rc = vasprintf (&p, fmt, ap);
-        va_end (ap);
-        if (rc < 0)
-            return (NULL);
+    if (vasprintf (&name, fmt, ap) < 0)
+        return (NULL);
+    if (asprintf (&key, "%s%s", base, name) < 0) {
+        free (name);
+        return (NULL);
     }
-    if (asprintf (&key, "%s%s", base, p) < 0)
-        return (NULL);
-    free (p);
+    free (name);
     return (key);
 }
 
-static int extract_raw_ngpus (flux_t *h, int64_t j, int64_t *ngpus)
+static char * __attribute__ ((format (printf, 3, 4)))
+lwj_key (flux_t *h, int64_t jobid, const char *fmt, ...)
 {
-    int rc = 0;
-    char *key = lwj_key (h, j, ".ngpus");
-    flux_future_t *f = NULL;
+    va_list ap;
+    char *key;
 
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", ngpus) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ngpus);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
+    va_start (ap, fmt);
+    key = lwj_vkey (h, jobid, fmt, ap);
+    va_end (ap);
+    return key;
 }
 
-static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
+static flux_future_t * __attribute__ ((format (printf, 3, 4)))
+lookup_job_attribute (flux_t *h, int64_t jobid, const char *fmt, ...)
 {
-    int rc = 0;
-    char *key = lwj_key (h, j, ".nnodes");
-    flux_future_t *f = NULL;
+    va_list ap;
+    flux_future_t *f;
+    char *key;
 
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", nnodes) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *nnodes);
+    va_start (ap, fmt);
+    key = lwj_vkey (h, jobid, fmt, ap);
+    va_end (ap);
+    if (!key)
+        return NULL;
+    f = flux_kvs_lookup (h, 0, key);
     free (key);
-    flux_future_destroy (f);
-    return rc;
+    return f;
 }
 
 static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
@@ -346,42 +335,6 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
     }
     else
         flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ntasks);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_ncores (flux_t *h, int64_t j, int64_t *ncores)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".ncores");
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-            || flux_kvs_lookup_get_unpack (f, "I", ncores) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ncores);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".walltime");
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", walltime) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *walltime);
     free (key);
     flux_future_destroy (f);
     return rc;
@@ -553,31 +506,28 @@ done:
     return jcb;
 }
 
-static int query_rdesc (flux_t *h, int64_t j, json_t **jcb)
+static json_t *query_rdesc (flux_t *h, int64_t jobid)
 {
-    json_t *o = NULL;
-    int64_t nnodes = -1;
-    int64_t ntasks = -1;
-    int64_t ncores = -1;
-    int64_t ngpus = 0;
-    int64_t walltime = -1;
+    json_t *jcb = NULL;
+    int64_t nnodes;
+    int64_t ntasks;
+    int64_t ncores;
+    int64_t ngpus;
+    int64_t walltime;
 
-    if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
-    if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
-    if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
-    if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
-    if (extract_raw_ngpus (h, j, &ngpus) < 0) return -1;
+    if (jsc_query_rdesc_efficiently (h, jobid, &nnodes, &ntasks, &ncores,
+                                     &walltime, &ngpus) < 0)
+        return NULL;
 
-    *jcb = Jnew ();
-    o = Jnew ();
-    Jadd_int64 (o, JSC_RDESC_NNODES, nnodes);
-    Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
-    Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
-    Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
-    Jadd_int64 (o, JSC_RDESC_NGPUS, ngpus);
-    if (json_object_set_new (*jcb, JSC_RDESC, o) < 0)
-        oom ();
-    return 0;
+    if (!(jcb = json_pack ("{s:{s:I s:I s:I s:I s:I}}",
+                           JSC_RDESC,
+                           JSC_RDESC_NNODES, nnodes,
+                           JSC_RDESC_NTASKS, ntasks,
+                           JSC_RDESC_NCORES, ncores,
+                           JSC_RDESC_WALLTIME, walltime,
+                           JSC_RDESC_NGPUS, ngpus)))
+        return NULL;
+    return jcb;
 }
 
 int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
@@ -585,27 +535,47 @@ int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
                                  int64_t *ncores, int64_t *walltime,
                                  int64_t *ngpus)
 {
-    if (nnodes) {
-        if (extract_raw_nnodes (h, jobid, nnodes) < 0)
-            return -1;
-    }
-    if (ntasks) {
-        if (extract_raw_ntasks (h, jobid, ntasks) < 0)
-            return -1;
-    }
-    if (ncores) {
-        if (extract_raw_ncores (h, jobid, ncores) < 0)
-            return -1;
-    }
-    if (walltime) {
-        if (extract_raw_walltime (h, jobid, walltime) < 0)
-            return -1;
-    }
-    if (ngpus) {
-        if (extract_raw_ngpus (h, jobid, ngpus) < 0)
-            return -1;
-    }
-    return 0;
+    flux_future_t *f_nnodes = NULL;
+    flux_future_t *f_ntasks = NULL;
+    flux_future_t *f_ncores = NULL;
+    flux_future_t *f_wall = NULL;
+    flux_future_t *f_ngpus = NULL;
+    int rc = -1;
+
+    /* Send requests (in parallel)
+     */
+    if (nnodes && !(f_nnodes = lookup_job_attribute (h, jobid, ".nnodes")))
+        goto error;
+    if (ntasks && !(f_ntasks = lookup_job_attribute (h, jobid, ".ntasks")))
+        goto error;
+    if (ncores && !(f_ncores = lookup_job_attribute (h, jobid, ".ncores")))
+        goto error;
+    if (walltime && !(f_wall = lookup_job_attribute (h, jobid, ".walltime")))
+        goto error;
+    if (ngpus && !(f_ngpus = lookup_job_attribute (h, jobid, ".ngpus")))
+        goto error;
+
+    /* Handle responses
+     */
+    if (f_nnodes && flux_kvs_lookup_get_unpack (f_nnodes, "I", nnodes) < 0)
+        goto error;
+    if (f_ntasks && flux_kvs_lookup_get_unpack (f_ntasks, "I", ntasks) < 0)
+        goto error;
+    if (f_ncores && flux_kvs_lookup_get_unpack (f_ncores, "I", ncores) < 0)
+        goto error;
+    if (f_wall && flux_kvs_lookup_get_unpack (f_wall, "I", walltime) < 0)
+        goto error;
+    if (f_ngpus && flux_kvs_lookup_get_unpack (f_ngpus, "I", ngpus) < 0)
+        goto error;
+
+    rc = 0;
+error:
+    flux_future_destroy (f_nnodes);
+    flux_future_destroy (f_ntasks);
+    flux_future_destroy (f_ncores);
+    flux_future_destroy (f_wall);
+    flux_future_destroy (f_ngpus);
+    return rc;
 }
 
 static int query_rdl (flux_t *h, int64_t j, json_t **jcb)
@@ -1186,8 +1156,8 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
         if ((jcb = query_state_pair (h, jobid)))
             rc = 0;
     } else if (!strcmp (key, JSC_RDESC)) {
-        if ( (rc = query_rdesc (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_rdesc failed");
+        if ((jcb = query_rdesc (h, jobid)))
+            rc = 0;
     } else if (!strcmp (key, JSC_RDL)) {
         if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl failed");
