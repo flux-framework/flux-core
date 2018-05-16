@@ -242,7 +242,7 @@ static int idset_grow (struct idset *idset, size_t size)
     Veb T;
     unsigned int id;
 
-    while (newsize <= size)
+    while (newsize < size)
         newsize <<= 1;
 
     if (newsize > idset->T.M) {
