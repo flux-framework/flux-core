@@ -278,8 +278,14 @@ static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
             return -1;
         h = n;
     }
-    *hi = h;
-    *lo = l;
+    if (h >= l) {
+        *hi = h;
+        *lo = l;
+    }
+    else {
+        *hi = l;
+        *lo = h;
+    }
     return 0;
 }
 
