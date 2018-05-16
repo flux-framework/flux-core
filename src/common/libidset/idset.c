@@ -88,7 +88,8 @@ void idset_destroy (struct idset *idset)
  * Grow *s by ENCODE_CHUNK to allow new string to be appended.
  * Returns 0 on success, -1 on failure with errno = ENOMEM.
  */
-static int catprintf (char **s, int *sz, int *len, const char *fmt, ...)
+static int __attribute__ ((format (printf, 4, 5)))
+catprintf (char **s, int *sz, int *len, const char *fmt, ...)
 {
     va_list ap;
     char *ns;
