@@ -89,11 +89,11 @@ void idset_destroy (struct idset *idset)
  * Returns 0 on success, -1 on failure with errno = ENOMEM.
  */
 static int __attribute__ ((format (printf, 4, 5)))
-catprintf (char **s, int *sz, int *len, const char *fmt, ...)
+catprintf (char **s, size_t *sz, size_t *len, const char *fmt, ...)
 {
     va_list ap;
     char *ns;
-    int nlen;
+    size_t nlen;
     int rc;
 
     va_start (ap, fmt);
@@ -104,7 +104,7 @@ catprintf (char **s, int *sz, int *len, const char *fmt, ...)
     nlen = strlen (ns);
 
     while (*len + nlen + 1 > *sz) {
-        int nsz = *sz + ENCODE_CHUNK;
+        size_t nsz = *sz + ENCODE_CHUNK;
         char *p;
         if (!(p = realloc (*s, nsz)))
             goto error;
@@ -123,7 +123,7 @@ error:
     return -1;
 }
 
-static int catrange (char **s, int *sz, int *len,
+static int catrange (char **s, size_t *sz, size_t *len,
                      int lo, int hi, const char *sep)
 {
     int rc;
@@ -135,7 +135,7 @@ static int catrange (char **s, int *sz, int *len,
 }
 
 static int encode_ranged (const struct idset *idset,
-                          char **s, int *sz, int *len)
+                          char **s, size_t *sz, size_t *len)
 {
     int count = 0;
     int id;
@@ -168,7 +168,7 @@ static int encode_ranged (const struct idset *idset,
 }
 
 static int encode_simple (const struct idset *idset,
-                          char **s, int *sz, int *len)
+                          char **s, size_t *sz, size_t *len)
 {
     int count = 0;
     int id;
@@ -188,8 +188,8 @@ static int encode_simple (const struct idset *idset,
 char *idset_encode (const struct idset *idset, int flags)
 {
     char *str = NULL;
-    int strsz = 0;
-    int strlength = 0;
+    size_t strsz = 0;
+    size_t strlength = 0;
     int count;
 
     if (!idset || idset->magic != IDSET_MAGIC
@@ -284,7 +284,7 @@ static char *trim_brackets (char *s)
     char *p = s;
     if (*p == '[')
         p++;
-    int len = strlen (p);
+    size_t len = strlen (p);
     if (len > 0 && p[len - 1] == ']')
         p[len - 1] = '\0';
     return p;
