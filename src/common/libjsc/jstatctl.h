@@ -90,14 +90,6 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 # define JSC_RDESC_WALLTIME "walltime"
 #define JSC_RDL "rdl"
 #define JSC_R_LITE "R_lite"
-#define JSC_PDESC "pdesc"
-# define JSC_PDESC_SIZE "procsize"
-# define JSC_PDESC_HOSTNAMES "hostnames"
-# define JSC_PDESC_EXECS "executables"
-# define JSC_PDESC_PDARRAY "pdarray"
-# define JSC_PDESC_RANK_PDARRAY_PID "pid"
-# define JSC_PDESC_RANK_PDARRAY_HINDX "hindx"
-# define JSC_PDESC_RANK_PDARRAY_EINDX "eindx"
 
 /**
  * Register a callback to the asynchronous status change notification service.

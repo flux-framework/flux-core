@@ -248,32 +248,6 @@ done:
     return rc;
 }
 
-static bool fetch_rank_pdesc (json_t *src, int64_t *p, int64_t *n,
-			      const char **c)
-{
-    if (!src) return false;
-    if (!Jget_str (src, "command", c)) return false;
-    if (!Jget_int64 (src, "pid", p)) return false;
-    if (!Jget_int64 (src, "nodeid", n)) return false;
-    return true;
-}
-
-static int build_name_array (zhash_t *ha, const char *k, json_t *ns)
-{
-    int i = (intptr_t) zhash_lookup (ha, k);
-    if ((void *)((intptr_t)i) == NULL) {
-        json_t *k_obj;
-        if (!(k_obj = json_string (k)))
-            oom ();
-        i = json_array_size (ns);
-        if (json_array_append_new (ns, k_obj) < 0)
-            oom ();
-        zhash_insert (ha, k, (void *)(intptr_t)i+1);
-    } else
-        i--;
-    return i;
-}
-
 static char *lwj_vkey (flux_t *h, int64_t jobid, const char *fmt, va_list ap)
 {
     jscctx_t *ctx = getctx (h);
@@ -320,119 +294,6 @@ lookup_job_attribute (flux_t *h, int64_t jobid, const char *fmt, ...)
     f = flux_kvs_lookup (h, 0, key);
     free (key);
     return f;
-}
-
-static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".ntasks");
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", ntasks) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ntasks);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_t **o)
-{
-    flux_future_t *f = NULL;
-    const char *json_str;
-    char *key = lwj_key (h, j, ".%ju.procdesc", i);
-    int rc = -1;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &json_str) < 0
-             || !(*o = Jfromstr (json_str))) {
-        flux_log_error (h, "extract %s", key);
-        goto done;
-    }
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    free (key);
-    return rc;
-}
-
-static json_t *build_parray_elem (int64_t pid, int64_t eix, int64_t hix)
-{
-    json_t *po = Jnew ();
-    Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_PID, pid);
-    Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_EINDX, eix);
-    Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_HINDX, hix);
-    return po;
-}
-
-static void add_pdescs_to_jcb (json_t **hns, json_t **ens,
-			       json_t **pa, json_t *jcb)
-{
-    if (json_object_set_new (jcb, JSC_PDESC_HOSTNAMES, *hns) < 0)
-        oom ();
-    if (json_object_set_new (jcb, JSC_PDESC_EXECS, *ens) < 0)
-        oom ();
-    if (json_object_set_new (jcb, JSC_PDESC_PDARRAY, *pa) < 0)
-        oom ();
-    /* Because the above transfer ownership, assign NULL should be ok */
-    *hns = NULL;
-    *ens = NULL;
-    *pa = NULL;
-}
-
-static int extract_raw_pdescs (flux_t *h, int64_t j, int64_t n, json_t *jcb)
-{
-    int rc = -1;
-    int64_t i = 0;
-    char *hnm;
-    const char *cmd = NULL;
-    zhash_t *eh = NULL; /* hash holding a set of unique exec_names */
-    zhash_t *hh = NULL; /* hash holding a set of unique host_names */
-    json_t *o = NULL;
-    json_t *po = NULL;
-    json_t *pa = Jnew_ar ();
-    json_t *hns = Jnew_ar ();
-    json_t *ens = Jnew_ar ();
-
-    if (!(eh = zhash_new ()) || !(hh = zhash_new ()))
-        oom ();
-    for (i=0; i < (int) n; i++) {
-        int64_t eix = 0, hix = 0;
-        int64_t pid = 0, nid = 0;
-
-        if (extract_raw_pdesc (h, j, i, &o) != 0)
-            goto done;
-        if (!fetch_rank_pdesc (o, &pid, &nid, &cmd))
-            goto done;
-
-        eix = build_name_array (eh, cmd, ens);
-        /* FIXME: we need a hostname service */
-        hnm = xasprintf ("%"PRId64, nid);
-        hix = build_name_array (hh, hnm, hns);
-        po = build_parray_elem (pid, eix, hix);
-        if (json_array_append_new (pa, po) < 0)
-            oom ();
-        po = NULL;
-        Jput (o);
-        o = NULL;
-        free (hnm);
-    }
-    add_pdescs_to_jcb (&hns, &ens, &pa, jcb);
-    rc = 0;
-
-done:
-    if (o) Jput (o);
-    if (po) Jput (po);
-    if (pa) Jput (pa);
-    if (hns) Jput (hns);
-    if (ens) Jput (ens);
-    zhash_destroy (&eh);
-    zhash_destroy (&hh);
-    return rc;
 }
 
 /* Old state is unavailable through the query.
@@ -580,15 +441,6 @@ static json_t *query_r_lite (flux_t *h, int64_t jobid)
 error:
     flux_future_destroy (f);
     return jcb;
-}
-
-static int query_pdesc (flux_t *h, int64_t j, json_t **jcb)
-{
-    int64_t ntasks = 0;
-    if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
-    *jcb = Jnew ();
-    Jadd_int64 (*jcb, JSC_PDESC_SIZE, ntasks);
-    return extract_raw_pdescs (h, j, ntasks, *jcb);
 }
 
 static int send_state_event (flux_t *h, job_state_t st, int64_t j)
@@ -783,101 +635,6 @@ done:
     flux_future_destroy (f);
     free (key);
 
-    return rc;
-}
-
-static int update_1pdesc (flux_t *h, flux_kvs_txn_t *txn,
-              int r, int64_t j, json_t *o,
-			  json_t *ha, json_t *ea)
-{
-    flux_future_t *f = NULL;
-    int rc = -1;
-    json_t *d = NULL;
-    char *key;
-    const char *json_str;
-    const char *hn = NULL, *en = NULL;
-    int64_t pid = 0, hindx = 0, eindx = 0, hrank = 0;
-    char *d_str = NULL;
-
-    if (!Jget_int64 (o, JSC_PDESC_RANK_PDARRAY_PID, &pid)) return -1;
-    if (!Jget_int64 (o, JSC_PDESC_RANK_PDARRAY_HINDX, &hindx)) return -1;
-    if (!Jget_int64 (o, JSC_PDESC_RANK_PDARRAY_EINDX, &eindx)) return -1;
-    if (!Jget_ar_str (ha, (int)hindx, &hn)) return -1;
-    if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
-
-    key = lwj_key (h, j, ".%d.procdesc", r);
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &json_str) < 0
-            || !(d = Jfromstr (json_str))) {
-        flux_log_error (h, "extract %s", key);
-        goto done;
-    }
-
-    Jadd_str (d, "command", en);
-    Jadd_int64 (d, "pid", pid);
-    errno = 0;
-    if ( (hrank = strtoul (hn, NULL, 10)) && errno != 0) {
-        flux_log (h, LOG_ERR, "invalid hostname %s", hn);
-        goto done;
-    }
-    Jadd_int64 (d, "nodeid", (int64_t)hrank);
-    if (!(d_str = json_dumps (d, 0)))
-        oom ();
-    if (flux_kvs_txn_put (txn, 0, key, d_str) < 0) {
-        flux_log_error (h, "put %s", key);
-        goto done;
-    }
-    rc = 0;
-
-done:
-    flux_future_destroy (f);
-    free (key);
-    if (d)
-        Jput (d);
-    free (d_str);
-    return rc;
-}
-
-static int update_pdesc (flux_t *h, int64_t j, json_t *o)
-{
-    int i = 0;
-    int rc = -1;
-    int64_t size = 0;
-    json_t *h_arr = NULL;
-    json_t *e_arr = NULL;
-    json_t *pd_arr = NULL;
-    json_t *pde = NULL;
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-
-    if (!Jget_int64 (o, JSC_PDESC_SIZE, &size))
-        goto done;
-    if (!Jget_obj (o, JSC_PDESC_PDARRAY, &pd_arr))
-        goto done;
-    if (!Jget_obj (o, JSC_PDESC_HOSTNAMES, &h_arr))
-        goto done;
-    if (!Jget_obj (o, JSC_PDESC_EXECS, &e_arr))
-        goto done;
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
-        goto done;
-    }
-    for (i=0; i < (int) size; ++i) {
-        if (!Jget_ar_obj (pd_arr, i, &pde))
-            goto done;
-        if ( (rc = update_1pdesc (h, txn, i, j, pde, h_arr, e_arr)) < 0)
-            goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log (h, LOG_ERR, "update_pdesc commit failed");
-        goto done;
-    }
-    rc = 0;
-
-done:
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
     return rc;
 }
 
@@ -1186,9 +943,6 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
     } else if (!strcmp (key, JSC_R_LITE)) {
         if (Jget_obj (jcb, JSC_R_LITE, &o))
             rc = update_r_lite (h, jobid, o);
-    } else if (!strcmp (key, JSC_PDESC)) {
-        if (Jget_obj (jcb, JSC_PDESC, &o))
-            rc = update_pdesc (h, jobid, o);
     }
     else
         flux_log (h, LOG_ERR, "key (%s) not understood", key);
