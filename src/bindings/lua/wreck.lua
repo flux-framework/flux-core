@@ -533,7 +533,7 @@ local function task_status (lwj, taskid)
     if not tonumber (taskid) then return nil end
     local t = lwj[taskid]
     if not t.exit_status then
-        return 0, (t.procdesc and "starting" or "running")
+        return 0, "running"
     end
     local x = t.exit_code or (t.exit_sig + 128)
     return x, exit_message (t)
