@@ -756,24 +756,18 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     jscctx_t *ctx = getctx (h);
     json_t *jcb = NULL;
-    int64_t jobid = -1;
+    int64_t jobid;
     const char *topic = NULL;
     const char *state = NULL;
     const char *kvs_path = NULL;
     int len = 12;
 
-    if (flux_msg_get_topic (msg, &topic) < 0)
+    if (flux_event_unpack (msg, &topic, "{s:I s?:s}",
+                                        "jobid", &jobid,
+                                        "kvs_path", &kvs_path) < 0)
         goto done;
-
-    if (flux_event_unpack (msg, NULL, "{ s:I }", "jobid", &jobid) < 0) {
-        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (kvs_path && jscctx_add_jobid_path (ctx, jobid, kvs_path) < 0)
         goto done;
-    }
-
-    if (!flux_event_unpack (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
-        if (jscctx_add_jobid_path (ctx, jobid, kvs_path) < 0)
-            flux_log_error (h, "jscctx_add_jobid_path");
-    }
 
     if (strncmp (topic, "jsc", 3) == 0)
        len = 10;
@@ -786,14 +780,12 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     else
         jcb = get_update_jcb (h, jobid, state);
 
-    if (invoke_cbs (h, jobid, jcb, (jcb)? 0 : EINVAL) < 0)
-        flux_log (h, LOG_DEBUG, "%s: failed to invoke callbacks", __FUNCTION__);
+    (void)invoke_cbs (h, jobid, jcb, (jcb)? 0 : EINVAL);
 
     if (job_is_finished (state))
         active_delete (ctx->active_jobs, jobid);
 done:
-    if (jcb)
-        Jput (jcb);
+    json_decref (jcb);
     return;
 }
 
