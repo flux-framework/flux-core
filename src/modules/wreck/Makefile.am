@@ -73,7 +73,6 @@ test_wreck_job_t_LDADD = \
 
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua \
-	lua.d/02-affinity.lua \
 	lua.d/timeout.lua \
         lua.d/output.lua \
         lua.d/epilog.lua \
