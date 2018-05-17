@@ -571,33 +571,29 @@ done:
     return rc;
 }
 
-static int update_rdl (flux_t *h, int64_t j, const json_t *rdl)
+static int update_rdl (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
-    char *key = lwj_key (h, j, ".rdl");
+    char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
+    json_t *rdl;
 
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (json_unpack (jcb, "{s:o}", JSC_RDL, &rdl) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key, "O", rdl) < 0) {
-        flux_log_error (h, "update %s", key);
+    if (!(key = lwj_key (h, jobid, ".rdl")))
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit failed");
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
+    if (flux_kvs_txn_pack (txn, 0, key, "O", rdl) < 0)
+        goto done;
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        goto done;
     rc = 0;
-
 done:
     flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);
     free (key);
-
     return rc;
 }
 
@@ -907,8 +903,7 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
     } else if (!strcmp (key, JSC_RDESC)) {
         rc = update_rdesc (h, jobid, jcb);
     } else if (!strcmp (key, JSC_RDL)) {
-        if (Jget_obj (jcb, JSC_RDL, &o))
-            rc = update_rdl (h, jobid, o);
+        rc = update_rdl (h, jobid, jcb);
     } else if (!strcmp (key, JSC_R_LITE)) {
         if (Jget_obj (jcb, JSC_R_LITE, &o))
             rc = update_r_lite (h, jobid, o);
