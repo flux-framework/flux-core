@@ -45,7 +45,7 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
 
 /* Put null-terminated request with sending client reference to protocol
  * engine.  The request should end with a newline.
- * Return 0 on success, -1 on failure.
+ * Returns 1 indicating finalized / close fd, 0 on success, -1 on failure.
  */
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf, void *client);
