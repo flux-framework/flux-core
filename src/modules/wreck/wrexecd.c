@@ -43,13 +43,14 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#include <jansson.h>
+
 #include <flux/core.h>
 
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libkz/kz.h"
@@ -770,16 +771,16 @@ struct prog_ctx * prog_ctx_create (void)
 }
 
 int json_array_to_argv (struct prog_ctx *ctx,
-    json_object *o, char ***argvp, int *argcp)
+        json_t *o, char ***argvp, int *argcp)
 {
     int i;
-    if (json_object_get_type (o) != json_type_array) {
+    if (json_typeof (o) != JSON_ARRAY) {
         wlog_err (ctx, "json_array_to_argv: not an array");
         errno = EINVAL;
         return (-1);
     }
 
-    *argcp = json_object_array_length (o);
+    *argcp = json_array_size (o);
     if (*argcp <= 0) {
         wlog_err (ctx, "json_array_to_argv: array length = %d", *argcp);
         return (-1);
@@ -788,13 +789,13 @@ int json_array_to_argv (struct prog_ctx *ctx,
     *argvp = xzmalloc ((*argcp + 1) * sizeof (char **));
 
     for (i = 0; i < *argcp; i++) {
-        json_object *ox = json_object_array_get_idx (o, i);
-        if (json_object_get_type (ox) != json_type_string) {
+        json_t *ox = json_array_get (o, i);
+        if (json_typeof (ox) != JSON_STRING) {
             wlog_err (ctx, "malformed cmdline");
             free (*argvp);
             return (-1);
         }
-        (*argvp) [i] = strdup (json_object_get_string (ox));
+        (*argvp) [i] = strdup (json_string_value (ox));
     }
     return (0);
 }
@@ -822,7 +823,7 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
     i = flux_kvsitr_create (opts);
     while ((opt = flux_kvsitr_next (i))) {
         char *json_str;
-        json_object *v;
+        json_t *v;
         char s [64];
 
         if (flux_kvsdir_get (opts, opt, &json_str) < 0) {
@@ -830,34 +831,34 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
             continue;
         }
 
-        if (!(v = json_tokener_parse (json_str))) {
+        if (!(v = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
             wlog_err (ctx, "failed to parse json for option '%s'", opt);
             free (json_str);
             continue;
         }
 
-        switch (json_object_get_type (v)) {
-            case json_type_null:
+        switch (json_typeof (v)) {
+            case JSON_NULL:
                 prog_ctx_setopt (ctx, opt, "");
                 break;
-            case json_type_string:
-                prog_ctx_setopt (ctx, opt, json_object_get_string (v));
+            case JSON_STRING:
+                prog_ctx_setopt (ctx, opt, json_string_value (v));
                 break;
-            case json_type_int:
-                snprintf (s, sizeof (s) -1, "%"PRId64,
-			  json_object_get_int64 (v));
+            case JSON_INTEGER:
+                snprintf (s, sizeof (s) -1, "%ju",
+                         (uintmax_t) json_integer_value (v));
                 prog_ctx_setopt (ctx, opt, s);
                 break;
-            case json_type_boolean:
-                if (json_object_get_boolean (v))
-                    prog_ctx_setopt (ctx, opt, "");
+            case JSON_TRUE:
+                prog_ctx_setopt (ctx, opt, "");
+            case JSON_FALSE:
                 break;
             default:
                 wlog_err (ctx, "skipping option '%s': invalid type", opt);
                 break;
         }
         free (json_str);
-        json_object_put (v);
+        json_decref (v);
     }
     flux_kvsitr_destroy (i);
     flux_kvsdir_destroy (opts);
@@ -953,7 +954,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 {
     int i;
     char *json_str;
-    json_object *v;
+    json_t *v;
     flux_future_t *f = NULL;
     char *key;
 
@@ -983,7 +984,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     if (flux_kvsdir_get (ctx->kvs, "cmdline", &json_str) < 0)
         wlog_fatal (ctx, 1, "kvs_get: cmdline");
 
-    if (!(v = json_tokener_parse (json_str)))
+    if (!(v = json_loads (json_str, 0, NULL)))
         wlog_fatal (ctx, 1, "kvs_get: cmdline: json parser failed");
 
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
@@ -995,9 +996,9 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 
     wlog_msg (ctx, "lwj %" PRIi64 ": node%d: nprocs=%d, nnodes=%d, cmdline=%s",
                    ctx->id, ctx->rankinfo.nodeid, ctx->rankinfo.ntasks,
-                   ctx->nnodes, json_object_to_json_string (v));
+                   ctx->nnodes, json_str);
     free (json_str);
-    json_object_put (v);
+    json_decref (v);
 
     return (0);
 }
@@ -1218,9 +1219,10 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
     struct prog_ctx *ctx = arg;
     flux_t *h = ctx->flux;
     int count;
-    json_object *o;
+    json_t *o;
 
-    if (err || !(o = Jfromstr (str))) {
+    if (err || !(o = json_loads (str, 0, NULL))
+            || (json_unpack (o, "{s:i}", "count", &count) < 0)) {
         if (err != ENOENT)
             flux_log (h, LOG_ERR, "exitstatus_watcher: %s",
                     err ? flux_strerror (err) : "Jfromstr failed");
@@ -1230,41 +1232,13 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
     /* Once count is fully populated, release the watch on the
      *  exit_status dir so reactor loop can exit
      */
-    if (Jget_int (o, "count", &count) && count == ctx->total_ntasks) {
+    if (count == ctx->total_ntasks) {
         flux_kvs_unwatch (h, key);
         prog_ctx_remove_completion_ref (ctx, "exit_status");
     }
 
-    Jput (o);
+    json_decref (o);
     return (0);
-}
-
-static json_object *task_exit_tojson (struct task_info *t)
-{
-    char *key = NULL;
-    char *taskid = NULL;
-    struct prog_ctx *ctx = t->ctx;
-    json_object *o;
-    json_object *e;
-
-    if (asprintf (&key, "%s.exit_status", ctx->kvspath) < 0)
-        return (NULL);
-    if (asprintf (&taskid, "%d", t->globalid) < 0) {
-        free (key);
-        return (NULL);
-    }
-
-    e = Jnew ();
-    Jadd_int64 (e, taskid, t->status);
-
-    o = Jnew ();
-    Jadd_str (o, "key", key);
-    Jadd_int (o, "total", ctx->total_ntasks);
-    json_object_object_add (o, "entries", e);
-
-    free (key);
-    free (taskid);
-    return (o);
 }
 
 static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
@@ -1293,18 +1267,26 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
 
 static int aggregator_push_task_exit (struct task_info *t)
 {
-    int rc = 0;
-    flux_t *h = t->ctx->flux;
+    int n, rc = 0;
+    char key [1024];
+    char idstr [16];
+    struct prog_ctx *ctx = t->ctx;
+    flux_t *h = ctx->flux;
     flux_future_t *f;
-    json_object *o = task_exit_tojson (t);
 
-    if (o == NULL) {
-        flux_log_error (h, "task_exit_tojson");
+    if ((n = snprintf (key, sizeof (key), "%s.exit_status", ctx->kvspath)) < 0
+        || (n >= sizeof (key))
+        || (n = snprintf (idstr, sizeof (idstr), "%d", t->globalid)) < 0
+        || (n >= sizeof (idstr))) {
+        flux_log_error (h, "aggregator_push_task_exit: snprintf");
         return (-1);
     }
 
-    if (!(f = flux_rpc (h, "aggregator.push", Jtostr (o),
-                                FLUX_NODEID_ANY, 0))) {
+    if (!(f = flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_ANY, 0,
+                                "{s:s,s:i,s:{s:i}}",
+                                "key", key,
+                                "total", ctx->total_ntasks,
+                                "entries", idstr, t->status))) {
         flux_log_error (h, "flux_rpc");
         rc = -1;
     }
@@ -1314,7 +1296,6 @@ static int aggregator_push_task_exit (struct task_info *t)
         rc = -1;
     }
     flux_future_destroy (f);
-    Jput (o);
 
     if (t->ctx->noderank == 0 && t->id == 0)
         rc = wait_for_task_exit_aggregate (t->ctx);
@@ -2003,9 +1984,7 @@ void ev_cb (flux_t *f, flux_msg_handler_t *mw,
            const flux_msg_t *msg, struct prog_ctx *ctx)
 {
     int base;
-    json_object *o = NULL;
     const char *topic;
-    const char *json_str;
 
     if (flux_msg_get_topic (msg, &topic) < 0) {
         wlog_err (ctx, "flux_msg_get_topic: %s", flux_strerror (errno));
@@ -2016,26 +1995,14 @@ void ev_cb (flux_t *f, flux_msg_handler_t *mw,
         flux_heartbeat_decode (msg, &ctx->epoch);
         return;
     }
-    if (flux_msg_get_json (msg, &json_str) < 0) {
-        wlog_err (ctx, "flux_msg_get_json");
-        return;
-    }
-    if (json_str && !(o = json_tokener_parse (json_str))) {
-        wlog_err (ctx, "json_tokener_parse");
-        return;
-    }
-
-
     base = strlen (ctx->topic);
     if (strcmp (topic+base, "kill") == 0) {
-        json_object *ox;
+        /*  Default signal is 9 (SIGKILL) unless overidden by event payload */
         int sig = 9;
-        if (json_object_object_get_ex (o, "signal", &ox))
-            sig = json_object_get_int (ox);
+        flux_msg_unpack (msg, "{s:i}", "signal", &sig);
         wlog_msg (ctx, "Killing jobid %" PRIi64 " with signal %d", ctx->id, sig);
         prog_ctx_signal (ctx, sig);
     }
-    json_object_put (o);
 }
 
 int task_info_io_setup (struct task_info *t)
