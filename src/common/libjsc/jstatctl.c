@@ -200,25 +200,33 @@ static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
     return (path);
 }
 
-static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
+static int *active_insert (zhash_t *hash, int64_t jobid)
 {
-    int *t = NULL;
-    char *key = NULL;
-
-    if (!aj) return J_FOR_RENT;
-    key = xasprintf ("%"PRId64, j);
-    if ( !(t = ((int *)zhash_lookup (aj, (const char *)key)))) {
-        free (key);
-        return J_FOR_RENT;
+    char key[32];
+    int *state;
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    if (!(state = calloc (1, sizeof (int))))
+        return NULL;
+    if (zhash_insert (hash, key, state) < 0) {
+        free (state);
+        return NULL;
     }
-    if (ns == J_COMPLETE || ns == J_FAILED)
-        zhash_delete (aj, key);
-    else
-        zhash_update (aj, key, (void *)(intptr_t)ns);
-    free (key);
+    zhash_freefn (hash, key, (zhash_free_fn *)free);
+    return state;
+}
 
-    /* safe to convert t to int */
-    return (intptr_t) t;
+static int *active_lookup (zhash_t *hash, int64_t jobid)
+{
+    char key[32];
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    return zhash_lookup (hash, key);
+}
+
+static void active_delete (zhash_t *hash, int64_t jobid)
+{
+    char key[32];
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    return zhash_delete (hash, key);
 }
 
 /******************************************************************************
@@ -638,18 +646,22 @@ done:
     return rc;
 }
 
-static json_t *get_update_jcb (flux_t *h, int64_t jobid, const char *state)
+static json_t *get_update_jcb (flux_t *h, int64_t jobid, const char *state_str)
 {
     jscctx_t *ctx = getctx (h);
-    int64_t nstate = jsc_job_state2num (state);
-    int64_t ostate = fetch_and_update_state (ctx->active_jobs, jobid, nstate);
+    int *state;
+    int nstate = jsc_job_state2num (state_str);
+    int ostate = J_FOR_RENT;
     json_t *o;
 
-    if (ostate < 0) {
-        flux_log (h, LOG_INFO, "%"PRId64"'s old state unavailable", jobid);
-        ostate = nstate;
+    if ((state = active_lookup (ctx->active_jobs, jobid))) {
+        ostate = *state;
+        if (nstate == J_COMPLETE || nstate == J_FAILED)
+            active_delete (ctx->active_jobs, jobid);
+        else
+            *state = nstate;
     }
-    if (!(o = json_pack ("{s:I s:{s:I s:I}}", JSC_JOBID, jobid,
+    if (!(o = json_pack ("{s:I s:{s:i s:i}}", JSC_JOBID, jobid,
                                               JSC_STATE_PAIR,
                                               JSC_STATE_PAIR_OSTATE, ostate,
                                               JSC_STATE_PAIR_NSTATE, nstate)))
@@ -686,23 +698,20 @@ static json_t *get_reserve_jcb (flux_t *h, int64_t jobid)
 {
     jscctx_t *ctx = getctx (h);
     json_t *jcb;
-    int64_t ostate = J_NULL;
-    int64_t nstate = J_RESERVED;
-    char key[32];
+    int ostate = J_NULL;
+    int nstate = J_RESERVED;
+    int *state;
 
-    if (!(jcb = json_pack ("{s:I s{s:I s:I}}",
+    if (!(jcb = json_pack ("{s:I s{s:i s:i}}",
                            JSC_JOBID, jobid,
                            JSC_STATE_PAIR,
                            JSC_STATE_PAIR_OSTATE, ostate,
                            JSC_STATE_PAIR_NSTATE, nstate)))
         goto error;
 
-    snprintf (key, sizeof (key), "%"PRId64, jobid);
-    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)nstate) < 0) {
-        flux_log (h, LOG_ERR, "%s: inserting a job to hash failed",
-                  __FUNCTION__);
+    if (!(state = active_insert (ctx->active_jobs, jobid)))
         goto error;
-    }
+    *state = nstate;
     return jcb;
 
 error:
@@ -718,10 +727,10 @@ static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t jobid)
     int64_t ncores;
     int64_t ngpus;
     int64_t walltime;
-    int64_t ostate = J_NULL;
-    int64_t nstate = J_SUBMITTED;
+    int ostate = J_NULL;
+    int nstate = J_SUBMITTED;
+    int *state;
     json_t *jcb = NULL;
-    char key[32];
 
     if (flux_event_unpack (msg, NULL, "{ s:I s:I s:I s:I s:I }",
                            "ntasks", &ntasks,
@@ -732,7 +741,7 @@ static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t jobid)
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto error;
     }
-    if (!(jcb = json_pack ("{s:I s:{s:I s:I} s:{s:I s:I s:I s:I s:I}}",
+    if (!(jcb = json_pack ("{s:I s:{s:i s:i} s:{s:I s:I s:I s:I s:I}}",
                            JSC_JOBID, jobid,
                            JSC_STATE_PAIR,
                            JSC_STATE_PAIR_OSTATE, ostate,
@@ -745,28 +754,16 @@ static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t jobid)
                            JSC_RDESC_WALLTIME, walltime)))
         goto error;
 
-    snprintf (key, sizeof (key), "%"PRId64, jobid);
-    if (zhash_lookup (ctx->active_jobs, key)) {
-        /* Note that we don't use the old state (reserved) in this case */
-        zhash_update (ctx->active_jobs, key, (void *)(intptr_t)nstate);
+    if (!(state = active_lookup (ctx->active_jobs, jobid))) {
+        if (!(state = active_insert (ctx->active_jobs, jobid)))
+            goto error;
     }
-    else if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)nstate) < 0) {
-        flux_log (h, LOG_ERR, "%s: hash insertion failed", __FUNCTION__);
-        goto error;
-    }
+    *state = nstate;
 
     return jcb;
 error:
     json_decref (jcb);
     return NULL;
-}
-
-static inline void delete_jobinfo (flux_t *h, int64_t jobid)
-{
-    jscctx_t *ctx = getctx (h);
-    char *key = xasprintf ("%"PRId64, jobid);
-    zhash_delete (ctx->active_jobs, key);
-    free (key);
 }
 
 static bool job_is_finished (const char *state)
@@ -780,6 +777,7 @@ static bool job_is_finished (const char *state)
 static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
+    jscctx_t *ctx = getctx (h);
     json_t *jcb = NULL;
     int64_t jobid = -1;
     const char *topic = NULL;
@@ -796,7 +794,7 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!flux_event_unpack (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
-        if (jscctx_add_jobid_path (getctx (h), jobid, kvs_path) < 0)
+        if (jscctx_add_jobid_path (ctx, jobid, kvs_path) < 0)
             flux_log_error (h, "jscctx_add_jobid_path");
     }
 
@@ -815,7 +813,7 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log (h, LOG_DEBUG, "%s: failed to invoke callbacks", __FUNCTION__);
 
     if (job_is_finished (state))
-        delete_jobinfo (h, jobid);
+        active_delete (ctx->active_jobs, jobid);
 done:
     if (jcb)
         Jput (jcb);
