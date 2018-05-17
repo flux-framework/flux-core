@@ -520,7 +520,7 @@ done:
     return rc;
 }
 
-static int update_rdesc (flux_t *h, int64_t jobid, json_t *o)
+static int update_rdesc (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
     int64_t nnodes;
@@ -531,11 +531,12 @@ static int update_rdesc (flux_t *h, int64_t jobid, json_t *o)
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
-    if (json_unpack (o, "{s:I s:I s:I s:I}",
-                        JSC_RDESC_NNODES, &nnodes,
-                        JSC_RDESC_NTASKS, &ntasks,
-                        JSC_RDESC_NCORES, &ncores,
-                        JSC_RDESC_WALLTIME, &walltime) < 0)
+    if (json_unpack (jcb, "{s:{s:I s:I s:I s:I}}",
+                          JSC_RDESC,
+                          JSC_RDESC_NNODES, &nnodes,
+                          JSC_RDESC_NTASKS, &ntasks,
+                          JSC_RDESC_NCORES, &ncores,
+                          JSC_RDESC_WALLTIME, &walltime) < 0)
         goto done;
     if ((nnodes < 0) || (ntasks < 0) || (ncores < 0) || (walltime < 0))
         goto done;
@@ -904,8 +905,7 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
     } else if (!strcmp (key, JSC_STATE_PAIR)) {
         rc = update_state (h, jobid, jcb);
     } else if (!strcmp (key, JSC_RDESC)) {
-        if (Jget_obj (jcb, JSC_RDESC, &o))
-            rc = update_rdesc (h, jobid, o);
+        rc = update_rdesc (h, jobid, jcb);
     } else if (!strcmp (key, JSC_RDL)) {
         if (Jget_obj (jcb, JSC_RDL, &o))
             rc = update_rdl (h, jobid, o);
