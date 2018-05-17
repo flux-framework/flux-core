@@ -874,45 +874,33 @@ done:
 
 int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
 {
-    int rc = -1;
     json_t *jcb = NULL;
 
-    if (!key) return -1;
-    if (jobid_exist (h, jobid) != 0) return -1;
+    if (!key)
+        return -1;
+    if (jobid_exist (h, jobid) < 0)
+        return -1;
 
-    if (!strcmp (key, JSC_JOBID)) {
-        if ((jcb = json_pack ("{s:I}", JSC_JOBID, jobid)))
-            rc = 0;
-    } else if (!strcmp (key, JSC_STATE_PAIR)) {
-        if ((jcb = query_state_pair (h, jobid)))
-            rc = 0;
-    } else if (!strcmp (key, JSC_RDESC)) {
-        if ((jcb = query_rdesc (h, jobid)))
-            rc = 0;
-    } else if (!strcmp (key, JSC_RDL)) {
-        if ((jcb = query_rdl (h, jobid)))
-            rc = 0;
-    } else if (!strcmp (key, JSC_R_LITE)) {
-        if ((jcb = query_r_lite (h, jobid)))
-            rc = 0;
-    } else if (!strcmp(key, JSC_PDESC)) {
-        if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_pdesc failed");
-    } else
-        flux_log (h, LOG_ERR, "key (%s) not understood", key);
-    if (rc < 0)
-        goto done;
-    if (jcb) {
-        char *s = json_dumps (jcb, 0);
-        if (!s)
-            oom ();
-        *jcb_str = s;
+    if (!strcmp (key, JSC_JOBID))
+        jcb = json_pack ("{s:I}", JSC_JOBID, jobid);
+    else if (!strcmp (key, JSC_STATE_PAIR))
+        jcb = query_state_pair (h, jobid);
+    else if (!strcmp (key, JSC_RDESC))
+        jcb = query_rdesc (h, jobid);
+    else if (!strcmp (key, JSC_RDL))
+        jcb = query_rdl (h, jobid);
+    else if (!strcmp (key, JSC_R_LITE))
+        jcb = query_r_lite (h, jobid);
+
+    if (!jcb)
+        return -1;
+    char *s = json_dumps (jcb, 0);
+    if (!s) {
+        json_decref (jcb);
+        return -1;
     }
-    else
-        *jcb_str = NULL;
-done:
-    Jput (jcb);
-    return rc;
+    *jcb_str = s;
+    return 0;
 }
 
 int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
