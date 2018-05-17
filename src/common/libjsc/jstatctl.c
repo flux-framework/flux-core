@@ -152,14 +152,10 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     uint32_t nodeid = FLUX_NODEID_ANY;
 
     if (!(f = flux_rpc_pack (h, "job.kvspath", nodeid, 0, "{s:[I]}", "ids", id))
-        ||  flux_rpc_get_unpack (f, "{s:[s]}", "paths", &path) < 0) {
-        flux_log_error (h, "flux_rpc (job.kvspath)");
+        ||  flux_rpc_get_unpack (f, "{s:[s]}", "paths", &path) < 0)
         goto out;
-    }
-    if (!(*pathp = strdup (path))) {
-        flux_log_error (h, "flux_rpc (job.kvspath): strdup");
+    if (!(*pathp = strdup (path)))
         goto out;
-    }
     rc = 0;
 out:
     flux_future_destroy (f);
@@ -175,11 +171,8 @@ static int jscctx_add_jobid_path (jscctx_t *ctx, int64_t id, const char *path)
         return (-1);
     if (!(s = strdup (path)))
         return (-1);
-    if (lru_cache_put (ctx->kvs_paths, key, s) < 0) {
-        if (errno != EEXIST)
-            flux_log_error (ctx->h, "jscctx_add_job_path");
+    if (lru_cache_put (ctx->kvs_paths, key, s) < 0)
         free (s);
-    }
     return (0);
 }
 
@@ -450,30 +443,22 @@ error:
     return jcb;
 }
 
-static int send_state_event (flux_t *h, job_state_t st, int64_t j)
+static int send_state_event (flux_t *h, job_state_t st, int64_t jobid)
 {
-    flux_msg_t *msg;
-    char *json = NULL;
+    flux_msg_t *msg = NULL;
     char *topic = NULL;
     int rc = -1;
 
-    if (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0) {
-        errno = ENOMEM;
-        flux_log_error (h, "create state change event: %s",
-                        jsc_job_num2state (st));
+    if (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0)
         goto done;
-    }
-    if ((msg = flux_event_pack (topic, "{ s:I }", "jobid", j)) == NULL) {
-        flux_log_error (h, "flux_event_pack");
+    if ((msg = flux_event_pack (topic, "{ s:I }", "jobid", jobid)) == NULL)
         goto done;
-    }
     if (flux_send (h, msg, 0) < 0)
-        flux_log_error (h, "flux_send event");
-    flux_msg_destroy (msg);
+        goto done;
     rc = 0;
 done:
+    flux_msg_destroy (msg);
     free (topic);
-    free (json);
     return rc;
 }
 
@@ -493,25 +478,15 @@ static int update_state (flux_t *h, int64_t jobid, json_t *jcb)
         goto done;
     if (!(key = lwj_key (h, jobid, ".state")))
         goto done;
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key, "s", jsc_job_num2state (state)) < 0) {
-        flux_log_error (h, "update %s", key);
+    if (flux_kvs_txn_pack (txn, 0, key, "s", jsc_job_num2state (state)) < 0)
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit %s", key);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", jobid,
-          jsc_job_num2state (state));
-    rc = 0;
-
     if (send_state_event (h, state, jobid) < 0)
-        flux_log_error (h, "send state event");
-
+        goto done;
+    rc = 0;
 done:
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -661,10 +636,8 @@ static int invoke_cbs (flux_t *h, int64_t j, json_t *jcb, int errnum)
         char *jcb_str = json_dumps (jcb, 0);
         if (!jcb_str)
             oom ();
-        if (c->cb (jcb_str, c->arg, errnum) < 0) {
-            flux_log (h, LOG_DEBUG, "callback returns an error");
+        if (c->cb (jcb_str, c->arg, errnum) < 0)
             rc = -1;
-        }
         free (jcb_str);
     }
     return rc;
@@ -713,10 +686,8 @@ static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t jobid)
                            "nnodes", &nnodes,
                            "ncores", &ncores,
                            "ngpus", &ngpus,
-                           "walltime", &walltime) < 0) {
-        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+                           "walltime", &walltime) < 0)
         goto error;
-    }
     if (!(jcb = json_pack ("{s:I s:{s:i s:i} s:{s:I s:I s:I s:I s:I}}",
                            JSC_JOBID, jobid,
                            JSC_STATE_PAIR,
@@ -808,21 +779,12 @@ int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
 
     if (!func)
         goto done;
-    if (flux_event_subscribe (h, "wreck.state.") < 0) {
-        flux_log_error (h, "subscribing to job event");
-        rc = -1;
+    if (flux_event_subscribe (h, "wreck.state.") < 0)
         goto done;
-    }
-    if (flux_event_subscribe (h, "jsc.state.") < 0) {
-        flux_log_error (h, "subscribing to job event");
-        rc = -1;
+    if (flux_event_subscribe (h, "jsc.state.") < 0)
         goto done;
-    }
-    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
-        flux_log_error (h, "registering resource event handler");
-        rc = -1;
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0)
         goto done;
-    }
 
     ctx = getctx (h);
     ctx->handlers = handlers;
