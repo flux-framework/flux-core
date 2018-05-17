@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "jstatctl.h"
 #include "src/common/libutil/oom.h"
@@ -477,26 +478,27 @@ done:
     return rc;
 }
 
-static int update_state (flux_t *h, int64_t j, json_t *o)
+static int update_state (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
-    int64_t st = 0;
+    int state;
     char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_STATE_PAIR_NSTATE, &st))
+    if (json_unpack (jcb, "{s:{s:i}}",
+                          JSC_STATE_PAIR,
+                          JSC_STATE_PAIR_NSTATE, &state) < 0)
         goto done;
-    if ((st >= J_FOR_RENT) || (st < J_NULL))
+    if ((state >= J_FOR_RENT) || (state < J_NULL))
         goto done;
-    if (!(key = lwj_key (h, j, ".state")))
+    if (!(key = lwj_key (h, jobid, ".state")))
         goto done;
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "txn_create");
         goto done;
     }
-    if (flux_kvs_txn_pack (txn, 0, key, "s",
-                           jsc_job_num2state ((job_state_t)st)) < 0) {
+    if (flux_kvs_txn_pack (txn, 0, key, "s", jsc_job_num2state (state)) < 0) {
         flux_log_error (h, "update %s", key);
         goto done;
     }
@@ -504,11 +506,11 @@ static int update_state (flux_t *h, int64_t j, json_t *o)
         flux_log_error (h, "commit %s", key);
         goto done;
     }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
-          jsc_job_num2state ((job_state_t)st));
+    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", jobid,
+          jsc_job_num2state (state));
     rc = 0;
 
-    if (send_state_event (h, st, j) < 0)
+    if (send_state_event (h, state, jobid) < 0)
         flux_log_error (h, "send state event");
 
 done:
@@ -518,70 +520,53 @@ done:
     return rc;
 }
 
-static int update_rdesc (flux_t *h, int64_t j, json_t *o)
+static int update_rdesc (flux_t *h, int64_t jobid, json_t *o)
 {
     int rc = -1;
-    int64_t nnodes = 0;
-    int64_t ntasks = 0;
-    int64_t ncores = 0;
-    int64_t walltime = 0;
-    char *key1 = NULL;
-    char *key2 = NULL;
-    char *key3 = NULL;
-    char *key4 = NULL;
+    int64_t nnodes;
+    int64_t ntasks;
+    int64_t ncores;
+    int64_t walltime;
+    char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_RDESC_NNODES, &nnodes))
-        goto done;
-    if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks))
-        goto done;
-    if (!Jget_int64 (o, JSC_RDESC_NCORES, &ncores))
-        goto done;
-    if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime))
+    if (json_unpack (o, "{s:I s:I s:I s:I}",
+                        JSC_RDESC_NNODES, &nnodes,
+                        JSC_RDESC_NTASKS, &ntasks,
+                        JSC_RDESC_NCORES, &ncores,
+                        JSC_RDESC_WALLTIME, &walltime) < 0)
         goto done;
     if ((nnodes < 0) || (ntasks < 0) || (ncores < 0) || (walltime < 0))
         goto done;
-    key1 = lwj_key (h, j, ".nnodes");
-    key2 = lwj_key (h, j, ".ntasks");
-    key3 = lwj_key (h, j, ".walltime");
-    key4 = lwj_key (h, j, ".ncores");
-    if (!key1 || !key2 || !key3 || !key4)
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (!(key = lwj_key (h, jobid, ".nnodes")))
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key1, "I", nnodes) < 0) {
-        flux_log_error (h, "update %s", key1);
+    if (flux_kvs_txn_pack (txn, 0, key, "I", nnodes) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key2, "I", ntasks) < 0) {
-        flux_log_error (h, "update %s", key2);
+    free (key);
+    if (!(key = lwj_key (h, jobid, ".ntasks")))
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key3, "I", walltime) < 0) {
-        flux_log_error (h, "update %s", key3);
+    if (flux_kvs_txn_pack (txn, 0, key, "I", ntasks) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key4, "I", ncores) < 0) {
-        flux_log_error (h, "update %s", key4);
+    free (key);
+    if (!(key = lwj_key (h, jobid, ".walltime")))
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit failed");
+    if (flux_kvs_txn_pack (txn, 0, key, "I", walltime) < 0)
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
+    free (key);
+    if (!(key = lwj_key (h, jobid, ".ncores")))
+        goto done;
+    if (flux_kvs_txn_pack (txn, 0, key, "I", ncores) < 0)
+        goto done;
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        goto done;
     rc = 0;
 done:
     flux_future_destroy (f);
+    free (key);
     flux_kvs_txn_destroy (txn);
-    free (key1);
-    free (key2);
-    free (key3);
-    free (key4);
-
     return rc;
 }
 
@@ -917,8 +902,7 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
     if (!strcmp(key, JSC_JOBID)) {
         flux_log (h, LOG_ERR, "jobid attr cannot be updated");
     } else if (!strcmp (key, JSC_STATE_PAIR)) {
-        if (Jget_obj (jcb, JSC_STATE_PAIR, &o))
-            rc = update_state (h, jobid, o);
+        rc = update_state (h, jobid, jcb);
     } else if (!strcmp (key, JSC_RDESC)) {
         if (Jget_obj (jcb, JSC_RDESC, &o))
             rc = update_rdesc (h, jobid, o);
