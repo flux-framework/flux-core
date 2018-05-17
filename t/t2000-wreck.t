@@ -234,28 +234,6 @@ test_expect_success 'wreckrun: job with more nodes than tasks fails' '
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
 test "$($cpus_allowed count)" = "0" || test_set_prereq MULTICORE
 
-test_expect_success MULTICORE 'wreckrun: supports affinity assignment' '
-	newmask=$($cpus_allowed last) &&
-	run_timeout 5 flux wreckrun -n1 \
-	  --pre-launch-hook="lwj[\"rank.0.cpumask\"] = \"$newmask\"" \
-	  $cpus_allowed > output_cpus &&
-	cat <<-EOF >expected_cpus &&
-	$newmask
-	EOF
-	test_cmp expected_cpus output_cpus
-'
-test_expect_success MULTICORE 'wreckrun: supports per-task affinity assignment' '
-	mask=$($cpus_allowed) &&
-	newmask=$($cpus_allowed first) &&
-	run_timeout 5 flux wreckrun -ln2 \
-	  --pre-launch-hook="lwj[\"0.cpumask\"] = \"$newmask\"" \
-	  $cpus_allowed | sort > output_cpus2 &&
-	cat <<-EOF >expected_cpus2 &&
-	0: $newmask
-	1: $mask
-	EOF
-	test_cmp expected_cpus2 output_cpus2
-'
 test_expect_success 'wreckrun: top level environment' '
 	flux kvs put --json lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
 	run_timeout 5 flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env &&
