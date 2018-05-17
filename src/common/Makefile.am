@@ -1,7 +1,6 @@
 SUBDIRS = libtap \
 	  libev \
 	  libminilzo \
-	  libjson-c \
 	  libpmi \
 	  liblsd \
 	  libutil \
@@ -36,7 +35,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libkz/libkz.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
-	$(builddir)/libjson-c/libjson-c.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(LIBMUNGE) $(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) $(LIBRT)

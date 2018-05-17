@@ -292,7 +292,6 @@ AC_CONFIG_FILES( \
   src/common/libtap/Makefile \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
-  src/common/libjson-c/Makefile \
   src/common/libev/Makefile \
   src/common/libminilzo/Makefile \
   src/common/libpmi/Makefile \
