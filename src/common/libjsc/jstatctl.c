@@ -40,7 +40,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/lru_cache.h"
-#include "shortjansson.h"
 
 
 /*******************************************************************************

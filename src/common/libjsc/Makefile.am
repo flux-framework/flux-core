@@ -13,5 +13,4 @@ noinst_LTLIBRARIES = libjsc.la
 fluxcoreinclude_HEADERS = jstatctl.h
 
 libjsc_la_SOURCES = \
-	jstatctl.c \
-	shortjansson.h
+	jstatctl.c
