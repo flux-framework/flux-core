@@ -195,6 +195,10 @@ test_expect_success 'jstat 7.4: basic query works: rdesc' '
     flux jstat query 1 rdesc
 '
 
+test_expect_success 'jstat 7.5: basic query works: R_lite' '
+    flux jstat query 1 R_lite
+'
+
 test_expect_success 'jstat 8: query detects bad inputs' '
     test_expect_code 42 flux jstat query 0 jobid &&
     test_expect_code 42 flux jstat query 99999 state-pair &&
