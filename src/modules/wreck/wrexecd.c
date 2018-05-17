@@ -90,7 +90,6 @@ struct prog_ctx {
 
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     flux_kvsdir_t *kvs;     /* Handle to this job's dir in kvs */
-    flux_kvsdir_t *resources; /* Handle to this node's resource dir in kvs */
     int *tasks_per_node;    /* Number of tasks per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -658,8 +657,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     if (ctx->kvs)
         flux_kvsdir_destroy (ctx->kvs);
-    if (ctx->resources)
-        flux_kvsdir_destroy (ctx->resources);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -938,22 +935,6 @@ static int prog_ctx_read_R_lite (struct prog_ctx *ctx)
     return (0);
 }
 
-static int prog_ctx_R_lite_from_rank_dirs (struct prog_ctx *ctx)
-{
-    rcalc_t *r = NULL;
-    flux_kvsdir_t *dir;
-
-    if (flux_kvsdir_get_dir (ctx->kvs, &dir, "rank") < 0)
-        return (-1);
-    if ((r = rcalc_create_kvsdir (dir)) == NULL)
-        wlog_fatal (ctx, 1, "failed to load lwj.rank dir as rcalc_t");
-    if (prog_ctx_process_rcalc (ctx, r) < 0)
-        wlog_fatal (ctx, 1, "Failed to process resource information");
-    rcalc_destroy (r);
-    flux_kvsdir_destroy (dir);
-    return (0);
-}
-
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 {
     int i;
@@ -969,8 +950,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     flux_future_destroy (f);
     free (key);
 
-    if (prog_ctx_read_R_lite (ctx) < 0
-        && prog_ctx_R_lite_from_rank_dirs (ctx) < 0)
+    if (prog_ctx_read_R_lite (ctx) < 0)
         wlog_fatal (ctx, 1, "Failed to read resource info from kvs");
 
     prog_ctx_kz_err_open (ctx);
@@ -1057,9 +1037,6 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
-
-    /* Ok if this fails, ctx->resources existence is now optional */
-    flux_kvsdir_get_dir (ctx->kvs, &ctx->resources, "rank.%d", ctx->noderank);
 
     if ((lua_pattern = flux_attr_get (ctx->flux, "wrexec.lua_pattern", NULL)))
         ctx->lua_pattern = lua_pattern;
@@ -1627,11 +1604,6 @@ static int l_wreck_index (lua_State *L)
     }
     if (strcmp (key, "kvsdir") == 0) {
         lua_push_kvsdir_external (L, ctx->kvs);
-        return (1);
-    }
-    if (strcmp (key, "by_rank") == 0) {
-        if (ctx->resources)
-            lua_push_kvsdir_external (L, ctx->resources);
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {

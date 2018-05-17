@@ -43,11 +43,6 @@ struct rcalc_rankinfo {
 rcalc_t *rcalc_create (const char *json_in);
 /* Same as above, but read JSON input from file */
 rcalc_t *rcalc_createf (FILE *);
-/* Backwards compatibitily for deprecated `lwj.rank.N.cores` resource
- *  specification in the KVS. This function will create a rcalc_t
- *  object from the old-style LWJ kvs directory rank information.
- */
-rcalc_t *rcalc_create_kvsdir (flux_kvsdir_t *kvs);
 
 void rcalc_destroy (rcalc_t *r);
 
