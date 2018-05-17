@@ -333,8 +333,11 @@ const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
 
 int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
 {
+    char *cpy = strdup (val);
+    if (cpy == NULL)
+        wlog_fatal (ctx, 1, "prog_ctx_setopt(%s=%s): Out of memory", opt, val);
     wlog_debug (ctx, "Setting option %s = %s", opt, val);
-    zhash_insert (ctx->options, opt, strdup (val));
+    zhash_insert (ctx->options, opt, cpy);
     zhash_freefn (ctx->options, opt, (zhash_free_fn *) free);
     return (0);
 }
@@ -795,7 +798,8 @@ int json_array_to_argv (struct prog_ctx *ctx,
             free (*argvp);
             return (-1);
         }
-        (*argvp) [i] = strdup (json_string_value (ox));
+        if (!((*argvp) [i] = strdup (json_string_value (ox))))
+            wlog_fatal (ctx, 1, "json_array_to_argv: strdup: Out of memory");
     }
     return (0);
 }
@@ -2232,7 +2236,8 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
 
     if (!optparse_getopt (p, "kvs-path", &kvspath))
         wlog_fatal (ctx, 1, "Required arg --kvs-path missing");
-    ctx->kvspath = strdup (kvspath);
+    if (!(ctx->kvspath = strdup (kvspath)))
+        wlog_fatal (ctx, 1, "prog_ctx_get_id: strdup failed");
 
     if (!optparse_getopt (p, "lwj-id", &id)) {
         /* Assume lwj id is last component of kvs-path */
