@@ -882,30 +882,22 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
         const char *jcb_str)
 {
     int rc = -1;
-    json_t *jcb = NULL;
+    json_t *jcb;
 
-    if (!jcb_str || !(jcb = Jfromstr (jcb_str))) {
-        errno = EINVAL;
+    if (!jcb_str || !(jcb = json_loads (jcb_str, 0, NULL)))
         return -1;
-    }
     if (jobid_exist (h, jobid) != 0)
         goto done;
-
-    if (!strcmp(key, JSC_JOBID)) {
-        flux_log (h, LOG_ERR, "jobid attr cannot be updated");
-    } else if (!strcmp (key, JSC_STATE_PAIR)) {
+    if (!strcmp (key, JSC_STATE_PAIR))
         rc = update_state (h, jobid, jcb);
-    } else if (!strcmp (key, JSC_RDESC)) {
+    else if (!strcmp (key, JSC_RDESC))
         rc = update_rdesc (h, jobid, jcb);
-    } else if (!strcmp (key, JSC_RDL)) {
+    else if (!strcmp (key, JSC_RDL))
         rc = update_rdl (h, jobid, jcb);
-    } else if (!strcmp (key, JSC_R_LITE)) {
+    else if (!strcmp (key, JSC_R_LITE))
         rc = update_r_lite (h, jobid, jcb);
-    }
-    else
-        flux_log (h, LOG_ERR, "key (%s) not understood", key);
 done:
-    Jput (jcb);
+    json_decref (jcb);
     return rc;
 }
 
