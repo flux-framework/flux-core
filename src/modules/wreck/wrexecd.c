@@ -395,8 +395,12 @@ static void wreck_pmi_close (struct task_info *t)
     if (t->pmi_zio)
         zio_destroy (t->pmi_zio);
     t->pmi_zio = NULL;
-    if (t->pmi_client)
+    if (t->pmi_client) {
+        /* flush any lingering data before destroying */
+        if (zio_flush (t->pmi_client) < 0)
+            wlog_err (t->ctx, "zio_flush: %s", flux_strerror (errno));
         zio_destroy (t->pmi_client);
+    }
     t->pmi_client = NULL;
 }
 
