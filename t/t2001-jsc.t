@@ -195,10 +195,6 @@ test_expect_success 'jstat 7.4: basic query works: rdesc' '
     flux jstat query 1 rdesc
 '
 
-test_expect_success 'jstat 7.5: basic query works: pdesc' '
-    flux jstat query 1 pdesc
-'
-
 test_expect_success 'jstat 8: query detects bad inputs' '
     test_expect_code 42 flux jstat query 0 jobid &&
     test_expect_code 42 flux jstat query 99999 state-pair &&
@@ -213,13 +209,6 @@ test_expect_success 'jstat 9: update state-pair' "
 cancelled
 EOF
     test_cmp expected.9.1 output.9.1 
-"
-
-test_expect_success 'jstat 10: update procdescs' "
-    flux kvs get --json $(flux wreck kvs-path 1).0.procdesc > output.10.1 &&
-    flux jstat update 1 pdesc '{\"pdesc\": {\"procsize\":1, \"hostnames\":[\"0\"], \"executables\":[\"fake\"], \"pdarray\":[{\"pid\":8482,\"eindx\":0,\"hindx\":0}]}}' &&
-    flux kvs get --json $(flux wreck kvs-path 1).0.procdesc > output.10.2 &&
-    test_expect_code 1 diff output.10.1 output.10.2 
 "
 
 test_expect_success 'jstat 11: update rdesc' "
