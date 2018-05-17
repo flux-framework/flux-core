@@ -37,6 +37,7 @@ local lwj_options = {
     ['stop-children-in-exec'] = "Start tasks in STOPPED state for debugger",
     ['no-pmi-server'] =         "Do not start simple-pmi server",
     ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
+    ['cpu-affinity'] =          "Set default cpu-affinity to assigned cores",
 }
 
 local default_opts = {

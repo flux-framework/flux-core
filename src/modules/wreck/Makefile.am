@@ -48,7 +48,7 @@ wrexecd_libs = \
 wrexecd_LDADD = \
 	rcalc.o \
 	$(wrexecd_libs) \
-	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
+	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD) $(HWLOC_LIBS)
 
 TESTS = \
 	test_wreck_job.t

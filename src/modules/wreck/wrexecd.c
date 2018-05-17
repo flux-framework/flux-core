@@ -39,6 +39,7 @@
 #include <sys/ptrace.h>
 #include <inttypes.h>
 #include <sys/resource.h>
+#include <hwloc.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -2252,6 +2253,56 @@ static int increase_nofile_limit (void)
     return (setrlimit (RLIMIT_NOFILE, &rlim));
 }
 
+static int do_hwloc_core_affinity (struct prog_ctx *ctx)
+{
+    int rc = -1;
+    int depth, i;
+    hwloc_topology_t topology;
+    hwloc_cpuset_t coreset = NULL;
+    hwloc_cpuset_t resultset = NULL;
+    flux_t *h = ctx->flux;
+
+    if (hwloc_topology_init (&topology) < 0) {
+        flux_log_error (h, "hwloc_topology_init");
+        return (-1);
+    }
+    if (hwloc_topology_load (topology) < 0) {
+        flux_log_error (h, "hwloc_topology_load");
+        goto out;
+    }
+    if (!(coreset = hwloc_bitmap_alloc ())
+       || !(resultset = hwloc_bitmap_alloc ())) {
+        flux_log_error (h, "hwloc_bitmap_alloc");
+        goto out;
+    }
+    if (hwloc_bitmap_list_sscanf (coreset, ctx->rankinfo.cores) < 0) {
+        flux_log_error (h, "hwloc_sscanf(%s)", ctx->rankinfo.cores);
+        goto out;
+    }
+    depth = hwloc_get_type_depth (topology, HWLOC_OBJ_CORE);
+    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN
+       || depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
+        flux_log_error (h, "hwloc_get_type_depth (CORE)");
+        goto out;
+    }
+    i = hwloc_bitmap_first (coreset);
+    while (i >= 0) {
+        hwloc_obj_t core = hwloc_get_obj_by_depth (topology, depth, i);
+        if (core)
+            hwloc_bitmap_or (resultset, resultset, core->cpuset);
+        else
+            flux_log_error (h, "hwloc_get_obj_by_depth: core%d", i);
+        i = hwloc_bitmap_next (coreset, i);
+    }
+    if ((rc = hwloc_set_cpubind (topology, resultset, 0)) < 0)
+        flux_log_error (h, "hwloc_set_cpubind: %s", strerror (errno));
+out:
+    hwloc_bitmap_free (resultset);
+    hwloc_bitmap_free (coreset);
+    hwloc_topology_destroy (topology);
+    return (0);
+}
+
 int main (int ac, char **av)
 {
     int code = 0;
@@ -2303,6 +2354,9 @@ int main (int ac, char **av)
 
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
+
+    if (prog_ctx_getopt (ctx, "cpu-affinity"))
+        do_hwloc_core_affinity (ctx);
 
     if (rexec_state_change (ctx, "starting") < 0)
         wlog_fatal (ctx, 1, "rexec_state_change");
