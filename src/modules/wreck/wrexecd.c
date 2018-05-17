@@ -1196,53 +1196,9 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
 }
 
 
-json_object * json_task_info_object_create (struct prog_ctx *ctx,
-    const char *cmd, pid_t pid)
-{
-    json_object *o = json_object_new_object ();
-    json_object *ocmd = json_object_new_string (cmd);
-    json_object *opid = json_object_new_int (pid);
-    json_object *onodeid = json_object_new_int (ctx->noderank);
-    json_object_object_add (o, "command", ocmd);
-    json_object_object_add (o, "pid", opid);
-    json_object_object_add (o, "nodeid", onodeid);
-    return (o);
-}
-
-int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
-{
-    json_object *o;
-    char *key;
-    int rc;
-    struct task_info *t = ctx->task [localid];
-
-    o = json_task_info_object_create (ctx, ctx->argv [0], t->pid);
-
-    if (asprintf (&key, "%d.procdesc", t->globalid) < 0) {
-        errno = ENOMEM;
-        wlog_fatal (ctx, 1, "rexec_taskinfo_put: asprintf: %s",
-                    flux_strerror (errno));
-    }
-
-    rc = flux_kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
-    free (key);
-    json_object_put (o);
-    //flux_kvs_commit_anon (ctx->flux, 0);
-
-    if (rc < 0)
-        return wlog_err (ctx, "kvs_put failure");
-    return (0);
-}
-
 int send_startup_message (struct prog_ctx *ctx)
 {
-    int i;
     const char * state = "running";
-
-    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
-        if (rexec_taskinfo_put (ctx, i) < 0)
-            return (-1);
-    }
 
     if (prog_ctx_getopt (ctx, "stop-children-in-exec"))
         state = "sync";
