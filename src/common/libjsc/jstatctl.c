@@ -235,20 +235,19 @@ static void active_delete (zhash_t *hash, int64_t jobid)
  *                                                                            *
  ******************************************************************************/
 
-static int jobid_exist (flux_t *h, int64_t j)
+static int jobid_exist (flux_t *h, int64_t jobid)
 {
-    flux_future_t *f = NULL;
     jscctx_t *ctx = getctx (h);
-    const char *path = jscctx_jobid_path (ctx, j);
+    flux_future_t *f = NULL;
+    const char *path;
     int rc = -1;
 
-    if (path == NULL)
-        goto done;
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
-                                || flux_kvs_lookup_get_dir (f, NULL) < 0) {
-        flux_log (h, LOG_DEBUG, "flux_kvs_lookup(%s): %s",
-                     path, flux_strerror (errno));
-        goto done;
+    if (!active_lookup (ctx->active_jobs, jobid)) {
+        if (!(path = jscctx_jobid_path (ctx, jobid)))
+            goto done;
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
+                                    || flux_future_get (f, NULL) < 0)
+            goto done;
     }
     rc = 0;
 done:
