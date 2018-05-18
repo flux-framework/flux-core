@@ -7,7 +7,6 @@ coverage:
  - ".*/tests/.*"
  - ".*/man3/*.c"
  - ".*/common/libtap/.*"
- - ".*/common/libjson-c/.*"
  - ".*/common/liblsd/.*"
  - ".*/common/libev/.*"
  - ".*/common/liboptparse/getopt*"
