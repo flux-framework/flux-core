@@ -90,14 +90,6 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 # define JSC_RDESC_WALLTIME "walltime"
 #define JSC_RDL "rdl"
 #define JSC_R_LITE "R_lite"
-#define JSC_PDESC "pdesc"
-# define JSC_PDESC_SIZE "procsize"
-# define JSC_PDESC_HOSTNAMES "hostnames"
-# define JSC_PDESC_EXECS "executables"
-# define JSC_PDESC_PDARRAY "pdarray"
-# define JSC_PDESC_RANK_PDARRAY_PID "pid"
-# define JSC_PDESC_RANK_PDARRAY_HINDX "hindx"
-# define JSC_PDESC_RANK_PDARRAY_EINDX "eindx"
 
 /**
  * Register a callback to the asynchronous status change notification service.
@@ -138,12 +130,13 @@ int jsc_job_state2num (const char *s);
 
 /**
  * Accessor for nnodes, ntasks, ncores, walltime that circumvents
- * JSON encode/decode.  N.B. this is a workaround for performance issu
+ * JSON encode/decode.  N.B. this is a workaround for performance issue
  * encountered when scheduling high throughput workloads.
  */
 int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
                                  int64_t *nnodes, int64_t *ntasks,
-                                 int64_t *ncores, int64_t *walltime);
+                                 int64_t *ncores, int64_t *walltime,
+                                 int64_t *ngpus);
 
 #ifdef __cplusplus
 }

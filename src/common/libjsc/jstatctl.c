@@ -32,12 +32,13 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "jstatctl.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/lru_cache.h"
 
 
@@ -151,14 +152,10 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     uint32_t nodeid = FLUX_NODEID_ANY;
 
     if (!(f = flux_rpc_pack (h, "job.kvspath", nodeid, 0, "{s:[I]}", "ids", id))
-        ||  flux_rpc_get_unpack (f, "{s:[s]}", "paths", &path) < 0) {
-        flux_log_error (h, "flux_rpc (job.kvspath)");
+        ||  flux_rpc_get_unpack (f, "{s:[s]}", "paths", &path) < 0)
         goto out;
-    }
-    if (!(*pathp = strdup (path))) {
-        flux_log_error (h, "flux_rpc (job.kvspath): strdup");
+    if (!(*pathp = strdup (path)))
         goto out;
-    }
     rc = 0;
 out:
     flux_future_destroy (f);
@@ -174,11 +171,8 @@ static int jscctx_add_jobid_path (jscctx_t *ctx, int64_t id, const char *path)
         return (-1);
     if (!(s = strdup (path)))
         return (-1);
-    if (lru_cache_put (ctx->kvs_paths, key, s) < 0) {
-        if (errno != EEXIST)
-            flux_log_error (ctx->h, "jscctx_add_job_path");
+    if (lru_cache_put (ctx->kvs_paths, key, s) < 0)
         free (s);
-    }
     return (0);
 }
 
@@ -199,25 +193,33 @@ static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
     return (path);
 }
 
-static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
+static int *active_insert (zhash_t *hash, int64_t jobid)
 {
-    int *t = NULL;
-    char *key = NULL;
-
-    if (!aj) return J_FOR_RENT;
-    key = xasprintf ("%"PRId64, j);
-    if ( !(t = ((int *)zhash_lookup (aj, (const char *)key)))) {
-        free (key);
-        return J_FOR_RENT;
+    char key[32];
+    int *state;
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    if (!(state = calloc (1, sizeof (int))))
+        return NULL;
+    if (zhash_insert (hash, key, state) < 0) {
+        free (state);
+        return NULL;
     }
-    if (ns == J_COMPLETE || ns == J_FAILED)
-        zhash_delete (aj, key);
-    else
-        zhash_update (aj, key, (void *)(intptr_t)ns);
-    free (key);
+    zhash_freefn (hash, key, (zhash_free_fn *)free);
+    return state;
+}
 
-    /* safe to convert t to int */
-    return (intptr_t) t;
+static int *active_lookup (zhash_t *hash, int64_t jobid)
+{
+    char key[32];
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    return zhash_lookup (hash, key);
+}
+
+static void active_delete (zhash_t *hash, int64_t jobid)
+{
+    char key[32];
+    snprintf (key, sizeof (key), "%"PRId64, jobid);
+    return zhash_delete (hash, key);
 }
 
 /******************************************************************************
@@ -226,20 +228,19 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
  *                                                                            *
  ******************************************************************************/
 
-static int jobid_exist (flux_t *h, int64_t j)
+static int jobid_exist (flux_t *h, int64_t jobid)
 {
-    flux_future_t *f = NULL;
     jscctx_t *ctx = getctx (h);
-    const char *path = jscctx_jobid_path (ctx, j);
+    flux_future_t *f = NULL;
+    const char *path;
     int rc = -1;
 
-    if (path == NULL)
-        goto done;
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
-                                || flux_kvs_lookup_get_dir (f, NULL) < 0) {
-        flux_log (h, LOG_DEBUG, "flux_kvs_lookup(%s): %s",
-                     path, flux_strerror (errno));
-        goto done;
+    if (!active_lookup (ctx->active_jobs, jobid)) {
+        if (!(path = jscctx_jobid_path (ctx, jobid)))
+            goto done;
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
+                                    || flux_future_get (f, NULL) < 0)
+            goto done;
     }
     rc = 0;
 done:
@@ -247,476 +248,245 @@ done:
     return rc;
 }
 
-static bool fetch_rank_pdesc (json_object *src, int64_t *p, int64_t *n,
-			      const char **c)
+static char *lwj_vkey (flux_t *h, int64_t jobid, const char *fmt, va_list ap)
 {
-    if (!src) return false;
-    if (!Jget_str (src, "command", c)) return false;
-    if (!Jget_int64 (src, "pid", p)) return false;
-    if (!Jget_int64 (src, "nodeid", n)) return false;
-    return true;
-}
-
-static int build_name_array (zhash_t *ha, const char *k, json_object *ns)
-{
-    int i = (intptr_t) zhash_lookup (ha, k);
-    if ((void *)((intptr_t)i) == NULL) {
-        char *t = xstrdup (k);
-        i = json_object_array_length (ns);
-        Jadd_ar_str (ns, t);
-        zhash_insert (ha, k, (void *)(intptr_t)i+1);
-        free (t);
-    } else
-        i--;
-    return i;
-}
-
-static char * lwj_key (flux_t *h, int64_t id, const char *fmt, ...)
-{
-    int rc;
-    va_list ap;
     jscctx_t *ctx = getctx (h);
     const char *base;
-    char *p = NULL;
+    char *name;
     char *key;
-    if (!(base = jscctx_jobid_path (ctx, id)))
+
+    if (!(base = jscctx_jobid_path (ctx, jobid)))
         return (NULL);
-    if (fmt != NULL) {
-        va_start (ap, fmt);
-        rc = vasprintf (&p, fmt, ap);
-        va_end (ap);
-        if (rc < 0)
-            return (NULL);
+    if (vasprintf (&name, fmt, ap) < 0)
+        return (NULL);
+    if (asprintf (&key, "%s%s", base, name) < 0) {
+        free (name);
+        return (NULL);
     }
-    if (asprintf (&key, "%s%s", base, p) < 0)
-        return (NULL);
-    free (p);
+    free (name);
     return (key);
 }
 
-static int extract_raw_ngpus (flux_t *h, int64_t j, int64_t *ngpus)
+static char * __attribute__ ((format (printf, 3, 4)))
+lwj_key (flux_t *h, int64_t jobid, const char *fmt, ...)
 {
-    int rc = 0;
-    char *key = lwj_key (h, j, ".ngpus");
-    flux_future_t *f = NULL;
+    va_list ap;
+    char *key;
 
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", ngpus) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ngpus);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
+    va_start (ap, fmt);
+    key = lwj_vkey (h, jobid, fmt, ap);
+    va_end (ap);
+    return key;
 }
 
-static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
+static flux_future_t * __attribute__ ((format (printf, 3, 4)))
+lookup_job_attribute (flux_t *h, int64_t jobid, const char *fmt, ...)
 {
-    int rc = 0;
-    char *key = lwj_key (h, j, ".nnodes");
-    flux_future_t *f = NULL;
+    va_list ap;
+    flux_future_t *f;
+    char *key;
 
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", nnodes) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *nnodes);
+    va_start (ap, fmt);
+    key = lwj_vkey (h, jobid, fmt, ap);
+    va_end (ap);
+    if (!key)
+        return NULL;
+    f = flux_kvs_lookup (h, 0, key);
     free (key);
-    flux_future_destroy (f);
-    return rc;
+    return f;
 }
 
-static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
+/* Old state is unavailable through the query.
+ * One should use notification service instead.
+ */
+static json_t *query_state_pair (flux_t *h, int64_t jobid)
 {
-    int rc = 0;
-    char *key = lwj_key (h, j, ".ntasks");
+    json_t *jcb = NULL;
+    char *key;
+    int64_t state;
+    const char *state_str;
     flux_future_t *f = NULL;
 
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", ntasks) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ntasks);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
+    if (!(key = lwj_key (h, jobid, ".state")))
+        return NULL;
 
-static int extract_raw_ncores (flux_t *h, int64_t j, int64_t *ncores)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".ncores");
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-            || flux_kvs_lookup_get_unpack (f, "I", ncores) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ncores);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".walltime");
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "I", walltime) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else
-        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *walltime);
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".rdl");
-    const char *s;
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &s) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else {
-        *rdlstr = xstrdup (s);
-        flux_log (h, LOG_DEBUG, "rdl under %s extracted", key);
-    }
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_r_lite (flux_t *h, int64_t j, char **rlitestr)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".R_lite");
-    const char *s;
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &s) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else {
-        *rlitestr = xstrdup (s);
-        flux_log (h, LOG_DEBUG, "R_lite under %s extracted", key);
-    }
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
-{
-    int rc = 0;
-    char *key = lwj_key (h, j, ".state");
-    const char *state;
-    flux_future_t *f = NULL;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "s", &state) < 0) {
-        flux_log_error (h, "extract %s", key);
-        rc = -1;
-    }
-    else {
-        *s = jsc_job_state2num (state);
-        flux_log (h, LOG_DEBUG, "extract %s: %s", key, state);
-    }
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_object **o)
-{
-    flux_future_t *f = NULL;
-    const char *json_str;
-    char *key = lwj_key (h, j, ".%ju.procdesc", i);
-    int rc = -1;
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &json_str) < 0
-             || !(*o = Jfromstr (json_str))) {
-        flux_log_error (h, "extract %s", key);
+    if (!(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "s", &state_str) < 0)
         goto done;
-    }
-    rc = 0;
+    state = jsc_job_state2num (state_str);
+    if (!(jcb = json_pack ("{s:{s:I s:I}}",
+                           JSC_STATE_PAIR,
+                           JSC_STATE_PAIR_OSTATE, state,
+                           JSC_STATE_PAIR_NSTATE, state)))
+        goto done;
 done:
     flux_future_destroy (f);
     free (key);
-    return rc;
+    return jcb;
 }
 
-static json_object *build_parray_elem (int64_t pid, int64_t eix, int64_t hix)
+static json_t *query_rdesc (flux_t *h, int64_t jobid)
 {
-    json_object *po = Jnew ();
-    Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_PID, pid);
-    Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_EINDX, eix);
-    Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_HINDX, hix);
-    return po;
-}
+    json_t *jcb = NULL;
+    int64_t nnodes;
+    int64_t ntasks;
+    int64_t ncores;
+    int64_t ngpus;
+    int64_t walltime;
 
-static void add_pdescs_to_jcb (json_object **hns, json_object **ens,
-			       json_object **pa, json_object *jcb)
-{
-    json_object_object_add (jcb, JSC_PDESC_HOSTNAMES, *hns);
-    json_object_object_add (jcb, JSC_PDESC_EXECS, *ens);
-    json_object_object_add (jcb, JSC_PDESC_PDARRAY, *pa);
-    /* Because the above transfer ownership, assign NULL should be ok */
-    *hns = NULL;
-    *ens = NULL;
-    *pa = NULL;
-}
+    if (jsc_query_rdesc_efficiently (h, jobid, &nnodes, &ntasks, &ncores,
+                                     &walltime, &ngpus) < 0)
+        return NULL;
 
-static int extract_raw_pdescs (flux_t *h, int64_t j, int64_t n, json_object *jcb)
-{
-    int rc = -1;
-    int64_t i = 0;
-    char *hnm;
-    const char *cmd = NULL;
-    zhash_t *eh = NULL; /* hash holding a set of unique exec_names */
-    zhash_t *hh = NULL; /* hash holding a set of unique host_names */
-    json_object *o = NULL;
-    json_object *po = NULL;
-    json_object *pa = Jnew_ar ();
-    json_object *hns = Jnew_ar ();
-    json_object *ens = Jnew_ar ();
-
-    if (!(eh = zhash_new ()) || !(hh = zhash_new ()))
-        oom ();
-    for (i=0; i < (int) n; i++) {
-        int64_t eix = 0, hix = 0;
-        int64_t pid = 0, nid = 0;
-
-        if (extract_raw_pdesc (h, j, i, &o) != 0)
-            goto done;
-        if (!fetch_rank_pdesc (o, &pid, &nid, &cmd))
-            goto done;
-
-        eix = build_name_array (eh, cmd, ens);
-        /* FIXME: we need a hostname service */
-        hnm = xasprintf ("%"PRId64, nid);
-        hix = build_name_array (hh, hnm, hns);
-        po = build_parray_elem (pid, eix, hix);
-        json_object_array_add (pa, po);
-        po = NULL;
-        Jput (o);
-        o = NULL;
-        free (hnm);
-    }
-    add_pdescs_to_jcb (&hns, &ens, &pa, jcb);
-    rc = 0;
-
-done:
-    if (o) Jput (o);
-    if (po) Jput (po);
-    if (pa) Jput (pa);
-    if (hns) Jput (hns);
-    if (ens) Jput (ens);
-    zhash_destroy (&eh);
-    zhash_destroy (&hh);
-    return rc;
-}
-
-static int query_jobid (flux_t *h, int64_t j, json_object **jcb)
-{
-    int rc = 0;
-    if ( ( rc = jobid_exist (h, j)) != 0)
-        *jcb = NULL;
-    else {
-        *jcb = Jnew ();
-        Jadd_int64 (*jcb, JSC_JOBID, j);
-    }
-    return rc;
-}
-
-static int query_state_pair (flux_t *h, int64_t j, json_object **jcb)
-{
-    json_object *o = NULL;
-    int64_t st = (int64_t)J_FOR_RENT;;
-
-    if (extract_raw_state (h, j, &st) < 0) return -1;
-
-    *jcb = Jnew ();
-    o = Jnew ();
-    /* Old state is unavailable through the query.
-     * One should use notification service instead.
-     */
-    Jadd_int64 (o, JSC_STATE_PAIR_OSTATE, st);
-    Jadd_int64 (o, JSC_STATE_PAIR_NSTATE, st);
-    json_object_object_add (*jcb, JSC_STATE_PAIR, o);
-    return 0;
-}
-
-static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
-{
-    json_object *o = NULL;
-    int64_t nnodes = -1;
-    int64_t ntasks = -1;
-    int64_t ncores = -1;
-    int64_t ngpus = 0;
-    int64_t walltime = -1;
-
-    if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
-    if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
-    if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
-    if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
-    if (extract_raw_ngpus (h, j, &ngpus) < 0) return -1;
-
-    *jcb = Jnew ();
-    o = Jnew ();
-    Jadd_int64 (o, JSC_RDESC_NNODES, nnodes);
-    Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
-    Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
-    Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
-    Jadd_int64 (o, JSC_RDESC_NGPUS, ngpus);
-    json_object_object_add (*jcb, JSC_RDESC, o);
-    return 0;
+    if (!(jcb = json_pack ("{s:{s:I s:I s:I s:I s:I}}",
+                           JSC_RDESC,
+                           JSC_RDESC_NNODES, nnodes,
+                           JSC_RDESC_NTASKS, ntasks,
+                           JSC_RDESC_NCORES, ncores,
+                           JSC_RDESC_WALLTIME, walltime,
+                           JSC_RDESC_NGPUS, ngpus)))
+        return NULL;
+    return jcb;
 }
 
 int jsc_query_rdesc_efficiently (flux_t *h, int64_t jobid,
                                  int64_t *nnodes, int64_t *ntasks,
-                                 int64_t *ncores, int64_t *walltime)
+                                 int64_t *ncores, int64_t *walltime,
+                                 int64_t *ngpus)
 {
-    if (nnodes) {
-        if (extract_raw_nnodes (h, jobid, nnodes) < 0)
-            return -1;
-    }
-    if (ntasks) {
-        if (extract_raw_ntasks (h, jobid, ntasks) < 0)
-            return -1;
-    }
-    if (ncores) {
-        if (extract_raw_ncores (h, jobid, ncores) < 0)
-            return -1;
-    }
-    if (walltime) {
-        if (extract_raw_walltime (h, jobid, walltime) < 0)
-            return -1;
-    }
-    return 0;
-}
-
-static int query_rdl (flux_t *h, int64_t j, json_object **jcb)
-{
-    char *rdlstr = NULL;
-
-    if (extract_raw_rdl (h, j, &rdlstr) < 0) return -1;
-
-    *jcb = Jnew ();
-    Jadd_str (*jcb, JSC_RDL, (const char *)rdlstr);
-    /* Note: seems there is no mechanism to transfer ownership
-     * of this string to jcb */
-    if (rdlstr)
-        free (rdlstr);
-    return 0;
-}
-
-static int query_r_lite (flux_t *h, int64_t j, json_object **jcb)
-{
-    char *rlitestr = NULL;
-
-    if (extract_raw_r_lite (h, j, &rlitestr) < 0) return -1;
-
-    *jcb = Jnew ();
-    Jadd_str (*jcb, JSC_R_LITE, (const char *)rlitestr);
-    /* Note: seems there is no mechanism to transfer ownership
-     * of this string to jcb */
-    if (rlitestr)
-        free (rlitestr);
-    return 0;
-}
-
-static int query_pdesc (flux_t *h, int64_t j, json_object **jcb)
-{
-    int64_t ntasks = 0;
-    if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
-    *jcb = Jnew ();
-    Jadd_int64 (*jcb, JSC_PDESC_SIZE, ntasks);
-    return extract_raw_pdescs (h, j, ntasks, *jcb);
-}
-
-static int send_state_event (flux_t *h, job_state_t st, int64_t j)
-{
-    flux_msg_t *msg;
-    char *json = NULL;
-    char *topic = NULL;
+    flux_future_t *f_nnodes = NULL;
+    flux_future_t *f_ntasks = NULL;
+    flux_future_t *f_ncores = NULL;
+    flux_future_t *f_wall = NULL;
+    flux_future_t *f_ngpus = NULL;
     int rc = -1;
 
-    if (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0) {
-        errno = ENOMEM;
-        flux_log_error (h, "create state change event: %s",
-                        jsc_job_num2state (st));
-        goto done;
-    }
-    if ((msg = flux_event_pack (topic, "{ s:I }", "jobid", j)) == NULL) {
-        flux_log_error (h, "flux_event_pack");
-        goto done;
-    }
-    if (flux_send (h, msg, 0) < 0)
-        flux_log_error (h, "flux_send event");
-    flux_msg_destroy (msg);
+    /* Send requests (in parallel)
+     */
+    if (nnodes && !(f_nnodes = lookup_job_attribute (h, jobid, ".nnodes")))
+        goto error;
+    if (ntasks && !(f_ntasks = lookup_job_attribute (h, jobid, ".ntasks")))
+        goto error;
+    if (ncores && !(f_ncores = lookup_job_attribute (h, jobid, ".ncores")))
+        goto error;
+    if (walltime && !(f_wall = lookup_job_attribute (h, jobid, ".walltime")))
+        goto error;
+    if (ngpus && !(f_ngpus = lookup_job_attribute (h, jobid, ".ngpus")))
+        goto error;
+
+    /* Handle responses
+     */
+    if (f_nnodes && flux_kvs_lookup_get_unpack (f_nnodes, "I", nnodes) < 0)
+        goto error;
+    if (f_ntasks && flux_kvs_lookup_get_unpack (f_ntasks, "I", ntasks) < 0)
+        goto error;
+    if (f_ncores && flux_kvs_lookup_get_unpack (f_ncores, "I", ncores) < 0)
+        goto error;
+    if (f_wall && flux_kvs_lookup_get_unpack (f_wall, "I", walltime) < 0)
+        goto error;
+    if (f_ngpus && flux_kvs_lookup_get_unpack (f_ngpus, "I", ngpus) < 0)
+        goto error;
+
     rc = 0;
-done:
-    free (topic);
-    free (json);
+error:
+    flux_future_destroy (f_nnodes);
+    flux_future_destroy (f_ntasks);
+    flux_future_destroy (f_ncores);
+    flux_future_destroy (f_wall);
+    flux_future_destroy (f_ngpus);
     return rc;
 }
 
-static int update_state (flux_t *h, int64_t j, json_object *o)
+static json_t *query_rdl (flux_t *h, int64_t jobid)
+{
+    flux_future_t *f;
+    const char *json_str;
+    json_t *rdl;
+    json_t *jcb = NULL;
+
+    if (!(f = lookup_job_attribute (h, jobid, ".rdl")))
+        return NULL;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto error;
+    if (!(rdl = json_loads (json_str, 0, NULL)))
+        goto error;
+    if (!(jcb = json_pack ("{s:o}",
+                           JSC_RDL, rdl))) {
+        json_decref (rdl);
+        goto error;
+    }
+error:
+    flux_future_destroy (f);
+    return jcb;
+}
+
+static json_t *query_r_lite (flux_t *h, int64_t jobid)
+{
+    flux_future_t *f;
+    const char *json_str;
+    json_t *r_lite;
+    json_t *jcb = NULL;
+
+    if (!(f = lookup_job_attribute (h, jobid, ".R_lite")))
+        return NULL;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto error;
+    if (!(r_lite = json_loads (json_str, 0, NULL)))
+        goto error;
+    if (!(jcb = json_pack ("{s:o}",
+                           JSC_R_LITE, r_lite))) {
+        json_decref (r_lite);
+        goto error;
+    }
+error:
+    flux_future_destroy (f);
+    return jcb;
+}
+
+static int send_state_event (flux_t *h, job_state_t st, int64_t jobid)
+{
+    flux_msg_t *msg = NULL;
+    char *topic = NULL;
+    int rc = -1;
+
+    if (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0)
+        goto done;
+    if ((msg = flux_event_pack (topic, "{ s:I }", "jobid", jobid)) == NULL)
+        goto done;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    free (topic);
+    return rc;
+}
+
+static int update_state (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
-    int64_t st = 0;
+    int state;
     char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_STATE_PAIR_NSTATE, &st))
+    if (json_unpack (jcb, "{s:{s:i}}",
+                          JSC_STATE_PAIR,
+                          JSC_STATE_PAIR_NSTATE, &state) < 0)
         goto done;
-    if ((st >= J_FOR_RENT) || (st < J_NULL))
+    if ((state >= J_FOR_RENT) || (state < J_NULL))
         goto done;
-    if (!(key = lwj_key (h, j, ".state")))
+    if (!(key = lwj_key (h, jobid, ".state")))
         goto done;
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key, "s",
-                           jsc_job_num2state ((job_state_t)st)) < 0) {
-        flux_log_error (h, "update %s", key);
+    if (flux_kvs_txn_pack (txn, 0, key, "s", jsc_job_num2state (state)) < 0)
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit %s", key);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
-          jsc_job_num2state ((job_state_t)st));
+    if (send_state_event (h, state, jobid) < 0)
+        goto done;
     rc = 0;
-
-    if (send_state_event (h, st, j) < 0)
-        flux_log_error (h, "send state event");
-
 done:
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -724,243 +494,129 @@ done:
     return rc;
 }
 
-static int update_rdesc (flux_t *h, int64_t j, json_object *o)
+static int update_rdesc (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
-    int64_t nnodes = 0;
-    int64_t ntasks = 0;
-    int64_t ncores = 0;
-    int64_t walltime = 0;
-    char *key1 = NULL;
-    char *key2 = NULL;
-    char *key3 = NULL;
-    char *key4 = NULL;
+    int64_t nnodes;
+    int64_t ntasks;
+    int64_t ncores;
+    int64_t walltime;
+    char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_RDESC_NNODES, &nnodes))
-        goto done;
-    if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks))
-        goto done;
-    if (!Jget_int64 (o, JSC_RDESC_NCORES, &ncores))
-        goto done;
-    if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime))
+    if (json_unpack (jcb, "{s:{s:I s:I s:I s:I}}",
+                          JSC_RDESC,
+                          JSC_RDESC_NNODES, &nnodes,
+                          JSC_RDESC_NTASKS, &ntasks,
+                          JSC_RDESC_NCORES, &ncores,
+                          JSC_RDESC_WALLTIME, &walltime) < 0)
         goto done;
     if ((nnodes < 0) || (ntasks < 0) || (ncores < 0) || (walltime < 0))
         goto done;
-    key1 = lwj_key (h, j, ".nnodes");
-    key2 = lwj_key (h, j, ".ntasks");
-    key3 = lwj_key (h, j, ".walltime");
-    key4 = lwj_key (h, j, ".ncores");
-    if (!key1 || !key2 || !key3 || !key4)
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (!(key = lwj_key (h, jobid, ".nnodes")))
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key1, "I", nnodes) < 0) {
-        flux_log_error (h, "update %s", key1);
+    if (flux_kvs_txn_pack (txn, 0, key, "I", nnodes) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key2, "I", ntasks) < 0) {
-        flux_log_error (h, "update %s", key2);
+    free (key);
+    if (!(key = lwj_key (h, jobid, ".ntasks")))
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key3, "I", walltime) < 0) {
-        flux_log_error (h, "update %s", key3);
+    if (flux_kvs_txn_pack (txn, 0, key, "I", ntasks) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key4, "I", ncores) < 0) {
-        flux_log_error (h, "update %s", key4);
+    free (key);
+    if (!(key = lwj_key (h, jobid, ".walltime")))
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit failed");
+    if (flux_kvs_txn_pack (txn, 0, key, "I", walltime) < 0)
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
+    free (key);
+    if (!(key = lwj_key (h, jobid, ".ncores")))
+        goto done;
+    if (flux_kvs_txn_pack (txn, 0, key, "I", ncores) < 0)
+        goto done;
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        goto done;
     rc = 0;
 done:
     flux_future_destroy (f);
+    free (key);
     flux_kvs_txn_destroy (txn);
-    free (key1);
-    free (key2);
-    free (key3);
-    free (key4);
-
     return rc;
 }
 
-static int update_rdl (flux_t *h, int64_t j, const char *rs)
+static int update_rdl (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
-    char *key = lwj_key (h, j, ".rdl");
+    char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
+    json_t *rdl;
 
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (json_unpack (jcb, "{s:o}", JSC_RDL, &rdl) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_put (txn, 0, key, rs) < 0) {
-        flux_log_error (h, "update %s", key);
+    if (!(key = lwj_key (h, jobid, ".rdl")))
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit failed");
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
+    if (flux_kvs_txn_pack (txn, 0, key, "O", rdl) < 0)
+        goto done;
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        goto done;
     rc = 0;
-
 done:
     flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);
     free (key);
-
     return rc;
 }
 
-static int update_r_lite (flux_t *h, int64_t j, const char *rs)
+static int update_r_lite (flux_t *h, int64_t jobid, json_t *jcb)
 {
     int rc = -1;
-    char *key = lwj_key (h, j, ".R_lite");
+    char *key = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
+    json_t *r_lite;
 
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
+    if (json_unpack (jcb, "{s:o}", JSC_R_LITE, &r_lite) < 0)
         goto done;
-    }
-    if (flux_kvs_txn_put (txn, 0, key, rs) < 0) {
-        flux_log_error (h, "update %s", key);
+    if (!(txn = flux_kvs_txn_create ()))
         goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "commit failed");
+    if (!(key = lwj_key (h, jobid, ".R_lite")))
         goto done;
-    }
-    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new R_lite.", j);
+    if (flux_kvs_txn_pack (txn, 0, key, "O", r_lite) < 0)
+        goto done;
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        goto done;
     rc = 0;
-
 done:
     flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);
     free (key);
-
     return rc;
 }
 
-static int update_1pdesc (flux_t *h, flux_kvs_txn_t *txn,
-              int r, int64_t j, json_object *o,
-			  json_object *ha, json_object *ea)
+static json_t *get_update_jcb (flux_t *h, int64_t jobid, const char *state_str)
 {
-    flux_future_t *f = NULL;
-    int rc = -1;
-    json_object *d = NULL;
-    char *key;
-    const char *json_str;
-    const char *hn = NULL, *en = NULL;
-    int64_t pid = 0, hindx = 0, eindx = 0, hrank = 0;
-
-    if (!Jget_int64 (o, JSC_PDESC_RANK_PDARRAY_PID, &pid)) return -1;
-    if (!Jget_int64 (o, JSC_PDESC_RANK_PDARRAY_HINDX, &hindx)) return -1;
-    if (!Jget_int64 (o, JSC_PDESC_RANK_PDARRAY_EINDX, &eindx)) return -1;
-    if (!Jget_ar_str (ha, (int)hindx, &hn)) return -1;
-    if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
-
-    key = lwj_key (h, j, ".%d.procdesc", r);
-
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_get (f, &json_str) < 0
-            || !(d = Jfromstr (json_str))) {
-        flux_log_error (h, "extract %s", key);
-        goto done;
-    }
-
-    Jadd_str (d, "command", en);
-    Jadd_int64 (d, "pid", pid);
-    errno = 0;
-    if ( (hrank = strtoul (hn, NULL, 10)) && errno != 0) {
-        flux_log (h, LOG_ERR, "invalid hostname %s", hn);
-        goto done;
-    }
-    Jadd_int64 (d, "nodeid", (int64_t)hrank);
-    if (flux_kvs_txn_put (txn, 0, key, Jtostr (d)) < 0) {
-        flux_log_error (h, "put %s", key);
-        goto done;
-    }
-    rc = 0;
-
-done:
-    flux_future_destroy (f);
-    free (key);
-    if (d)
-        Jput (d);
-    return rc;
-}
-
-static int update_pdesc (flux_t *h, int64_t j, json_object *o)
-{
-    int i = 0;
-    int rc = -1;
-    int64_t size = 0;
-    json_object *h_arr = NULL;
-    json_object *e_arr = NULL;
-    json_object *pd_arr = NULL;
-    json_object *pde = NULL;
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-
-    if (!Jget_int64 (o, JSC_PDESC_SIZE, &size))
-        goto done;
-    if (!Jget_obj (o, JSC_PDESC_PDARRAY, &pd_arr))
-        goto done;
-    if (!Jget_obj (o, JSC_PDESC_HOSTNAMES, &h_arr))
-        goto done;
-    if (!Jget_obj (o, JSC_PDESC_EXECS, &e_arr))
-        goto done;
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "txn_create");
-        goto done;
-    }
-    for (i=0; i < (int) size; ++i) {
-        if (!Jget_ar_obj (pd_arr, i, &pde))
-            goto done;
-        if ( (rc = update_1pdesc (h, txn, i, j, pde, h_arr, e_arr)) < 0)
-            goto done;
-    }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log (h, LOG_ERR, "update_pdesc commit failed");
-        goto done;
-    }
-    rc = 0;
-
-done:
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static json_object *get_update_jcb (flux_t *h, int64_t j, const char *val)
-{
-    json_object *o = NULL;
-    json_object *ss = NULL;
     jscctx_t *ctx = getctx (h);
-    int64_t ostate = (int64_t) J_FOR_RENT;
-    int64_t nstate = (int64_t) J_FOR_RENT;
+    int *state;
+    int nstate = jsc_job_state2num (state_str);
+    int ostate = J_FOR_RENT;
+    json_t *o;
 
-    nstate = jsc_job_state2num (val);
-    if ( (ostate = fetch_and_update_state (ctx->active_jobs, j, nstate)) < 0) {
-        flux_log (h, LOG_INFO, "%"PRId64"'s old state unavailable", j);
-        ostate = nstate;
+    if ((state = active_lookup (ctx->active_jobs, jobid))) {
+        ostate = *state;
+        if (nstate == J_COMPLETE || nstate == J_FAILED)
+            active_delete (ctx->active_jobs, jobid);
+        else
+            *state = nstate;
     }
-    o = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (o, JSC_JOBID, j);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) ostate);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) nstate);
-    json_object_object_add (o, JSC_STATE_PAIR, ss);
+    if (!(o = json_pack ("{s:I s:{s:i s:i}}", JSC_JOBID, jobid,
+                                              JSC_STATE_PAIR,
+                                              JSC_STATE_PAIR_OSTATE, ostate,
+                                              JSC_STATE_PAIR_NSTATE, nstate)))
+        oom ();
     return o;
 }
 
@@ -971,111 +627,90 @@ static json_object *get_update_jcb (flux_t *h, int64_t j, const char *val)
  *                                                                            *
  ******************************************************************************/
 
-static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
+static int invoke_cbs (flux_t *h, int64_t j, json_t *jcb, int errnum)
 {
     int rc = 0;
     cb_pair_t *c = NULL;
     jscctx_t *ctx = getctx (h);
     for (c = zlist_first (ctx->callbacks); c; c = zlist_next (ctx->callbacks)) {
-        if (c->cb (Jtostr (jcb), c->arg, errnum) < 0) {
-            flux_log (h, LOG_DEBUG, "callback returns an error");
+        char *jcb_str = json_dumps (jcb, 0);
+        if (!jcb_str)
+            oom ();
+        if (c->cb (jcb_str, c->arg, errnum) < 0)
             rc = -1;
-        }
+        free (jcb_str);
     }
     return rc;
 }
 
-static json_object *get_reserve_jcb (flux_t *h, int64_t nj)
+static json_t *get_reserve_jcb (flux_t *h, int64_t jobid)
 {
-    json_object *ss = NULL;
-    json_object *jcb = NULL;
-    int64_t js = J_NULL;
-    int64_t js2 = J_RESERVED;
-    char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
+    json_t *jcb;
+    int ostate = J_NULL;
+    int nstate = J_RESERVED;
+    int *state;
 
-    jcb = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (jcb, JSC_JOBID, nj);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js2);
-    json_object_object_add (jcb, JSC_STATE_PAIR, ss);
-    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
-        flux_log (h, LOG_ERR, "%s: inserting a job to hash failed",
-                  __FUNCTION__);
-        goto done;
-    }
-    free (key);
+    if (!(jcb = json_pack ("{s:I s{s:i s:i}}",
+                           JSC_JOBID, jobid,
+                           JSC_STATE_PAIR,
+                           JSC_STATE_PAIR_OSTATE, ostate,
+                           JSC_STATE_PAIR_NSTATE, nstate)))
+        goto error;
+
+    if (!(state = active_insert (ctx->active_jobs, jobid)))
+        goto error;
+    *state = nstate;
     return jcb;
 
-done:
-    Jput (jcb);
-    free (key);
+error:
+    json_decref (jcb);
     return NULL;
 }
 
-static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj)
+static json_t *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t jobid)
 {
-    int ntasks = 0;
-    int nnodes = 0;
-    int ncores = 0;
-    int ngpus = 0;
-    int walltime = 0;
-    int64_t js = J_NULL;
-    int64_t js2 = J_SUBMITTED;
-    json_object *o = NULL;
-    json_object *o2 = NULL;
-    json_object *jcb = NULL;
-    char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
+    int64_t ntasks;
+    int64_t nnodes;
+    int64_t ncores;
+    int64_t ngpus;
+    int64_t walltime;
+    int ostate = J_NULL;
+    int nstate = J_SUBMITTED;
+    int *state;
+    json_t *jcb = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i s:i }",
+    if (flux_event_unpack (msg, NULL, "{ s:I s:I s:I s:I s:I }",
                            "ntasks", &ntasks,
                            "nnodes", &nnodes,
                            "ncores", &ncores,
                            "ngpus", &ngpus,
-                           "walltime", &walltime) < 0) {
-        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+                           "walltime", &walltime) < 0)
         goto error;
-    }
-
-    jcb = Jnew ();
-    o = Jnew ();
-    Jadd_int64 (jcb, JSC_JOBID, nj);
-    Jadd_int64 (o, JSC_STATE_PAIR_OSTATE , (int64_t)js);
-    Jadd_int64 (o, JSC_STATE_PAIR_NSTATE, (int64_t)js2);
-    json_object_object_add (jcb, JSC_STATE_PAIR, o);
-    o2 = Jnew ();
-    Jadd_int64 (o2, JSC_RDESC_NNODES, (int64_t)nnodes);
-    Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
-    Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
-    Jadd_int64 (o2, JSC_RDESC_NGPUS, (int64_t)ngpus);
-    Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
-    json_object_object_add (jcb, JSC_RDESC, o2);
-
-    if (zhash_lookup (ctx->active_jobs, key)) {
-        /* Note that we don't use the old state (reserved) in this case */
-        zhash_update (ctx->active_jobs, key, (void *)(intptr_t)js2);
-    } else if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
-        flux_log (h, LOG_ERR, "%s: hash insertion failed", __FUNCTION__);
+    if (!(jcb = json_pack ("{s:I s:{s:i s:i} s:{s:I s:I s:I s:I s:I}}",
+                           JSC_JOBID, jobid,
+                           JSC_STATE_PAIR,
+                           JSC_STATE_PAIR_OSTATE, ostate,
+                           JSC_STATE_PAIR_NSTATE, nstate,
+                           JSC_RDESC,
+                           JSC_RDESC_NNODES, nnodes,
+                           JSC_RDESC_NTASKS, ntasks,
+                           JSC_RDESC_NCORES, ncores,
+                           JSC_RDESC_NGPUS, ngpus,
+                           JSC_RDESC_WALLTIME, walltime)))
         goto error;
-    }
 
-    free (key);
+    if (!(state = active_lookup (ctx->active_jobs, jobid))) {
+        if (!(state = active_insert (ctx->active_jobs, jobid)))
+            goto error;
+    }
+    *state = nstate;
+
     return jcb;
-
 error:
-    Jput (jcb);
-    free (key);
+    json_decref (jcb);
     return NULL;
-}
-
-static inline void delete_jobinfo (flux_t *h, int64_t jobid)
-{
-    jscctx_t *ctx = getctx (h);
-    char *key = xasprintf ("%"PRId64, jobid);
-    zhash_delete (ctx->active_jobs, key);
-    free (key);
 }
 
 static bool job_is_finished (const char *state)
@@ -1089,25 +724,20 @@ static bool job_is_finished (const char *state)
 static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
-    json_object *jcb = NULL;
-    int64_t jobid = -1;
+    jscctx_t *ctx = getctx (h);
+    json_t *jcb = NULL;
+    int64_t jobid;
     const char *topic = NULL;
     const char *state = NULL;
     const char *kvs_path = NULL;
     int len = 12;
 
-    if (flux_msg_get_topic (msg, &topic) < 0)
+    if (flux_event_unpack (msg, &topic, "{s:I s?:s}",
+                                        "jobid", &jobid,
+                                        "kvs_path", &kvs_path) < 0)
         goto done;
-
-    if (flux_event_unpack (msg, NULL, "{ s:I }", "jobid", &jobid) < 0) {
-        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (kvs_path && jscctx_add_jobid_path (ctx, jobid, kvs_path) < 0)
         goto done;
-    }
-
-    if (!flux_event_unpack (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
-        if (jscctx_add_jobid_path (getctx (h), jobid, kvs_path) < 0)
-            flux_log_error (h, "jscctx_add_jobid_path");
-    }
 
     if (strncmp (topic, "jsc", 3) == 0)
        len = 10;
@@ -1120,14 +750,12 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     else
         jcb = get_update_jcb (h, jobid, state);
 
-    if (invoke_cbs (h, jobid, jcb, (jcb)? 0 : EINVAL) < 0)
-        flux_log (h, LOG_DEBUG, "%s: failed to invoke callbacks", __FUNCTION__);
+    (void)invoke_cbs (h, jobid, jcb, (jcb)? 0 : EINVAL);
 
     if (job_is_finished (state))
-        delete_jobinfo (h, jobid);
+        active_delete (ctx->active_jobs, jobid);
 done:
-    if (jcb)
-        Jput (jcb);
+    json_decref (jcb);
     return;
 }
 
@@ -1151,21 +779,12 @@ int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
 
     if (!func)
         goto done;
-    if (flux_event_subscribe (h, "wreck.state.") < 0) {
-        flux_log_error (h, "subscribing to job event");
-        rc = -1;
+    if (flux_event_subscribe (h, "wreck.state.") < 0)
         goto done;
-    }
-    if (flux_event_subscribe (h, "jsc.state.") < 0) {
-        flux_log_error (h, "subscribing to job event");
-        rc = -1;
+    if (flux_event_subscribe (h, "jsc.state.") < 0)
         goto done;
-    }
-    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
-        flux_log_error (h, "registering resource event handler");
-        rc = -1;
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0)
         goto done;
-    }
 
     ctx = getctx (h);
     ctx->handlers = handlers;
@@ -1183,78 +802,55 @@ done:
 
 int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
 {
-    int rc = -1;
-    json_object *jcb = NULL;
+    json_t *jcb = NULL;
 
-    if (!key) return -1;
-    if (jobid_exist (h, jobid) != 0) return -1;
+    if (!key)
+        return -1;
+    if (jobid_exist (h, jobid) < 0)
+        return -1;
 
-    if (!strcmp (key, JSC_JOBID)) {
-        if ( (rc = query_jobid (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_jobid failed");
-    } else if (!strcmp (key, JSC_STATE_PAIR)) {
-        if ( (rc = query_state_pair (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_pdesc failed");
-    } else if (!strcmp (key, JSC_RDESC)) {
-        if ( (rc = query_rdesc (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_rdesc failed");
-    } else if (!strcmp (key, JSC_RDL)) {
-        if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_rdl failed");
-    } else if (!strcmp (key, JSC_R_LITE)) {
-        if ( (rc = query_r_lite (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_r_lite failed");
-    } else if (!strcmp(key, JSC_PDESC)) {
-        if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
-            flux_log (h, LOG_ERR, "query_pdesc failed");
-    } else
-        flux_log (h, LOG_ERR, "key (%s) not understood", key);
-    if (rc < 0)
-        goto done;
-    *jcb_str = jcb ? xstrdup (Jtostr (jcb)) : NULL;
-done:
-    Jput (jcb);
-    return rc;
+    if (!strcmp (key, JSC_JOBID))
+        jcb = json_pack ("{s:I}", JSC_JOBID, jobid);
+    else if (!strcmp (key, JSC_STATE_PAIR))
+        jcb = query_state_pair (h, jobid);
+    else if (!strcmp (key, JSC_RDESC))
+        jcb = query_rdesc (h, jobid);
+    else if (!strcmp (key, JSC_RDL))
+        jcb = query_rdl (h, jobid);
+    else if (!strcmp (key, JSC_R_LITE))
+        jcb = query_r_lite (h, jobid);
+
+    if (!jcb)
+        return -1;
+    char *s = json_dumps (jcb, 0);
+    if (!s) {
+        json_decref (jcb);
+        return -1;
+    }
+    *jcb_str = s;
+    return 0;
 }
 
 int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
         const char *jcb_str)
 {
     int rc = -1;
-    json_object *o = NULL;
-    json_object *jcb = NULL;
+    json_t *jcb;
 
-    if (!jcb_str || !(jcb = Jfromstr (jcb_str))) {
-        errno = EINVAL;
+    if (!jcb_str || !(jcb = json_loads (jcb_str, 0, NULL)))
         return -1;
-    }
     if (jobid_exist (h, jobid) != 0)
         goto done;
-
-    if (!strcmp(key, JSC_JOBID)) {
-        flux_log (h, LOG_ERR, "jobid attr cannot be updated");
-    } else if (!strcmp (key, JSC_STATE_PAIR)) {
-        if (Jget_obj (jcb, JSC_STATE_PAIR, &o))
-            rc = update_state (h, jobid, o);
-    } else if (!strcmp (key, JSC_RDESC)) {
-        if (Jget_obj (jcb, JSC_RDESC, &o))
-            rc = update_rdesc (h, jobid, o);
-    } else if (!strcmp (key, JSC_RDL)) {
-        const char *s = NULL;
-        if (Jget_str (jcb, JSC_RDL, &s))
-            rc = update_rdl (h, jobid, s);
-    } else if (!strcmp (key, JSC_R_LITE)) {
-        const char *s = NULL;
-        if (Jget_str (jcb, JSC_R_LITE, &s))
-            rc = update_r_lite (h, jobid, s);
-    } else if (!strcmp (key, JSC_PDESC)) {
-        if (Jget_obj (jcb, JSC_PDESC, &o))
-            rc = update_pdesc (h, jobid, o);
-    }
-    else
-        flux_log (h, LOG_ERR, "key (%s) not understood", key);
+    if (!strcmp (key, JSC_STATE_PAIR))
+        rc = update_state (h, jobid, jcb);
+    else if (!strcmp (key, JSC_RDESC))
+        rc = update_rdesc (h, jobid, jcb);
+    else if (!strcmp (key, JSC_RDL))
+        rc = update_rdl (h, jobid, jcb);
+    else if (!strcmp (key, JSC_R_LITE))
+        rc = update_r_lite (h, jobid, jcb);
 done:
-    Jput (jcb);
+    json_decref (jcb);
     return rc;
 }
 

@@ -44,7 +44,6 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libjson-c/libjson-c.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \

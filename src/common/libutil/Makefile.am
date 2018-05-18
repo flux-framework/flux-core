@@ -30,7 +30,6 @@ libutil_la_SOURCES = \
 	veb.h \
 	nodeset.c \
 	nodeset.h \
-	shortjson.h \
 	read_all.c \
 	read_all.h \
 	ev_zmq.c \
@@ -109,7 +108,6 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(top_builddir)/src/common/libjson-c/libjson-c.la \
 	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT) $(JANSSON_LIBS)
 

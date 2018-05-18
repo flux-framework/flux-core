@@ -74,7 +74,6 @@ service.
 | rdesc      | JSC_RDESC      | dictionary     | Information on the resources owned by this job. See Table 3-3.                 |
 | rdl        | JSC_RDL        | string         | RDL binary string allocated to the job                                         |
 | R_lite     | JSC_R\_LITE    | string         | R\_lite serialized JSON string allocated to the job                            |
-| pdesc      | JSC_PDESC      | dictionary     | Information on the processes spawned by this job. See Table 3-5.               |
 
 **Table 3-1** Keys and values of top-level JCB attributes
 
@@ -96,26 +95,6 @@ service.
 | walltime   | JSC_RDESC\_WALLTIME | 64-bit integer | Walltime    |
 
 **Table 3-3** Keys and values of *rdesc* attribute
-
-
-
-| Key        | Macro                | Value Type                  | Comment                                                             |
-|------------|----------------------|-----------------------------|---------------------------------------------------------------------|
-| procsize   | JSC_PDESC\_SIZE      | 64-bit integer              | Process count                                                       |
-| hostnames  | JSC_PDESC\_HOSTNAMES | array of strings            | Host name array (Names are current home broker rank)                |
-| executables| JSC_PDESC\_EXECS     | array of strings            | Executable name array                                               |
-| pdarray    | JSC_PDESC\_PDARRAY   | array of dictionary objects | Process descriptor array (MPI rank order). See Table 3-6 for each pdarray element |
-
-**Table 3-5** Keys and values of *pdesc* attribute
-
-
-| Key        | Macro                           | Value Type     | Comment                                                |
-|------------|---------------------------------|----------------|--------------------------------------------------------|
-| pid        | JSC_PDESC\_RANK\_PDARRAY\_PID   | 64-bit integer | Process count                                          |
-| hindx      | JSC_PDESC\_RANK\_PDARRAY\_HINDX | 64-bit integer | Host name (indexing into the hostname array)           |
-| eindx      | JSC_PDESC\_RANK\_PDARRAY\_EINDX | 64-bit integer | Executable name (indexing into the executable name array) |
-
-**Table 3-6** Keys and values of each *pdarray* element
 
 
 3. Job Control Block
