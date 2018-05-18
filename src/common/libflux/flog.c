@@ -142,6 +142,7 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
     int rpc_flags = FLUX_RPC_NORESPONSE;
+    char *xtra = NULL;
 
     if (!h) {
         char buf[FLUX_MAX_LOGBUF + 1];
@@ -176,15 +177,25 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
                            STDLOG_NILVALUE, fmt, ap);
     if (len >= sizeof (ctx->buf))
         len = sizeof (ctx->buf);
+    /* If log message contains multiple lines, log the first
+     * line and save the rest.
+     */
+    xtra = stdlog_split_message (ctx->buf, &len, "\r\n");
     if (ctx->cb) {
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
         if (log_rpc (h, ctx->buf, len, rpc_flags) < 0)
             goto fatal;
     }
+    /* If addition log lines were saved above, log them separately.
+     */
+    if (xtra)
+        flux_log (h, level, "%s", xtra);
+    free (xtra);
     errno = saved_errno;
     return 0;
 fatal:
+    free (xtra);
     FLUX_FATAL (h);
     return -1;
 }
