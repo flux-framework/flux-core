@@ -141,6 +141,37 @@ int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
     return 0;
 }
 
+char *stdlog_split_message (const char *buf, int *len, const char *sep)
+{
+    struct stdlog_header hdr;
+    const char *msg;
+    int msglen;
+    int off;
+    char *xtra;
+    int xtra_len;
+
+    if (stdlog_decode (buf, *len, &hdr, NULL, NULL, &msg, &msglen) < 0)
+        return NULL;
+    for (off = 0; off < msglen; off++) {
+        if (strchr (sep, msg[off]))
+            break;
+    }
+    xtra_len = msglen - off;
+    if (xtra_len == 0)
+        return NULL;
+    if (!(xtra = malloc (xtra_len + 1)))
+        return NULL;
+    memcpy (xtra, msg + off, xtra_len);
+    xtra[xtra_len] = '\0';
+    *len -= xtra_len; // truncate original (N.B. message is last, no \0 term)
+    while (xtra_len > 0 && strchr (sep, xtra[0]))
+        memmove (xtra, xtra + 1, xtra_len--); // drop leading separator(s)
+    if (xtra_len == 0) {
+        free (xtra);
+        return NULL;
+    }
+    return xtra;
+}
 
 int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
                      const char *sd, const char *fmt, va_list ap)
@@ -166,6 +197,12 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
         n = len - m;
     for (i = 0; i < n; i++)
         buf[m + i] &= 0x7f; // ensure only ascii chars are logged
+    for (i = n - 1; i >= 0; i--) {
+        if (buf[m + i] != '\r' && buf[m + i] != '\n')
+            break;
+        buf[m + i] = '\0';  // drop trailing \r, \n
+        rc--;
+    }
     return rc;
 }
 

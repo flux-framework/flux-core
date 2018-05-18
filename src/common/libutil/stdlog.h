@@ -45,6 +45,14 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
 int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
                     const char *sd, const char *fmt, ...);
 
+/* If encoded stdlog message in buf, *len contains chars from 'sep'
+ * (in the message part), truncate the original message and return
+ * buffer containing the rest, with NULL terminator.
+ * Returns NULL if no 'sep' chars or on alloc failure.
+ * If non-NULL, caller must free returned value.
+ */
+char *stdlog_split_message (const char *buf, int *len, const char *sep);
+
 void stdlog_init (struct stdlog_header *hdr);
 
 
