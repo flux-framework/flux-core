@@ -68,14 +68,47 @@ struct idset *idset_create (size_t size, int flags)
 void idset_destroy (struct idset *idset)
 {
     if (idset) {
+        int saved_errno = errno;
         free (idset->T.D);
         free (idset);
+        errno = saved_errno;
     }
+}
+
+static Veb vebdup (Veb T)
+{
+    size_t size = vebsize (T.M);
+    Veb cpy;
+
+    cpy.k = T.k;
+    cpy.M = T.M;
+    if ((cpy.D = malloc (size)))
+        memcpy (cpy.D, T.D, size);
+    return cpy;
+}
+
+struct idset *idset_copy (const struct idset *idset)
+{
+    struct idset *cpy;
+
+    if (!idset) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(cpy = malloc (sizeof (*idset))))
+        return NULL;
+    cpy->flags = idset->flags;
+    cpy->T = vebdup (idset->T);
+    if (!cpy->T.D) {
+        idset_destroy (cpy);
+        return NULL;
+    }
+    return cpy;
 }
 
 static bool valid_id (unsigned int id)
 {
-    if (id == UINT_MAX)
+    if (id == UINT_MAX || id == IDSET_INVALID_ID)
         return false;
     return true;
 }
@@ -122,6 +155,102 @@ int idset_set (struct idset *idset, unsigned int id)
         return -1;
     vebput (idset->T, id);
     return 0;
+}
+
+static void normalize_range (unsigned int *lo, unsigned int *hi)
+{
+    if (*hi < *lo) {
+        unsigned int tmp = *hi;
+        *hi = *lo;
+        *lo = tmp;
+    }
+}
+
+int idset_range_set (struct idset *idset, unsigned int lo, unsigned int hi)
+{
+    unsigned int id;
+
+    if (!idset || !valid_id (lo) || !valid_id (hi)) {
+        errno = EINVAL;
+        return -1;
+    }
+    normalize_range (&lo, &hi);
+    if (idset_grow (idset, hi + 1) < 0)
+        return -1;
+    for (id = lo; id <= hi; id++)
+        vebput (idset->T, id);
+    return 0;
+}
+
+int idset_clear (struct idset *idset, unsigned int id)
+{
+    if (!idset || !valid_id (id)) {
+        errno = EINVAL;
+        return -1;
+    }
+    vebdel (idset->T, id);
+    return 0;
+}
+
+int idset_range_clear (struct idset *idset, unsigned int lo, unsigned int hi)
+{
+    unsigned int id;
+
+    if (!idset || !valid_id (lo) || !valid_id (hi)) {
+        errno = EINVAL;
+        return -1;
+    }
+    normalize_range (&lo, &hi);
+    for (id = lo; id <= hi && id < idset->T.M; id++)
+        vebdel (idset->T, id);
+    return 0;
+}
+
+bool idset_test (const struct idset *idset, unsigned int id)
+{
+    if (!idset || !valid_id (id))
+        return false;
+    return (vebsucc (idset->T, id) == id);
+}
+
+unsigned int idset_first (const struct idset *idset)
+{
+    unsigned int next = IDSET_INVALID_ID;
+
+    if (idset) {
+        next = vebsucc (idset->T, 0);
+        if (next == idset->T.M)
+            next = IDSET_INVALID_ID;
+    }
+    return next;
+}
+
+
+unsigned int idset_next (const struct idset *idset, unsigned int prev)
+{
+    unsigned int next = IDSET_INVALID_ID;
+
+    if (idset) {
+        next = vebsucc (idset->T, prev + 1);
+        if (next == idset->T.M)
+            next = IDSET_INVALID_ID;
+    }
+    return next;
+}
+
+size_t idset_count (const struct idset *idset)
+{
+    unsigned int id;
+    size_t count = 0;
+
+    if (!idset)
+        return 0;
+    id = vebsucc (idset->T, 0);
+    while (id < idset->T.M) {
+        count++;
+        id = vebsucc (idset->T, id + 1);
+    }
+    return count;
 }
 
 /*
