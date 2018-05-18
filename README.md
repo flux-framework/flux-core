@@ -5,78 +5,48 @@ _NOTE: The interfaces of flux-core are being actively developed
 and are not yet stable._ The github issue tracker is the primary
 way to communicate with the developers.
 
+See also the flux-framework.org [Online Documentation](http://flux-framework.org/docs/home/).
+
 ### flux-core
 
 flux-core implements the communication layer and lowest level
 services and interfaces for the Flux resource manager framework.
-It consists of a distributed message broker and plug-in _comms modules_
-that implement various distributed services.
-
-#### Overview
-
-A set of message broker instances are launched as a _comms session_.
-Each instance has a rank numbered 0 to (size - 1).
-Instances are interconnected with three overlay networks:
-a k-ary tree rooted at rank 0 that is used for request/response
-messages and data reductions, an event overlay that is used for
-session-wide broadcasts, and a ring network that is used for debugging
-requests.  Overlay networks are implemented using [ZeroMQ](http://zeromq.org).
-
-The message broker natively supports the following services:
-_logging_, which aggregates syslog-like log messages at rank 0;
-_heartbeat_, which broadcasts a periodic event to synchronize
-housekeeping tasks; _module loader_, which loads and unloads
-comms modules; and _reparent_, which allows overlay networks to be
-rewired on the fly.
-
-flux-core also includes the following services implemented as
-comms modules: _kvs_, a distributed key-value store;  _modctl_, a
-distributed module control service; _barrier_, a MPI-like barrier
-implementation; _api_, a routing service for clients connecting to a
-broker instance via a UNIX domain socket; and _wreck_ a remote
-execution service.
-
-A number of utilities are provided for accessing these services,
-accessible via the `flux` command front-end (see below),
-
-Experimental programming abstractions are provided for various recurring
-needs such as data reduction, multicast RPC, streaming I/O, and others.
-A PMI implementation built on the Flux KVS facilitates scalable MPI launch.
-A set of Lua bindings permits rapid development of Flux utilities and test
-drivers.
+It consists of a distributed message broker, plug-in _comms modules_
+that implement various distributed services, and an API and set
+of utilities to utilize these services.
 
 flux-core is intended to be the first building block used in the
 construction of a site-composed Flux resource manager.  Other building
-blocks are being worked on and will appear in the
-[flux-framework github organization](http://github.com/flux-framework)
-as they get going.
+blocks are also in development under the
+[flux-framework github organization](https://github.com/flux-framework),
+including a fully functional workload
+[scheduler](https://github.com/flux-framework/flux-sched).
 
 Framework projects use the C4 development model pioneered in
 the ZeroMQ project and forked as
-[Flux RFC 1](http://github.com/flux-framework/rfc/blob/master/spec_1.adoc).
+[Flux RFC 1](https://github.com/flux-framework/rfc/blob/master/spec_1.adoc).
 Flux licensing and collaboration plans are described in
-[Flux RFC 2](http://github.com/flux-framework/rfc/blob/master/spec_2.adoc).
+[Flux RFC 2](https://github.com/flux-framework/rfc/blob/master/spec_2.adoc).
 Protocols and API's used in Flux will be documented as Flux RFC's.
 
-#### Building flux-core
+#### Build Requirements
 
 flux-core requires the following packages to build:
 ```
 zeromq4-devel >= 4.0.4   # built --with-libsodium
 czmq-devel >= 3.0.1
 munge-devel
-json-c-devel
+jansson-devel >= 2.6
 lua-5.1-devel
 luaposix
-libhwloc-devel >= v1.11.0
+libhwloc-devel >= v1.11.1
+yaml-cpp-devel >= 0.5.1
 # for python bindings
 python-devel >= 2.7
 python-cffi >= 1.1
 # for man pages
-asciidoc     
+asciidoc
 ```
-Spec files for building zeromq4 and czmq packages on a RHEL 6 based
-system are provided for your convenience in foreign/rpm.
 
 If you want to build the MPI-based test programs, make sure that
 `mpicc` is in your PATH before you run configure.  These programs are
@@ -88,18 +58,18 @@ not built if configure does not find MPI.
 make
 make check
 ```
-#### Bootstrapping a Flux comms session
+#### Bootstrapping a Flux instance
 
-A Flux comms session is composed of a set of `flux-broker` processes
+A Flux instance is composed of a set of `flux-broker` processes
 that boostrap via PMI (e.g. under another resource manager), or locally
 via the `flux start` command.
 
-No administrator privilege is required to start a Flux comms
-session as described below.
+No administrator privilege is required to start a Flux instance
+as described below.
 
 ##### Single node session
 
-To start a Flux comms session (size = 8) on the local node:
+To start a Flux instance (size = 8) on the local node for testing:
 ```
 src/cmd/flux start --size 8
 ```
@@ -109,7 +79,7 @@ the session exits.
 
 ##### SLURM session
 
-To start a Flux comms session (size = 64) on a cluster using SLURM,
+To start a Flux instance (size = 64) on a cluster using SLURM,
 first ensure that MUNGE is set up on your cluster, then:
 ```
 srun --pty --mpi=none -N64 src/cmd/flux start
@@ -126,16 +96,33 @@ absolute path is no longer necessary.
 To see a list of commonly used commands run `flux` with no arguments,
 `flux help`, or `flux --help`
 ```
-$ flux --help
+$ flux help
 Usage: flux [OPTIONS] COMMAND ARGS
-...
+  -h, --help             Display this message.
+  -v, --verbose          Be verbose about environment and command search
 
-The flux-core commands are:
-   help          Display manual for a sub-command
-   keygen        Generate CURVE keypairs for session security
-   start         Bootstrap a comms session interactively
-   kvs           Access the Flux the key-value store
-...
+Common commands from flux-core:
+   broker             Invoke Flux comms message broker daemon
+   content            Access instance content storage
+   cron               Schedule tasks on timers and events
+   dmesg              manipulate broker log ring buffer
+   env                Print or run inside a Flux environment
+   event              Send and receive Flux events
+   exec               Execute processes across flux ranks
+   get,set,lsattr     Access, modify, and list broker attributes
+   hwloc              Control/query resource-hwloc service
+   keygen             generate keys for Flux security
+   kvs                Flux key-value store utility
+   logger             create a Flux log entry
+   module             manage Flux extension modules
+   ping               measure round-trip latency to Flux services
+   proxy              Create proxy environment for Flux instance
+   ps                 List subprocesses managed by brokers
+   start              bootstrap a local Flux instance
+   submit             submit job requests to a scheduler
+   user               Flux user database client
+   wreck              Flux wreck convenience utilities
+   wreckrun           Flux utility for remote execution
 ```
 
 Most of these have UNIX manual pages as `flux-<sub-command>(1)`,
