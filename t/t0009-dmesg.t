@@ -58,6 +58,29 @@ test_expect_success 'ring buffer wraps over old entries' '
 	flux setattr log-ring-size $OLD_RINGSIZE
 '
 
+test_expect_success 'multi-line log messages are split' '
+	seq 1 8 | flux logger --appname=linesplit1 &&
+	test $(flux dmesg | grep linesplit1 | wc -l) -eq 8
+'
+
+test_expect_success 'trailing cr/lf are stripped' '
+	/bin/echo -n -e "xxx\x0A\x0D\x0A" | flux logger --appname striptest &&
+	flux dmesg|grep striptest | sed -e "s/.*: //" >striptest.out &&
+	echo "xxx" >striptest.exp &&
+	test_cmp striptest.exp striptest.out
+'
+
+test_expect_success 'embedded blank log messages are ignored' '
+	cat <<-EOT
+	foo
+	bar
+	baz
+
+	nerp
+	EOT | flux logger --appname=embtest &&
+	test $(flux dmesg | grep linesplit1 | wc -l) -eq 4
+'
+
 # Try to make flux dmesg get an EPROTO error
 test_expect_success 'logged non-ascii characters handled ok' '
 	/bin/echo -n -e "\xFF\xFE\x82\x00" | flux logger &&
