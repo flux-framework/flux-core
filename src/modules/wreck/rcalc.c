@@ -38,6 +38,7 @@ struct rankinfo {
     int id;
     int rank;
     int ncores;
+    const char *cores;
     cpu_set_t cpuset;
 };
 
@@ -145,18 +146,17 @@ static int cstr_to_cpuset(cpu_set_t *mask, const char* str)
 
 static int rankinfo_get (json_t *o, struct rankinfo *ri)
 {
-    const char *cores;
     json_error_t error;
     int rc = json_unpack_ex (o, &error, 0, "{s:i, s:{s:s}}",
                 "rank", &ri->rank,
                 "children",
-                "core", &cores);
+                "core", &ri->cores);
     if (rc < 0) {
         fprintf (stderr, "json_unpack: %s\n", error.text);
         return -1;
     }
 
-    if (!cores || cstr_to_cpuset (&ri->cpuset, cores))
+    if (!ri->cores || cstr_to_cpuset (&ri->cpuset, ri->cores))
         return -1;
 
     ri->ncores = CPU_COUNT (&ri->cpuset);
@@ -358,6 +358,8 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     rli->ncores = ri->ncores;
     rli->ntasks = ai->ntasks;
     rli->global_basis =  ai->basis;
+    rli->cores = ri->cores;
+    rli->cpusetp = &ri->cpuset;
 }
 
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *rli)

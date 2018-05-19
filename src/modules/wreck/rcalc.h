@@ -31,12 +31,13 @@
 typedef struct rcalc rcalc_t;
 
 struct rcalc_rankinfo {
-    int nodeid;
-    int rank;
-    int ntasks;
-    int ncores;
-    int global_basis;
-    const cpu_set_t *cpusetp;
+    int nodeid;               /* This rank's nodeid within the job       */
+    int rank;                 /* The current broker rank                 */
+    int ntasks;               /* Number of tasks assigned to this rank   */
+    int global_basis;         /* Task id of the first task on this rank  */
+    int ncores;               /* Number of cores allocated on this rank  */
+    const char *cores;        /* String core list (directly from R_lite) */
+    const cpu_set_t *cpusetp; /* cpu_set_t representation of cores list  */
 };
 
 /* Create resource calc object from JSON string in "Rlite" format */
