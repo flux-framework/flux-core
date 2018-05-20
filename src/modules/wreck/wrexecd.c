@@ -813,31 +813,33 @@ int cmp_int (const void *x, const void *y)
     return (1);
 }
 
-int prog_ctx_options_init (struct prog_ctx *ctx)
+int prog_ctx_options_init (struct prog_ctx *ctx, const char *basedir)
 {
-    flux_kvsdir_t *opts;
-    flux_kvsitr_t *i;
+    flux_future_t *f;
+    char key [1024];
+    char s [64];
+    json_t *options;
+    json_t *v;
     const char *opt;
 
-    if (flux_kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)
-        return (0); /* Assume ENOENT */
-    i = flux_kvsitr_create (opts);
-    while ((opt = flux_kvsitr_next (i))) {
-        char *json_str;
-        json_t *v;
-        char s [64];
+    assert (strlen (basedir) < sizeof (key)+9);
+    sprintf (key, "%s.options", basedir);
 
-        if (flux_kvsdir_get (opts, opt, &json_str) < 0) {
-            wlog_err (ctx, "skipping option '%s': %s", opt, flux_strerror (errno));
-            continue;
-        }
+    if (!(f = flux_kvs_lookup (ctx->flux, 0, key))) {
+        wlog_err (ctx, "flux_kvs_lookup (%s): %s\n",
+                        key, flux_strerror (errno));
+        return (-1);
+    }
+    if (flux_kvs_lookup_get_unpack (f, "o", &options) < 0) {
+        flux_future_destroy (f);
+        if (errno == ENOENT)
+            return (0);
+        wlog_err (ctx, "lookup_get_unpack (%s): %s\n",
+                        key, flux_strerror (errno));
+        return (-1);
+    }
 
-        if (!(v = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-            wlog_err (ctx, "failed to parse json for option '%s'", opt);
-            free (json_str);
-            continue;
-        }
-
+    json_object_foreach (options, opt, v) {
         switch (json_typeof (v)) {
             case JSON_NULL:
                 prog_ctx_setopt (ctx, opt, "");
@@ -858,11 +860,8 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
                 wlog_err (ctx, "skipping option '%s': invalid type", opt);
                 break;
         }
-        free (json_str);
-        json_decref (v);
     }
-    flux_kvsitr_destroy (i);
-    flux_kvsdir_destroy (opts);
+    flux_future_destroy (f);
     return (0);
 }
 
@@ -961,7 +960,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
             ctx->nnodes, ctx->total_ntasks);
     }
 
-    if (prog_ctx_options_init (ctx) < 0)
+    if (prog_ctx_options_init (ctx, flux_kvsdir_key (ctx->kvs)) < 0)
         wlog_fatal (ctx, 1, "failed to read %s.options",
                     flux_kvsdir_key (ctx->kvs));
 

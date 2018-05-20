@@ -269,7 +269,7 @@ function wreck:parse_cmdline (arg)
 
     if self.opts.o then
         for opt in self.opts.o:gmatch ("[^,]+") do
-            if not lwj_options [opt] then
+            if not lwj_options [opt:match ("([^=]+)")] then
                 return nil, string.format ("Unknown LWJ option '%s'\n", opt)
             end
         end
@@ -388,8 +388,16 @@ function wreck:jobreq ()
         ["epilog.post"] = self.opts.p,
     }
     if self.opts.o then
-        for opt in self.opts.o:gmatch ('[^,]+') do
-            jobreq['options.'..opt] = 1
+        jobreq.options = {}
+        for entry in self.opts.o:gmatch ('[^,]+') do
+            local opt, val = entry, 1
+            if entry:match ("=") then
+                opt, val = entry:match ("(.+)=(.+)")
+                if tonumber(val) == 0 or val == "false" or val == "no" then
+                    val = false
+                end
+            end
+            jobreq.options[opt] = val
         end
     end
     if self.opts.O or self.opts.E then
