@@ -972,6 +972,11 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
             ctx->nnodes, ctx->total_ntasks);
     }
 
+    /*  Initialize global job options first from 'lwj.options', then
+     *    override with options set locally for this job
+     */
+    if (prog_ctx_options_init (ctx, "lwj") < 0)
+        wlog_fatal (ctx, 1, "failed to read lwj.options");
     if (prog_ctx_options_init (ctx, flux_kvsdir_key (ctx->kvs)) < 0)
         wlog_fatal (ctx, 1, "failed to read %s.options",
                     flux_kvsdir_key (ctx->kvs));
