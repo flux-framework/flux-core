@@ -330,6 +330,12 @@ const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
     return (NULL);
 }
 
+void prog_ctx_unsetopt (struct prog_ctx *ctx, const char *opt)
+{
+    if (ctx->options)
+        zhash_delete (ctx->options, opt);
+}
+
 int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
 {
     char *cpy = strdup (val);
@@ -842,19 +848,25 @@ int prog_ctx_options_init (struct prog_ctx *ctx, const char *basedir)
     json_object_foreach (options, opt, v) {
         switch (json_typeof (v)) {
             case JSON_NULL:
-                prog_ctx_setopt (ctx, opt, "");
+                prog_ctx_unsetopt (ctx, opt);
                 break;
             case JSON_STRING:
                 prog_ctx_setopt (ctx, opt, json_string_value (v));
                 break;
             case JSON_INTEGER:
+                if (json_integer_value (v) == 0) {
+                    prog_ctx_unsetopt (ctx, opt);
+                    break;
+                }
                 snprintf (s, sizeof (s) -1, "%ju",
                          (uintmax_t) json_integer_value (v));
                 prog_ctx_setopt (ctx, opt, s);
                 break;
             case JSON_TRUE:
                 prog_ctx_setopt (ctx, opt, "");
+                break;
             case JSON_FALSE:
+                prog_ctx_unsetopt (ctx, opt);
                 break;
             default:
                 wlog_err (ctx, "skipping option '%s': invalid type", opt);
