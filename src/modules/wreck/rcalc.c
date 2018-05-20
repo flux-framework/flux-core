@@ -351,6 +351,7 @@ static struct rankinfo *rcalc_rankinfo_find (rcalc_t *r, int rank)
 static void rcalc_rankinfo_set (rcalc_t *r, int id,
                                 struct rcalc_rankinfo *rli)
 {
+    int coreslen = sizeof (rli->cores);
     struct rankinfo *ri = &r->ranks[id];
     struct allocinfo *ai = &r->alloc[id];
     rli->nodeid = ri->id;
@@ -358,8 +359,16 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     rli->ncores = ri->ncores;
     rli->ntasks = ai->ntasks;
     rli->global_basis =  ai->basis;
-    rli->cores = ri->cores;
-    rli->cpusetp = &ri->cpuset;
+    memcpy (&rli->cpuset, &ri->cpuset, sizeof (cpu_set_t));
+    /*  Copy cores string to rli, in the very unlikely event that
+     *   we get a huge cores string, indicate truncation.
+     */
+    if (strlen (ri->cores) < coreslen)
+        strcpy (rli->cores, ri->cores);
+    else {
+        strncpy (rli->cores, ri->cores, coreslen-1);
+        rli->cores [coreslen-2] = '+'; /* Indicate truncation */
+    }
 }
 
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *rli)

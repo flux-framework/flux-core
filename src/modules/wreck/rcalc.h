@@ -36,8 +36,8 @@ struct rcalc_rankinfo {
     int ntasks;               /* Number of tasks assigned to this rank   */
     int global_basis;         /* Task id of the first task on this rank  */
     int ncores;               /* Number of cores allocated on this rank  */
-    const char *cores;        /* String core list (directly from R_lite) */
-    const cpu_set_t *cpusetp; /* cpu_set_t representation of cores list  */
+    cpu_set_t cpuset;         /* cpu_set_t representation of cores list  */
+    char cores [128];         /* String core list (directly from R_lite) */
 };
 
 /* Create resource calc object from JSON string in "Rlite" format */
