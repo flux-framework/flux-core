@@ -341,6 +341,7 @@ AC_CONFIG_FILES( \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \
   src/modules/userdb/Makefile \
+  src/modules/job-ingest/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
