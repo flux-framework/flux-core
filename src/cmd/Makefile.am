@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS) $(FLUX_SECURITY_CFLAGS)
 
 AM_CXXFLAGS = \
 	$(WARNING_CXXFLAGS) \
@@ -18,6 +18,7 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
+	$(FLUX_SECURITY_LIBS) \
 	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL) $(HWLOC_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
@@ -72,7 +73,8 @@ fluxcmd_PROGRAMS = \
 	flux-comms \
 	flux-kvs \
 	flux-start \
-	flux-jstat
+	flux-jstat \
+	flux-job
 
 if ENABLE_JOBSPEC
 fluxcmd_PROGRAMS += \
