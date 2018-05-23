@@ -30,7 +30,11 @@ https://github.com/wolfcw/libfaketime.git \
 https://github.com/danmar/cppcheck.git \
 https://github.com/LLNL/Caliper.git"
 
+checkouts_after_downloads="\
+https://github.com/flux-framework/flux-security.git"
+
 declare -A checkout_sha1=(\
+["flux-security"]="622875174590614bc6e24f8dcde3a8ae17daa35d" \
 ["libfaketime"]="5d41d41da8f67e396f630280b180cdfb8e56abbc" \
 ["cppcheck"]="7466a49b216d4ba5e25b48381d85a8c3b2d3a228" \
 ["Caliper"]="be6b488bedb75012e60d3062f8cd2749032985fe" \
@@ -142,35 +146,18 @@ add_cache ()
     touch "${cachedir}/$(sanitize ${1})"
 }
 
-pip help >/dev/null 2>&1 || die "Required command pip not installed"
-pip install --user $pips || die "Failed to install required python packages"
-
-
-luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
-
-# install rocks
-for p in ${!lua_rocks[@]}; do
-    if ! lua -l$p -e '' >/dev/null 2>&1; then
-        luarocks --local install ${lua_rocks[$p]}
-    else
-        say "Using cached version of " ${lua_rocks[$p]}
-    fi
-done
-
-# hack for 'make install' targets that force installation to
-#  /lib/systemd if $prefix/lib/systemd/system doesn't exist
-mkdir -p ${prefix}/lib/systemd/system
-
-for url in $checkouts; do
-    name=$(basename ${url} .git)
-    sha1="${checkout_sha1[$name]}"
-    make_opts="${extra_make_opts[$name]}"
-    cmake_opts="${extra_cmake_opts[$name]}"
-    configure_opts="${extra_configure_opts[$name]}"
-    cache_name="$name:$sha1:$make_opts:$configure_opts:$cmake_opts"
+build_checkout ()
+{
+    local url=$1
+    local name=$(basename ${url} .git)
+    local sha1="${checkout_sha1[$name]}"
+    local make_opts="${extra_make_opts[$name]}"
+    local cmake_opts="${extra_cmake_opts[$name]}"
+    local configure_opts="${extra_configure_opts[$name]}"
+    local cache_name="$name:$sha1:$make_opts:$configure_opts:$cmake_opts"
     if check_cache "$cache_name"; then
        say "Using cached version of ${name}"
-       continue
+       return
     fi
     git clone ${url} ${name} || die "Failed to clone ${url}"
     (
@@ -199,6 +186,29 @@ for url in $checkouts; do
       make PREFIX=${prefix} $make_opts install
     ) || die "Failed to build and install $name"
     add_cache "$cache_name"
+}
+
+pip help >/dev/null 2>&1 || die "Required command pip not installed"
+pip install --user $pips || die "Failed to install required python packages"
+
+
+luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
+
+# install rocks
+for p in ${!lua_rocks[@]}; do
+    if ! lua -l$p -e '' >/dev/null 2>&1; then
+        luarocks --local install ${lua_rocks[$p]}
+    else
+        say "Using cached version of " ${lua_rocks[$p]}
+    fi
+done
+
+# hack for 'make install' targets that force installation to
+#  /lib/systemd if $prefix/lib/systemd/system doesn't exist
+mkdir -p ${prefix}/lib/systemd/system
+
+for url in $checkouts; do
+    build_checkout ${url}
 done
 
 for pkg in $downloads; do
@@ -222,4 +232,7 @@ for pkg in $downloads; do
     add_cache "$name"
 done
 
+for url in $checkouts_after_downloads; do
+    build_checkout ${url}
+done
 
