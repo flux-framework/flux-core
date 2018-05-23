@@ -7,6 +7,7 @@ SUBDIRS = libtap \
 	  libflux \
 	  libkvs \
 	  libjsc \
+	  libjob \
 	  libsubprocess \
 	  libcompat \
 	  liboptparse \
@@ -51,6 +52,7 @@ libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
 	$(builddir)/libkvs/libkvs.la \
 	$(builddir)/libjsc/libjsc.la \
+	$(builddir)/libjob/libjob.la \
 	libflux-internal.la
 libflux_core_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-core.map \
