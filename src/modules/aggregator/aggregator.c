@@ -60,6 +60,7 @@ struct aggregate {
     struct aggregator *ctx;  /* Pointer back to containing aggregator        */
     flux_watcher_t *tw;      /* timeout watcher                              */
     double timeout;          /* timeout                                      */
+    int sink_retries;        /* number of times left to try to sink to kvs   */
     uint32_t fwd_count;      /* forward at this many                         */
     char *key;               /* KVS key into which to sink the aggregate     */
     int64_t max;             /* current max value                            */
@@ -182,6 +183,15 @@ error:
     return (NULL);
 }
 
+static void forward_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    struct aggregate *ag = arg;
+    if (flux_rpc_get (f, NULL) < 0)
+        flux_log_error (h, "aggregator.push: key=%s", ag->key);
+    flux_future_destroy (f);
+}
+
 /*
  *  Forward aggregate `ag` upstream
  */
@@ -206,11 +216,11 @@ static int aggregate_forward (flux_t *h, struct aggregate *ag)
                                 "min", ag->min,
                                 "max", ag->max,
                                 "entries", o)) ||
-        (flux_future_get (f, NULL) < 0)) {
+        (flux_future_then (f, -1., forward_continuation, (void *) ag) < 0)) {
         flux_log_error (h, "flux_rpc: aggregator.push");
+        flux_future_destroy (f);
         rc = -1;
     }
-    flux_future_destroy (f);
     return (rc);
 }
 
@@ -236,7 +246,60 @@ out:
     flux_msg_destroy (msg);
 }
 
-static int aggregate_sink (flux_t *h, struct aggregate *ag)
+static void aggregate_sink (flux_t *h, struct aggregate *ag);
+
+static void aggregate_sink_again (flux_reactor_t *r, flux_watcher_t *w,
+                                 int revents, void *arg)
+{
+    struct aggregate *ag = arg;
+    aggregate_sink (ag->ctx->h, ag);
+    flux_watcher_destroy (w);
+}
+
+static int sink_retry (flux_t *h, struct aggregate *ag)
+{
+    flux_watcher_t *w;
+    double t = ag->timeout;
+    if (t <= 1e-3)
+        t = .250;
+
+    /* Return with error if we're out of retries */
+    if (--ag->sink_retries <= 0)
+        return (-1);
+
+    flux_log (h, LOG_DEBUG, "sink: %s: retry  in %.3fs", ag->key, t);
+    w = flux_timer_watcher_create (flux_get_reactor (h),
+                                   t, 0.,
+                                   aggregate_sink_again,
+                                   (void *) ag);
+    if (w == NULL) {
+        flux_log_error (h, "sink_retry: flux_timer_watcher_create");
+        return (-1);
+    }
+    flux_watcher_start (w);
+    return (0);
+}
+
+static void sink_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    struct aggregate *ag = arg;
+
+    int rc = flux_future_get (f, NULL);
+    flux_future_destroy (f);
+    if (rc < 0) {
+        /*  Schedule a retry, if  succesful return immediately, otherwise
+         *   abort the current aggregate and remove it.
+         */
+        if (sink_retry (h, ag) == 0)
+            return;
+        aggregate_sink_abort (h, ag);
+    }
+    zhash_delete (ag->ctx->aggregates, ag->key);
+    return;
+}
+
+static void  aggregate_sink (flux_t *h, struct aggregate *ag)
 {
     int rc = -1;
     json_t *o = NULL;
@@ -270,57 +333,20 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
         goto out;
     }
     o = NULL;
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+    if (!(f = flux_kvs_commit (h, 0, txn))
+        || flux_future_then (f, -1., sink_continuation, (void *)ag) < 0) {
         flux_log_error (h, "sink: flux_kvs_commit");
+        flux_future_destroy (f);
         goto out;
     }
     rc = 0;
 out:
     flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
     json_decref (o);
-    return (rc);
-}
-
-static void aggregate_sink_again (flux_reactor_t *r, flux_watcher_t *w,
-                                  int revents, void *arg)
-{
-    struct aggregate *ag = arg;
-    flux_t *h = ag->ctx->h;
-    if (aggregate_sink (h, ag) < 0)
+    if ((rc < 0) && (sink_retry (h, ag) < 0)) {
         aggregate_sink_abort (h, ag);
-    flux_watcher_destroy (w);
-    zhash_delete (ag->ctx->aggregates, ag->key);
-}
-
-
-/*
- *   Push aggregate to kvs.
- */
-static void aggregate_try_sink (flux_t *h, struct aggregate *ag)
-{
-    if (aggregate_sink (h, ag) < 0) {
-        flux_watcher_t *w;
-        double t = ag->timeout;
-        if (t <= 1e-3)
-            t = .250;
-        flux_log (h, LOG_DEBUG, "sink: %s: retry  in %.3fs", ag->key, t);
-        /* On failure, retry just once, then abort */
-        w = flux_timer_watcher_create (flux_get_reactor (h),
-                                       t, 0.,
-                                       aggregate_sink_again,
-                                       (void *) ag);
-        if (w == NULL) {
-            flux_log_error (h, "flux_timer_watcher_create");
-            /* Force abort now */
-            aggregate_sink_abort (h, ag);
-            return;
-        }
-        flux_watcher_start (w);
-        return;
+        zhash_delete (ag->ctx->aggregates, ag->key);
     }
-    zhash_delete (ag->ctx->aggregates, ag->key);
-    return;
 }
 
 /*
@@ -390,6 +416,7 @@ static struct aggregate *
         aggregate_destroy (ag);
         return (NULL);
     }
+    ag->sink_retries = 2;
     return (ag);
 }
 
@@ -529,7 +556,7 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
     }
     else if (ag->count == ag->total)
-        aggregate_try_sink (h, ag);
+        aggregate_sink (h, ag);
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
