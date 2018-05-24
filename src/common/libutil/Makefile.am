@@ -80,7 +80,9 @@ libutil_la_SOURCES = \
 	cf.h \
 	mnemonic.c \
 	mnemonic.h \
-	mn_wordlist.c
+	mn_wordlist.c \
+	fluid.c \
+	fluid.h
 
 EXTRA_DIST = veb_mach.c
 
