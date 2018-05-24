@@ -47,14 +47,14 @@ struct aggregator {
  */
 struct aggregate_entry {
     nodeset_t *ids;
-    int64_t value;
+    json_t *value;
 };
 
 
 /*
  *  Representation of an aggregate. A unique kvs key, along with a
  *   list of aggregate entries as above. Each aggregate tracks its
- *   minimum, maximum, current count and expected total of entries.
+ *   summary stats, current count and expected total of entries.
  */
 struct aggregate {
     struct aggregator *ctx;  /* Pointer back to containing aggregator        */
@@ -63,11 +63,10 @@ struct aggregate {
     int sink_retries;        /* number of times left to try to sink to kvs   */
     uint32_t fwd_count;      /* forward at this many                         */
     char *key;               /* KVS key into which to sink the aggregate     */
-    int64_t max;             /* current max value                            */
-    int64_t min;             /* current minimum value                        */
     uint32_t count;          /* count of current total entries               */
     uint32_t total;          /* expected total entries (used for sink)       */
     zlist_t *entries;        /* list of individual entries                   */
+    json_t *summary;         /* optional summary stats for this aggregate    */
 };
 
 static void aggregate_entry_destroy (struct aggregate_entry *ae)
@@ -90,30 +89,91 @@ static struct aggregate_entry * aggregate_entry_create (void)
 /*  Search this aggregates entries for a value. Return entry if found
  */
 static struct aggregate_entry *
-    aggregate_entry_find (struct aggregate *ag, int64_t value)
+    aggregate_entry_find (struct aggregate *ag, json_t *value)
 {
     struct aggregate_entry *ae = zlist_first (ag->entries);
     while (ae) {
-        if (ae->value == value)
+        if (json_equal (ae->value, value))
             return (ae);
         ae = zlist_next (ag->entries);
     }
     return (NULL);
 }
 
+static int summarize_real (struct aggregate *ag, json_t *value)
+{
+    double v = json_real_value (value);
+    double min, max;
+    if (!ag->summary) {
+        ag->summary = json_pack ("{s:f,s:f}", "min", v, "max", v);
+        return ag->summary ? 0 : -1;
+    }
+    if (json_unpack (ag->summary, "{s:F,s:F}", "min", &min, "max", &max) < 0) {
+        flux_log (ag->ctx->h, LOG_ERR, "summarize_real: json_unpack failed");
+        return (-1);
+    }
+    if (((max < v) && (json_object_set (ag->summary, "max", value) < 0))
+        || ((min > v) && (json_object_set (ag->summary, "min", value) < 0))) {
+        flux_log_error (ag->ctx->h, "summarize_real: json_object_set");
+        return (-1);
+    }
+    return (0);
+}
 
-/*  Add a new entry to this aggregate. Update minimum, maximum.
+static int summarize_int (struct aggregate *ag, json_t *value)
+{
+    int64_t v = json_integer_value (value);
+    int64_t min, max;
+    if (!ag->summary) {
+        ag->summary = json_pack ("{s:I,s:I}", "min", v, "max", v);
+        return ag->summary ? 0 : -1;
+    }
+    if (json_unpack (ag->summary, "{s:I,s:I}", "min", &min, "max", &max) < 0) {
+        flux_log_error (ag->ctx->h, "summarize_int: json_unpack");
+        return (-1);
+    }
+    if (((max < v) && (json_object_set (ag->summary, "max", value) < 0))
+        || ((min > v) && (json_object_set (ag->summary, "min", value) < 0))) {
+        flux_log_error (ag->ctx->h, "summarize_int: json_object_set");
+        return (-1);
+    }
+    return (0);
+}
+
+static int aggregate_update_summary (struct aggregate *ag, json_t *value)
+{
+    switch (json_typeof (value)) {
+        case JSON_INTEGER:
+            return summarize_int (ag, value);
+        case JSON_REAL:
+            return summarize_real (ag, value);
+        case JSON_STRING:
+        case JSON_OBJECT:
+        case JSON_ARRAY:
+        case JSON_TRUE:
+        case JSON_FALSE:
+        case JSON_NULL:
+            /* Currently no summary stats for these types */
+            return (0);
+
+    }
+    return (0);
+}
+
+/*  Add a new aggregate entry to this aggregate.
+ *   Update summary stats if update == true.
  */
 static struct aggregate_entry *
-    aggregate_entry_add (struct aggregate *ag, int64_t value)
+    aggregate_entry_add (struct aggregate *ag, json_t *value)
 {
     struct aggregate_entry *ae = aggregate_entry_create ();
     if (ae) {
+        json_incref (value);
         ae->value = value;
-        if (ag->max < value)
-            ag->max = value;
-        if (ag->min > value)
-            ag->min = value;
+
+        /* Update aggregate summary statistics on rank 0 only */
+        if (ag->ctx->rank == 0 && aggregate_update_summary (ag, value) < 0)
+            flux_log_error (ag->ctx->h, "aggregate_update_summary");
         zlist_push (ag->entries, ae);
     }
     return (ae);
@@ -124,7 +184,7 @@ static struct aggregate_entry *
  *   o/w, add a new entry. In either case update current count with
  *   the number of `ids` added.
  */
-static int aggregate_push (struct aggregate *ag, int64_t value, const char *ids)
+static int aggregate_push (struct aggregate *ag, json_t *value, const char *ids)
 {
     int count;
     struct aggregate_entry *ae = aggregate_entry_find (ag, value);
@@ -143,13 +203,14 @@ static int aggregate_push (struct aggregate *ag, int64_t value, const char *ids)
 
 /*  Push JSON object of aggregate entries onto aggregate `ag`
  */
-static int aggregate_push_json (struct aggregate *ag, json_t *entries)
+static int aggregate_push_json (struct aggregate *ag,
+                                json_t *entries)
 {
     const char *ids;
     json_t *val;
+
     json_object_foreach (entries, ids, val) {
-        int64_t v = json_integer_value (val);
-        if (aggregate_push (ag, v, ids) < 0) {
+        if (aggregate_push (ag, val, ids) < 0) {
             flux_log_error (ag->ctx->h, "aggregate_push failed");
             return (-1);
         }
@@ -163,7 +224,6 @@ static int aggregate_push_json (struct aggregate *ag, json_t *entries)
 static json_t *aggregate_entries_tojson (struct aggregate *ag)
 {
     struct aggregate_entry *ae;
-    json_t *o = NULL;
     json_t *entries = NULL;
 
     if (!(entries = json_object ()))
@@ -171,14 +231,14 @@ static json_t *aggregate_entries_tojson (struct aggregate *ag)
 
     ae = zlist_first (ag->entries);
     while (ae) {
-        if (!(o = json_integer (ae->value))
-          || (json_object_set_new (entries, nodeset_string (ae->ids), o) < 0))
+        if (json_object_set_new (entries,
+                                 nodeset_string (ae->ids),
+                                 ae->value) < 0)
             goto error;
         ae = zlist_next (ag->entries);
     }
     return (entries);
 error:
-    json_decref (o);
     json_decref (entries);
     return (NULL);
 }
@@ -208,13 +268,11 @@ static int aggregate_forward (flux_t *h, struct aggregate *ag)
     flux_log (h, LOG_DEBUG, "forward: %s: count=%d total=%d",
                  ag->key, ag->count, ag->total);
     if (!(f = flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_UPSTREAM, 0,
-                                "{s:s,s:i,s:i,s:f,s:I,s:I,s:o}",
+                                "{s:s,s:i,s:i,s:f,s:o}",
                                 "key", ag->key,
                                 "count", ag->count,
                                 "total", ag->total,
                                 "timeout", ag->timeout,
-                                "min", ag->min,
-                                "max", ag->max,
                                 "entries", o)) ||
         (flux_future_then (f, -1., forward_continuation, (void *) ag) < 0)) {
         flux_log_error (h, "flux_rpc: aggregator.push");
@@ -299,10 +357,40 @@ static void sink_continuation (flux_future_t *f, void *arg)
     return;
 }
 
-static void  aggregate_sink (flux_t *h, struct aggregate *ag)
+static char *aggregate_to_string (struct aggregate *ag)
+{
+    char *s = NULL;
+    const char *name;
+    json_t *val, *o;
+    json_t *entries = aggregate_entries_tojson (ag);
+
+    if (entries == NULL)
+        return (NULL);
+
+    o = json_pack ("{s:i,s:i,s:o}",
+                   "total", ag->total,
+                   "count", ag->count,
+                   "entries", entries);
+    if (o == NULL)
+        return (NULL);
+
+    /*  Encode summary stats at top level of json representation
+     *   for backwards compatibility
+     */
+    if (ag->summary) {
+        json_object_foreach (ag->summary, name, val)
+            json_object_set (o, name, val);
+    }
+    s = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (s);
+}
+
+
+static void aggregate_sink (flux_t *h, struct aggregate *ag)
 {
     int rc = -1;
-    json_t *o = NULL;
+    char *agstr = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
@@ -314,25 +402,18 @@ static void  aggregate_sink (flux_t *h, struct aggregate *ag)
         flux_log (h, LOG_ERR, "sink: refusing to sink to rootdir");
         goto out;
     }
-    if (!(o = aggregate_entries_tojson (ag))) {
-        flux_log (h, LOG_ERR, "sink: aggregate_entries_tojson failed");
+    if (!(agstr = aggregate_to_string (ag))) {
+        flux_log (h, LOG_ERR, "sink: aggregate_to_string failed");
         goto out;
     }
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "sink: flux_kvs_txn_create");
         goto out;
     }
-    if (flux_kvs_txn_pack (txn, 0, ag->key,
-                            "{s:i,s:i,s:I,s:I,s:o}",
-                            "total", ag->total,
-                            "count", ag->count,
-                            "max", ag->max,
-                            "min", ag->min,
-                            "entries", o) < 0) {
+    if (flux_kvs_txn_put (txn, 0, ag->key, agstr) < 0) {
         flux_log_error (h, "sink: flux_kvs_txn_put");
         goto out;
     }
-    o = NULL;
     if (!(f = flux_kvs_commit (h, 0, txn))
         || flux_future_then (f, -1., sink_continuation, (void *)ag) < 0) {
         flux_log_error (h, "sink: flux_kvs_commit");
@@ -342,7 +423,7 @@ static void  aggregate_sink (flux_t *h, struct aggregate *ag)
     rc = 0;
 out:
     flux_kvs_txn_destroy (txn);
-    json_decref (o);
+    free (agstr);
     if ((rc < 0) && (sink_retry (h, ag) < 0)) {
         aggregate_sink_abort (h, ag);
         zhash_delete (ag->ctx->aggregates, ag->key);
@@ -370,6 +451,7 @@ static void aggregate_destroy (struct aggregate *ag)
         ae = zlist_next (ag->entries);
     }
     zlist_destroy (&ag->entries);
+    json_decref (ag->summary);
     flux_watcher_destroy (ag->tw);
     free (ag->key);
     free (ag);
@@ -378,16 +460,17 @@ static void aggregate_destroy (struct aggregate *ag)
 static void timer_cb (flux_reactor_t *r, flux_watcher_t *tw,
                       int revents, void *arg)
 {
-    if (aggregate_flush (arg) < 0) {
-        flux_t *h = ((struct aggregate *) arg)->ctx->h;
+    struct aggregate *ag = arg;
+    flux_t *h = ag->ctx->h;
+    if (aggregate_flush (ag) < 0)
         flux_log_error (h, "aggregate_flush");
-    }
 }
 
-static void aggregate_timer_start (struct aggregator *ctx,
-                                   struct aggregate *ag,
+static void aggregate_timer_start (struct aggregate *ag,
                                    double timeout)
 {
+    assert (ag && ag->ctx && ag->ctx->h);
+    struct aggregator *ctx = ag->ctx;
     if (ctx->rank != 0) {
         flux_t *h = ctx->h;
         flux_reactor_t *r = flux_get_reactor (h);
@@ -478,8 +561,8 @@ error:
 
 /*
  *  Add a new aggregate to aggregator `ctx`. Insert into entries
- *   hash and set default minimum and maximum. Start the aggregate
- *   timeout, scaled by the current aggregator timeout scale.
+ *   hash, start the aggregate timeout, scaled by the current
+ *   aggregator timeout scale.
  */
 static struct aggregate *
 aggregator_new_aggregate (struct aggregator *ctx, const char *key,
@@ -495,12 +578,9 @@ aggregator_new_aggregate (struct aggregator *ctx, const char *key,
         return (NULL);
     }
     zhash_freefn (ctx->aggregates, key, (zhash_free_fn *) aggregate_destroy);
-    ag->min = LLONG_MAX;
-    ag->max = LLONG_MIN;
     ag->timeout = timeout;
     ag->total = total;
-    ag->ctx = ctx;
-    aggregate_timer_start (ctx, ag, timeout * ctx->timer_scale);
+    aggregate_timer_start (ag, timeout * ctx->timer_scale);
     return (ag);
 }
 
