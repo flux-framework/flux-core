@@ -77,7 +77,10 @@ libutil_la_SOURCES = \
 	timestamp.c \
 	timestamp.h \
 	cf.c \
-	cf.h
+	cf.h \
+	mnemonic.c \
+	mnemonic.h \
+	mn_wordlist.c
 
 EXTRA_DIST = veb_mach.c
 
