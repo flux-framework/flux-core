@@ -60,8 +60,9 @@ def attach(flux_handle,
                   | RAW.KZ_FLAGS_NONBLOCK)):
     handle = RAW.kz_open(flux_handle, key, flags)
     warg = (stream, prefix, handle)
-    KZWATCHES[key] = warg
-    return RAW.set_ready_cb(handle, kz_stream_handler, ffi.new_handle(warg))
+    ffi_handle = ffi.new_handle(warg)
+    KZWATCHES[key] = ffi_handle
+    return RAW.set_ready_cb(handle, kz_stream_handler, ffi_handle)
 
 
 def detach(flux_handle, key):
@@ -81,7 +82,6 @@ class KZStream(WrapperPimpl):
                      handle=None,
                      prefix=False):
             self.destroyer = RAW.kz_close
-            self.handle = None
             self.prefix = prefix
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError(
@@ -106,14 +106,16 @@ class KZStream(WrapperPimpl):
         """ Redirect all output from this KZ stream to the specified stream"""
         arg = (stream, self.prefix, self.handle)
 
-        self.set_ready_cb(kz_stream_handler, ffi.new_handle(arg))
+        ffi_handle = ffi.new_handle(arg)
+        KZWATCHES[self.name] = ffi_handle
+        self.pimpl.set_ready_cb(kz_stream_handler, ffi_handle)
 
     def __init__(self,
                  flux_handle,
                  name,
                  flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
                  handle=None,
-                 prefix=False):
+                 prefix=None):
         super(KZStream, self).__init__()
         self.flux_handle = flux_handle
         self.prefix = prefix
