@@ -91,14 +91,14 @@ error:
     return NULL;
 }
 
-int flux_rpc_get (flux_future_t *f, const char **json_str)
+int flux_rpc_get (flux_future_t *f, const char **s)
 {
     const flux_msg_t *msg;
     int rc = -1;
 
     if (flux_future_get (f, &msg) < 0)
         goto done;
-    if (flux_response_decode (msg, NULL, json_str) < 0)
+    if (flux_response_decode (msg, NULL, s) < 0)
         goto done;
     rc = 0;
 done:
@@ -253,13 +253,13 @@ error:
 
 flux_future_t *flux_rpc (flux_t *h,
                          const char *topic,
-                         const char *json_str,
+                         const char *s,
                          uint32_t nodeid,
                          int flags)
 {
     flux_msg_t *msg = NULL;
     flux_future_t *f = NULL;
-    if (!(msg = flux_request_encode (topic, json_str)))
+    if (!(msg = flux_request_encode (topic, s)))
         goto done;
     if (!(f = flux_rpc_msg (h, nodeid, flags, msg)))
         goto done;

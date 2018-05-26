@@ -20,7 +20,7 @@ typedef void (*flux_mrpc_continuation_f)(flux_mrpc_t *mrpc, void *arg);
  * shorthand for a single rpc sent to FLUX_NODEID_UPSTREAM.  On
  * failure return NULL with errno set.
  */
-flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *json_str,
+flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *s,
                         const char *nodeset, int flags);
 
 /* Variant of flux_mrpc that encodes a json payload using jansson
@@ -38,11 +38,11 @@ void flux_mrpc_destroy (flux_mrpc_t *mrpc);
 bool flux_mrpc_check (flux_mrpc_t *mrpc);
 
 /* Wait for a response if necessary, then decode it.
- * Any returned 'json_str' payload is invalidated by
+ * Any returned 's' payload is invalidated by
  * flux_mrpc_destroy() or flux_mrpc_next().
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str);
+int flux_mrpc_get (flux_mrpc_t *mrpc, const char **s);
 
 /* Variant of flux_mrpc_get that decodes json payload using
  * jansson pack/unpack format strings.  Returned items are

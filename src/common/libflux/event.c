@@ -62,19 +62,20 @@ done:
 }
 
 
-int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **json_str)
+int flux_event_decode (const flux_msg_t *msg, const char **topicp,
+                       const char **sp)
 {
-    const char *ts, *js;
+    const char *topic, *s;
     int rc = -1;
 
-    if (event_decode (msg, &ts) < 0)
+    if (event_decode (msg, &topic) < 0)
         goto done;
-    if (flux_msg_get_json (msg, &js) < 0)
+    if (flux_msg_get_string (msg, &s) < 0)
         goto done;
-    if (topic)
-        *topic = ts;
-    if (json_str)
-        *json_str = js;
+    if (topicp)
+        *topicp = topic;
+    if (sp)
+        *sp = s;
     rc = 0;
 done:
     return rc;
@@ -157,12 +158,12 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
+flux_msg_t *flux_event_encode (const char *topic, const char *s)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
         goto error;
-    if (json_str && flux_msg_set_json (msg, json_str) < 0)
+    if (s && flux_msg_set_string (msg, s) < 0)
         goto error;
     return msg;
 error:

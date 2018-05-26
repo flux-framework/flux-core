@@ -8,9 +8,9 @@
 extern "C" {
 #endif
 
-/* Decode a response message, with optional json payload.
+/* Decode a response message, with optional string payload.
  * If topic is non-NULL, assign the response topic string.
- * If json_str is non-NULL, assign the payload if one exists or set to
+ * If s is non-NULL, assign the string payload if one exists or set to
  * NULL is none exists.  If response includes a nonzero errnum, errno
  * is set to the errnum value and -1 is returned with no assignments
  * to topic or json_str.  Returns 0 on success, or -1 on failure with
@@ -30,19 +30,22 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
 int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
                               const void **data, int *len);
 
-flux_msg_t *flux_response_encode (const char *topic, int errnum,
-                                  const char *json_str);
+/* Encode a message with optional string payload.
+ */
+flux_msg_t *flux_response_encode (const char *topic, int errnum, const char *s);
+
 /* Encode a response message with optional raw payload.
  */
 flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
                                       const void *data, int len);
 
-/* Create a response to the provided request message with optional json payload.
+/* Create a response to the provided request message with optional
+ * string payload.
  * If errnum is nonzero, payload argument is ignored.
  * All errors in this function are fatal - see flux_fatal_set().
  */
 int flux_respond (flux_t *h, const flux_msg_t *request,
-                  int errnum, const char *json_str);
+                  int errnum, const char *s);
 
 /* Create a response to the provided request message with json payload, using
  * jansson pack style variable arguments for encoding the JSON object

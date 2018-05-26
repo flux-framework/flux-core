@@ -74,7 +74,7 @@ class Message(WrapperPimpl):
     def payload_str(self):
         string = ffi.new('char *[1]')
         if self.pimpl.has_payload():
-            self.pimpl.get_json(ffi.cast('char**', string))
+            self.pimpl.get_string(ffi.cast('char**', string))
             return ffi.string(string[0])
         else:
             return None

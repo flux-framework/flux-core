@@ -70,7 +70,7 @@ struct zmsg_info * zmsg_info_create (flux_msg_t **msg, int typemask)
     if ((flux_msg_get_topic (*msg, &topic) < 0)
         || !(zi->tag = strdup (topic))
         || !(zi->msg = flux_msg_copy (*msg, true))
-        || (flux_msg_get_json (zi->msg, &json_str) < 0)) {
+        || (flux_msg_get_string (zi->msg, &json_str) < 0)) {
         zmsg_info_destroy (zi);
         return (NULL);
     }

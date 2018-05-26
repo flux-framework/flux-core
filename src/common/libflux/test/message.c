@@ -4,6 +4,7 @@
 #include <czmq.h>
 #include <errno.h>
 #include <stdio.h>
+#include <jansson.h>
 
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
@@ -124,54 +125,54 @@ void check_payload_json (void)
 {
     const char *s;
     flux_msg_t *msg;
-    const char *json_str = "{\"foo\"=42}";
+    json_t *o;
+    int i;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
 
     s = (char *)msg;
-    ok (flux_msg_get_json (msg, &s) == 0 && s == NULL,
-       "flux_msg_get_json returns success with no payload");
+    ok (flux_msg_get_string (msg, &s) == 0 && s == NULL,
+       "flux_msg_get_string returns success with no payload");
 
     /* RFC 3 - json payload must be an object
      * Encoding should return EINVAL.
      */
-/* XXX */
     errno = 0;
-    ok (flux_msg_set_json (msg, "[1,2,3]") < 0 && errno == EINVAL,
-       "flux_msg_set_json array fails with EINVAL");
+    ok (flux_msg_pack (msg, "[1,2,3]") < 0 && errno == EINVAL,
+       "flux_msg_pack array fails with EINVAL");
     errno = 0;
-    ok (flux_msg_set_json (msg, "3.14") < 0 && errno == EINVAL,
-       "flux_msg_set_json scalar fails with EINVAL");
+    ok (flux_msg_pack (msg, "3.14") < 0 && errno == EINVAL,
+       "flux_msg_pack scalar fails with EINVAL");
 
     /* Sneak in a malformed JSON payloads and test decoding.
      * 1) array
      */
-    if (flux_msg_set_payload (msg, "[1,2,3]", 8) < 0)
-        BAIL_OUT ("flux_msg_set_payload failed");
+    if (flux_msg_set_string (msg, "[1,2,3]") < 0)
+        BAIL_OUT ("flux_msg_set_string failed");
     errno = 0;
-    ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
-        "flux_msg_get_json array fails with EPROTO");
+    ok (flux_msg_unpack (msg, "o", &o) < 0 && errno == EPROTO,
+        "flux_msg_unpack array fails with EPROTO");
     /* 2) bare value
      */
-    if (flux_msg_set_payload (msg, "3.14", 5) < 0)
-        BAIL_OUT ("flux_msg_set_payload failed");
+    if (flux_msg_set_string (msg, "3.14") < 0)
+        BAIL_OUT ("flux_msg_set_string failed");
     errno = 0;
-    ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
-        "flux_msg_get_json scalar fails with EPROTO");
+    ok (flux_msg_unpack (msg, "o", &o) < 0 && errno == EPROTO,
+        "flux_msg_unpack scalar fails with EPROTO");
     /* 3) malformed object (no trailing })
      */
-    if (flux_msg_set_payload (msg, "{\"a\":42", 8) < 0)
-        BAIL_OUT ("flux_msg_set_payload failed");
+    if (flux_msg_set_string (msg, "{\"a\":42") < 0)
+        BAIL_OUT ("flux_msg_set_string failed");
     errno = 0;
-    ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
-        "flux_msg_get_json malformed object fails with EPROTO");
+    ok (flux_msg_unpack (msg, "o", &o) < 0 && errno == EPROTO,
+        "flux_msg_unpack malformed object fails with EPROTO");
 
-    ok (flux_msg_set_json (msg, json_str) == 0,
-       "flux_msg_set_json works");
-    ok (flux_msg_get_json (msg, &s) == 0 && s != NULL
-        && !strcmp (s, json_str),
-       "flux_msg_get_json returns payload intact");
+    ok (flux_msg_pack (msg, "{s:i}", "foo", 42) == 0,
+       "flux_msg_pack works");
+    i = 0;
+    ok (flux_msg_unpack (msg, "{s:i}", "foo", &i) == 0 && i == 42,
+       "flux_msg_unpack returns payload intact");
 
     flux_msg_destroy (msg);
 }

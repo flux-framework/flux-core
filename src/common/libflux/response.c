@@ -65,21 +65,21 @@ done:
     return rc;
 }
 
-int flux_response_decode (const flux_msg_t *msg, const char **topic,
-                          const char **json_str)
+int flux_response_decode (const flux_msg_t *msg, const char **topicp,
+                          const char **sp)
 {
-    const char *ts, *js;
+    const char *topic, *s;
     int rc = -1;
 
-    if (response_decode (msg, &ts) < 0)
+    if (response_decode (msg, &topic) < 0)
         goto done;
-    if (json_str) {
-        if (flux_msg_get_json (msg, &js) < 0)
+    if (sp) {
+        if (flux_msg_get_string (msg, &s) < 0)
             goto done;
-        *json_str = js;
+        *sp = s;
     }
-    if (topic)
-        *topic = ts;
+    if (topicp)
+        *topicp = topic;
     rc = 0;
 done:
     return rc;
@@ -135,18 +135,17 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_response_encode (const char *topic, int errnum,
-                                  const char *json_str)
+flux_msg_t *flux_response_encode (const char *topic, int errnum, const char *s)
 {
     flux_msg_t *msg;
 
     if (!(msg = response_encode (topic, errnum)))
         goto error;
-    if ((errnum != 0 && json_str != NULL)) {
+    if ((errnum != 0 && s != NULL)) {
         errno = EINVAL;
         goto error;
     }
-    if (json_str && flux_msg_set_json (msg, json_str) < 0)
+    if (s && flux_msg_set_string (msg, s) < 0)
         goto error;
     return msg;
 error:
@@ -200,12 +199,12 @@ fatal:
 }
 
 int flux_respond (flux_t *h, const flux_msg_t *request,
-                  int errnum, const char *json_str)
+                  int errnum, const char *s)
 {
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
         goto fatal;
-    if (!errnum && json_str && flux_msg_set_json (msg, json_str) < 0)
+    if (!errnum && s&& flux_msg_set_string (msg, s) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
         goto fatal;

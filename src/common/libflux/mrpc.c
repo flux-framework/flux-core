@@ -228,14 +228,14 @@ done:
     return rc;
 }
 
-int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str)
+int flux_mrpc_get (flux_mrpc_t *mrpc, const char **s)
 {
     int rc = -1;
 
     assert (mrpc->magic == MRPC_MAGIC);
     if (mrpc_get (mrpc) < 0)
         goto done;
-    if (flux_response_decode (mrpc->rx_msg, NULL, json_str) < 0)
+    if (flux_response_decode (mrpc->rx_msg, NULL, s) < 0)
         goto done;
     rc = 0;
 done:
@@ -259,17 +259,12 @@ done:
 static int flux_mrpc_vget_unpack (flux_mrpc_t *mrpc, const char *fmt, va_list ap)
 {
     int rc = -1;
-    const char *json_str;
 
     assert (mrpc->magic == MRPC_MAGIC);
     if (mrpc_get (mrpc) < 0)
         goto done;
-    if (flux_response_decode (mrpc->rx_msg, NULL, &json_str) < 0)
+    if (flux_response_decode (mrpc->rx_msg, NULL, NULL) < 0)
         goto done;
-    if (!json_str) {
-        errno = EPROTO;
-        goto done;
-    }
     if (flux_msg_vunpack (mrpc->rx_msg, fmt, ap) < 0)
         goto done;
     rc = 0;
@@ -490,14 +485,14 @@ error:
 
 flux_mrpc_t *flux_mrpc (flux_t *h,
                         const char *topic,
-                        const char *json_str,
+                        const char *s,
                         const char *nodeset,
                         int flags)
 {
     flux_msg_t *msg;
     flux_mrpc_t *rc = NULL;
 
-    if (!(msg = flux_request_encode (topic, json_str)))
+    if (!(msg = flux_request_encode (topic, s)))
         goto done;
     rc = mrpc (h, nodeset, flags, msg);
 done:

@@ -1035,27 +1035,29 @@ done:
 
 int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap)
 {
-    json_error_t error;
     char *json_str = NULL;
     json_t *json;
-    int rc = -1;
+    int saved_errno;
 
-    if (!(json = json_vpack_ex (&error, 0, fmt, ap))) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(json_str = json_dumps (json, JSON_COMPACT))) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (flux_msg_set_json (msg, json_str) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (json_str)
-        free (json_str);
+    if (!(json = json_vpack_ex (NULL, 0, fmt, ap)))
+        goto error_inval;
+    if (!json_is_object (json))
+        goto error_inval;
+    if (!(json_str = json_dumps (json, JSON_COMPACT)))
+        goto error_inval;
+    if (flux_msg_set_string (msg, json_str) < 0)
+        goto error;
+    free (json_str);
     json_decref (json);
-    return rc;
+    return 0;
+error_inval:
+    errno = EINVAL;
+error:
+    saved_errno = errno;
+    free (json_str);
+    json_decref (json);
+    errno = saved_errno;
+    return -1;
 }
 
 int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
@@ -1112,21 +1114,16 @@ bool flux_msg_has_payload (const flux_msg_t *msg)
     return ((flags & FLUX_MSGFLAG_PAYLOAD));
 }
 
-int flux_msg_set_json (flux_msg_t *msg, const char *s)
+int flux_msg_set_string (flux_msg_t *msg, const char *s)
 {
     if (s) {
-        int len = strlen (s) + 1;
-        if (len < 3 || s[len - 1] != '\0' || s[0] != '{' || s[len - 2] != '}') {
-            errno = EINVAL;
-            return -1;
-        }
-        return flux_msg_set_payload (msg, s, len);
+        return flux_msg_set_payload (msg, s, strlen (s) + 1);
     }
     else
         return flux_msg_set_payload (msg, NULL, 0);
 }
 
-int flux_msg_get_json (const flux_msg_t *msg, const char **s)
+int flux_msg_get_string (const flux_msg_t *msg, const char **s)
 {
     const char *buf;
     int size;
@@ -1140,8 +1137,7 @@ int flux_msg_get_json (const flux_msg_t *msg, const char **s)
         errno = 0;
         *s = NULL;
     } else {
-        if (!buf || size == 0 || buf[size - 1] != '\0'
-                              || buf[0] != '{' || buf[size - 2] != '}') {
+        if (!buf || size == 0 || buf[size - 1] != '\0') {
             errno = EPROTO;
             goto done;
         }
@@ -1168,9 +1164,10 @@ int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
         goto done;
     }
     if (!msg->json) {
-        if (flux_msg_get_json (msg, &json_str) < 0)
+        if (flux_msg_get_string (msg, &json_str) < 0)
             goto done;
-        if (!json_str || !(msg->json = json_loads (json_str, 0, &error))) {
+        if (!json_str || !(msg->json = json_loads (json_str, 0, &error))
+                      || !json_is_object (msg->json)) {
             errno = EPROTO;
             goto done;
         }
@@ -1411,11 +1408,11 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
     /* Payload
      */
     if (flux_msg_has_payload (msg)) {
-        const char *json_str;
+        const char *s;
         const void *buf;
         int size;
-        if (flux_msg_get_json (msg, &json_str) == 0)
-            fprintf (f, "%s[%3.3zu] %s\n", prefix, strlen (json_str), json_str);
+        if (flux_msg_get_string (msg, &s) == 0)
+            fprintf (f, "%s[%3.3zu] %s\n", prefix, strlen (s), s);
         else if (flux_msg_get_payload (msg, &buf, &size) == 0)
             fprintf (f, "%s[%3.3d] ...\n", prefix, size);
         else
