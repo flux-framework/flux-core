@@ -113,6 +113,38 @@ done:
     return rc;
 }
 
+int flux_response_decode_error (const flux_msg_t *msg, const char **errstr)
+{
+    int type;
+    int errnum;
+    const char *s = NULL;
+
+    if (!msg || !errstr) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (flux_msg_get_type (msg, &type) < 0)
+        return -1;
+    if (type != FLUX_MSGTYPE_RESPONSE) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (flux_msg_get_errnum (msg, &errnum) < 0)
+        return -1;
+    if (errnum == 0) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (flux_msg_get_string (msg, &s) < 0)
+        return -1;
+    if (s == NULL) {
+        errno = ENOENT;
+        return -1;
+    }
+    *errstr = s;
+    return 0;
+}
+
 static flux_msg_t *response_encode (const char *topic, int errnum)
 {
     flux_msg_t *msg = NULL;
