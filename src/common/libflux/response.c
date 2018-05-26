@@ -204,6 +204,25 @@ error:
     return NULL;
 }
 
+flux_msg_t *flux_response_encode_error (const char *topic, int errnum,
+                                        const char *errstr)
+{
+    flux_msg_t *msg;
+
+    if (errnum == 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(msg = response_encode (topic, errnum)))
+        goto error;
+    if (errstr && flux_msg_set_string (msg, errstr) < 0)
+        goto error;
+    return msg;
+error:
+    flux_msg_destroy (msg);
+    return NULL;
+}
+
 static flux_msg_t *derive_response (flux_t *h, const flux_msg_t *request,
                                     int errnum)
 {

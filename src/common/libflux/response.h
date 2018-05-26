@@ -46,6 +46,12 @@ flux_msg_t *flux_response_encode (const char *topic, int errnum, const char *s);
 flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
                                       const void *data, int len);
 
+/* Encode an error response with 'errnum' (must be nonzero) and
+ * if non-NULL, an error string payload.
+ */
+flux_msg_t *flux_response_encode_error (const char *topic, int errnum,
+                                        const char *errstr);
+
 /* Create a response to the provided request message with optional
  * string payload.
  * If errnum is nonzero, payload argument is ignored.
