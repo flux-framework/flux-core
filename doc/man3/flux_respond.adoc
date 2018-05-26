@@ -13,7 +13,7 @@ SYNOPSIS
  #include <flux/core.h>
 
  int flux_respond (flux_t *h, const flux_msg_t *request,
-                   int errnum, const char *json_str);
+                   int errnum, const char *s);
 
  int flux_respond_pack (flux_t *h, const flux_msg_t *request,
                         const char *fmt, ...);
@@ -33,7 +33,7 @@ If _errnum_ is non-zero, an error is returned to the sender such that
 `flux_rpc_get(3)` or `flux_rpc_get_raw(3)` will fail, with the system
 errno set to _errnum_.  Any payload arguments are ignored in this case.
 
-If _json_str_ is non-NULL, `flux_respond()` will send it as the response
+If _s_ is non-NULL, `flux_respond()` will send it as the response
 payload, otherwise there will be no payload.  Similarly, if _data_ is
 non-NULL, `flux_respond_raw()` will send it as the response payload.
 

@@ -14,7 +14,7 @@ SYNOPSIS
 
  int flux_response_decode (const flux_msg_t *msg,
                            const char **topic,
-                           const char **json_str);
+                           const char **s);
 
  int flux_response_decode_raw (const flux_msg_t *msg,
                                const char **topic,
@@ -28,8 +28,8 @@ DESCRIPTION
 _topic_, if non-NULL, will be set to the message's topic string. The
 storage for this string belongs to _msg_ and should not be freed.
 
-_json_str_, if non-NULL, will be set to the message's JSON payload.
-If no payload exists, _json_str_ is set to NULL.  The storage for this
+_s_, if non-NULL, will be set to the message's NULL-terminated string payload.
+If no payload exists, it is set to NULL.  The storage for this
 string belongs to _msg_ and should not be freed.
 
 `flux_response_decode_raw()` decodes a response message with a raw payload,

@@ -12,13 +12,13 @@ SYNOPSIS
 --------
 #include <flux/core.h>
 
-flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *json_str,
+flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *s,
                         const char *nodeset, int flags);
 
 flux_mrpc_t *flux_mrpc_pack (flux_t *h, const char *topic, const char *nodeset,
                              int flags, const char *fmt, ...);
 
-int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str);
+int flux_mrpc_get (flux_mrpc_t *mrpc, const char **s);
 
 int flux_mrpc_get_unpack (flux_mrpc_t *mrpc, const char *fmt, ...);
 
