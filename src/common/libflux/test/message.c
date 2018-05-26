@@ -125,7 +125,6 @@ void check_payload_json (void)
     const char *s;
     flux_msg_t *msg;
     const char *json_str = "{\"foo\"=42}";
-    uint8_t flags;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
@@ -148,31 +147,22 @@ void check_payload_json (void)
     /* Sneak in a malformed JSON payloads and test decoding.
      * 1) array
      */
-    if (flux_msg_set_payload (msg, 0, "[1,2,3]", 8) < 0)
+    if (flux_msg_set_payload (msg, "[1,2,3]", 8) < 0)
         BAIL_OUT ("flux_msg_set_payload failed");
-    if (flux_msg_get_flags (msg, &flags) < 0
-            || flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_JSON) < 0)
-        BAIL_OUT ("flux_msg_set_flags failed");
     errno = 0;
     ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
         "flux_msg_get_json array fails with EPROTO");
     /* 2) bare value
      */
-    if (flux_msg_set_payload (msg, 0, "3.14", 5) < 0)
+    if (flux_msg_set_payload (msg, "3.14", 5) < 0)
         BAIL_OUT ("flux_msg_set_payload failed");
-    if (flux_msg_get_flags (msg, &flags) < 0
-            || flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_JSON) < 0)
-        BAIL_OUT ("flux_msg_set_flags failed");
     errno = 0;
     ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
         "flux_msg_get_json scalar fails with EPROTO");
     /* 3) malformed object (no trailing })
      */
-    if (flux_msg_set_payload (msg, 0, "{\"a\":42", 8) < 0)
+    if (flux_msg_set_payload (msg, "{\"a\":42", 8) < 0)
         BAIL_OUT ("flux_msg_set_payload failed");
-    if (flux_msg_get_flags (msg, &flags) < 0
-            || flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_JSON) < 0)
-        BAIL_OUT ("flux_msg_set_flags failed");
     errno = 0;
     ok (flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
         "flux_msg_get_json malformed object fails with EPROTO");
@@ -254,38 +244,37 @@ void check_payload (void)
     const void *buf;
     void *pay[1024];
     int plen = sizeof (pay), len;
-    int flags;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
     errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) < 0 && errno == EPROTO,
+    ok (flux_msg_get_payload (msg, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o payload");
     errno = 0;
-    ok (flux_msg_set_payload (msg, 0, NULL, 0) == 0 && errno == 0,
+    ok (flux_msg_set_payload (msg, NULL, 0) == 0 && errno == 0,
         "flux_msg_set_payload NULL works with no payload");
     errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) < 0 && errno == EPROTO,
+    ok (flux_msg_get_payload (msg, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload still fails");
 
     errno = 0;
     memset (pay, 42, plen);
-    ok (flux_msg_set_payload (msg, 0, pay, plen) == 0
+    ok (flux_msg_set_payload (msg, pay, plen) == 0
         && flux_msg_frames (msg) == 2,
        "flux_msg_set_payload works");
 
-    len = 0; buf = NULL; flags =0; errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
-        && buf && len == plen && flags == 0 && errno == 0,
+    len = 0; buf = NULL; errno = 0;
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0
+        && buf && len == plen && errno == 0,
        "flux_msg_get_payload works");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
     ok (flux_msg_set_topic (msg, "blorg") == 0 && flux_msg_frames (msg) == 3,
        "flux_msg_set_topic works");
-    len = 0; buf = NULL; flags = 0; errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
-        && buf && len == plen && flags == 0 && errno == 0,
+    len = 0; buf = NULL; errno = 0;
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0
+        && buf && len == plen && errno == 0,
        "flux_msg_get_payload works with topic");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
@@ -297,39 +286,39 @@ void check_payload (void)
     ok (flux_msg_push_route (msg, "id1") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works");
 
-    len = 0; buf = NULL; flags =0; errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
-        && buf && len == plen && flags == 0 && errno == 0,
+    len = 0; buf = NULL; errno = 0;
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0
+        && buf && len == plen && errno == 0,
        "flux_msg_get_payload still works, with routes");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
     ok (flux_msg_set_topic (msg, "blorg") == 0 && flux_msg_frames (msg) == 5,
        "flux_msg_set_topic works");
-    len = 0; buf = NULL; flags = 0; errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
-        && buf && len == plen && flags == 0 && errno == 0,
+    len = 0; buf = NULL; errno = 0;
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0
+        && buf && len == plen && errno == 0,
        "flux_msg_get_payload works, with topic and routes");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
     errno = 0;
-    ok (flux_msg_set_payload (msg, 0, buf, len - 1) < 0 && errno == EINVAL,
+    ok (flux_msg_set_payload (msg, buf, len - 1) < 0 && errno == EINVAL,
         "flux_msg_set_payload detects reuse of payload fragment and fails with EINVAL");
 
-    ok (flux_msg_set_payload (msg, 0, buf, len) == 0,
+    ok (flux_msg_set_payload (msg, buf, len) == 0,
         "flux_msg_set_payload detects payload echo and works");
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
-        && buf && len == plen && flags == 0,
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0
+        && buf && len == plen,
        "flux_msg_get_payload works");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
     errno = 0;
-    ok (flux_msg_set_payload (msg, 0, NULL, 0) == 0 && errno == 0,
+    ok (flux_msg_set_payload (msg, NULL, 0) == 0 && errno == 0,
         "flux_msg_set_payload NULL works");
     errno = 0;
-    ok (flux_msg_get_payload (msg, &flags, &buf, &len) < 0 && errno == EPROTO,
+    ok (flux_msg_get_payload (msg, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload now fails with EPROTO");
 
     flux_msg_destroy (msg);
@@ -631,7 +620,7 @@ void check_copy (void)
     flux_msg_t *msg, *cpy;
     int type;
     const char *topic;
-    int cpylen, flags;
+    int cpylen;
     const char buf[] = "xxxxxxxxxxxxxxxxxx";
     const void *cpybuf;
 
@@ -654,14 +643,14 @@ void check_copy (void)
         "added route delim");
     ok (flux_msg_set_topic (msg, "foo") == 0,
         "set topic string");
-    ok (flux_msg_set_payload (msg, 0, buf, sizeof (buf)) == 0,
+    ok (flux_msg_set_payload (msg, buf, sizeof (buf)) == 0,
         "added payload");
     ok ((cpy = flux_msg_copy (msg, true)) != NULL,
         "flux_msg_copy works");
     type = -1;
     ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
              && flux_msg_has_payload (cpy)
-             && flux_msg_get_payload (cpy, &flags, &cpybuf, &cpylen) == 0
+             && flux_msg_get_payload (cpy, &cpybuf, &cpylen) == 0
              && cpylen == sizeof (buf) && memcmp (cpybuf, buf, cpylen) == 0
              && flux_msg_get_route_count (cpy) == 0
              && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
@@ -710,7 +699,7 @@ void check_print (void)
         "enabled routing");
     ok (flux_msg_push_route (msg, "id1") == 0,
         "added one route");
-    ok (flux_msg_set_payload (msg, 0, buf, strlen (buf)) == 0,
+    ok (flux_msg_set_payload (msg, buf, strlen (buf)) == 0,
         "added payload");
     lives_ok ({flux_msg_fprint (f, msg);},
         "flux_msg_fprint doesn't segfault on fully loaded request");
@@ -734,17 +723,8 @@ void check_params (void)
     if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
         BAIL_OUT ("flux_msg_create failed");
     errno = 0;
-    ok (flux_msg_set_payload (NULL, 0, NULL, 0) < 0 && errno == EINVAL,
+    ok (flux_msg_set_payload (NULL, NULL, 0) < 0 && errno == EINVAL,
         "flux_msg_set_payload msg=NULL fails with EINVAL");
-
-    errno = 0;
-    ok (flux_msg_set_payload (msg, 0xff, NULL, 0) < 0 && errno == EINVAL,
-        "flux_msg_set_payload flags=0xff fails with EINVAL");
-
-    errno = 0;
-    ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, NULL, 0) < 0
-        && errno == EINVAL,
-        "flux_msg_set_payload flags=JSON, buf=NULL fails with EINVAL");
 
     flux_msg_destroy (msg);
 }

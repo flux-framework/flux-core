@@ -966,40 +966,32 @@ static bool payload_overlap (const void *b, zframe_t *zf)
          && (char *)b <  (char *)zframe_data (zf) + zframe_size (zf));
 }
 
-int flux_msg_set_payload (flux_msg_t *msg, int flags, const void *buf, int size)
+int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
 {
     zframe_t *zf;
-    uint8_t msgflags;
+    uint8_t flags;
     int rc = -1;
 
-    if (!msg || (flags & ~FLUX_MSGFLAG_JSON) != 0) {
+    if (!msg) {
         errno = EINVAL;
         goto done;
     }
-    if ((flags & FLUX_MSGFLAG_JSON)) {
-        const char *json_str = buf;
-        if (!json_str || size < 3 || json_str[size - 1] != '\0'
-                      || json_str[0] != '{' || json_str[size - 2] != '}') {
-            errno = EINVAL;
-            goto done;
-        }
-    }
     json_decref (msg->json);            /* invalidate cached json object */
     msg->json = NULL;
-    if (flux_msg_get_flags (msg, &msgflags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         goto done;
-    if (!(msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
+    if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
         rc = 0;
         goto done;
     }
     zf = zmsg_first (msg->zmsg);
-    if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
+    if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (msg->zmsg);      /* skip route frame */
         if (zf)
             zf = zmsg_next (msg->zmsg);      /* skip route delim */
     }
-    if ((msgflags & FLUX_MSGFLAG_TOPIC)) {
+    if ((flags & FLUX_MSGFLAG_TOPIC)) {
         if (zf)
             zf = zmsg_next (msg->zmsg);      /* skip topic frame */
     }
@@ -1009,7 +1001,7 @@ int flux_msg_set_payload (flux_msg_t *msg, int flags, const void *buf, int size)
     }
     /* Case #1: replace existing payload.
      */
-    if ((msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
+    if ((flags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
         if (zframe_data (zf) != buf || zframe_size (zf) != size) {
             if (payload_overlap (buf, zf)) {
                 errno = EINVAL;
@@ -1017,27 +1009,24 @@ int flux_msg_set_payload (flux_msg_t *msg, int flags, const void *buf, int size)
             }
             zframe_reset (zf, buf, size);
         }
-        msgflags &= ~(uint8_t)FLUX_MSGFLAG_JSON;
-        msgflags |= flags;
     /* Case #2: add payload.
      */
-    } else if (!(msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)){
+    } else if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
         zmsg_remove (msg->zmsg, zf);
         if (zmsg_addmem (msg->zmsg, buf, size) < 0
                                         || zmsg_append (msg->zmsg, &zf) < 0) {
             errno = ENOMEM;
             goto done;
         }
-        msgflags &= ~(uint8_t)FLUX_MSGFLAG_JSON;
-        msgflags |= FLUX_MSGFLAG_PAYLOAD | flags;
+        flags |= FLUX_MSGFLAG_PAYLOAD;
     /* Case #3: remove payload.
      */
-    } else if ((msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)){
+    } else if ((flags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
         zmsg_remove (msg->zmsg, zf);
         zframe_destroy (&zf);
-        msgflags &= ~(uint8_t)(FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
+        flags &= ~(uint8_t)(FLUX_MSGFLAG_PAYLOAD);
     }
-    if (flux_msg_set_flags (msg, msgflags) < 0)
+    if (flux_msg_set_flags (msg, flags) < 0)
         goto done;
     rc = 0;
 done:
@@ -1080,26 +1069,25 @@ int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
     return rc;
 }
 
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
-                          const void **buf, int *size)
+int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size)
 {
     zframe_t *zf;
-    uint8_t msgflags;
+    uint8_t flags;
 
-    if (flux_msg_get_flags (msg, &msgflags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
-    if (!(msgflags & FLUX_MSGFLAG_PAYLOAD)) {
+    if (!(flags & FLUX_MSGFLAG_PAYLOAD)) {
         errno = EPROTO;
         return -1;
     }
     zf = zmsg_first (msg->zmsg);
-    if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
+    if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (msg->zmsg);
         if (zf)
             zf = zmsg_next (msg->zmsg);
     }
-    if ((msgflags & FLUX_MSGFLAG_TOPIC)) {
+    if ((flags & FLUX_MSGFLAG_TOPIC)) {
         if (zf)
             zf = zmsg_next (msg->zmsg);
     }
@@ -1107,8 +1095,6 @@ int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
         errno = EPROTO;
         return -1;
     }
-    if (flags)
-        *flags = msgflags & FLUX_MSGFLAG_JSON;
     if (buf)
         *buf = zframe_data (zf);
     if (size)
@@ -1128,29 +1114,33 @@ bool flux_msg_has_payload (const flux_msg_t *msg)
 
 int flux_msg_set_json (flux_msg_t *msg, const char *s)
 {
-    if (s)
-        return flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, s, strlen(s) + 1);
+    if (s) {
+        int len = strlen (s) + 1;
+        if (len < 3 || s[len - 1] != '\0' || s[0] != '{' || s[len - 2] != '}') {
+            errno = EINVAL;
+            return -1;
+        }
+        return flux_msg_set_payload (msg, s, len);
+    }
     else
-        return flux_msg_set_payload (msg, 0, NULL, 0);
+        return flux_msg_set_payload (msg, NULL, 0);
 }
 
 int flux_msg_get_json (const flux_msg_t *msg, const char **s)
 {
     const char *buf;
     int size;
-    int flags;
     int rc = -1;
 
     if (!s) {
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_payload (msg, &flags, (const void **)&buf, &size) < 0) {
+    if (flux_msg_get_payload (msg, (const void **)&buf, &size) < 0) {
         errno = 0;
         *s = NULL;
     } else {
-        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)
-                              || buf[size - 1] != '\0'
+        if (!buf || size == 0 || buf[size - 1] != '\0'
                               || buf[0] != '{' || buf[size - 2] != '}') {
             errno = EPROTO;
             goto done;
@@ -1317,7 +1307,7 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     if (!payload && (flags & FLUX_MSGFLAG_PAYLOAD)) {
-        flags &= ~(FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
+        flags &= ~(FLUX_MSGFLAG_PAYLOAD);
         skip_payload = true;
     }
     if (!(cpy = calloc (1, sizeof (*cpy))))
@@ -1423,10 +1413,10 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
     if (flux_msg_has_payload (msg)) {
         const char *json_str;
         const void *buf;
-        int size, flags;
+        int size;
         if (flux_msg_get_json (msg, &json_str) == 0)
             fprintf (f, "%s[%3.3zu] %s\n", prefix, strlen (json_str), json_str);
-        else if (flux_msg_get_payload (msg, &flags, &buf, &size) == 0)
+        else if (flux_msg_get_payload (msg, &buf, &size) == 0)
             fprintf (f, "%s[%3.3d] ...\n", prefix, size);
         else
             fprintf (f, "malformed payload\n");

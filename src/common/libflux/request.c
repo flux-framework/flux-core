@@ -89,7 +89,7 @@ int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
     }
     if (request_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload (msg, NULL, &d, &l) < 0) {
+    if (flux_msg_get_payload (msg, &d, &l) < 0) {
         if (errno != EPROTO)
             goto done;
         errno = 0;
@@ -177,7 +177,7 @@ flux_msg_t *flux_request_encode_raw (const char *topic,
 
     if (!msg)
         goto error;
-    if (data && flux_msg_set_payload (msg, 0, data, len) < 0)
+    if (data && flux_msg_set_payload (msg, data, len) < 0)
         goto error;
     return msg;
 error:

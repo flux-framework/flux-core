@@ -302,7 +302,7 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
                   topic);
         goto error;
     }
-    if (flux_msg_get_payload (msg, &flags, &buf, &size) == 0) {
+    if (flux_msg_get_payload (msg, &buf, &size) == 0) {
         flux_log (h, LOG_ERR, "%s: unexpected payload size %d", __FUNCTION__,
                   size);
         goto error;

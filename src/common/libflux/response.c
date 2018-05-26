@@ -91,7 +91,6 @@ int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
     const char *ts;
     const void *d = NULL;
     int l = 0;
-    int flags = 0;
     int rc = -1;
 
     if (!data || !len) {
@@ -100,7 +99,7 @@ int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
     }
     if (response_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload (msg, &flags, &d, &l) < 0) {
+    if (flux_msg_get_payload (msg, &d, &l) < 0) {
         if (errno != EPROTO)
             goto done;
         errno = 0;
@@ -166,7 +165,7 @@ flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
         errno = EINVAL;
         goto error;
     }
-    if (data && flux_msg_set_payload (msg, 0, data, len) < 0)
+    if (data && flux_msg_set_payload (msg, data, len) < 0)
         goto error;
     return msg;
 error:
@@ -254,7 +253,7 @@ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
         goto fatal;
-    if (!errnum && data && flux_msg_set_payload (msg, 0, data, len) < 0)
+    if (!errnum && data && flux_msg_set_payload (msg, data, len) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
         goto fatal;

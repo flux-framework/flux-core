@@ -86,7 +86,6 @@ int flux_event_decode_raw (const flux_msg_t *msg, const char **topicp,
     const char *topic;
     const void *data = NULL;
     int len = 0;
-    int flags;
     int rc = -1;
 
     if (!datap || !lenp) {
@@ -95,7 +94,7 @@ int flux_event_decode_raw (const flux_msg_t *msg, const char **topicp,
     }
     if (event_decode (msg, &topic) < 0)
         goto done;
-    if (flux_msg_get_payload (msg, &flags, &data, &len) < 0) {
+    if (flux_msg_get_payload (msg, &data, &len) < 0) {
         if (errno != EPROTO)
             goto done;
         errno = 0;
@@ -177,7 +176,7 @@ flux_msg_t *flux_event_encode_raw (const char *topic,
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
         goto error;
-    if (data && flux_msg_set_payload (msg, 0, data, len) < 0)
+    if (data && flux_msg_set_payload (msg, data, len) < 0)
         goto error;
     return msg;
 error:
@@ -252,10 +251,8 @@ flux_future_t *flux_event_publish (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (json_str) {
-        flags |= FLUX_MSGFLAG_JSON;
+    if (json_str)
         len = strlen (json_str) + 1;
-    }
     return wrap_event_rpc (h, topic, flags, json_str, len);
 }
 
@@ -285,7 +282,7 @@ flux_future_t *flux_event_publish_pack (flux_t *h,
         return NULL;
     }
     json_decref (o);
-    if (!(f = wrap_event_rpc (h,  topic, flags | FLUX_MSGFLAG_JSON,
+    if (!(f = wrap_event_rpc (h,  topic, flags,
                               json_str, strlen (json_str) + 1))) {
         int saved_errno = errno;
         free (json_str);

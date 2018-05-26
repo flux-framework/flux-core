@@ -27,7 +27,6 @@ enum {
 enum {
     FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
     FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
-    FLUX_MSGFLAG_JSON       = 0x04,	/* message payload is JSON */
     FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
@@ -161,12 +160,9 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * The new payload will be copied (caller retains ownership).
  * Any old payload is deleted.
  * flux_msg_get_payload returns pointer to msg-owned buf.
- * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
-                          const void **buf, int *size);
-int flux_msg_set_payload (flux_msg_t *msg, int flags,
-                          const void *buf, int size);
+int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size);
+int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
 /* Get/set flags

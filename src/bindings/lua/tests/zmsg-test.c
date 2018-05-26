@@ -109,7 +109,7 @@ static int l_cmb_zmsg_create_response_with_error (lua_State *L)
         return lua_pusherror (L, "flux_msg_set_topic: %s", strerror (errno));
     if (flux_msg_set_errnum (msg, errnum) < 0)
         return lua_pusherror (L, "flux_msg_set_errnum: %s", strerror (errno));
-    if (flux_msg_set_payload (msg, 0, NULL, 0))
+    if (flux_msg_set_payload (msg, NULL, 0))
         return lua_pusherror (L, "flux_msg_set_payload: %s", strerror (errno));
 
     zi = zmsg_info_create (&msg, FLUX_MSGTYPE_RESPONSE);

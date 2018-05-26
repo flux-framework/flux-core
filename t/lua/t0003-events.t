@@ -67,7 +67,7 @@ local response, err = f:rpc ("event.pub", request);
 is (err, nil, "event.pub: works with payload")
 
 -- good request, with JSON "{}\0"
-local request = { topic = "foo", flags = 4, payload = "e30A" }
+local request = { topic = "foo", flags = 0, payload = "e30A" }
 local response, err = f:rpc ("event.pub", request);
 is (err, nil, "event.pub: works with json payload")
 
