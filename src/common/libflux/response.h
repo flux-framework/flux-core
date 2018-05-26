@@ -24,7 +24,7 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
  * Data and len must be non-NULL and will be assigned the payload and length.
  * If there is no payload, they will be assigned NULL and zero.
  * If response includes a nonzero errnum, errno is set to the errnum value
- * and -1 is returned with no assignments to topic or json_str.
+ * and -1 is returned with no assignments to topic, data, or len.
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
@@ -37,13 +37,14 @@ int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
 int flux_response_decode_error (const flux_msg_t *msg, const char **errstr);
 
 
-/* Encode a message with optional string payload.
+/* Encode a message with optional string payload 's'.
+ * If errnum != 0, payload 's' must be NULL.
  */
 flux_msg_t *flux_response_encode (const char *topic, int errnum, const char *s);
 
 /* Encode a response message with optional raw payload.
  */
-flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
+flux_msg_t *flux_response_encode_raw (const char *topic,
                                       const void *data, int len);
 
 /* Encode an error response with 'errnum' (must be nonzero) and

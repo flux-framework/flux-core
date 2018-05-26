@@ -23,7 +23,7 @@ int main (int argc, char *argv[])
         && errno == EINVAL,
         "flux_response_encode returns EINVAL with no topic string");
     errno = 0;
-    ok ((msg = flux_response_encode_raw (NULL, 0, data, len)) == NULL
+    ok ((msg = flux_response_encode_raw (NULL, data, len)) == NULL
         && errno == EINVAL,
         "flux_response_encode_raw returns EINVAL with no topic string");
 
@@ -32,10 +32,6 @@ int main (int argc, char *argv[])
     ok ((msg = flux_response_encode ("foo.bar", 1, json_str)) == NULL
         && errno == EINVAL,
         "flux_response_encode returns EINVAL with both payload and errnum");
-    errno = 0;
-    ok ((msg = flux_response_encode_raw ("foo.bar", 1, data, len)) == NULL
-        && errno == EINVAL,
-        "flux_response_encode_raw returns EINVAL with both payload and errnum");
 
     /* without payload */
     ok ((msg = flux_response_encode ("foo.bar", 0, NULL)) != NULL,
@@ -53,7 +49,7 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
 
     /* without payload (raw) */
-    ok ((msg = flux_response_encode_raw ("foo.bar", 0, NULL, 0)) != NULL,
+    ok ((msg = flux_response_encode_raw ("foo.bar", NULL, 0)) != NULL,
         "flux_response_encode_raw works with NULL payload");
 
     topic = NULL;
@@ -82,7 +78,7 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
 
     /* with raw payload */
-    ok ((msg = flux_response_encode_raw ("foo.bar", 0, data, len)) != NULL,
+    ok ((msg = flux_response_encode_raw ("foo.bar", data, len)) != NULL,
         "flux_response_encode_raw works with payload");
 
     d = NULL;
@@ -100,17 +96,6 @@ int main (int argc, char *argv[])
     ok (flux_response_decode (msg, NULL, NULL) < 0
         && errno == 42,
         "flux_response_decode fails with encoded errnum");
-    flux_msg_destroy (msg);
-
-    /* with error (raw) */
-    ok ((msg = flux_response_encode_raw ("foo.bar", 42, NULL, 0)) != NULL,
-        "flux_response_encode_raw works with errnum");
-    d = NULL;
-    l = 0;
-    errno = 0;
-    ok (flux_response_decode_raw (msg, NULL, &d, &l) < 0
-        && errno == 42 && d == NULL && l == 0,
-        "flux_response_decode_raw fails with encoded errnum");
     flux_msg_destroy (msg);
 
     done_testing();

@@ -185,17 +185,13 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
+flux_msg_t *flux_response_encode_raw (const char *topic,
                                       const void *data, int len)
 {
     flux_msg_t *msg;
 
-    if (!(msg = response_encode (topic, errnum)))
+    if (!(msg = response_encode (topic, 0)))
         goto error;
-    if ((errnum != 0 && data != NULL)) {
-        errno = EINVAL;
-        goto error;
-    }
     if (data && flux_msg_set_payload (msg, data, len) < 0)
         goto error;
     return msg;
