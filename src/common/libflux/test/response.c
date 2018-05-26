@@ -19,7 +19,7 @@ int main (int argc, char *argv[])
 
     /* no topic is an error */
     errno = 0;
-    ok ((msg = flux_response_encode (NULL, 0, json_str)) == NULL
+    ok ((msg = flux_response_encode (NULL, json_str)) == NULL
         && errno == EINVAL,
         "flux_response_encode returns EINVAL with no topic string");
     errno = 0;
@@ -27,14 +27,8 @@ int main (int argc, char *argv[])
         && errno == EINVAL,
         "flux_response_encode_raw returns EINVAL with no topic string");
 
-    /* both errnum and payload is an error */
-    errno = 0;
-    ok ((msg = flux_response_encode ("foo.bar", 1, json_str)) == NULL
-        && errno == EINVAL,
-        "flux_response_encode returns EINVAL with both payload and errnum");
-
     /* without payload */
-    ok ((msg = flux_response_encode ("foo.bar", 0, NULL)) != NULL,
+    ok ((msg = flux_response_encode ("foo.bar", NULL)) != NULL,
         "flux_response_encode works with NULL payload");
 
     topic = NULL;
@@ -65,7 +59,7 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
 
     /* with json payload */
-    ok ((msg = flux_response_encode ("foo.bar", 0, json_str)) != NULL,
+    ok ((msg = flux_response_encode ("foo.bar", json_str)) != NULL,
         "flux_response_encode works with payload");
 
     s = NULL;
@@ -89,8 +83,8 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
 
     /* with error */
-    ok ((msg = flux_response_encode ("foo.bar", 42, NULL)) != NULL,
-        "flux_response_encode works with errnum");
+    ok ((msg = flux_response_encode_error ("foo.bar", 42, NULL)) != NULL,
+        "flux_response_encode_error works with errnum");
     s = NULL;
     errno = 0;
     ok (flux_response_decode (msg, NULL, NULL) < 0

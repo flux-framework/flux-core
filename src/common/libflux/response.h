@@ -38,9 +38,8 @@ int flux_response_decode_error (const flux_msg_t *msg, const char **errstr);
 
 
 /* Encode a message with optional string payload 's'.
- * If errnum != 0, payload 's' must be NULL.
  */
-flux_msg_t *flux_response_encode (const char *topic, int errnum, const char *s);
+flux_msg_t *flux_response_encode (const char *topic, const char *s);
 
 /* Encode a response message with optional raw payload.
  */

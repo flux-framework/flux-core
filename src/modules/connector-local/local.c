@@ -637,9 +637,19 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
         return false; // no match - forward to broker
 
 done_respond:
-    if (!(rmsg = flux_response_encode (topic, rc < 0 ? errno : 0, NULL))) {
-        flux_log_error (c->ctx->h, "%s: flux_response_encode", __FUNCTION__);
-        goto done;
+    if (rc < 0) {
+        if (!(rmsg = flux_response_encode_error (topic, errno, NULL))) {
+            flux_log_error (c->ctx->h, "%s: flux_response_encode_error",
+                            __FUNCTION__);
+            goto done;
+        }
+    }
+    else {
+        if (!(rmsg = flux_response_encode (topic, NULL))) {
+            flux_log_error (c->ctx->h, "%s: flux_response_encode",
+                            __FUNCTION__);
+            goto done;
+        }
     }
     if (flux_msg_set_rolemask (rmsg, FLUX_ROLE_OWNER) < 0) {
         flux_log_error (c->ctx->h, "%s: flux_response_set_rolemask",
