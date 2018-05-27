@@ -222,22 +222,21 @@ static flux_msg_t *derive_response (flux_t *h, const flux_msg_t *request,
 
     if (!request) {
         errno = EINVAL;
-        goto fatal;
+        goto error;
     }
     if (!(msg = flux_msg_copy (request, false)))
-        goto fatal;
+        goto error;
     if (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) < 0)
-        goto fatal;
+        goto error;
     if (flux_msg_set_userid (msg, FLUX_USERID_UNKNOWN) < 0)
-        goto fatal;
+        goto error;
     if (flux_msg_set_rolemask (msg, FLUX_ROLE_NONE) < 0)
-        goto fatal;
+        goto error;
     if (errnum && flux_msg_set_errnum (msg, errnum) < 0)
-        goto fatal;
+        goto error;
     return msg;
-fatal:
+error:
     flux_msg_destroy (msg);
-    FLUX_FATAL (h);
     return NULL;
 }
 
@@ -246,16 +245,15 @@ int flux_respond (flux_t *h, const flux_msg_t *request,
 {
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
-        goto fatal;
-    if (!errnum && s&& flux_msg_set_string (msg, s) < 0)
-        goto fatal;
+        goto error;
+    if (!errnum && s && flux_msg_set_string (msg, s) < 0)
+        goto error;
     if (flux_send (h, msg, 0) < 0)
-        goto fatal;
+        goto error;
     flux_msg_destroy (msg);
     return 0;
-fatal:
+error:
     flux_msg_destroy (msg);
-    FLUX_FATAL (h);
     return -1;
 }
 
@@ -264,16 +262,15 @@ static int flux_respond_vpack (flux_t *h, const flux_msg_t *request,
 {
     flux_msg_t *msg = derive_response (h, request, 0);
     if (!msg)
-        goto fatal;
+        goto error;
     if (flux_msg_vpack (msg, fmt, ap) < 0)
-        goto fatal;
+        goto error;
     if (flux_send (h, msg, 0) < 0)
-        goto fatal;
+        goto error;
     flux_msg_destroy (msg);
     return 0;
-fatal:
+error:
     flux_msg_destroy (msg);
-    FLUX_FATAL (h);
     return -1;
 }
 
@@ -294,16 +291,15 @@ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
 {
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
-        goto fatal;
+        goto error;
     if (!errnum && data && flux_msg_set_payload (msg, data, len) < 0)
-        goto fatal;
+        goto error;
     if (flux_send (h, msg, 0) < 0)
-        goto fatal;
+        goto error;
     flux_msg_destroy (msg);
     return 0;
-fatal:
+error:
     flux_msg_destroy (msg);
-    FLUX_FATAL (h);
     return -1;
 }
 
