@@ -137,6 +137,7 @@ MAN3_FILES_SECONDARY = \
 	flux_rpc_get.3 \
 	flux_rpc_get_unpack.3 \
 	flux_rpc_get_raw.3 \
+	flux_rpc_get_error.3 \
 	flux_kvs_lookupat.3 \
 	flux_kvs_lookup_get.3 \
 	flux_kvs_lookup_get_unpack.3 \
@@ -266,6 +267,7 @@ flux_rpc_raw.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
 flux_rpc_get_unpack.3: flux_rpc.3
 flux_rpc_get_raw.3: flux_rpc.3
+flux_rpc_get_error.3: flux_rpc.3
 flux_kvs_lookupat.3: flux_kvs_lookup.3
 flux_kvs_lookup_get.3: flux_kvs_lookup.3
 flux_kvs_lookup_get_unpack.3: flux_kvs_lookup.3
