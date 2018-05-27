@@ -119,9 +119,17 @@ static int respond_requests_raw (zlist_t **l, flux_t *h, int errnum,
 
     if (*l) {
         while ((msg = zlist_pop (*l))) {
-            if (flux_respond_raw (h, msg, errnum, data, len) < 0) {
-                saved_errno = errno;
-                rc = -1;
+            if (errnum != 0) {
+                if (flux_respond_error (h, msg, errnum, NULL) < 0) {
+                    saved_errno = errno;
+                    rc = -1;
+                }
+            }
+            else {
+                if (flux_respond_raw (h, msg, data, len) < 0) {
+                    saved_errno = errno;
+                    rc = -1;
+                }
             }
             flux_msg_destroy (msg);
         }
@@ -399,9 +407,14 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     rc = 0;
 done:
     assert (rc == 0 || saved_errno != 0);
-    if (flux_respond_raw (h, msg, rc < 0 ? saved_errno : 0,
-                                                        data, len) < 0)
-        flux_log_error (h, "content load");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "content load: flux_respond_error");
+    }
+    else {
+        if (flux_respond_raw (h, msg, data, len) < 0)
+            flux_log_error (h, "content load: flux_respond_raw");
+    }
 }
 
 /* Store operation
@@ -581,9 +594,14 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
     rc = 0;
 done:
     assert (rc == 0 || errno != 0);
-    if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
-                                            blobref, strlen (blobref) + 1) < 0)
-        flux_log_error (h, "content store");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "content store: flux_respond_error");
+    }
+    else {
+        if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+            flux_log_error (h, "content store: flux_respond_raw");
+    }
 }
 
 /* Backing store is enabled/disabled by modules that provide the

@@ -67,10 +67,14 @@ void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_decode_raw (msg, NULL, &d, &l) < 0) {
         errnum = errno;
-        goto done;
+        goto error;
     }
-done:
-    (void)flux_respond_raw (h, msg, errnum, d, l);
+    if (flux_respond_raw (h, msg, d, l) < 0)
+        BAIL_OUT ("flux_respond_raw: %s", flux_strerror (errno));
+    return;
+error:
+    if (flux_respond_error (h, msg, errnum, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 /* no-payload response */

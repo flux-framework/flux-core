@@ -287,12 +287,12 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request,
 }
 
 int flux_respond_raw (flux_t *h, const flux_msg_t *request,
-                      int errnum, const void *data, int len)
+                      const void *data, int len)
 {
-    flux_msg_t *msg = derive_response (h, request, errnum);
+    flux_msg_t *msg = derive_response (h, request, 0);
     if (!msg)
         goto error;
-    if (!errnum && data && flux_msg_set_payload (msg, data, len) < 0)
+    if (data && flux_msg_set_payload (msg, data, len) < 0)
         goto error;
     if (flux_send (h, msg, 0) < 0)
         goto error;

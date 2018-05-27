@@ -68,10 +68,9 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request,
 
 
 /* Create a response to the provided request message with optional raw payload.
- * If errnum is nonzero, payload argument is ignored.
  */
 int flux_respond_raw (flux_t *h, const flux_msg_t *request,
-                      int errnum, const void *data, int len);
+                      const void *data, int len);
 
 /* Create an error response to the provided request message with optional
  * printf-style error string payload if 'fmt' is non-NULL.
