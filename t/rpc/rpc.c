@@ -62,6 +62,31 @@ error:
         BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
+/* request payload sets error response content */
+void rpctest_echo_error_cb (flux_t *h, flux_msg_handler_t *mh,
+                            const flux_msg_t *msg, void *arg)
+{
+    int errnum;
+    const char *errstr = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:i s?:s}",
+                             "errnum", &errnum, "errstr", &errstr) < 0)
+        goto error;
+    if (errstr) {
+        if (flux_respond_error (h, msg, errnum, "Error: %s", errstr) < 0)
+            BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
+    }
+    else {
+        if (flux_respond_error (h, msg, errnum, NULL) < 0)
+            BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
+    }
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
+}
+
+
 /* raw request payload echoed in response */
 void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
@@ -136,6 +161,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",   rpctest_hello_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",  rpcftest_hello_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",    rpctest_echo_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.echoerr", rpctest_echo_error_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho", rpctest_rawecho_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",  rpctest_nodeid_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,   "rpctest.multi",   rpctest_multi_cb, 0 },
@@ -224,6 +250,65 @@ void test_basic (flux_t *h)
     flux_future_destroy (r);
 
     diag ("completed synchronous rpc test");
+}
+
+void test_error (flux_t *h)
+{
+    flux_future_t *f;
+    const char *errstr;
+    const char *s;
+
+    /* Error response with error message payload.
+     */
+    f = flux_rpc_pack (h, "rpctest.echoerr", FLUX_NODEID_ANY, 0,
+                       "{s:i s:s}",
+                       "errnum", 69,
+                       "errstr", "Hello world");
+    ok (f != NULL,
+        "flux_rpc_pack sent request to rpctest.echoerr service");
+    errno = 0;
+    ok (flux_future_get (f, NULL) < 0 && errno == 69,
+        "flux_future_get failed with expected errno");
+    errno = 0;
+    ok (flux_rpc_get (f, NULL) < 0 && errno == 69,
+        "flux_rpc_get failed with expected errno");
+    errstr = flux_rpc_get_error (f);
+    ok (errstr != NULL && !strcmp (errstr, "Error: Hello world"),
+        "flux_rpc_get_error returned expected error string");
+    flux_future_destroy (f);
+
+    /* Error response with no error message payload.
+     */
+    f = flux_rpc_pack (h, "rpctest.echoerr", FLUX_NODEID_ANY, 0,
+                       "{s:i}",
+                       "errnum", ENOTDIR);
+    ok (f != NULL,
+        "flux_rpc_pack sent request to rpctest.echoerr service (no errstr)");
+    errno = 0;
+    ok (flux_future_get (f, NULL) < 0 && errno == ENOTDIR,
+        "flux_future_get failed with expected errno");
+    errno = 0;
+    ok (flux_rpc_get (f, NULL) < 0 && errno == ENOTDIR,
+        "flux_rpc_get failed with expected errno");
+    errstr = flux_rpc_get_error (f);
+    ok (errstr != NULL && !strcmp (errstr, flux_strerror (ENOTDIR)),
+        "flux_rpc_get_error returned canned error string");
+    flux_future_destroy (f);
+
+    /* Success response with payload.
+     * Ensure flux_rpc_get_error() doesn't return the payload!
+     */
+    f = flux_rpc (h, "rpctest.echo", "Nerp", FLUX_NODEID_ANY, 0);
+    ok (f != NULL,
+        "flux_rpc sent request to rpctest.echo");
+    ok (flux_future_get (f, NULL) == 0,
+        "flux_future_get returned success");
+    ok (flux_rpc_get (f, &s) == 0 && s != NULL && !strcmp (s, "Nerp"),
+        "flux_rpc_get worked and retrieved payload");
+    errstr = flux_rpc_get_error (f);
+    ok (errstr != NULL && !strcmp (errstr, flux_strerror (0)),
+        "flux_rpc_get_error returned canned Success string");
+    flux_future_destroy (f);
 }
 
 void test_encoding (flux_t *h)
@@ -564,6 +649,7 @@ int main (int argc, char *argv[])
 
     test_service (h);
     test_basic (h);
+    test_error (h);
     test_encoding (h);
     test_then (h);
     test_multi_response (h);
