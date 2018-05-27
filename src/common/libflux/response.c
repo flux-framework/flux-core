@@ -307,6 +307,34 @@ fatal:
     return -1;
 }
 
+int flux_respond_error (flux_t *h, const flux_msg_t *request,
+                        int errnum, const char *fmt, ...)
+{
+    flux_msg_t *msg = derive_response (h, request, errnum);
+    if (!msg)
+        goto error;
+    if (errnum == 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (fmt) {
+        va_list ap;
+        char errstr[1024];
+        va_start (ap, fmt);
+        (void)vsnprintf (errstr, sizeof (errstr), fmt, ap);
+        va_end (ap);
+        if (flux_msg_set_string (msg, errstr) < 0)
+            goto error;
+    }
+    if (flux_send (h, msg, 0) < 0)
+        goto error;
+    flux_msg_destroy (msg);
+    return 0;
+error:
+    flux_msg_destroy (msg);
+    return -1;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
