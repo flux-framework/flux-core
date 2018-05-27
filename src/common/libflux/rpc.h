@@ -28,6 +28,14 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len);
 
+/* Get a human-readable error message for fulfilled RPC.
+ * The result is always a valid string:
+ * If the RPC did not fail, flux_strerror (0) is returned.
+ * If the RPC failed, but did not include an error message payload,
+ * flux_strerror (errnum) is returned.
+ */
+const char *flux_rpc_get_error (flux_future_t *f);
+
 #ifdef __cplusplus
 }
 #endif
