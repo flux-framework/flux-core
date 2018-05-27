@@ -37,9 +37,11 @@ int main (int argc, char *argv[])
         "flux_response_decode returns encoded topic");
     ok (flux_response_decode (msg, NULL, NULL) == 0,
         "flux_response_decode topic is optional");
-    errno = 0;
     ok (flux_response_decode (msg, NULL, &s) == 0 && s == NULL,
         "flux_response_decode returns s = NULL when expected payload is missing");
+    errno = 0;
+    ok (flux_response_decode_error (msg, &s) < 0 && errno == ENOENT,
+        "flux_response_decode_error fails with ENOENT");
     flux_msg_destroy (msg);
 
     /* without payload (raw) */
@@ -56,6 +58,9 @@ int main (int argc, char *argv[])
     d = (char *)&d;
     ok (flux_response_decode_raw (msg, NULL, &d, &l) == 0 && l==0 && d==NULL,
         "flux_response_decode_raw returns NULL payload");
+    errno = 0;
+    ok (flux_response_decode_error (msg, &s) < 0 && errno == ENOENT,
+        "flux_response_decode_error fails with ENOENT");
     flux_msg_destroy (msg);
 
     /* with json payload */
@@ -66,9 +71,11 @@ int main (int argc, char *argv[])
     ok (flux_response_decode (msg, NULL, &s) == 0
         && s != NULL && !strcmp (s, json_str),
         "flux_response_decode returns encoded payload");
-    errno = 0;
     ok (flux_response_decode (msg, NULL, NULL) == 0,
         "flux_response_decode works with payload but don't want the payload");
+    errno = 0;
+    ok (flux_response_decode_error (msg, &s) < 0 && errno == ENOENT,
+        "flux_response_decode_error fails with ENOENT");
     flux_msg_destroy (msg);
 
     /* with raw payload */
@@ -80,6 +87,9 @@ int main (int argc, char *argv[])
     ok (flux_response_decode_raw (msg, NULL, &d, &l) == 0
         && d != NULL && l == len && memcmp (d, data, len) == 0,
         "flux_response_decode_raw returns encoded payload");
+    errno = 0;
+    ok (flux_response_decode_error (msg, &s) < 0 && errno == ENOENT,
+        "flux_response_decode_error fails with ENOENT");
     flux_msg_destroy (msg);
 
     /* with error */
@@ -90,6 +100,21 @@ int main (int argc, char *argv[])
     ok (flux_response_decode (msg, NULL, NULL) < 0
         && errno == 42,
         "flux_response_decode fails with encoded errnum");
+    errno = 0;
+    ok (flux_response_decode_error (msg, &s) < 0 && errno == ENOENT,
+        "flux_response_decode_error fails with ENOENT");
+    flux_msg_destroy (msg);
+
+    /* with extended error message */
+    ok ((msg = flux_response_encode_error ("foo.bar", 42, "My Error")) != NULL,
+        "flux_response_encode_error works with errnum");
+    s = NULL;
+    errno = 0;
+    ok (flux_response_decode (msg, NULL, NULL) < 0
+        && errno == 42,
+        "flux_response_decode fails with encoded errnum");
+    ok (flux_response_decode_error (msg, &s) == 0 && !strcmp (s, "My Error"),
+        "flux_response_decode_error includes error message");
     flux_msg_destroy (msg);
 
     done_testing();
