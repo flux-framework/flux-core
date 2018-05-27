@@ -12,9 +12,13 @@ void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
     int i;
 
     if (flux_request_unpack (msg, NULL, "{s:i}", "n", &i) < 0)
-        flux_respond (h, msg, errno, NULL);
-    else
-        flux_respond_pack (h, msg, "{s:i}", "n", i + 1);
+        goto error;
+    if (flux_respond_pack (h, msg, "{s:i}", "n", i + 1) < 0)
+        BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 /* request nodeid and flags returned in response */
@@ -24,56 +28,54 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
     uint32_t nodeid;
     int flags;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0
-            || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
+    if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    }
+    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+        goto error;
     if (flux_respond_pack (h, msg, "s:i s:i",
                                    "nodeid", (int)nodeid,
                                    "flags", flags) < 0)
-        diag ("%s: flux_respond_pack: %s", __FUNCTION__, strerror (errno));
+        BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        diag ("%s: flux_respond: %s", __FUNCTION__, strerror (errno));
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 /* request payload echoed in response */
 void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
-    const char *json_str;
+    const char *s;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        errnum = errno;
-        goto done;
+    if (flux_request_decode (msg, NULL, &s) < 0)
+        goto error;
+    if (!s) {
+        errno = EPROTO;
+        goto error;
     }
-    if (!json_str) {
-        errnum = EPROTO;
-        goto done;
-    }
-done:
-    (void)flux_respond (h, msg, errnum, json_str);
+    if (flux_respond (h, msg, 0, s) < 0)
+        BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 /* raw request payload echoed in response */
 void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
     const void *d = NULL;
     int l = 0;
 
-    if (flux_request_decode_raw (msg, NULL, &d, &l) < 0) {
-        errnum = errno;
+    if (flux_request_decode_raw (msg, NULL, &d, &l) < 0)
         goto error;
-    }
     if (flux_respond_raw (h, msg, d, l) < 0)
         BAIL_OUT ("flux_respond_raw: %s", flux_strerror (errno));
     return;
 error:
-    if (flux_respond_error (h, msg, errnum, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
@@ -81,36 +83,33 @@ error:
 void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
-    const char *json_str;
+    const char *s;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        errnum = errno;
-        goto done;
+    if (flux_request_decode (msg, NULL, &s) < 0)
+        goto error;
+    if (s) {
+        errno = EPROTO;
+        goto error;
     }
-    if (json_str) {
-        errnum = EPROTO;
-        goto done;
-    }
-done:
-    if (flux_respond (h, msg, errnum, NULL) < 0)
-        diag ("%s: flux_respond: %s", __FUNCTION__, flux_strerror (errno));
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
-
-    if (flux_request_unpack (msg, NULL, "{ ! }") < 0) {
-        errnum = errno;
-        goto done;
-    }
- done:
-    if (errnum)
-        (void)flux_respond (h, msg, errnum, NULL);
-    else
-        (void)flux_respond_pack (h, msg, "{}");
+    if (flux_request_unpack (msg, NULL, "{ ! }") < 0)
+        goto error;
+    if (flux_respond_pack (h, msg, "{}") < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 /* Send back the requested number of responses followed an ENODATA error.
@@ -124,12 +123,12 @@ void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     for (i = 0; i < count; i++) {
         if (flux_respond_pack (h, msg, "{s:i}", "seq", i) < 0)
-            diag ("%s: flux_respond: %s", __FUNCTION__, flux_strerror (errno));
+            BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     }
     errno = ENODATA; // EOF of sorts
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        diag ("%s: flux_respond: %s", __FUNCTION__, flux_strerror (errno));
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
 }
 
 static const struct flux_msg_handler_spec htab[] = {
