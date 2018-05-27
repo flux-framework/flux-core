@@ -5,7 +5,7 @@ flux_respond(3)
 
 NAME
 ----
-flux_respond, flux_respond_pack, flux_respond_raw - respond to a request
+flux_respond, flux_respond_pack, flux_respond_raw, flux_respond_error - respond to a request
 
 
 SYNOPSIS
@@ -21,17 +21,21 @@ SYNOPSIS
  int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                        int errnum, const void *data, int length);
 
+ int flux_respond_error (flux_t *h, const flux_msg_t *request,
+                         int errnum, const char *fmt, ...);
 
 DESCRIPTION
 -----------
 
-`flux_respond()`, `flux_respond_pack()`, and `flux_respond_raw()` encode
-and send a response message on handle _h_, deriving topic string,
-matchtag, and route stack from the provided _request_.
+`flux_respond()`, `flux_respond_pack()`, `flux_respond_raw()`, and
+`flux_respond_error()`  encode and send a response message on handle _h_,
+deriving topic string, matchtag, and route stack from the provided
+_request_.
 
-If _errnum_ is non-zero, an error is returned to the sender such that
-`flux_rpc_get(3)` or `flux_rpc_get_raw(3)` will fail, with the system
-errno set to _errnum_.  Any payload arguments are ignored in this case.
+`flux_respond()` can operate in two modes.  If _errnum_ is non-zero,
+an error is returned to the sender such that `flux_rpc_get(3)` or
+variants will fail, with the system errno set to _errnum_.  Any payload
+arguments are ignored in this case.
 
 If _s_ is non-NULL, `flux_respond()` will send it as the response
 payload, otherwise there will be no payload.  Similarly, if _data_ is
@@ -41,6 +45,11 @@ non-NULL, `flux_respond_raw()` will send it as the response payload.
 building the payload using variable arguments with a format string in
 the style of jansson's `json_pack()` (used internally).
 
+`flux_respond_error()` returns an error response to the sender.
+_errnum_ must be non-zero.  If _fmt_ is non-NULL, an error string
+payload is included in the response, constructed using printf(3)-style
+arguments.  The error string may be used to provide a more
+detailed error message than can be conveyed via _errnum_.
 
 include::JSON_PACK.adoc[]
 
