@@ -5,7 +5,7 @@ flux_response_decode(3)
 
 NAME
 ----
-flux_response_decode, flux_response_decode_raw - decode a Flux response message
+flux_response_decode, flux_response_decode_raw, flux_response_decode_error - decode a Flux response message
 
 
 SYNOPSIS
@@ -19,6 +19,10 @@ SYNOPSIS
  int flux_response_decode_raw (const flux_msg_t *msg,
                                const char **topic,
                                const void **data, int *len);
+
+ int flux_response_decode_error (const flux_msg_t *msg,
+                                 const char *errstr);
+
 
 DESCRIPTION
 -----------
@@ -35,6 +39,10 @@ string belongs to _msg_ and should not be freed.
 `flux_response_decode_raw()` decodes a response message with a raw payload,
 setting _data_ and _len_ to the payload data and length. The storage for
 the raw payload belongs to _msg_ and should not be freed.
+
+`flux_response_decode_error()` decodes an optional error string included
+with an error response.  This fails if the response is not an error,
+or does not include an error string payload.
 
 
 RETURN VALUE
@@ -53,6 +61,10 @@ The _msg_ argument was NULL.
 EPROTO::
 Message decoding failed, such as due to incorrect message type,
 missing topic string, etc..
+
+ENOENT::
+`flux_response_decode_error()` was called on a message with no
+error response payload.
 
 
 AUTHOR
