@@ -612,8 +612,55 @@ prog:SubCommand {
  end
 }
 
+prog:SubCommand {
+ name = "setopt",
+ usage = "option[=value]",
+ description = "Set global WRECK job options",
+ handler = function (self, arg)
+    if #arg == 0 then
+        self:die ("Missing option!")
+    end
+    local f = assert (require 'flux'.new ())
+    local options = f:kvs_get ("lwj.options") or {}
+    for _,s in pairs (arg) do
+        local opt,val = s:match("([^=]+)=?(.*)")
+        if not val or val == "" then
+            options[opt] = true
+        elseif val == "false" or val == "no" or val == 0 then
+            options[opt] = nil
+        else
+            options[opt] = tonumber(val) or val
+        end
+    end
+    print (require 'inspect' (options))
+    f:kvs_put ("lwj.options", options)
+    f:kvs_commit ()
+ end
+}
 
-
+prog:SubCommand {
+ name = "getopt",
+ usage = "[option]",
+ description = "Print global WRECK options",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local options = f:kvs_get ("lwj.options") or {}
+    if #arg == 0 then
+        for k,v in pairs (options) do
+            print (k.."="..v)
+        end
+    else
+        for _,k in pairs (arg) do
+            v = options[k]
+            if v then
+                print (k.."="..v)
+            else
+                print (k.."=false")
+            end
+        end
+    end
+ end
+}
 
 -- return keys in dir as a table sorted by number
 local function sorted_keys (dir)
