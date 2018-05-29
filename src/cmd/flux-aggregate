@@ -41,6 +41,19 @@ local function die (...)
     os.exit (1)
 end
 
+local function l_tostring (o)
+   if type(o) == 'table' then
+      local s = '{ '
+      for k,v in pairs(o) do
+         if type(k) ~= 'number' then k = '"'..k..'"' end
+         s = s .. '['..k..'] = ' .. l_tostring (v) .. ','
+      end
+      return s .. '} '
+   else
+      return tostring(o)
+   end
+end
+
 ---
 -- Synchronously subscribe to topic on flux handle f
 --
@@ -56,16 +69,30 @@ end
 --
 --  parse options, get key and value
 --
-local opts, optind = getopt (arg, "ht:c:",
-                             { help = "h", timeout = "t", count = "c" })
+local opts, optind = getopt (arg, "ht:c:e:",
+                             { help = "h",
+                               timeout = "t",
+                               count = "c",
+                               execute = "e" })
 local key = arg[optind]
-local value = tonumber (arg[optind+1])
+local value = nil
+
+if opts.e then
+    local fn, err = loadstring ("return "..opts.e)
+    if not fn then
+        die ("Failed to parse argument to -e, --execute: %s\n", err)
+    end
+    value = fn ()
+else
+    value = tonumber (arg[optind+1]) or arg[optind+1]
+end
 
 if opts.h then
     printf ("Usage: %s [OPTIONS] KEY VALUE\n", prog)
     printf (" -h, --help         Display this message.\n")
     printf (" -t, --timeout=T    Set reduction timeout to T seconds.\n")
     printf (" -c, --fwd-count=N  Forward aggregate upstream after N.\n")
+    printf (" -e, --execute=CODE Execute Lua code to get value.\n")
     os.exit (0)
 end
 
@@ -112,7 +139,7 @@ if tonumber (f.rank) == 0 then
     handler = function (kw, result)
         if result and not kw.isdir and result.total == result.count then
             for ids,value in pairs (result.entries) do
-              printf ("%s: %d\n", ids, value)
+              printf ("%s: %s\n", ids, l_tostring (value))
             end
             f:reactor_stop ()
         end
@@ -136,7 +163,7 @@ local resp, err= f:rpc ("aggregator.push", {
   timeout = tonumber (opts.t),
   fwd_count = tonumber (opts.c),
   entries = {
-      [tostring (f.rank)] = tonumber (value),
+      [tostring (f.rank)] = value,
   }
 })
 
