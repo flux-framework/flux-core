@@ -77,7 +77,12 @@ libutil_la_SOURCES = \
 	timestamp.c \
 	timestamp.h \
 	cf.c \
-	cf.h
+	cf.h \
+	mnemonic.c \
+	mnemonic.h \
+	mn_wordlist.c \
+	fluid.c \
+	fluid.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -101,7 +106,8 @@ TESTS = test_nodeset.t \
 	test_read_all.t \
 	test_tomltk.t \
 	test_cf.t \
-	test_ipaddr.t
+	test_ipaddr.t \
+	test_fluid.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -204,3 +210,7 @@ test_cf_t_LDADD = $(test_ldadd)
 test_ipaddr_t_SOURCES = test/ipaddr.c
 test_ipaddr_t_CPPFLAGS = $(test_cppflags)
 test_ipaddr_t_LDADD = $(test_ldadd)
+
+test_fluid_t_SOURCES = test/fluid.c
+test_fluid_t_CPPFLAGS = $(test_cppflags)
+test_fluid_t_LDADD = $(test_ldadd)
