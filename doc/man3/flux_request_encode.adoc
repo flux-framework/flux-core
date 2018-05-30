@@ -13,7 +13,7 @@ SYNOPSIS
  #include <flux/core.h>
 
  flux_msg_t *flux_request_encode (const char *topic,
-                                  const char *json_str);
+                                  const char *s);
 
  flux_msg_t *flux_request_encode_raw (const char *topic,
                                       void *data, int len);
@@ -22,7 +22,7 @@ DESCRIPTION
 -----------
 
 `flux_request_encode()` encodes a request message with topic string
-_topic_ and optional JSON payload _json_str_.  The newly constructed
+_topic_ and optional NULL terminated string payload _s_.  The newly constructed
 message that is returned must be destroyed with `flux_msg_destroy()`.
 
 `flux_request_encode_raw()` encodes a request message with topic
@@ -41,7 +41,7 @@ ERRORS
 ------
 
 EINVAL::
-The _topic_ argument was NULL or _json_str_ is not a json object.
+The _topic_ argument was NULL or _s_ is not NULL terminated.
 
 ENOMEM::
 Memory was unavailable.

@@ -14,7 +14,7 @@ SYNOPSIS
 
  int flux_request_decode (const flux_msg_t *msg,
                           const char **topic,
-                          const char **json_str);
+                          const char **s);
 
  int flux_request_unpack (const flux_msg_t *msg,
                           const char **topic,
@@ -32,9 +32,9 @@ DESCRIPTION
 _topic_, if non-NULL, will be set the message's topic string. The storage
 for this string belongs to _msg_ and should not be freed.
 
-_json_str_, if non-NULL, will be set to the message's JSON payload.
-If no payload exists, _json_str_ is set to NULL.  The storage for this
-string belongs to _msg_ and should not be freed.
+_s_, if non-NULL, will be set to the message's NULL-terminated string payload.
+If no payload exists, it is set to NULL.  The storage for this string belongs
+to _msg_ and should not be freed.
 
 `flux_request_unpack()` decodes a request message with a JSON payload as
 above, parsing the payload using variable arguments with a format string

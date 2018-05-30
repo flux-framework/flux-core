@@ -44,8 +44,7 @@
 #include "rpc.h"
 #include "reactor.h"
 #include "msg_handler.h"
-
-#include "src/common/libutil/nodeset.h"
+#include "flog.h"
 
 struct flux_rpc {
     flux_t *h;
@@ -91,14 +90,14 @@ error:
     return NULL;
 }
 
-int flux_rpc_get (flux_future_t *f, const char **json_str)
+int flux_rpc_get (flux_future_t *f, const char **s)
 {
     const flux_msg_t *msg;
     int rc = -1;
 
     if (flux_future_get (f, &msg) < 0)
         goto done;
-    if (flux_response_decode (msg, NULL, json_str) < 0)
+    if (flux_response_decode (msg, NULL, s) < 0)
         goto done;
     rc = 0;
 done:
@@ -145,6 +144,21 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...)
     return rc;
 }
 
+const char *flux_rpc_get_error (flux_future_t *f)
+{
+    int errnum = 0;
+    const char *errstr = NULL;
+
+    if (flux_future_get (f, NULL) < 0) {
+        errnum = errno;
+        errstr = flux_future_aux_get (f, "flux::rpc_errstr");
+    }
+    if (errstr)
+        return errstr;
+    else
+        return flux_strerror (errnum);
+}
+
 /* Message handler for response.
  * Parse the response message here so one could call flux_future_get()
  * instead of flux_rpc_get() to test result of RPC with no response payload.
@@ -156,6 +170,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_future_t *f = arg;
     flux_msg_t *cpy;
     int saved_errno;
+    const char *errstr;
 
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
@@ -172,6 +187,15 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     saved_errno = errno;
     flux_future_fulfill_error (f, saved_errno);
+    /* If error response contains an error string payload,
+     * save it in the future aux hash.  If unlikely ENOMEM errors occur,
+     * silently discard the error string.
+     */
+    if (flux_response_decode_error (msg, &errstr) == 0) {
+        char *cpy = strdup (errstr);
+        if (cpy && flux_future_aux_set (f, "flux::rpc_errstr", cpy, free) < 0)
+            free (cpy);
+    }
 }
 
 /* Callback to initialize future in main or alternate reactor contexts.
@@ -253,13 +277,13 @@ error:
 
 flux_future_t *flux_rpc (flux_t *h,
                          const char *topic,
-                         const char *json_str,
+                         const char *s,
                          uint32_t nodeid,
                          int flags)
 {
     flux_msg_t *msg = NULL;
     flux_future_t *f = NULL;
-    if (!(msg = flux_request_encode (topic, json_str)))
+    if (!(msg = flux_request_encode (topic, s)))
         goto done;
     if (!(f = flux_rpc_msg (h, nodeid, flags, msg)))
         goto done;

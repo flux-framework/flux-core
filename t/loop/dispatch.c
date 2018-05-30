@@ -75,7 +75,7 @@ void test_fastpath (flux_t *h)
         "allocated matchtag");
     ok ((mh = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
-    ok ((msg = flux_response_encode ("foo", 0, NULL)) != NULL,
+    ok ((msg = flux_response_encode ("foo", NULL)) != NULL,
         "encoded response message");
     ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
         "set matchtag in response");
@@ -157,7 +157,7 @@ void test_cloned_dispatch (flux_t *orig)
     ok ((mh2 = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
     flux_msg_handler_start (mh2);
-    ok ((msg = flux_response_encode ("foo", 0, NULL)) != NULL,
+    ok ((msg = flux_response_encode ("foo", NULL)) != NULL,
         "encoded response message");
     ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
         "set matchtag in response");
@@ -170,7 +170,7 @@ void test_cloned_dispatch (flux_t *orig)
     m2.matchtag = flux_matchtag_alloc (h, 0);
     ok (m2.matchtag != FLUX_MATCHTAG_NONE,
         "allocated matchtag (%d)", m2.matchtag); // 2
-    ok ((msg = flux_response_encode ("bar", 0, NULL)) != NULL,
+    ok ((msg = flux_response_encode ("bar", NULL)) != NULL,
         "encoded response message");
     ok (flux_msg_set_matchtag (msg, m2.matchtag) == 0,
         "set matchtag in response");

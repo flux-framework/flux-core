@@ -509,7 +509,8 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
 
     /* Respond to client
      */
-    if (!(rmsg = flux_response_encode (topic, rc < 0 ? errno : 0, NULL))
+    if (!(rmsg = flux_response_encode (topic, NULL))
+                    || flux_msg_set_errnum (rmsg, rc < 0 ? errno : 0) < 0
                     || flux_msg_set_matchtag (rmsg, matchtag) < 0
                     || flux_msg_set_rolemask (rmsg, FLUX_ROLE_OWNER) < 0)
         flux_log_error (c->ctx->h, "%s: encoding response", __FUNCTION__);

@@ -141,7 +141,7 @@ static int io_handler (flux_t *h, cron_task_t *t, const flux_msg_t *msg)
     bool is_stderr = false;
     int len;
 
-    if (flux_msg_get_json (msg, &json_str) < 0)
+    if (flux_msg_get_string (msg, &json_str) < 0)
         return -1;
 
     if ((len = zio_json_decode (json_str, &data, &eof)) < 0) {

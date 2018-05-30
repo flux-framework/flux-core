@@ -7,15 +7,15 @@
 extern "C" {
 #endif
 
-/* Decode a request message with optional json payload.
+/* Decode a request message with optional string payload.
  * If topic is non-NULL, assign the request topic string.
- * If json_str is non-NULL, assign the payload or set to NULL if none
+ * If s is non-NULL, assign the string payload or set to NULL if none
  * exists.  Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_request_decode (const flux_msg_t *msg, const char **topic,
-                         const char **json_str);
+                         const char **s);
 
-/* Decode a request message with json payload.  These functions use
+/* Decode a request message with required json payload.  These functions use
  * jansson unpack style variable arguments for decoding the JSON object
  * payload directly.  Returns 0 on success, or -1 on failure with errno set.
  */
@@ -31,12 +31,12 @@ int flux_request_unpack (const flux_msg_t *msg, const char **topic,
 int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
                              const void **data, int *len);
 
-/* Encode a request message.
- * If json_str is non-NULL, assign the json payload.
+/* Encode a request message with optional string payload.
+ * If s is non-NULL, assign the string payload.
  */
-flux_msg_t *flux_request_encode (const char *topic, const char *json_str);
+flux_msg_t *flux_request_encode (const char *topic, const char *s);
 
-/* Encode a request message.
+/* Encode a request message with optional raw payload.
  * If data is non-NULL, assign the raw payload.
  * Otherwise there will be no payload.
  */

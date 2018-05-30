@@ -317,8 +317,14 @@ void load_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     rc = 0;
 done:
-    if (flux_respond_raw (h, msg, rc < 0 ? errno : 0, data, size) < 0)
-        flux_log_error (h, "load: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "load: flux_respond_error");
+    }
+    else {
+        if (flux_respond_raw (h, msg, data, size) < 0)
+            flux_log_error (h, "load: flux_respond_raw");
+    }
     (void )sqlite3_reset (ctx->load_stmt);
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
 }
@@ -388,9 +394,14 @@ void store_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     rc = 0;
 done:
-    if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
-                                        blobref, strlen (blobref) + 1) < 0)
-        flux_log_error (h, "store: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "store: flux_respond_error");
+    }
+    else {
+        if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+            flux_log_error (h, "store: flux_respond_raw");
+    }
     (void) sqlite3_reset (ctx->store_stmt);
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
 }

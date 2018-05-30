@@ -5,7 +5,7 @@ flux_rpc(3)
 
 NAME
 ----
-flux_rpc, flux_rpc_pack, flux_rpc_raw, flux_rpc_get, flux_rpc_get_unpack, flux_rpc_get_raw - perform a remote procedure call to a Flux service
+flux_rpc, flux_rpc_pack, flux_rpc_raw, flux_rpc_get, flux_rpc_get_unpack, flux_rpc_get_raw, flux_rpc_get_error - perform a remote procedure call to a Flux service
 
 
 SYNOPSIS
@@ -13,7 +13,7 @@ SYNOPSIS
  #include <flux/core.h>
 
  flux_future_t *flux_rpc (flux_t *h, const char *topic,
-                          const char *json_str,
+                          const char *s,
                           uint32_t nodeid, int flags);
 
  flux_future_t *flux_rpc_pack (flux_t *h, const char *topic,
@@ -24,13 +24,14 @@ SYNOPSIS
                               const void *data, int len,
                               uint32_t nodeid, int flags);
 
- int flux_rpc_get (flux_future_t *f, const char **json_str);
+ int flux_rpc_get (flux_future_t *f, const char **s);
 
  int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
 
  int flux_rpc_get_raw (flux_future_t *f,
                        const void **data, int *len);
 
+ const char *flux_rpc_get_error (flux_future_t *f);
 
 DESCRIPTION
 -----------
@@ -54,6 +55,12 @@ to access the response message stored in the future.  If the response
 message has not yet been received, these functions block until it is,
 or an error occurs.
 
+`flux_rpc_get_error()` returns an error string explaining the reason
+for a failure.  Its return value is never NULL.  If the remote service
+included a textual error string in the response, that is returned.
+Otherwise flux_strerror(3) provides the string based on the error
+number received in the response.
+
 
 REQUEST OPTIONS
 ---------------
@@ -61,11 +68,11 @@ REQUEST OPTIONS
 The request message is encoded and sent with or without a payload
 using one of the three `flux_rpc()` variants.
 
-`flux_rpc()` attaches _json_str_, a serialized JSON string, as request
+`flux_rpc()` attaches _s_, a NULL terminated string, as request
 payload.  If NULL, the request is encoded without a payload.
 
-`flux_rpc_pack()` attaches a JSON payload encoded using Jansson
-`json_pack()` style arguments (see below).
+`flux_rpc_pack()` attaches a JSON payload encoded as a NULL terminated
+string using Jansson `json_pack()` style arguments (see below).
 
 `flux_rpc_raw()` attaches a raw payload _data_ of length _len_, in bytes.
 If _data_ is NULL, the request is encoded without a payload.
@@ -100,13 +107,13 @@ with an error.  Otherwise it is fulfilled with the response message.
 If there was an error, `flux_future_get()` or the `flux_rpc_get()` variants
 return an error.
 
-`flux_rpc_get()` sets _json_str_ (if non-NULL) to the serialized JSON
-payload contained in the RPC response.  If there was no payload, _json_str_
+`flux_rpc_get()` sets _s_ (if non-NULL) to the NULL-terminated string
+payload contained in the RPC response.  If there was no payload, _s_
 is set to NULL.
 
-`flux_rpc_get_unpack()` decodes the JSON payload using Jansson `json_unpack()`
-style arguments (see below).  It is an error if there is no payload, or if
-the payload is not JSON.
+`flux_rpc_get_unpack()` decodes the NULL-terminated string payload as JSON
+using Jansson `json_unpack()` style arguments (see below).  It is an error
+if there is no payload, or if the payload is not JSON.
 
 `flux_rpc_get_raw()` assigns the raw payload of the RPC response message
 to _data_ and its length to _len_.  If there is no payload, this function

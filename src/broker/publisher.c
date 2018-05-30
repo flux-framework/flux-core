@@ -109,8 +109,7 @@ static flux_msg_t *encode_event (const char *topic, int flags,
             errno = EPROTO;
             goto error;
         }
-        if (flux_msg_set_payload (msg, (flags & FLUX_MSGFLAG_JSON),
-                                  dst, dstlen) < 0) {
+        if (flux_msg_set_payload (msg, dst, dstlen) < 0) {
             if (errno == EINVAL)
                 errno = EPROTO;
             goto error;
@@ -157,8 +156,7 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
                                         "flags", &flags,
                                         "payload", &payload) < 0)
         goto error;
-    if ((flags & ~(FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_JSON)) != 0
-                            || (!payload && (flags & FLUX_MSGFLAG_JSON))) {
+    if ((flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
         errno = EPROTO;
         goto error;
     }

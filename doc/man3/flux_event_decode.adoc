@@ -14,7 +14,7 @@ SYNOPSIS
 
  int flux_event_decode (const flux_msg_t *msg,
                         const char **topic,
-                        const char **json_str);
+                        const char **s);
 
  int flux_event_decode_raw (const flux_msg_t *msg,
                             const char **topic,
@@ -25,7 +25,7 @@ SYNOPSIS
                         const char *fmt, ...);
 
  flux_msg_t *flux_event_encode (const char *topic,
-                                const char *json_str);
+                                const char *s);
 
  flux_msg_t *flux_event_encode_raw (const char *topic,
                                     const void *data, int len);
@@ -42,9 +42,9 @@ DESCRIPTION
 _topic_, if non-NULL, will be set to the message's topic string. The storage
 for this string belongs to _msg_ and should not be freed.
 
-_json_str_, if non-NULL, will be set to the message's JSON payload. If
-no payload exists, _json_str_ is set to NULL.  The storage for this
-string belongs to _msg_ and should not be freed.
+_s_, if non-NULL, will be set to the message's NULL-terminated string payload.
+If no payload exists, it is set to NULL.  The storage for this string belongs
+to _msg_ and should not be freed.
 
 `flux_event_decode_raw()` decodes an event message with a raw payload,
 setting _data_ and _len_ to the payload data and length.  The storage for
@@ -56,8 +56,8 @@ in the style of jansson's `json_unpack()` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
 `flux_event_encode()` encodes a Flux event message with topic string _topic_
-and optional JSON payload _json_str_.  The newly constructed message that
-is returned must be destroyed with `flux_msg_destroy()`.
+and optional NULL-terminated string payload _s_.  The newly constructed
+message that is returned must be destroyed with `flux_msg_destroy()`.
 
 `flux_event_encode_raw()` encodes a Flux event message with topic
 string _topic_.  If _data_ is non-NULL, its contents will be used as

@@ -27,7 +27,6 @@ enum {
 enum {
     FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
     FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
-    FLUX_MSGFLAG_JSON       = 0x04,	/* message payload is JSON */
     FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
@@ -161,12 +160,9 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * The new payload will be copied (caller retains ownership).
  * Any old payload is deleted.
  * flux_msg_get_payload returns pointer to msg-owned buf.
- * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
-                          const void **buf, int *size);
-int flux_msg_set_payload (flux_msg_t *msg, int flags,
-                          const void *buf, int size);
+int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size);
+int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
 /* Get/set flags
@@ -177,17 +173,21 @@ bool flux_msg_has_payload (const flux_msg_t *msg);
 int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags);
 int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags);
 
-/* Get/set JSON payload.
- * flux_msg_set_json() accepts a NULL json_str (no payload).
- * flux_msg_get_json() will set json_str to NULL if there is no payload
+/* Get/set string payload.
+ * flux_msg_set_string() accepts a NULL 's' (no payload).
+ * flux_msg_get_string() will set 's' to NULL if there is no payload
+ * N.B. the raw paylaod includes C string \0 terminator.
+ */
+int flux_msg_set_string (flux_msg_t *msg, const char *);
+int flux_msg_get_string (const flux_msg_t *msg, const char **s);
+
+/* Get/set JSON payload (encoded as string)
  * pack/unpack functions use jansson pack/unpack style arguments for
  * encoding/decoding the JSON object payload directly from/to its members.
  */
-int flux_msg_set_json (flux_msg_t *msg, const char *json_str);
 int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...);
 int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap);
 
-int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
 int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...);
 int flux_msg_vunpack (const flux_msg_t *msg, const char *fmt, va_list ap);
 

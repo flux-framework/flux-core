@@ -563,7 +563,7 @@ static int l_flux_recv (lua_State *L)
         goto error;
 
     if (errnum == 0 && (flux_msg_get_topic (msg, &topic) < 0
-                     || flux_msg_get_json (msg, &json_str) < 0))
+                     || flux_msg_get_string (msg, &json_str) < 0))
         goto error;
 
     if (json_str)
@@ -618,7 +618,15 @@ static int l_flux_rpc (lua_State *L)
         rc = lua_pusherror (L, "Invalid args");
         goto done;
     }
-
+    /* flux_rpc() no longer checks that string payload is a JSON object.
+     * Do that here since we know the payload here is intended to be JSON,
+     * therefore should be an object not an array per RFC 3.
+     */
+    if (json_str[0] != '{' || json_str[strlen (json_str) - 1] != '}') {
+        errno = EINVAL;
+        rc = lua_pusherror (L, (char *)flux_strerror (errno));
+        goto done;
+    }
     fut = flux_rpc (f, tag, json_str, nodeid, 0);
     free (json_str);
     if (!fut || flux_rpc_get (fut, &s) < 0) {
@@ -736,8 +744,7 @@ static int l_flux_recv_event (lua_State *L)
     if (!(msg = flux_recv (f, match, 0)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
-    if (flux_msg_get_topic (msg, &topic) < 0
-            || flux_msg_get_json (msg, &json_str) < 0) {
+    if (flux_event_decode (msg, &topic, &json_str) < 0) {
         flux_msg_destroy (msg);
         return lua_pusherror (L, (char *)flux_strerror (errno));
     }

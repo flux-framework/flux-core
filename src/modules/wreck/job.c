@@ -546,7 +546,7 @@ static void spawn_io_cb (flux_t *h, struct wreck_job *job,
     int level = LOG_INFO;
     int len;
 
-    if (flux_msg_get_json (msg, &json_str) < 0)
+    if (flux_msg_get_string (msg, &json_str) < 0)
         return;
 
     if ((len = zio_json_decode (json_str, &data, NULL)) < 0) {

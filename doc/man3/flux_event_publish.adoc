@@ -14,24 +14,24 @@ SYNOPSIS
 
  flux_future_t *flux_event_publish (flux_t *h,
                                     const char *topic, int flags,
-                                    const char *json_str);
- 
+                                    const char *s);
+
  flux_future_t *flux_event_publish_pack (flux_t *h,
                                          const char *topic, int flags,
                                          const char *fmt, ...);
- 
+
  flux_future_t *flux_event_publish_raw (flux_t *h,
                                         const char *topic, int flags,
                                         const void *data, int len);
- 
+
  int flux_event_publish_get_seq (flux_future_t *f, int *seq);
 
 DESCRIPTION
 -----------
 
 `flux_event_publish()` sends an event message with topic string _topic_,
-_flags_ as described below, and optional payload _json_str_, a string-encoded
-JSON object or NULL indicating no payload.  The returned future is
+_flags_ as described below, and optional payload _s_, a NULL-terminated
+string, or NULL indicating no payload.  The returned future is
 fulfilled once the event is accepted by the broker and assigned a
 global sequence number.
 

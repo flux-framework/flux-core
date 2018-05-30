@@ -103,6 +103,7 @@ MAN3_FILES_SECONDARY = \
 	flux_stat_watcher_get_rstat.3 \
 	flux_respond_raw.3 \
 	flux_respond_pack.3 \
+	flux_respond_error.3 \
 	flux_reactor_now_update.3 \
 	flux_request_unpack.3 \
 	flux_request_decode_raw.3 \
@@ -112,6 +113,7 @@ MAN3_FILES_SECONDARY = \
 	flux_event_encode_raw.3 \
 	flux_event_decode_raw.3 \
 	flux_response_decode_raw.3 \
+	flux_response_decode_error.3 \
 	flux_request_encode_raw.3 \
 	flux_content_load_get.3 \
 	flux_content_store.3 \
@@ -135,6 +137,7 @@ MAN3_FILES_SECONDARY = \
 	flux_rpc_get.3 \
 	flux_rpc_get_unpack.3 \
 	flux_rpc_get_raw.3 \
+	flux_rpc_get_error.3 \
 	flux_kvs_lookupat.3 \
 	flux_kvs_lookup_get.3 \
 	flux_kvs_lookup_get_unpack.3 \
@@ -231,6 +234,7 @@ flux_signal_watcher_get_signum.3: flux_signal_watcher_create.3
 flux_stat_watcher_get_rstat.3: flux_stat_watcher_create.3
 flux_respond_raw.3: flux_respond.3
 flux_respond_pack.3: flux_respond.3
+flux_respond_error.3: flux_respond.3
 flux_reactor_now_update.3: flux_reactor_now.3
 flux_request_unpack.3: flux_request_decode.3
 flux_request_decode_raw.3: flux_request_decode.3
@@ -240,6 +244,7 @@ flux_event_pack.3: flux_event_decode.3
 flux_event_encode_raw.3: flux_event_decode.3
 flux_event_decode_raw.3: flux_event_decode.3
 flux_response_decode_raw.3: flux_response_decode.3
+flux_response_decode_error.3: flux_response_decode.3
 flux_request_encode_raw.3: flux_request_encode.3
 flux_content_load_get.3: flux_content_load.3
 flux_content_store.3: flux_content_load.3
@@ -262,6 +267,7 @@ flux_rpc_raw.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
 flux_rpc_get_unpack.3: flux_rpc.3
 flux_rpc_get_raw.3: flux_rpc.3
+flux_rpc_get_error.3: flux_rpc.3
 flux_kvs_lookupat.3: flux_kvs_lookup.3
 flux_kvs_lookup_get.3: flux_kvs_lookup.3
 flux_kvs_lookup_get_unpack.3: flux_kvs_lookup.3
