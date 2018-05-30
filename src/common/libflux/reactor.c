@@ -34,6 +34,10 @@
 #include "handle.h"
 #include "reactor.h"
 #include "ev_flux.h"
+#include "ev_buffer_read.h"
+#include "ev_buffer_write.h"
+#include "buffer.h"
+#include "buffer_private.h"
 
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"
@@ -363,6 +367,200 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w)
     assert (flux_watcher_get_ops (w) == &fd_watcher);
     ev_io *iow = w->data;
     return iow->fd;
+}
+
+/* buffer
+ */
+
+static int fd_set_nonblocking (int fd, int *flags_orig)
+{
+    int fval;
+
+    if ((fval = fcntl (fd, F_GETFL, 0)) < 0)
+        return (-1);
+
+    if (fcntl (fd, F_SETFL, fval | O_NONBLOCK) < 0)
+        return (-1);
+
+    if (flags_orig)
+        (*flags_orig) = fval;
+
+    return (0);
+}
+
+static int fd_set_flags (int fd, int flags)
+{
+    if (fcntl (fd, F_SETFL, flags) < 0)
+        return (-1);
+
+    return (0);
+}
+
+static void buffer_read_start (flux_watcher_t *w)
+{
+    struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
+    ev_buffer_read_start (w->r->loop, ebr);
+}
+
+static void buffer_read_stop (flux_watcher_t *w)
+{
+    struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
+    ev_buffer_read_stop (w->r->loop, ebr);
+}
+
+static void buffer_read_destroy (flux_watcher_t *w)
+{
+    struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
+    ev_buffer_read_cleanup (ebr);
+}
+
+static void buffer_read_cb (struct ev_loop *loop,
+                            struct ev_buffer_read *ebr,
+                            int revents)
+{
+    struct flux_watcher *w = ebr->data;
+    if (w->fn)
+        w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
+}
+
+static struct flux_watcher_ops buffer_read_watcher = {
+    .start = buffer_read_start,
+    .stop = buffer_read_stop,
+    .destroy = buffer_read_destroy,
+};
+
+flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
+                                                 int size, flux_watcher_f cb,
+                                                 int flags, void *arg)
+{
+    struct ev_buffer_read *ebr;
+    flux_watcher_t *w = NULL;
+    int flags_orig;
+
+    if (fd < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (fd_set_nonblocking (fd, &flags_orig) < 0)
+        return NULL;
+
+    if (!(w = flux_watcher_create (r,
+                                   sizeof (*ebr),
+                                   &buffer_read_watcher,
+                                   cb,
+                                   arg)))
+        goto cleanup;
+
+    ebr = flux_watcher_get_data (w);
+
+    if (ev_buffer_read_init (ebr,
+                             fd,
+                             size,
+                             buffer_read_cb,
+                             r->loop) < 0)
+        goto cleanup;
+
+    if (flags & FLUX_WATCHER_LINE_BUFFER)
+        ebr->line = true;
+
+    ebr->data = w;
+
+    return w;
+
+cleanup:
+    flux_watcher_destroy (w);
+    fd_set_flags (fd, flags_orig);
+    return NULL;
+}
+
+flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w)
+{
+    if (w)
+        return ((struct ev_buffer_read *)(w->data))->fb;
+    return NULL;
+}
+
+static void buffer_write_start (flux_watcher_t *w)
+{
+    struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;
+    ev_buffer_write_start (w->r->loop, ebw);
+}
+
+static void buffer_write_stop (flux_watcher_t *w)
+{
+    struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;
+    ev_buffer_write_stop (w->r->loop, ebw);
+}
+
+static void buffer_write_destroy (flux_watcher_t *w)
+{
+    struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;
+    ev_buffer_write_cleanup (ebw);
+}
+
+static void buffer_write_cb (struct ev_loop *loop,
+                             struct ev_buffer_write *ebw,
+                             int revents)
+{
+    struct flux_watcher *w = ebw->data;
+    if (w->fn)
+        w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
+}
+
+static struct flux_watcher_ops buffer_write_watcher = {
+    .start = buffer_write_start,
+    .stop = buffer_write_stop,
+    .destroy = buffer_write_destroy,
+};
+
+flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
+                                                  int size, flux_watcher_f cb,
+                                                  int flags, void *arg)
+{
+    struct ev_buffer_write *ebw;
+    flux_watcher_t *w = NULL;
+    int flags_orig;
+
+    if (fd < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (fd_set_nonblocking (fd, &flags_orig) < 0)
+        return NULL;
+
+    if (!(w = flux_watcher_create (r,
+                                   sizeof (*ebw),
+                                   &buffer_write_watcher,
+                                   cb,
+                                   arg)))
+        goto cleanup;
+
+    ebw = flux_watcher_get_data (w);
+
+    if (ev_buffer_write_init (ebw,
+                              fd,
+                              size,
+                              buffer_write_cb,
+                              r->loop) < 0)
+        goto cleanup;
+
+    ebw->data = w;
+
+    return w;
+
+cleanup:
+    flux_watcher_destroy (w);
+    fd_set_flags (fd, flags_orig);
+    return NULL;
+}
+
+flux_buffer_t *flux_buffer_write_watcher_get_buffer (flux_watcher_t *w)
+{
+    if (w)
+        return ((struct ev_buffer_write *)(w->data))->fb;
+    return NULL;
 }
 
 /* 0MQ sockets

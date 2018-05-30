@@ -73,7 +73,8 @@ fluxcoreinclude_HEADERS = \
 	heartbeat.h \
 	content.h \
 	future.h \
-	barrier.h
+	barrier.h \
+	buffer.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -100,11 +101,17 @@ libflux_la_SOURCES = \
 	tagpool.c \
 	ev_flux.h \
 	ev_flux.c \
+	ev_buffer_read.h \
+	ev_buffer_read.c \
+	ev_buffer_write.h \
+	ev_buffer_write.c \
 	heartbeat.c \
 	keepalive.c \
 	content.c \
 	future.c \
-	barrier.c
+	barrier.c \
+	buffer_private.h \
+	buffer.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
@@ -120,7 +127,8 @@ TESTS = test_module.t \
 	test_tagpool.t \
 	test_security.t \
 	test_future.t \
-	test_reactor.t
+	test_reactor.t \
+	test_buffer.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -180,3 +188,7 @@ test_security_t_LDADD = $(test_ldadd) $(LIBDL)
 test_future_t_SOURCES = test/future.c
 test_future_t_CPPFLAGS = $(test_cppflags)
 test_future_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_buffer_t_SOURCES = test/buffer.c
+test_buffer_t_CPPFLAGS = $(test_cppflags)
+test_buffer_t_LDADD = $(test_ldadd) $(LIBDL)
