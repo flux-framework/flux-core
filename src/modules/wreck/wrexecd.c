@@ -39,6 +39,7 @@
 #include <sys/ptrace.h>
 #include <inttypes.h>
 #include <sys/resource.h>
+#include <hwloc.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -90,7 +91,6 @@ struct prog_ctx {
 
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     flux_kvsdir_t *kvs;     /* Handle to this job's dir in kvs */
-    flux_kvsdir_t *resources; /* Handle to this node's resource dir in kvs */
     int *tasks_per_node;    /* Number of tasks per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -329,6 +329,12 @@ const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
     if (ctx->options)
         return zhash_lookup (ctx->options, opt);
     return (NULL);
+}
+
+void prog_ctx_unsetopt (struct prog_ctx *ctx, const char *opt)
+{
+    if (ctx->options)
+        zhash_delete (ctx->options, opt);
 }
 
 int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
@@ -658,8 +664,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     if (ctx->kvs)
         flux_kvsdir_destroy (ctx->kvs);
-    if (ctx->resources)
-        flux_kvsdir_destroy (ctx->resources);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -816,56 +820,61 @@ int cmp_int (const void *x, const void *y)
     return (1);
 }
 
-int prog_ctx_options_init (struct prog_ctx *ctx)
+int prog_ctx_options_init (struct prog_ctx *ctx, const char *basedir)
 {
-    flux_kvsdir_t *opts;
-    flux_kvsitr_t *i;
+    flux_future_t *f;
+    char key [1024];
+    char s [64];
+    json_t *options;
+    json_t *v;
     const char *opt;
 
-    if (flux_kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)
-        return (0); /* Assume ENOENT */
-    i = flux_kvsitr_create (opts);
-    while ((opt = flux_kvsitr_next (i))) {
-        char *json_str;
-        json_t *v;
-        char s [64];
+    assert (strlen (basedir) < sizeof (key)+9);
+    sprintf (key, "%s.options", basedir);
 
-        if (flux_kvsdir_get (opts, opt, &json_str) < 0) {
-            wlog_err (ctx, "skipping option '%s': %s", opt, flux_strerror (errno));
-            continue;
-        }
+    if (!(f = flux_kvs_lookup (ctx->flux, 0, key))) {
+        wlog_err (ctx, "flux_kvs_lookup (%s): %s\n",
+                        key, flux_strerror (errno));
+        return (-1);
+    }
+    if (flux_kvs_lookup_get_unpack (f, "o", &options) < 0) {
+        flux_future_destroy (f);
+        if (errno == ENOENT)
+            return (0);
+        wlog_err (ctx, "lookup_get_unpack (%s): %s\n",
+                        key, flux_strerror (errno));
+        return (-1);
+    }
 
-        if (!(v = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-            wlog_err (ctx, "failed to parse json for option '%s'", opt);
-            free (json_str);
-            continue;
-        }
-
+    json_object_foreach (options, opt, v) {
         switch (json_typeof (v)) {
             case JSON_NULL:
-                prog_ctx_setopt (ctx, opt, "");
+                prog_ctx_unsetopt (ctx, opt);
                 break;
             case JSON_STRING:
                 prog_ctx_setopt (ctx, opt, json_string_value (v));
                 break;
             case JSON_INTEGER:
+                if (json_integer_value (v) == 0) {
+                    prog_ctx_unsetopt (ctx, opt);
+                    break;
+                }
                 snprintf (s, sizeof (s) -1, "%ju",
                          (uintmax_t) json_integer_value (v));
                 prog_ctx_setopt (ctx, opt, s);
                 break;
             case JSON_TRUE:
                 prog_ctx_setopt (ctx, opt, "");
+                break;
             case JSON_FALSE:
+                prog_ctx_unsetopt (ctx, opt);
                 break;
             default:
                 wlog_err (ctx, "skipping option '%s': invalid type", opt);
                 break;
         }
-        free (json_str);
-        json_decref (v);
     }
-    flux_kvsitr_destroy (i);
-    flux_kvsdir_destroy (opts);
+    flux_future_destroy (f);
     return (0);
 }
 
@@ -938,22 +947,6 @@ static int prog_ctx_read_R_lite (struct prog_ctx *ctx)
     return (0);
 }
 
-static int prog_ctx_R_lite_from_rank_dirs (struct prog_ctx *ctx)
-{
-    rcalc_t *r = NULL;
-    flux_kvsdir_t *dir;
-
-    if (flux_kvsdir_get_dir (ctx->kvs, &dir, "rank") < 0)
-        return (-1);
-    if ((r = rcalc_create_kvsdir (dir)) == NULL)
-        wlog_fatal (ctx, 1, "failed to load lwj.rank dir as rcalc_t");
-    if (prog_ctx_process_rcalc (ctx, r) < 0)
-        wlog_fatal (ctx, 1, "Failed to process resource information");
-    rcalc_destroy (r);
-    flux_kvsdir_destroy (dir);
-    return (0);
-}
-
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 {
     int i;
@@ -969,8 +962,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     flux_future_destroy (f);
     free (key);
 
-    if (prog_ctx_read_R_lite (ctx) < 0
-        && prog_ctx_R_lite_from_rank_dirs (ctx) < 0)
+    if (prog_ctx_read_R_lite (ctx) < 0)
         wlog_fatal (ctx, 1, "Failed to read resource info from kvs");
 
     prog_ctx_kz_err_open (ctx);
@@ -981,7 +973,12 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
             ctx->nnodes, ctx->total_ntasks);
     }
 
-    if (prog_ctx_options_init (ctx) < 0)
+    /*  Initialize global job options first from 'lwj.options', then
+     *    override with options set locally for this job
+     */
+    if (prog_ctx_options_init (ctx, "lwj") < 0)
+        wlog_fatal (ctx, 1, "failed to read lwj.options");
+    if (prog_ctx_options_init (ctx, flux_kvsdir_key (ctx->kvs)) < 0)
         wlog_fatal (ctx, 1, "failed to read %s.options",
                     flux_kvsdir_key (ctx->kvs));
 
@@ -1057,9 +1054,6 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
-
-    /* Ok if this fails, ctx->resources existence is now optional */
-    flux_kvsdir_get_dir (ctx->kvs, &ctx->resources, "rank.%d", ctx->noderank);
 
     if ((lua_pattern = flux_attr_get (ctx->flux, "wrexec.lua_pattern", NULL)))
         ctx->lua_pattern = lua_pattern;
@@ -1627,11 +1621,6 @@ static int l_wreck_index (lua_State *L)
     }
     if (strcmp (key, "kvsdir") == 0) {
         lua_push_kvsdir_external (L, ctx->kvs);
-        return (1);
-    }
-    if (strcmp (key, "by_rank") == 0) {
-        if (ctx->resources)
-            lua_push_kvsdir_external (L, ctx->resources);
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {
@@ -2264,6 +2253,56 @@ static int increase_nofile_limit (void)
     return (setrlimit (RLIMIT_NOFILE, &rlim));
 }
 
+static int do_hwloc_core_affinity (struct prog_ctx *ctx)
+{
+    int rc = -1;
+    int depth, i;
+    hwloc_topology_t topology;
+    hwloc_cpuset_t coreset = NULL;
+    hwloc_cpuset_t resultset = NULL;
+    flux_t *h = ctx->flux;
+
+    if (hwloc_topology_init (&topology) < 0) {
+        flux_log_error (h, "hwloc_topology_init");
+        return (-1);
+    }
+    if (hwloc_topology_load (topology) < 0) {
+        flux_log_error (h, "hwloc_topology_load");
+        goto out;
+    }
+    if (!(coreset = hwloc_bitmap_alloc ())
+       || !(resultset = hwloc_bitmap_alloc ())) {
+        flux_log_error (h, "hwloc_bitmap_alloc");
+        goto out;
+    }
+    if (hwloc_bitmap_list_sscanf (coreset, ctx->rankinfo.cores) < 0) {
+        flux_log_error (h, "hwloc_sscanf(%s)", ctx->rankinfo.cores);
+        goto out;
+    }
+    depth = hwloc_get_type_depth (topology, HWLOC_OBJ_CORE);
+    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN
+       || depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
+        flux_log_error (h, "hwloc_get_type_depth (CORE)");
+        goto out;
+    }
+    i = hwloc_bitmap_first (coreset);
+    while (i >= 0) {
+        hwloc_obj_t core = hwloc_get_obj_by_depth (topology, depth, i);
+        if (core)
+            hwloc_bitmap_or (resultset, resultset, core->cpuset);
+        else
+            flux_log_error (h, "hwloc_get_obj_by_depth: core%d", i);
+        i = hwloc_bitmap_next (coreset, i);
+    }
+    if ((rc = hwloc_set_cpubind (topology, resultset, 0)) < 0)
+        flux_log_error (h, "hwloc_set_cpubind: %s", strerror (errno));
+out:
+    hwloc_bitmap_free (resultset);
+    hwloc_bitmap_free (coreset);
+    hwloc_topology_destroy (topology);
+    return (0);
+}
+
 int main (int ac, char **av)
 {
     int code = 0;
@@ -2315,6 +2354,9 @@ int main (int ac, char **av)
 
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
+
+    if (prog_ctx_getopt (ctx, "cpu-affinity"))
+        do_hwloc_core_affinity (ctx);
 
     if (rexec_state_change (ctx, "starting") < 0)
         wlog_fatal (ctx, 1, "rexec_state_change");

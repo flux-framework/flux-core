@@ -31,23 +31,19 @@
 typedef struct rcalc rcalc_t;
 
 struct rcalc_rankinfo {
-    int nodeid;
-    int rank;
-    int ntasks;
-    int ncores;
-    int global_basis;
-    const cpu_set_t *cpusetp;
+    int nodeid;               /* This rank's nodeid within the job       */
+    int rank;                 /* The current broker rank                 */
+    int ntasks;               /* Number of tasks assigned to this rank   */
+    int global_basis;         /* Task id of the first task on this rank  */
+    int ncores;               /* Number of cores allocated on this rank  */
+    cpu_set_t cpuset;         /* cpu_set_t representation of cores list  */
+    char cores [128];         /* String core list (directly from R_lite) */
 };
 
 /* Create resource calc object from JSON string in "Rlite" format */
 rcalc_t *rcalc_create (const char *json_in);
 /* Same as above, but read JSON input from file */
 rcalc_t *rcalc_createf (FILE *);
-/* Backwards compatibitily for deprecated `lwj.rank.N.cores` resource
- *  specification in the KVS. This function will create a rcalc_t
- *  object from the old-style LWJ kvs directory rank information.
- */
-rcalc_t *rcalc_create_kvsdir (flux_kvsdir_t *kvs);
 
 void rcalc_destroy (rcalc_t *r);
 

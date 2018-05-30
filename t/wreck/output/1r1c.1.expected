@@ -1,3 +1,3 @@
 Distributing 1 tasks across 1 nodes with 1 cores
 Used 1 nodes
-0: rank=0 ntasks=1 basis=0
+0: rank=0 ntasks=1 basis=0 cores=0

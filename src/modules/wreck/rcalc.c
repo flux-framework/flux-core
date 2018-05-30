@@ -38,6 +38,7 @@ struct rankinfo {
     int id;
     int rank;
     int ncores;
+    const char *cores;
     cpu_set_t cpuset;
 };
 
@@ -145,18 +146,17 @@ static int cstr_to_cpuset(cpu_set_t *mask, const char* str)
 
 static int rankinfo_get (json_t *o, struct rankinfo *ri)
 {
-    const char *cores;
     json_error_t error;
     int rc = json_unpack_ex (o, &error, 0, "{s:i, s:{s:s}}",
                 "rank", &ri->rank,
                 "children",
-                "core", &cores);
+                "core", &ri->cores);
     if (rc < 0) {
         fprintf (stderr, "json_unpack: %s\n", error.text);
         return -1;
     }
 
-    if (!cores || cstr_to_cpuset (&ri->cpuset, cores))
+    if (!ri->cores || cstr_to_cpuset (&ri->cpuset, ri->cores))
         return -1;
 
     ri->ncores = CPU_COUNT (&ri->cpuset);
@@ -219,73 +219,6 @@ rcalc_t *rcalc_createf (FILE *fp)
         return (NULL);
     }
     r = rcalc_create_json (o);
-    json_decref (o);
-    return (r);
-}
-
-static int rank_corecount (flux_kvsdir_t *dir, int rank)
-{
-    int n = -1;
-    char *k = NULL;
-    char *json_str = NULL;
-    json_t *o = NULL;
-
-    if ((asprintf (&k, "%d.cores", rank) < 0)
-      || (flux_kvsdir_get (dir, k, &json_str) < 0))
-        goto out;
-
-    if (!(o = json_loads (json_str, JSON_DECODE_ANY, NULL)))
-        goto out;
-
-    n = json_integer_value (o);
-out:
-    free (json_str);
-    free (k);
-    json_decref (o);
-    return (n);
-}
-
-static json_t *rank_json_object (flux_kvsdir_t *dir, const char *key)
-{
-    char *p;
-    int cores = 0;
-    char corelist[64] = "0";
-    int rank = strtol (key, &p, 10);
-
-    if ((rank < 0) || (*p != '\0'))
-        return (NULL);
-    if ((cores = rank_corecount (dir, rank)) < 0)
-        return (NULL);
-    if (cores > 1)
-        sprintf (corelist, "0-%d", cores-1);
-    return (json_pack ("{ s:i, s:{s:s} }", "rank", rank,
-                       "children", "core", corelist));
-}
-
-rcalc_t *rcalc_create_kvsdir (flux_kvsdir_t *dir)
-{
-    rcalc_t *r = NULL;
-    const char *key;
-    json_t *o;
-    flux_kvsitr_t *i;
-
-    if (!dir)
-        return (NULL);
-    if (!(o = json_array ()))
-        return (NULL);
-
-    i = flux_kvsitr_create (dir);
-    while ((key = flux_kvsitr_next (i))) {
-        json_t *x = rank_json_object (dir, key);
-        if (!x)
-            goto out;
-        json_array_append (o, x);
-        json_decref (x);
-    }
-    flux_kvsitr_destroy (i);
-
-    r = rcalc_create_json (o);
-out:
     json_decref (o);
     return (r);
 }
@@ -418,6 +351,7 @@ static struct rankinfo *rcalc_rankinfo_find (rcalc_t *r, int rank)
 static void rcalc_rankinfo_set (rcalc_t *r, int id,
                                 struct rcalc_rankinfo *rli)
 {
+    int coreslen = sizeof (rli->cores);
     struct rankinfo *ri = &r->ranks[id];
     struct allocinfo *ai = &r->alloc[id];
     rli->nodeid = ri->id;
@@ -425,6 +359,16 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     rli->ncores = ri->ncores;
     rli->ntasks = ai->ntasks;
     rli->global_basis =  ai->basis;
+    memcpy (&rli->cpuset, &ri->cpuset, sizeof (cpu_set_t));
+    /*  Copy cores string to rli, in the very unlikely event that
+     *   we get a huge cores string, indicate truncation.
+     */
+    if (strlen (ri->cores) < coreslen)
+        strcpy (rli->cores, ri->cores);
+    else {
+        strncpy (rli->cores, ri->cores, coreslen-1);
+        rli->cores [coreslen-2] = '+'; /* Indicate truncation */
+    }
 }
 
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *rli)

@@ -48,7 +48,7 @@ wrexecd_libs = \
 wrexecd_LDADD = \
 	rcalc.o \
 	$(wrexecd_libs) \
-	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
+	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD) $(HWLOC_LIBS)
 
 TESTS = \
 	test_wreck_job.t
@@ -73,7 +73,6 @@ test_wreck_job_t_LDADD = \
 
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua \
-	lua.d/02-affinity.lua \
 	lua.d/timeout.lua \
         lua.d/output.lua \
         lua.d/epilog.lua \

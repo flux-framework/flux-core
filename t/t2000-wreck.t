@@ -232,30 +232,39 @@ test_expect_success 'wreckrun: job with more nodes than tasks fails' '
 	test "$(flux kvs get --json ${LWJ}.state)" = "failed"
 '
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
-test "$($cpus_allowed count)" = "0" || test_set_prereq MULTICORE
+if test "$($cpus_allowed count)" = "0"; then
+    test_set_prereq MULTICORE
+    # Note: Normalize format of cpu0 thread siblings using cpus-allowed script
+    #  so that comparison of output works in MULTICORE tests below
+    cpu0_thread_siblings=$(cat /sys/devices/system/cpu/cpu0/topology/thread_siblings_list)
+    cpu0_thread_siblings=$($cpus_allowed intersect ${cpu0_thread_siblings})
+fi
+test_expect_success MULTICORE 'wreckrun: cpu-affinity job option works' '
+	flux wreckrun -o cpu-affinity -n1 $cpus_allowed > cpu-affinity.out &&
+	cat <<-EOF >cpu-affinity.expected &&
+	${cpu0_thread_siblings}
+	EOF
+	test_cmp cpu-affinity.expected cpu-affinity.out
+'
+test_expect_success MULTICORE 'wreckrun: global cpu-affinity job option works' '
+	flux wreck setopt cpu-affinity &&
+	test_when_finished "flux-wreck setopt cpu-affinity=false" &&
+	flux wreckrun -n1 $cpus_allowed > global-affinity.out &&
+	cat <<-EOF >global-affinity.expected &&
+	${cpu0_thread_siblings}
+	EOF
+	test_cmp global-affinity.expected global-affinity.out
+'
+test_expect_success MULTICORE 'wreckrun: local cpu-affinity option overriedes global' '
+	flux wreck setopt cpu-affinity
+	test_when_finished "flux wreck setopt cpu-affinity=false" &&
+	flux wreckrun -n1 -o cpu-affinity=0 $cpus_allowed > no-affinity.out &&
+	cat <<-EOF >no-affinity.expected &&
+	$($cpus_allowed)
+	EOF
+	test_cmp no-affinity.expected no-affinity.out
+'
 
-test_expect_success MULTICORE 'wreckrun: supports affinity assignment' '
-	newmask=$($cpus_allowed last) &&
-	run_timeout 5 flux wreckrun -n1 \
-	  --pre-launch-hook="lwj[\"rank.0.cpumask\"] = \"$newmask\"" \
-	  $cpus_allowed > output_cpus &&
-	cat <<-EOF >expected_cpus &&
-	$newmask
-	EOF
-	test_cmp expected_cpus output_cpus
-'
-test_expect_success MULTICORE 'wreckrun: supports per-task affinity assignment' '
-	mask=$($cpus_allowed) &&
-	newmask=$($cpus_allowed first) &&
-	run_timeout 5 flux wreckrun -ln2 \
-	  --pre-launch-hook="lwj[\"0.cpumask\"] = \"$newmask\"" \
-	  $cpus_allowed | sort > output_cpus2 &&
-	cat <<-EOF >expected_cpus2 &&
-	0: $newmask
-	1: $mask
-	EOF
-	test_cmp expected_cpus2 output_cpus2
-'
 test_expect_success 'wreckrun: top level environment' '
 	flux kvs put --json lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
 	run_timeout 5 flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env &&

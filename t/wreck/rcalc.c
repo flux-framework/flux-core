@@ -66,8 +66,8 @@ int main (int ac, char **av)
                      i, strerror (errno));
             exit (1);
         }
-        printf ("%d: rank=%d ntasks=%d basis=%d\n",
-                ri.nodeid, ri.rank, ri.ntasks, ri.global_basis);
+        printf ("%d: rank=%d ntasks=%d basis=%d cores=%s\n",
+                ri.nodeid, ri.rank, ri.ntasks, ri.global_basis, ri.cores);
     }
     rcalc_destroy (r);
     return (0);

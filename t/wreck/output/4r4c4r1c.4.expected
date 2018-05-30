@@ -1,10 +1,10 @@
 Distributing 4 tasks across 8 nodes with 20 cores
 Used 4 nodes
-0: rank=0 ntasks=1 basis=0
-1: rank=1 ntasks=1 basis=1
-2: rank=2 ntasks=1 basis=2
-3: rank=3 ntasks=1 basis=3
-4: rank=4 ntasks=0 basis=4
-5: rank=5 ntasks=0 basis=4
-6: rank=6 ntasks=0 basis=4
-7: rank=7 ntasks=0 basis=4
+0: rank=0 ntasks=1 basis=0 cores=0-3
+1: rank=1 ntasks=1 basis=1 cores=0-3
+2: rank=2 ntasks=1 basis=2 cores=0-3
+3: rank=3 ntasks=1 basis=3 cores=0-3
+4: rank=4 ntasks=0 basis=4 cores=0
+5: rank=5 ntasks=0 basis=4 cores=0
+6: rank=6 ntasks=0 basis=4 cores=0
+7: rank=7 ntasks=0 basis=4 cores=0
