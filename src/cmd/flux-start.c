@@ -414,16 +414,11 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
 {
     char *argz = NULL;
     size_t argz_len = 0;
-    const char *arg;
 
     if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
 
-    optparse_getopt_iterator_reset (ctx.opts, "broker-opts");
-    while ((arg = optparse_getopt_next (ctx.opts, "broker-opts"))) {
-        if (argz_add (&argz, &argz_len, arg) != 0)
-            goto nomem;
-    }
+    add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (cmd_argz) {
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;
