@@ -97,6 +97,22 @@ test_expect_success 'flux-start in subprocess/pmi mode works as initial program'
 test_expect_success 'flux-start init.rc2_timeout attribute works' "
 	test_expect_code 143 flux start ${ARGS} -o,-Sinit.rc2_timeout=0.1 sleep 5
 "
+test_expect_success 'flux-start --wrap option works' '
+	broker_path=$(flux start -vX 2>&1 | sed "s/^flux-start: *//g") &&
+	echo broker_path=${broker_path} &&
+	test -n "${broker_path}" &&
+	flux start --wrap=/bin/echo,start: arg0 arg1 arg2 > wrap.output &&
+	test_debug "cat wrap.output" &&
+	cat >wrap.expected <<-EOF &&
+	start: ${broker_path} arg0 arg1 arg2
+	EOF
+	test_cmp wrap.expected wrap.output
+'
+test_expect_success 'flux-start --wrap option works with --size' '
+	flux start --size=2 -vX --wrap=test-wrap > wrap2.output 2>&1 &&
+	test_debug "cat wrap2.output" &&
+	test "$(grep -c test-wrap wrap2.output)" = "2"
+'
 
 test_expect_success 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
