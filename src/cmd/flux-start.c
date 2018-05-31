@@ -391,7 +391,7 @@ int pmi_kvs_get (void *arg, const char *kvsname,
     return 0;
 }
 
-int execvp_argz (const char *cmd_argz, char *argz, size_t argz_len)
+int execvp_argz (char *argz, size_t argz_len)
 {
     char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
     if (!av) {
@@ -399,7 +399,7 @@ int execvp_argz (const char *cmd_argz, char *argz, size_t argz_len)
         return -1;
     }
     argz_extract (argz, argz_len, av);
-    execvp (cmd_argz, av);
+    execvp (av[0], av);
     free (av);
     return -1;
 }
@@ -433,7 +433,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
         free (cpy);
     }
     if (!optparse_hasopt (ctx.opts, "noexec")) {
-        if (execvp_argz (broker_path, argz, argz_len) < 0)
+        if (execvp_argz (argz, argz_len) < 0)
             goto error;
     }
     free (argz);
