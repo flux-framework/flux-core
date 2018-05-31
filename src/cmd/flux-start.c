@@ -118,6 +118,11 @@ static struct optparse_option opts[] = {
       .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
 #endif /* !HAVE_CALIPER */
     },
+    { .group = 1,
+      .name = "wrap", .has_arg = 1, .arginfo = "ARGS,...",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Wrap broker execution in comma-separated arguments"
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -415,6 +420,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
     char *argz = NULL;
     size_t argz_len = 0;
 
+    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
 
@@ -460,6 +466,7 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     subprocess_set_context (cli->p, "cli", cli);
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
+    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     argz_add (&argz, &argz_len, broker_path);
     char *run_dir = xasprintf ("%s/%d", scratch_dir, rank);
     if (mkdir (run_dir, 0755) < 0)
