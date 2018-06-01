@@ -107,7 +107,7 @@ static int fluid_encode_dothex (char *buf, int bufsz, fluid_t fluid)
 {
     int rc;
 
-    rc = snprintf (buf, bufsz, "%x.%x.%x.%x",
+    rc = snprintf (buf, bufsz, "%04x.%04x.%04x.%04x",
                    (unsigned int)(fluid>>48) & 0xffff,
                    (unsigned int)(fluid>>32) & 0xffff,
                    (unsigned int)(fluid>>16) & 0xffff,
