@@ -65,6 +65,10 @@ If a DIR is not set with this option, a unique temporary directory will
 be created for the lifetime of the instance and removed when the
 instance is destroyed.
 
+*--wrap*='ARGS,...'::
+Wrap broker execution in a comma-separated list of arguments. This is
+useful for running flux-broker directly under debuggers or valgrind.
+
 
 EXAMPLES
 --------

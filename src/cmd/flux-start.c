@@ -118,6 +118,11 @@ static struct optparse_option opts[] = {
       .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
 #endif /* !HAVE_CALIPER */
     },
+    { .group = 1,
+      .name = "wrap", .has_arg = 1, .arginfo = "ARGS,...",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Wrap broker execution in comma-separated arguments"
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -391,7 +396,7 @@ int pmi_kvs_get (void *arg, const char *kvsname,
     return 0;
 }
 
-int execvp_argz (const char *cmd_argz, char *argz, size_t argz_len)
+int execvp_argz (char *argz, size_t argz_len)
 {
     char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
     if (!av) {
@@ -399,7 +404,7 @@ int execvp_argz (const char *cmd_argz, char *argz, size_t argz_len)
         return -1;
     }
     argz_extract (argz, argz_len, av);
-    execvp (cmd_argz, av);
+    execvp (av[0], av);
     free (av);
     return -1;
 }
@@ -414,16 +419,12 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
 {
     char *argz = NULL;
     size_t argz_len = 0;
-    const char *arg;
 
+    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
 
-    optparse_getopt_iterator_reset (ctx.opts, "broker-opts");
-    while ((arg = optparse_getopt_next (ctx.opts, "broker-opts"))) {
-        if (argz_add (&argz, &argz_len, arg) != 0)
-            goto nomem;
-    }
+    add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (cmd_argz) {
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;
@@ -438,7 +439,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
         free (cpy);
     }
     if (!optparse_hasopt (ctx.opts, "noexec")) {
-        if (execvp_argz (broker_path, argz, argz_len) < 0)
+        if (execvp_argz (argz, argz_len) < 0)
             goto error;
     }
     free (argz);
@@ -465,6 +466,7 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     subprocess_set_context (cli->p, "cli", cli);
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
+    add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     argz_add (&argz, &argz_len, broker_path);
     char *run_dir = xasprintf ("%s/%d", scratch_dir, rank);
     if (mkdir (run_dir, 0755) < 0)
