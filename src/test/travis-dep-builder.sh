@@ -200,6 +200,11 @@ for url in $checkouts; do
         git checkout $sha1
       fi
 
+      # Autogen?
+      if ! test -x configure && test -x autogen.sh; then
+        ./autogen.sh
+      fi
+
       # Do we need to create a Makefile?
       if ! test -f Makefile; then
         if test -x configure; then
