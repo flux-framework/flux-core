@@ -91,6 +91,11 @@ TESTS = \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t
 
+if ENABLE_JOBSPEC
+TESTS += \
+	t0018-jobspec.t
+endif
+
 if HAVE_PYTHON
 TESTS += \
 	 $(top_builddir)/t/t9990-python-tests.t
@@ -109,7 +114,8 @@ EXTRA_DIST= \
 	rc/rc3-wreck \
 	rc/rc3-testenv \
 	wreck/input \
-	wreck/output
+	wreck/output \
+	jobspec
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -176,6 +182,7 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
+	t0018-jobspec.t \
 	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
