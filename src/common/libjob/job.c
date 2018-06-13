@@ -39,7 +39,7 @@ flux_future_t *flux_job_submit (flux_t *h, const char *J, int flags)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-ingest.add", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "job-ingest.submit", FLUX_NODEID_ANY, 0,
                              "{s:s s:i}",
                              "J", J,
                              "flags", flags)))
