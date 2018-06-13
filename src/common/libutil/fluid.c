@@ -161,9 +161,13 @@ int fluid_decode (const char *s, fluid_t *fluidp, fluid_string_type_t type)
             break;
         }
         case FLUID_STRING_MNEMONIC:
-            /* first arg of mn_decode not declared const, but not modified */
+            /* N.B. Contrary to its inline documentation, mn_decode() returns
+             * the number of bytes written to output, or MN_EWORD (-7).
+             * Fluids are always encoded such that 8 bytes should be written.
+             * Also, 's' is not modified so it is safe to cast away const.
+             */
             rc = mn_decode ((char *)s, (void *)&fluid, sizeof (fluid_t));
-            if (rc < 0)
+            if (rc != 8)
                 return -1;
             break;
 
