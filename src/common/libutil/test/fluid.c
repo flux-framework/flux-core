@@ -93,6 +93,15 @@ int main (int argc, char *argv[])
     ok (decode_errors == 0,
         "fluid_decode type=MNEMONIC worked 4K times");
 
+    /* Decode bad input must fail
+     */
+    ok (fluid_decode ("bogus", &id, FLUID_STRING_DOTHEX) < 0,
+        "fluid_decode type=DOTHEX fails on input=bogus");
+    ok (fluid_decode ("bogus", &id, FLUID_STRING_MNEMONIC) < 0,
+        "fluid_decode type=MNEMONIC fails on input=bogus");
+    ok (fluid_decode ("a-a-a--a-a-a", &id, FLUID_STRING_MNEMONIC) < 0,
+        "fluid_decode type=MNEMONIC fails on unknown words xx-xx-xx--xx-xx-xx");
+
     done_testing ();
     return 0;
 }
