@@ -84,6 +84,7 @@ TESTS = \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
         t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
@@ -178,6 +179,7 @@ check_SCRIPTS = \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
         t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
