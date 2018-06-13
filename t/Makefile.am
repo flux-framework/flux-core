@@ -76,6 +76,7 @@ TESTS = \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
@@ -168,6 +169,7 @@ check_SCRIPTS = \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
