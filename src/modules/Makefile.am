@@ -9,5 +9,6 @@ SUBDIRS = \
  cron \
  aggregator \
  userdb \
+ pymod \
  job-ingest \
- pymod
+ job-manager
