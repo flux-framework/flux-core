@@ -17,6 +17,9 @@ struct ev_buffer_write {
     flux_buffer_t     *fb;
     struct ev_loop    *loop;
     bool              start;    /* flag, if user started reactor */
+    bool              eof;      /* flag, eof written             */
+    bool              closed;   /* flag, fd has been closed      */
+    int               close_errno;  /* errno from close          */
     void              *data;
 };
 
@@ -28,5 +31,5 @@ int ev_buffer_write_init (struct ev_buffer_write *ebw,
 void ev_buffer_write_cleanup (struct ev_buffer_write *ebw);
 void ev_buffer_write_start (struct ev_loop *loop, struct ev_buffer_write *ebw);
 void ev_buffer_write_stop (struct ev_loop *loop, struct ev_buffer_write *ebw);
-
+void ev_buffer_write_wakeup (struct ev_buffer_write *ebw);
 #endif /* !_EV_BUFFER_WRITE_H */

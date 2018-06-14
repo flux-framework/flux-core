@@ -24,6 +24,8 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <errno.h>
 
 #include "src/common/libev/ev.h"
 
@@ -40,7 +42,17 @@ static void buffer_write_cb (struct ev_loop *loop, ev_io *iow, int revents)
         if (flux_buffer_read_to_fd (ebw->fb, ebw->fd, -1) < 0)
             return;
 
-        if (!flux_buffer_bytes (ebw->fb))
+        if (!flux_buffer_bytes (ebw->fb) && ebw->eof) {
+            if (close (ebw->fd) < 0)
+                ebw->close_errno = errno;
+            ebw->fd = -1;
+            ebw->closed = true;
+            ebw->eof = false;
+            if (ebw->cb)
+                ebw->cb (loop, ebw, revents);
+        }
+
+        if (!flux_buffer_bytes (ebw->fb) && !ebw->eof)
             ev_io_stop (ebw->loop, &(ebw->io_w));
     }
     else {
@@ -49,15 +61,19 @@ static void buffer_write_cb (struct ev_loop *loop, ev_io *iow, int revents)
     }
 }
 
+/* data is available, start ev io watcher assuming user has
+ * started the watcher.
+ */
+void ev_buffer_write_wakeup (struct ev_buffer_write *ebw)
+{
+    if (ebw->start)
+        ev_io_start (ebw->loop, &(ebw->io_w));
+}
+
 static void buffer_data_available_cb (flux_buffer_t *fb, void *arg)
 {
     struct ev_buffer_write *ebw = arg;
-
-    /* data is available, start ev io watcher assuming user has
-     * started the watcher.
-     */
-    if (ebw->start)
-        ev_io_start (ebw->loop, &(ebw->io_w));
+    ev_buffer_write_wakeup (ebw);
 }
 
 int ev_buffer_write_init (struct ev_buffer_write *ebw,
@@ -105,8 +121,8 @@ void ev_buffer_write_start (struct ev_loop *loop, struct ev_buffer_write *ebw)
 {
     if (!ebw->start) {
         ebw->start = true;
-        /* do not start io watcher unless there is data to be written out */
-        if (flux_buffer_bytes (ebw->fb))
+        /* do not start watcher unless there is data or EOF to be written out */
+        if (flux_buffer_bytes (ebw->fb) || ebw->eof)
             ev_io_start (ebw->loop, &(ebw->io_w));
     }
 }

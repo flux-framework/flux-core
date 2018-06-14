@@ -563,6 +563,39 @@ flux_buffer_t *flux_buffer_write_watcher_get_buffer (flux_watcher_t *w)
     return NULL;
 }
 
+int flux_buffer_write_watcher_close (flux_watcher_t *w)
+{
+    struct ev_buffer_write *evw;
+    if (!w) {
+        errno = EINVAL;
+        return (-1);
+    }
+    evw = w->data;
+    if (evw->eof) {
+        errno = EINPROGRESS;
+        return (-1);
+    }
+    if (evw->closed) {
+        errno = EINVAL;
+        return (-1);
+    }
+    evw->eof = true;
+    flux_buffer_readonly (evw->fb);
+    ev_buffer_write_wakeup (evw);
+    return (0);
+}
+
+int flux_buffer_write_watcher_is_closed (flux_watcher_t *w, int *errp)
+{
+    if (w) {
+        struct ev_buffer_write *evw = w->data;
+        if (evw->closed && errp != NULL)
+            *errp = evw->close_errno;
+        return (evw->closed);
+    }
+    return (0);
+}
+
 /* 0MQ sockets
  */
 
