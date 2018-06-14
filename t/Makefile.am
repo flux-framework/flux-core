@@ -203,7 +203,8 @@ check_PROGRAMS = \
 	module/basic \
 	request/treq \
 	barrier/tbarrier \
-	wreck/rcalc
+	wreck/rcalc \
+	reactor/reactorcat
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -397,3 +398,8 @@ wreck_sched_dummy_la_CPPFLAGS = $(test_cppflags)
 wreck_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 wreck_sched_dummy_la_LIBADD = \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+reactor_reactorcat_SOURCES = reactor/reactorcat.c
+reactor_reactorcat_CPPFLAGS = $(test_cppflags)
+reactor_reactorcat_LDADD = \
+	 $(test_ldadd) $(LIBDL) $(LIBUTIL)
