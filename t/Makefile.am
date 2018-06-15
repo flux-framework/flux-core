@@ -211,7 +211,8 @@ check_PROGRAMS = \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
-	reactor/reactorcat
+	reactor/reactorcat \
+	security/sectest
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -410,3 +411,7 @@ reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = \
 	 $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+security_sectest_SOURCES = security/sectest.c
+security_sectest_CPPFLAGS = $(FLUX_SECURITY_CFLAGS)
+security_sectest_LDADD = $(FLUX_SECURITY_LIBS)
