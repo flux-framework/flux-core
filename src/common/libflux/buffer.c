@@ -49,6 +49,7 @@ enum {
 struct flux_buffer {
     int magic;
     int size;
+    bool readonly;
     cbuf_t cbuf;
     void *buf;                  /* internal buffer for user reads */
     int buflen;
@@ -74,6 +75,7 @@ flux_buffer_t *flux_buffer_create (int size)
 
     fb->magic = FLUX_BUFFER_MAGIC;
     fb->size = size;
+    fb->readonly = false;
 
     if (!(fb->cbuf = cbuf_create (fb->size, fb->size)))
         goto cleanup;
@@ -137,6 +139,27 @@ int flux_buffer_space (flux_buffer_t *fb)
     }
 
     return cbuf_free (fb->cbuf);
+}
+
+int flux_buffer_readonly (flux_buffer_t *fb)
+{
+    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    fb->readonly = true;
+    return 0;
+}
+
+int flux_buffer_is_readonly (flux_buffer_t *fb)
+{
+    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return fb->readonly;
 }
 
 static int set_cb (flux_buffer_t *fb,
@@ -362,6 +385,11 @@ int flux_buffer_write (flux_buffer_t *fb, const void *data, int len)
         return -1;
     }
 
+    if (fb->readonly) {
+        errno = EROFS;
+        return -1;
+    }
+
     if ((ret = cbuf_write (fb->cbuf, (void *)data, len, NULL)) < 0)
         return -1;
 
@@ -446,6 +474,11 @@ int flux_buffer_write_line (flux_buffer_t *fb, const char *data)
         return -1;
     }
 
+    if (fb->readonly) {
+        errno = EROFS;
+        return -1;
+    }
+
     if ((ret = cbuf_write_line (fb->cbuf, (char *)data, NULL)) < 0)
         return -1;
 
@@ -487,6 +520,11 @@ int flux_buffer_write_from_fd (flux_buffer_t *fb, int fd, int len)
 
     if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
         errno = EINVAL;
+        return -1;
+    }
+
+    if (fb->readonly) {
+        errno = EROFS;
         return -1;
     }
 
