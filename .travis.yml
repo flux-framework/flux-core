@@ -9,15 +9,15 @@ compiler:
 matrix:
   include:
     - compiler: gcc
-      env: COVERAGE=t ARGS="--enable-caliper --enable-pylint"
+      env: COVERAGE=t ARGS="--enable-caliper --enable-pylint --with-flux-security"
     - compiler: gcc
       env: T_INSTALL=t
     - compiler: clang
-      env: CPPCHECK=t ARGS=--enable-sanitizer CC=clang-3.8 CXX=clang++-3.8
+      env: CPPCHECK=t ARGS="--enable-sanitizer --with-flux-security" CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
-      env: CC=gcc-4.9 chain_lint=t
+      env: CC=gcc-4.9 chain_lint=t ARGS="--with-flux-security"
     - compiler: clang
-      env: ARGS=--enable-caliper CC=clang-3.8 CXX=clang++-3.8
+      env: ARGS="--enable-caliper" CC=clang-3.8 CXX=clang++-3.8
       
 cache:
   directories:
