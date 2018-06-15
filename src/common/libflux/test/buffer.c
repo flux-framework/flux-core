@@ -878,6 +878,12 @@ void corner_case (void)
     ok (flux_buffer_space (NULL) < 0
         && errno == EINVAL,
         "flux_buffer_space fails on NULL pointer");
+    ok (flux_buffer_readonly (NULL) < 0
+        && errno == EINVAL,
+        "flux_buffer_readonly fails on NULL pointer");
+    ok (flux_buffer_is_readonly (NULL) < 0
+        && errno == EINVAL,
+        "flux_buffer_is_readonly fails on NULL pointer");
     ok (flux_buffer_set_low_read_cb (NULL, empty_cb, 0, NULL) < 0
         && errno == EINVAL,
         "flux_buffer_set_low_read_cb fails on NULL pointer");
@@ -1022,6 +1028,12 @@ void corner_case (void)
     ok (flux_buffer_space (fb) < 0
         && errno == EINVAL,
         "flux_buffer_space fails on destroyed fb pointer");
+    ok (flux_buffer_readonly (fb) < 0
+        && errno == EINVAL,
+        "flux_buffer_readonly fails on destroyed fb pointer");
+    ok (flux_buffer_is_readonly (fb) < 0
+        && errno == EINVAL,
+        "flux_buffer_is_readonly fails on destroyed fb pointer");
     ok (flux_buffer_set_low_read_cb (fb, empty_cb, 0, NULL) < 0
         && errno == EINVAL,
         "flux_buffer_set_low_read_cb fails on destroyed fb pointer");
@@ -1099,6 +1111,57 @@ void full_buffer (void)
     flux_buffer_destroy (fb);
 }
 
+void readonly_buffer (void)
+{
+    flux_buffer_t *fb;
+    int pipefds[2];
+
+    ok (pipe (pipefds) == 0,
+        "pipe succeeded");
+
+    ok ((fb = flux_buffer_create (FLUX_BUFFER_TEST_MAXSIZE)) != NULL,
+        "flux_buffer_create works");
+
+    ok (flux_buffer_is_readonly (fb) == 0,
+        "flux buffer is not readonly on creation");
+
+    ok (flux_buffer_readonly (fb) == 0,
+        "flux buffer readonly set");
+
+    ok (flux_buffer_is_readonly (fb) > 0,
+        "flux buffer is readonly after setting");
+
+    flux_buffer_destroy (fb);
+
+    ok ((fb = flux_buffer_create (FLUX_BUFFER_TEST_MAXSIZE)) != NULL,
+        "flux_buffer_create works");
+
+    ok (flux_buffer_write (fb, "foobar", 6) == 6,
+        "flux_buffer_write success");
+
+    ok (flux_buffer_readonly (fb) == 0,
+        "flux buffer readonly set");
+
+    ok (flux_buffer_write (fb, "foobar", 6) < 0
+        && errno == EROFS,
+        "flux_buffer_write fails b/c readonly is set");
+
+    ok (flux_buffer_write_line (fb, "foobar") < 0
+        && errno == EROFS,
+        "flux_buffer_write_line fails b/c readonly is set");
+
+    ok (write (pipefds[1], "foo", 3) == 3,
+        "write to pipe works");
+
+    ok (flux_buffer_write_from_fd (fb, pipefds[0], -1) < 0
+        && errno == EROFS,
+        "flux_buffer_write_from_fd fails b/c readonly is set");
+
+    flux_buffer_destroy (fb);
+    close (pipefds[0]);
+    close (pipefds[1]);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1109,6 +1172,7 @@ int main (int argc, char *argv[])
     disable_callback ();
     corner_case ();
     full_buffer ();
+    readonly_buffer ();
 
     done_testing();
 
