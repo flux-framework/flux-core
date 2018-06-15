@@ -80,4 +80,10 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: submit user != signed user f
 	grep -q permitted baduser.out
 '
 
+test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
+	! FLUX_HANDLE_ROLEMASK=0x2 ${SUBMITBENCH} \
+	     ${JOBSPEC}/valid/basic.yaml 2>badrole.out &&
+	grep -q permitted badrole.out
+'
+
 test_done
