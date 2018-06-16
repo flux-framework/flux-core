@@ -378,4 +378,13 @@ test_expect_success 'passing NULL to flux_log functions logs to stderr (#1191)' 
         grep "err: world: No such file or directory" std.err
 '
 
+reactorcat=${SHARNESS_TEST_DIRECTORY}/reactor/reactorcat
+test_expect_success 'reactor: reactorcat example program works' '
+	dd if=/dev/urandom bs=1024 count=4 >reactorcat.in &&
+	$reactorcat <reactorcat.in >reactorcat.out &&
+	test_cmp reactorcat.in reactorcat.out &&
+	$reactorcat </dev/null >reactorcat.devnull.out &&
+	test -f reactorcat.devnull.out &&
+	test_must_fail test -s reactorcat.devnull.out
+'
 test_done

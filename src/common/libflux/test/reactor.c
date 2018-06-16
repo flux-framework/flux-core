@@ -287,8 +287,8 @@ static void buffer_write (flux_reactor_t *r, flux_watcher_t *w,
             "buffer: write callback called with FLUX_POLLERR");
     }
     else {
-        ok (false,
-            "buffer: write callback called");
+        ok (flux_buffer_write_watcher_is_closed (w, NULL),
+            "buffer: write callback called after close");
     }
 
     (*count)++;
@@ -366,7 +366,9 @@ static void buffer_read_overflow (flux_reactor_t *r, flux_watcher_t *w,
 
 static void test_buffer (flux_reactor_t *reactor)
 {
+    int errnum = 0;
     int fd[2];
+    int pfds[2];
     flux_watcher_t *w;
     flux_buffer_t *fb;
     int count;
@@ -577,6 +579,66 @@ static void test_buffer (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
+    /* write buffer watcher close() testcase */
+
+    ok (flux_buffer_write_watcher_close (NULL) == -1 && errno == EINVAL,
+        "buffer: flux_buffer_write_watcher_close handles NULL argument");
+
+    count = 0;
+    ok (pipe (pfds) == 0,
+        "buffer: hey I can has a pipe!");
+    w = flux_buffer_write_watcher_create (reactor,
+                                          pfds[1],
+                                          1024,
+                                          buffer_write,
+                                          0,
+                                          &count);
+    ok (w != NULL,
+        "buffer: write watcher close: watcher created");
+    fb = flux_buffer_write_watcher_get_buffer (w);
+    ok (fb != NULL,
+        "buffer: write watcher close: buffer retrieved");
+
+    ok (flux_buffer_write (fb, "foobaz", 6) == 6,
+        "buffer: write to buffer success");
+
+    ok (flux_buffer_write_watcher_is_closed (w, NULL) == 0,
+        "buffer: flux_buffer_write_watcher_is_closed returns false");
+    ok (flux_buffer_write_watcher_close (w) == 0,
+        "buffer: flux_buffer_write_watcher_close: Success");
+    ok (flux_buffer_write_watcher_is_closed (w, NULL) == 0,
+        "buffer: watcher still not closed (close(2) not called yet)");
+    ok (flux_buffer_write_watcher_close (w) == -1 && errno == EINPROGRESS,
+        "buffer: flux_buffer_write_watcher_close: In progress");
+
+    ok (flux_buffer_write (fb, "shouldfail", 10) == -1 && errno == EROFS,
+        "buffer: flux_buffer_write after close fails with EROFS");
+
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
+
+    ok (count == 1,
+        "buffer: write callback called once");
+    ok (flux_buffer_write_watcher_is_closed (w, &errnum) == 1 && errnum == 0,
+        "buffer: flux_buffer_write_watcher_is_closed returns true");
+    ok (flux_buffer_write_watcher_close (w) == -1 && errno == EINVAL,
+        "buffer: flux_buffer_write_watcher_close after close returns EINVAL");
+
+    ok (read (pfds[0], buf, 1024) == 6,
+        "buffer: read from pipe success");
+
+    ok (!memcmp (buf, "foobaz", 6),
+        "buffer: read from pipe returned correct data");
+
+    ok (read (pfds[0], buf, 1024) == 0,
+        "buffer: read from pipe got EOF");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    close (pfds[0]);
     close (fd[0]);
     close (fd[1]);
 }
