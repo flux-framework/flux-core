@@ -169,7 +169,7 @@ done:
 
 /*
  *  Default handler for stdout/err: send output directly into
- *   stderr of caller...
+ *   stdout/err of caller...
  */
 static int send_output_to_stream (const char *name, const char *json_str)
 {
