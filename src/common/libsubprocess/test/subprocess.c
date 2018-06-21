@@ -189,7 +189,7 @@ int main (int ac, char **av)
     is (subprocess_state_string (p), "Waiting", "subprocess is Waiting");
     ok (subprocess_pid (p) > 0, "subprocess_pid() is valid");
 
-    ok (subprocess_exec (p) == 0, "subprocess_run");
+    ok (subprocess_exec (p) == 0, "subprocess_exec");
     is (subprocess_state_string (p), "Running", "subprocess is Running");
     q = subprocess_manager_wait (sm);
     ok (q != NULL, "subprocess_manager_wait");
