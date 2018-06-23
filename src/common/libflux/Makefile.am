@@ -128,6 +128,7 @@ TESTS = test_module.t \
 	test_tagpool.t \
 	test_security.t \
 	test_future.t \
+	test_composite_future.t \
 	test_reactor.t \
 	test_buffer.t
 
@@ -189,6 +190,10 @@ test_security_t_LDADD = $(test_ldadd) $(LIBDL)
 test_future_t_SOURCES = test/future.c
 test_future_t_CPPFLAGS = $(test_cppflags)
 test_future_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_composite_future_t_SOURCES = test/composite_future.c
+test_composite_future_t_CPPFLAGS = $(test_cppflags)
+test_composite_future_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
