@@ -52,6 +52,18 @@ flux_t *flux_future_get_flux (flux_future_t *f);
 void flux_future_set_reactor (flux_future_t *f, flux_reactor_t *r);
 flux_reactor_t *flux_future_get_reactor (flux_future_t *f);
 
+/* Composite future implementation
+ */
+flux_future_t *flux_future_wait_all_create (void);
+flux_future_t *flux_future_wait_any_create (void);
+
+int flux_future_push (flux_future_t *cf, const char *name, flux_future_t *f);
+
+const char * flux_future_first_child (flux_future_t *cf);
+const char * flux_future_next_child (flux_future_t *cf);
+
+flux_future_t *flux_future_get_child (flux_future_t *cf, const char *name);
+
 #ifdef __cplusplus
 }
 #endif

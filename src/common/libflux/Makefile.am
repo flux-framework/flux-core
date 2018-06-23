@@ -109,6 +109,7 @@ libflux_la_SOURCES = \
 	keepalive.c \
 	content.c \
 	future.c \
+	composite_future.c \
 	barrier.c \
 	buffer_private.h \
 	buffer.c
