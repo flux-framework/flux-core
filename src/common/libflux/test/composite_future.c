@@ -142,6 +142,172 @@ static void test_composite_basic_all (flux_reactor_t *r)
     flux_future_destroy (all);
 }
 
+static void step1_or (flux_future_t *f, void *arg)
+{
+    void * result;
+    char *str = arg;
+    /* or_then handler -- future `f` must have been fulfilled with error */
+    ok (flux_future_get (f, &result) < 0,
+        "chained: step1 or_then: flux_future_get returns failure");
+    strcat (str, "-step1_or");
+
+    /* Simulate recovery, do not propagate error to next future in the chain */
+    flux_future_t *next = flux_future_create (NULL, NULL);
+    flux_future_continue (f, next);
+    flux_future_fulfill (next, NULL, NULL);
+    flux_future_destroy (f);
+}
+
+static void step2 (flux_future_t *f, void *arg)
+{
+    void * result;
+    char *str = arg;
+    ok (flux_future_get (f, &result) == 0,
+        "chained: step2: flux_future_get returns success");
+    strcat (str, "-step2");
+    flux_future_t *next = flux_future_create (NULL, NULL);
+    flux_future_continue (f, next);
+    flux_future_fulfill (next, NULL, NULL);
+    flux_future_destroy (f);
+}
+
+static void step2_err (flux_future_t *f, void *arg)
+{
+    void * result;
+    char *str = arg;
+    ok (flux_future_get (f, &result) == 0,
+        "chained: step2: flux_future_get returns success");
+    strcat (str, "-step2_err");
+    flux_future_continue_error (f, 123);
+    flux_future_destroy (f);
+}
+
+static void step3 (flux_future_t *f2, void *arg)
+{
+    void * result;
+    char *str = arg;
+    ok (flux_future_get (f2, &result) == 0,
+        "chained: step3: flux_future_get returns success");
+    strcat (str, "-step3");
+    flux_future_t *next = flux_future_create (NULL, NULL);
+    flux_future_continue (f2, next);
+    flux_future_fulfill (next, NULL, NULL);
+    flux_future_destroy (f2);
+}
+
+static void test_basic_chained (flux_reactor_t *r)
+{
+    char str [4096];
+    flux_future_t *f1 = NULL;
+    flux_future_t *f = flux_future_create (NULL, NULL);
+    flux_future_t *f2 = flux_future_and_then (f, step2, (void *) str);
+    flux_future_t *f3 = flux_future_and_then (f2, step3, (void *) str);
+    if (!f || !f2 || !f3)
+        BAIL_OUT ("Error creating test futures");
+
+    /*==== Basic chained future test: ====*/
+
+    memset (str, 0, sizeof (str));
+    strcat (str, "step1");
+
+    flux_future_set_reactor (f, r);
+    ok (!flux_future_is_ready (f3) && !flux_future_is_ready (f2),
+        "chained: chained futures not yet ready");
+
+    flux_future_fulfill (f, NULL, NULL);
+
+    ok (flux_future_wait_for (f3, 0.1) == 0,
+        "chained: flux_future_wait_for step3 returns");
+    ok (flux_future_get (f3, NULL) == 0,
+        "chained: flux_future_get == 0");
+    is (str, "step1-step2-step3",
+        "chained: futures ran in correct order");
+
+    flux_future_destroy (f3);
+
+    /*==== Ensure initial error is propagated to final future ===*/
+
+    memset (str, 0, sizeof (str));
+    strcat (str, "step1");
+
+    f = flux_future_create (NULL, NULL);
+    f2 = flux_future_and_then (f, step2, (void *) str);
+    f3 = flux_future_and_then (f2, step3, (void *) str);
+    if (!f || !f2 || !f3)
+        BAIL_OUT ("Error creating test futures");
+
+    flux_future_set_reactor (f, r);
+    ok (!flux_future_is_ready (f3) && !flux_future_is_ready (f2),
+        "chained: chained future not yet ready");
+
+    flux_future_fulfill_error (f, 42);
+    ok (flux_future_wait_for (f3, 0.1) == 0,
+        "chained: flux_future_wait_for step3 returns 0");
+    ok (flux_future_get (f3, NULL) < 0 && errno == 42,
+        "chained: flux_future_get() returns -1 with errno set to errnum");
+
+    is (str, "step1",
+        "chained: no chained callbacks run by default on error");
+
+    flux_future_destroy (f3);
+
+    /*==== Ensure error in intermediate step is propagated through chain ====*/
+    memset (str, 0, sizeof (str));
+    strcat (str, "step1");
+
+    f = flux_future_create (NULL, NULL);
+    f2 = flux_future_and_then (f, step2_err, (void *) str);
+    f3 = flux_future_and_then (f2, step3, (void *) str);
+    if (!f || !f2 || !f3)
+        BAIL_OUT ("Error creating test futures");
+
+    flux_future_set_reactor (f, r);
+    ok (!flux_future_is_ready (f3),
+        "chained (failure): future not ready");
+
+    flux_future_fulfill (f, NULL, NULL);
+
+    ok (flux_future_wait_for (f3, 0.1) == 0,
+        "chained (failure): flux_future_wait_for finished");
+    ok (flux_future_is_ready (f3),
+        "chained (failure): flux_future_is_ready");
+    ok (flux_future_get (f3, NULL) < 0 && errno == 123,
+        "chained (failure): flux_future_get: %s", strerror (errno));
+    is (str, "step1-step2_err",
+        "chained (failure): step2 error short-circuits step3");
+    flux_future_destroy (f3);
+
+    /*==== Recovery with flux_future_or_then() ===*/
+    memset (str, 0, sizeof (str));
+    strcat (str, "step1");
+
+    f = flux_future_create (NULL, NULL);
+    f2 = flux_future_and_then (f, step2, (void *) str);
+    f1 = flux_future_or_then  (f, step1_or, (void *) str);
+    f3 = flux_future_and_then (f2, step3, (void *) str);
+    if (!f || !f1 || !f2 || !f3)
+        BAIL_OUT ("Error creating test futures");
+
+    ok (f2 == f1,
+        "chained (or-then): and_then/or_then return the same 'next' future");
+
+    flux_future_set_reactor (f, r);
+    ok (!flux_future_is_ready (f3) && !flux_future_is_ready (f2),
+        "chained (or-then): chained future not yet ready");
+
+    flux_future_fulfill_error (f, 42);
+
+    ok (flux_future_wait_for (f3, 0.1) == 0,
+        "chained (or-then): flux_future_wait_for step3 returns 0");
+    ok (flux_future_get (f3, NULL) == 0,
+        "chained (or-then): flux_future_get() returns 0 for recovered chain");
+
+    is (str, "step1-step1_or-step3",
+        "chained (or-then): on error or_then handler called not and_then");
+
+    flux_future_destroy (f3);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -155,6 +321,7 @@ int main (int argc, char *argv[])
 
     test_composite_basic_any (reactor);
     test_composite_basic_all (reactor);
+    test_basic_chained (reactor);
 
     flux_reactor_destroy (reactor);
 
