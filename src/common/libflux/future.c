@@ -430,10 +430,6 @@ int flux_future_then (flux_future_t *f, double timeout,
         f->init (f, f->init_arg); // might set error
         f->then->init_called = true;
     }
-    if (f->result_errnum_valid) {
-        errno = f->result_errnum;
-        return -1;
-    }
     return 0;
 }
 
