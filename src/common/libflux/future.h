@@ -64,6 +64,39 @@ const char * flux_future_next_child (flux_future_t *cf);
 
 flux_future_t *flux_future_get_child (flux_future_t *cf, const char *name);
 
+/* Future chaining
+ */
+
+/* Similar to flux_future_then(3), but return a future that can subsequently
+ *  be "continued" from the continuation function `cb` via
+ *  flux_future_continue(3) upon successful fulfillment of future `f`.
+ *
+ * The continuation `cb` is only called on success of future `f`. If `f`
+ *  is fulfilled with an error, then that error is immediately passed
+ *  to  future returned by this function, unless `flux_future_or_then(3)`
+ *  has been used.
+ */
+flux_future_t *flux_future_and_then (flux_future_t *f,
+                                     flux_continuation_f cb, void *arg);
+
+/* Like flux_future_and_then(3), but run the continuation `cb` when
+ *  future `f` is fulfilled with an error.
+ */
+flux_future_t *flux_future_or_then (flux_future_t *f,
+                                    flux_continuation_f cb, void *arg);
+
+/* Set the next future for the chained future `prev` to `f`.
+ *  This function steals a reference to `f` and thus flux_future_destroy()
+ *  should not be called on `f`.
+ *
+ */
+int flux_future_continue (flux_future_t *prev, flux_future_t *f);
+
+/*  Set the next future for the chained future `prev` to be fulfilled
+ *   with an error `errnum`.
+ */
+void flux_future_continue_error (flux_future_t *prev, int errnum);
+
 #ifdef __cplusplus
 }
 #endif
