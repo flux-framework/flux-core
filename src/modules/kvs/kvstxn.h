@@ -48,6 +48,7 @@ int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum);
 bool kvstxn_fallback_mergeable (kvstxn_t *kt);
 
 json_t *kvstxn_get_ops (kvstxn_t *kt);
+json_t *kvstxn_get_keys (kvstxn_t *kt);
 json_t *kvstxn_get_names (kvstxn_t *kt);
 int kvstxn_get_flags (kvstxn_t *kt);
 

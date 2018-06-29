@@ -805,7 +805,7 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 }
 
 static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
-                               json_t *names)
+                               json_t *names, json_t *keys)
 {
     const json_t *root_dir = NULL;
     json_t *nullobj = NULL;
@@ -837,12 +837,13 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         goto done;
     }
 
-    if (!(msg = flux_event_pack (setroot_topic, "{ s:s s:i s:s s:O s:O }",
+    if (!(msg = flux_event_pack (setroot_topic, "{ s:s s:i s:s s:O s:O s:O}",
                                  "namespace", root->namespace,
                                  "rootseq", root->seq,
                                  "rootref", root->ref,
                                  "names", names,
-                                 "rootdir", root_dir))) {
+                                 "rootdir", root_dir,
+                                 "keys", keys))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
@@ -1038,7 +1039,7 @@ done:
                       count, opcount);
         }
         setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
-        setroot_event_send (ctx, root, names);
+        setroot_event_send (ctx, root, names, kvstxn_get_keys (kt));
     } else {
         fallback = kvstxn_fallback_mergeable (kt);
 
