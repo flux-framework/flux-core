@@ -215,9 +215,10 @@ void basic_kvstxn_mgr_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ops = json_array ();
-    /* not a real operation */
-    json_array_append_new (ops, json_string ("foo"));
+    ops = json_pack ("[{s:s s:i s:n}]",
+                     "key", "a.b.c",
+                     "flags", 0,
+                     "dirent");
 
     ok (kvstxn_mgr_add_transaction (root->ktm,
                                     "foo",
