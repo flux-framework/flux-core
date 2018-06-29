@@ -43,6 +43,8 @@ MAN3_FILES_PRIMARY = \
 	flux_log.3 \
 	flux_future_get.3 \
 	flux_future_create.3 \
+	flux_future_wait_all_create.3 \
+	flux_future_and_then.3 \
 	flux_kvs_lookup.3 \
 	flux_kvs_commit.3 \
 	flux_kvs_txn_create.3 \
@@ -132,6 +134,16 @@ MAN3_FILES_SECONDARY = \
 	flux_future_aux_get.3 \
 	flux_future_set_flux.3 \
 	flux_future_get_flux.3 \
+	flux_future_wait_all_create.3 \
+	flux_future_wait_any_create.3 \
+	flux_future_push.3 \
+	flux_future_first_child.3 \
+	flux_future_next_child.3 \
+	flux_future_get_child.3 \
+	flux_future_and_then.3 \
+	flux_future_or_then.3 \
+	flux_future_continue.3 \
+	flux_future_continue_error.3 \
 	flux_rpc_pack.3 \
 	flux_rpc_raw.3 \
 	flux_rpc_get.3 \
