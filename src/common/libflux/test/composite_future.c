@@ -1,4 +1,6 @@
+#define _GNU_SOURCE
 #include <czmq.h>
+#include <stdio.h>
 
 #include "src/common/libflux/reactor.h"
 #include "src/common/libflux/future.h"
@@ -308,6 +310,221 @@ static void test_basic_chained (flux_reactor_t *r)
     flux_future_destroy (f3);
 }
 
+void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+{
+    flux_future_t *f = arg;
+    flux_future_fulfill (f, NULL, NULL);
+}
+
+void timeout_init (flux_future_t *f, void *arg)
+{
+    flux_reactor_t *r = flux_future_get_reactor (f);
+    double *dptr = arg;
+    flux_watcher_t *w;
+    if (!(w = flux_timer_watcher_create (r, *dptr, 0., timeout_cb, f)))
+        goto error;
+    /* no longer need memory for stashed argument */
+    free (dptr);
+    if (flux_future_aux_set (f, "watcher", w,
+                             (flux_free_f) flux_watcher_destroy) < 0) {
+        flux_watcher_destroy (w);
+        goto error;
+    }
+    flux_watcher_start (w);
+    return;
+error:
+    flux_future_fulfill_error (f, errno);
+}
+
+static void flux_future_timeout_clear (flux_future_t *f)
+{
+    flux_watcher_t *w = flux_future_aux_get (f, "watcher");
+    ok (w != NULL, "timeout stop: got timer watcher");
+    if (w)
+        flux_watcher_stop (w);
+}
+
+static flux_future_t *flux_future_timeout (double s)
+{
+    double *dptr = calloc (1, sizeof (*dptr));
+    if (dptr == NULL)
+        return (NULL);
+    *dptr = s;
+    return flux_future_create (timeout_init, (void *) dptr);
+}
+
+static int async_check_rc = -1;
+void async_check (flux_future_t *fc, void *arg)
+{
+    flux_future_t *f;
+    ok (flux_future_is_ready (fc) == true,
+        "async: composite future is ready");
+    ok ((f = flux_future_get_child (fc, "f1")) != NULL,
+        "async: retrieved handle child future");
+    ok (flux_future_get (f, NULL) == 0,
+        "async: flux_future_get on child successful");
+    ok ((f = flux_future_get_child (fc, "timeout")) != NULL,
+        "async: retrieved handle to timeout future");
+    ok (flux_future_get (f, NULL) == 0,
+        "async: timeout future fulfilled");
+    async_check_rc = 0;
+}
+
+void test_composite_all_async (void)
+{
+    flux_reactor_t *r;
+    flux_future_t *f, *fc;
+
+    r = flux_reactor_create (0);
+    if (!r)
+        BAIL_OUT ("flux_reactor_create failed");
+    if (!(fc = flux_future_wait_all_create ()))
+        BAIL_OUT ("flux_future_wait_all_create failed");
+    if (!(f = flux_future_create (init_and_fulfill, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    ok (flux_future_push (fc, "f1", f) == 0,
+        "flux_future_push success");
+
+    if (!(f = flux_future_timeout (0.1)))
+        BAIL_OUT ("flux_future_timeout failed");
+
+    ok (flux_future_push (fc, "timeout", f) == 0,
+        "flux_future_push timeout success");
+
+    flux_future_set_reactor (fc, r);
+    ok (flux_future_then (fc, 1., async_check, NULL) == 0,
+        "flux_future_then worked");
+    ok (flux_future_is_ready (fc) == 0,
+        "flux_future_is_ready returns false");
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run returned");
+    ok (async_check_rc == 0,
+        "asynchronous callback called");
+
+    flux_future_destroy (fc);
+    flux_reactor_destroy (r);
+}
+
+static int async_any_check_rc = -1;
+void async_any_check (flux_future_t *fc, void *arg)
+{
+    flux_future_t *f;
+    ok (flux_future_is_ready (fc) == true,
+        "async: composite future is ready");
+    ok ((f = flux_future_get_child (fc, "f1")) != NULL,
+        "async: retrieved handle child future");
+    ok (flux_future_get (f, NULL) == 0,
+        "async: flux_future_get on child successful");
+    ok ((f = flux_future_get_child (fc, "timeout")) != NULL,
+        "async: retrieved handle to timeout future");
+    ok (flux_future_is_ready (f) == false,
+        "async: timeout future not yet fulfilled");
+    flux_future_timeout_clear (f);
+    async_any_check_rc = 0;
+    /* Required so we pop out of reactor since we will still have
+     *  active watchers */
+    flux_reactor_stop (flux_future_get_reactor (f));
+}
+
+void test_composite_any_async (void)
+{
+    flux_reactor_t *r;
+    flux_future_t *f, *fc;
+
+    r = flux_reactor_create (0);
+    if (!r)
+        BAIL_OUT ("flux_reactor_create failed");
+    if (!(fc = flux_future_wait_any_create ()))
+        BAIL_OUT ("flux_future_wait_any_create failed");
+    if (!(f = flux_future_create (init_and_fulfill, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    ok (flux_future_push (fc, "f1", f) == 0,
+        "flux_future_push success");
+
+    if (!(f = flux_future_timeout (1.0)))
+        BAIL_OUT ("flux_future_timeout failed");
+
+    ok (flux_future_push (fc, "timeout", f) == 0,
+        "flux_future_push timeout success");
+
+    flux_future_set_reactor (fc, r);
+    ok (flux_future_then (fc, -1., async_any_check, NULL) == 0,
+        "flux_future_then worked");
+    ok (flux_future_is_ready (fc) == 0,
+        "flux_future_is_ready returns false");
+    int count = flux_reactor_run (r, 0);
+    ok (count >= 0,
+        "flux_reactor_run returned %d", count);
+    ok (async_any_check_rc == 0,
+        "asynchronous callback called");
+
+    flux_future_destroy (fc);
+    flux_reactor_destroy (r);
+}
+
+void f_strdup_init (flux_future_t *f, void *arg)
+{
+    char *result = strdup ((char *) arg);
+    flux_future_fulfill (f, result, free);
+}
+
+void f_strcat (flux_future_t *prev, void *arg)
+{
+    char *result = NULL;
+    char *next = NULL;
+    char *append = arg;
+    flux_future_t *f;
+
+    ok (flux_future_get (prev, (void *)&result) == 0,
+        "flux_future_get (prev) worked");
+    if (asprintf (&next, "%s%s", result, append) < 0)
+        BAIL_OUT ("f_strcat: asprintf: %s", strerror (errno));
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("f_strcat: flux_future_create: %s", strerror (errno));
+    flux_future_fulfill (f, next, free);
+    ok (flux_future_continue (prev, f) == 0,
+        "f_strcat: flux_future_continue worked");
+    flux_future_destroy (prev);
+}
+
+void chained_async_cb (flux_future_t *f, void *arg)
+{
+    char *result;
+    const char *expected = arg;
+    ok (flux_future_is_ready (f),
+        "chained_async_cb: future is ready");
+    ok (flux_future_get (f, (void *) &result) == 0,
+        "chained_async_cb: flux_future_get worked");
+    is (result, expected,
+        "chained_async_cb: got expected result");
+    flux_future_destroy (f);
+}
+
+void test_chained_async ()
+{
+    flux_reactor_t *r;
+    flux_future_t *f;
+
+    r = flux_reactor_create (0);
+    if (!r)
+        BAIL_OUT ("flux_reactor_create failed");
+    if (!(f = flux_future_create (f_strdup_init, "Hello")))
+        BAIL_OUT ("flux_future_create failed");
+    if (!(f = flux_future_and_then (f, f_strcat, ", ")))
+        BAIL_OUT ("flux_future_create failed");
+    if (!(f = flux_future_and_then (f, f_strcat, "World.")))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_set_reactor (f, r);
+    ok (flux_future_then (f, -1., chained_async_cb, "Hello, World.") == 0,
+        "chained async: flux_future_then worked");
+    ok (flux_reactor_run (r, 0) == 0,
+        "chained async: reactor exited");
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -322,6 +539,9 @@ int main (int argc, char *argv[])
     test_composite_basic_any (reactor);
     test_composite_basic_all (reactor);
     test_basic_chained (reactor);
+    test_composite_all_async ();
+    test_composite_any_async ();
+    test_chained_async ();
 
     flux_reactor_destroy (reactor);
 
