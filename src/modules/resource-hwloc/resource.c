@@ -70,6 +70,9 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "flux_topology_init");
         goto done;
     }
+    if (hwloc_topology_set_flags (ctx->topology,
+                                  HWLOC_TOPOLOGY_FLAG_IO_DEVICES) < 0)
+        flux_log (h, LOG_ERR, "hwloc_topology_set_flags FLAG_IO_DEVICES failed");
     if (hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_CACHE) < 0)
         flux_log (h, LOG_ERR, "hwloc_topology_ignore_type OBJ_CACHE failed");
     if (hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_GROUP) < 0)
