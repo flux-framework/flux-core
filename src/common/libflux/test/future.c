@@ -95,13 +95,15 @@ void test_simple (void)
     ok (flux_future_aux_set (f, NULL, "bar", aux_destroy) == 0,
         "flux_future_aux_set with NULL key works");
 
-    /* wait_for/get - no future_init; artificially call fulfill */
+    /* is_ready/wait_for/get - no future_init; artificially call fulfill */
     errno = 0;
     ok (flux_future_wait_for (NULL, 0.) < 0 && errno == EINVAL,
         "flux_future_wait_for w/ NULL future returns EINVAL");
     errno = 0;
     ok (flux_future_wait_for (f, 0.) < 0 && errno == ETIMEDOUT,
         "flux_future_wait_for initially times out");
+    ok (!flux_future_is_ready (f),
+        "flux_future_is_ready returns false");
     errno = 0;
     void *result = NULL;
     result_destroy_called = 0;
@@ -109,6 +111,8 @@ void test_simple (void)
     flux_future_fulfill (f, "Hello", result_destroy);
     ok (flux_future_wait_for (f, 0.) == 0,
         "flux_future_wait_for succedes after result is set");
+    ok (flux_future_is_ready (f),
+        "flux_future_is_ready returns true after result is set");
     ok (flux_future_get (f, &result) == 0
         && result != NULL && !strcmp (result, "Hello"),
         "flux_future_get returns correct result");

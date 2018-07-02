@@ -379,6 +379,16 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
     return 0;
 }
 
+
+/* Return true if future is fulfilled and flux_future_get() will not block.
+ */
+bool flux_future_is_ready (flux_future_t *f)
+{
+    if (f && flux_future_wait_for (f, 0.) == 0)
+        return true;
+    return false;
+}
+
 /* Block until future is fulfilled if not already.
  * Then return either result or error depending on how it was fulfilled.
  */
@@ -419,10 +429,6 @@ int flux_future_then (flux_future_t *f, double timeout,
     if (f->init && !f->then->init_called) {
         f->init (f, f->init_arg); // might set error
         f->then->init_called = true;
-    }
-    if (f->result_errnum_valid) {
-        errno = f->result_errnum;
-        return -1;
     }
     return 0;
 }
