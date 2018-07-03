@@ -29,7 +29,7 @@ test_expect_success 'flux-wreck: unsetenv works' '
 '
 test_expect_success 'flux-wreck: setenv all' '
 	flux wreck setenv all &&
-	flux env /usr/bin/env | sort | grep -ve FLUX_URI -e HOSTNAME -e ENVIRONMENT > env.expected &&
+	flux env /usr/bin/env | sort | grep -ve "^FLUX_URI=" -e "^HOSTNAME=" -e "^ENVIRONMENT=" > env.expected &&
 	flux wreck getenv | sort > env.output &&
 	test_cmp env.expected env.output
 '

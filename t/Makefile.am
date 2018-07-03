@@ -75,6 +75,8 @@ TESTS = \
 	t2008-althash.t \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
+	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
@@ -91,6 +93,11 @@ TESTS = \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t
 
+if ENABLE_JOBSPEC
+TESTS += \
+	t0018-jobspec.t
+endif
+
 if HAVE_PYTHON
 TESTS += \
 	 $(top_builddir)/t/t9990-python-tests.t
@@ -105,11 +112,14 @@ EXTRA_DIST= \
 	rc/rc1-kvs \
 	rc/rc1-wreck \
 	rc/rc1-testenv \
+	rc/rc1-job \
 	rc/rc3-kvs \
 	rc/rc3-wreck \
 	rc/rc3-testenv \
+	rc/rc3-job \
 	wreck/input \
-	wreck/output
+	wreck/output \
+	jobspec
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -158,6 +168,8 @@ check_SCRIPTS = \
 	t2008-althash.t \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
+	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
@@ -176,6 +188,7 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
+	t0018-jobspec.t \
 	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
@@ -204,7 +217,8 @@ check_PROGRAMS = \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
-	reactor/reactorcat
+	reactor/reactorcat \
+	security/sectest
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -403,3 +417,7 @@ reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = \
 	 $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+security_sectest_SOURCES = security/sectest.c
+security_sectest_CPPFLAGS = $(FLUX_SECURITY_CFLAGS)
+security_sectest_LDADD = $(FLUX_SECURITY_LIBS)
