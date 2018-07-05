@@ -323,6 +323,7 @@ AC_CONFIG_FILES( \
   src/modules/Makefile \
   src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
+  src/modules/kvs-watch/Makefile \
   src/modules/content-sqlite/Makefile \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
