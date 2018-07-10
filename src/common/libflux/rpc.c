@@ -324,6 +324,12 @@ flux_future_t *flux_rpc_pack (flux_t *h, const char *topic, uint32_t nodeid,
     return f;
 }
 
+uint32_t flux_rpc_get_matchtag (flux_future_t *f)
+{
+    struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
+    return rpc ? rpc->matchtag : FLUX_MATCHTAG_NONE;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
