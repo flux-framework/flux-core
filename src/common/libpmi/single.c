@@ -46,74 +46,78 @@ struct pmi_single {
     char kvsname[KVS_NAME_MAX];
 };
 
-int pmi_single_init (struct pmi_single *pmi, int *spawned)
+static int pmi_single_init (void *impl, int *spawned)
 {
+    struct pmi_single *pmi = impl;
     pmi->initialized = 1;
     *spawned = pmi->spawned;
     return PMI_SUCCESS;
 }
 
-int pmi_single_initialized (struct pmi_single *pmi, int *initialized)
+static int pmi_single_initialized (void *impl, int *initialized)
 {
+    struct pmi_single *pmi = impl;
     *initialized = pmi->initialized;
     return PMI_SUCCESS;
 }
 
-int pmi_single_finalize (struct pmi_single *pmi)
+static int pmi_single_finalize (void *impl)
 {
+    struct pmi_single *pmi = impl;
     pmi->initialized = 0;
     return PMI_SUCCESS;
 }
 
-int pmi_single_get_size (struct pmi_single *pmi, int *size)
+static int pmi_single_get_size (void *impl, int *size)
 {
+    struct pmi_single *pmi = impl;
     *size = pmi->size;
     return PMI_SUCCESS;
 }
 
-int pmi_single_get_rank (struct pmi_single *pmi, int *rank)
+static int pmi_single_get_rank (void *impl, int *rank)
 {
+    struct pmi_single *pmi = impl;
     *rank = pmi->rank;
     return PMI_SUCCESS;
 }
 
-int pmi_single_get_appnum (struct pmi_single *pmi, int *appnum)
+static int pmi_single_get_appnum (void *impl, int *appnum)
 {
     *appnum = getpid ();
     return PMI_SUCCESS;
 }
 
-int pmi_single_get_universe_size (struct pmi_single *pmi, int *universe_size)
+static int pmi_single_get_universe_size (void *impl, int *universe_size)
 {
+    struct pmi_single *pmi = impl;
     *universe_size = pmi->size;
     return PMI_SUCCESS;
 }
 
-int pmi_single_publish_name (struct pmi_single *pmi,
-                             const char *service_name, const char *port)
+static int pmi_single_publish_name (void *impl,
+                                    const char *service_name, const char *port)
 {
     return PMI_FAIL;
 }
 
-int pmi_single_unpublish_name (struct pmi_single *pmi,
-                               const char *service_name)
+static int pmi_single_unpublish_name (void *impl, const char *service_name)
 {
     return PMI_FAIL;
 }
 
-int pmi_single_lookup_name (struct pmi_single *pmi,
-                            const char *service_name, char *port)
+static int pmi_single_lookup_name (void *impl,
+                                   const char *service_name, char *port)
 {
     return PMI_FAIL;
 }
 
-int pmi_single_barrier (struct pmi_single *pmi)
+static int pmi_single_barrier (void *impl)
 {
     return PMI_SUCCESS;
 }
 
-int pmi_single_abort (struct pmi_single *pmi,
-                      int exit_code, const char *error_msg)
+static int pmi_single_abort (void *impl, int exit_code, const char *error_msg)
 {
     fprintf (stderr, "PMI_Abort: %s\n", error_msg);
     exit (exit_code);
@@ -121,36 +125,37 @@ int pmi_single_abort (struct pmi_single *pmi,
     return PMI_SUCCESS;
 }
 
-int pmi_single_kvs_get_my_name (struct pmi_single *pmi,
-                                char *kvsname, int length)
+static int pmi_single_kvs_get_my_name (void *impl, char *kvsname, int length)
 {
+    struct pmi_single *pmi = impl;
     if (length < strlen (pmi->kvsname) + 1)
         return PMI_ERR_INVALID_LENGTH;
     strcpy (kvsname, pmi->kvsname);
     return PMI_SUCCESS;
 }
 
-int pmi_single_kvs_get_name_length_max (struct pmi_single *pmi, int *length)
+static int pmi_single_kvs_get_name_length_max (void *impl, int *length)
 {
     *length = KVS_NAME_MAX;
     return PMI_SUCCESS;
 }
 
-int pmi_single_kvs_get_key_length_max (struct pmi_single *pmi, int *length)
+static int pmi_single_kvs_get_key_length_max (void *impl, int *length)
 {
     *length = KVS_KEY_MAX;
     return PMI_SUCCESS;
 }
 
-int pmi_single_kvs_get_value_length_max (struct pmi_single *pmi, int *length)
+static int pmi_single_kvs_get_value_length_max (void *impl, int *length)
 {
     *length = KVS_VAL_MAX;
     return PMI_SUCCESS;
 }
 
-int pmi_single_kvs_put (struct pmi_single *pmi, const char *kvsname,
-                        const char *key, const char *value)
+static int pmi_single_kvs_put (void *impl, const char *kvsname,
+                               const char *key, const char *value)
 {
+    struct pmi_single *pmi = impl;
     char *cpy;
 
     if (strcmp (kvsname, pmi->kvsname))
@@ -165,46 +170,74 @@ int pmi_single_kvs_put (struct pmi_single *pmi, const char *kvsname,
     return PMI_SUCCESS;
 }
 
-int pmi_single_kvs_commit (struct pmi_single *pmi, const char *kvsname)
+static int pmi_single_kvs_commit (void *impl, const char *kvsname)
 {
     return PMI_SUCCESS; /* a no-op here */
 }
 
-int pmi_single_kvs_get (struct pmi_single *pmi, const char *kvsname,
-                        const char *key, char *value, int len)
+static int pmi_single_kvs_get (void *impl, const char *kvsname,
+                               const char *key, char *value, int len)
 {
+    struct pmi_single *pmi = impl;
     char *val = zhash_lookup (pmi->kvs, key);
     if (!val)
         return PMI_ERR_INVALID_KEY;
-    if (len< strlen (val) + 1)
+    if (len < strlen (val) + 1)
         return PMI_ERR_INVALID_VAL_LENGTH;
     strcpy (value, val);
     return PMI_SUCCESS;
 }
 
-int pmi_single_spawn_multiple (struct pmi_single *pmi,
-                               int count,
-                               const char *cmds[],
-                               const char **argvs[],
-                               const int maxprocs[],
-                               const int info_keyval_sizesp[],
-                               const PMI_keyval_t *info_keyval_vectors[],
-                               int preput_keyval_size,
-                               const PMI_keyval_t preput_keyval_vector[],
-                               int errors[])
+static int pmi_single_spawn_multiple (void *impl,
+                                      int count,
+                                      const char *cmds[],
+                                      const char **argvs[],
+                                      const int maxprocs[],
+                                      const int info_keyval_sizesp[],
+                                      const PMI_keyval_t *info_keyval_vectors[],
+                                      int preput_keyval_size,
+                                      const PMI_keyval_t preput_keyval_vector[],
+                                      int errors[])
 {
     return PMI_FAIL;
 }
 
-void pmi_single_destroy (struct pmi_single *pmi)
+static void pmi_single_destroy (void *impl)
 {
+    struct pmi_single *pmi = impl;
     if (pmi) {
         zhash_destroy (&pmi->kvs);
         free (pmi);
     }
 }
 
-struct pmi_single *pmi_single_create (void)
+static struct pmi_operations pmi_single_operations = {
+    .init                       = pmi_single_init,
+    .initialized                = pmi_single_initialized,
+    .finalize                   = pmi_single_finalize,
+    .get_size                   = pmi_single_get_size,
+    .get_rank                   = pmi_single_get_rank,
+    .get_appnum                 = pmi_single_get_appnum,
+    .get_universe_size          = pmi_single_get_universe_size,
+    .publish_name               = pmi_single_publish_name,
+    .unpublish_name             = pmi_single_unpublish_name,
+    .lookup_name                = pmi_single_lookup_name,
+    .barrier                    = pmi_single_barrier,
+    .abort                      = pmi_single_abort,
+    .kvs_get_my_name            = pmi_single_kvs_get_my_name,
+    .kvs_get_name_length_max    = pmi_single_kvs_get_name_length_max,
+    .kvs_get_key_length_max     = pmi_single_kvs_get_key_length_max,
+    .kvs_get_value_length_max   = pmi_single_kvs_get_value_length_max,
+    .kvs_put                    = pmi_single_kvs_put,
+    .kvs_commit                 = pmi_single_kvs_commit,
+    .kvs_get                    = pmi_single_kvs_get,
+    .get_clique_size            = NULL,
+    .get_clique_ranks           = NULL,
+    .spawn_multiple             = pmi_single_spawn_multiple,
+    .destroy                    = pmi_single_destroy,
+};
+
+void *pmi_single_create (struct pmi_operations **ops)
 {
     struct pmi_single *pmi = calloc (1, sizeof (*pmi));
 
@@ -218,6 +251,7 @@ struct pmi_single *pmi_single_create (void)
     if (pmi_single_kvs_put (pmi, pmi->kvsname,
                             "PMI_process_mapping", "") != PMI_SUCCESS)
         goto error;
+    *ops = &pmi_single_operations;
     return pmi;
 error:
     pmi_single_destroy (pmi);

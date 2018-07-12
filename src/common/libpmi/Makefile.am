@@ -29,7 +29,8 @@ libpmi_la_SOURCES = \
 	dgetline.c \
 	dgetline.h \
 	clique.c \
-	clique.h
+	clique.h \
+	pmi_operations.h
 
 fluxinclude_HEADERS = \
 	pmi.h \

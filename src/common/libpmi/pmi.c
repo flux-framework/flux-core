@@ -39,25 +39,14 @@
 #include "single.h"
 #include "clique.h"
 
-typedef enum {
-    IMPL_UNKNOWN,
-    IMPL_SIMPLE,
-    IMPL_WRAP,
-    IMPL_SINGLETON,
-} implementation_t;
-
 struct pmi_context {
-    implementation_t type;
-    union {
-        struct pmi_wrap *wrap;
-        struct pmi_simple_client *cli;
-        struct pmi_single *single;
-    };
+    void *impl;
+    struct pmi_operations *ops;
     int debug;
     int rank; /* for debug */
 };
 
-static struct pmi_context ctx = { .type = IMPL_UNKNOWN, .rank = -1 };
+static struct pmi_context ctx = { .rank = -1 };
 
 #define DPRINTF(fmt,...) do { \
     if (ctx.debug) fprintf (stderr, fmt, ##__VA_ARGS__); \
@@ -76,7 +65,7 @@ int PMI_Init (int *spawned)
     const char *library;
     const char *debug;
 
-    if (ctx.type != IMPL_UNKNOWN)
+    if (ctx.impl != NULL)
         goto done;
 
     if ((debug = getenv ("FLUX_PMI_DEBUG")))
@@ -89,60 +78,39 @@ int PMI_Init (int *spawned)
      */
     if (getenv ("PMI_FD")) {
         DPRINTF ("%s: PMI_FD is set, selecting simple_client\n", __FUNCTION__);
-        if (!(ctx.cli = pmi_simple_client_create ()))
+        if (!(ctx.impl = pmi_simple_client_create (&ctx.ops)))
             goto done;
-        result = pmi_simple_client_init (ctx.cli, spawned);
-        if (result != PMI_SUCCESS) {
-            pmi_simple_client_destroy (ctx.cli);
-            ctx.cli = NULL;
-            goto done;
-        }
-        ctx.type = IMPL_SIMPLE;
-        goto done;
     }
     /* If PMI_LIBRARY is set, we are directed to open a specific library.
      */
-    if ((library = getenv ("PMI_LIBRARY"))) {
+    else if ((library = getenv ("PMI_LIBRARY"))) {
         DPRINTF ("%s: PMI_LIBRARY is set, use %s\n", __FUNCTION__, library);
-        if (!(ctx.wrap = pmi_wrap_create (library)))
+        if (!(ctx.impl = pmi_wrap_create (library, &ctx.ops)))
             goto done;
-        result = pmi_wrap_init (ctx.wrap, spawned);
-        if (result != PMI_SUCCESS) {
-            pmi_wrap_destroy (ctx.wrap);
-            ctx.wrap = NULL;
-            goto done;
-        }
-        ctx.type = IMPL_WRAP;
-        goto done;
     }
 
     /* No obvious directives.
      * Try to dlopen another PMI library, e.g. SLURM's.
      * If that fails, fall through to singleton.
      */
-    if (!getenv ("FLUX_PMI_SINGLETON") && (ctx.wrap = pmi_wrap_create (NULL))) {
-        result = pmi_wrap_init (ctx.wrap, spawned);
-        if (result != PMI_SUCCESS) {
-            pmi_wrap_destroy (ctx.wrap);
-            ctx.wrap = NULL;
-        } else {
-            ctx.type = IMPL_WRAP;
-            goto done;
-        }
+    else if (!getenv ("FLUX_PMI_SINGLETON")
+                        && (ctx.impl = pmi_wrap_create (NULL, &ctx.ops))) {
     }
     /* Singleton.
      */
-    if ((ctx.single = pmi_single_create ())) {
+    else {
         DPRINTF ("%s: library search failed, use singleton\n", __FUNCTION__);
-        result = pmi_single_init (ctx.single, spawned);
-        if (result != PMI_SUCCESS) {
-            pmi_single_destroy (ctx.single);
-            ctx.single = NULL;
+        if (!(ctx.impl = pmi_single_create (&ctx.ops)))
             goto done;
-        }
-        ctx.type = IMPL_SINGLETON;
     }
 
+    /* call PMI_Init method */
+    result = ctx.ops->init (ctx.impl, spawned);
+    if (result != PMI_SUCCESS) {
+        ctx.ops->destroy (ctx.impl);
+        ctx.impl = NULL;
+        goto done;
+    }
 done:
     /* Cache the rank for logging.
      */
@@ -158,20 +126,11 @@ done:
 int PMI_Initialized (int *initialized)
 {
     int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_initialized (ctx.single, initialized);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_initialized (ctx.wrap, initialized);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_initialized (ctx.cli, initialized);
-            break;
-        default:
-            *initialized = 0;
-            result = PMI_SUCCESS;
-            break;
+    if (ctx.impl && ctx.ops->initialized)
+        result = ctx.ops->initialized (ctx.impl, initialized);
+    else {
+        *initialized = 0;
+        result = PMI_SUCCESS;
     }
     DRETURN (result);
     return result;
@@ -179,90 +138,39 @@ int PMI_Initialized (int *initialized)
 
 int PMI_Finalize (void)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_finalize (ctx.single);
-            pmi_single_destroy (ctx.single);
-            ctx.single = NULL;
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_finalize (ctx.wrap);
-            pmi_wrap_destroy (ctx.wrap);
-            ctx.wrap = NULL;
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_finalize (ctx.cli);
-            pmi_simple_client_destroy (ctx.cli);
-            ctx.cli = NULL;
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
-    ctx.type = IMPL_UNKNOWN;
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->finalize)
+        result = ctx.ops->finalize (ctx.impl);
+    if (ctx.impl && ctx.ops->destroy)
+        ctx.ops->destroy (ctx.impl);
+    ctx.impl = NULL;
+
     DRETURN (result);
 }
 
 int PMI_Abort (int exit_code, const char error_msg[])
 {
+    int result = PMI_ERR_INIT;
     DPRINTF ("%d: %s\n", ctx.rank, __FUNCTION__);
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_abort (ctx.single, exit_code, error_msg);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_abort (ctx.wrap, exit_code, error_msg);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_abort (ctx.cli, exit_code, error_msg);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    if (ctx.impl && ctx.ops->abort)
+        result = ctx.ops->abort (ctx.impl, exit_code, error_msg);
     /* unlikely to return */
     DRETURN (result);
 }
 
 int PMI_Get_size (int *size)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_get_size (ctx.single, size);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_get_size (ctx.wrap, size);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_get_size (ctx.cli, size);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->get_size)
+        result = ctx.ops->get_size (ctx.impl, size);
     DRETURN (result);
 }
 
 int PMI_Get_rank (int *rank)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_get_rank (ctx.single, rank);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_get_rank (ctx.wrap, rank);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_get_rank (ctx.cli, rank);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->get_rank)
+        result = ctx.ops->get_rank (ctx.impl, rank);
     if (result == PMI_SUCCESS)
         ctx.rank = *rank;
     DRETURN (result);
@@ -270,62 +178,25 @@ int PMI_Get_rank (int *rank)
 
 int PMI_Get_universe_size (int *size)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_get_universe_size (ctx.single, size);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_get_universe_size (ctx.wrap, size);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_get_universe_size (ctx.cli, size);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->get_universe_size)
+        result = ctx.ops->get_universe_size (ctx.impl, size);
     DRETURN (result);
 }
 
 int PMI_Get_appnum (int *appnum)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_get_appnum (ctx.single, appnum);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_get_appnum (ctx.wrap, appnum);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_get_appnum (ctx.cli, appnum);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->get_appnum)
+        result = ctx.ops->get_appnum (ctx.impl, appnum);
     DRETURN (result);
 }
 
 int PMI_KVS_Get_my_name (char kvsname[], int length)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_get_my_name (ctx.single, kvsname, length);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_get_my_name (ctx.wrap, kvsname, length);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_get_my_name (ctx.cli, kvsname,
-                                                        length);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_get_my_name)
+        result = ctx.ops->kvs_get_my_name (ctx.impl, kvsname, length);
     if (result == PMI_SUCCESS) {
         DPRINTF ("%d: %s (\"%s\") rc=%d\n", ctx.rank, __FUNCTION__,
                  kvsname, result);
@@ -338,83 +209,33 @@ int PMI_KVS_Get_my_name (char kvsname[], int length)
 
 int PMI_KVS_Get_name_length_max (int *length)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_get_name_length_max (ctx.single, length);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_get_name_length_max (ctx.wrap, length);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_get_name_length_max (ctx.cli,
-                                                                length);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_get_name_length_max)
+        result = ctx.ops->kvs_get_name_length_max (ctx.impl, length);
     DRETURN (result);
 }
 
 int PMI_KVS_Get_key_length_max (int *length)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_get_key_length_max (ctx.single, length);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_get_key_length_max (ctx.wrap, length);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_get_key_length_max (ctx.cli, length);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_get_key_length_max)
+        result = ctx.ops->kvs_get_key_length_max (ctx.impl, length);
     DRETURN (result);
 }
 
 int PMI_KVS_Get_value_length_max (int *length)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_get_value_length_max (ctx.single, length);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_get_value_length_max (ctx.wrap, length);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_get_value_length_max (ctx.cli,
-                                                                 length);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_get_value_length_max)
+        result = ctx.ops->kvs_get_value_length_max (ctx.impl, length);
     DRETURN (result);
 }
 
 int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_put (ctx.single, kvsname, key, value);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_put (ctx.wrap, kvsname, key, value);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_put (ctx.cli, kvsname, key, value);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_put)
+        result = ctx.ops->kvs_put (ctx.impl, kvsname, key, value);
     DPRINTF ("%d: PMI_KVS_Put (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
              ctx.rank, kvsname, key, value, result,
              result == PMI_SUCCESS ? "" : pmi_strerror (result));
@@ -422,25 +243,11 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
 }
 
 int PMI_KVS_Get (const char kvsname[], const char key[],
-                          char value[], int length)
+                 char value[], int length)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_get (ctx.single, kvsname,
-                                         key, value, length);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_get (ctx.wrap, kvsname, key, value, length);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_get (ctx.cli, kvsname,
-                                                key, value, length);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_get)
+        result = ctx.ops->kvs_get (ctx.impl, kvsname, key, value, length);
     if (result == PMI_SUCCESS) {
         DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\", \"%s\") rc=%d\n",
                  ctx.rank, kvsname, key, value, result);
@@ -453,103 +260,41 @@ int PMI_KVS_Get (const char kvsname[], const char key[],
 
 int PMI_KVS_Commit (const char kvsname[])
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_kvs_commit (ctx.single, kvsname);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_kvs_commit (ctx.wrap, kvsname);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_kvs_commit (ctx.cli, kvsname);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->kvs_commit)
+        result = ctx.ops->kvs_commit (ctx.impl, kvsname);
     DRETURN (result);
 }
 
 int PMI_Barrier (void)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_barrier (ctx.single);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_barrier (ctx.wrap);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_barrier (ctx.cli);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->barrier)
+        result = ctx.ops->barrier (ctx.impl);
     DRETURN (result);
 }
 
 int PMI_Publish_name (const char service_name[], const char port[])
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result  = pmi_single_publish_name (ctx.single, service_name, port);
-            break;
-        case IMPL_WRAP:
-            result  = pmi_wrap_publish_name (ctx.wrap, service_name, port);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_publish_name (ctx.cli,
-                                                     service_name, port);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->publish_name)
+        result  = ctx.ops->publish_name (ctx.impl, service_name, port);
     DRETURN (result);
 }
 
 int PMI_Unpublish_name (const char service_name[])
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result  = pmi_single_unpublish_name (ctx.single, service_name);
-            break;
-        case IMPL_WRAP:
-            result  = pmi_wrap_unpublish_name (ctx.wrap, service_name);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_unpublish_name (ctx.cli, service_name);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->unpublish_name)
+        result  = ctx.ops->unpublish_name (ctx.impl, service_name);
     DRETURN (result);
 }
 
 int PMI_Lookup_name (const char service_name[], char port[])
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result  = pmi_single_lookup_name (ctx.single, service_name, port);
-            break;
-        case IMPL_WRAP:
-            result  = pmi_wrap_lookup_name (ctx.wrap, service_name, port);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_lookup_name (ctx.cli,
-                                                    service_name, port);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->lookup_name)
+        result  = ctx.ops->lookup_name (ctx.impl, service_name, port);
     DRETURN (result);
 }
 
@@ -563,35 +308,13 @@ int PMI_Spawn_multiple(int count,
                        const PMI_keyval_t preput_keyval_vector[],
                        int errors[])
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_SINGLETON:
-            result = pmi_single_spawn_multiple (ctx.single, count, cmds, argvs,
-                                                maxprocs, info_keyval_sizesp,
-                                                info_keyval_vectors,
-                                                preput_keyval_size,
-                                                preput_keyval_vector, errors);
-            break;
-        case IMPL_WRAP:
-            result = pmi_wrap_spawn_multiple (ctx.wrap, count, cmds, argvs,
-                                              maxprocs, info_keyval_sizesp,
-                                              info_keyval_vectors,
-                                              preput_keyval_size,
-                                              preput_keyval_vector, errors);
-            break;
-        case IMPL_SIMPLE:
-            result = pmi_simple_client_spawn_multiple (ctx.cli, count, cmds,
-                                                       argvs, maxprocs,
-                                                       info_keyval_sizesp,
-                                                       info_keyval_vectors,
-                                                       preput_keyval_size,
-                                                       preput_keyval_vector,
-                                                       errors);
-            break;
-        default:
-            result = PMI_ERR_INIT;
-            break;
-    }
+    int result = PMI_ERR_INIT;
+    if (ctx.impl && ctx.ops->spawn_multiple)
+        result = ctx.ops->spawn_multiple (ctx.impl, count, cmds, argvs,
+                                          maxprocs, info_keyval_sizesp,
+                                          info_keyval_vectors,
+                                          preput_keyval_size,
+                                          preput_keyval_vector, errors);
     DRETURN (result);
 }
 
@@ -600,15 +323,9 @@ int PMI_Spawn_multiple(int count,
 
 int PMI_Get_clique_ranks (int ranks[], int length)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_WRAP:
-            result = pmi_wrap_get_clique_ranks (ctx.wrap, ranks, length);
-            break;
-        default:
-            result = PMI_FAIL;
-            break;
-    }
+    int result = PMI_FAIL;
+    if (ctx.impl && ctx.ops->get_clique_ranks)
+        result = ctx.ops->get_clique_ranks (ctx.impl, ranks, length);
     if (result == PMI_FAIL)
         result = pmi_process_mapping_get_clique_ranks (ranks, length);
     DRETURN (result);
@@ -616,15 +333,9 @@ int PMI_Get_clique_ranks (int ranks[], int length)
 
 int PMI_Get_clique_size (int *size)
 {
-    int result;
-    switch (ctx.type) {
-        case IMPL_WRAP:
-            result = pmi_wrap_get_clique_size (ctx.wrap, size);
-            break;
-        default:
-            result = PMI_FAIL;
-            break;
-    }
+    int result = PMI_FAIL;
+    if (ctx.impl && ctx.ops->get_clique_size)
+        result = ctx.ops->get_clique_size (ctx.impl, size);
     if (result == PMI_FAIL)
         result = pmi_process_mapping_get_clique_size (size);
     DRETURN (result);

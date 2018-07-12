@@ -51,8 +51,9 @@ struct pmi_simple_client {
     int buflen;
 };
 
-int pmi_simple_client_init (struct pmi_simple_client *pmi, int *spawned)
+static int pmi_simple_client_init (void *impl, int *spawned)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     unsigned int vers, subvers;
     char buf[SIMPLE_MAX_PROTO_LINE];
@@ -102,15 +103,16 @@ done:
     return result;
 }
 
-int pmi_simple_client_initialized (struct pmi_simple_client *pmi,
-                                   int *initialized)
+static int pmi_simple_client_initialized (void *impl, int *initialized)
 {
+    struct pmi_simple_client *pmi = impl;
     *initialized = pmi->initialized;
     return PMI_SUCCESS;
 }
 
-int pmi_simple_client_finalize (struct pmi_simple_client *pmi)
+static int pmi_simple_client_finalize (void *impl)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -129,24 +131,27 @@ done:
     return result;
 }
 
-int pmi_simple_client_get_size (struct pmi_simple_client *pmi, int *size)
+static int pmi_simple_client_get_size (void *impl, int *size)
 {
+    struct pmi_simple_client *pmi = impl;
     if (!pmi->initialized)
         return PMI_FAIL;
     *size = pmi->size;
     return PMI_SUCCESS;
 }
 
-int pmi_simple_client_get_rank (struct pmi_simple_client *pmi, int *rank)
+static int pmi_simple_client_get_rank (void *impl, int *rank)
 {
+    struct pmi_simple_client *pmi = impl;
     if (!pmi->initialized)
         return PMI_FAIL;
     *rank = pmi->rank;
     return PMI_SUCCESS;
 }
 
-int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum)
+static int pmi_simple_client_get_appnum (void *impl, int *appnum)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -169,9 +174,9 @@ done:
     return result;
 }
 
-int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
-                                         int *universe_size)
+static int pmi_simple_client_get_universe_size (void *impl, int *universe_size)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -194,26 +199,28 @@ done:
     return result;
 }
 
-int pmi_simple_client_publish_name (struct pmi_simple_client *pmi,
-                                    const char *service_name, const char *port)
+static int pmi_simple_client_publish_name (void *impl,
+                                           const char *service_name,
+                                           const char *port)
 {
     return PMI_FAIL;
 }
 
-int pmi_simple_client_unpublish_name (struct pmi_simple_client *pmi,
-                                      const char *service_name)
+static int pmi_simple_client_unpublish_name (void *impl,
+                                             const char *service_name)
 {
     return PMI_FAIL;
 }
 
-int pmi_simple_client_lookup_name (struct pmi_simple_client *pmi,
-                                   const char *service_name, char *port)
+static int pmi_simple_client_lookup_name (void *impl,
+                                          const char *service_name, char *port)
 {
     return PMI_FAIL;
 }
 
-int pmi_simple_client_barrier (struct pmi_simple_client *pmi)
+static int pmi_simple_client_barrier (void *impl)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -234,15 +241,16 @@ done:
     return result;
 }
 
-int pmi_simple_client_abort (struct pmi_simple_client *pmi,
-                             int exit_code, const char *error_msg)
+static int pmi_simple_client_abort (void *impl,
+                                    int exit_code, const char *error_msg)
 {
     return PMI_FAIL;
 }
 
-int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
-                                       char *kvsname, int length)
+static int pmi_simple_client_kvs_get_my_name (void *impl,
+                                              char *kvsname, int length)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -265,37 +273,38 @@ done:
     return result;
 }
 
-int pmi_simple_client_kvs_get_name_length_max (struct pmi_simple_client *pmi,
-                                               int *length)
+static int pmi_simple_client_kvs_get_name_length_max (void *impl, int *length)
 {
+    struct pmi_simple_client *pmi = impl;
     if (!pmi->initialized)
         return PMI_FAIL;
     *length = pmi->kvsname_max;
     return PMI_SUCCESS;
 }
 
-int pmi_simple_client_kvs_get_key_length_max (struct pmi_simple_client *pmi,
-                                              int *length)
+static int pmi_simple_client_kvs_get_key_length_max (void *impl, int *length)
 {
+    struct pmi_simple_client *pmi = impl;
     if (!pmi->initialized)
         return PMI_FAIL;
     *length = pmi->keylen_max;
     return PMI_SUCCESS;
 }
 
-int pmi_simple_client_kvs_get_value_length_max (struct pmi_simple_client *pmi,
-                                                int *length)
+static int pmi_simple_client_kvs_get_value_length_max (void *impl, int *length)
 {
+    struct pmi_simple_client *pmi = impl;
     if (!pmi->initialized)
         return PMI_FAIL;
     *length = pmi->vallen_max;
     return PMI_SUCCESS;
 }
 
-int pmi_simple_client_kvs_put (struct pmi_simple_client *pmi,
-                               const char *kvsname, const char *key,
-                               const char *value)
+static int pmi_simple_client_kvs_put (void *impl,
+                                      const char *kvsname, const char *key,
+                                      const char *value)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -317,16 +326,16 @@ done:
     return result;
 }
 
-int pmi_simple_client_kvs_commit (struct pmi_simple_client *pmi,
-                                  const char *kvsname)
+static int pmi_simple_client_kvs_commit (void *impl, const char *kvsname)
 {
     return PMI_SUCCESS; /* a no-op here */
 }
 
-int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
-                               const char *kvsname,
-                               const char *key, char *value, int len)
+static int pmi_simple_client_kvs_get (void *impl,
+                                      const char *kvsname,
+                                      const char *key, char *value, int len)
 {
+    struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
     int rc;
 
@@ -349,22 +358,23 @@ done:
     return result;
 }
 
-int pmi_simple_client_spawn_multiple (struct pmi_simple_client *pmi,
-                                      int count,
-                                      const char *cmds[],
-                                      const char **argvs[],
-                                      const int maxprocs[],
-                                      const int info_keyval_sizesp[],
-                                      const PMI_keyval_t *info_keyval_vectors[],
-                                      int preput_keyval_size,
-                                      const PMI_keyval_t preput_keyval_vector[],
-                                      int errors[])
+static int pmi_simple_client_spawn_multiple (void *impl,
+                                             int count,
+                                             const char *cmds[],
+                                             const char **argvs[],
+                                             const int maxprocs[],
+                                             const int info_keyval_sizesp[],
+                                             const PMI_keyval_t *info_keyval_vectors[],
+                                             int preput_keyval_size,
+                                             const PMI_keyval_t preput_keyval_vector[],
+                                             int errors[])
 {
     return PMI_FAIL;
 }
 
-void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
+static void pmi_simple_client_destroy (void *impl)
 {
+    struct pmi_simple_client *pmi = impl;
     if (pmi) {
         if (pmi->fd != -1)
             (void)close (pmi->fd);
@@ -374,7 +384,33 @@ void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
     }
 }
 
-struct pmi_simple_client *pmi_simple_client_create (void)
+static struct pmi_operations pmi_simple_operations = {
+    .init                       = pmi_simple_client_init,
+    .initialized                = pmi_simple_client_initialized,
+    .finalize                   = pmi_simple_client_finalize,
+    .get_size                   = pmi_simple_client_get_size,
+    .get_rank                   = pmi_simple_client_get_rank,
+    .get_appnum                 = pmi_simple_client_get_appnum,
+    .get_universe_size          = pmi_simple_client_get_universe_size,
+    .publish_name               = pmi_simple_client_publish_name,
+    .unpublish_name             = pmi_simple_client_unpublish_name,
+    .lookup_name                = pmi_simple_client_lookup_name,
+    .barrier                    = pmi_simple_client_barrier,
+    .abort                      = pmi_simple_client_abort,
+    .kvs_get_my_name            = pmi_simple_client_kvs_get_my_name,
+    .kvs_get_name_length_max    = pmi_simple_client_kvs_get_name_length_max,
+    .kvs_get_key_length_max     = pmi_simple_client_kvs_get_key_length_max,
+    .kvs_get_value_length_max   = pmi_simple_client_kvs_get_value_length_max,
+    .kvs_put                    = pmi_simple_client_kvs_put,
+    .kvs_commit                 = pmi_simple_client_kvs_commit,
+    .kvs_get                    = pmi_simple_client_kvs_get,
+    .get_clique_size            = NULL,
+    .get_clique_ranks           = NULL,
+    .spawn_multiple             = pmi_simple_client_spawn_multiple,
+    .destroy                    = pmi_simple_client_destroy,
+};
+
+void *pmi_simple_client_create (struct pmi_operations **ops)
 {
     struct pmi_simple_client *pmi = calloc (1, sizeof (*pmi));
     const char *s;
@@ -393,6 +429,7 @@ struct pmi_simple_client *pmi_simple_client_create (void)
     pmi->spawned = 0;
     if ((s = getenv ("PMI_SPAWNED")))
         pmi->spawned = strtol (s, NULL, 10);
+    *ops = &pmi_simple_operations;
     return pmi;
 error:
     pmi_simple_client_destroy (pmi);
