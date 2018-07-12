@@ -38,6 +38,7 @@ local lwj_options = {
     ['no-pmi-server'] =         "Do not start simple-pmi server",
     ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
     ['cpu-affinity'] =          "Set default cpu-affinity to assigned cores",
+    ['mpi'] =                   "Set hint for type of MPI, e.g. -o mpi=spectrum "
 }
 
 local default_opts = {
