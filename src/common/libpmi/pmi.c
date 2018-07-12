@@ -100,22 +100,6 @@ int PMI_Init (int *spawned)
         ctx.type = IMPL_SIMPLE;
         goto done;
     }
-    /* If PMIX_SERVER_URI is set, this indicates PMIx service is offered.
-     * Use it via the PMI v1 API provided in libpmix.so.
-     */
-    if (getenv ("PMIX_SERVER_URI")) {
-        DPRINTF ("%s: PMIX_SERVER_URI is set, use libpmix.so\n", __FUNCTION__);
-        if (!(ctx.wrap = pmi_wrap_create ("libpmix.so")))
-            goto done;
-        result = pmi_wrap_init (ctx.wrap, spawned);
-        if (result != PMI_SUCCESS) {
-            pmi_wrap_destroy (ctx.wrap);
-            ctx.wrap = NULL;
-            goto done;
-        }
-        ctx.type = IMPL_WRAP;
-        goto done;
-    }
     /* If PMI_LIBRARY is set, we are directed to open a specific library.
      */
     if ((library = getenv ("PMI_LIBRARY"))) {
