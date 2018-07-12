@@ -1592,6 +1592,18 @@ static int l_wreck_tasks_per_node (struct prog_ctx *ctx, lua_State *L)
     return (1);
 }
 
+static int l_wreck_getopt (lua_State *L)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
+    const char *opt = lua_tostring (L, 2);
+    const char *val = NULL;
+    if (opt && (val = prog_ctx_getopt (ctx, opt)))
+        lua_pushstring (L, val);
+    else
+        lua_pushnil (L);
+    return (1);
+}
+
 static int l_wreck_index (lua_State *L)
 {
     struct task_info *t;
@@ -1650,6 +1662,10 @@ static int l_wreck_index (lua_State *L)
             ctx->envref = luaL_ref (L, LUA_REGISTRYINDEX);
         }
         lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->envref);
+        return (1);
+    }
+    if (strcmp (key, "getopt") == 0) {
+        lua_pushcfunction (L, l_wreck_getopt);
         return (1);
     }
     if (strcmp (key, "argv") == 0) {
