@@ -103,6 +103,8 @@ static int find_local_cf_endpoint (const cf_t *cf, int size)
             if (fnmatch (pat, s, 0) == 0)
                 break;
         }
+        if (entry != NULL) // found a match in 'addrs'
+            break;
     }
     free (addrs);
     if (i == size) {
