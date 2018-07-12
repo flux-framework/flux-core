@@ -9,8 +9,9 @@ AC_CONFIG_SRCDIR([NEWS])
 AC_CANONICAL_SYSTEM
 ##
 # If runstatedir not explicitly set on command line, use '/run' as default
+# N.B. runstatedir is not set at all in autoconf < 2.70.
 ##
-if test "$runstatedir" = '${localstatedir}/run'; then
+if test "$runstatedir" = '${localstatedir}/run' || test -z "$runstatedir"; then
    AC_SUBST([runstatedir],[/run])
 fi
 X_AC_EXPAND_INSTALL_DIRS
