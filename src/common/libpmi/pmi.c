@@ -35,6 +35,7 @@
 #include "pmi.h"
 #include "pmi_strerror.h"
 #include "simple_client.h"
+#include "pmix_client.h"
 #include "wrap.h"
 #include "single.h"
 #include "clique.h"
@@ -81,6 +82,15 @@ int PMI_Init (int *spawned)
         if (!(ctx.impl = pmi_simple_client_create (&ctx.ops)))
             goto done;
     }
+#if HAVE_LIBPMIX
+    /* If PMIX_SERVER_* is set, pmix service is offered.
+     * Use the pmix client.
+     */
+    else if (getenv ("PMIX_SERVER_URI") || getenv ("PMIX_SERVER_URI2")) {
+        if (!(ctx.impl = pmix_client_create (&ctx.ops)))
+            goto done;
+    }
+#endif
     /* If PMI_LIBRARY is set, we are directed to open a specific library.
      */
     else if ((library = getenv ("PMI_LIBRARY"))) {

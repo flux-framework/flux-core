@@ -42,6 +42,7 @@ wrexecd_SOURCES = \
 wrexecd_libs = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la
 

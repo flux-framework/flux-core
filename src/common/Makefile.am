@@ -31,7 +31,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
-	$(builddir)/libpmi/libpmi.la \
 	$(builddir)/libkz/libkz.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
@@ -84,7 +83,7 @@ endif
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL) $(LIBPMIX)
 libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
 	-Wl,--defsym=flux_pmi_library=1 \
@@ -94,7 +93,7 @@ libpmi_la_LDFLAGS = \
 libpmi2_la_SOURCES =
 libpmi2_la_LIBADD = \
 	$(builddir)/libpmi/libpmi.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL) $(LIBPMIX)
 libpmi2_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi2.map \
 	-shared -export-dynamic --disable-static \
