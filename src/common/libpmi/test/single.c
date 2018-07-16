@@ -11,6 +11,7 @@ int main (int argc, char *argv[])
     int rc, spawned, initialized, rank, size, appnum;
     int kvsname_length, kvskey_length, kvsval_length;
     char *kvsname, *kvsval;
+    char port[1024];
 
     plan (NO_PLAN);
 
@@ -87,6 +88,24 @@ int main (int argc, char *argv[])
     rc = ops->kvs_put (pmi, kvsname, "foo", "bar");
     ok (rc == PMI_ERR_INVALID_KEY,
         "pmi_single_kvs_put on duplicate key fails w/PMI_ERR_INVALID_KEY");
+
+    rc = ops->publish_name (pmi, "foo", "42");
+    ok (rc == PMI_FAIL,
+        "pmi_single_publish_name fails with PMI_FAIL");
+    rc = ops->unpublish_name (pmi, "foo");
+    ok (rc == PMI_FAIL,
+        "pmi_single_unpublish_name fails with PMI_FAIL");
+    rc = ops->lookup_name (pmi, "foo", port);
+    ok (rc == PMI_FAIL,
+        "pmi_single_lookup_name fails with PMI_FAIL");
+
+    rc = ops->spawn_multiple (pmi, 0, NULL, NULL, NULL, NULL, NULL,
+                              0, NULL, NULL);
+    ok (rc == PMI_FAIL,
+        "pmi_single_spawn_multiple fails with PMI_FAIL");
+
+    dies_ok ({ops->abort (pmi, 0, "a test message");},
+        "pmi_single_abort exits program");
 
     rc = ops->finalize (pmi);
     ok (rc == PMI_SUCCESS,
