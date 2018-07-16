@@ -139,6 +139,7 @@ int main (int argc, char *argv[])
     char *name = NULL, *val = NULL, *val2 = NULL, *val3 = NULL;
     char *key = NULL;
     int rc;
+    char port[1024];
 
     plan (NO_PLAN);
 
@@ -257,6 +258,26 @@ int main (int argc, char *argv[])
     rig_barrier_exit_failure = 0;
     ok (ops->barrier (cli) == PMI_SUCCESS,
         "pmi_simple_client_barrier OK (rigged errors cleared)");
+
+    /* unimplemented stuff
+     */
+    rc = ops->publish_name (cli, "foo", "42");
+    ok (rc == PMI_FAIL,
+        "pmi_simple_publish_name fails with PMI_FAIL");
+    rc = ops->unpublish_name (cli, "foo");
+    ok (rc == PMI_FAIL,
+        "pmi_simple_unpublish_name fails with PMI_FAIL");
+    rc = ops->lookup_name (cli, "foo", port);
+    ok (rc == PMI_FAIL,
+        "pmi_simple_lookup_name fails with PMI_FAIL");
+
+    rc = ops->spawn_multiple (cli, 0, NULL, NULL, NULL, NULL, NULL,
+                              0, NULL, NULL);
+    ok (rc == PMI_FAIL,
+        "pmi_simple_spawn_multiple fails with PMI_FAIL");
+
+    dies_ok ({ops->abort (cli, 0, "a test message");},
+        "pmi_simple_abort exits program");
 
     /* finalize
      */
