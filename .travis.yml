@@ -9,15 +9,15 @@ compiler:
 matrix:
   include:
     - compiler: gcc
-      env: COVERAGE=t ARGS="--enable-caliper --enable-pylint"
+      env: COVERAGE=t ARGS="--with-pmix --enable-caliper --enable-pylint"
     - compiler: gcc
       env: T_INSTALL=t
     - compiler: clang
-      env: CPPCHECK=t ARGS=--enable-sanitizer CC=clang-3.8 CXX=clang++-3.8
+      env: CPPCHECK=t ARGS="--with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
-      env: CC=gcc-4.9 chain_lint=t
+      env: CC=gcc-4.9 ARGS="--with-pmix" chain_lint=t
     - compiler: clang
-      env: ARGS=--enable-caliper CC=clang-3.8 CXX=clang++-3.8
+      env: ARGS="--with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
       
 cache:
   directories:
@@ -51,6 +51,7 @@ addons:
       - valgrind
       - libyaml-cpp-dev
       - libboost-dev # for yaml-cpp 0.5.1. >=0.5.2 no longer need boost
+      - libevent-dev # pmix needs this
 
   coverity_scan:
     project:
