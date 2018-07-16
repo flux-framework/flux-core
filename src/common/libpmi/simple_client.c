@@ -244,7 +244,10 @@ done:
 static int pmi_simple_client_abort (void *impl,
                                     int exit_code, const char *error_msg)
 {
-    return PMI_FAIL;
+    fprintf (stderr, "PMI_Abort: %s\n", error_msg);
+    exit (exit_code);
+    /*NOTREACHED*/
+    return PMI_SUCCESS;
 }
 
 static int pmi_simple_client_kvs_get_my_name (void *impl,
