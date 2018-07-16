@@ -382,7 +382,8 @@ static struct pmi_operations pmi_wrap_operations = {
  * - Use RTLD_GLOBAL due to issue #432
  */
 
-void *pmi_wrap_create (const char *libname, struct pmi_operations **ops)
+void *pmi_wrap_create (const char *libname, struct pmi_operations **ops,
+                       bool allow_self_wrap)
 {
     struct pmi_wrap *pmi = calloc (1, sizeof (*pmi));
     const char *s;
@@ -408,7 +409,7 @@ void *pmi_wrap_create (const char *libname, struct pmi_operations **ops)
                              __FUNCTION__, name);
             }
         }
-        else if (dlsym (pmi->dso, "flux_pmi_library")) {
+        else if (!allow_self_wrap && dlsym (pmi->dso, "flux_pmi_library")) {
             if (debug)
                 fprintf (stderr, "%s: skipping %s\n", __FUNCTION__, name);
             dlclose (pmi->dso);

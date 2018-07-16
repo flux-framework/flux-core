@@ -95,7 +95,7 @@ int PMI_Init (int *spawned)
      */
     else if ((library = getenv ("PMI_LIBRARY"))) {
         DPRINTF ("%s: PMI_LIBRARY is set, use %s\n", __FUNCTION__, library);
-        if (!(ctx.impl = pmi_wrap_create (library, &ctx.ops)))
+        if (!(ctx.impl = pmi_wrap_create (library, &ctx.ops, false)))
             goto done;
     }
 
@@ -104,7 +104,7 @@ int PMI_Init (int *spawned)
      * If that fails, fall through to singleton.
      */
     else if (!getenv ("FLUX_PMI_SINGLETON")
-                        && (ctx.impl = pmi_wrap_create (NULL, &ctx.ops))) {
+                    && (ctx.impl = pmi_wrap_create (NULL, &ctx.ops, false))) {
     }
     /* Singleton.
      */
