@@ -14,6 +14,7 @@ noinst_LTLIBRARIES = libkvs.la
 libkvs_la_SOURCES = \
 	kvs.c \
 	kvs_lookup.c \
+	kvs_getroot.c \
 	kvs_dir.c \
 	kvs_dir_private.h \
 	kvs_classic.c \
@@ -27,6 +28,7 @@ libkvs_la_SOURCES = \
 fluxcoreinclude_HEADERS = \
 	kvs.h \
 	kvs_lookup.h \
+	kvs_getroot.h \
 	kvs_dir.h \
 	kvs_watch.h \
 	kvs_classic.h \
