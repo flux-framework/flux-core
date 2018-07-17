@@ -86,6 +86,7 @@ endif
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
+	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(LIBUTIL)
 
 #

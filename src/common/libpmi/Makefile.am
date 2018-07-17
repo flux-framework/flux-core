@@ -29,7 +29,14 @@ libpmi_la_SOURCES = \
 	dgetline.c \
 	dgetline.h \
 	clique.c \
-	clique.h
+	clique.h \
+	pmi_operations.h
+
+if HAVE_LIBPMIX
+libpmi_la_SOURCES += \
+	pmix_client.c \
+	pmix_client.h
+endif
 
 fluxinclude_HEADERS = \
 	pmi.h \
@@ -38,6 +45,7 @@ fluxinclude_HEADERS = \
 TESTS = test_keyval.t \
 	test_simple.t \
 	test_single.t \
+	test_wrap.t \
 	test_clique.t
 
 test_ldadd = \
@@ -47,7 +55,8 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL) $(LIBMUNGE)
+	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) \
+	$(LIBRT) $(LIBDL) $(LIBMUNGE) $(LIBPMIX)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
@@ -73,6 +82,11 @@ test_simple_t_LDADD = $(test_ldadd)
 test_single_t_SOURCES = test/single.c
 test_single_t_CPPFLAGS = $(test_cppflags)
 test_single_t_LDADD = $(test_ldadd)
+
+test_wrap_t_SOURCES = test/wrap.c
+test_wrap_t_CPPFLAGS = $(test_cppflags) \
+    -DINTREE_PMI_LIBRARY_PATH=\"$(abs_top_builddir)/src/common/.libs/libpmi.so\"
+test_wrap_t_LDADD = $(test_ldadd)
 
 test_clique_t_SOURCES = test/clique.c
 test_clique_t_CPPFLAGS = $(test_cppflags)
