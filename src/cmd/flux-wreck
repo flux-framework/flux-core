@@ -818,6 +818,56 @@ prog:SubCommand {
  end
 }
 
+prog:SubCommand {
+ name = "sched-params",
+ description = "Set/Get scheduler parameters at runtime.",
+ usage = "get or set ITEM=VAL",
+ 
+ handler = function (self, arg)
+    local action = arg[1]
+    if action == "set" then    
+        local params = arg[2]
+        if not params then
+            self:die ("No arguments specified for setting scheduler parameters.")
+        end
+  
+        local resp, err = f:rpc ("sched.params.set", { param = tostring(params) })
+        if not resp then
+            if err == "Function not implemented" then
+                prog:die ("Scheduler parameters cannot be updated when scheduler is not loaded")
+            else
+                prog:die ("Unable to set scheduler parameters. %s\n", err)
+            end
+        end
+    else  -- Else corresponding to the 'get' action, return all current values 
+        local params = arg[2]
+        local resp, err = f:rpc ("sched.params.get", { })
+        if not resp then
+            if err == "Function not implemented" then
+                prog:die ("Scheduler parameters cannot be queried when scheduler is not loaded")
+            else
+                prog:die ("Unable to obtain scheduler parameters. %s\n", err)
+            end
+        end
+        
+        for k,v in pairs(resp) do
+            if (k == "delay-sched") then    -- Return a simple integer, but print true/false for consistency
+                local v_str = ""
+                if (v == 1) then 
+                    v = "true"
+                else 
+                    v = "false"
+                end
+            end 
+            if not params then 
+                print(k.."="..v) 
+            elseif string.find(params,k,1,true) then    -- We have strings with '-', so search for plain strings
+                print(k.."="..v) 
+            end
+        end
+    end 
+ end
+}
 
 -- Check for valid connection to flux:
 if not f then prog:die ("Connecting to flux failed: %s\n", err) end
@@ -825,3 +875,4 @@ if not f then prog:die ("Connecting to flux failed: %s\n", err) end
 -- Process cmdline, run any subcommand, or exit with failure:
 prog:run (arg)
 --  vi: ts=4 sw=4 expandtab
+            
