@@ -52,8 +52,8 @@ struct lua_script {
     char *      label;/*  Filename or name of this script (for errors)      */
 
     lua_stack_t   st; /*  Pointer back to lua_stack in which we're loaded   */
-    lua_State *    L; /*  This script's local Lua state                     */
-    int      lua_ref; /*  Reference back into global registry               */
+    lua_State *    L; /*  Copy of Lua state                                 */
+    int      env_ref; /*  Reference for _ENV table (5.1 setfenv table)      */
 };
 
 struct lua_script_stack {
@@ -82,7 +82,7 @@ static void lua_script_destroy (struct lua_script *s)
     if (s == NULL)
         return;
     if (s->L && s->st) {
-        luaL_unref (s->st->L, LUA_REGISTRYINDEX, s->lua_ref);
+        luaL_unref (s->L, LUA_REGISTRYINDEX, s->env_ref);
         /* Only call lua_close() on global/main lua state */
         s->st = NULL;
         s->L = NULL;
@@ -126,21 +126,9 @@ lua_script_t lua_script_create (lua_stack_t st, int type, const char *data)
 
     L = st->L;
     script->st = st;
-    script->L = lua_newthread (L);
-    script->lua_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+    script->L = L;
 
-    /*
-     *  Now we need to redefine the globals table for this script/thread.
-     *   this will keep each script's globals in a private namespace,
-     *   (including all the spank callback functions).
-     *   To do this, we define a new table in the current thread's
-     *   state, and give that table's metatable an __index field that
-     *   points to the real globals table, then replace this threads
-     *   globals table with the new (empty) table.
-     *
-     */
-
-    /*  New globals table */
+    /*  New globals table/_ENV for this chunk */
     lua_newtable (script->L);
 
     /*  metatable for table on top of stack */
@@ -149,7 +137,7 @@ lua_script_t lua_script_create (lua_stack_t st, int type, const char *data)
     /*
      *  Now set metatable->__index to point to the real globals
      *   table. This way Lua will check the root global table
-     *   for any nonexistent items in the current thread's global
+     *   for any nonexistent items in the current chunk's environment
      *   table.
      */
     lua_pushstring (script->L, "__index");
@@ -159,11 +147,8 @@ lua_script_t lua_script_create (lua_stack_t st, int type, const char *data)
     /*  Now set metatable for the new globals table */
     lua_setmetatable (script->L, -2);
 
-    /*  And finally replace the globals table with the (empty)  table
-     *   now at top of the stack
-     */
-    lua_replace (script->L, LUA_GLOBALSINDEX);
-
+    /* Save reference to this table, which will be used as _ENV for loaded chunk */
+    script->env_ref = luaL_ref (script->L, LUA_REGISTRYINDEX);
     return (script);
 }
 
@@ -186,6 +171,18 @@ static int lua_script_compile (lua_stack_t st, lua_script_t s)
         (*st->errf) ("%s: Failed to load script.\n", s->data);
         return (-1);
     }
+
+    /* Get the environment/globals table for this script from
+     *  the registry and set it as globals table for this chunk
+     */
+    lua_rawgeti (s->L, LUA_REGISTRYINDEX, s->env_ref);
+#if LUA_VERSION_NUM >= 502
+    /* 5.2 and greater: set table as first upvalue: i.e. _ENV */
+    lua_setupvalue (s->L, -2, 1);
+#else
+    /* 5.0, 5.1: Set table as function environment for the chunk */
+    lua_setfenv (s->L, -2);
+#endif
 
     /*
      *  Now compile the loaded script:
@@ -350,11 +347,21 @@ lua_State *lua_stack_state (lua_stack_t st)
     return (st->L);
 }
 
+/*
+ *  Return "global" `name` from the shadow globals table for this
+ *   script (stored at s->env_ref).
+ */
+static void lua_script_getglobal (lua_script_t s, const char *name)
+{
+    lua_rawgeti (s->L, LUA_REGISTRYINDEX, s->env_ref);
+    lua_getfield (s->L, -1, name);
+}
+
 int lua_script_call (lua_script_t s, const char *name)
 {
     struct lua_State *L = lua_script_state (s);
 
-    lua_getglobal (L, name);
+    lua_script_getglobal (s, name);
 
     if (lua_isnil (L, -1)) {
         lua_pop (L, 1);
