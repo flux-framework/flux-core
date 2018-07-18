@@ -235,7 +235,7 @@ local mh, err = f:msghandler {
                 f:reactor_stop ()
             end
         else
-            warn ("got unexpected msg %s\n", require 'inspect' (resp))
+            warn ("got unexpected msg!\n")
         end
     end
 
