@@ -632,7 +632,6 @@ prog:SubCommand {
             options[opt] = tonumber(val) or val
         end
     end
-    print (require 'inspect' (options))
     f:kvs_put ("lwj.options", options)
     f:kvs_commit ()
  end
