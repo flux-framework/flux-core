@@ -216,7 +216,6 @@ if plugin then
     local code = file:read ("*a")
     local fn, err = loadstring ("local f, printf = ...; " .. code);
     if not fn then error (err) end
-    setfenv (fn, _G)
     local r, v = pcall (fn, f, printf)
     if not r then error (v) end
 end
