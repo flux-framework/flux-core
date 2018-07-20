@@ -95,7 +95,7 @@ script:
  - export MAKECMDS="make distcheck"
  # Ensure travis builds libev such that libfaketime will work:
  # (force libev to *not* use syscall interface for clock_gettime())
- - export CPPFLAGS="-DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
+ - export CPPFLAGS="$CPPFLAGS -DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
 
  # Travis has limited resources, even though number of processors might
  #  might appear to be large. Limit session size for testing to 5 to avoid
