@@ -59,7 +59,7 @@ pylint==1.5.6
 #  Lua rocks files to download and install:
 #
 declare -A lua_rocks=(\
-["posix"]="luaposix" \
+["posix"]="luaposix=33.4.0-1" \
 )
 
 declare -r prog=${0##*/}
@@ -172,7 +172,7 @@ luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
 # install rocks
 for p in ${!lua_rocks[@]}; do
     if ! lua -l$p -e '' >/dev/null 2>&1; then
-        luarocks install ${lua_rocks[$p]}
+        luarocks install ${lua_rocks[$p]//=*} ${lua_rocks[$p]//*=}
     else
         say "Using cached version of " ${lua_rocks[$p]}
     fi
