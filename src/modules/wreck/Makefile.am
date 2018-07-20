@@ -46,6 +46,9 @@ wrexecd_libs = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la
 
+wrexecd_LDFLAGS = \
+	$(AM_LDFLAGS) -export-dynamic
+
 wrexecd_LDADD = \
 	rcalc.o \
 	$(wrexecd_libs) \
