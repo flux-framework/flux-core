@@ -50,11 +50,11 @@ declare -A extra_cmake_opts=(\
 #  Python pip packages
 #
 pips="\
+hererocks \
 cffi==1.5 \
 coverage \
 pylint==1.5.6
 "
-
 #
 #  Lua rocks files to download and install:
 #
@@ -63,8 +63,8 @@ declare -A lua_rocks=(\
 )
 
 declare -r prog=${0##*/}
-declare -r long_opts="prefix:,cachedir:,verbose,printenv"
-declare -r short_opts="vp:c:P"
+declare -r long_opts="prefix:,cachedir:,verbose,printenv,lua-version:"
+declare -r short_opts="vp:c:PL:"
 declare -r usage="\
 \n
 Usage: $prog [OPTIONS]\n\
@@ -76,7 +76,8 @@ Options:\n\
  -P, --printenv          Print environment variables to stdout\n\
  -c, --cachedir=DIR      Check for precompiled dependency cache in DIR\n\
  -e, --max-cache-age=N   Expire cache in N days from creation\n\
- -p, --prefix=DIR        Install software into prefix\n
+ -p, --prefix=DIR        Install software into prefix\n\
+ -L, --lua-version=VER   Install Lua version with hererocks\n
 "
 
 die() { echo -e "$prog: $@"; exit 1; }
@@ -96,6 +97,7 @@ while true; do
       -e|--max-cache-age)    cacheage="$2"; shift 2 ;;
       -p|--prefix)           prefix="$2";   shift 2 ;;
       -P|--printenv)         print_env=1;   shift   ;;
+      -L|--lua-verson)       LUA_VERSION="$2"; shift 2 ;;
       --)                    shift ; break;         ;;
       *)                     die "Invalid option '$1'\n$usage" ;;
     esac
@@ -107,7 +109,12 @@ print_env () {
     echo "export LDFLAGS=-L${prefix}/lib"
     echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig:${prefix}/share/pkgconfig"
     echo "export PATH=${HOME}/.local/bin:${HOME}/local/usr/bin:${prefix}/bin:${PATH}"
-    luarocks path --bin
+    if test -n "$LUA_VERSION"; then
+        echo "export LUA_PATH=${prefix}/share/lua/${LUA_VERSION}/?.lua;${prefix}/share/lua/${LUA_VERSION}/?/init.lua;./?.lua;${LUA_PATH}"
+        echo "export LUA_CPATH=${prefix}/lib/lua/${LUA_VERSION}/?.so;${LUA_CPATH}"
+    else
+        luarocks path --bin
+    fi
 }
 
 if test -n "$print_env"; then
@@ -115,7 +122,7 @@ if test -n "$print_env"; then
     exit 0
 fi
 
-eval $(print_env)
+$(print_env)
 
 sanitize ()
 {
@@ -144,15 +151,28 @@ add_cache ()
 }
 
 pip help >/dev/null 2>&1 || die "Required command pip not installed"
+# pip install --user --upgrade pip || die "Failed to update pip"
 pip install --user $pips || die "Failed to install required python packages"
 
+if ! test -x ${prefix}/bin/lua${LUA_VERSION}; then
+  # Use hererocks to get specific Lua version
+  hererocks -i --cflags=-fPIC ${prefix} -l ${LUA_VERSION} -rlatest
+  # XXX: hererocks doesn't create liblua.so by default, have to do it manually here!
+  (cd $prefix/lib && \
+   lib=$(echo liblua*.a) && \
+   soname=${lib//.a}.so && \
+   echo building $soname && \
+   gcc -shared -Wl,--whole-archive,--soname=${soname} \
+               -Wl,--no-as-needed -o $soname $lib -ldl -lm \
+               -Wl,--no-whole-archive)
+fi
 
 luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
 
 # install rocks
 for p in ${!lua_rocks[@]}; do
     if ! lua -l$p -e '' >/dev/null 2>&1; then
-        luarocks --local install ${lua_rocks[$p]}
+        luarocks install ${lua_rocks[$p]}
     else
         say "Using cached version of " ${lua_rocks[$p]}
     fi
