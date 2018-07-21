@@ -2,27 +2,26 @@ language: c
 
 sudo: true
 
-compiler:
-  - gcc
-  - clang
-
 matrix:
   include:
     - compiler: gcc
-      env: COVERAGE=t ARGS="--with-pmix --enable-caliper --enable-pylint"
-    - compiler: gcc
-      env: T_INSTALL=t
+      env: LUA_VERSION=5.1
     - compiler: clang
-      env: CPPCHECK=t ARGS="--with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
+      env: LUA_VERSION=5.1
     - compiler: gcc
-      env: CC=gcc-4.9 ARGS="--with-pmix" chain_lint=t
+      env: LUA_VERSION=5.1 COVERAGE=t ARGS="--with-pmix --enable-caliper --enable-pylint"
+    - compiler: gcc
+      env: LUA_VERSION=5.1 T_INSTALL=t
     - compiler: clang
-      env: ARGS="--with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
+      env: LUA_VERSION=5.1 CPPCHECK=t ARGS="--with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
+    - compiler: gcc
+      env: LUA_VERSION=5.2 CC=gcc-4.9 ARGS="--with-pmix" chain_lint=t
+    - compiler: clang
+      env: LUA_VERSION=5.2 ARGS="--with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
       
 cache:
   directories:
     - $HOME/local
-    - $HOME/.luarocks
     - $HOME/.ccache
     - $HOME/.local
 
@@ -39,9 +38,6 @@ addons:
       - gcc-4.9
       - g++-4.9
       - libmunge-dev
-      - lua5.1
-      - liblua5.1-0-dev
-      - luarocks
       - uuid-dev
       - aspell
       - aspell-en
@@ -74,7 +70,9 @@ before_install:
   #
   - test "$TRAVIS_PULL_REQUEST" == "false" || export CCACHE_READONLY=1
   - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
-  - eval $(./src/test/travis-dep-builder.sh --printenv)
+
+  - rm -rf $HOME/.luarocks
+  - $(./src/test/travis-dep-builder.sh --printenv)
   - ./src/test/travis-dep-builder.sh --cachedir=$HOME/local/.cache
 
   # coveralls-lcov required only for coveralls upload:
