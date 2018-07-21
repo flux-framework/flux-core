@@ -584,6 +584,7 @@ static void cmb_exec_cb (flux_future_t *f, void *arg)
                               "status", &status, "pid", &pid) < 0) {
         flux_log_error (h, "cmb_exec_cb: flux_msg_unpack");
         flux_future_destroy (f);
+        return;
     }
 
     if (type && strcmp (type, "io") == 0)
