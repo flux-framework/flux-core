@@ -120,6 +120,7 @@ after_success:
  - if test "$COVERAGE" = "t" ; then coveralls-lcov flux*-coverage.info; bash <(curl -s https://codecov.io/bash) ; fi
 
 after_failure:
+ - find . -name test-suite.log | xargs -i sh -c 'printf "===XXX {} XXX===";cat {}'
  - find . -name t[0-9]*.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - find . -name *.broker.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - src/test/backtrace-all.sh
