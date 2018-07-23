@@ -9,6 +9,9 @@ AM_CPPFLAGS = \
         -I$(top_srcdir) -I$(top_srcdir)/src/include \
         $(ZMQ_CFLAGS)
 
+AM_TESTS_ENVIRONMENT = \
+	export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";
+
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh

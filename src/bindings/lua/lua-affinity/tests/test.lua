@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 require "Test.More"
 
 local affinity = require 'affinity'
