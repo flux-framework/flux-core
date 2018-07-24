@@ -837,13 +837,15 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         goto done;
     }
 
-    if (!(msg = flux_event_pack (setroot_topic, "{ s:s s:i s:s s:O s:O s:O}",
+    if (!(msg = flux_event_pack (setroot_topic,
+                                 "{ s:s s:i s:s s:O s:O s:O s:i}",
                                  "namespace", root->namespace,
                                  "rootseq", root->seq,
                                  "rootref", root->ref,
                                  "names", names,
                                  "rootdir", root_dir,
-                                 "keys", keys))) {
+                                 "keys", keys,
+                                 "owner", root->owner))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
