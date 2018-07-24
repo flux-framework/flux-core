@@ -698,6 +698,60 @@ void test_reset (void)
     flux_reactor_destroy (r);
 }
 
+void test_multiple_fulfill (void)
+{
+    flux_reactor_t *r;
+    flux_future_t *f;
+    void *result;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fulfill (f, "foo", NULL);
+    flux_future_fulfill (f, "bar", NULL);
+    flux_future_fulfill (f, "baz", NULL);
+    ok (flux_future_get (f, &result) == 0,
+        "flux_future_get gets fulfillment");
+    ok (strcmp (result, "foo") == 0,
+        "flux_future_get gets correct result");
+    flux_future_reset (f);
+    ok (flux_future_get (f, &result) == 0,
+        "flux_future_get gets queued fulfillment");
+    ok (strcmp (result, "bar") == 0,
+        "flux_future_get gets correct result");
+    flux_future_reset (f);
+    ok (flux_future_get (f, &result) == 0,
+        "flux_future_get gets queued fulfillment");
+    ok (strcmp (result, "baz") == 0,
+        "flux_future_get gets correct result");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fulfill (f, "foo", NULL);
+    flux_future_fulfill_error (f, ENOENT);
+    flux_future_fulfill_error (f, EPERM);
+    ok (flux_future_get (f, &result) < 0
+        && errno == ENOENT,
+        "flux_future_get fails, error overrides result");
+    flux_future_reset (f);
+    errno = 0;
+    ok (flux_future_wait_for (f, 0.1) < 0
+        && errno == ETIMEDOUT,
+        "flux_future_wait_for timed out, b/c second error not queue");
+
+    flux_future_destroy (f);
+
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -714,6 +768,8 @@ int main (int argc, char *argv[])
     test_walk ();
 
     test_reset ();
+
+    test_multiple_fulfill ();
 
     done_testing();
     return (0);
