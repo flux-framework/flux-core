@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Populate resource.hosts for this instance using either R_lite
 #  from the parent instance if this is a flux job, or flux-exec hostname
 #
