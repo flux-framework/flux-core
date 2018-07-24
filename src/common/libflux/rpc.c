@@ -125,6 +125,8 @@ static int flux_rpc_get_vunpack (flux_future_t *f, const char *fmt, va_list ap)
 
     if (flux_future_get (f, &msg) < 0)
         goto done;
+    if (flux_response_decode (msg, NULL, NULL) < 0)
+        goto done;
     if (flux_msg_vunpack (msg, fmt, ap) < 0)
         goto done;
     rc = 0;
@@ -146,31 +148,31 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...)
 
 const char *flux_rpc_get_error (flux_future_t *f)
 {
-    int errnum = 0;
+    const flux_msg_t *msg;
     const char *errstr = NULL;
+    int errnum = 0;
 
-    if (flux_future_get (f, NULL) < 0) {
+    if (flux_future_get (f, &msg) < 0)
+        goto done;
+    if (flux_response_decode (msg, NULL, NULL) < 0) {
         errnum = errno;
-        errstr = flux_future_aux_get (f, "flux::rpc_errstr");
+        (void) flux_response_decode_error (msg, &errstr);
     }
+done:
     if (errstr)
         return errstr;
     else
         return flux_strerror (errnum);
 }
 
-/* Message handler for response.
- * Parse the response message here so one could call flux_future_get()
- * instead of flux_rpc_get() to test result of RPC with no response payload.
- * Fulfill future.
-*/
+/* Message handler for response to fulfill future.
+ */
 static void response_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     flux_future_t *f = arg;
     flux_msg_t *cpy;
     int saved_errno;
-    const char *errstr;
 
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
@@ -178,8 +180,6 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.rpc");
 #endif
-    if (flux_response_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
     flux_future_fulfill (f, cpy, (flux_free_f)flux_msg_destroy);
@@ -187,15 +187,6 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     saved_errno = errno;
     flux_future_fulfill_error (f, saved_errno);
-    /* If error response contains an error string payload,
-     * save it in the future aux hash.  If unlikely ENOMEM errors occur,
-     * silently discard the error string.
-     */
-    if (flux_response_decode_error (msg, &errstr) == 0) {
-        char *cpy = strdup (errstr);
-        if (cpy && flux_future_aux_set (f, "flux::rpc_errstr", cpy, free) < 0)
-            free (cpy);
-    }
 }
 
 /* Callback to initialize future in main or alternate reactor contexts.
