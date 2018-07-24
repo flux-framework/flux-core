@@ -361,6 +361,10 @@ int lua_script_call (lua_script_t s, const char *name)
 {
     struct lua_State *L = lua_script_state (s);
 
+    /* Clear Lua stack before calling into each script to avoid
+     *  potential for stack overflow.
+     */
+    lua_settop (L, 0);
     lua_script_getglobal (s, name);
 
     if (lua_isnil (L, -1)) {
