@@ -38,6 +38,7 @@ local lwj_options = {
     ['no-pmi-server'] =         "Do not start simple-pmi server",
     ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
     ['cpu-affinity'] =          "Set default cpu-affinity to assigned cores",
+    ['gpubind'] =               "Control CUDA_VISIBLE_DEVICES [=per-task,off]",
     ['mpi'] =                   "Set hint for type of MPI, e.g. -o mpi=spectrum "
 }
 
