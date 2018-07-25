@@ -91,12 +91,17 @@ local function alloc_tasks (f, wreck, lwj)
         end
     end
     for i, ntasks in ipairs (counts) do
+        local gpus_per_task = tonumber (wreck.opts.g or 0)
         local rank = i - 1
         local corelist = "0"
+        local gpulist = nil
+        if gpus_per_task > 0 then
+            gpulist = "0-".. (ntasks * gpus_per_task) - 1
+        end
         if ntasks > 1 then
             corelist = corelist .. "-" .. ntasks - 1
         end
-        table.insert (Rlite, { rank = rank, children = { core = corelist } })
+        table.insert (Rlite, { rank = rank, children = { core = corelist, gpu = gpulist } })
         if not r[ntasks] then r[ntasks] = {} end
         table.insert (r[ntasks], rank)
     end

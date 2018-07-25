@@ -265,6 +265,34 @@ test_expect_success MULTICORE 'wreckrun: local cpu-affinity option overriedes gl
 	test_cmp no-affinity.expected no-affinity.out
 '
 
+test_expect_success 'wreckrun: CUDA_VISIBLE_DEVICES is set for gpus' '
+	output=$(flux wreckrun -n1 -g 1 printenv CUDA_VISIBLE_DEVICES) &&
+	test_debug "echo CUDA_VISIBLE_DEVICES = $output" &&
+	test "$output" = "0" &&
+	output=$(flux wreckrun -n1 -g 2 printenv CUDA_VISIBLE_DEVICES) &&
+	test_debug "echo CUDA_VISIBLE_DEVICES = $output" &&
+	test "$output" = "0,1"
+'
+test_expect_success 'wreckrun: CUDA_VISIBLE_DEVICES not set with gpubind=off' '
+	output=$(flux wreckrun -n1 -g1 -o gpubind=off printenv CUDA_VISIBLE_DEVICES ||:) &&
+	test_debug "echo CUDA_VISIBLE_DEVICES=$output" &&
+	test "$output" = ""
+'
+test_expect_success 'wreckrun: -o gpubind=per-task works' '
+	flux wreckrun -l -n2 -N1 -g2 printenv CUDA_VISIBLE_DEVICES |sort >cuda_visible.out1 &&
+	cat <<-EOF >cuda_visible.expected1 &&
+	0: 0,1,2,3
+	1: 0,1,2,3
+	EOF
+	test_cmp cuda_visible.expected1 cuda_visible.out1 &&
+	flux wreckrun -l -n2 -N1 -g2 -o gpubind=per-task \
+		printenv CUDA_VISIBLE_DEVICES |sort >cuda_visible.out2 &&
+	cat <<-EOF >cuda_visible.expected2 &&
+	0: 0,1
+	1: 2,3
+	EOF
+	test_cmp cuda_visible.expected2 cuda_visible.out2
+'
 test_expect_success 'wreckrun: top level environment' '
 	flux kvs put --json lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
 	run_timeout 5 flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env &&
