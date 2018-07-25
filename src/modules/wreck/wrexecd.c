@@ -2304,6 +2304,19 @@ static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
     return (0);
 }
 
+static int topology_restrict_current (hwloc_topology_t topo)
+{
+    int rc = -1;
+    hwloc_bitmap_t rset = hwloc_bitmap_alloc ();
+    if (!rset || hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0)
+        goto out;
+    rc = topology_restrict (topo, rset);
+out:
+    if (rset)
+        hwloc_bitmap_free (rset);
+    return (rc);
+}
+
 static hwloc_cpuset_t *distribute_tasks (struct prog_ctx *ctx, hwloc_topology_t topo)
 {
     hwloc_obj_t obj[1];
@@ -2331,6 +2344,10 @@ static int do_hwloc_core_affinity (struct prog_ctx *ctx)
     }
     if (hwloc_topology_load (topology) < 0) {
         flux_log_error (h, "hwloc_topology_load");
+        goto out;
+    }
+    if (topology_restrict_current (topology) < 0) {
+        flux_log_error (h, "topology_restrict_current");
         goto out;
     }
     if (!(coreset = hwloc_bitmap_alloc ())
