@@ -246,6 +246,12 @@ test_expect_success MULTICORE 'wreckrun: cpu-affinity job option works' '
 	EOF
 	test_cmp cpu-affinity.expected cpu-affinity.out
 '
+test_expect_success MULTICORE 'wreckrun: cpu-affinity=per-task job option works' '
+	flux wreckrun -o cpu-affinity=per-task -N1 -n2 $cpus_allowed | \
+		sort -k1,1n > cpu-affinity-task.out &&
+	test_debug "cat cpu-affinity-task.out" &&
+	test $(head -1 cpu-affinity-task.out) != $(tail -1 cpu-affinity-task.out)
+'
 test_expect_success MULTICORE 'wreckrun: global cpu-affinity job option works' '
 	flux wreck setopt cpu-affinity &&
 	test_when_finished "flux wreck setopt cpu-affinity=false" &&
