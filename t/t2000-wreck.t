@@ -232,7 +232,7 @@ test_expect_success 'wreckrun: job with more nodes than tasks fails' '
 	test "$(flux kvs get --json ${LWJ}.state)" = "failed"
 '
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
-if test "$($cpus_allowed count)" = "0"; then
+if test $($cpus_allowed count) -gt 0; then
     test_set_prereq MULTICORE
     # Note: Normalize format of cpu0 thread siblings using cpus-allowed script
     #  so that comparison of output works in MULTICORE tests below
@@ -248,15 +248,15 @@ test_expect_success MULTICORE 'wreckrun: cpu-affinity job option works' '
 '
 test_expect_success MULTICORE 'wreckrun: global cpu-affinity job option works' '
 	flux wreck setopt cpu-affinity &&
-	test_when_finished "flux-wreck setopt cpu-affinity=false" &&
+	test_when_finished "flux wreck setopt cpu-affinity=false" &&
 	flux wreckrun -n1 $cpus_allowed > global-affinity.out &&
 	cat <<-EOF >global-affinity.expected &&
 	${cpu0_thread_siblings}
 	EOF
 	test_cmp global-affinity.expected global-affinity.out
 '
-test_expect_success MULTICORE 'wreckrun: local cpu-affinity option overriedes global' '
-	flux wreck setopt cpu-affinity
+test_expect_success MULTICORE 'wreckrun: local cpu-affinity option overrides global' '
+	flux wreck setopt cpu-affinity &&
 	test_when_finished "flux wreck setopt cpu-affinity=false" &&
 	flux wreckrun -n1 -o cpu-affinity=0 $cpus_allowed > no-affinity.out &&
 	cat <<-EOF >no-affinity.expected &&
