@@ -105,7 +105,7 @@ int main (int argc, char *argv[])
             else
                 log_err_exit ("flux_barrier");
         }
-        if (flux_future_get (f, NULL) < 0)
+        if (flux_rpc_get (f, NULL) < 0)
             log_err_exit ("barrier completion failed");
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",

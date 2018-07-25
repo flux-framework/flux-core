@@ -124,7 +124,7 @@ static int log_rpc (flux_t *h, const char *buf, int len, int flags)
         goto done;
     if ((flags & FLUX_RPC_NORESPONSE))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -238,7 +238,7 @@ static int dmesg_clear (flux_t *h, int seq)
     if (!(f = flux_rpc_pack (h, "log.clear", FLUX_NODEID_ANY, 0,
                              "{s:i}", "seq", seq)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

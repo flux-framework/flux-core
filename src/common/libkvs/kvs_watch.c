@@ -157,7 +157,7 @@ int flux_kvs_unwatch (flux_t *h, const char *key)
                              "key", key,
                              "namespace", namespace)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     /* Delete all watchers for the specified key.
      */
@@ -324,6 +324,9 @@ static int kvs_watch_rpc_get_matchtag (flux_future_t *f, uint32_t *matchtag)
     const flux_msg_t *msg;
 
     if (flux_future_get (f, &msg) < 0)
+        return -1;
+    /* check if error in the response */
+    if (flux_response_decode (msg, NULL, NULL) < 0)
         return -1;
     if (flux_msg_get_matchtag (msg, &tag) < 0)
         return -1;

@@ -160,7 +160,7 @@ static int op_event (void *impl, const char *topic, const char *msg_topic)
     if (!(f = flux_rpc_pack (c->h, msg_topic, FLUX_NODEID_ANY, 0,
                              "{s:s}", "topic", topic)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

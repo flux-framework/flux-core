@@ -267,8 +267,8 @@ void test_error (flux_t *h)
     ok (f != NULL,
         "flux_rpc_pack sent request to rpctest.echoerr service");
     errno = 0;
-    ok (flux_future_get (f, NULL) < 0 && errno == 69,
-        "flux_future_get failed with expected errno");
+    ok (flux_rpc_get (f, NULL) < 0 && errno == 69,
+        "flux_rpc_get failed with expected errno");
     errno = 0;
     ok (flux_rpc_get (f, NULL) < 0 && errno == 69,
         "flux_rpc_get failed with expected errno");
@@ -285,8 +285,8 @@ void test_error (flux_t *h)
     ok (f != NULL,
         "flux_rpc_pack sent request to rpctest.echoerr service (no errstr)");
     errno = 0;
-    ok (flux_future_get (f, NULL) < 0 && errno == ENOTDIR,
-        "flux_future_get failed with expected errno");
+    ok (flux_rpc_get (f, NULL) < 0 && errno == ENOTDIR,
+        "flux_rpc_get failed with expected errno");
     errno = 0;
     ok (flux_rpc_get (f, NULL) < 0 && errno == ENOTDIR,
         "flux_rpc_get failed with expected errno");
@@ -301,8 +301,8 @@ void test_error (flux_t *h)
     f = flux_rpc (h, "rpctest.echo", "Nerp", FLUX_NODEID_ANY, 0);
     ok (f != NULL,
         "flux_rpc sent request to rpctest.echo");
-    ok (flux_future_get (f, NULL) == 0,
-        "flux_future_get returned success");
+    ok (flux_rpc_get (f, NULL) == 0,
+        "flux_rpc_get returned success");
     ok (flux_rpc_get (f, &s) == 0 && s != NULL && !strcmp (s, "Nerp"),
         "flux_rpc_get worked and retrieved payload");
     errstr = flux_rpc_get_error (f);

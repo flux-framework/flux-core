@@ -190,7 +190,7 @@ int flux_kvs_commit_anon (flux_t *h, int flags)
         return -1;
     if (!(f = flux_kvs_commit (h, flags, txn))) /* no-op if NULL txn */
         return -1;
-    rc = flux_future_get (f, NULL);
+    rc = flux_rpc_get (f, NULL);
     saved_errno = errno;
     flux_future_destroy (f);
     clear_default_txn (h);
@@ -208,7 +208,7 @@ int flux_kvs_fence_anon (flux_t *h, const char *name, int nprocs, int flags)
         return -1;
     if (!(f = flux_kvs_fence (h, flags, name, nprocs, txn)))
         return -1;
-    rc = flux_future_get (f, NULL);
+    rc = flux_rpc_get (f, NULL);
     saved_errno = errno;
     flux_future_destroy (f);
     clear_default_txn (h);

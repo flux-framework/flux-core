@@ -36,7 +36,7 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (!(f = flux_rpc_pack (h, "heaptrace.start", FLUX_NODEID_ANY, 0,
                              "{ s:s }", "filename", av[ac - 1]))
-            || flux_future_get (f, NULL) < 0)
+            || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("heaptrace.start");
     flux_future_destroy (f);
     flux_close (h);

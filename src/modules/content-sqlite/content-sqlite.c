@@ -417,7 +417,7 @@ int register_backing_store (flux_t *h, bool value, const char *name)
                              "backing", value,
                              "name", name)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

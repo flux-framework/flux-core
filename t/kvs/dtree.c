@@ -99,7 +99,7 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_kvs_txn_create");
         if (flux_kvs_txn_mkdir (txn, 0, prefix) < 0)
             log_err_exit ("flux_kvs_txn_mkdir %s", prefix);
-        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
             log_err_exit ("flux_kvs_commit");
         flux_future_destroy (f);
         flux_kvs_txn_destroy (txn);
@@ -121,7 +121,7 @@ int main (int argc, char *argv[])
         if (!(txn = flux_kvs_txn_create ()))
             log_err_exit ("flux_kvs_txn_create");
         dtree (txn, prefix, width, height);
-        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
            log_err_exit ("flux_kvs_commit");
         flux_future_destroy (f);
         flux_kvs_txn_destroy (txn);

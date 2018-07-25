@@ -135,7 +135,7 @@ static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
 #endif
     if (!f)
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     if (val) {
         if (!(attr = attr_create (val, 0)))
