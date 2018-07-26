@@ -113,8 +113,8 @@ int main (int argc, char *argv[])
         goto done;
     }
 
-    if (flux_future_get (f2, NULL) < 0) {
-        printf ("flux_future_get: %s\n", flux_strerror (errno));
+    if (flux_rpc_get (f2, NULL) < 0) {
+        printf ("flux_rpc_get: %s\n", flux_strerror (errno));
         goto done;
     }
 

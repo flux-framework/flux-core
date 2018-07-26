@@ -142,7 +142,7 @@ static int op_event_subscribe (void *impl, const char *topic)
     if (!(f = flux_rpc_pack (ctx->h, "cmb.sub", FLUX_NODEID_ANY, 0,
                              "{ s:s }", "topic", topic)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -160,7 +160,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     if (!(f = flux_rpc_pack (ctx->h, "cmb.unsub", FLUX_NODEID_ANY, 0,
                              "{ s:s }", "topic", topic)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

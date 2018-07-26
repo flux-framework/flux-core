@@ -146,7 +146,7 @@ static void check_rpc_default_policy (flux_t *h)
     ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
-        && flux_future_get (f, NULL) == 0,
+        && flux_rpc_get (f, NULL) == 0,
         "default-creds: handler was called and returned success response");
     flux_future_destroy (f);
 
@@ -170,7 +170,7 @@ static void check_rpc_default_policy (flux_t *h)
         "random-creds: reactor successfully handled one event");
     errno = 0;
     ok (testrpc1_called == false
-        && flux_future_get (f, NULL) == -1 && errno == EPERM,
+        && flux_rpc_get (f, NULL) == -1 && errno == EPERM,
         "random-creds: handler was NOT called and dispatcher returned EPERM response");
     flux_future_destroy (f);
     ok (cred_set (h, &saved) == 0,
@@ -202,7 +202,7 @@ static void check_rpc_open_policy (flux_t *h)
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
+    ok (testrpc1_called == true && flux_rpc_get (f, NULL) == 0,
         "default-creds: handler was called and returned success response");
     flux_future_destroy (f);
 
@@ -224,7 +224,7 @@ static void check_rpc_open_policy (flux_t *h)
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "random-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
+    ok (testrpc1_called == true && flux_rpc_get (f, NULL) == 0,
         "random-creds: handler was called and returned success response");
     flux_future_destroy (f);
     ok (cred_set (h, &saved) == 0,
@@ -262,7 +262,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
+    ok (testrpc1_called == true && flux_rpc_get (f, NULL) == 0,
         "default-creds: handler was called and returned success response");
     flux_future_destroy (f);
 
@@ -281,7 +281,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "target-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
+    ok (testrpc1_called == true && flux_rpc_get (f, NULL) == 0,
         "target-creds: handler was called and returned success response");
     flux_future_destroy (f);
 
@@ -302,7 +302,7 @@ static void check_rpc_targetted_policy (flux_t *h)
         "nontarget-creds: reactor successfully handled one event");
     errno = 0;
     ok (testrpc1_called == false
-        && flux_future_get (f, NULL) == -1 && errno == EPERM,
+        && flux_rpc_get (f, NULL) == -1 && errno == EPERM,
         "nontarget-creds: handler was NOT called and dispatcher returned EPERM response");
     flux_future_destroy (f);
 

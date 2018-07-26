@@ -115,12 +115,12 @@ void *thread (void *arg)
         if (fopt) {
             if (!(f = flux_kvs_fence (t->h, flags, fence_name,
                                                    fence_nprocs, txn))
-                    || flux_future_get (f, NULL) < 0)
+                    || flux_rpc_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_fence");
             flux_future_destroy (f);
         } else {
             if (!(f = flux_kvs_commit (t->h, flags, txn))
-                    || flux_future_get (f, NULL) < 0)
+                    || flux_rpc_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_commit");
             flux_future_destroy (f);
         }

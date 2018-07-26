@@ -240,7 +240,7 @@ static bool ping_sched (flux_t *h)
         flux_log_error (h, "ping_sched");
         goto out;
     }
-    if (flux_future_get (f, NULL) >= 0)
+    if (flux_rpc_get (f, NULL) >= 0)
         retval = true;
 out:
     flux_future_destroy (f);
@@ -287,7 +287,7 @@ static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
     wreck_job_set_state (job, "submitted");
     if (!(f = send_create_event (h, job)))
         goto error;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{s:I}", "jobid", job->id) < 0)
         flux_log_error (h, "flux_respond");
@@ -309,7 +309,7 @@ static void job_create_event_continuation (flux_future_t *f, void *arg)
     flux_t *h = flux_future_get_flux (f);
     flux_msg_t *msg = wreck_job_get_aux (job);
 
-    if (flux_future_get (f, NULL) < 0) {
+    if (flux_rpc_get (f, NULL) < 0) {
         flux_log_error (h, "%s", __FUNCTION__);
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
@@ -336,7 +336,7 @@ static void job_create_kvs_continuation (flux_future_t *f, void *arg)
     flux_msg_t *msg = wreck_job_get_aux (job);
     flux_future_t *f_next = NULL;
 
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto error;
 
     /* Preemptively insert this job into the active job hash on this
@@ -538,7 +538,7 @@ static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
 }
 
 static void spawn_io_cb (flux_t *h, struct wreck_job *job,
-                         const flux_msg_t *msg)
+                         flux_future_t *f)
 {
     const char *stream = "stdout";
     const char *json_str;
@@ -546,14 +546,14 @@ static void spawn_io_cb (flux_t *h, struct wreck_job *job,
     int level = LOG_INFO;
     int len;
 
-    if (flux_msg_get_string (msg, &json_str) < 0)
+    if (flux_rpc_get (f, &json_str) < 0)
         return;
 
     if ((len = zio_json_decode (json_str, &data, NULL)) < 0) {
         flux_log_error (h, "wrexecd: io decode");
     }
     if (len > 0) {
-        (void) flux_msg_unpack (msg, "{s:s}", "name", &stream);
+        (void) flux_rpc_get_unpack (f, "{s:s}", "name", &stream);
         if (strcmp (stream, "stderr") == 0)
             level = LOG_ERR;
         flux_log (h, level, "job%ju: wrexecd says: %s",
@@ -570,24 +570,18 @@ static void cmb_exec_cb (flux_future_t *f, void *arg)
     const char *type = NULL;
     const char *state = NULL;
     int status = 1;
-    const flux_msg_t *msg;
     flux_t *h = flux_future_get_flux (f);
     struct wreck_job *job = arg;
 
-    if (flux_future_get (f, &msg) < 0) {
-        flux_log_error (h, "cmb_exec_cb: flux_future_get");
-        flux_future_destroy (f);
-        return;
-    }
-    if (flux_msg_unpack (msg, "{s?s,s?s,s?i,s:i}",
-                              "type", &type, "state", &state,
-                              "status", &status, "pid", &pid) < 0) {
-        flux_log_error (h, "cmb_exec_cb: flux_msg_unpack");
+    if (flux_rpc_get_unpack (f, "{s?s,s?s,s?i,s:i}",
+                                "type", &type, "state", &state,
+                                "status", &status, "pid", &pid) < 0) {
+        flux_log_error (h, "cmb_exec_cb: flux_rpc_get_unpack");
         flux_future_destroy (f);
     }
 
     if (type && strcmp (type, "io") == 0)
-        spawn_io_cb (h, job, msg);
+        spawn_io_cb (h, job, f);
     else if (state && strcmp (state, "Exited") == 0) {
         if (WIFSIGNALED (status))
             flux_log_error (h, "job%ju: wrexecd: %s",

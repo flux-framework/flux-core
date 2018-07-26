@@ -122,7 +122,7 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (!(f = flux_rpc (h, "content.dropcache", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("content.dropcache");
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         log_err_exit ("content.dropcache");
     flux_future_destroy (f);
     flux_close (h);

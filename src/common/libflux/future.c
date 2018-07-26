@@ -52,6 +52,11 @@ struct then_context {
     void *continuation_arg;
 };
 
+struct future_result {
+    void *result;
+    flux_free_f result_free;
+};
+
 struct flux_future {
     flux_reactor_t *r;
     flux_t *h;
@@ -66,6 +71,7 @@ struct flux_future {
     struct then_context *then;
     bool result_valid;
     bool result_errnum_valid;
+    zlist_t *queue;
 };
 
 static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -205,6 +211,27 @@ static void then_context_clear_timer (struct then_context *then)
         flux_watcher_stop (then->timer);
 }
 
+static void future_result_destroy (void *data)
+{
+    struct future_result *fs = data;
+    if (fs) {
+        if (fs->result && fs->result_free)
+            fs->result_free (fs->result);
+        free (fs);
+    }
+}
+
+static struct future_result *future_result_create (void *result,
+                                                   flux_free_f result_free)
+{
+    struct future_result *fs = calloc (1, sizeof (*fs));
+    if (!fs)
+        return NULL;
+    fs->result = result;
+    fs->result_free = result_free;
+    return fs;
+}
+
 /* Destroy a future.
  */
 void flux_future_destroy (flux_future_t *f)
@@ -218,6 +245,7 @@ void flux_future_destroy (flux_future_t *f)
         }
         now_context_destroy (f->now);
         then_context_destroy (f->then);
+        zlist_destroy (&f->queue);
         free (f);
     }
     errno = saved_errno;
@@ -234,6 +262,7 @@ flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
     }
     f->init = cb;
     f->init_arg = arg;
+    f->queue = NULL;
     return f;
 error:
     flux_future_destroy (f);
@@ -254,6 +283,15 @@ void flux_future_reset (flux_future_t *f)
         f->result_errnum_valid = false;
         if (f->then)
             then_context_start (f->then);
+        if (f->queue && zlist_size (f->queue) > 0) {
+            struct future_result *fs = zlist_pop (f->queue);
+            flux_future_fulfill (f, fs->result, fs->result_free);
+            /* result & result_free now stored in future, reset before
+             * destroying this structure */
+            fs->result = NULL;
+            fs->result_free = NULL;
+            future_result_destroy (fs);
+        }
     }
 }
 
@@ -486,12 +524,39 @@ int flux_future_aux_set (flux_future_t *f, const char *name,
     return 0;
 }
 
+static void fulfill_internal_error (flux_future_t *f,
+                                    void *result,
+                                    flux_free_f free_fn,
+                                    int errnum)
+{
+    if (result && free_fn)
+        free_fn (result);
+    flux_future_fulfill_error (f, errnum);
+}
+
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
 {
     if (f) {
-        if (f->result) {
-            if (f->result_free)
-                f->result_free (f->result);
+        if (f->result_errnum_valid) {
+            if (free_fn)
+                free_fn (result);
+            return;
+        }
+        if (f->result_valid) {
+            struct future_result *fs;
+            if (!f->queue) {
+                if (!(f->queue = zlist_new ())) {
+                    fulfill_internal_error (f, result, free_fn, errno);
+                    return;
+                }
+            }
+            if (!(fs = future_result_create (result, free_fn))) {
+                fulfill_internal_error (f, result, free_fn, errno);
+                return;
+            }
+            zlist_append (f->queue, fs);
+            zlist_freefn (f->queue, fs, future_result_destroy, true);
+            return;
         }
         f->result = result;
         f->result_free = free_fn;
@@ -509,6 +574,15 @@ void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
 void flux_future_fulfill_error (flux_future_t *f, int errnum)
 {
     if (f) {
+        if (f->result_errnum_valid)
+            return;
+        if (f->result_valid) {
+            if (f->result && f->result_free)
+                f->result_free (f->result);
+            f->result = NULL;
+            f->result_free = NULL;
+            f->result_valid = false;
+        }
         f->result_errnum = errnum;
         f->result_errnum_valid = true;
         now_context_clear_timer (f->now);

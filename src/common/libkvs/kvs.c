@@ -222,7 +222,7 @@ int flux_kvs_wait_version (flux_t *h, int version)
         goto done;
     /* N.B. response contains (rootseq, rootref) but we don't need it.
      */
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     ret = 0;
 done:
@@ -237,7 +237,7 @@ int flux_kvs_dropcache (flux_t *h)
 
     if (!(f = flux_rpc (h, "kvs.dropcache", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

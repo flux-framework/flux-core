@@ -139,7 +139,7 @@ void test_null (flux_t *h, uint32_t nodeid)
     flux_future_t *f;
 
     if (!(f = flux_rpc (h, "req.null", NULL, nodeid, 0))
-             || flux_future_get (f, NULL) < 0)
+             || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("req.null");
     flux_future_destroy (f);
 }
@@ -164,7 +164,7 @@ void test_err (flux_t *h, uint32_t nodeid)
 
     if (!(f = flux_rpc (h, "req.err", NULL, nodeid, 0)))
         log_err_exit ("error sending request");
-    if (flux_future_get (f, NULL) == 0)
+    if (flux_rpc_get (f, NULL) == 0)
         log_msg_exit ("%s: succeeded when should've failed", __FUNCTION__);
     if (errno != 42)
         log_msg_exit ("%s: got errno %d instead of 42", __FUNCTION__, errno);
@@ -189,7 +189,7 @@ void test_sink (flux_t *h, uint32_t nodeid)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (h, "req.sink", nodeid, 0, "{s:f}", "pi", 3.14))
-             || flux_future_get (f, NULL) < 0)
+             || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
 }
@@ -325,7 +325,7 @@ void test_flush (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
     if (!(f = flux_rpc (h, "req.flush", NULL, nodeid, 0))
-             || flux_future_get (f, NULL) < 0)
+             || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("req.flush");
     flux_future_destroy (f);
 }

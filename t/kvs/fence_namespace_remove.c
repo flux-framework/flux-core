@@ -98,7 +98,7 @@ int main (int argc, char *argv[])
     }
 
     /* nprocs = 2, but we call flux_kvs_fence only once, so the
-     * flux_future_get() below should hang until an error occurs
+     * flux_rpc_get() below should hang until an error occurs
      */
 
     if (!(f = flux_kvs_fence (h, 0, fence_name, 2, txn))) {
@@ -106,8 +106,8 @@ int main (int argc, char *argv[])
         goto done;
     }
 
-    if (flux_future_get (f, NULL) < 0) {
-        printf ("flux_future_get: %s\n", flux_strerror (errno));
+    if (flux_rpc_get (f, NULL) < 0) {
+        printf ("flux_rpc_get: %s\n", flux_strerror (errno));
         goto done;
     }
 

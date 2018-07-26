@@ -643,7 +643,7 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
         topic = xasprintf ("%s.stats.clear", service);
         if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
-        if (flux_future_get (f, NULL) < 0)
+        if (flux_rpc_get (f, NULL) < 0)
             log_err_exit ("%s", topic);
     } else if (optparse_hasopt (p, "clear-all")) {
         topic = xasprintf ("%s.stats.clear", service);

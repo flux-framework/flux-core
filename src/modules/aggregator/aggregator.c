@@ -343,7 +343,7 @@ static void sink_continuation (flux_future_t *f, void *arg)
     flux_t *h = flux_future_get_flux (f);
     struct aggregate *ag = arg;
 
-    int rc = flux_future_get (f, NULL);
+    int rc = flux_rpc_get (f, NULL);
     flux_future_destroy (f);
     if (rc < 0) {
         /*  Schedule a retry, if  succesful return immediately, otherwise

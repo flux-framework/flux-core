@@ -325,7 +325,7 @@ int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
         goto done;
     if (!(f = flux_rpc (h, topic, json_str, nodeid, 0)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -397,7 +397,7 @@ int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
     json_str = flux_insmod_json_encode (path, argc, argv);
     if (!(f = flux_rpc (h, topic, json_str, nodeid, 0)))
         goto done;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

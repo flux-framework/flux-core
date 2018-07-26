@@ -406,7 +406,7 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
         const char *name = argv[i];
         int flags = 0;
         if (!(f = flux_kvs_namespace_create (h, name, owner, flags))
-            || flux_future_get (f, NULL) < 0)
+            || flux_rpc_get (f, NULL) < 0)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
     }
@@ -427,7 +427,7 @@ int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
         if (!(f = flux_kvs_namespace_remove (h, name))
-            || flux_future_get (f, NULL) < 0)
+            || flux_rpc_get (f, NULL) < 0)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
     }
@@ -685,7 +685,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         free (key);
     }
     if (!(f = flux_kvs_commit (h, commit_flags, txn))
-                                        || flux_future_get (f, NULL) < 0)
+                                        || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -755,7 +755,7 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
                 log_err_exit ("%s", argv[i]);
         }
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -781,7 +781,7 @@ int cmd_link (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_symlink (txn, 0, argv[optindex + 1], argv[optindex]) < 0)
         log_err_exit ("%s", argv[optindex + 1]);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -838,7 +838,7 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
         if (flux_kvs_txn_mkdir (txn, 0, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -1522,7 +1522,7 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
         log_err_exit( "flux_kvs_txn_put_treeobj");
     flux_future_destroy (f);
 
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);
@@ -1556,7 +1556,7 @@ int cmd_move (optparse_t *p, int argc, char **argv)
         log_err_exit( "flux_kvs_txn_unlink");
     flux_future_destroy (f);
 
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);

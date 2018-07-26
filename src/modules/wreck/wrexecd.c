@@ -1300,8 +1300,8 @@ static int aggregator_push_task_exit (struct task_info *t)
         rc = -1;
     }
 
-    if (f && flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "flux_future_get");
+    if (f && flux_rpc_get (f, NULL) < 0) {
+        flux_log_error (h, "flux_rpc_get");
         rc = -1;
     }
     flux_future_destroy (f);
@@ -2156,7 +2156,7 @@ static void wreck_barrier_next (struct prog_ctx *ctx)
 static void wreck_barrier_complete (flux_future_t *f, void *arg)
 {
     struct prog_ctx *ctx = arg;
-    int rc = flux_future_get (f, NULL);
+    int rc = flux_rpc_get (f, NULL);
     pmi_simple_server_barrier_complete (ctx->pmi, rc);
     flux_future_destroy (f);
     wreck_barrier_next (ctx);

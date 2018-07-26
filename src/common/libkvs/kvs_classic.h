@@ -40,7 +40,7 @@ int flux_kvs_mkdir (flux_t *h, const char *key)
                     __attribute__ ((deprecated));
 
 /* flux_kvs_commit_anon() and flux_kvs_fence_anon() combine a flux_kvs_commit()
- * and a flux_future_get() call in one function, thus they block the calling
+ * and a flux_rpc_get() call in one function, thus they block the calling
  * thread while RPC's complete.  These functions operate only on the
  * anonymous transaction (see above).
  */
