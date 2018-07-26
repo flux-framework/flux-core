@@ -40,6 +40,14 @@ OPTIONS
 	distribute the 'ntasks' tasks across all nodes of the Flux comms
 	session.
 
+--cores-per-task='N'::
+-c 'N'::
+	Request N cores be allocated to each task.
+
+--gpus-per-task='N'::
+-g 'N'::
+	Request N GPUs be allocated to each task.
+
 --nnodes='nnodes'::
 -N 'nnodes'::
 	Request to run across 'nnodes' nodes in the current comms session.
@@ -98,6 +106,21 @@ OPTIONS
 -I::
        Bypass scheduler and run job immediately.
 
+--skip-env::
+-S::
+	Skip the export of the local environment to the job.
+
+--epilog='PATH'::
+-x 'PATH'::
+	Execute a script at 'PATH' after all tasks exit but before the
+	job state is set to to 'complete' (So the job will not complete
+	and the resources will not be released until the script ends)
+
+--postscript='PATH'::
+-p 'PATH'::
+	Similar to '--epilog', but execute 'PATH' after job state is
+	complete.
+
 --options='options,...'::
 -o 'options,...'::
 	Apply extended job options to the current execution. Examples of
@@ -110,6 +133,23 @@ EXTRA OPTIONS
 Extra options can be supplied on the `flux wreckrun` command via the
 '--options' command line option. Multiple options should be separated
 via commas. Currently available options include:
+
+'cpu-affinity[=per-task]'::
+	Set default CPU affinity of all tasks to the cores allocated
+        to the job. With 'cpu-affinity=per-task' distribute tasks
+        across allocated cores using 'hwloc_distrib(3)'.
+
+'gpubind=[per-task,off]'::
+	By default, if GPU devices are allocated to a job, the environment
+	variable CUDA_VISIBLE_DEVICES is set to the list of allocated
+	GPUs. The 'gpubind' option may be used to disable this behavior
+	'-o gpubind=off', or can request that the GPUs be distributed
+	among the local tasks with '-o gpubind=per-task'.
+
+'mpi'::
+	Select an MPI type being run if necessary. Some MPI "plugins"
+	are not enabled by default, and this option may be used to
+	enable them, e.g. '-o mpi=spectrum'.
 
 'stdio-commit-on-open'::
 	Commit to kvs on stdio open in each task. The default is to

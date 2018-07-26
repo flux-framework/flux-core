@@ -24,7 +24,7 @@ flux-wreck(1) operates via a series of 'COMMANDS', described below:
 
 COMMANDS
 --------
-*help* 'cmd'
+*help* 'cmd'::
 Print help. If 'cmd' is provided, print help for that sub-command.
 
 *ls* [-n, --max=COUNT] [JOBIDS...]::
@@ -59,6 +59,30 @@ if a job scheduler module is loaded.
 *kill* [--signal=N] 'jobid'::
 Send SIGTERM to running job 'jobid'. If '--signal' is used, send signal 'N'
 where 'N' may  be a signal number or name such as 'SIGKILL'.
+
+*setenv* [VAR=VALUE|all]::
+Export environment variables to all future jobs. The 'flux wreck setenv',
+'getenv' and 'unsetenv' commands control the global job environment which
+is applied to all jobs run by the wreck system. With 'flux wreck setenv all'
+the entire environment is exported to the global job environment, inherited
+by all future jobs. This may help reduce the size of job environment records
+stored in the KVS if there are only small environment differences from
+run to run. 'flux wreck setenv VAR=VALUE' may also be used to export a
+single environment variable to all jobs.
+
+*getenv* VAR::
+Get the value of an environment variable set in the global job environment.
+
+*unsetenv* VAR::
+Unset environment variable 'VAR' in the global job environment.
+
+*setopt* 'option[=value]'::
+Set global job option 'option' with optional value 'value' (the default value
+is 'true'). All future jobs will inherit global job options as if they
+were run with '-o option=value'.
+
+*getopt* '[option]'::
+Display global job options.
 
 *timing* [-n, --max=COUNT] [JOBIDS...]::
 List timing information for lwj entries in Flux KVS. if '-n, --max' option is
@@ -115,6 +139,23 @@ is dependent on the options below:
 -m N:::
 	Set the maximum number of entries to remove on any one run.
 
+
+*dumplog* [JOBID]::
+Dump the error log from the wreck job 'JOBID'.
+
+*exclude* [NODENAME]::
+Exclude a node from running future jobs. By default, jobs currently running
+on the node and its resources are not killed.
+
+-k, --kill:::
+	Kill all jobs to which the node is allocated.
+
+*include* [NODENAME]::
+Include a previously excluded node from scheduling.
+
+*sched-params* set 'item=val'::
+*sched-params* get 'item'::
+Set and get scheduler parameters at runtime.
 
 AUTHOR
 ------

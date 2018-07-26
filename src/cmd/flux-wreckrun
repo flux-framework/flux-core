@@ -38,76 +38,52 @@ local function lwj_return_code (f, wreck, id)
     return max
 end
 
-local function summarize_tasks_per_node (r)
-    local hostlist = require 'flux.hostlist'
-    local m = {}
-    for msg, ids in pairs (r) do
-        local h = hostlist.new()
-        for _,id in pairs (ids) do
-            h:concat (id)
-        end
-        table.insert (m, string.format ("node%s: %s", tostring (h:sort()), msg))
+--
+-- Helper for fake_R_lite(): generate a fake range string from 0 .. n,
+--  when n >= 1
+--
+local function range_string (n)
+    if not n or n == 0 then return nil end
+    local s = "0"
+    if n > 1 then
+        s = s .. "-" .. n-1
     end
-    return table.concat (m, ', ')
+    return s
 end
 
-local function fake_resource_array (wreck, nnodes)
-    local res = {}
-    local total = 0
-    local ppn = math.ceil (wreck.ntasks / nnodes)
-    for i = 0, nnodes - 1 do
-        local n = tonumber (ppn)
-        if (total + ppn) > tonumber (wreck.ntasks) then
-            n = wreck.ntasks - total
+--
+-- Generate a fake R_lite representation for the current wreck request.
+--  If -g, --gpus-per-task was used on the command line, include GPUs.
+--
+-- This assists with testing without sched or with the -I, --immediate flag.
+--
+local function fake_R_lite (f, wreck)
+    local ncores, ngpus = wreck.ncores, wreck.ngpus
+    local R_lite = {}
+    local nnodes = wreck.nnodes > 0 and wreck.nnodes or f.size
+    local cores_per_node = math.ceil (ncores / nnodes)
+    local gpus_per_node =  ngpus and math.ceil (ngpus / nnodes)
+
+    -- Allocate cores (and gpus) to R_lite in rank order until
+    --  no more cores are required
+    --
+    for rank = 0, nnodes - 1 do
+        local corecnt = math.min (ncores, cores_per_node)
+        local gpucnt  = ngpus and math.min (wreck.ngpus, gpus_per_node)
+        table.insert (R_lite, { rank = rank,
+                                children = {
+                                   core = range_string (corecnt),
+                                   gpu  = range_string (gpucnt) }
+                              })
+        ncores = ncores - corecnt
+        if ngpus then
+            ngpus = ngpus - gpucnt
         end
-        res[i] = { cores = n }
-        total = total + n
-    end
-    return res
-end
-
-local function alloc_tasks (f, wreck, lwj)
-    local r = {}
-    local size = f.size
-    local res
-    local Rlite = {}
-
-    res = fake_resource_array (wreck, wreck.nnodes or f.size)
-    wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
-                wreck.ntasks, size)
-
-    local counts = {}
-    local total = 0
-    while total < wreck.ntasks do
-        for i = 1, size do
-            local rank = i - 1
-            local n = tonumber (res[rank].cores)
-            if (total + n) > wreck.ntasks then
-                n = wreck.ntasks - total
-            end
-            counts [i] = (counts [i] or 0) + n
-            total = total + n
-            if total == wreck.ntasks then break end
+        if ncores == 0 then
+            return R_lite
         end
     end
-    for i, ntasks in ipairs (counts) do
-        local gpus_per_task = tonumber (wreck.opts.g or 0)
-        local rank = i - 1
-        local corelist = "0"
-        local gpulist = nil
-        if gpus_per_task > 0 then
-            gpulist = "0-".. (ntasks * gpus_per_task) - 1
-        end
-        if ntasks > 1 then
-            corelist = corelist .. "-" .. ntasks - 1
-        end
-        table.insert (Rlite, { rank = rank, children = { core = corelist, gpu = gpulist } })
-        if not r[ntasks] then r[ntasks] = {} end
-        table.insert (r[ntasks], rank)
-    end
-    wreck:verbose ("tasks per node: %s\n", summarize_tasks_per_node (r))
-    lwj.R_lite = Rlite
-    lwj:commit()
+    return R_lite
 end
 
 local function wreckrun_hooks_compile (wreck)
@@ -240,10 +216,14 @@ end
 if not submitted then
     --
     --  If submit failed due to lack of scheduler or use of the
-    --   -I, --immediate option, manually distribute tasks and
+    --   -I, --immediate option, manually create R_lite and
     ---  send event to run the job.
     --
-    alloc_tasks (f, wreck, lwj)
+    R_lite = fake_R_lite (f, wreck);
+    if not R_lite then wreck:die ("Failed to generate R_lite\n") end
+    lwj.R_lite = R_lite
+    lwj:commit()
+
     -- Ensure lwj nnodes matches fake allocation
     lwj.nnodes = tonumber (wreck.nnodes)
     lwj.ntasks = tonumber (wreck.ntasks)
