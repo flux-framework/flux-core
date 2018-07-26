@@ -698,6 +698,61 @@ void test_reset (void)
     flux_reactor_destroy (r);
 }
 
+void test_fatal_error (void)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill (f, "Hello", NULL);
+    flux_future_fatal_error (f, EPERM);
+    flux_future_fatal_error (f, ENOENT); /* test EPERM is not overwritten */
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM before result");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill_error (f, EACCES);
+    flux_future_fatal_error (f, EPERM);
+    flux_future_fatal_error (f, ENOENT); /* test EPERM is not overwritten */
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM before result error");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, EPERM);
+    flux_future_fulfill (f, "Hello", NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM, later fulfillment ignored");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, EPERM);
+    flux_future_fulfill_error (f, EACCES);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM, later fulfillment ignored");
+
+    flux_future_destroy (f);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -714,6 +769,8 @@ int main (int argc, char *argv[])
     test_walk ();
 
     test_reset ();
+
+    test_fatal_error ();
 
     done_testing();
     return (0);

@@ -22,6 +22,8 @@ SYNOPSIS
 
  void flux_future_fulfill_error (flux_future_t *f, int errnum);
 
+ void flux_future_fatal_error (flux_future_t *f, int errnum);
+
  void *flux_future_aux_get (flux_future_t *f, const char *name);
 
  int flux_future_aux_set (flux_future_t *f, const char *name,
@@ -56,18 +58,20 @@ function that is called lazily by the future implementation to perform
 class-specific reactor setup, such as installing watchers and message
 handlers.
 
-`flux_future_create()` creates a future and registers the class-specific
-initialization callback _cb_, and an opaque argument _arg_ that will be
-passed to _cb_.  The purpose of the initialization callback is to set up
-class-specific watchers on a reactor obtained with `flux_future_get_reactor()`,
-or message handlers on a flux_t handle obtained with `flux_future_get_flux()`,
-or both.  `flux_future_get_reactor()` and `flux_future_get_flux()` return
+`flux_future_create()` creates a future and registers the
+class-specific initialization callback _cb_, and an opaque argument
+_arg_ that will be passed to _cb_.  The purpose of the initialization
+callback is to set up class-specific watchers on a reactor obtained
+with `flux_future_get_reactor()`, or message handlers on a flux_t
+handle obtained with `flux_future_get_flux()`, or both.
+`flux_future_get_reactor()` and `flux_future_get_flux()` return
 different results depending on whether the initialization callback is
-triggered by a user calling `flux_future_then()` or `flux_future_wait_for()`.
-The function may be triggered in one or both contexts, at most once for each.
-The watchers or message handlers must eventually call `flux_future_fulfill()`
-or `flux_future_fulfill_error()` to fulfill the future.  See REACTOR CONTEXTS
-below for more information.
+triggered by a user calling `flux_future_then()` or
+`flux_future_wait_for()`.  The function may be triggered in one or
+both contexts, at most once for each.  The watchers or message
+handlers must eventually call `flux_future_fulfill()`,
+`flux_future_fulfill_error()`, or `flux_future_fatal_error()` to
+fulfill the future.  See REACTOR CONTEXTS below for more information.
 
 `flux_future_fulfill()` fulfills the future, assigning an opaque
 _result_ value with optional destructor _free_fn_ to the future.
@@ -78,6 +82,11 @@ as needed until the future is destroyed.
 `flux_future_fulfill_error()` fulfills the future, assigning an _errnum_
 value.  After the future is fulfilled with an error, `flux_future_get()`
 will return -1 with errno set to _errnum_.
+
+`flux_future_fatal_error()` fulfills the future, assigning an _errnum_
+value.  Unlike `flux_future_fulfill_error()` this fulfillment can only
+be called once and takes precedence over all other fulfillments.  It
+is used for catastrophic error paths in future fulfillment.
 
 `flux_future_aux_set()` attaches an object _aux_, with optional destructor
 _destroy_, to the future under an optional _name_.  `flux_future_aux_get()`

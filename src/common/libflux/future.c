@@ -66,6 +66,8 @@ struct flux_future {
     int aux_anon_ctr;
     struct future_result result;
     bool result_valid;
+    int fatal_errnum;
+    bool fatal_errnum_valid;
     flux_future_init_f init;
     void *init_arg;
     struct now_context *now;
@@ -371,7 +373,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         errno = EINVAL;
         return -1;
     }
-    if (!f->result_valid) {
+    if (!f->result_valid && !f->fatal_errnum_valid) {
         if (timeout == 0.) { // don't setup 'now' context in this case
             errno = ETIMEDOUT;
             return -1;
@@ -387,7 +389,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             f->init (f, f->init_arg); // might set error
             f->now->init_called = true;
         }
-        if (!f->result_valid) {
+        if (!f->result_valid && !f->fatal_errnum_valid) {
             if (flux_reactor_run (f->now->r, 0) < 0)
                 return -1; // errno set by now_timer_cb or other watcher
         }
@@ -395,7 +397,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             flux_dispatch_requeue (f->now->h);
         f->now->running = false;
     }
-    if (!f->result_valid)
+    if (!f->result_valid && !f->fatal_errnum_valid)
         return -1;
     return 0;
 }
@@ -417,6 +419,10 @@ int flux_future_get (flux_future_t *f, void *result)
 {
     if (flux_future_wait_for (f, -1.0) < 0) // no timeout
         return -1;
+    if (f->fatal_errnum_valid) {
+        errno = f->fatal_errnum;
+        return -1;
+    }
     if (f->result_valid) {
         if (f->result.is_error) {
             errno = f->result.errnum;
@@ -511,35 +517,49 @@ int flux_future_aux_set (flux_future_t *f, const char *name,
     return 0;
 }
 
+static void post_fulfill (flux_future_t *f)
+{
+    now_context_clear_timer (f->now);
+    then_context_clear_timer (f->then);
+    if (f->now)
+        flux_reactor_stop (f->now->r);
+    /* in "then" context, the main reactor prepare/check/idle watchers
+     * will run continuation in the next reactor loop for fairness.
+     */
+}
+
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
 {
     if (f) {
+        if (f->fatal_errnum_valid)
+            return;
         clear_result (&f->result);
         set_result_value (&f->result, result, free_fn);
         f->result_valid = true;
-        now_context_clear_timer (f->now);
-        then_context_clear_timer (f->then);
-        if (f->now)
-            flux_reactor_stop (f->now->r);
-        /* in "then" context, the main reactor prepare/check/idle watchers
-         * will run continuation in the next reactor loop for fairness.
-         */
+        post_fulfill (f);
     }
 }
 
 void flux_future_fulfill_error (flux_future_t *f, int errnum)
 {
     if (f) {
+        if (f->fatal_errnum_valid)
+            return;
         clear_result (&f->result);
         set_result_errnum (&f->result, errnum);
         f->result_valid = true;
-        now_context_clear_timer (f->now);
-        then_context_clear_timer (f->then);
-        if (f->now)
-            flux_reactor_stop (f->now->r);
-        /* in "then" context, the main reactor prepare/check/idle watchers
-         * will run continuation in the next reactor loop for fairness.
-         */
+        post_fulfill (f);
+    }
+}
+
+void flux_future_fatal_error (flux_future_t *f, int errnum)
+{
+    if (f) {
+        if (!f->fatal_errnum_valid) {
+            f->fatal_errnum = errnum;
+            f->fatal_errnum_valid = true;
+        }
+        post_fulfill (f);
     }
 }
 
@@ -573,7 +593,7 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     assert (f->then != NULL);
 
-    if (f->result_valid)
+    if (f->result_valid || f->fatal_errnum_valid)
         flux_watcher_start (f->then->idle); // prevent reactor from blocking
 }
 
@@ -587,7 +607,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     assert (f->then != NULL);
 
     flux_watcher_stop (f->then->idle);
-    if (f->result_valid) {
+    if (f->result_valid || f->fatal_errnum_valid) {
         flux_watcher_stop (f->then->timer);
         flux_watcher_stop (f->then->prepare);
         flux_watcher_stop (f->then->check);
