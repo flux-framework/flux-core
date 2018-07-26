@@ -134,6 +134,9 @@ struct prog_ctx {
 
     char *topic;            /* Per program topic base string for events */
 
+    hwloc_cpuset_t *cpusetp;
+    hwloc_topology_t topology;
+
     /*  Per-task data. These members are only valid between fork and
      *   exec within each task and are created on-demand as needed by
      *   Lua scripts.
@@ -652,6 +655,15 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 {
     int i;
 
+    if (ctx->topology) {
+        hwloc_topology_destroy (ctx->topology);
+        if (ctx->cpusetp) {
+            for (int i = 0; i < ctx->rankinfo.ntasks; i++)
+                hwloc_bitmap_free (ctx->cpusetp[i]);
+            free (ctx->cpusetp);
+        }
+    }
+
     for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         task_io_flush (ctx->task [i]);
         task_info_destroy (ctx->task [i]);
@@ -688,7 +700,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         zhash_destroy (&ctx->completion_refs);
 
     flux_kvs_txn_destroy (ctx->barrier_txn);
-
     free (ctx);
 }
 
@@ -1360,6 +1371,9 @@ int exec_command (struct prog_ctx *ctx, int i)
         setpgrp ();
 
         child_io_setup (t);
+
+        if (ctx->cpusetp)
+            hwloc_set_cpubind (ctx->topology, ctx->cpusetp[i], 0);
 
         if (sigmask_unblock_all () < 0)
             fprintf (stderr, "sigprocmask: %s\n", flux_strerror (errno));
@@ -2269,6 +2283,52 @@ static int increase_nofile_limit (void)
     return (setrlimit (RLIMIT_NOFILE, &rlim));
 }
 
+hwloc_cpuset_t *cpuset_array_create (struct prog_ctx *ctx)
+{
+    hwloc_cpuset_t *cpusetp = calloc (ctx->rankinfo.ntasks, sizeof (hwloc_cpuset_t));
+    if (!cpusetp)
+        return (NULL);
+    for (int i = 0; i < ctx->rankinfo.ntasks; i++)
+        cpusetp[i] = hwloc_bitmap_alloc ();
+    return (cpusetp);
+}
+
+static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
+{
+    int flags = HWLOC_RESTRICT_FLAG_ADAPT_DISTANCES |
+                HWLOC_RESTRICT_FLAG_ADAPT_MISC |
+                HWLOC_RESTRICT_FLAG_ADAPT_IO;
+    flags = 0;
+    if (hwloc_topology_restrict (topo, set, flags) < 0)
+        return (-1);
+    return (0);
+}
+
+static int topology_restrict_current (hwloc_topology_t topo)
+{
+    int rc = -1;
+    hwloc_bitmap_t rset = hwloc_bitmap_alloc ();
+    if (!rset || hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0)
+        goto out;
+    rc = topology_restrict (topo, rset);
+out:
+    if (rset)
+        hwloc_bitmap_free (rset);
+    return (rc);
+}
+
+static hwloc_cpuset_t *distribute_tasks (struct prog_ctx *ctx, hwloc_topology_t topo)
+{
+    hwloc_obj_t obj[1];
+    hwloc_cpuset_t *cpusetp = cpuset_array_create (ctx);
+    if (!cpusetp)
+        return (NULL);
+    /* Distribute starting at root over remaining objects */
+    obj[0] = hwloc_get_root_obj (topo);
+    hwloc_distrib (topo, obj, 1, cpusetp, ctx->rankinfo.ntasks, HWLOC_OBJ_PU, 0);
+    return (cpusetp);
+}
+
 static int do_hwloc_core_affinity (struct prog_ctx *ctx)
 {
     int rc = -1;
@@ -2284,6 +2344,10 @@ static int do_hwloc_core_affinity (struct prog_ctx *ctx)
     }
     if (hwloc_topology_load (topology) < 0) {
         flux_log_error (h, "hwloc_topology_load");
+        goto out;
+    }
+    if (topology_restrict_current (topology) < 0) {
+        flux_log_error (h, "topology_restrict_current");
         goto out;
     }
     if (!(coreset = hwloc_bitmap_alloc ())
@@ -2312,10 +2376,16 @@ static int do_hwloc_core_affinity (struct prog_ctx *ctx)
     }
     if ((rc = hwloc_set_cpubind (topology, resultset, 0)) < 0)
         flux_log_error (h, "hwloc_set_cpubind: %s", strerror (errno));
+
+    ctx->topology = topology;
+    if (strcmp (prog_ctx_getopt (ctx, "cpu-affinity"), "per-task") == 0) {
+        if ((topology_restrict (ctx->topology, resultset) < 0)
+           || !(ctx->cpusetp = distribute_tasks (ctx, ctx->topology)))
+            flux_log_error (h, "cpu-affinity=per-task failed");
+    }
 out:
     hwloc_bitmap_free (resultset);
     hwloc_bitmap_free (coreset);
-    hwloc_topology_destroy (topology);
     return (0);
 }
 
