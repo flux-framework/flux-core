@@ -86,6 +86,11 @@ _errnum_ value and an optional error string.  After the future is
 fulfilled with an error, `flux_future_get()` will return -1 with errno
 set to _errnum_.
 
+Both `flux_future_fulfill()` and `flux_future_fulfill_error()` can be
+called multiple times to queue multiple results or errors.  When
+callers access future results via `flux_future_get()`, results or
+errors will be returned in FIFO order.
+
 `flux_future_fatal_error()` fulfills the future, assigning an _errnum_
 value and an optional error string.  Unlike
 `flux_future_fulfill_error()` this fulfillment can only be called once

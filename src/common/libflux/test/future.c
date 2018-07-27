@@ -820,6 +820,61 @@ void test_error_string (void)
     flux_future_destroy (f);
 }
 
+void test_multiple_fulfill (void)
+{
+    flux_reactor_t *r;
+    flux_future_t *f;
+    void *result;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fulfill (f, "foo", NULL);
+    flux_future_fulfill_error (f, ENOENT, NULL);
+    flux_future_fulfill (f, "bar", NULL);
+    flux_future_fulfill_error (f, EPERM, NULL);
+    flux_future_fulfill (f, "baz", NULL);
+
+    result = NULL;
+    ok (flux_future_get (f, &result) == 0
+        && result
+        && !strcmp (result, "foo"),
+        "flux_future_get gets fulfillment");
+    flux_future_reset (f);
+
+    ok (flux_future_get (f, &result) < 0
+        && errno == ENOENT,
+        "flux_future_get gets queued ENOENT error");
+    flux_future_reset (f);
+
+    result = NULL;
+    ok (flux_future_get (f, &result) == 0
+        && result
+        && !strcmp (result, "bar"),
+        "flux_future_get gets queued fulfillment");
+    flux_future_reset (f);
+
+    ok (flux_future_get (f, &result) < 0
+        && errno == EPERM,
+        "flux_future_get gets queued EPERM error");
+    flux_future_reset (f);
+
+    result = NULL;
+    ok (flux_future_get (f, &result) == 0
+        && result
+        && !strcmp (result, "baz"),
+        "flux_future_get gets queued fulfillment");
+    flux_future_reset (f);
+
+    flux_future_destroy (f);
+
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -840,6 +895,8 @@ int main (int argc, char *argv[])
     test_fatal_error ();
 
     test_error_string ();
+
+    test_multiple_fulfill ();
 
     done_testing();
     return (0);

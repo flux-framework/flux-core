@@ -74,6 +74,7 @@ struct flux_future {
     void *init_arg;
     struct now_context *now;
     struct then_context *then;
+    zlist_t *queue;
 };
 
 static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -213,17 +214,22 @@ static void then_context_clear_timer (struct then_context *then)
         flux_watcher_stop (then->timer);
 }
 
+static void init_result (struct future_result *fs)
+{
+    fs->is_error = false;
+    fs->errnum = 0;
+    fs->errnum_string = NULL;
+    fs->value = NULL;
+    fs->value_free = NULL;
+}
+
 static void clear_result (struct future_result *fs)
 {
     if (fs->value && fs->value_free)
         fs->value_free (fs->value);
-    fs->is_error = false;
-    fs->errnum = 0;
     if (fs->errnum_string)
         free (fs->errnum_string);
-    fs->errnum_string = NULL;
-    fs->value = NULL;
-    fs->value_free = NULL;
+    init_result (fs);
 }
 
 static void set_result_value (struct future_result *fs, void *value,
@@ -249,6 +255,51 @@ static int set_result_errnum (struct future_result *fs, int errnum,
     return 0;
 }
 
+static void move_result (struct future_result *dst, struct future_result *src)
+{
+    dst->is_error = src->is_error;
+    dst->errnum = src->errnum;
+    dst->errnum_string = src->errnum_string;
+    dst->value = src->value;
+    dst->value_free = src->value_free;
+    init_result (src);
+}
+
+static void future_result_destroy (void *data)
+{
+    struct future_result *fs = data;
+    if (fs) {
+        clear_result (fs);
+        free (fs);
+    }
+}
+
+static struct future_result *future_result_value_create (void *value,
+                                                         flux_free_f value_free)
+{
+    struct future_result *fs = calloc (1, sizeof (*fs));
+    if (!fs)
+        return NULL;
+    set_result_value (fs, value, value_free);
+    return fs;
+}
+
+static struct future_result *future_result_errnum_create (int errnum,
+                                                          const char *errstr)
+{
+    struct future_result *fs = calloc (1, sizeof (*fs));
+    if (!fs)
+        return NULL;
+    if (set_result_errnum (fs, errnum, errstr) < 0) {
+        int save_errno = errno;
+        clear_result (fs);
+        free (fs);
+        errno = save_errno;
+        return NULL;
+    }
+    return fs;
+}
+
 /* Destroy a future.
  */
 void flux_future_destroy (flux_future_t *f)
@@ -260,6 +311,7 @@ void flux_future_destroy (flux_future_t *f)
         free (f->fatal_errnum_string);
         now_context_destroy (f->now);
         then_context_destroy (f->then);
+        zlist_destroy (&f->queue);
         free (f);
     }
     errno = saved_errno;
@@ -276,10 +328,22 @@ flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
     }
     f->init = cb;
     f->init_arg = arg;
+    f->queue = NULL;
     return f;
 error:
     flux_future_destroy (f);
     return NULL;
+}
+
+static void post_fulfill (flux_future_t *f)
+{
+    now_context_clear_timer (f->now);
+    then_context_clear_timer (f->then);
+    if (f->now)
+        flux_reactor_stop (f->now->r);
+    /* in "then" context, the main reactor prepare/check/idle watchers
+     * will run continuation in the next reactor loop for fairness.
+     */
 }
 
 /* Reset (unfulfill) a future.
@@ -291,6 +355,13 @@ void flux_future_reset (flux_future_t *f)
         f->result_valid = false;
         if (f->then)
             then_context_start (f->then);
+        if (f->queue && zlist_size (f->queue) > 0) {
+            struct future_result *fs = zlist_pop (f->queue);
+            move_result (&f->result, fs);
+            f->result_valid = true;
+            future_result_destroy (fs);
+            post_fulfill (f);
+        }
     }
 }
 
@@ -531,15 +602,27 @@ int flux_future_aux_set (flux_future_t *f, const char *name,
     return 0;
 }
 
-static void post_fulfill (flux_future_t *f)
+static void fulfill_internal_error (flux_future_t *f,
+                                    void *result,
+                                    flux_free_f free_fn,
+                                    int errnum)
 {
-    now_context_clear_timer (f->now);
-    then_context_clear_timer (f->then);
-    if (f->now)
-        flux_reactor_stop (f->now->r);
-    /* in "then" context, the main reactor prepare/check/idle watchers
-     * will run continuation in the next reactor loop for fairness.
-     */
+    if (result && free_fn)
+        free_fn (result);
+    flux_future_fatal_error (f, errnum, NULL);
+}
+
+static int queue_result (flux_future_t *f, struct future_result *fs)
+{
+    if (!f->queue) {
+        if (!(f->queue = zlist_new ())) {
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    zlist_append (f->queue, fs);
+    zlist_freefn (f->queue, fs, future_result_destroy, true);
+    return 0;
 }
 
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
@@ -547,9 +630,22 @@ void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
     if (f) {
         if (f->fatal_errnum_valid)
             return;
-        clear_result (&f->result);
-        set_result_value (&f->result, result, free_fn);
-        f->result_valid = true;
+        if (f->result_valid) {
+            struct future_result *fs;
+            if (!(fs = future_result_value_create (result, free_fn))) {
+                fulfill_internal_error (f, result, free_fn, errno);
+                return;
+            }
+            if (queue_result (f, fs) < 0) {
+                fulfill_internal_error (f, result, free_fn, errno);
+                future_result_destroy (fs);
+                return;
+            }
+        }
+        else {
+            set_result_value (&f->result, result, free_fn);
+            f->result_valid = true;
+        }
         post_fulfill (f);
     }
 }
@@ -560,12 +656,26 @@ void flux_future_fulfill_error (flux_future_t *f, int errnum,
     if (f) {
         if (f->fatal_errnum_valid)
             return;
-        clear_result (&f->result);
-        if (set_result_errnum (&f->result, errnum, errstr) < 0) {
-            flux_future_fatal_error (f, errno, NULL);
-            return;
+        if (f->result_valid) {
+            struct future_result *fs;
+            if (!(fs = future_result_errnum_create (errnum, errstr))) {
+                fulfill_internal_error (f, NULL, NULL, errno);
+                return;
+            }
+            if (queue_result (f, fs) < 0) {
+                fulfill_internal_error (f, NULL, NULL, errno);
+                future_result_destroy (fs);
+                return;
+            }
         }
-        f->result_valid = true;
+        else {
+            clear_result (&f->result);
+            if (set_result_errnum (&f->result, errnum, errstr) < 0) {
+                flux_future_fatal_error (f, errno, NULL);
+                return;
+            }
+            f->result_valid = true;
+        }
         post_fulfill (f);
     }
 }
