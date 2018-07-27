@@ -55,6 +55,11 @@ struct pmi_simple_server {
     int flags;
 };
 
+
+static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
+                                            void *client, int result);
+
+
 static void trace (struct pmi_simple_server *pmi,
                    void *client, const char *fmt, ...)
 {
@@ -252,6 +257,17 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
     return ret;
 }
 
+static int client_respond (struct pmi_simple_server *pmi, void *client,
+                           const char *resp)
+{
+    if (resp[0] != '\0') {
+        trace (pmi, client, "S: %s", resp);
+        if (pmi->ops.response_send (client, resp) < 0)
+            return (-1);
+    }
+    return (0);
+}
+
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf, void *client)
 {
@@ -349,7 +365,6 @@ put_respond:
     else if (keyval_parse_isword (buf, "cmd", "get") == 0) {
         char name[SIMPLE_KVS_NAME_MAX];
         char key[SIMPLE_KVS_KEY_MAX];
-        char val[SIMPLE_KVS_VAL_MAX];
         int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
         if (result < 0) {
             if (result == EKV_VAL_LEN) {
@@ -366,14 +381,11 @@ put_respond:
             }
             goto proto;
         }
-        if (pmi->ops.kvs_get (pmi->arg, name, key, val, sizeof (val)) < 0)
-            result = PMI_ERR_INVALID_KEY;
+        if (pmi->ops.kvs_get (pmi->arg, client, name, key) == 0)
+            goto done;
+        result = PMI_ERR_INVALID_KEY;
 get_respond:
-        if (result == 0)
-            snprintf (resp, sizeof (resp), "cmd=get_result rc=0 value=%s\n",
-                      val);
-        else
-            snprintf (resp, sizeof (resp), "cmd=get_result rc=%d\n", result);
+        return (pmi_simple_server_kvs_get_error (pmi, client, result));
     }
     /* barrier */
     else if (keyval_parse_isword (buf, "cmd", "barrier_in") == 0) {
@@ -429,6 +441,25 @@ proto:
 int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc)
 {
     return barrier_exit (pmi, rc);
+}
+
+static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
+                                            void *client, int result)
+{
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
+    snprintf (resp, sizeof (resp), "cmd=get_result rc=%d\n", result);
+    return (client_respond (pmi, client, resp));
+}
+
+int pmi_simple_server_kvs_get_complete (struct pmi_simple_server *pmi,
+                                        void *client, const char *val)
+{
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
+    if (val == NULL)
+        return (pmi_simple_server_kvs_get_error (pmi, client,
+                                                 PMI_ERR_INVALID_KEY));
+    snprintf (resp, sizeof (resp), "cmd=get_result rc=0 value=%s\n", val);
+    return (client_respond (pmi, client, resp));
 }
 
 /*
