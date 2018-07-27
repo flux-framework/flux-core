@@ -25,6 +25,7 @@ SYNOPSIS
 
  void flux_future_destroy (flux_future_t *f);
 
+ const char *flux_future_error_string (flux_future_t *f);
 
 OVERVIEW
 --------
@@ -77,6 +78,9 @@ another `flux_future_then()`, if desired.
 `flux_future_destroy()` destroys a future, including any result contained
 within.
 
+When flux futures are fulfilled with errors, they can optionally
+include an error string for callers.  `flux_future_error_string()`
+returns the error string if one is available.
 
 RETURN VALUE
 ------------

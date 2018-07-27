@@ -242,7 +242,7 @@ static void test_basic_chained (flux_reactor_t *r)
     ok (!flux_future_is_ready (f3) && !flux_future_is_ready (f2),
         "chained: chained future not yet ready");
 
-    flux_future_fulfill_error (f, 42);
+    flux_future_fulfill_error (f, 42, NULL);
     ok (flux_future_wait_for (f3, 0.1) == 0,
         "chained: flux_future_wait_for step3 returns 0");
     ok (flux_future_get (f3, NULL) < 0 && errno == 42,
@@ -297,7 +297,7 @@ static void test_basic_chained (flux_reactor_t *r)
     ok (!flux_future_is_ready (f3) && !flux_future_is_ready (f2),
         "chained (or-then): chained future not yet ready");
 
-    flux_future_fulfill_error (f, 42);
+    flux_future_fulfill_error (f, 42, NULL);
 
     ok (flux_future_wait_for (f3, 0.1) == 0,
         "chained (or-then): flux_future_wait_for step3 returns 0");
@@ -333,7 +333,7 @@ void timeout_init (flux_future_t *f, void *arg)
     flux_watcher_start (w);
     return;
 error:
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 
 static void flux_future_timeout_clear (flux_future_t *f)

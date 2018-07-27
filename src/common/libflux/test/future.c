@@ -238,7 +238,7 @@ void simple_init (flux_future_t *f, void *arg)
     flux_watcher_start (w);
     return;
 error:
-   flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 
 void test_init_now (void)
@@ -347,7 +347,7 @@ void mumble_init (flux_future_t *f, void *arg)
     flux_watcher_start (w);
     return;
 error:
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 
 flux_future_t *mumble_create (void)
@@ -450,7 +450,7 @@ void incept_mumble_contin (flux_future_t *f, void *arg)
         flux_future_fulfill (incept_f, xstrdup ("Blorg"), free);
     return;
 error:
-    flux_future_fulfill_error (incept_f, errno);
+    flux_future_fulfill_error (incept_f, errno, NULL);
 }
 void incept_init (flux_future_t *f, void *arg)
 {
@@ -465,7 +465,7 @@ void incept_init (flux_future_t *f, void *arg)
         goto error;
     return;
 error:
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 flux_future_t *incept_create (void)
 {
@@ -561,7 +561,7 @@ void walk_mumble_contin (flux_future_t *f, void *arg)
     diag ("%s: count=%d", __FUNCTION__, walk->count);
     return;
 error:
-    flux_future_fulfill_error (walk_f, errno);
+    flux_future_fulfill_error (walk_f, errno, NULL);
 }
 void walk_init (flux_future_t *f, void *arg)
 {
@@ -584,7 +584,7 @@ void walk_init (flux_future_t *f, void *arg)
     }
     return;
 error:
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 flux_future_t *walk_create (int count)
 {
@@ -698,6 +698,183 @@ void test_reset (void)
     flux_reactor_destroy (r);
 }
 
+void test_fatal_error (void)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill (f, "Hello", NULL);
+    flux_future_fatal_error (f, EPERM, NULL);
+    flux_future_fatal_error (f, ENOENT, NULL); /* test EPERM is not overwritten */
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM before result");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill_error (f, EACCES, NULL);
+    flux_future_fatal_error (f, EPERM, NULL);
+    flux_future_fatal_error (f, ENOENT, NULL); /* test EPERM is not overwritten */
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM before result error");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, EPERM, NULL);
+    flux_future_fulfill (f, "Hello", NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM, later fulfillment ignored");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, EPERM, NULL);
+    flux_future_fulfill_error (f, EACCES, NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM, later fulfillment ignored");
+
+    flux_future_destroy (f);
+}
+
+void test_error_string (void)
+{
+    flux_future_t *f;
+    const char *str;
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill (f, "Hello", NULL);
+
+    ok (flux_future_get (f, NULL) == 0
+        && flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL when future fulfilled");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill_error (f, ENOENT, NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == ENOENT
+        && flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL when no error string set");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill_error (f, ENOENT, "foobar");
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == ENOENT
+        && (str = flux_future_error_string (f)) != NULL
+        && !strcmp (str, "foobar"),
+        "flux_future_error_string returns correct string when error string set");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, ENOENT, NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == ENOENT
+        && flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL when no fatal error string set");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, ENOENT, "boobaz");
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == ENOENT
+        && (str = flux_future_error_string (f)) != NULL
+        && !strcmp (str, "boobaz"),
+        "flux_future_error_string returns correct fatal error string when error string set");
+
+    flux_future_destroy (f);
+}
+
+void test_multiple_fulfill (void)
+{
+    flux_reactor_t *r;
+    flux_future_t *f;
+    void *result;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fulfill (f, "foo", NULL);
+    flux_future_fulfill_error (f, ENOENT, NULL);
+    flux_future_fulfill (f, "bar", NULL);
+    flux_future_fulfill_error (f, EPERM, NULL);
+    flux_future_fulfill (f, "baz", NULL);
+
+    result = NULL;
+    ok (flux_future_get (f, &result) == 0
+        && result
+        && !strcmp (result, "foo"),
+        "flux_future_get gets fulfillment");
+    flux_future_reset (f);
+
+    ok (flux_future_get (f, &result) < 0
+        && errno == ENOENT,
+        "flux_future_get gets queued ENOENT error");
+    flux_future_reset (f);
+
+    result = NULL;
+    ok (flux_future_get (f, &result) == 0
+        && result
+        && !strcmp (result, "bar"),
+        "flux_future_get gets queued fulfillment");
+    flux_future_reset (f);
+
+    ok (flux_future_get (f, &result) < 0
+        && errno == EPERM,
+        "flux_future_get gets queued EPERM error");
+    flux_future_reset (f);
+
+    result = NULL;
+    ok (flux_future_get (f, &result) == 0
+        && result
+        && !strcmp (result, "baz"),
+        "flux_future_get gets queued fulfillment");
+    flux_future_reset (f);
+
+    flux_future_destroy (f);
+
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -714,6 +891,12 @@ int main (int argc, char *argv[])
     test_walk ();
 
     test_reset ();
+
+    test_fatal_error ();
+
+    test_error_string ();
+
+    test_multiple_fulfill ();
 
     done_testing();
     return (0);
