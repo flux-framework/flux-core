@@ -323,7 +323,7 @@ static int kvs_watch_rpc_get_matchtag (flux_future_t *f, uint32_t *matchtag)
     uint32_t tag;
     const flux_msg_t *msg;
 
-    if (flux_future_get (f, &msg) < 0)
+    if (flux_future_get (f, (const void **)&msg) < 0)
         return -1;
     if (flux_msg_get_matchtag (msg, &tag) < 0)
         return -1;

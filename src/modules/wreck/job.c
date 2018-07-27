@@ -574,7 +574,7 @@ static void cmb_exec_cb (flux_future_t *f, void *arg)
     flux_t *h = flux_future_get_flux (f);
     struct wreck_job *job = arg;
 
-    if (flux_future_get (f, &msg) < 0) {
+    if (flux_future_get (f, (const void **)&msg) < 0) {
         flux_log_error (h, "cmb_exec_cb: flux_future_get");
         flux_future_destroy (f);
         return;

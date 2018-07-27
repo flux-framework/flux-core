@@ -14,7 +14,7 @@ SYNOPSIS
 
  typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
 
- int flux_future_get (flux_future_t *f, void *result);
+ int flux_future_get (flux_future_t *f, const void **result);
 
  int flux_future_then (flux_future_t *f, double timeout,
                        flux_continuation_f cb, void *arg);

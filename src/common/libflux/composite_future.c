@@ -237,7 +237,7 @@ static void fulfill_next (flux_future_t *f, flux_future_t *next)
      */
     flux_future_aux_set (next, NULL, f, (flux_free_f) flux_future_destroy);
 
-    if (flux_future_get (f, &result) < 0)
+    if (flux_future_get (f, (const void **)&result) < 0)
         flux_future_fulfill_error (next, errno, NULL);
     else
         flux_future_fulfill (next, result, NULL);

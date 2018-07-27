@@ -500,7 +500,7 @@ bool flux_future_is_ready (flux_future_t *f)
 /* Block until future is fulfilled if not already.
  * Then return either result or error depending on how it was fulfilled.
  */
-int flux_future_get (flux_future_t *f, void *result)
+int flux_future_get (flux_future_t *f, const void **result)
 {
     if (flux_future_wait_for (f, -1.0) < 0) // no timeout
         return -1;
@@ -515,7 +515,7 @@ int flux_future_get (flux_future_t *f, void *result)
         }
         else {
             if (result)
-                *(void **)result = f->result.value;
+                (*result) = f->result.value;
         }
     }
     return 0;

@@ -41,7 +41,7 @@ typedef void (*flux_future_init_f)(flux_future_t *f, void *arg);
 
 flux_future_t *flux_future_create (flux_future_init_f cb, void *arg);
 
-int flux_future_get (flux_future_t *f, void *result);
+int flux_future_get (flux_future_t *f, const void **result);
 
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn);
 void flux_future_fulfill_error (flux_future_t *f, int errnum, const char *errstr);
