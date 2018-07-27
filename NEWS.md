@@ -1,3 +1,34 @@
+flux-core version 0.10.0 - 2018-07-26
+-------------------------------------
+
+### Fixes
+ * fix python kz binding errors (#1537)
+ * fix default socket path and config file parsing for flux-broker (#1577)
+ * Lua 5.2 compatibility and other Lua fixes (#1586, #1594)
+ * flux PMI server response before closing (#1528)
+
+### New Features
+ * support cpu affinity for wreck jobs (#1533, #1603)
+ * support for GPU device discovery through hwloc (#1561)
+ * set CUDA_VISIBLE_DEVICES for jobs with GPUs (#1599)
+ * add ability to bootstrap Flux using pmix (#1580)
+ * add `flux wreck sched-params` cmd to tune scheduler at runtime (#1579)
+ * support `-o mpi=spectrum` for spectrum MPI launch (#1578, #1588)
+ * allow generic JSON values in aggregator (#1535)
+ * new --wrap=arg0,arg1 option to flux-start (#1542)
+ * allow arbitrary error strings in RPC responses (#1538)
+ * support for composite flux_future_t types (#1553)
+ * add buffered I/O support to Flux API (#1518, #1547, #1548)
+ * remove extra line breaks in Flux log messages (#1530)
+ * add Flux Locally Unique ID (FLUID) implementation (#1541)
+
+### Cleanup
+ * remove json-c (#1522, #1524, #1525, #1527, #1529)
+ * libidset internal cleanup (#1521)
+ * libsubprocess cleanup (#1549)
+ * drop PMIx heuristic in libpmi (#1575)
+ * add missing `#!/bin/bash` to all rc1 scripts (#1597)
+
 flux-core version 0.9.0 - 2018-05-10
 ------------------------------------
 
