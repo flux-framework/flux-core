@@ -151,7 +151,7 @@ const char *flux_rpc_get_error (flux_future_t *f)
 
     if (flux_future_get (f, NULL) < 0) {
         errnum = errno;
-        errstr = flux_future_aux_get (f, "flux::rpc_errstr");
+        errstr = flux_future_error_string (f);
     }
     if (errstr)
         return errstr;
@@ -186,16 +186,13 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 error:
     saved_errno = errno;
-    flux_future_fulfill_error (f, saved_errno, NULL);
-    /* If error response contains an error string payload,
-     * save it in the future aux hash.  If unlikely ENOMEM errors occur,
-     * silently discard the error string.
+    /* If error response contains an error string payload, save it for
+     * retrieval later by user.
      */
-    if (flux_response_decode_error (msg, &errstr) == 0) {
-        char *cpy = strdup (errstr);
-        if (cpy && flux_future_aux_set (f, "flux::rpc_errstr", cpy, free) < 0)
-            free (cpy);
-    }
+    if (flux_response_decode_error (msg, &errstr) == 0)
+        flux_future_fulfill_error (f, saved_errno, errstr);
+    else
+        flux_future_fulfill_error (f, saved_errno, NULL);
 }
 
 /* Callback to initialize future in main or alternate reactor contexts.
