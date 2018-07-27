@@ -256,7 +256,6 @@ void test_error (flux_t *h)
 {
     flux_future_t *f;
     const char *errstr;
-    const char *s;
 
     /* Error response with error message payload.
      */
@@ -272,7 +271,7 @@ void test_error (flux_t *h)
     errno = 0;
     ok (flux_rpc_get (f, NULL) < 0 && errno == 69,
         "flux_rpc_get failed with expected errno");
-    errstr = flux_rpc_get_error (f);
+    errstr = flux_future_error_string (f);
     ok (errstr != NULL && !strcmp (errstr, "Error: Hello world"),
         "flux_rpc_get_error returned expected error string");
     flux_future_destroy (f);
@@ -290,24 +289,9 @@ void test_error (flux_t *h)
     errno = 0;
     ok (flux_rpc_get (f, NULL) < 0 && errno == ENOTDIR,
         "flux_rpc_get failed with expected errno");
-    errstr = flux_rpc_get_error (f);
-    ok (errstr != NULL && !strcmp (errstr, flux_strerror (ENOTDIR)),
-        "flux_rpc_get_error returned canned error string");
-    flux_future_destroy (f);
-
-    /* Success response with payload.
-     * Ensure flux_rpc_get_error() doesn't return the payload!
-     */
-    f = flux_rpc (h, "rpctest.echo", "Nerp", FLUX_NODEID_ANY, 0);
-    ok (f != NULL,
-        "flux_rpc sent request to rpctest.echo");
-    ok (flux_future_get (f, NULL) == 0,
-        "flux_future_get returned success");
-    ok (flux_rpc_get (f, &s) == 0 && s != NULL && !strcmp (s, "Nerp"),
-        "flux_rpc_get worked and retrieved payload");
-    errstr = flux_rpc_get_error (f);
-    ok (errstr != NULL && !strcmp (errstr, flux_strerror (0)),
-        "flux_rpc_get_error returned canned Success string");
+    errstr = flux_future_error_string (f);
+    ok (errstr == NULL,
+        "flux_future_error_string returned NULL, no error string set");
     flux_future_destroy (f);
 }
 

@@ -31,8 +31,6 @@ SYNOPSIS
  int flux_rpc_get_raw (flux_future_t *f,
                        const void **data, int *len);
 
- const char *flux_rpc_get_error (flux_future_t *f);
-
 DESCRIPTION
 -----------
 
@@ -54,12 +52,6 @@ decode the RPC result.  Internally, they call `flux_future_get()`
 to access the response message stored in the future.  If the response
 message has not yet been received, these functions block until it is,
 or an error occurs.
-
-`flux_rpc_get_error()` returns an error string explaining the reason
-for a failure.  Its return value is never NULL.  If the remote service
-included a textual error string in the response, that is returned.
-Otherwise flux_strerror(3) provides the string based on the error
-number received in the response.
 
 
 REQUEST OPTIONS

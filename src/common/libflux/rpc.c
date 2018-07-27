@@ -144,21 +144,6 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...)
     return rc;
 }
 
-const char *flux_rpc_get_error (flux_future_t *f)
-{
-    int errnum = 0;
-    const char *errstr = NULL;
-
-    if (flux_future_get (f, NULL) < 0) {
-        errnum = errno;
-        errstr = flux_future_error_string (f);
-    }
-    if (errstr)
-        return errstr;
-    else
-        return flux_strerror (errnum);
-}
-
 /* Message handler for response.
  * Parse the response message here so one could call flux_future_get()
  * instead of flux_rpc_get() to test result of RPC with no response payload.
