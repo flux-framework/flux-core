@@ -186,7 +186,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 error:
     saved_errno = errno;
-    flux_future_fulfill_error (f, saved_errno);
+    flux_future_fulfill_error (f, saved_errno, NULL);
     /* If error response contains an error string payload,
      * save it in the future aux hash.  If unlikely ENOMEM errors occur,
      * silently discard the error string.
@@ -220,7 +220,7 @@ static void initialize_cb (flux_future_t *f, void *arg)
     flux_msg_handler_start (mh);
     return;
 error:
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 
 static flux_future_t *flux_rpc_msg (flux_t *h,

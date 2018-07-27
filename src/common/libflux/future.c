@@ -55,6 +55,7 @@ struct then_context {
 struct future_result {
     bool is_error;             /* if should return value or errnum */
     int errnum;
+    char *errnum_string;
     void *value;
     flux_free_f value_free;
 };
@@ -67,6 +68,7 @@ struct flux_future {
     struct future_result result;
     bool result_valid;
     int fatal_errnum;
+    char *fatal_errnum_string;
     bool fatal_errnum_valid;
     flux_future_init_f init;
     void *init_arg;
@@ -217,6 +219,9 @@ static void clear_result (struct future_result *fs)
         fs->value_free (fs->value);
     fs->is_error = false;
     fs->errnum = 0;
+    if (fs->errnum_string)
+        free (fs->errnum_string);
+    fs->errnum_string = NULL;
     fs->value = NULL;
     fs->value_free = NULL;
 }
@@ -229,11 +234,19 @@ static void set_result_value (struct future_result *fs, void *value,
     fs->value_free = value_free;
 }
 
-static void set_result_errnum (struct future_result *fs, int errnum)
+static int set_result_errnum (struct future_result *fs, int errnum,
+                              const char *errstr)
 {
     assert (!fs->value && !fs->value_free);
     fs->errnum = errnum;
+    if (errstr && !(fs->errnum_string = strdup (errstr))) {
+        int save_errno = errno;
+        clear_result (fs);
+        errno = save_errno;
+        return -1;
+    }
     fs->is_error = true;
+    return 0;
 }
 
 /* Destroy a future.
@@ -244,6 +257,7 @@ void flux_future_destroy (flux_future_t *f)
     if (f) {
         zhash_destroy (&f->aux);
         clear_result (&f->result);
+        free (f->fatal_errnum_string);
         now_context_destroy (f->now);
         then_context_destroy (f->then);
         free (f);
@@ -540,27 +554,46 @@ void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
     }
 }
 
-void flux_future_fulfill_error (flux_future_t *f, int errnum)
+void flux_future_fulfill_error (flux_future_t *f, int errnum,
+                                const char *errstr)
 {
     if (f) {
         if (f->fatal_errnum_valid)
             return;
         clear_result (&f->result);
-        set_result_errnum (&f->result, errnum);
+        if (set_result_errnum (&f->result, errnum, errstr) < 0) {
+            flux_future_fatal_error (f, errno, NULL);
+            return;
+        }
         f->result_valid = true;
         post_fulfill (f);
     }
 }
 
-void flux_future_fatal_error (flux_future_t *f, int errnum)
+void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr)
 {
     if (f) {
         if (!f->fatal_errnum_valid) {
             f->fatal_errnum = errnum;
+            /* if ENOMEM here, nothing we can do b/c we're in
+             * flux_future_fatal_error already */
+            if (errstr)
+                f->fatal_errnum_string = strdup (errstr);
             f->fatal_errnum_valid = true;
         }
         post_fulfill (f);
     }
+}
+
+const char *flux_future_error_string (flux_future_t *f)
+{
+    if (f) {
+        if (f->fatal_errnum_valid)
+            return f->fatal_errnum_string;
+        if (f->result_valid)
+            return f->result.errnum_string;
+    }
+    return NULL;
 }
 
 /* timer - for flux_future_then() timeout
@@ -570,7 +603,7 @@ static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
                            int revents, void *arg)
 {
     flux_future_t *f = arg;
-    flux_future_fulfill_error (f, ETIMEDOUT);
+    flux_future_fulfill_error (f, ETIMEDOUT, NULL);
 }
 
 /* timer - for flux_future_wait_for() timeout

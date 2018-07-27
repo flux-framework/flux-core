@@ -44,9 +44,11 @@ flux_future_t *flux_future_create (flux_future_init_f cb, void *arg);
 int flux_future_get (flux_future_t *f, void *result);
 
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn);
-void flux_future_fulfill_error (flux_future_t *f, int errnum);
+void flux_future_fulfill_error (flux_future_t *f, int errnum, const char *errstr);
 
-void flux_future_fatal_error (flux_future_t *f, int errnum);
+void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr);
+
+const char *flux_future_error_string (flux_future_t *f);
 
 void flux_future_set_flux (flux_future_t *f, flux_t *h);
 flux_t *flux_future_get_flux (flux_future_t *f);

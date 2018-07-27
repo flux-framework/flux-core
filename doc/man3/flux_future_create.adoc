@@ -20,9 +20,11 @@ SYNOPSIS
  void flux_future_fulfill (flux_future_t *f,
                            void *result, flux_free_f free_fn);
 
- void flux_future_fulfill_error (flux_future_t *f, int errnum);
+ void flux_future_fulfill_error (flux_future_t *f, int errnum,
+                                 const char *errstr);
 
- void flux_future_fatal_error (flux_future_t *f, int errnum);
+ void flux_future_fatal_error (flux_future_t *f, int errnum,
+                               const char *errstr);
 
  void *flux_future_aux_get (flux_future_t *f, const char *name);
 
@@ -79,14 +81,16 @@ A NULL _result_ is valid and also fulfills the future.  The _result_
 is contained within the future and can be accessed with `flux_future_get()`
 as needed until the future is destroyed.
 
-`flux_future_fulfill_error()` fulfills the future, assigning an _errnum_
-value.  After the future is fulfilled with an error, `flux_future_get()`
-will return -1 with errno set to _errnum_.
+`flux_future_fulfill_error()` fulfills the future, assigning an
+_errnum_ value and an optional error string.  After the future is
+fulfilled with an error, `flux_future_get()` will return -1 with errno
+set to _errnum_.
 
 `flux_future_fatal_error()` fulfills the future, assigning an _errnum_
-value.  Unlike `flux_future_fulfill_error()` this fulfillment can only
-be called once and takes precedence over all other fulfillments.  It
-is used for catastrophic error paths in future fulfillment.
+value and an optional error string.  Unlike
+`flux_future_fulfill_error()` this fulfillment can only be called once
+and takes precedence over all other fulfillments.  It is used for
+catastrophic error paths in future fulfillment.
 
 `flux_future_aux_set()` attaches an object _aux_, with optional destructor
 _destroy_, to the future under an optional _name_.  `flux_future_aux_get()`

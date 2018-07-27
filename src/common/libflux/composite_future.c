@@ -122,7 +122,7 @@ void composite_future_init (flux_future_t *f, void *arg)
     }
     return;
 error:
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
 }
 
 /*
@@ -238,7 +238,7 @@ static void fulfill_next (flux_future_t *f, flux_future_t *next)
     flux_future_aux_set (next, NULL, f, (flux_free_f) flux_future_destroy);
 
     if (flux_future_get (f, &result) < 0)
-        flux_future_fulfill_error (next, errno);
+        flux_future_fulfill_error (next, errno, NULL);
     else
         flux_future_fulfill (next, result, NULL);
 }
@@ -288,7 +288,7 @@ error:
      *  and pass the error up the chain to cf->next, since that is likely the
      *  future which has callbacks registered on it.
      */
-    flux_future_fulfill_error (f, errno);
+    flux_future_fulfill_error (f, errno, NULL);
     fulfill_next (f, cf->next);
 }
 
@@ -370,7 +370,7 @@ void flux_future_continue_error (flux_future_t *prev, int errnum)
 {
     struct chained_future *cf = chained_future_get (prev);
     if (cf && cf->next)
-        flux_future_fulfill_error (cf->next, errnum);
+        flux_future_fulfill_error (cf->next, errnum, NULL);
 }
 
 flux_future_t *flux_future_and_then (flux_future_t *prev,
