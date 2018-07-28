@@ -25,7 +25,7 @@ void result_destroy (void *arg)
 }
 
 int contin_called;
-void *contin_arg;
+const void *contin_arg;
 int contin_get_rc;
 flux_reactor_t *contin_reactor;
 flux_t *contin_flux;
@@ -36,7 +36,7 @@ void contin (flux_future_t *f, void *arg)
     contin_arg = arg;
     contin_flux = flux_future_get_flux (f);
     contin_reactor = flux_future_get_reactor (f);
-    contin_get_rc = flux_future_get (f, &contin_get_result);
+    contin_get_rc = flux_future_get (f, (const void **)&contin_get_result);
 }
 
 void test_simple (void)
@@ -105,7 +105,7 @@ void test_simple (void)
     ok (!flux_future_is_ready (f),
         "flux_future_is_ready returns false");
     errno = 0;
-    void *result = NULL;
+    const void *result = NULL;
     result_destroy_called = 0;
     result_destroy_arg = NULL;
     flux_future_fulfill (f, "Hello", result_destroy);
@@ -244,7 +244,7 @@ error:
 void test_init_now (void)
 {
     flux_future_t *f;
-    char *result;
+    const char *result;
 
     f = flux_future_create (simple_init, "testarg");
     ok (f != NULL,
@@ -255,7 +255,7 @@ void test_init_now (void)
     simple_init_arg = NULL;
     simple_init_r = NULL;
     result = NULL;
-    ok (flux_future_get (f, &result) == 0,
+    ok (flux_future_get (f, (const void **)&result) == 0,
         "flux_future_get worked");
     ok (result != NULL && !strcmp (result, "Result!"),
         "and correct result was returned");
@@ -270,13 +270,13 @@ void test_init_now (void)
     diag ("%s: init works in synchronous context", __FUNCTION__);
 }
 
-char *simple_contin_result;
+const char *simple_contin_result;
 int simple_contin_called;
 int simple_contin_rc;
 void simple_contin (flux_future_t *f, void *arg)
 {
     simple_contin_called++;
-    simple_contin_rc = flux_future_get (f, &simple_contin_result);
+    simple_contin_rc = flux_future_get (f, (const void **)&simple_contin_result);
 }
 
 void test_init_then (void)
@@ -358,16 +358,17 @@ flux_future_t *mumble_create (void)
 int fclass_contin_rc;
 void fclass_contin (flux_future_t *f, void *arg)
 {
-    fclass_contin_rc = flux_future_get (f, arg);
+    const void **result = arg;
+    fclass_contin_rc = flux_future_get (f, result);
 }
 
 void test_fclass_synchronous (char *tag, flux_future_t *f, const char *expected)
 {
-    char *s;
+    const char *s;
 
     ok (flux_future_wait_for (f, -1.) == 0,
         "%s: flux_future_wait_for returned successfully", tag);
-    ok (flux_future_get (f, &s) == 0 && s != NULL && !strcmp (s, expected),
+    ok (flux_future_get (f, (const void **)&s) == 0 && s != NULL && !strcmp (s, expected),
         "%s: flux_future_get worked", tag);
 }
 
@@ -375,7 +376,7 @@ void test_fclass_asynchronous (char *tag,
                                flux_future_t *f, const char *expected)
 {
     flux_reactor_t *r;
-    char *s;
+    const char *s;
 
     r = flux_reactor_create (0);
     if (!r)
@@ -824,7 +825,7 @@ void test_multiple_fulfill (void)
 {
     flux_reactor_t *r;
     flux_future_t *f;
-    void *result;
+    const void *result;
 
     if (!(r = flux_reactor_create (0)))
         BAIL_OUT ("flux_reactor_create failed");
@@ -840,31 +841,31 @@ void test_multiple_fulfill (void)
     flux_future_fulfill (f, "baz", NULL);
 
     result = NULL;
-    ok (flux_future_get (f, &result) == 0
+    ok (flux_future_get (f, (const void **)&result) == 0
         && result
         && !strcmp (result, "foo"),
         "flux_future_get gets fulfillment");
     flux_future_reset (f);
 
-    ok (flux_future_get (f, &result) < 0
+    ok (flux_future_get (f, (const void **)&result) < 0
         && errno == ENOENT,
         "flux_future_get gets queued ENOENT error");
     flux_future_reset (f);
 
     result = NULL;
-    ok (flux_future_get (f, &result) == 0
+    ok (flux_future_get (f, (const void **)&result) == 0
         && result
         && !strcmp (result, "bar"),
         "flux_future_get gets queued fulfillment");
     flux_future_reset (f);
 
-    ok (flux_future_get (f, &result) < 0
+    ok (flux_future_get (f, (const void **)&result) < 0
         && errno == EPERM,
         "flux_future_get gets queued EPERM error");
     flux_future_reset (f);
 
     result = NULL;
-    ok (flux_future_get (f, &result) == 0
+    ok (flux_future_get (f, (const void **)&result) == 0
         && result
         && !strcmp (result, "baz"),
         "flux_future_get gets queued fulfillment");

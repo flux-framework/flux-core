@@ -146,10 +146,10 @@ static void test_composite_basic_all (flux_reactor_t *r)
 
 static void step1_or (flux_future_t *f, void *arg)
 {
-    void * result;
+    const void *result;
     char *str = arg;
     /* or_then handler -- future `f` must have been fulfilled with error */
-    ok (flux_future_get (f, &result) < 0,
+    ok (flux_future_get (f, (const void **)&result) < 0,
         "chained: step1 or_then: flux_future_get returns failure");
     strcat (str, "-step1_or");
 
@@ -162,9 +162,9 @@ static void step1_or (flux_future_t *f, void *arg)
 
 static void step2 (flux_future_t *f, void *arg)
 {
-    void * result;
+    const void *result;
     char *str = arg;
-    ok (flux_future_get (f, &result) == 0,
+    ok (flux_future_get (f, (const void **)&result) == 0,
         "chained: step2: flux_future_get returns success");
     strcat (str, "-step2");
     flux_future_t *next = flux_future_create (NULL, NULL);
@@ -175,9 +175,9 @@ static void step2 (flux_future_t *f, void *arg)
 
 static void step2_err (flux_future_t *f, void *arg)
 {
-    void * result;
+    const void *result;
     char *str = arg;
-    ok (flux_future_get (f, &result) == 0,
+    ok (flux_future_get (f, (const void **)&result) == 0,
         "chained: step2: flux_future_get returns success");
     strcat (str, "-step2_err");
     flux_future_continue_error (f, 123);
@@ -186,9 +186,9 @@ static void step2_err (flux_future_t *f, void *arg)
 
 static void step3 (flux_future_t *f2, void *arg)
 {
-    void * result;
+    const void *result;
     char *str = arg;
-    ok (flux_future_get (f2, &result) == 0,
+    ok (flux_future_get (f2, (const void **)&result) == 0,
         "chained: step3: flux_future_get returns success");
     strcat (str, "-step3");
     flux_future_t *next = flux_future_create (NULL, NULL);
@@ -472,12 +472,12 @@ void f_strdup_init (flux_future_t *f, void *arg)
 
 void f_strcat (flux_future_t *prev, void *arg)
 {
-    char *result = NULL;
+    const char *result = NULL;
     char *next = NULL;
     char *append = arg;
     flux_future_t *f;
 
-    ok (flux_future_get (prev, (void *)&result) == 0,
+    ok (flux_future_get (prev, (const void **)&result) == 0,
         "flux_future_get (prev) worked");
     if (asprintf (&next, "%s%s", result, append) < 0)
         BAIL_OUT ("f_strcat: asprintf: %s", strerror (errno));
@@ -491,11 +491,11 @@ void f_strcat (flux_future_t *prev, void *arg)
 
 void chained_async_cb (flux_future_t *f, void *arg)
 {
-    char *result;
+    const char *result;
     const char *expected = arg;
     ok (flux_future_is_ready (f),
         "chained_async_cb: future is ready");
-    ok (flux_future_get (f, (void *) &result) == 0,
+    ok (flux_future_get (f, (const void **) &result) == 0,
         "chained_async_cb: flux_future_get worked");
     is (result, expected,
         "chained_async_cb: got expected result");

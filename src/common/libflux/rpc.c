@@ -95,7 +95,7 @@ int flux_rpc_get (flux_future_t *f, const char **s)
     const flux_msg_t *msg;
     int rc = -1;
 
-    if (flux_future_get (f, &msg) < 0)
+    if (flux_future_get (f, (const void **)&msg) < 0)
         goto done;
     if (flux_response_decode (msg, NULL, s) < 0)
         goto done;
@@ -109,7 +109,7 @@ int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len)
     const flux_msg_t *msg;
     int rc = -1;
 
-    if (flux_future_get (f, &msg) < 0)
+    if (flux_future_get (f, (const void **)&msg) < 0)
         goto done;
     if (flux_response_decode_raw (msg, NULL, data, len) < 0)
         goto done;
@@ -123,7 +123,7 @@ static int flux_rpc_get_vunpack (flux_future_t *f, const char *fmt, va_list ap)
     const flux_msg_t *msg;
     int rc = -1;
 
-    if (flux_future_get (f, &msg) < 0)
+    if (flux_future_get (f, (const void **)&msg) < 0)
         goto done;
     if (flux_msg_vunpack (msg, fmt, ap) < 0)
         goto done;
