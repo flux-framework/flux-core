@@ -2105,45 +2105,50 @@ done:
     return (rc);
 }
 
+static void pmi_kvs_get_continuation (flux_future_t *f, void *arg)
+{
+    const char *s = NULL;
+    struct prog_ctx *ctx = arg;
+    void *client = flux_future_aux_get (f, "pmi_kvs::client");
 
-static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
-        char *val, int len)
+   if (flux_kvs_lookup_get_unpack (f, "s", &s) < 0) {
+        if (errno != ENOENT)
+            wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup_get_unpack (s,%s): %s",
+                      flux_kvs_lookup_get_key (f), strerror (errno));
+    }
+    if (pmi_simple_server_kvs_get_complete (ctx->pmi, client, s) < 0)
+        wlog_err (ctx, "pmi_simple_server_kvs_get_complete (key=%s): %s",
+                  flux_kvs_lookup_get_key (f), strerror (errno));
+    flux_future_destroy (f);
+}
+
+static int wreck_pmi_kvs_get (void *arg, void *client, const char *kvsname,
+                              const char *key)
 {
     struct prog_ctx *ctx = arg;
     char *kvskey = NULL;
-    const char *s = NULL;
-    int rc = 0;
+    int rc = -1;
     flux_future_t *f;
 
     if (asprintf (&kvskey, "%s.%s", kvsname, key) < 0) {
         wlog_err (ctx, "pmi_kvs_get: asprintf: %s", strerror (errno));
-        return (-1);
+        goto done;
     }
 
     if (!(f = flux_kvs_lookup (ctx->flux, 0, kvskey))) {
         wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup: %s", strerror (errno));
-        free (kvskey);
-        return (-1);
-    }
-    if (flux_kvs_lookup_get_unpack (f, "s", &s) < 0) {
-        if (errno != ENOENT)
-            wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup_get_unpack (s,%s): %s",
-                      kvskey, strerror (errno));
-        free (kvskey);
-        flux_future_destroy (f);
-        return (-1);
+        goto done;
     }
 
-    if (strlen (s) >= len) {
-        rc = -1;
-        errno = ENOSPC;
-    }
-    else
-        strcpy (val, s);
+    flux_future_aux_set (f, "pmi_kvs::client", client, NULL);
 
+    if (flux_future_then (f, -1., pmi_kvs_get_continuation, ctx) < 0) {
+        wlog_err (ctx, "pmi_kvs_get: flux_future_then: %s", strerror (errno));
+        goto done;
+    }
+    rc = 0;
+done:
     free (kvskey);
-    flux_future_destroy (f);
-
     return (rc);
 }
 

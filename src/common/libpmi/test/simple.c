@@ -35,19 +35,14 @@ static int s_kvs_put (void *arg, const char *kvsname, const char *key,
     return rc;
 }
 
-static int s_kvs_get (void *arg, const char *kvsname, const char *key,
-                 char *val, int len)
+static int s_kvs_get (void *arg, void *client,
+                      const char *kvsname, const char *key)
 {
     diag ("%s: %s::%s", __FUNCTION__, kvsname, key);
     struct context *ctx = arg;
     char *v = zhash_lookup (ctx->kvs, key);
-    int rc = -1;
-
-    if (v && strlen (v) < len) {
-        strcpy (val, v);
-        rc = 0;
-    }
-    return rc;
+    pmi_simple_server_kvs_get_complete (ctx->pmi, client, v);
+    return 0;
 }
 
 static int s_send_response (void *client, const char *buf)

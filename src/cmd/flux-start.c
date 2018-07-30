@@ -386,13 +386,12 @@ int pmi_kvs_put (void *arg, const char *kvsname,
     return 0;
 }
 
-int pmi_kvs_get (void *arg, const char *kvsname,
-                 const char *key, char *val, int len)
+int pmi_kvs_get (void *arg, void *client, const char *kvsname,
+                 const char *key)
 {
     char *v = zhash_lookup (ctx.pmi.kvs, key);
-    if (!v || strlen (v) >= len)
-        return -1;
-    strcpy (val, v);
+    if (pmi_simple_server_kvs_get_complete (ctx.pmi.srv, client, v) < 0)
+        log_err_exit ("pmi_simple_server_kvs_get_complete");
     return 0;
 }
 
