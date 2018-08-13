@@ -45,6 +45,7 @@ TESTS = \
 	t0003-module.t \
 	t0004-event.t \
 	t0005-exec.t \
+	t0005-rexec.t \
 	t0007-ping.t \
 	t0008-attr.t \
 	t0009-dmesg.t \
@@ -140,6 +141,7 @@ check_SCRIPTS = \
 	t0003-module.t \
 	t0004-event.t \
 	t0005-exec.t \
+	t0005-rexec.t \
 	t0007-ping.t \
 	t0008-attr.t \
 	t0009-dmesg.t \
@@ -228,7 +230,10 @@ check_PROGRAMS = \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
-	reactor/reactorcat
+	reactor/reactorcat \
+	rexec/rexec \
+	rexec/rexec_signal \
+	rexec/rexec_ps
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -273,6 +278,7 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libflux-optparse.la \
         $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
@@ -427,3 +433,18 @@ reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = \
 	 $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+rexec_rexec_SOURCES = rexec/rexec.c
+rexec_rexec_CPPFLAGS = $(test_cppflags)
+rexec_rexec_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+rexec_rexec_signal_SOURCES = rexec/rexec_signal.c
+rexec_rexec_signal_CPPFLAGS = $(test_cppflags)
+rexec_rexec_signal_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+rexec_rexec_ps_SOURCES = rexec/rexec_ps.c
+rexec_rexec_ps_CPPFLAGS = $(test_cppflags)
+rexec_rexec_ps_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
