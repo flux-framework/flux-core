@@ -40,6 +40,8 @@ flux_broker_SOURCES = \
 	heaptrace.c \
 	exec.h \
 	exec.c \
+	exec2.h \
+	exec2.c \
 	ping.h \
 	ping.c \
 	rusage.h \

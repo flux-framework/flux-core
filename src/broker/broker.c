@@ -82,6 +82,7 @@
 #include "runlevel.h"
 #include "heaptrace.h"
 #include "exec.h"
+#include "exec2.h"
 #include "ping.h"
 #include "rusage.h"
 #include "boot_config.h"
@@ -611,6 +612,8 @@ int main (int argc, char *argv[])
         log_err_exit ("sequence_hash_initialize");
     if (exec_initialize (ctx.h, ctx.sm, rank, ctx.attrs) < 0)
         log_err_exit ("exec_initialize");
+    if (exec2_initialize (ctx.h, rank, ctx.attrs) < 0)
+        log_err_exit ("exec2_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
     if (rusage_initialize (ctx.h, "cmb") < 0)
@@ -1294,6 +1297,7 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_msg_get_route_first (msg, &sender) == 0) {
         exec_terminate_subprocesses_by_uuid (h, sender);
+        exec2_terminate_subprocesses_by_uuid (h, sender);
         free (sender);
     }
     /* no response */
