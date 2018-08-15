@@ -157,6 +157,13 @@ of synchronization between peers is:  node A puts a value, commits it,
 reads version, sends version to node B.  Node B waits for version, gets
 value.
 
+*getroot* [-w] [-c count] [-s | -o | -b]::
+Retrieve the current KVS root, displaying it as an RFC 11 dirref object.
+If '-b' is specified, display it as a blobref.  If '-o' is specified,
+display the namespace owner.  If '-s' is specified, display the root
+sequence number.  If '-w' is specified, display the current root,
+then a new value each time it is updated, up to 'count', if specified.
+
 
 AUTHOR
 ------
