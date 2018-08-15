@@ -1,0 +1,125 @@
+flux_kvs_getroot(3)
+===================
+:doctype: manpage
+
+
+NAME
+----
+flux_kvs_getroot, flux_kvs_getroot_get_treeobj, flux_kvs_getroot_get_blobref, flux_kvs_getroot_get_sequence, flux_kvs_getroot_get_owner, flux_kvs_getroot_cancel - look up KVS root hash
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_future_t *flux_kvs_getroot (flux_t *h,
+                                  const char *ns,
+                                  int flags);
+
+ int flux_kvs_getroot_get_treeobj (flux_future_t *f,
+                                   const char **treeobj);
+
+ int flux_kvs_getroot_get_blobref (flux_future_t *f,
+                                   const char **blobref);
+
+ int flux_kvs_getroot_get_sequence (flux_future_t *f,
+                                    int *seq);
+
+ int flux_kvs_getroot_get_owner (flux_future_t *f,
+                                 uint32_t *owner);
+
+ int flux_kvs_getroot_cancel (flux_future_t *f);
+
+
+DESCRIPTION
+-----------
+
+`flux_kvs_getroot()` sends a request via handle _h_ to the `kvs` or `kvs-watch`
+service to look up the current root hash for namespace _ns_.  A `flux_future_t`
+object is returned, which acts as handle for synchronization and container
+for the response.  _flags_ modifies the request as described below.
+
+Upon future fulfillment, these functions can decode the result:
+
+`flux_kvs_getroot_get_treeobj()` obtains the root hash in the form
+of an RFC 11 _dirref_ treeobj, suitable to be passed to `flux_kvs_lookupat(3)`.
+
+`flux_kvs_getroot_get_blobref()` obtains the RFC 10 blobref, suitable to
+be passed to `flux_content_load(3)`.
+
+`flux_kvs_getroot_get_sequence()` retrieves the monotonic sequence number
+for the root.
+
+`flux_kvs_getroot_get_owner()` retrieves the namespace owner.
+
+If the `FLUX_KVS_WATCH` flag is used, the current root is returned immediately.
+Thereafter, a new response is returned each time the root is updated.
+`flux_future_reset()` must be called after each response to destroy the
+current result value and re-arm the future.  The stream of responses may
+be stopped at any time with `flux_kvs_getroot_cancel()`, after which
+the caller should wait for the future to be fulfilled with an ENODATA error.
+After an error, the future may be safely destroyed.
+
+
+FLAGS
+-----
+
+The following are valid bits in the _flags_ mask passed as an argument
+to `flux_kvs_lookup()`:
+
+FLUX_KVS_WATCH::
+The current root is returned immediately.  Thereafter, a new response is
+returned each time the root is updated, as described above.
+
+
+RETURN VALUE
+------------
+
+`flux_kvs_getroot()` returns a `flux_future_t` on success, or NULL on
+failure with errno set appropriately.
+
+The other functions return zero on success, or -1 on failure with errno
+set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+One of the arguments was invalid.
+
+ENOMEM::
+Out of memory.
+
+EPROTO::
+A request was malformed.
+
+ENOSYS::
+The kvs or kvs-watch module is not loaded.
+
+EPERM::
+The requesting user is not permitted to access the requested namespace.
+
+ENODATA::
+A stream of responses has been terminated by a call to
+`flux_kvs_getroot_cancel()`.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_kvs_lookup (3), flux_future_get (3), flux_content_load (3).

@@ -51,6 +51,7 @@ MAN3_FILES_PRIMARY = \
 	flux_kvs_namespace_create.3 \
 	flux_kvs_namespace_list.3 \
 	flux_kvs_set_namespace.3 \
+	flux_kvs_getroot.3 \
 	idset_create.3
 
 # These files are generated as roff .so includes of a primary page.
@@ -156,6 +157,11 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_lookup_get_dir.3 \
 	flux_kvs_lookup_get_treeobj.3 \
 	flux_kvs_lookup_get_symlink.3 \
+	flux_kvs_getroot_get_treeobj.3 \
+	flux_kvs_getroot_get_blobref.3 \
+	flux_kvs_getroot_get_sequence.3 \
+	flux_kvs_getroot_get_owner.3 \
+	flux_kvs_getroot_cancel.3 \
 	flux_kvs_fence.3 \
 	flux_kvs_txn_destroy.3 \
 	flux_kvs_txn_put.3 \
@@ -286,6 +292,11 @@ flux_kvs_lookup_get_raw.3: flux_kvs_lookup.3
 flux_kvs_lookup_get_dir.3: flux_kvs_lookup.3
 flux_kvs_lookup_treeobj.3: flux_kvs_lookup.3
 flux_kvs_lookup_symlink.3: flux_kvs_lookup.3
+flux_kvs_getroot_get_treeobj.3: flux_kvs_getroot.3
+flux_kvs_getroot_get_blobref.3: flux_kvs_getroot.3
+flux_kvs_getroot_get_sequence.3: flux_kvs_getroot.3
+flux_kvs_getroot_get_owner.3: flux_kvs_getroot.3
+flux_kvs_getroot_cancel.3: flux_kvs_getroot.3
 flux_kvs_fence.3: flux_kvs_commit.3
 flux_kvs_txn_destroy.3: flux_kvs_txn_create.3
 flux_kvs_txn_put.3: flux_kvs_txn_create.3
