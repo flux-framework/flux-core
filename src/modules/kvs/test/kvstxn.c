@@ -232,6 +232,75 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
         "kvstxn_mgr_transaction_ready says a kvstxn is ready");
 }
 
+/* Return true if 'key' is referenced an 'ops' array entry.
+ */
+bool is_op_key (json_t *ops, const char *key)
+{
+    size_t index;
+    json_t *entry;
+    json_t *o;
+    const char *k;
+
+    json_array_foreach (ops, index, entry) {
+        if ((o = json_object_get (entry, "key"))
+                    && (k = json_string_value (o))
+                    && !strcmp (key, k))
+            return true;
+    }
+    return false;
+}
+
+/* Return true if key array consist entirely of ops keys.
+ */
+bool keys_match_ops (json_t *ops, json_t *keys)
+{
+    size_t index;
+    json_t *key;
+    const char *k;
+
+    json_array_foreach (keys, index, key) {
+        k = json_string_value (key);
+        if (k == NULL || !is_op_key (ops, k))
+            return false;
+    }
+    return true;
+}
+
+
+/* Return true if 'key' is a member of 'keys' array
+ */
+bool is_key (json_t *keys, const char *key)
+{
+    size_t index;
+    json_t *o;
+    const char *k;
+
+    json_array_foreach (keys, index, o) {
+        if ((k = json_string_value (o))
+                    && !strcmp (key, k))
+            return true;
+    }
+    return false;
+}
+
+/* Return true if all ops have a key array entry
+ */
+bool ops_match_keys (json_t *keys, json_t *ops)
+{
+    size_t index;
+    json_t *entry;
+    json_t *o;
+    const char *k;
+
+    json_array_foreach (ops, index, entry) {
+        if (!(o = json_object_get (entry, "key"))
+                    || !(k = json_string_value (o))
+                    || !is_key (keys, k))
+            return false;
+    }
+    return true;
+}
+
 void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
                           json_t *names,
                           json_t *ops,
@@ -239,6 +308,7 @@ void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
                           const char *extramsg)
 {
     json_t *o;
+    json_t *keys;
     kvstxn_t *kt;
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
@@ -258,6 +328,13 @@ void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
 
     ok (kvstxn_get_flags (kt) == flags,
         "flags do not match");
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+    ok (keys_match_ops (ops, keys) == true,
+        "all keys match ops");
+    ok (ops_match_keys (keys, ops) == true,
+        "all ops match keys");
 }
 
 void clear_ready_kvstxns (kvstxn_mgr_t *ktm)
