@@ -214,7 +214,7 @@ static int state_handler (flux_t *h, cron_task_t *t, const flux_msg_t *msg)
 static void cron_task_rexec_failed (cron_task_t *t, int errnum)
 {
     t->rexec_failed = 1;
-    t->rexec_errno = errno;
+    t->rexec_errno = errnum;
     cron_task_state_update (t, "Rexec Failure");
 }
 
