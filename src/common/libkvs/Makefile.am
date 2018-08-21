@@ -42,6 +42,7 @@ TESTS = \
 	test_kvs_dir.t \
 	test_kvs_commit.t \
 	test_kvs_watch.t \
+	test_kvs_getroot.t \
 	test_treeobj.t
 
 check_PROGRAMS = \
@@ -88,6 +89,10 @@ test_kvs_commit_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_watch_t_SOURCES = test/kvs_watch.c
 test_kvs_watch_t_CPPFLAGS = $(test_cppflags)
 test_kvs_watch_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_getroot_t_SOURCES = test/kvs_getroot.c
+test_kvs_getroot_t_CPPFLAGS = $(test_cppflags)
+test_kvs_getroot_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_treeobj_t_SOURCES = test/treeobj.c
 test_treeobj_t_CPPFLAGS = $(test_cppflags)
