@@ -9,15 +9,15 @@ matrix:
     - compiler: clang
       env: LUA_VERSION=5.1
     - compiler: gcc
-      env: LUA_VERSION=5.1 COVERAGE=t ARGS="--with-pmix --enable-caliper --enable-pylint"
+      env: LUA_VERSION=5.1 COVERAGE=t ARGS="--with-flux-security --with-pmix --enable-caliper --enable-pylint"
     - compiler: gcc
       env: LUA_VERSION=5.1 T_INSTALL=t
     - compiler: clang
-      env: LUA_VERSION=5.1 CPPCHECK=t ARGS="--with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
+      env: LUA_VERSION=5.1 CPPCHECK=t ARGS="--with-flux-security --with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
-      env: LUA_VERSION=5.2 CC=gcc-4.9 ARGS="--with-pmix" chain_lint=t
+      env: LUA_VERSION=5.2 CC=gcc-4.9 ARGS="--with-flux-security --with-pmix" chain_lint=t
     - compiler: clang
-      env: LUA_VERSION=5.2 ARGS="--with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
+      env: LUA_VERSION=5.2 ARGS="--with-flux-security --with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
       
 cache:
   directories:
