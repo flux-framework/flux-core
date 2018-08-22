@@ -58,7 +58,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-submit \
 	flux-wreckrun \
 	flux-wreck \
-	flux-exec \
 	flux-cron \
 	flux-aggregate \
 	flux-hostlist
@@ -73,7 +72,8 @@ fluxcmd_PROGRAMS = \
 	flux-kvs \
 	flux-start \
 	flux-jstat \
-	flux-job
+	flux-job \
+	flux-exec
 
 if ENABLE_JOBSPEC
 fluxcmd_PROGRAMS += \
