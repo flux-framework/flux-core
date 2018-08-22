@@ -62,6 +62,7 @@ struct kvstxn {
     int aux_errnum;
     int blocked:1;
     json_t *ops;
+    json_t *keys;
     json_t *names;
     int flags;
     json_t *rootcpy;   /* working copy of root dir */
@@ -84,6 +85,7 @@ static void kvstxn_destroy (kvstxn_t *kt)
 {
     if (kt) {
         json_decref (kt->ops);
+        json_decref (kt->keys);
         json_decref (kt->names);
         json_decref (kt->rootcpy);
         if (kt->missing_refs_list)
@@ -92,6 +94,29 @@ static void kvstxn_destroy (kvstxn_t *kt)
             zlist_destroy (&kt->dirty_cache_entries_list);
         free (kt);
     }
+}
+
+/* Create array of keys (strings) from array of operations ({ "key":s ... })
+ * The keys array is for inclusion in the kvs.setroot event, so we can
+ * notify watchers of keys that their key may have changed.
+ */
+static json_t *keys_from_ops (json_t *ops)
+{
+    json_t *keys;
+    size_t index;
+    json_t *op;
+
+    if (!(keys = json_array ()))
+        return NULL;
+    json_array_foreach (ops, index, op) {
+        json_t *o = json_object_get (op, "key");
+        if (!o || json_array_append (keys, o) < 0)
+            goto error;
+    }
+    return keys;
+error:
+    json_decref (keys);
+    return NULL;
 }
 
 static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
@@ -107,6 +132,10 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         goto error;
     }
     if (!(kt->ops = json_copy (ops))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(kt->keys = keys_from_ops (kt->ops))) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -170,6 +199,11 @@ bool kvstxn_fallback_mergeable (kvstxn_t *kt)
 json_t *kvstxn_get_ops (kvstxn_t *kt)
 {
     return kt->ops;
+}
+
+json_t *kvstxn_get_keys (kvstxn_t *kt)
+{
+    return kt->keys;
 }
 
 json_t *kvstxn_get_names (kvstxn_t *kt)
@@ -1165,6 +1199,17 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
             }
         }
     }
+    if ((len = json_array_size (src->keys))) {
+        for (i = 0; i < len; i++) {
+            json_t *key;
+            if ((key = json_array_get (src->keys, i))) {
+                if (json_array_append (dest->keys, key) < 0) {
+                    errno = ENOMEM;
+                    return -1;
+                }
+            }
+        }
+    }
 
     return 1;
 }
@@ -1176,6 +1221,8 @@ static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm, int flags)
     if (!(ktnew = calloc (1, sizeof (*ktnew))))
         goto error_enomem;
     if (!(ktnew->ops = json_array ()))
+        goto error_enomem;
+    if (!(ktnew->keys = json_array ()))
         goto error_enomem;
     if (!(ktnew->names = json_array ()))
         goto error_enomem;

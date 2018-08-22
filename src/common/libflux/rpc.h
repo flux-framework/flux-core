@@ -28,6 +28,10 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len);
 
+/* Accessor for RPC matchtag (see RFC 6).
+ */
+uint32_t flux_rpc_get_matchtag (flux_future_t *f);
+
 #ifdef __cplusplus
 }
 #endif
