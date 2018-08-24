@@ -1291,7 +1291,7 @@ static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *mh,
 static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    char *sender = NULL;;
+    char *sender = NULL;
 
     if (flux_msg_get_route_first (msg, &sender) == 0) {
         exec_terminate_subprocesses_by_uuid (h, sender);

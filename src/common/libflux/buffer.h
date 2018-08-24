@@ -37,17 +37,20 @@ int flux_buffer_drop (flux_buffer_t *fb, int len);
 
 /* Read up to [len] bytes of data in the buffer without consuming it.
  * Pointer to buffer is returned to user and optionally length read
- * can be returned to user in [lenp].  User shall not free returned
- * pointer.  If no data is available, returns pointer and length of 0.
- * Set [len] to -1 to read all data.
+ * can be returned to user in [lenp].  The buffer will always be NUL
+ * terminated, so the user may treat returned ptr as a string.  User
+ * shall not free returned pointer.  If no data is available, returns
+ * pointer and length of 0.  Set [len] to -1 to read all data.
  */
 const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp);
 
 /* Read up to [len] bytes of data in the buffer and mark data as
  * consumed.  Pointer to buffer is returned to user and optionally
- * length read can be returned to user in [lenp].  User shall not free
- * returned pointer.  If no data is available, returns pointer and
- * length of 0.  Set [len] to -1 to read all data.
+ * length read can be returned to user in [lenp].  The buffer will
+ * always be NUL terminated, so the user may treat returned ptr as a
+ * string.  User shall not free returned pointer.  If no data is
+ * available, returns pointer and length of 0.  Set [len] to -1 to
+ * read all data.
  */
 const void *flux_buffer_read (flux_buffer_t *fb, int len, int *lenp);
 

@@ -51,7 +51,7 @@ struct flux_buffer {
     int size;
     bool readonly;
     cbuf_t cbuf;
-    void *buf;                  /* internal buffer for user reads */
+    char *buf;                  /* internal buffer for user reads */
     int buflen;
     int cb_type;
     flux_buffer_cb cb;
@@ -340,6 +340,7 @@ const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp)
 
     if ((ret = cbuf_peek (fb->cbuf, fb->buf, len)) < 0)
         return NULL;
+    fb->buf[ret] = '\0';
 
     if (lenp)
         (*lenp) = ret;
@@ -364,6 +365,7 @@ const void *flux_buffer_read (flux_buffer_t *fb, int len, int *lenp)
 
     if ((ret = cbuf_read (fb->cbuf, fb->buf, len)) < 0)
         return NULL;
+    fb->buf[ret] = '\0';
 
     if (lenp)
         (*lenp) = ret;

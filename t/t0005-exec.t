@@ -232,6 +232,10 @@ test_expect_success 'stdin redirect from /dev/null works' '
 	test_expect_code 0 run_timeout 1 flux exec -r0-3 cat
 '
 
+test_expect_success 'stdin redirect from /dev/null works via -n' '
+       test_expect_code 0 run_timeout 1 flux exec -n -r0-3 cat
+'
+
 test_expect_success 'stdin broadcast -- multiple lines' '
 	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
 	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
