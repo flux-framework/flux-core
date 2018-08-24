@@ -59,7 +59,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-wreckrun \
 	flux-wreck \
 	flux-exec \
-	flux-ps \
 	flux-cron \
 	flux-aggregate \
 	flux-hostlist
