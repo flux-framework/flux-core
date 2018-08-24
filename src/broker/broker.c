@@ -66,8 +66,6 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libsubprocess/zio.h"
-#include "src/common/libsubprocess/subprocess.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -82,7 +80,6 @@
 #include "runlevel.h"
 #include "heaptrace.h"
 #include "exec.h"
-#include "exec2.h"
 #include "ping.h"
 #include "rusage.h"
 #include "boot_config.h"
@@ -610,9 +607,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("heaptrace_initialize");
     if (sequence_hash_initialize (ctx.h) < 0)
         log_err_exit ("sequence_hash_initialize");
-    if (exec_initialize (ctx.h, ctx.sm, rank, ctx.attrs) < 0)
-        log_err_exit ("exec_initialize");
-    if (exec2_initialize (ctx.h, rank, ctx.attrs) < 0)
+    if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
         log_err_exit ("exec2_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
@@ -1297,7 +1292,6 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_msg_get_route_first (msg, &sender) == 0) {
         exec_terminate_subprocesses_by_uuid (h, sender);
-        exec2_terminate_subprocesses_by_uuid (h, sender);
         free (sender);
     }
     /* no response */
