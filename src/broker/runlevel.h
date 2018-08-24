@@ -2,7 +2,6 @@
 #define _BROKER_RUNLEVEL_H
 
 #include "attr.h"
-#include "src/common/libsubprocess/subprocess.h"
 
 #include <stdint.h>
 #include <stddef.h> // for size_t
@@ -18,8 +17,6 @@ typedef void (*runlevel_io_cb_f)(runlevel_t *r, const char *name,
  */
 runlevel_t *runlevel_create (void);
 int runlevel_register_attrs (runlevel_t *r, attr_t *attr);
-void runlevel_set_subprocess_manager (runlevel_t *r,
-                                      struct subprocess_manager *sm);
 void runlevel_set_size (runlevel_t *r, uint32_t size);
 void runlevel_set_flux (runlevel_t *r, flux_t *h);
 void runlevel_destroy (runlevel_t *r);

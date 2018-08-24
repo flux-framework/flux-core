@@ -136,10 +136,6 @@ typedef struct {
     flux_t *enclosing_h;
     runlevel_t *runlevel;
 
-    /* Subprocess management
-     */
-    struct subprocess_manager *sm;
-
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
 } broker_ctx_t;
@@ -338,10 +334,6 @@ int main (int argc, char *argv[])
 
     init_attrs (ctx.attrs, getpid());
 
-    if (!(ctx.sm = subprocess_manager_create ()))
-        oom ();
-    subprocess_manager_set (ctx.sm, SM_WAIT_FLAGS, WNOHANG);
-
     parse_command_line_arguments(argc, argv, &ctx, &sec_typemask);
 
     /* Record the instance owner: the effective uid of the broker.
@@ -395,8 +387,6 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_handle_create");
     if (flux_set_reactor (ctx.h, ctx.reactor) < 0)
         log_err_exit ("flux_set_reactor");
-
-    subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor);
 
     /* Prepare signal handling
      */
@@ -566,7 +556,6 @@ int main (int argc, char *argv[])
             log_err_exit ("conf.pmi_library_path is not set");
 
         runlevel_set_size (ctx.runlevel, size);
-        runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
         runlevel_set_flux (ctx.runlevel, ctx.h);
@@ -716,7 +705,6 @@ int main (int argc, char *argv[])
     }
     runlevel_destroy (ctx.runlevel);
     free (ctx.init_shell_cmd);
-    subprocess_manager_destroy (ctx.sm);
 
     return exit_rc;
 }
@@ -829,7 +817,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
+    int loglevel = !strcmp (name, "STDERR") ? LOG_ERR : LOG_INFO;
     int runlevel = runlevel_get_level (r);
 
     flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);
