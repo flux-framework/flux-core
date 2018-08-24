@@ -47,7 +47,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libsubprocess/subprocess.h"
+#include "src/common/subprocess/subprocess.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -59,8 +59,7 @@ typedef struct {
     flux_reactor_t *reactor;
     uid_t session_owner;
     zhash_t *subscriptions;
-    struct subprocess_manager *sm;
-    struct subprocess *p;
+    flux_subprocess_t *p;
     bool oneshot;
     int exit_code;
 } proxy_ctx_t;
@@ -106,10 +105,6 @@ static void ctx_destroy (proxy_ctx_t *ctx)
     if (ctx) {
         zlist_destroy (&ctx->clients);
         zhash_destroy (&ctx->subscriptions);
-        if (ctx->sm)
-            subprocess_manager_destroy (ctx->sm);
-        if (ctx->reactor)
-            flux_reactor_destroy (ctx->reactor);
         free (ctx);
     }
 }
@@ -127,11 +122,6 @@ static proxy_ctx_t *ctx_create (flux_t *h)
     if (!(ctx->subscriptions = zhash_new ()))
         oom ();
     ctx->session_owner = geteuid ();
-    if (!(ctx->sm = subprocess_manager_create ()))
-        log_err_exit ("subprocess_manager_create");
-    if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
-        log_err_exit ("subprocess_manager_set reactor");
-    subprocess_manager_set (ctx->sm, SM_WAIT_FLAGS, WNOHANG);
 
     return ctx;
 }
@@ -822,14 +812,19 @@ done:
     return uri;
 }
 
-static int child_cb (struct subprocess *p)
+static void completion_cb (flux_subprocess_t *p)
 {
-    proxy_ctx_t *ctx = subprocess_get_context (p, "ctx");
+    proxy_ctx_t *ctx = flux_subprocess_get_context (p, "ctx");
 
-    ctx->exit_code = subprocess_exit_code (p);
+    assert (ctx);
+
+    if ((ctx->exit_code = flux_subprocess_exit_code (p)) < 0) {
+        /* bash standard, signals + 128 */
+        if ((ctx->exit_code = flux_subprocess_signaled (p)) >= 0)
+            ctx->exit_code += 128;
+    }
     flux_reactor_stop (ctx->reactor);
-    subprocess_destroy (p);
-    return 0;
+    flux_subprocess_destroy (p);
 }
 
 static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpath)
@@ -837,11 +832,25 @@ static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpa
     const char *shell = getenv ("SHELL");
     char *argz = NULL;
     size_t argz_len = 0;
-    struct subprocess *p = NULL;
+    flux_subprocess_t *p = NULL;
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_state_change = NULL,
+        .on_channel_out = NULL,
+        .on_stdout = NULL,
+        .on_stderr = NULL,
+    };
+    flux_cmd_t *cmd = NULL;
     int i;
 
     if (!shell)
         shell = "/bin/sh";
+
+    if (!(cmd = flux_cmd_create (0, NULL, environ)))
+        goto error;
+
+    if (flux_cmd_argv_append (cmd, "%s", shell) < 0)
+        goto error;
 
     for (i = 0; i < ac; i++) {
         if (argz_add (&argz, &argz_len, av[i]) != 0) {
@@ -849,30 +858,42 @@ static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpa
             goto error;
         }
     }
-    if (argz)
+    if (argz) {
+        /* must use argz_stringify and not loop through argz, want
+         * single string passed to -c
+         */
         argz_stringify (argz, argz_len, ' ');
 
-    if (!(p = subprocess_create (ctx->sm))
-            || subprocess_set_context (p, "ctx", ctx) < 0
-            || subprocess_add_hook (p, SUBPROCESS_COMPLETE, child_cb) < 0
-            || subprocess_argv_append (p, shell) < 0
-            || (argz && subprocess_argv_append (p, "-c") < 0)
-            || (argz && subprocess_argv_append (p, argz) < 0)
-            || subprocess_set_environ (p, environ) < 0
-            || subprocess_setenvf (p, "FLUX_URI", 1,
-                                   "local://%s", workpath) < 0
-            || subprocess_run (p) < 0)
+        if (flux_cmd_argv_append (cmd, "-c") < 0)
+            goto error;
+
+        if (flux_cmd_argv_append (cmd, argz) < 0)
+            goto error;
+    }
+
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "local://%s", workpath) < 0)
         goto error;
 
-    if (argz)
-        free (argz);
+    /* We want stdio fallthrough so subprocess can capture tty if
+     * necessary (i.e. an interactive shell)
+     */
+    if (!(p = flux_local_exec (ctx->reactor,
+                               FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
+                               cmd,
+                               &ops)))
+        goto error;
+
+    if (flux_subprocess_set_context (p, "ctx", ctx) < 0)
+        goto error;
+
+    flux_cmd_destroy (cmd);
+
     ctx->p = p;
     return 0;
 error:
     if (p)
-        subprocess_destroy (p);
-    if (argz)
-        free (argz);
+        flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
     return -1;
 }
 
