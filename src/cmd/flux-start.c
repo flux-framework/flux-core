@@ -334,7 +334,7 @@ void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *
     optparse_getopt_iterator_reset (opt, name);
     while ((arg = optparse_getopt_next (opt, name)))
         if (argz_add  (argz, argz_len, arg) != 0)
-            log_err_exit ("subprocess_argv_append");
+            log_err_exit ("argz_add");
 }
 
 char *create_scratch_dir (const char *session_id)
