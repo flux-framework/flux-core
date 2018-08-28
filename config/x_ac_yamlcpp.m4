@@ -36,6 +36,8 @@ Add --disable-jobspec, or set the PKG_CONFIG_PATH env var appropriately.])])
         AC_LANG_POP([C++])
         LIBS="$ac_save_LIBS"
         CFLAGS="$ac_save_CFLAGS"
+
+        AC_DEFINE([HAVE_JOBSPEC], [1], [Define to 1 if jobspec is enabled])
     ])
 
     AM_CONDITIONAL([ENABLE_JOBSPEC], [test "x$enable_jobspec" != "xno"])

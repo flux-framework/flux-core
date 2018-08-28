@@ -206,6 +206,14 @@ AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_VALGRIND_H
 AX_CODE_COVERAGE
 
+AC_ARG_WITH([flux-security], AS_HELP_STRING([--with-flux-security],
+             [Build with flux-security]))
+AS_IF([test "x$with_flux_security" = "xyes"], [
+    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security], [], [])
+    AC_DEFINE([HAVE_FLUX_SECURITY], [1], [Define flux-security is available])
+])
+AM_CONDITIONAL([HAVE_FLUX_SECURITY], [test "x$with_flux_security" = "xyes"])
+
 AC_ARG_ENABLE(caliper,
 	[  --enable-caliper[=OPTS]   Use caliper for profiling. [default=no] [OPTS=no/yes]], ,
 	[enable_caliper="no"])
@@ -301,6 +309,7 @@ AC_CONFIG_FILES( \
   src/common/libkvs/Makefile \
   src/common/libkz/Makefile \
   src/common/libjsc/Makefile \
+  src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
@@ -332,6 +341,7 @@ AC_CONFIG_FILES( \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \
   src/modules/userdb/Makefile \
+  src/modules/job-ingest/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \

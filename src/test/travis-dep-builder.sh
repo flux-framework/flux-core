@@ -17,6 +17,7 @@ http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
 http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.1.tar.gz \
 https://github.com/pmix/pmix/releases/download/v3.0.0/pmix-3.0.0.tar.gz \
 http://www.digip.org/jansson/releases/jansson-2.9.tar.gz \
+https://github.com/flux-framework/flux-security/releases/download/v0.2.0/flux-security-0.2.0.tar.gz \
 http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz \
 https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz \
 https://ftp.gnu.org/gnu/automake/automake-1.15.tar.gz \
@@ -198,6 +199,11 @@ for url in $checkouts; do
       cd ${name} || die "cd failed"
       if test -n "$sha1"; then
         git checkout $sha1
+      fi
+
+      # Autogen?
+      if ! test -x configure && test -x autogen.sh; then
+        ./autogen.sh
       fi
 
       # Do we need to create a Makefile?

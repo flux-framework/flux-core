@@ -83,6 +83,8 @@ TESTS = \
 	t2008-althash.t \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
+	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
         t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
@@ -100,6 +102,11 @@ TESTS = \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t
 
+if ENABLE_JOBSPEC
+TESTS += \
+	t0018-jobspec.t
+endif
+
 if HAVE_PYTHON
 TESTS += \
 	 $(top_builddir)/t/t9990-python-tests.t
@@ -114,11 +121,14 @@ EXTRA_DIST= \
 	rc/rc1-kvs \
 	rc/rc1-wreck \
 	rc/rc1-testenv \
+	rc/rc1-job \
 	rc/rc3-kvs \
 	rc/rc3-wreck \
 	rc/rc3-testenv \
+	rc/rc3-job \
 	wreck/input \
-	wreck/output
+	wreck/output \
+	jobspec
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -168,6 +178,8 @@ check_SCRIPTS = \
 	t2008-althash.t \
 	t2009-hostlist.t \
 	t2100-aggregate.t \
+	t2200-job-ingest.t \
+	t2201-job-cmd.t \
 	t3000-mpi-basic.t \
         t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
@@ -187,6 +199,7 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
+	t0018-jobspec.t \
 	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
