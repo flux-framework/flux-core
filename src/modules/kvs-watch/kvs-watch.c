@@ -31,16 +31,26 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/blobref.h"
 
-/* State for one getroot watcher.
+/* State for one watcher.
+ * If w->key is NULL, watcher tracks root updates for flux_kvs_getroot().
+ * If w->key is non-NULL, watcher tracks key key updates for flux_kvs_lookup().
  */
 struct watcher {
     flux_msg_t *request;        // getroot request message
+    uint32_t rolemask;          // request cred
+    uint32_t userid;            // request cred
     int rootseq;                // last root sequence number sent
-    bool auth;                  // true if authorized to watch namespace
     bool cancelled;             // true if watcher has been cancelled
     bool mute;                  // true if response should be suppressed
+
+    char *key;                  // non-NULL if watching a key with lookup
+    int flags;                  // kvs_lookup flags (not FLUX_KVS_WATCH)
+    zlist_t *lookups;           // list of futures, in commit order
+
+    struct namespace *ns;       // back pointer for removal
 };
 
 /* Current KVS root.
@@ -70,7 +80,7 @@ struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhash_t *namespaces;        // hash of monitored namespaces
-    int subscriptions;          // count of setroot subscrpitions
+    int subscriptions;          // count of kvs.setroot-<name> subscriptions
 };
 
 
@@ -79,23 +89,42 @@ static void watcher_destroy (struct watcher *w)
     if (w) {
         int saved_errno = errno;
         flux_msg_destroy (w->request);
+        free (w->key);
+        if (w->lookups) {
+            flux_future_t *f;
+            while ((f = zlist_pop (w->lookups)))
+                flux_future_destroy (f);
+            zlist_destroy (&w->lookups);
+        }
         free (w);
         errno = saved_errno;
     }
 }
 
-static struct watcher *watcher_create (const flux_msg_t *msg)
+static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
+                                       int flags)
 {
     struct watcher *w;
 
     if (!(w = calloc (1, sizeof (*w))))
         return NULL;
-    if (!(w->request = flux_msg_copy (msg, true))) {
-        watcher_destroy (w);
-        return NULL;
-    }
+    if (!(w->request = flux_msg_copy (msg, true)))
+        goto error;
+    if (flux_msg_get_rolemask (msg, &w->rolemask) < 0
+            || flux_msg_get_userid (msg, &w->userid) < 0)
+        goto error;
+    if (key && !(w->key = strdup (key)))
+        goto error;
+    if (!(w->lookups = zlist_new ()))
+        goto error_nomem;
+    w->flags = flags;
     w->rootseq = -1;
     return w;
+error_nomem:
+    errno = ENOMEM;
+error:
+    watcher_destroy (w);
+    return NULL;
 }
 
 static void commit_destroy (struct commit *commit)
@@ -176,25 +205,134 @@ error:
     return NULL;
 }
 
-/* Verify that a getroot request 'msg' is authorized to access 'ns'.
+/* Verify that (userid, rolemask) credential is authorized to access 'ns'.
  * The instance owner or namespace owner are permitted (return 0).
  * All others are denied (return -1, errno == EPERM).
  */
-static int authenticate (struct namespace *ns, const flux_msg_t *msg)
+static int check_authorization (struct namespace *ns,
+                                uint32_t rolemask, uint32_t userid)
 {
-    uint32_t rolemask;
-    uint32_t userid;
-
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
-        return -1;
     if ((rolemask & FLUX_ROLE_OWNER))
         return 0;
-    if (flux_msg_get_userid (msg, &userid) < 0)
-        return -1;
     if (ns->owner != FLUX_USERID_UNKNOWN && userid == ns->owner)
         return 0;
     errno = EPERM;
     return -1;
+}
+
+/* Helper for watcher_respond - is key a member of array?
+ */
+static bool array_match (json_t *a, const char *key)
+{
+    size_t index;
+    json_t *value;
+
+    json_array_foreach (a, index, value) {
+        const char *s = json_string_value (value);
+        if (s && !strcmp (s, key))
+            return true;
+    }
+    return false;
+}
+
+/* New value of key is available in future 'f' container.
+ * Send response to watcher using raw payload from lookup response.
+ * Return 0 on success, -1 on error (caller should destroy watcher).
+ */
+static int handle_lookup_response (flux_future_t *f, struct watcher *w)
+{
+    flux_t *h = flux_future_get_flux (f);
+    const void *data;
+    int len;
+
+    if (flux_rpc_get_raw (f, &data, &len) < 0)
+        goto error;
+    if (!w->mute) {
+        if (flux_respond_raw (h, w->request, data, len) < 0)
+            flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+    }
+    return 0;
+error:
+    if (!w->mute) {
+        if (flux_respond_error (h, w->request, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    }
+    return -1;
+}
+
+/* One lookup has completed.
+ * Pop ready futures off w->lookups and send responses, until
+ * the list is empty, or a non-ready future is encountered.
+ */
+static void lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct watcher *w = arg;
+    struct namespace *ns = w->ns;
+
+    while ((f = zlist_first (w->lookups)) && flux_future_is_ready (f)) {
+        f = zlist_pop (w->lookups);
+        int rc = handle_lookup_response (f, w);
+        flux_future_destroy (f);
+        if (rc < 0)
+            goto destroy_watcher;
+    }
+    return;
+destroy_watcher:
+    zlist_remove (ns->watchers, w);
+    watcher_destroy (w);
+    if (zlist_size (ns->watchers) == 0)
+        zhash_delete (ns->ctx->namespaces, ns->name);
+}
+
+/* Like flux_kvs_lookupat() except:
+ * - blobref param replaces treeobj
+ * - namespace param (ignores namespace associated with flux_t handle)
+ * - userid, rolemask params (see N.B. below)
+ * Use flux_rpc_get() not flux_kvs_lookup_get() to access the response.
+ */
+static flux_future_t *lookupat (flux_t *h,
+                                int flags,
+                                const char *key,
+                                const char *blobref,
+                                const char *namespace,
+                                uint32_t userid,
+                                uint32_t rolemask)
+{
+    flux_msg_t *msg;
+    json_t *o = NULL;
+    flux_future_t *f;
+    int saved_errno;
+
+    if (!(msg = flux_request_encode ("kvs.lookup", NULL)))
+        return NULL;
+    if (!(o = treeobj_create_dirref (blobref)))
+        goto error;
+    if (flux_msg_pack (msg, "{s:s s:s s:i s:O}",
+                       "key", key,
+                       "namespace", namespace,
+                       "flags", flags,
+                       "rootdir", o) < 0)
+        goto error;
+    /* N.B. Since this module is authenticated to the shmem:// connector
+     * with FLUX_ROLE_OWNER, we are allowed to switch the message credentials
+     * in this request message, and not be overridden at the connector,
+     * as would be the case if we were not sufficiently privileged.
+     */
+    if (flux_msg_set_userid (msg, userid) < 0)
+        goto error;
+    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+        goto error;
+    if (!(f = flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0)))
+        goto error;
+    flux_msg_destroy (msg);
+    json_decref (o);
+    return f;
+error:
+    saved_errno = errno;
+    json_decref (o);
+    flux_msg_destroy (msg);
+    errno = saved_errno;
+    return NULL;
 }
 
 /* Respond to watcher request, if appropriate.
@@ -211,12 +349,16 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         errno = ns->errnum;
         goto error_respond;
     }
-    if (ns->commit && ns->commit->rootseq > w->rootseq) {
-        if (!w->auth && authenticate (ns, w->request) < 0) {
-            flux_log (ns->ctx->h, LOG_DEBUG, "%s: auth failure", __FUNCTION__);
-            goto error_respond;
-        }
-        w->auth = true;
+    assert (ns->commit != NULL);
+    if (ns->commit->rootseq <= w->rootseq)
+        return;
+    if (check_authorization (ns, w->rolemask, w->userid) < 0) {
+        flux_log (ns->ctx->h, LOG_DEBUG, "%s: auth failure", __FUNCTION__);
+        goto error_respond;
+    }
+    /* flux_kvs_getroot (FLUX_KVS_WATCH)
+     */
+    if (w->key == NULL) {
         if (!w->mute) {
             if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
                                    "rootref", ns->commit->rootref,
@@ -226,6 +368,43 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
                 flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
                 goto error;
             }
+        }
+        w->rootseq = ns->commit->rootseq;
+    }
+    /* flux_kvs_lookup (FLUX_KVS_WATCH)
+     *
+     * Ordering note: KVS lookups can be returned out of order.  KVS lookup
+     * futures are added to the w->lookups zlist in commit order here, and
+     * in lookup_continuation(), fulfilled futures are popped off the head
+     * of w->lookups until an unfulfilled future is encountered, so that
+     * responses are always returned to the watcher in commit order.
+     *
+     * Security note: although the requestor has already been authenticated
+     * to access the namespace by check_authorization() above, we make the
+     * kvs.lookupat request with the requestor's creds, in case the key lookup
+     * traverses to a new namespace.  Leave it up to the KVS module to ensure
+     * the requestor is permitted to access *that* namespace.
+     */
+    else if (w->rootseq == -1 || array_match (ns->commit->keys, w->key)) {
+        flux_future_t *f;
+        if (!(f = lookupat (ns->ctx->h,
+                            w->flags,
+                            w->key,
+                            ns->commit->rootref,
+                            ns->name,
+                            w->userid,
+                            w->rolemask))) {
+            flux_log_error (ns->ctx->h, "%s: lookupat", __FUNCTION__);
+            goto error_respond;
+        }
+        if (zlist_append (w->lookups, f) < 0) {
+            flux_future_destroy (f);
+            errno = ENOMEM;
+            goto error_respond;
+        }
+        if (flux_future_then (f, -1., lookup_continuation, w) < 0) {
+            flux_future_destroy (f);
+            goto error_respond;
         }
         w->rootseq = ns->commit->rootseq;
     }
@@ -242,8 +421,10 @@ error:
         zhash_delete (ns->ctx->namespaces, ns->name);
 }
 
-/* Respond to all watchers for a namespace, as appropriate.
- * See watcher_respond().
+/* Respond to all ready watchers.
+ * N.B. watcher_respond() may call zlist_remove() on ns->watchers.
+ * Since zlist_t is not deletion-safe for traversal, a temporary duplicate
+ * must be created here.
  */
 static void watcher_respond_ns (struct namespace *ns)
 {
@@ -262,9 +443,9 @@ static void watcher_respond_ns (struct namespace *ns)
         flux_log_error (ns->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
-/* Cancel this watcher 'w' if it matches (sender, matchtag).
+/* Cancel watcher 'w' if it matches (sender, matchtag).
  * matchtag=FLUX_MATCHTAG_NONE matches any matchtag.
- * If 'mute' is true, suppress response.
+ * If 'mute' is true, suppress response (e.g. for disconnect handling).
  */
 static void watcher_cancel (struct namespace *ns, struct watcher *w,
                             const char *sender, uint32_t matchtag,
@@ -481,8 +662,9 @@ static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
      * otherwise response will be sent upon getroot RPC response
      * or setroot event.
      */
-    if (!(w = watcher_create (msg)))
+    if (!(w = watcher_create (msg, NULL, 0)))
         goto error;
+    w->ns = ns;
     if (zlist_append (ns->watchers, w) < 0) {
         watcher_destroy (w);
         errno = ENOMEM;
@@ -499,16 +681,35 @@ error:
 static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
+    struct watch_ctx *ctx = arg;
     const char *namespace;
     const char *key;
     int flags;
+    struct namespace *ns;
+    struct watcher *w;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:s s:i}",
                              "namespace", &namespace,
                              "key", &key,
                              "flags", &flags) < 0)
         goto error;
-    /* FIXME: */
+    if (!(ns = namespace_monitor (ctx, namespace)))
+        goto error;
+    /* Thread a new watcher 'w' onto ns->watchers.
+     * If there is already a commit result available, send first response now,
+     * otherwise response will be sent upon getroot RPC response
+     * or setroot event.
+     */
+    if (!(w = watcher_create (msg, key, flags)))
+        goto error;
+    w->ns = ns;
+    if (zlist_append (ns->watchers, w) < 0) {
+        watcher_destroy (w);
+        errno = ENOMEM;
+        goto error;
+    }
+    if (ns->commit)
+        watcher_respond (ns, w);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
