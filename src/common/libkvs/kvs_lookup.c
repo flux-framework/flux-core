@@ -100,7 +100,12 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
     struct lookup_ctx *ctx;
     flux_future_t *f;
     const char *namespace;
+    const char *topic = "kvs.lookup";
 
+    if ((flags & FLUX_KVS_WATCH)) {
+        topic = "kvs-watch.lookup"; // redirect to kvs-watch module
+        flags &= ~FLUX_KVS_WATCH;
+    }
     if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
         errno = EINVAL;
         return NULL;
@@ -109,7 +114,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
         return NULL;
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
-    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:s s:s s:i}",
                              "key", key,
                              "namespace", namespace,
@@ -132,6 +137,8 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
     json_t *obj = NULL;
     struct lookup_ctx *ctx;
 
+    /* N.B. FLUX_KVS_WATCH is not valid for lookupat (r/o snapshot).
+     */
     if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
         errno = EINVAL;
         return NULL;
