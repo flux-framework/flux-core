@@ -483,6 +483,25 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
+{
+    const char *namespace;
+    const char *key;
+    int flags;
+
+    if (flux_request_unpack (msg, NULL, "{s:s s:s s:i}",
+                             "namespace", &namespace,
+                             "key", &key,
+                             "flags", &flags) < 0)
+        goto error;
+    /* FIXME: */
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 /* kvs-watch.cancel request
  * The user called flux_kvs_getroot_cancel() which expects no response.
  * The enclosed matchtag and the cancel sender are used to find the
@@ -592,6 +611,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "kvs-watch.getroot",
       .cb           = getroot_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "kvs-watch.lookup",
+      .cb           = lookup_cb,
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
