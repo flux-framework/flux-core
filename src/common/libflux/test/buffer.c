@@ -54,14 +54,14 @@ void basic (void)
         "flux_buffer_peek with specific length works");
 
     ok (!memcmp (ptr, "fo", 2),
-        "flux_buffer_peek returns exepected data");
+        "flux_buffer_peek returns expected data");
 
     ok ((ptr = flux_buffer_peek (fb, -1, &len)) != NULL
         && len == 3,
         "flux_buffer_peek with length -1 works");
 
     ok (!memcmp (ptr, "foo", 3),
-        "flux_buffer_peek returns exepected data");
+        "flux_buffer_peek returns expected data");
 
     ok (flux_buffer_bytes (fb) == 3,
         "flux_buffer_bytes returns unchanged length after peek");
@@ -100,7 +100,7 @@ void basic (void)
         "flux_buffer_read with specific length works");
 
     ok (!memcmp (ptr, "fo", 2),
-        "flux_buffer_read returns exepected data");
+        "flux_buffer_read returns expected data");
 
     ok (flux_buffer_bytes (fb) == 1,
         "flux_buffer_bytes returns new length after read");
@@ -110,7 +110,7 @@ void basic (void)
         "flux_buffer_peek with length -1 works");
 
     ok (!memcmp (ptr, "o", 1),
-        "flux_buffer_peek returns exepected data");
+        "flux_buffer_peek returns expected data");
 
     ok (flux_buffer_bytes (fb) == 0,
         "flux_buffer_bytes returns 0 with all bytes read");
@@ -140,7 +140,7 @@ void basic (void)
         "flux_buffer_peek_line works");
 
     ok (!memcmp (ptr, "foo\n", 4),
-        "flux_buffer_peek_line returns exepected data");
+        "flux_buffer_peek_line returns expected data");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns unchanged length after peek_line");
@@ -176,10 +176,10 @@ void basic (void)
 
     ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL
         && len == 4,
-        "flux_buffer_peek_line works");
+        "flux_buffer_read_line works");
 
     ok (!memcmp (ptr, "foo\n", 4),
-        "flux_buffer_peek_line returns exepected data");
+        "flux_buffer_read_line returns expected data");
 
     ok (flux_buffer_bytes (fb) == 0,
         "flux_buffer_bytes returns 0 after read_line");
@@ -268,7 +268,7 @@ void basic (void)
         "flux_buffer_read with specific length works");
 
     ok (!memcmp (ptr, "fo", 2),
-        "flux_buffer_read returns exepected data");
+        "flux_buffer_read returns expected data");
 
     ok (flux_buffer_bytes (fb) == 1,
         "flux_buffer_bytes returns new length after read");
@@ -278,7 +278,7 @@ void basic (void)
         "flux_buffer_peek with length -1 works");
 
     ok (!memcmp (ptr, "o", 1),
-        "flux_buffer_peek returns exepected data");
+        "flux_buffer_peek returns expected data");
 
     ok (flux_buffer_bytes (fb) == 0,
         "flux_buffer_bytes returns 0 with all bytes read");
