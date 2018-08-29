@@ -585,10 +585,75 @@ static void output_key_json_str (const char *key,
     json_decref (o);
 }
 
+struct lookup_ctx {
+    optparse_t *p;
+};
+
+
+void lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct lookup_ctx *ctx = arg;
+    const char *key = flux_kvs_lookup_get_key (f);
+
+    if (optparse_hasopt (ctx->p, "treeobj")) {
+        const char *treeobj;
+        if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
+            log_err_exit ("%s", key);
+        printf ("%s\n", treeobj);
+    }
+    else if (optparse_hasopt (ctx->p, "json")) {
+        const char *json_str;
+        if (flux_kvs_lookup_get (f, &json_str) < 0)
+            log_err_exit ("%s", key);
+        if (!json_str)
+            log_msg_exit ("%s: zero-length value", key);
+        output_key_json_str (NULL, json_str, key);
+    }
+    else if (optparse_hasopt (ctx->p, "raw")) {
+        const void *data;
+        int len;
+        if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
+            log_err_exit ("%s", key);
+        if (write_all (STDOUT_FILENO, data, len) < 0)
+            log_err_exit ("%s", key);
+    }
+    else {
+        const char *value;
+        if (flux_kvs_lookup_get (f, &value) < 0)
+            log_err_exit ("%s", key);
+        if (value)
+            printf ("%s\n", value);
+    }
+    fflush (stdout);
+    flux_future_destroy (f);
+}
+
+void cmd_get_one (flux_t *h, const char *key, optparse_t *p)
+{
+    flux_future_t *f;
+    int flags = 0;
+    struct lookup_ctx ctx = { .p = p };
+
+    if (optparse_hasopt (p, "treeobj"))
+        flags |= FLUX_KVS_TREEOBJ;
+    if (optparse_hasopt (p, "at")) {
+        const char *reference = optparse_get_str (p, "at", "");
+        if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
+            log_err_exit ("%s", key);
+    }
+    else {
+        if (!(f = flux_kvs_lookup (h, flags, key)))
+            log_err_exit ("%s", key);
+    }
+    if (flux_future_then (f, -1., lookup_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+}
+
 int cmd_get (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    flux_future_t *f;
     int optindex, i;
 
     optindex = optparse_option_index (p);
@@ -596,51 +661,9 @@ int cmd_get (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    for (i = optindex; i < argc; i++) {
-        const char *key = argv[i];
-        int flags = 0;
-        if (optparse_hasopt (p, "treeobj"))
-            flags |= FLUX_KVS_TREEOBJ;
-        if (optparse_hasopt (p, "at")) {
-            const char *reference = optparse_get_str (p, "at", "");
-            if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
-                log_err_exit ("%s", key);
-        }
-        else {
-            if (!(f = flux_kvs_lookup (h, flags, key)))
-                log_err_exit ("%s", key);
-        }
-        if (optparse_hasopt (p, "treeobj")) {
-            const char *treeobj;
-            if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
-                log_err_exit ("%s", key);
-            printf ("%s\n", treeobj);
-        }
-        else if (optparse_hasopt (p, "json")) {
-            const char *json_str;
-            if (flux_kvs_lookup_get (f, &json_str) < 0)
-                log_err_exit ("%s", key);
-            if (!json_str)
-                log_msg_exit ("%s: zero-length value", key);
-            output_key_json_str (NULL, json_str, key);
-        }
-        else if (optparse_hasopt (p, "raw")) {
-            const void *data;
-            int len;
-            if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
-                log_err_exit ("%s", key);
-            if (write_all (STDOUT_FILENO, data, len) < 0)
-                log_err_exit ("%s", key);
-        }
-        else {
-            const char *value;
-            if (flux_kvs_lookup_get (f, &value) < 0)
-                log_err_exit ("%s", key);
-            if (value)
-                printf ("%s\n", value);
-        }
-        flux_future_destroy (f);
-    }
+    for (i = optindex; i < argc; i++)
+        cmd_get_one (h, argv[i], p);
+
     return (0);
 }
 
