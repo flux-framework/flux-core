@@ -428,23 +428,16 @@ done:
     flux_future_destroy (f);
 }
 
-/* kvs-watch.getroot request
+/* Create 'ns' if not already monitoring this namespace, and
+ * send a getroot RPC to the kvs so first response need not wait
+ * for the next commit to occur in the arbitrarily distant future.
  */
-static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+struct namespace *namespace_monitor (struct watch_ctx *ctx,
+                                     const char *namespace)
 {
-    struct watch_ctx *ctx = arg;
-    const char *namespace;
-    struct watcher *w;
     struct namespace *ns;
     flux_future_t *f;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "namespace", &namespace) < 0)
-        goto error;
-    /* Create 'ns' if not already monitoring this namespace, and
-     * send a getroot RPC to the kvs so first response need not wait
-     * for the next commit to occur in the arbitrarily distant future.
-     */
     if (!(ns = zhash_lookup (ctx->namespaces, namespace))) {
         if (!(ns = namespace_create (ctx, namespace)))
             goto error;
@@ -460,9 +453,29 @@ static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         if (flux_future_then (f, -1., getroot_continuation, ns) < 0) {
             zhash_delete (ctx->namespaces, namespace);
+            flux_future_destroy (f);
             goto error;
         }
     }
+    return ns;
+error:
+    return NULL;
+}
+
+/* kvs-watch.getroot request
+ */
+static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
+{
+    struct watch_ctx *ctx = arg;
+    const char *namespace;
+    struct watcher *w;
+    struct namespace *ns;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "namespace", &namespace) < 0)
+        goto error;
+    if (!(ns = namespace_monitor (ctx, namespace)))
+        goto error;
     /* Thread a new watcher 'w' onto ns->watchers.
      * If there is already a commit result available, send first response now,
      * otherwise response will be sent upon getroot RPC response
