@@ -445,6 +445,25 @@ const void *flux_buffer_peek_line (flux_buffer_t *fb, int *lenp)
     return fb->buf;
 }
 
+const void *flux_buffer_peek_trimmed_line (flux_buffer_t *fb, int *lenp)
+{
+    int tmp_lenp = 0;
+
+    if (!flux_buffer_peek_line (fb, &tmp_lenp))
+        return NULL;
+
+    if (tmp_lenp) {
+        if (fb->buf[tmp_lenp - 1] == '\n') {
+            fb->buf[tmp_lenp - 1] = '\0';
+            tmp_lenp--;
+        }
+    }
+    if (lenp)
+        (*lenp) = tmp_lenp;
+
+    return fb->buf;
+}
+
 const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp)
 {
     int ret;
@@ -461,6 +480,25 @@ const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp)
         (*lenp) = ret;
 
     check_write_cb (fb);
+
+    return fb->buf;
+}
+
+const void *flux_buffer_read_trimmed_line (flux_buffer_t *fb, int *lenp)
+{
+    int tmp_lenp = 0;
+
+    if (!flux_buffer_read_line (fb, &tmp_lenp))
+        return NULL;
+
+    if (tmp_lenp) {
+        if (fb->buf[tmp_lenp - 1] == '\n') {
+            fb->buf[tmp_lenp - 1] = '\0';
+            tmp_lenp--;
+        }
+    }
+    if (lenp)
+        (*lenp) = tmp_lenp;
 
     return fb->buf;
 }

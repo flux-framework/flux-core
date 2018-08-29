@@ -74,12 +74,20 @@ int flux_buffer_drop_line (flux_buffer_t *fb);
  */
 const void *flux_buffer_peek_line (flux_buffer_t *fb, int *lenp);
 
+/* Identical to flux_buffer_peek_line(), but does not return trailing
+ * newline */
+const void *flux_buffer_peek_trimmed_line (flux_buffer_t *fb, int *lenp);
+
 /* Read a line in the buffer and mark data as consumed.  Return buffer
  * will include newline.  Optionally return length of data returned in
  * [lenp].  If no line is available, returns pointer and length of 0.
  * Return NULL on error.
  */
 const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp);
+
+/* Identical to flux_buffer_read_line(), but does not return trailing
+ * newline */
+const void *flux_buffer_read_trimmed_line (flux_buffer_t *fb, int *lenp);
 
 /* Write NUL terminated string data into the buffer and appends a
  * newline.  Returns number of bytes written on success.
