@@ -313,8 +313,9 @@ static int subprocess_io_cb (struct subprocess *p, const char *json_str)
     char *s = NULL, *argz = NULL, *line = NULL;
     size_t argz_len;
 
-    r = subprocess_get_context (p, "runlevel_t");
+    r = subprocess_get_context (p, "runlevel");
     assert (r != NULL);
+    assert (r->level == 1|| r->level == 3);
 
     if (!r->io_cb)
         goto done;
@@ -384,8 +385,6 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
         if (subprocess_setenv (p, "FLUX_NODESET_MASK", r->nodeset, 1) < 0)
             goto error;
         if (subprocess_set_io_callback (p, subprocess_io_cb) < 0)
-            goto error;
-        if (subprocess_set_context (p, "runlevel_t", r) < 0)
             goto error;
     }
     r->rc[level].subprocess = p;
