@@ -6,7 +6,7 @@ number of assumptions about the error propagation and handling that flux uses.
 import re
 import os
 import inspect
-from types import MethodType
+import six
 
 
 class MissingFunctionError(Exception):
@@ -156,7 +156,6 @@ class FunctionWrapper(object):
                 self.arg_trans.append(i)
 
     def __call__(self, calling_object, *args_in):
-        # print holder.__name__, 'got', calling_object, args_in
         calling_object.ffi.errno = 0
         caller = calling_object.handle
         args = [caller, ] + \
@@ -174,7 +173,7 @@ class FunctionWrapper(object):
             elif isinstance(args[i], WrapperBase):
                 # Unpack wrapper objects
                 args[i] = args[i].handle
-            elif isinstance(args[i], unicode):
+            elif isinstance(args[i], six.text_type):
                 # convert unicode string to ascii to make cffi happy
                 args[i] = str(args[i])
 
@@ -186,6 +185,9 @@ class FunctionWrapper(object):
 
         if result == calling_object.ffi.NULL:
             result = None
+
+        elif result is not None and calling_object.ffi.typeof(result) == "char *":
+            result = calling_object.ffi.string(result)
 
         # Convert errno errors into python exceptions
 
@@ -267,7 +269,7 @@ class Wrapper(WrapperBase):
             return fun
 
         new_fun = self.check_wrap(fun, name)
-        new_method = MethodType(new_fun, None, self.__class__)
+        new_method = six.create_bound_method(new_fun, self)
         # Store the wrapper function into the class to prevent a second lookup
         setattr(self.__class__, name, new_method)
         return self.__getattribute__(name)

@@ -44,9 +44,17 @@
 typedef void PyObject;
 #endif
 
+PyObject * py_unicode_or_string(const char *str) {
+#if PY_MAJOR_VERSION >= 3
+    return PyUnicode_FromString(str);
+#else
+    return PyString_FromString(str);
+#endif
+}
+
 void add_if_not_present(PyObject *list, const char* path){
     if(path){
-        PyObject *pymod_path = PyString_FromString(path);
+        PyObject *pymod_path = py_unicode_or_string(path);
         if (!PySequence_Contains(list, pymod_path)){
             PyList_Append(list, pymod_path);
         }else{
@@ -103,7 +111,12 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     const char * module_name = argv[option_index];
 
-    Py_SetProgramName("pymod");
+#if PY_MAJOR_VERSION >= 3
+    wchar_t *program = Py_DecodeLocale("pymod", NULL);
+#else
+    char *program = "pymod"
+#endif
+    Py_SetProgramName(program);
     Py_Initialize();
 
     PyObject *search_path = PySys_GetObject("path");
@@ -128,7 +141,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     if(mod_main && PyCallable_Check(mod_main)){
         //maybe unpack args directly? probably easier to use a dict
         PyObject *py_args = PyTuple_New(3);
-        PyTuple_SetItem(py_args, 0, PyString_FromString(module_name));
+        PyObject *pystr_mod_name = py_unicode_or_string(module_name);
+        PyTuple_SetItem(py_args, 0, pystr_mod_name);
         PyTuple_SetItem(py_args, 1, PyLong_FromVoidPtr(h));
 
         //Convert zhash to native python dict, should preserve mods
@@ -137,7 +151,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         char ** it = argv + option_index;
         int i;
         for (i=0; *it; i++, it++){
-            PyList_Append(arg_list, PyString_FromString(*it));
+            PyList_Append(arg_list, py_unicode_or_string(*it));
         }
 
         PyTuple_SetItem(py_args, 2, arg_list);

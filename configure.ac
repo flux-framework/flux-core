@@ -138,7 +138,7 @@ AC_ARG_ENABLE(python,
 AC_MSG_RESULT($enable_python)
 
 if test "$enable_python" = "yes"; then
-  AM_PATH_PYTHON([2.7])
+  AM_PATH_PYTHON([3.2])
   if test "X$PYTHON" != "X"; then
     # Flag for PYTHON_LDFLAGS workaround below.
     if test -n "$PYTHON_LDFLAGS"; then
