@@ -63,6 +63,7 @@ struct cron_task {
     unsigned int       running:1;
     unsigned int      timedout:1;
     unsigned int        exited:1;
+    unsigned int     completed:1;
     unsigned int stderr_closed:1;
     unsigned int stdout_closed:1;
 
@@ -115,6 +116,8 @@ static bool cron_task_completed (cron_task_t *t)
     if (t->rexec_failed)
         return true;
     if (t->exited && t->stderr_closed && t->stdout_closed)
+        return true;
+    if (t->completed)
         return true;
     return false;
 }
@@ -190,6 +193,7 @@ static void completion_cb (flux_subprocess_t *p)
 
     assert (t);
 
+    t->completed = 1;
     cron_task_handle_completion (p, t);
 }
 
