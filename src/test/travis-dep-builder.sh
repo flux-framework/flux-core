@@ -235,7 +235,7 @@ for pkg in $downloads; do
       curl -L -O --insecure ${pkg} || die "Failed to download ${pkg}"
       tar --strip-components=1 -xf *.tar.gz || die "Failed to un-tar ${name}"
       test -x configure || ./autogen.sh
-      test -x configure && CC=gcc ./configure --prefix=${prefix} \
+      test -x configure && CC=gcc CXX=g++ ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
                   ${extra_configure_opts[$name]} || : &&
       make -j 2 PREFIX=${prefix} &&
