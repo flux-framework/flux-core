@@ -65,8 +65,6 @@ struct cron_task {
     unsigned int      timedout:1;
     unsigned int        exited:1;
     unsigned int     completed:1;
-    unsigned int stderr_closed:1;
-    unsigned int stdout_closed:1;
 
     cron_task_io_f       io_cb;
     cron_task_state_f    state_cb;
@@ -117,8 +115,6 @@ static bool cron_task_completed (cron_task_t *t)
     if (t->rexec_failed)
         return true;
     if (t->exec_failed)
-        return true;
-    if (t->exited && t->stderr_closed && t->stdout_closed)
         return true;
     if (t->completed)
         return true;
@@ -281,13 +277,6 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
 
     if (t->io_cb && lenp)
         (*t->io_cb) (t->h, t, t->arg, is_stderr, ptr, lenp, eof);
-
-    if (eof) {
-        if (is_stderr)
-            t->stderr_closed = 1;
-        else
-            t->stdout_closed = 1;
-    }
 }
 
 int cron_task_kill (cron_task_t *t, int sig)
