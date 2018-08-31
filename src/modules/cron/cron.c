@@ -73,7 +73,7 @@ static int cron_entry_stop (cron_entry_t *e);
 static void cron_entry_finished_handler (flux_t *h, cron_task_t *t,
     void *arg);
 static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, const char *data, int datalen, bool eof);
+    bool is_stderr, const char *data, int datalen);
 static int cron_entry_run_task (cron_entry_t *e);
 static int cron_entry_defer (cron_entry_t *e);
 
@@ -152,7 +152,7 @@ int cron_entry_schedule_task (cron_entry_t *e)
 /**************************************************************************/
 
 static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, const char *data, int datalen, bool eof)
+    bool is_stderr, const char *data, int datalen)
 {
     cron_entry_t *e = arg;
     int level = is_stderr ? LOG_ERR : LOG_INFO;

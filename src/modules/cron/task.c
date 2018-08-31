@@ -252,7 +252,6 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr = NULL;
     int lenp;
     bool is_stderr = false;
-    bool eof = false;
 
     assert (t);
 
@@ -271,12 +270,10 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
                             __FUNCTION__);
             return;
         }
-        if (!lenp)
-            eof = true;
     }
 
     if (t->io_cb && lenp)
-        (*t->io_cb) (t->h, t, t->arg, is_stderr, ptr, lenp, eof);
+        (*t->io_cb) (t->h, t, t->arg, is_stderr, ptr, lenp);
 }
 
 int cron_task_kill (cron_task_t *t, int sig)
