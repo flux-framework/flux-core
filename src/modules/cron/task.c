@@ -60,6 +60,7 @@ struct cron_task {
 
     unsigned int       started:1;
     unsigned int  rexec_failed:1;
+    unsigned int   exec_failed:1;
     unsigned int       running:1;
     unsigned int      timedout:1;
     unsigned int        exited:1;
@@ -115,6 +116,8 @@ static bool cron_task_completed (cron_task_t *t)
 {
     if (t->rexec_failed)
         return true;
+    if (t->exec_failed)
+        return true;
     if (t->exited && t->stderr_closed && t->stdout_closed)
         return true;
     if (t->completed)
@@ -165,6 +168,13 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
     t->timeout = to;
     if (t->started)
         cron_task_timeout_start (t);
+}
+
+static void cron_task_exec_failed (cron_task_t *t, int errnum)
+{
+    t->exec_failed = 1;
+    t->exec_errno = errnum;
+    cron_task_state_update (t, "Exec Failure");
 }
 
 static void cron_task_rexec_failed (cron_task_t *t, int errnum)
@@ -218,9 +228,7 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
         t->rank = flux_subprocess_rank (p);
     }
     else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        t->exec_errno = flux_subprocess_fail_errno (p);
-        t->exited = 1;
-        t->stderr_closed = t->stdout_closed = 1;
+        cron_task_exec_failed (t, flux_subprocess_fail_errno (p));
         cron_task_handle_completion (p, t);
         errno = t->exec_errno;
     }
@@ -379,7 +387,7 @@ int cron_task_run (cron_task_t *t,
         goto done;
 
     if (!(p = flux_rexec (h, rank, 0, cmd, &ops))) {
-        cron_task_rexec_failed (t, errno);
+        cron_task_exec_failed (t, errno);
         goto done;
     }
 
