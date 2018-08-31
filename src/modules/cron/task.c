@@ -29,17 +29,18 @@
 #include <signal.h>
 #include <time.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include <flux/core.h>
+#include <assert.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libsubprocess/zio.h"
+#include "src/common/subprocess/subprocess.h"
 
 #include "task.h"
 
 struct cron_task {
     flux_t *              h;      /* flux handle used to create this task   */
-    struct flux_match     match;  /* match object for message handler       */
-    flux_msg_handler_t *  mh;     /* msg handler specific to this task      */
+    flux_subprocess_t    *p;      /* flux subprocess */
 
     int                   rank;   /* rank on which task is being run        */
     pid_t                 pid;    /* remote process id                      */
@@ -75,9 +76,7 @@ struct cron_task {
 
 void cron_task_destroy (cron_task_t *t)
 {
-    flux_msg_handler_stop (t->mh);
-    flux_msg_handler_destroy (t->mh);
-    t->mh = NULL;
+    flux_subprocess_destroy (t->p);
     flux_watcher_destroy (t->timeout_w);
     t->timeout_w = NULL;
     free (t->state);
@@ -94,7 +93,6 @@ cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg)
         return NULL;
     }
     t->h = h;
-    t->match = FLUX_MATCH_RESPONSE;
     t->completion_cb = cb;
     t->arg = arg;
     clock_gettime (CLOCK_REALTIME, &t->createtime);
@@ -132,185 +130,6 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
     va_end (ap);
 }
 
-static int io_handler (flux_t *h, cron_task_t *t, const flux_msg_t *msg)
-{
-    const char *stream = "stdout";
-    const char *json_str;
-    void *data = NULL;
-    bool eof;
-    bool is_stderr = false;
-    int len;
-
-    if (flux_msg_get_string (msg, &json_str) < 0)
-        return -1;
-
-    if ((len = zio_json_decode (json_str, &data, &eof)) < 0) {
-        flux_log_error (h, "io decode");
-        free (data);
-        return (-1);
-    }
-    (void) flux_msg_unpack (msg, "{s:s}", "name", &stream);
-    if (strcmp (stream, "stderr") == 0)
-        is_stderr = true;
-
-    if (t->io_cb)
-        (*t->io_cb) (h, t, t->arg, is_stderr, data, len, eof);
-
-    if (eof) {
-        if (is_stderr)
-            t->stderr_closed = 1;
-        else
-            t->stdout_closed = 1;
-    }
-    free (data);
-    return (0);
-}
-
-static int state_handler (flux_t *h, cron_task_t *t, const flux_msg_t *msg)
-{
-    const char *state;
-
-    if (flux_msg_unpack (msg, "{s:s}", "state", &state) < 0) {
-        flux_log_error (h, "unable to get exec state");
-        return -1;
-    }
-    cron_task_state_update (t, state);
-
-    if (strcmp (state, "Running") == 0) {
-        clock_gettime (CLOCK_REALTIME, &t->runningtime);
-        t->running = 1;
-        (void) flux_msg_unpack (msg, "{s:i, s:i}",
-                                "pid", &t->pid, "rank", &t->rank);
-    }
-    else if (strcmp (state, "Exec Failure") == 0) {
-        if (flux_msg_unpack (msg, "{s:i}", "exec_errno", &t->exec_errno) < 0) {
-            flux_log_error (h,
-                "cron task: state handler unable to get exec errno");
-            t->exec_errno = 0;
-        }
-        t->exited = 1;
-        t->stderr_closed = t->stdout_closed = 1;
-        errno = t->exec_errno;
-    }
-    else if (strcmp (state, "Exited") == 0) {
-        t->exited = 1;
-        if (flux_msg_unpack (msg, "{s:i}", "status", &t->status) < 0) {
-            flux_log_error (h, "cron task: state handler failed to get status");
-            t->status = 0;
-        }
-        if (WIFSIGNALED (t->status))
-            cron_task_state_update (t, "%s", strsignal (WTERMSIG (t->status)));
-        else if (WEXITSTATUS (t->status) != 0)
-            cron_task_state_update (t, "Exit %d", WEXITSTATUS (t->status));
-    }
-
-    if (t->state_cb)
-        (*t->state_cb) (h, t, t->arg);
-
-    return (0);
-
-}
-
-static void cron_task_rexec_failed (cron_task_t *t, int errnum)
-{
-    t->rexec_failed = 1;
-    t->rexec_errno = errnum;
-    cron_task_state_update (t, "Rexec Failure");
-}
-
-static void cron_task_handle_completion (cron_task_t *t)
-{
-    clock_gettime (CLOCK_REALTIME, &t->endtime);
-    /*
-     * Disable message handling for this task. Task will be destroyed
-     *  later.
-     */
-    flux_msg_handler_stop (t->mh);
-    flux_msg_handler_destroy (t->mh);
-    t->mh = NULL;
-    flux_watcher_destroy (t->timeout_w);
-    t->timeout_w = NULL;
-
-    /* Call completion handler for this entry */
-    if (t->completion_cb)
-        (*t->completion_cb) (t->h, t, t->arg);
-}
-
-static void exec_handler (flux_t *h, flux_msg_handler_t *w,
-                          const flux_msg_t *msg, void *arg)
-{
-    struct cron_task *t = arg;
-    const char *json_str;
-    const char *topic;
-    const char *type;
-    json_t *resp = NULL;
-    json_error_t error;
-
-    if (flux_response_decode (msg, &topic, &json_str) < 0) {
-        cron_task_rexec_failed (t, errno);
-        flux_log_error (h, "cron task: exec handler");
-        goto out;
-    }
-    else if (!json_str || (resp = json_loads (json_str, 0, &error)) == NULL) {
-        errno = EPROTO;
-        cron_task_rexec_failed (t, errno);
-        flux_log_error (h, "cron task: json decode: %s", error.text);
-    }
-    else if (json_unpack (resp, "{s:s}", "type", &type) == 0
-             && strcmp (type, "io") == 0) {
-        if (io_handler (h, t, msg) < 0)
-            goto out;
-    }
-    else if (state_handler (h, t, msg) < 0)
-        goto out;
-
-    if (cron_task_completed (t))
-        cron_task_handle_completion (t);
-out:
-    if (resp)
-        json_decref (resp);
-}
-
-static flux_msg_t *kill_request_create (cron_task_t *t, int sig)
-{
-    int e = 0;
-    flux_msg_t *msg;
-    char *s = NULL;;
-    json_t *o = json_pack ("{s:i, s:i}", "pid", t->pid, "signum", sig);
-    if (o == NULL)
-        return NULL;
-
-    s = json_dumps (o, JSON_COMPACT);
-    if (!(msg = flux_request_encode ("cmb.exec.signal", s))
-        || (flux_msg_set_nodeid (msg, t->rank, 0) < 0)) {
-        e = errno;
-        flux_msg_destroy (msg);
-        errno = e;
-        msg = NULL;
-    }
-    json_decref (o);
-    free (s);
-    return (msg);
-}
-
-int cron_task_kill (cron_task_t *t, int sig)
-{
-    flux_t *h = t->h;
-    flux_msg_t *msg;
-
-    if (!t->started || t->exited) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    msg = kill_request_create (t, sig);
-    if (!msg || flux_send (h, msg, 0) < 0) {
-        flux_log_error (h, "cron_task_kill");
-        return (-1);
-    }
-    return (0);
-}
-
 static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
 {
@@ -345,87 +164,235 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
         cron_task_timeout_start (t);
 }
 
-static json_t *exec_request_create (struct cron_task *t,
+static void cron_task_rexec_failed (cron_task_t *t, int errnum)
+{
+    t->rexec_failed = 1;
+    t->rexec_errno = errnum;
+    cron_task_state_update (t, "Rexec Failure");
+}
+
+static void cron_task_handle_completion (flux_subprocess_t *p, cron_task_t *t)
+{
+    clock_gettime (CLOCK_REALTIME, &t->endtime);
+    flux_watcher_destroy (t->timeout_w);
+    t->timeout_w = NULL;
+    flux_subprocess_destroy (t->p);
+    t->p = NULL;
+
+    /* Call completion handler for this entry */
+    if (t->completion_cb)
+        (*t->completion_cb) (t->h, t, t->arg);
+}
+
+static void completion_cb (flux_subprocess_t *p)
+{
+    cron_task_t *t = flux_subprocess_get_context (p, "task");
+
+    assert (t);
+
+    cron_task_handle_completion (p, t);
+}
+
+static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+{
+    cron_task_t *t = flux_subprocess_get_context (p, "task");
+
+    assert (t);
+
+    cron_task_state_update (t, flux_subprocess_state_string (state));
+
+    if (state == FLUX_SUBPROCESS_STARTED) {
+        t->started = 1;
+        clock_gettime (CLOCK_REALTIME, &t->starttime);
+        if (t->timeout >= 0.0)
+            cron_task_timeout_start (t);
+    }
+    else if (state == FLUX_SUBPROCESS_RUNNING) {
+        clock_gettime (CLOCK_REALTIME, &t->runningtime);
+        t->running = 1;
+        t->pid = flux_subprocess_pid (p);
+        t->rank = flux_subprocess_rank (p);
+    }
+    else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
+        t->exec_errno = flux_subprocess_fail_errno (p);
+        t->exited = 1;
+        t->stderr_closed = t->stdout_closed = 1;
+        cron_task_handle_completion (p, t);
+        errno = t->exec_errno;
+    }
+    else if (state == FLUX_SUBPROCESS_FAILED) {
+        cron_task_rexec_failed (t, flux_subprocess_fail_errno (p));
+        cron_task_handle_completion (p, t);
+        errno = t->rexec_errno;
+    }
+    else if (state == FLUX_SUBPROCESS_EXITED) {
+        t->exited = 1;
+        t->status = flux_subprocess_status (p);
+        if (WIFSIGNALED (t->status))
+            cron_task_state_update (t, "%s", strsignal (WTERMSIG (t->status)));
+        else if (WEXITSTATUS (t->status) != 0)
+            cron_task_state_update (t, "Exit %d", WEXITSTATUS (t->status));
+    }
+
+    if (t->state_cb)
+        (*t->state_cb) (t->h, t, t->arg);
+}
+
+static void io_cb (flux_subprocess_t *p, const char *stream)
+{
+    cron_task_t *t = flux_subprocess_get_context (p, "task");
+    const char *ptr = NULL;
+    int lenp;
+    bool is_stderr = false;
+    bool eof = false;
+
+    assert (t);
+
+    if (!strcmp (stream, "STDERR"))
+        is_stderr = true;
+
+    if (!(ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp))) {
+        flux_log_error (t->h, "%s: flux_subprocess_read_trimmed_line",
+                        __FUNCTION__);
+        return;
+    }
+
+    if (!lenp) {
+        if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
+            flux_log_error (t->h, "%s: flux_subprocess_read",
+                            __FUNCTION__);
+            return;
+        }
+        if (!lenp)
+            eof = true;
+    }
+
+    if (t->io_cb && lenp)
+        (*t->io_cb) (t->h, t, t->arg, is_stderr, ptr, lenp, eof);
+
+    if (eof) {
+        if (is_stderr)
+            t->stderr_closed = 1;
+        else
+            t->stdout_closed = 1;
+    }
+}
+
+int cron_task_kill (cron_task_t *t, int sig)
+{
+    flux_t *h = t->h;
+    flux_future_t *f;
+
+    if (!t->running || t->exited) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(f = flux_subprocess_kill (t->p, sig))) {
+        flux_log_error (h, "%s: flux_subprocess_kill", __FUNCTION__);
+        return (-1);
+    }
+    /* ignore response */
+    flux_future_destroy (f);
+    return (0);
+}
+
+
+static flux_cmd_t *exec_cmd_create (struct cron_task *t,
     const char *command,
     const char *cwd,
     json_t *env)
 {
-    json_t *o;
-    json_t *cmdline = NULL;
+    flux_cmd_t *cmd = NULL;
+    char *tmp_cwd = NULL;
 
-    if ((o = json_object ()) == NULL)
-        return NULL;
-
-    if ((cmdline = json_pack ("[s,s,s]", "sh", "-c", command)) == NULL
-        || (json_object_set_new (o, "cmdline", cmdline) < 0)) {
-        json_decref (cmdline);
-        goto fail;
+    if (!(cmd = flux_cmd_create (0, NULL, NULL))) {
+        flux_log_error (t->h, "exec_cmd_create: flux_cmd_create");
+        goto error;
     }
+    if (flux_cmd_argv_append (cmd, "%s", "sh") < 0
+        || flux_cmd_argv_append (cmd, "%s", "-c") < 0
+        || flux_cmd_argv_append (cmd, "%s", command) < 0) {
+        flux_log_error (t->h, "exec_cmd_create: flux_cmd_argv_append");
+        goto error;
+    }
+    if (!cwd) {
+        /* flux_rexec() requires a cwd */
+        if (!(tmp_cwd = get_current_dir_name ())) {
+            flux_log_error (t->h, "exec_cmd_create: get_get_current_dir_name");
+            goto error;
+        }
+        cwd = tmp_cwd;
+    }
+    if (flux_cmd_setcwd (cmd, cwd) < 0) {
+        flux_log_error (t->h, "exec_cmd_create: flux_cmd_setcwd");
+        goto error;
+    }
+    if (env) {
+        /* obj is a JSON object */
+        const char *key;
+        json_t *value;
 
-    if (cwd) {
-        json_t *x = json_string (cwd);
-        if (x == NULL || json_object_set_new (o, "cwd", x) < 0) {
-            json_decref (x);
-            goto fail;
+        json_object_foreach (env, key, value) {
+            const char *value_str = json_string_value (value);
+            if (!value_str) {
+                flux_log_error (t->h, "exec_cmd_create: json_string_value");
+                errno = EPROTO;
+                goto error;
+            }
+            if (flux_cmd_setenvf (cmd, 1, key, "%s", value_str) < 0) {
+                flux_log_error (t->h, "exec_cmd_create: flux_cmd_setenvf");
+                goto error;
+            }
         }
     }
 
-    if (env && json_object_set (o, "env", env) < 0)
-            goto fail;
-    return (o);
-fail:
-    json_decref (o);
+    free (tmp_cwd);
+    return (cmd);
+ error:
+    free (tmp_cwd);
+    flux_cmd_destroy (cmd);
     return (NULL);
 }
 
 int cron_task_run (cron_task_t *t,
-    int rank, const char *cmd, const char *cwd,
+    int rank, const char *command, const char *cwd,
     json_t *env)
 {
     flux_t *h = t->h;
-    json_t *req = NULL;
-    char *json_str = NULL;
-    flux_msg_t *msg = NULL;
+    flux_subprocess_t *p = NULL;
+    flux_cmd_t *cmd;
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_state_change = state_change_cb,
+        .on_channel_out = NULL,
+        .on_stdout = io_cb,
+        .on_stderr = io_cb
+    };
     int rc = -1;
 
-    t->match.matchtag = flux_matchtag_alloc (h, 0);
-    if (t->match.matchtag == FLUX_MATCHTAG_NONE)
-        return -1;
-    t->match.topic_glob = "cmb.exec";
-    t->mh = flux_msg_handler_create (h, t->match, exec_handler, t);
-    if (!t->mh)
-        return -1;
+    if (!(cmd = exec_cmd_create (t, command, cwd, env)))
+        goto done;
 
-    if (!(req = exec_request_create (t, cmd, cwd, env)))
-        goto done;
-    if (!(json_str = json_dumps (req, JSON_COMPACT)))
-        goto done;
-    if (!(msg = flux_request_encode ("cmb.exec", json_str)))
-        goto done;
-    if (flux_msg_set_nodeid (msg, rank, 0) < 0)
-        goto done;
-    if (flux_msg_set_matchtag (msg, t->match.matchtag) < 0)
-        goto done;
-    if ((rc = flux_send (h, msg, 0)) < 0) {
-        flux_log_error (h, "cron_task_run: flux_send");
+    if (!(p = flux_rexec (h, rank, 0, cmd, &ops))) {
+        cron_task_rexec_failed (t, errno);
         goto done;
     }
-    t->started = 1;
-    clock_gettime (CLOCK_REALTIME, &t->starttime);
-    cron_task_state_update (t, "Started");
-    rc = 0;
-    flux_msg_handler_start (t->mh);
 
-    if (t->timeout >= 0.0)
-        cron_task_timeout_start (t);
+    if (flux_subprocess_set_context (p, "task", t) < 0) {
+        flux_log_error (h, "flux_subprocess_set_context");
+        goto done;
+    }
+
+    t->p = p;
+    rc = 0;
 done:
-    json_decref (req);
-    free (json_str);
     if (rc < 0) {
         t->rexec_errno = errno;
         cron_task_state_update (t, "Rexec Failure");
+        flux_subprocess_destroy (p);
     }
-    flux_msg_destroy (msg);
+    flux_cmd_destroy (cmd);
     return (rc);
 }
 
