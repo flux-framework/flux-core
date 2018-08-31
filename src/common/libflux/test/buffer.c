@@ -157,6 +157,45 @@ void basic (void)
     ok (flux_buffer_lines (fb) == 0,
         "flux_buffer_lines returns 0 after drop_line");
 
+    /* write_line & peek_trimmed_line tests */
+
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 on no line");
+
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line works");
+
+    ok (flux_buffer_bytes (fb) == 4,
+        "flux_buffer_bytes returns length of bytes written");
+
+    ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 4),
+        "flux_buffer_space returns length of space left");
+
+    ok (flux_buffer_lines (fb) == 1,
+        "flux_buffer_lines returns 1 on line written");
+
+    ok ((ptr = flux_buffer_peek_trimmed_line (fb, &len)) != NULL
+        && len == 3,
+        "flux_buffer_peek_trimmed_line works");
+
+    ok (!memcmp (ptr, "foo", 3),
+        "flux_buffer_peek_trimmed_line returns expected data");
+
+    ok (flux_buffer_bytes (fb) == 4,
+        "flux_buffer_bytes returns unchanged length after peek_trimmed_line");
+
+    ok (flux_buffer_drop_line (fb) == 4,
+        "flux_buffer_drop_line works");
+
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 after drop_line");
+
+    ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
+        "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
+
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after drop_line");
+
     /* write_line & read_line tests */
 
     ok (flux_buffer_lines (fb) == 0,
@@ -189,6 +228,39 @@ void basic (void)
 
     ok (flux_buffer_lines (fb) == 0,
         "flux_buffer_lines returns 0 after read_line");
+
+    /* write_line & read_trimmed_line tests */
+
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 on no line");
+
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line works");
+
+    ok (flux_buffer_bytes (fb) == 4,
+        "flux_buffer_bytes returns length of bytes written");
+
+    ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 4),
+        "flux_buffer_space returns length of space left");
+
+    ok (flux_buffer_lines (fb) == 1,
+        "flux_buffer_lines returns 1 on line written");
+
+    ok ((ptr = flux_buffer_read_trimmed_line (fb, &len)) != NULL
+        && len == 3,
+        "flux_buffer_read_trimmed_line works");
+
+    ok (!memcmp (ptr, "foo", 3),
+        "flux_buffer_read_trimmed_line returns expected data");
+
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 after read_trimmed_line");
+
+    ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
+        "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
+
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after read_trimmed_line");
 
     /* peek_to_fd tests */
 
@@ -914,9 +986,15 @@ void corner_case (void)
     ok (flux_buffer_peek_line (NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_buffer_peek_line fails on NULL pointer");
+    ok (flux_buffer_peek_trimmed_line (NULL, NULL) == NULL
+        && errno == EINVAL,
+        "flux_buffer_peek_trimmed_line fails on NULL pointer");
     ok (flux_buffer_read_line (NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_buffer_read_line fails on NULL pointer");
+    ok (flux_buffer_read_trimmed_line (NULL, NULL) == NULL
+        && errno == EINVAL,
+        "flux_buffer_read_trimmed_line fails on NULL pointer");
     ok (flux_buffer_write_line (NULL, "foo") < 0
         && errno == EINVAL,
         "flux_buffer_write_line fails on NULL pointer");
@@ -946,10 +1024,18 @@ void corner_case (void)
         "flux_buffer_peek_line works when no data available");
     ok (len == 0,
         "flux_buffer_peek_line returns length 0 when no data available");
+    ok ((ptr = flux_buffer_peek_trimmed_line (fb, &len)) != NULL,
+        "flux_buffer_peek_trimmed_line works when no data available");
+    ok (len == 0,
+        "flux_buffer_peek_trimmed_line returns length 0 when no data available");
     ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
         "flux_buffer_read_line works when no data available");
     ok (len == 0,
         "flux_buffer_read_line returns length 0 when no data available");
+    ok ((ptr = flux_buffer_read_trimmed_line (fb, &len)) != NULL,
+        "flux_buffer_read_trimmed_line works when no data available");
+    ok (len == 0,
+        "flux_buffer_read_trimmed_line returns length 0 when no data available");
 
     /* callback corner case tests */
 
@@ -1064,9 +1150,15 @@ void corner_case (void)
     ok (flux_buffer_peek_line (fb, NULL) == NULL
         && errno == EINVAL,
         "flux_buffer_peek_line fails on destroyed fb pointer");
+    ok (flux_buffer_peek_trimmed_line (fb, NULL) == NULL
+        && errno == EINVAL,
+        "flux_buffer_peek_trimmed_line fails on destroyed fb pointer");
     ok (flux_buffer_read_line (fb, NULL) == NULL
         && errno == EINVAL,
         "flux_buffer_read_line fails on destroyed fb pointer");
+    ok (flux_buffer_read_trimmed_line (fb, NULL) == NULL
+        && errno == EINVAL,
+        "flux_buffer_read_trimmed_line fails on destroyed fb pointer");
     ok (flux_buffer_write_line (fb, "foo") < 0
         && errno == EINVAL,
         "flux_buffer_write_line fails on destroyed fb pointer");
