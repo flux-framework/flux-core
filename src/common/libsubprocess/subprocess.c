@@ -766,7 +766,7 @@ static void subprocess_child (struct subprocess *p)
     if (p->cwd && chdir (p->cwd) < 0) {
         log_err ("Couldn't change dir to %s: going to /tmp instead", p->cwd);
         if (chdir ("/tmp") < 0)
-            exit (1);
+            _exit (1);
     }
 
     /*
@@ -781,12 +781,12 @@ static void subprocess_child (struct subprocess *p)
 
     if (preparefd_child (p) < 0) {
         log_err ("Failed to prepare child fds");
-        exit (1);
+        _exit (1);
     }
 
     if (subprocess_run_hooks (p, p->hooks [SUBPROCESS_PRE_EXEC]) < 0) {
         log_err ("Failed to run subprocess hooks: %s\n", strerror (errno));
-        exit (1);
+        _exit (1);
     }
 
     environ = subprocess_env_expand (p);
@@ -809,7 +809,7 @@ static void subprocess_child (struct subprocess *p)
     close (STDOUT_FILENO);
     close (STDERR_FILENO);
     sp_barrier_write_error (p->childfd, errnum);
-    exit (code);
+    _exit (code);
 }
 
 int subprocess_exec (struct subprocess *p)
