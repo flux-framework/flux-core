@@ -232,7 +232,7 @@ test_expect_success 'wreckrun: job with more nodes than tasks fails' '
 	test "$(flux kvs get --json ${LWJ}.state)" = "failed"
 '
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
-if test $($cpus_allowed count) -gt 0; then
+if test $($cpus_allowed count) -gt 1; then
     test_set_prereq MULTICORE
     # Note: Normalize format of cpu0 thread siblings using cpus-allowed script
     #  so that comparison of output works in MULTICORE tests below
