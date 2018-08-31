@@ -39,6 +39,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/macros.h"
 
 #define CTX_MAGIC   0xf434aaab
 typedef struct {
@@ -258,7 +259,7 @@ static int connect_sock_with_retry (int fd, const char *file, int retries)
 flux_t *connector_init (const char *path, int flags)
 {
     local_ctx_t *c = NULL;
-    char sockfile[PATH_MAX + 1];
+    char sockfile [SIZEOF_FIELD (struct sockaddr_un, sun_path)];
     int n;
     int retries = env_getint ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT", 5);
 
