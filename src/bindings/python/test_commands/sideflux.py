@@ -1,4 +1,5 @@
 from __future__ import print_function
+import io
 import re
 import os
 import sys
@@ -11,7 +12,7 @@ import pprint
 import shutil
 import tempfile
 import time
-import Queue
+from six.moves import queue as Queue
 import pycotap
 
 # pprint.pprint(os.environ)
@@ -64,16 +65,26 @@ class SideFlux(object):
             stderr=subprocess.STDOUT,
             close_fds=True,  # Start a process session to clean up brokers
             preexec_fn=os.setsid,
-            env=self.subenv, )
-        self.p = mp.Process(target=consume, args=(self.sub.stdout, ))
+            env=self.subenv,
+        )
+        self.sub_in = io.TextIOWrapper(
+            self.sub.stdin,
+            encoding='utf-8',
+            line_buffering=True,  # send data on newline
+        )
+        self.sub_out = io.TextIOWrapper(
+            self.sub.stdout,
+            encoding='utf-8',
+        )
+        self.p = mp.Process(target=consume, args=(self.sub_out, ))
 
-        print('echo READY', file=self.sub.stdin)
+        print('echo READY', file=self.sub_in)
 
         self.env_items = {}
         self.env_items['FLUX_URI'] = self.flux_uri
 
         while True:
-            line = self.sub.stdout.readline()
+            line = self.sub_out.readline()
             if os.environ.get('SIDEFLUX_DEBUG', False):
                 print(line)
             if line != '':
@@ -87,9 +98,9 @@ class SideFlux(object):
                     self.env_items[m.group('var')] = v
                 if re.search('READY', line):
                     break
-            else:
-                if self.sub.poll() is not None:
-                    raise EnvironmentError(self.sub.poll())
+                else:
+                    if self.sub.poll() is not None:
+                        raise EnvironmentError(self.sub.poll())
         self.p.start()
 
     def apply_environment(self):
@@ -103,7 +114,7 @@ class SideFlux(object):
         if os.path.exists(self.tmpdir):
             shutil.rmtree(self.tmpdir)
         try:
-            self.sub.stdin.close()
+            self.sub_in.close()
         except AttributeError:
             pass
         # Kill the process group headed by the subprocess
@@ -114,11 +125,11 @@ class SideFlux(object):
 
     def run_flux_cmd(self, command=''):
         global flux_exe
-        print("{} {}".format(flux_exe, command), file=self.sub.stdin)
+        print("{} {}".format(flux_exe, command), file=self.sub_in)
 
     def run_cmd(self, command=''):
         global flux_exe
-        print(command, file=self.sub.stdin)
+        print(command, file=self.sub_in)
 
     def __del__(self):
         self.destroy()

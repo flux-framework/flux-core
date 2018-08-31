@@ -7,6 +7,7 @@ import re
 import os
 import inspect
 import six
+from builtins import bytes
 
 
 class MissingFunctionError(Exception):
@@ -113,16 +114,14 @@ Handle type: {htype}
 
 class InvalidArguments(ValueError):
 
-    def __init__(self, name, signature, arguments, err_msg):
+    def __init__(self, name, signature, arguments):
         message = """
 Invalid arguments passed to wrapped C function:
-cffi error: {err_msg}
 Name: {name}
 C signature: {c_type}
 Arguments: {arguments}
           """.format(name=name,
                      c_type=signature,
-                     err_msg=err_msg,
                      arguments=arguments)
         super(InvalidArguments, self).__init__(message)
 
@@ -168,6 +167,7 @@ class FunctionWrapper(object):
                                     self.function_type, args,
                                     calling_type)
         for i in self.arg_trans:
+            print("entering trans with:", args[i])
             if args[i] is None:
                 args[i] = calling_object.ffi.NULL
             elif isinstance(args[i], WrapperBase):
@@ -175,18 +175,19 @@ class FunctionWrapper(object):
                 args[i] = args[i].handle
             elif isinstance(args[i], six.text_type):
                 # convert unicode string to ascii to make cffi happy
-                args[i] = str(args[i])
+                print("converting", args[i])
+                args[i] = bytes(args[i], 'UTF-8')
 
         try:
             result = self.fun(*args)
         except TypeError as err:
-            raise InvalidArguments(self.name, self.ffi.getctype(
-                self.function_type), args_in, err.message)
+            six.raise_from(InvalidArguments(self.name, self.ffi.getctype(
+                self.function_type), args_in), err)
 
         if result == calling_object.ffi.NULL:
             result = None
 
-        elif result is not None and calling_object.ffi.typeof(result) == "char *":
+        elif result is not None and self.function_type.result is calling_object.ffi.typeof("char *"):
             result = calling_object.ffi.string(result)
 
         # Convert errno errors into python exceptions

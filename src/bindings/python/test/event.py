@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import unittest
 import errno
 import os
@@ -40,6 +41,6 @@ class TestEvent(unittest.TestCase):
         self.assertIsNotNone(pld)
         self.assertEqual(pld['test'], 'yay!')
         self.assertIsNotNone(evt.payload_str)
-        print evt.payload_str
+        print ( evt.payload_str )
 
 

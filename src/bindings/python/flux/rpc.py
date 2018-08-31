@@ -1,4 +1,5 @@
 import json
+import six
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 import flux.constants
@@ -33,15 +34,15 @@ class RPC(WrapperPimpl):
 
                 if payload is None or payload == ffi.NULL:
                     payload = ffi.NULL
-                elif not isinstance(payload, basestring):
+                elif not (isinstance(payload, six.binary_type)):
                     payload = json.dumps(payload)
 
-                if isinstance(nodeid, basestring):
+                if isinstance(nodeid, six.binary_type):
                     # String version is multiple nodeids
-                    self.handle = lib.flux_rpc_multi(
+                    self.handle = raw.flux_rpc_multi(
                         flux_handle, topic, payload, nodeid, flags)
                 else:
-                    self.handle = lib.flux_rpc(
+                    self.handle = raw.flux_rpc(
                         flux_handle, topic, payload, nodeid, flags)
 
     def __init__(self,

@@ -3,7 +3,7 @@ import errno
 import os
 import re
 import flux.core as core
-from flux.core.inner import ffi, lib
+from flux.core.inner import ffi, lib, raw
 import flux.wrapper
 
 
@@ -33,7 +33,7 @@ class TestWrapper(unittest.TestCase):
     def test_set_pimpl_handle(self):
       f = core.Flux('loop://')
       r = f.rpc_create('topic')
-      r.handle = lib.flux_rpc(f.handle, 'other topic', ffi.NULL, flux.FLUX_NODEID_ANY, 0)
+      r.handle = raw.flux_rpc(f.handle, 'other topic', ffi.NULL, flux.FLUX_NODEID_ANY, 0)
 
     def test_set_pimpl_handle_invalid(self):
       f = core.Flux('loop://')
