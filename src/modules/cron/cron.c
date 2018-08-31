@@ -206,6 +206,10 @@ static void cron_entry_completion_handler (flux_t *h, cron_task_t *t, void *arg)
         flux_log_error (h, "cron-%ju: failed to run %s", e->id, e->command);
         cron_entry_failure (e);
     }
+    else if (strcmp (cron_task_state (t), "Rexec Failure") == 0) {
+        flux_log_error (h, "cron-%ju: failure running %s", e->id, e->command);
+        cron_entry_failure (e);
+    }
     else if (cron_task_status (t) != 0) {
         flux_log (h, LOG_ERR, "cron-%ju: \"%s\": Failed: %s",
                  e->id, e->command, cron_task_state (t));

@@ -56,6 +56,23 @@ test_expect_success 'cron interval --after= works' '
     flux cron dump ${id} &&
     cron_entry_check ${id} task.1.state Exited
 '
+
+wait_cron_delete () {
+    i=0
+    flux cron dump ${id}
+    while [ $? -eq 0 ] && [ $i -lt 50 ]
+    do
+        sleep 0.1
+        i=$((i + 1))
+        flux cron dump ${id}
+    done
+    if [ "$i" -eq "50" ]
+    then
+        return 1
+    fi
+    return 0;
+}
+
 test_expect_success 'cron delete leaves running task - --kill works' '
     id=$(flux_cron interval --after=.01s 0 sleep 100) &&
     sleep .1 &&
@@ -64,7 +81,7 @@ test_expect_success 'cron delete leaves running task - --kill works' '
     grep "sleep still running" delete.${id}.out &&
     cron_entry_check ${id} task.1.state Running &&
     flux cron delete --kill ${id} &&
-    test_expect_code 1 flux cron dump ${id}
+    wait_cron_delete
 '
 test_expect_success 'repeat count works' '
     id=$(flux_cron interval -c1 .01s echo hi) &&

@@ -77,7 +77,7 @@ struct cron_entry {
     char *              command;            /* Command to execute            */
     char *              cwd;                /* Change working directory      */
     json_t *            env;                /* Optional environment for cmd,
-                                               (encoded as json array)       */
+                                               (encoded as json object)      */
 
     int                 repeat;             /* Total number of times to run  */
 

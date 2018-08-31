@@ -144,7 +144,6 @@ typedef struct {
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
-    struct subprocess *init_shell;
 } broker_ctx_t;
 
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
