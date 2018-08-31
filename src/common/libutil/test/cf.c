@@ -424,6 +424,7 @@ void test_update_file (void)
 void test_update_glob (void)
 {
     int rc;
+    int len;
     const char *tmpdir = getenv ("TMPDIR");
     char dir[PATH_MAX + 1];
     char path1[PATH_MAX + 1];
@@ -448,7 +449,9 @@ void test_update_glob (void)
     if (!(cf = cf_create ()))
         BAIL_OUT ("cf_create: %s", strerror (errno));
 
-    snprintf (p, sizeof (p), "%s/*.toml", dir);
+    len = snprintf (p, sizeof (p), "%s/*.toml", dir);
+    if ((len < 0) || (len >= sizeof (p)))
+        BAIL_OUT ("snprintf failed in creating toml file path");
 
     ok (cf_update_glob (cf, p, &error) == 3, 
         "cf_update_glob successfully parsed 3 files");

@@ -17,12 +17,12 @@ int main(int argc, char** argv)
     char path2[PATH_MAX];
     int n;
     struct stat sb;
-    int fd;
+    int fd, len;
 
     plan (NO_PLAN);
 
-    snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
-    if (!mkdtemp (path))
+    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
 
     n = unlink_recursive (path);
@@ -31,11 +31,11 @@ int main(int argc, char** argv)
         "cleaned up directory containing nothing");
 
 
-    snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
-    if (!mkdtemp (path))
+    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
-    snprintf (path2, sizeof (path2), "%s/a", path);
-    if (mkdir (path2, 0777) < 0)
+    len = snprintf (path2, sizeof (path2), "%s/a", path);
+    if ((len < 0) || (len >= sizeof (path2)) || mkdir (path2, 0777) < 0)
         BAIL_OUT ("could not create subdirectory");
     n = unlink_recursive (path);
     errno = 0;
@@ -43,31 +43,34 @@ int main(int argc, char** argv)
         "cleaned up directory containing 1 dir");
 
 
-    snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
-    if (!mkdtemp (path))
+    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
-    snprintf (path2, sizeof (path2), "%s/a", path);
-    if (mkdir (path2, 0777) < 0)
+    len = snprintf (path2, sizeof (path2), "%s/a", path);
+    if ((len < 0) || (len >= sizeof (path2)) || mkdir (path2, 0777) < 0)
         BAIL_OUT ("could not create subdirectory");
-    snprintf (path2, sizeof (path2), "%s/b", path);
-    if ((fd = open (path2, O_CREAT | O_RDWR, 0666)) < 0 || close (fd) < 0)
+    len = snprintf (path2, sizeof (path2), "%s/b", path);
+    if ((len < 0) || (len >= sizeof (path2))
+        || (fd = open (path2, O_CREAT | O_RDWR, 0666)) < 0 || close (fd) < 0)
         BAIL_OUT ("could not create subdirectory");
     n = unlink_recursive (path);
     errno = 0;
     ok (n == 3 && stat (path, &sb) < 0 && errno == ENOENT,
         "cleaned up directory containing 1 dir (empty) + 1 file ");
 
-    snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
-    if (!mkdtemp (path))
+    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
-    snprintf (path2, sizeof (path2), "%s/a", path);
-    if (mkdir (path2, 0777) < 0)
+    len = snprintf (path2, sizeof (path2), "%s/a", path);
+    if ((len < 0) || (len >= sizeof (path2)) || mkdir (path2, 0777) < 0)
         BAIL_OUT ("could not create subdirectory");
-    snprintf (path2, sizeof (path2), "%s/b", path);
-    if ((fd = open (path2, O_CREAT | O_RDWR, 0666)) < 0 || close (fd) < 0)
+    len = snprintf (path2, sizeof (path2), "%s/b", path);
+    if ((len < 0) || (len >= sizeof (path2))
+        || (fd = open (path2, O_CREAT | O_RDWR, 0666)) < 0 || close (fd) < 0)
         BAIL_OUT ("could not create subdirectory");
-    snprintf (path2, sizeof (path2), "%s/a/a", path);
-    if ((fd = open (path2, O_CREAT | O_RDWR, 0666)) < 0 || close (fd) < 0)
+    len = snprintf (path2, sizeof (path2), "%s/a/a", path);
+    if ((len < 0) || (len >= sizeof (path2))
+       || (fd = open (path2, O_CREAT | O_RDWR, 0666)) < 0 || close (fd) < 0)
         BAIL_OUT ("could not create file in subdirectory");
     n = unlink_recursive (path);
     errno = 0;
