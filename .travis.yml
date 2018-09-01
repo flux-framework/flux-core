@@ -112,6 +112,7 @@ script:
  - if test "$CPPCHECK" = "t" ; then MAKECMDS="sh -x src/test/cppcheck.sh && make"; fi
 
  - export FLUX_TESTS_LOGFILE=t
+ - export DISTCHECK_CONFIGURE_FLAGS=${ARGS}
  - if test "$COVERITY_SCAN_BRANCH" != "1" ; then ./autogen.sh && ./configure ${ARGS} && eval ${MAKECMDS}; fi
 
 after_success:
