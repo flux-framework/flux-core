@@ -197,14 +197,23 @@ static int decode_treeobj (flux_future_t *f, json_t **treeobj)
     return 0;
 }
 
-int flux_kvs_lookup_get (flux_future_t *f, const char **value)
+static struct lookup_ctx *get_lookup_ctx (flux_future_t *f)
 {
     struct lookup_ctx *ctx;
 
     if (!(ctx = flux_future_aux_get (f, auxkey))) {
         errno = EINVAL;
-        return -1;
+        return NULL;
     }
+    return ctx;
+}
+
+int flux_kvs_lookup_get (flux_future_t *f, const char **value)
+{
+    struct lookup_ctx *ctx;
+
+    if (!(ctx = get_lookup_ctx (f)))
+        return -1;
     if (!(ctx->treeobj)) {
         if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
@@ -225,10 +234,8 @@ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
     if (!(ctx->treeobj)) {
         if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
@@ -248,10 +255,8 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     va_list ap;
     int rc;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
     if (!(ctx->treeobj)) {
         if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
@@ -281,10 +286,8 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
     if (!(ctx->treeobj)) {
         if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
@@ -306,10 +309,8 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
     if (!(ctx->treeobj)) {
         if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
@@ -330,10 +331,8 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
     json_t *str;
     const char *s;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
     if (!(ctx->treeobj)) {
         if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
@@ -356,10 +355,8 @@ const char *flux_kvs_lookup_get_key (flux_future_t *f)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return NULL;
-    }
     return ctx->key;
 }
 
