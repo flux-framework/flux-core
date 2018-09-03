@@ -81,13 +81,13 @@ test_expect_success 'job-ingest: submit job 100 times, reuse signature' '
 test_expect_success HAVE_FLUX_SECURITY 'job-ingest: submit user != signed user fails' '
 	! FLUX_HANDLE_USERID=9999 ${SUBMITBENCH} \
 	     ${JOBSPEC}/valid/basic.yaml 2>baduser.out &&
-	grep -q permitted baduser.out
+	grep -q "signer=$(id -u) != requestor=9999" baduser.out
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 	! FLUX_HANDLE_ROLEMASK=0x2 ${SUBMITBENCH} \
 	     ${JOBSPEC}/valid/basic.yaml 2>badrole.out &&
-	grep -q permitted badrole.out
+	grep -q "only instance owner" badrole.out
 '
 
 test_done
