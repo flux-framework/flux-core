@@ -10,7 +10,7 @@ fi
 if test -x ${FLUX_BUILD_DIR}/src/cmd/flux-jobspec-validate; then
     test_set_prereq ENABLE_JOBSPEC
 fi
-if flux job --help 2>&1 | grep -q sign-type; then
+if flux job submitbench --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
     SUBMITBENCH_OPT_R="--reuse-signature"
     SUBMITBENCH_OPT_NONE="--sign-type=none"
