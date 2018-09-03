@@ -18,6 +18,13 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target);
 
 const char *flux_kvs_lookup_get_key (flux_future_t *f);
 
+/* Cancel a FLUX_KVS_WATCH "stream".
+ * Once the cancel request is processed, an ENODATA error response is sent,
+ * thus the user should continue to reset and consume responses until an
+ * error occurs, after which it is safe to destroy the future.
+ */
+int flux_kvs_lookup_cancel (flux_future_t *f);
+
 #ifdef __cplusplus
 }
 #endif

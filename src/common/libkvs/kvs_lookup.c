@@ -40,6 +40,7 @@ struct lookup_ctx {
     flux_t *h;
     char *key;
     char *atref;
+    int flags;
 
     json_t *treeobj;
     char *treeobj_str; // json_dumps of tree object returned from lookup
@@ -73,6 +74,7 @@ static struct lookup_ctx *alloc_ctx (flux_t *h, int flags, const char *key)
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto nomem;
     ctx->h = h;
+    ctx->flags = flags;
     if (!(ctx->key = strdup (key)))
         goto nomem;
     return ctx;
@@ -102,6 +104,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
     flux_future_t *f;
     const char *namespace;
     const char *topic = "kvs.lookup";
+    int flags_orig = flags;
 
     if ((flags & FLUX_KVS_WATCH)) {
         topic = "kvs-watch.lookup"; // redirect to kvs-watch module
@@ -113,7 +116,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
     }
     if (!(namespace = flux_kvs_get_namespace (h)))
         return NULL;
-    if (!(ctx = alloc_ctx (h, flags, key)))
+    if (!(ctx = alloc_ctx (h, flags_orig, key)))
         return NULL;
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:s s:s s:i}",
@@ -382,6 +385,31 @@ const char *flux_kvs_lookup_get_key (flux_future_t *f)
     if (!(ctx = get_lookup_ctx (f)))
         return NULL;
     return ctx->key;
+}
+
+
+/* This only applies with FLUX_KVS_WATCH.
+ * Causes a stream of lookup responses to end with an ENODATA response.
+ */
+int flux_kvs_lookup_cancel (flux_future_t *f)
+{
+    struct lookup_ctx *ctx;
+    flux_future_t *f2;
+
+    if (!f || !(ctx = flux_future_aux_get (f, auxkey))
+           || !(ctx->flags & FLUX_KVS_WATCH)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f2 = flux_rpc_pack (flux_future_get_flux (f),
+                              "kvs-watch.cancel",
+                              FLUX_NODEID_ANY,
+                              FLUX_RPC_NORESPONSE,
+                              "{s:i}",
+                              "matchtag", (int)flux_rpc_get_matchtag (f))))
+        return -1;
+    flux_future_destroy (f2);
+    return 0;
 }
 
 /*
