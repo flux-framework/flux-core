@@ -36,7 +36,7 @@ class TestEvent(unittest.TestCase):
             self.f.event_send("testevent.1", {'test': 'yay!'}), 0)
         evt = self.f.event_recv()
         self.assertIsNotNone(evt)
-        self.assertEqual(evt.topic, 'testevent.1')
+        self.assertEqual(evt.topic, b'testevent.1')
         pld = evt.payload
         self.assertIsNotNone(pld)
         self.assertEqual(pld['test'], 'yay!')

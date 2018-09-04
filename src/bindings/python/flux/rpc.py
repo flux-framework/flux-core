@@ -34,7 +34,7 @@ class RPC(WrapperPimpl):
 
                 if payload is None or payload == ffi.NULL:
                     payload = ffi.NULL
-                elif not (isinstance(payload, six.binary_type)):
+                elif not (isinstance(payload, six.string_types)):
                     payload = json.dumps(payload)
 
                 if isinstance(nodeid, six.binary_type):

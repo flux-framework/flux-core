@@ -55,7 +55,7 @@ class Message(WrapperPimpl):
     def from_event_encode(cls, topic, payload=None):
         if payload is None:
             payload = ffi.NULL
-        elif not isinstance(payload, six.text_type):
+        elif not isinstance(payload, six.string_types):
             # Convert dict or list into json string
             payload = json.dumps(payload)
         handle = raw.flux_event_encode(topic, payload)
