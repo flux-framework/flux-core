@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import unittest
 import errno
 import os
@@ -77,7 +78,7 @@ class TestKVS(unittest.TestCase):
         kd.commit()
         with self.assertRaises(KeyError):
             stuff = kd['todel']
-            print stuff
+            print (stuff)
 
     def test_fill(self):
         with flux.kvs.get_dir(self.f) as kd:
@@ -111,15 +112,16 @@ class TestKVS(unittest.TestCase):
 
     def test_read_non_existent(self):
         with self.assertRaises(KeyError):
-            print flux.kvs.KVSDir(self.f)[
+            print (flux.kvs.KVSDir(self.f)[
                 'crazykeythatclearlydoesntexistandneverwillinanyuniverse'
-            ]
+            ])
 
     def test_read_non_existent_basedir(self):
         with self.assertRaisesRegexp(EnvironmentError, "No such file"):
-            print flux.kvs.KVSDir(
+            print(flux.kvs.KVSDir(
                 self.f,
                 'crazykeythatclearlydoesntexistandneverwillinanyuniverse')
+                  )
 
     def test_iterator(self):
         keys = ['testdir1a.' + str(x) for x in range(1, 15)]
@@ -128,7 +130,7 @@ class TestKVS(unittest.TestCase):
                 kd[k] = "bar"
 
         with flux.kvs.get_dir(self.f, 'testdir1a') as kd:
-            print kd.keys()
+            print(kd.keys())
             for k, v in kd.items():
                 self.assertEqual(v, 'bar')
                 print("passed {}".format(k))
