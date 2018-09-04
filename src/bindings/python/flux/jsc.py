@@ -1,5 +1,5 @@
 from flux.wrapper import Wrapper
-from flux._jsc import ffi, lib
+from _flux._jsc import ffi, lib
 
 # Constants taken from jstatctl.h
 JSC_STATE_PAIR = "state-pair"
