@@ -145,7 +145,7 @@ def run_beside_flux(size=1):
     try:
         yield f
     finally:
-        os.environ.update(dict=env)
+        os.environ.update(env)
         f.destroy()
 
 

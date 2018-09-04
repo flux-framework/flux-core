@@ -62,11 +62,7 @@ class RPC(WrapperPimpl):
         self.then_args = None
         self.then_cb = None
 
-    def check(self):
-        return bool(self.pimpl.check())
 
-    def completed(self):
-        return bool(self.pimpl.completed())
 
     def get_str(self):
         j_str = ffi.new('char *[1]')
@@ -76,11 +72,3 @@ class RPC(WrapperPimpl):
     def get(self):
         return json.loads(self.get_str())
 
-    def then(self, callback, args):
-        def cb_then_wrapper(trash, arg):
-            rpc_handle = ffi.from_handle(arg)
-            callback(rpc_handle, rpc_handle.then_args)
-        # Save the callback to keep it from getting collected
-        self.then_cb = ffi.callback('flux_then_f', cb_then_wrapper)
-        self.then_args = args
-        return self.pimpl.then(self.then_cb, ffi.new_handle(self))
