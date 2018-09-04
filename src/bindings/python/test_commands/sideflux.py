@@ -50,7 +50,10 @@ class SideFlux(object):
         self.cleaned = False
 
     def start(self):
-        flux_command = [flux_exe, 'start', '--size={}'.format(self.size), '-o',
+        flux_command = [flux_exe, 'start',
+                        '--bootstrap=selfpmi',
+                        '--size={}'.format(self.size),
+                        '-o',
                         '-Slog-forward-level=7',
                         '--scratchdir=' + self.tmpdir, 'bash']
         # print ' '.join(flux_command)
@@ -103,6 +106,9 @@ class SideFlux(object):
                         raise EnvironmentError(self.sub.poll())
         self.p.start()
 
+    def get_uri():
+        return self.flux_uri
+
     def apply_environment(self):
         for k, v in self.env_items.items():
             os.environ[k] = v
@@ -145,7 +151,7 @@ def run_beside_flux(size=1):
     try:
         yield f
     finally:
-        os.environ.update(dict=env)
+        os.environ.update(env)
         f.destroy()
 
 
