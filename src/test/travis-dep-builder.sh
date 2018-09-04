@@ -44,7 +44,7 @@ declare -A extra_make_opts=(\
 )
 
 declare -A extra_cmake_opts=(\
-["Caliper"]="-DCMAKE_C_COMPILER=/usr/bin/gcc-4.9 -DCMAKE_CXX_COMPILER=g++-4.9"
+["Caliper"]="-DCMAKE_C_COMPILER=/usr/bin/gcc-8 -DCMAKE_CXX_COMPILER=g++-8"
 )
 
 #

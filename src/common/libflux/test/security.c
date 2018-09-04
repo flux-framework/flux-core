@@ -444,7 +444,10 @@ void test_curve (void)
     zcert_apply (rogue_cert, rogue);
     /* read server public key from file */
     char server_file[PATH_MAX];
-    snprintf (server_file, sizeof (server_file), "%s/curve/server", path);
+    int n;
+    n = snprintf (server_file, sizeof (server_file), "%s/curve/server", path);
+    if ((n < 0) || (n >= sizeof (server_file)))
+        BAIL_OUT ("snprintf failed in creation of server_file");
     zcert_t *server_cert = zcert_load (server_file);
     if (!server_cert)
         BAIL_OUT ("zcert_load %s: %s", server_file, zmq_strerror (errno));
