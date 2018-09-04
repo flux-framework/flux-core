@@ -10,7 +10,7 @@ fi
 if test -x ${FLUX_BUILD_DIR}/src/cmd/flux-jobspec-validate; then
     test_set_prereq ENABLE_JOBSPEC
 fi
-if flux job --help 2>&1 | grep -q sign-type; then
+if flux job submitbench --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
     SUBMITBENCH_OPT_R="--reuse-signature"
     SUBMITBENCH_OPT_NONE="--sign-type=none"
@@ -81,13 +81,13 @@ test_expect_success 'job-ingest: submit job 100 times, reuse signature' '
 test_expect_success HAVE_FLUX_SECURITY 'job-ingest: submit user != signed user fails' '
 	! FLUX_HANDLE_USERID=9999 ${SUBMITBENCH} \
 	     ${JOBSPEC}/valid/basic.yaml 2>baduser.out &&
-	grep -q permitted baduser.out
+	grep -q "signer=$(id -u) != requestor=9999" baduser.out
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 	! FLUX_HANDLE_ROLEMASK=0x2 ${SUBMITBENCH} \
 	     ${JOBSPEC}/valid/basic.yaml 2>badrole.out &&
-	grep -q permitted badrole.out
+	grep -q "only instance owner" badrole.out
 '
 
 test_done
