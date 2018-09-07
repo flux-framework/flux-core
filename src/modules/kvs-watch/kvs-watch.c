@@ -514,7 +514,7 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
 }
 
 /* kvs.namespace-remove event
- * A namespace has been removed.  All watchers should receive ENODATA.
+ * A namespace has been removed.  All watchers should receive ENOENT.
  */
 static void remove_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
@@ -528,7 +528,7 @@ static void remove_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     if ((ns = zhash_lookup (ctx->namespaces, namespace))) {
-        ns->errnum = ENODATA;
+        ns->errnum = ENOENT;
         watcher_respond_ns (ns);
     }
 }
