@@ -226,6 +226,7 @@ check_PROGRAMS = \
 	kvs/transactionmerge \
 	kvs/fence_namespace_remove \
 	kvs/fence_invalid \
+	kvs/commit_order \
 	module/basic \
 	request/treq \
 	barrier/tbarrier \
@@ -372,6 +373,11 @@ kvs_fence_namespace_remove_LDADD = \
 kvs_fence_invalid_SOURCES = kvs/fence_invalid.c
 kvs_fence_invalid_CPPFLAGS = $(test_cppflags)
 kvs_fence_invalid_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_commit_order_SOURCES = kvs/commit_order.c
+kvs_commit_order_CPPFLAGS = $(test_cppflags)
+kvs_commit_order_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
