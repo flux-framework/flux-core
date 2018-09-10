@@ -33,6 +33,8 @@ SYNOPSIS
 
  const char *flux_kvs_lookup_get_key (flux_future_t *f);
 
+ int flux_kvs_lookup_cancel (flux_future_t *f);
+
 
 DESCRIPTION
 -----------
@@ -92,6 +94,10 @@ The result is parsed and symlink target is assigned to _target_.
 `flux_kvs_lookup_get_key()` accesses the key argument from the original
 lookup.
 
+`flux_kvs_lookup_cancel()` cancels a stream of lookup responses requested
+with FLUX_KVS_WATCH (see below).  The future will be fulfilled with
+an ENODATA error once the cancel request is received and processed.
+
 These functions may be used asynchronously.  See `flux_future_then(3)` for
 details.
 
@@ -117,6 +123,14 @@ be converted to a "val" object, and a "dirref" will not be converted
 to a "dir" object.  This is useful for obtaining a snapshot reference
 that can be passed to `flux_kvs_lookupat()`.
 
+FLUX_KVS_WATCH::
+After the initial response, continue to send responses to the lookup
+request each time _key_ is mentioned verbatim in a committed transaction.
+Responses continue until the namespace is removed, the key is removed,
+the lookup is canceled with `flux_kvs_lookup_cancel()`, or an error
+occurs.  `flux_future_reset()` should be used to consume a response
+and prepare for the next one.
+
 
 RETURN VALUE
 ------------
@@ -126,8 +140,9 @@ RETURN VALUE
 
 `flux_kvs_lookup_get()`, `flux_kvs_lookup_get_unpack()`,
 `flux_kvs_lookup_get_raw()`, `flux_kvs_lookup_get_dir()`,
-`flux_kvs_lookup_get_treeobj()`, and `flux_kvs_lookup_get_symlink()`
-return 0 on success, or -1 on failure with errno set appropriately.
+`flux_kvs_lookup_get_treeobj()`, `flux_kvs_lookup_get_symlink()`,
+and `flux_kvs_lookup_cancel()` return 0 on success, or -1 on failure with
+errno set appropriately.
 
 `flux_kvs_lookup_get_key()` returns key on success, or NULL with errno
 set to EINVAL if its future argument did not come from a KVS lookup.
@@ -162,6 +177,15 @@ The KVS module is not loaded.
 
 ENOTSUP::
 An unknown namespace was requested.
+
+ENODATA::
+A stream of responses requested with FLUX_KVS_WATCH was terminated
+with `flux_kvs_lookup_cancel()`.
+
+EPERM::
+The user does not have instance owner capability, and a lookup was attempted
+against a KVS namespace owned by another user.
+
 
 AUTHOR
 ------
