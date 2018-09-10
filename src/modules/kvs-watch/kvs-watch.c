@@ -593,7 +593,8 @@ static void getroot_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_getroot_get_sequence (f, &rootseq) < 0
             || flux_kvs_getroot_get_blobref (f, &rootref) < 0
             || flux_kvs_getroot_get_owner (f, &owner) < 0) {
-        flux_log_error (ns->ctx->h, "%s: kvs_getroot", __FUNCTION__);
+        if (errno != ENOTSUP && errno != EPERM)
+            flux_log_error (ns->ctx->h, "%s: kvs_getroot", __FUNCTION__);
         ns->errnum = errno;
         goto done;
     }
