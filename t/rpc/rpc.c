@@ -566,6 +566,65 @@ void test_multi_response_then_chain (flux_t *h)
         BAIL_OUT ("flux_reactor_run failed");
 }
 
+/* Try flux_rpc_message() with various bad arguments
+ */
+void test_rpc_message_inval (flux_t *h)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        BAIL_OUT ("flux_response_create failed");
+
+    errno = 0;
+    ok (flux_rpc_message (NULL, msg, FLUX_NODEID_ANY, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message h=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_rpc_message (h, NULL, FLUX_NODEID_ANY, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message msg=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0xffff) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message flags=wrong fails with EINVAL");
+
+    flux_msg_destroy (msg);
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        BAIL_OUT ("flux_response_create failed");
+
+    errno = 0;
+    ok (flux_rpc_message (h, msg , FLUX_NODEID_ANY, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message msg=event fails with EINVAL");
+
+    flux_msg_destroy (msg);
+
+}
+
+/* Try flux_rpc_message() hello world
+ */
+void test_rpc_message (flux_t *h)
+{
+    flux_msg_t *msg;
+    flux_future_t *f;
+    const char *s;
+
+    if (!(msg = flux_request_encode ("rpctest.hello", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+
+    ok ((f = flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0)) != NULL,
+        "flux_rpc_message works");
+    errno = 0;
+    ok (flux_rpc_get (f, &s) == 0 && s == NULL,
+        "flux_rpc_message response received from rpctest.hello");
+
+    flux_future_destroy (f);
+    flux_msg_destroy (msg);
+}
+
 /* Bit of code to test the test framework.
  */
 static int fake_server (flux_t *h, void *arg)
@@ -639,6 +698,8 @@ int main (int argc, char *argv[])
     test_multi_response (h);
     test_multi_response_then (h);
     test_multi_response_then_chain (h);
+    test_rpc_message_inval (h);
+    test_rpc_message (h);
 
     ok (test_server_stop (h) == 0,
         "stopped test server thread");
