@@ -46,6 +46,8 @@ python-devel >= 2.7
 python-cffi >= 1.1
 # for man pages
 asciidoc
+# or
+asciidoctor >= 1.5.7
 ```
 
 If you want to build the MPI-based test programs, make sure that
