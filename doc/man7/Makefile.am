@@ -19,14 +19,14 @@ if ENABLE_ADOC
 .adoc.7:
 	$(AM_V_GEN)$(ADOC) --attribute mansource=$(PACKAGE_NAME) \
 	    --attribute manversion=$(PACKAGE_VERSION) \
-	    --attribute manmanual="Flux Command Reference" \
+	    --attribute manmanual="Flux Miscellaneous Reference" \
 	    --destination-dir $(builddir) \
 	    --doctype manpage --backend manpage $< $(STDERR_DEVNULL)
 else
 .adoc.7:
 	$(AM_V_GEN)$(A2X) --attribute mansource=$(PACKAGE_NAME) \
 	    --attribute manversion=$(PACKAGE_VERSION) \
-	    --attribute manmanual="Flux Command Reference" \
+	    --attribute manmanual="Flux Miscellaneous Reference" \
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 endif
