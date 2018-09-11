@@ -47,10 +47,6 @@ before_install:
   - test "$TRAVIS_PULL_REQUEST" == "false" || export CCACHE_READONLY=1
   - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
 
-  - rm -rf $HOME/.luarocks
-  - $(./src/test/travis-dep-builder.sh --printenv)
-  - ./src/test/travis-dep-builder.sh --cachedir=$HOME/local/.cache
-
   # coveralls-lcov required only for coveralls upload:
   - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
 
