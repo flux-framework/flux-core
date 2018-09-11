@@ -68,13 +68,16 @@ Remove a kvs namespace.
 *namespace-list*::
 List all current namespaces and info on each namespace.
 
-*get* [-j|-r|-t] [-a treeobj] 'key' ['key...']::
+*get* [-j|-r|-t] [-a treeobj] [-l] [-w] [-c count] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.  If no options, value is displayed with
-a newline appended (if value length is nonzero).  If '-j', value is
-interpreted as encoded JSON and formatted accordingly.  If '-r', value
-is displayed without a newline.  If '-t', the RFC 11 object is displayed.
-'-a treeobj' causes the lookup to be relative to an RFC 11 snapshot reference.
+a newline appended (if value length is nonzero).  If '-l', a 'key=' prefix is
+added. If '-j', value is interpreted as encoded JSON and formatted accordingly.
+If '-r', value is displayed without a newline.  If '-t', the RFC 11 object
+is displayed.  '-a treeobj' causes the lookup to be relative to an RFC 11
+snapshot reference.  If '-w', after the initial value, display the
+new value each time the key changes until interrupted, or if '-c count'
+is specified, until 'count' values have been displayed.
 
 *put* [-j|-r|-t] [-n] [-A] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
