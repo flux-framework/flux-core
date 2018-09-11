@@ -36,6 +36,7 @@ RUN apt-get -qq update \
             cppcheck \
             clang-tidy \
             ccache \
+            valgrind \
  && luarocks install luaposix \
  && /usr/bin/gem install asciidoctor \
  && rm -rf /var/lib/apt/lists/*
