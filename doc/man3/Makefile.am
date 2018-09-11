@@ -147,6 +147,7 @@ MAN3_FILES_SECONDARY = \
 	flux_future_continue_error.3 \
 	flux_rpc_pack.3 \
 	flux_rpc_raw.3 \
+	flux_rpc_message.3 \
 	flux_rpc_get.3 \
 	flux_rpc_get_unpack.3 \
 	flux_rpc_get_raw.3 \
@@ -290,6 +291,7 @@ flux_future_set_flux.3: flux_future_create.3
 flux_future_get_flux.3: flux_future_create.3
 flux_rpc_pack.3: flux_rpc.3
 flux_rpc_raw.3: flux_rpc.3
+flux_rpc_message.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
 flux_rpc_get_unpack.3: flux_rpc.3
 flux_rpc_get_raw.3: flux_rpc.3
