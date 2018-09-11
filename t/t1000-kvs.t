@@ -976,4 +976,13 @@ test_expect_success NO_CHAIN_LINT 'kvs: version and wait' '
         test_expect_code 0 wait $kvswaitpid
 '
 
+#
+# Other get options
+#
+
+test_expect_success 'kvs: get --label works' '
+	flux kvs put test.ZZZ=42 &&
+	flux kvs get --label test.ZZZ |grep test.ZZZ=42
+'
+
 test_done
