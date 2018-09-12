@@ -39,11 +39,21 @@ void errors (void)
     ok (flux_kvs_lookup_get_key (NULL) == NULL && errno == EINVAL,
         "flux_kvs_lookup_get_key future=NULL fails with EINVAL");
 
+    errno = 0;
+    ok (flux_kvs_lookup_cancel (NULL) == -1 && errno == EINVAL,
+        "flux_kvs_lookup_cancel future=NULL fails with EINVAL");
+
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
+
     errno = 0;
     ok (flux_kvs_lookup_get_key (f) == NULL && errno == EINVAL,
         "flux_kvs_lookup_get_key future=(wrong type) fails with EINVAL");
+
+    errno = 0;
+    ok (flux_kvs_lookup_cancel (f) == -1 && errno == EINVAL,
+        "flux_kvs_lookup_cancel future=(wrong type) fails with EINVAL");
+
     flux_future_destroy (f);
 }
 

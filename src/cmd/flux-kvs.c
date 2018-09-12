@@ -96,6 +96,15 @@ static struct optparse_option get_opts[] =  {
     { .name = "at", .key = 'a', .has_arg = 1,
       .usage = "Lookup relative to RFC 11 snapshot reference",
     },
+    { .name = "label", .key = 'l', .has_arg = 0,
+      .usage = "Print key= before value",
+    },
+    { .name = "watch", .key = 'w', .has_arg = 0,
+      .usage = "Monitor root changes",
+    },
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
+      .usage = "Display at most COUNT changes",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -228,7 +237,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "get",
-      "[-j|-r|-t] [-a treeobj] key [key...]",
+      "[-j|-r|-t] [-a treeobj] [-l] [-w] [-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -585,62 +594,125 @@ static void output_key_json_str (const char *key,
     json_decref (o);
 }
 
+struct lookup_ctx {
+    optparse_t *p;
+    int maxcount;
+    int count;
+};
+
+
+void lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct lookup_ctx *ctx = arg;
+    const char *key = flux_kvs_lookup_get_key (f);
+
+    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
+                                          && errno == ENODATA) {
+        flux_future_destroy (f);
+        return; // EOF
+    }
+
+    if (optparse_hasopt (ctx->p, "treeobj")) {
+        const char *treeobj;
+        if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
+            log_err_exit ("%s", key);
+        if (optparse_hasopt (ctx->p, "label"))
+            printf ("%s=", key);
+        printf ("%s\n", treeobj);
+    }
+    else if (optparse_hasopt (ctx->p, "json")) {
+        const char *json_str;
+        if (flux_kvs_lookup_get (f, &json_str) < 0)
+            log_err_exit ("%s", key);
+        if (!json_str)
+            log_msg_exit ("%s: zero-length value", key);
+        if (optparse_hasopt (ctx->p, "label"))
+            printf ("%s=", key);
+        output_key_json_str (NULL, json_str, key);
+    }
+    else if (optparse_hasopt (ctx->p, "raw")) {
+        const void *data;
+        int len;
+        if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
+            log_err_exit ("%s", key);
+        if (optparse_hasopt (ctx->p, "label"))
+            printf ("%s=", key);
+        if (write_all (STDOUT_FILENO, data, len) < 0)
+            log_err_exit ("%s", key);
+    }
+    else {
+        const char *value;
+        if (flux_kvs_lookup_get (f, &value) < 0)
+            log_err_exit ("%s", key);
+        if (optparse_hasopt (ctx->p, "label"))
+            printf ("%s=", key);
+        if (value)
+            printf ("%s\n", value);
+    }
+    fflush (stdout);
+    if (optparse_hasopt (ctx->p, "watch")) {
+        flux_future_reset (f);
+        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount) {
+            if (flux_kvs_lookup_cancel (f) < 0)
+                log_err_exit ("flux_kvs_lookup_cancel");
+        }
+    }
+    else
+        flux_future_destroy (f);
+}
+
+void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
+{
+    flux_future_t *f;
+    int flags = 0;
+
+    if (optparse_hasopt (ctx->p, "treeobj"))
+        flags |= FLUX_KVS_TREEOBJ;
+    if (optparse_hasopt (ctx->p, "watch"))
+        flags |= FLUX_KVS_WATCH;
+    if (optparse_hasopt (ctx->p, "at")) {
+        const char *reference = optparse_get_str (ctx->p, "at", "");
+        if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
+            log_err_exit ("%s", key);
+    }
+    else {
+        if (!(f = flux_kvs_lookup (h, flags, key)))
+            log_err_exit ("%s", key);
+    }
+    if (flux_future_then (f, -1., lookup_continuation, ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (!optparse_hasopt (ctx->p, "watch")) {
+        if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+            log_err_exit ("flux_reactor_run");
+    }
+}
+
 int cmd_get (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    flux_future_t *f;
     int optindex, i;
+    struct lookup_ctx ctx;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
-    for (i = optindex; i < argc; i++) {
-        const char *key = argv[i];
-        int flags = 0;
-        if (optparse_hasopt (p, "treeobj"))
-            flags |= FLUX_KVS_TREEOBJ;
-        if (optparse_hasopt (p, "at")) {
-            const char *reference = optparse_get_str (p, "at", "");
-            if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
-                log_err_exit ("%s", key);
-        }
-        else {
-            if (!(f = flux_kvs_lookup (h, flags, key)))
-                log_err_exit ("%s", key);
-        }
-        if (optparse_hasopt (p, "treeobj")) {
-            const char *treeobj;
-            if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
-                log_err_exit ("%s", key);
-            printf ("%s\n", treeobj);
-        }
-        else if (optparse_hasopt (p, "json")) {
-            const char *json_str;
-            if (flux_kvs_lookup_get (f, &json_str) < 0)
-                log_err_exit ("%s", key);
-            if (!json_str)
-                log_msg_exit ("%s: zero-length value", key);
-            output_key_json_str (NULL, json_str, key);
-        }
-        else if (optparse_hasopt (p, "raw")) {
-            const void *data;
-            int len;
-            if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
-                log_err_exit ("%s", key);
-            if (write_all (STDOUT_FILENO, data, len) < 0)
-                log_err_exit ("%s", key);
-        }
-        else {
-            const char *value;
-            if (flux_kvs_lookup_get (f, &value) < 0)
-                log_err_exit ("%s", key);
-            if (value)
-                printf ("%s\n", value);
-        }
-        flux_future_destroy (f);
+    ctx.p = p;
+    ctx.count = 0;
+    ctx.maxcount = optparse_get_int (p, "count", 0);
+    for (i = optindex; i < argc; i++)
+        cmd_get_one (h, argv[i], &ctx);
+    /* Unless --watch is specified, cmd_get_one() starts the reactor and
+     * waits for it to complete, effectively making each lookup synchronous,
+     * so that value output order matches command line order of keys.
+     * Otherwise, make all the lookups before running the reactor.
+     */
+    if (optparse_hasopt (p, "watch")) {
+        if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+            log_err_exit ("flux_reactor_run");
     }
+
     return (0);
 }
 

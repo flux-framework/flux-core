@@ -205,10 +205,10 @@ error:
     flux_future_fulfill_error (f, errno, NULL);
 }
 
-static flux_future_t *flux_rpc_msg (flux_t *h,
-                                    uint32_t nodeid,
-                                    int flags,
-                                    flux_msg_t *msg)
+static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
+                                               flux_msg_t *msg,
+                                               uint32_t nodeid,
+                                               int flags)
 {
     struct flux_rpc *rpc = NULL;
     flux_future_t *f;
@@ -257,6 +257,29 @@ error:
     return NULL;
 }
 
+flux_future_t *flux_rpc_message (flux_t *h,
+                                 const flux_msg_t *msg,
+                                 uint32_t nodeid,
+                                 int flags)
+{
+    flux_msg_t *cpy;
+    flux_future_t *f;
+
+    if (!h || !msg || (flags != 0 && flags != FLUX_RPC_NORESPONSE)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(cpy = flux_msg_copy (msg, true)))
+        return NULL;
+    if (!(f = flux_rpc_message_nocopy (h, cpy, nodeid, flags)))
+        goto error;
+    flux_msg_destroy (cpy);
+    return f;
+error:
+    flux_msg_destroy (cpy);
+    return NULL;
+}
+
 flux_future_t *flux_rpc (flux_t *h,
                          const char *topic,
                          const char *s,
@@ -267,7 +290,7 @@ flux_future_t *flux_rpc (flux_t *h,
     flux_future_t *f = NULL;
     if (!(msg = flux_request_encode (topic, s)))
         goto done;
-    if (!(f = flux_rpc_msg (h, nodeid, flags, msg)))
+    if (!(f = flux_rpc_message_nocopy (h, msg, nodeid, flags)))
         goto done;
 done:
     flux_msg_destroy (msg);
@@ -286,7 +309,7 @@ flux_future_t *flux_rpc_raw (flux_t *h,
 
     if (!(msg = flux_request_encode_raw (topic, data, len)))
         goto done;
-    if (!(f = flux_rpc_msg (h, nodeid, flags, msg)))
+    if (!(f = flux_rpc_message_nocopy (h, msg, nodeid, flags)))
         goto done;
 done:
     flux_msg_destroy (msg);
@@ -306,7 +329,7 @@ static flux_future_t *flux_rpc_vpack (flux_t *h,
         goto done;
     if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto done;
-    f = flux_rpc_msg (h, nodeid, flags, msg);
+    f = flux_rpc_message_nocopy (h, msg, nodeid, flags);
 done:
     flux_msg_destroy (msg);
     return f;

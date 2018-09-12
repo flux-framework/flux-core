@@ -100,7 +100,7 @@ test_expect_success NO_CHAIN_LINT 'kvs-watch namespace removal terminates stream
 	pid=$! &&
 	$waitfile --timeout=10 seq3.out &&
 	flux kvs namespace-remove meep &&
-	wait $pid
+	! wait $pid
 '
 
 # Security checks

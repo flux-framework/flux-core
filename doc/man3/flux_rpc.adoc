@@ -5,7 +5,7 @@ flux_rpc(3)
 
 NAME
 ----
-flux_rpc, flux_rpc_pack, flux_rpc_raw, flux_rpc_get, flux_rpc_get_unpack, flux_rpc_get_raw - perform a remote procedure call to a Flux service
+flux_rpc, flux_rpc_pack, flux_rpc_raw, flux_rpc_message, flux_rpc_get, flux_rpc_get_unpack, flux_rpc_get_raw - perform a remote procedure call to a Flux service
 
 
 SYNOPSIS
@@ -24,6 +24,10 @@ SYNOPSIS
                               const void *data, int len,
                               uint32_t nodeid, int flags);
 
+ flux_future_t *flux_rpc_message (flux_t *h,
+                                  const flux_msg_t *msg,
+                                  uint32_t nodeid, int flags);
+
  int flux_rpc_get (flux_future_t *f, const char **s);
 
  int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
@@ -41,6 +45,10 @@ via Flux broker handle _h_ to a Flux service identified by _topic_
 and _nodeid_.  A `flux_future_t` object is returned which acts as a handle
 for synchronization and a container for the response message which in
 turn contains the RPC result.
+
+A lower-level variant of `flux_rpc()`, `flux_rpc_message()` accepts a
+pre-created request message, assigning _nodeid_ and matchtag according
+to _flags_.
 
 `flux_future_then(3)` may be used to register a reactor callback
 (continuation) to be called once the response has been received.

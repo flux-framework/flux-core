@@ -40,6 +40,7 @@ struct lookup_ctx {
     flux_t *h;
     char *key;
     char *atref;
+    int flags;
 
     json_t *treeobj;
     char *treeobj_str; // json_dumps of tree object returned from lookup
@@ -57,6 +58,7 @@ static void free_ctx (struct lookup_ctx *ctx)
     if (ctx) {
         free (ctx->key);
         free (ctx->atref);
+        json_decref (ctx->treeobj);
         free (ctx->treeobj_str);
         free (ctx->val_data);
         json_decref (ctx->val_obj);
@@ -72,6 +74,7 @@ static struct lookup_ctx *alloc_ctx (flux_t *h, int flags, const char *key)
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto nomem;
     ctx->h = h;
+    ctx->flags = flags;
     if (!(ctx->key = strdup (key)))
         goto nomem;
     return ctx;
@@ -100,16 +103,22 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
     struct lookup_ctx *ctx;
     flux_future_t *f;
     const char *namespace;
+    const char *topic = "kvs.lookup";
+    int flags_orig = flags;
 
+    if ((flags & FLUX_KVS_WATCH)) {
+        topic = "kvs-watch.lookup"; // redirect to kvs-watch module
+        flags &= ~FLUX_KVS_WATCH;
+    }
     if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
         errno = EINVAL;
         return NULL;
     }
     if (!(namespace = flux_kvs_get_namespace (h)))
         return NULL;
-    if (!(ctx = alloc_ctx (h, flags, key)))
+    if (!(ctx = alloc_ctx (h, flags_orig, key)))
         return NULL;
-    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:s s:s s:i}",
                              "key", key,
                              "namespace", namespace,
@@ -132,6 +141,8 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
     json_t *obj = NULL;
     struct lookup_ctx *ctx;
 
+    /* N.B. FLUX_KVS_WATCH is not valid for lookupat (r/o snapshot).
+     */
     if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
         errno = EINVAL;
         return NULL;
@@ -190,18 +201,60 @@ static int decode_treeobj (flux_future_t *f, json_t **treeobj)
     return 0;
 }
 
-int flux_kvs_lookup_get (flux_future_t *f, const char **value)
+static struct lookup_ctx *get_lookup_ctx (flux_future_t *f)
 {
     struct lookup_ctx *ctx;
 
     if (!(ctx = flux_future_aux_get (f, auxkey))) {
         errno = EINVAL;
+        return NULL;
+    }
+    return ctx;
+}
+
+/* Parse the lookup response message, extracting the 'val' treeobj.
+ * If decoded results were previously cached and the response has
+ * changed (e.g. future has been reset and another response has arrived),
+ * invalidate the cached results.
+ */
+static int parse_response (flux_future_t *f, struct lookup_ctx *ctx)
+{
+    json_t *treeobj2;
+
+    if (decode_treeobj (f, &treeobj2) < 0)
         return -1;
+    if (!ctx->treeobj || !json_equal (ctx->treeobj, treeobj2)) {
+        json_decref (ctx->treeobj);
+        ctx->treeobj = json_incref (treeobj2);
+        if (ctx->treeobj_str) {
+            free (ctx->treeobj_str);
+            ctx->treeobj_str = NULL;
+        }
+        if (ctx->val_valid) {
+            free (ctx->val_data);
+            ctx->val_data = NULL;
+            ctx->val_valid = false;
+        }
+        if (ctx->val_obj) {
+            json_decref (ctx->val_obj);
+            ctx->val_obj = NULL;
+        }
+        if (ctx->dir) {
+            flux_kvsdir_destroy (ctx->dir);
+            ctx->dir = NULL;
+        }
     }
-    if (!(ctx->treeobj)) {
-        if (decode_treeobj (f, &ctx->treeobj) < 0)
-            return -1;
-    }
+    return 0;
+}
+
+int flux_kvs_lookup_get (flux_future_t *f, const char **value)
+{
+    struct lookup_ctx *ctx;
+
+    if (!(ctx = get_lookup_ctx (f)))
+        return -1;
+    if (parse_response (f, ctx) < 0)
+        return -1;
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
                                               &ctx->val_len) < 0)
@@ -218,14 +271,10 @@ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
-    if (!(ctx->treeobj)) {
-        if (decode_treeobj (f, &ctx->treeobj) < 0)
-            return -1;
-    }
+    if (parse_response (f, ctx) < 0)
+        return -1;
     if (!ctx->treeobj_str) {
         if (!(ctx->treeobj_str = treeobj_encode (ctx->treeobj)))
             return -1;
@@ -241,14 +290,10 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     va_list ap;
     int rc;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
-    if (!(ctx->treeobj)) {
-        if (decode_treeobj (f, &ctx->treeobj) < 0)
-            return -1;
-    }
+    if (parse_response (f, ctx) < 0)
+        return -1;
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
                                               &ctx->val_len) < 0)
@@ -274,14 +319,10 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
-    if (!(ctx->treeobj)) {
-        if (decode_treeobj (f, &ctx->treeobj) < 0)
-            return -1;
-    }
+    if (parse_response (f, ctx) < 0)
+        return -1;
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
                                               &ctx->val_len) < 0)
@@ -299,14 +340,10 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
-    if (!(ctx->treeobj)) {
-        if (decode_treeobj (f, &ctx->treeobj) < 0)
-            return -1;
-    }
+    if (parse_response (f, ctx) < 0)
+        return -1;
     if (!ctx->dir) {
         if (!(ctx->dir = kvsdir_create_fromobj (ctx->h, ctx->atref,
                                                 ctx->key, ctx->treeobj)))
@@ -323,14 +360,10 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
     json_t *str;
     const char *s;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return -1;
-    }
-    if (!(ctx->treeobj)) {
-        if (decode_treeobj (f, &ctx->treeobj) < 0)
-            return -1;
-    }
+    if (parse_response (f, ctx) < 0)
+        return -1;
     if (!treeobj_is_symlink (ctx->treeobj)) {
         errno = EINVAL;
         return -1;
@@ -349,11 +382,34 @@ const char *flux_kvs_lookup_get_key (flux_future_t *f)
 {
     struct lookup_ctx *ctx;
 
-    if (!(ctx = flux_future_aux_get (f, auxkey))) {
-        errno = EINVAL;
+    if (!(ctx = get_lookup_ctx (f)))
         return NULL;
-    }
     return ctx->key;
+}
+
+
+/* This only applies with FLUX_KVS_WATCH.
+ * Causes a stream of lookup responses to end with an ENODATA response.
+ */
+int flux_kvs_lookup_cancel (flux_future_t *f)
+{
+    struct lookup_ctx *ctx;
+    flux_future_t *f2;
+
+    if (!f || !(ctx = flux_future_aux_get (f, auxkey))
+           || !(ctx->flags & FLUX_KVS_WATCH)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f2 = flux_rpc_pack (flux_future_get_flux (f),
+                              "kvs-watch.cancel",
+                              FLUX_NODEID_ANY,
+                              FLUX_RPC_NORESPONSE,
+                              "{s:i}",
+                              "matchtag", (int)flux_rpc_get_matchtag (f))))
+        return -1;
+    flux_future_destroy (f2);
+    return 0;
 }
 
 /*
