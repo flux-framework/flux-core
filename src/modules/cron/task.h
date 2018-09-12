@@ -35,8 +35,7 @@ typedef struct cron_task cron_task_t;
 /*  io callback fn for cron task
  */
 typedef void (*cron_task_io_f) (flux_t *h, cron_task_t *t, void *arg,
-                                bool is_stderr, const char *data, int datalen,
-                                bool eof);
+                                bool is_stderr, const char *data, int datalen);
 
 /*  task state change handler for cron task, check state with
  *   cron_task_state().
@@ -46,13 +45,13 @@ typedef void (*cron_task_state_f) (flux_t *h, cron_task_t *t, void *arg);
 /*  task completion handler, the only required handler for cron task,
  *   called when task and its I/O have completed.
  */
-typedef void (*cron_task_complete_f) (flux_t *h, cron_task_t *t, void *arg);
+typedef void (*cron_task_finished_f) (flux_t *h, cron_task_t *t, void *arg);
 
 /*  create a new cron task using flux handle `h`. Completion handler
  *   `cb` will be called when cron task has fully completed. All callbacks
  *   will be passed context `arg`.
  */
-cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg);
+cron_task_t *cron_task_new (flux_t *h, cron_task_finished_f cb, void *arg);
 
 /*  destroy cron task `t`
  */

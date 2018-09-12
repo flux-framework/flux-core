@@ -60,16 +60,16 @@ struct cron_task {
 
     unsigned int       started:1;
     unsigned int  rexec_failed:1;
+    unsigned int   exec_failed:1;
     unsigned int       running:1;
     unsigned int      timedout:1;
     unsigned int        exited:1;
-    unsigned int stderr_closed:1;
-    unsigned int stdout_closed:1;
+    unsigned int     completed:1;
 
     cron_task_io_f       io_cb;
     cron_task_state_f    state_cb;
     cron_task_state_f    timeout_cb;
-    cron_task_complete_f completion_cb;
+    cron_task_finished_f finished_cb;
     void *               arg;
 };
 
@@ -83,7 +83,7 @@ void cron_task_destroy (cron_task_t *t)
     free (t);
 }
 
-cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg)
+cron_task_t *cron_task_new (flux_t *h, cron_task_finished_f cb, void *arg)
 {
     cron_task_t *t = calloc (1, sizeof (*t));
     if (t == NULL)
@@ -93,7 +93,7 @@ cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg)
         return NULL;
     }
     t->h = h;
-    t->completion_cb = cb;
+    t->finished_cb = cb;
     t->arg = arg;
     clock_gettime (CLOCK_REALTIME, &t->createtime);
     t->timeout = 0.0;
@@ -110,11 +110,13 @@ void cron_task_on_state_change (cron_task_t *t, cron_task_state_f cb)
     t->state_cb = cb;
 }
 
-static bool cron_task_completed (cron_task_t *t)
+static bool cron_task_finished (cron_task_t *t)
 {
     if (t->rexec_failed)
         return true;
-    if (t->exited && t->stderr_closed && t->stdout_closed)
+    if (t->exec_failed)
+        return true;
+    if (t->completed)
         return true;
     return false;
 }
@@ -164,6 +166,13 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
         cron_task_timeout_start (t);
 }
 
+static void cron_task_exec_failed (cron_task_t *t, int errnum)
+{
+    t->exec_failed = 1;
+    t->exec_errno = errnum;
+    cron_task_state_update (t, "Exec Failure");
+}
+
 static void cron_task_rexec_failed (cron_task_t *t, int errnum)
 {
     t->rexec_failed = 1;
@@ -171,7 +180,7 @@ static void cron_task_rexec_failed (cron_task_t *t, int errnum)
     cron_task_state_update (t, "Rexec Failure");
 }
 
-static void cron_task_handle_completion (flux_subprocess_t *p, cron_task_t *t)
+static void cron_task_handle_finished (flux_subprocess_t *p, cron_task_t *t)
 {
     clock_gettime (CLOCK_REALTIME, &t->endtime);
     flux_watcher_destroy (t->timeout_w);
@@ -179,9 +188,9 @@ static void cron_task_handle_completion (flux_subprocess_t *p, cron_task_t *t)
     flux_subprocess_destroy (t->p);
     t->p = NULL;
 
-    /* Call completion handler for this entry */
-    if (t->completion_cb)
-        (*t->completion_cb) (t->h, t, t->arg);
+    /* Call finished handler for this entry */
+    if (t->finished_cb)
+        (*t->finished_cb) (t->h, t, t->arg);
 }
 
 static void completion_cb (flux_subprocess_t *p)
@@ -190,7 +199,8 @@ static void completion_cb (flux_subprocess_t *p)
 
     assert (t);
 
-    cron_task_handle_completion (p, t);
+    t->completed = 1;
+    cron_task_handle_finished (p, t);
 }
 
 static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -214,15 +224,13 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
         t->rank = flux_subprocess_rank (p);
     }
     else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        t->exec_errno = flux_subprocess_fail_errno (p);
-        t->exited = 1;
-        t->stderr_closed = t->stdout_closed = 1;
-        cron_task_handle_completion (p, t);
+        cron_task_exec_failed (t, flux_subprocess_fail_errno (p));
+        cron_task_handle_finished (p, t);
         errno = t->exec_errno;
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         cron_task_rexec_failed (t, flux_subprocess_fail_errno (p));
-        cron_task_handle_completion (p, t);
+        cron_task_handle_finished (p, t);
         errno = t->rexec_errno;
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
@@ -244,7 +252,6 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr = NULL;
     int lenp;
     bool is_stderr = false;
-    bool eof = false;
 
     assert (t);
 
@@ -263,19 +270,10 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
                             __FUNCTION__);
             return;
         }
-        if (!lenp)
-            eof = true;
     }
 
     if (t->io_cb && lenp)
-        (*t->io_cb) (t->h, t, t->arg, is_stderr, ptr, lenp, eof);
-
-    if (eof) {
-        if (is_stderr)
-            t->stderr_closed = 1;
-        else
-            t->stdout_closed = 1;
-    }
+        (*t->io_cb) (t->h, t, t->arg, is_stderr, ptr, lenp);
 }
 
 int cron_task_kill (cron_task_t *t, int sig)
@@ -315,14 +313,6 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         || flux_cmd_argv_append (cmd, "%s", command) < 0) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_argv_append");
         goto error;
-    }
-    if (!cwd) {
-        /* flux_rexec() requires a cwd */
-        if (!(tmp_cwd = get_current_dir_name ())) {
-            flux_log_error (t->h, "exec_cmd_create: get_get_current_dir_name");
-            goto error;
-        }
-        cwd = tmp_cwd;
     }
     if (flux_cmd_setcwd (cmd, cwd) < 0) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_setcwd");
@@ -375,7 +365,7 @@ int cron_task_run (cron_task_t *t,
         goto done;
 
     if (!(p = flux_rexec (h, rank, 0, cmd, &ops))) {
-        cron_task_rexec_failed (t, errno);
+        cron_task_exec_failed (t, errno);
         goto done;
     }
 
@@ -470,7 +460,7 @@ json_t *cron_task_to_json (struct cron_task *t)
         json_object_set_new (o, "exec_errno", json_integer (t->exec_errno));
     if (t->timedout)
         json_object_set_new (o, "timedout", json_boolean (true));
-    if (cron_task_completed (t)) {
+    if (cron_task_finished (t)) {
         int code = 0;
         if (WIFEXITED (t->status))
             code = WEXITSTATUS (t->status);
@@ -482,7 +472,7 @@ json_t *cron_task_to_json (struct cron_task *t)
         goto fail;
     if (t->running && add_timespec (o, "running-time", &t->runningtime) < 0)
         goto fail;
-    if (cron_task_completed (t)
+    if (cron_task_finished (t)
         && add_timespec (o, "end-time", &t->endtime) < 0)
         goto fail;
 

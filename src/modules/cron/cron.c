@@ -62,6 +62,7 @@ struct cron_ctx {
     double                 sync_epsilon;    /* allow tasks to run for this
                                                number of seconds after last-
                                                sync before deferring         */
+    char *                 cwd;             /* cwd to avoid constant lookups */
 };
 
 /**************************************************************************
@@ -70,10 +71,10 @@ struct cron_ctx {
 static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg);
 static void cron_entry_destroy (cron_entry_t *e);
 static int cron_entry_stop (cron_entry_t *e);
-static void cron_entry_completion_handler (flux_t *h, cron_task_t *t,
+static void cron_entry_finished_handler (flux_t *h, cron_task_t *t,
     void *arg);
 static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, const char *data, int datalen, bool eof);
+    bool is_stderr, const char *data, int datalen);
 static int cron_entry_run_task (cron_entry_t *e);
 static int cron_entry_defer (cron_entry_t *e);
 
@@ -105,8 +106,8 @@ static int cron_entry_run_task (cron_entry_t *e)
     flux_t *h = e->ctx->h;
     if (cron_task_run (e->task, e->rank, e->command, e->cwd, e->env) < 0) {
         flux_log_error (h, "cron-%ju: cron_task_run", e->id);
-        /* Run "completion" handler since this task is done */
-        cron_entry_completion_handler (h, e->task, e);
+        /* Run "finished" handler since this task is done */
+        cron_entry_finished_handler (h, e->task, e);
         return (-1);
     }
     e->stats.lastrun = get_timestamp ();
@@ -130,7 +131,7 @@ int cron_entry_schedule_task (cron_entry_t *e)
                   e->id, e->name);
         return (0);
     }
-    if (!(e->task = cron_task_new (h, cron_entry_completion_handler, e))) {
+    if (!(e->task = cron_task_new (h, cron_entry_finished_handler, e))) {
         flux_log_error (h, "cron_task_create");
         return -1;
     }
@@ -152,7 +153,7 @@ int cron_entry_schedule_task (cron_entry_t *e)
 /**************************************************************************/
 
 static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, const char *data, int datalen, bool eof)
+    bool is_stderr, const char *data, int datalen)
 {
     cron_entry_t *e = arg;
     int level = is_stderr ? LOG_ERR : LOG_INFO;
@@ -164,14 +165,14 @@ static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
  *  entry e. If the list has grown past completed-task-size, then drop the
  *  tail task on the list.
  */
-int cron_entry_push_completed_task (cron_entry_t *e, struct cron_task *t)
+int cron_entry_push_finished_task (cron_entry_t *e, struct cron_task *t)
 {
-    if (zlist_push (e->completed_tasks, t) < 0)
+    if (zlist_push (e->finished_tasks, t) < 0)
         return (-1);
-    if (zlist_size (e->completed_tasks) > e->task_history_count) {
-        struct cron_task *tdel = zlist_tail (e->completed_tasks);
+    if (zlist_size (e->finished_tasks) > e->task_history_count) {
+        struct cron_task *tdel = zlist_tail (e->finished_tasks);
         if (tdel) {
-            zlist_remove (e->completed_tasks, tdel);
+            zlist_remove (e->finished_tasks, tdel);
             cron_task_destroy (tdel);
         }
     }
@@ -190,7 +191,7 @@ static void cron_entry_failure (cron_entry_t *e)
     }
 }
 
-static void cron_entry_completion_handler (flux_t *h, cron_task_t *t, void *arg)
+static void cron_entry_finished_handler (flux_t *h, cron_task_t *t, void *arg)
 {
     cron_entry_t *e = arg;
 
@@ -215,7 +216,7 @@ static void cron_entry_completion_handler (flux_t *h, cron_task_t *t, void *arg)
      *   drop a task if needed. Reset e->task to NULL since there
      *   is currently no active task.
      */
-    if (cron_entry_push_completed_task (e, t) < 0)
+    if (cron_entry_push_finished_task (e, t) < 0)
         return;
     e->task = NULL;
 
@@ -317,13 +318,13 @@ static void cron_entry_destroy (cron_entry_t *e)
     if (e->env)
         json_decref (e->env);
 
-    if (e->completed_tasks) {
-        t = zlist_first (e->completed_tasks);
+    if (e->finished_tasks) {
+        t = zlist_first (e->finished_tasks);
         while (t) {
             cron_task_destroy (t);
-            t = zlist_next (e->completed_tasks);
+            t = zlist_next (e->finished_tasks);
         }
-        zlist_destroy (&e->completed_tasks);
+        zlist_destroy (&e->finished_tasks);
     }
 
     free (e);
@@ -470,7 +471,10 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
         goto out_err;
     }
 
-    if (cwd && (e->cwd = strdup (cwd)) == NULL) {
+    if (!cwd)
+        cwd = ctx->cwd;
+
+    if ((e->cwd = strdup (cwd)) == NULL) {
         flux_log_error (h, "cron.create: strdup (cwd)");
         errno = ENOMEM;
         goto out_err;
@@ -478,7 +482,7 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
 
     /* List for all completed tasks up to task-history-count
      */
-    if (!(e->completed_tasks = zlist_new ())) {
+    if (!(e->finished_tasks = zlist_new ())) {
         saved_errno = errno;
         flux_log_error (h, "cron_entry_create: zlist_new");
         goto out_err;
@@ -541,6 +545,7 @@ static void cron_ctx_destroy (cron_ctx_t *ctx)
     }
     if (ctx->deferred)
         zlist_destroy (&ctx->deferred);
+    free (ctx->cwd);
     free (ctx);
 }
 
@@ -590,6 +595,12 @@ static cron_ctx_t * cron_ctx_create (flux_t *h)
         flux_log_error (h, "cron_ctx_create: zlist_new");
         goto error;
     }
+
+    if (!(ctx->cwd = get_current_dir_name ())) {
+        flux_log_error (h, "cron_ctx_create: get_get_current_dir_name");
+        goto error;
+    }
+
     ctx->h = h;
     return ctx;
 error:
@@ -652,11 +663,11 @@ static json_t *cron_entry_to_json (cron_entry_t *e)
     if (e->task && (to = cron_task_to_json (e->task)))
         json_array_append_new (tasks, to);
 
-    t = zlist_first (e->completed_tasks);
+    t = zlist_first (e->finished_tasks);
     while (t) {
         if ((to = cron_task_to_json (t)))
             json_array_append_new (tasks, to);
-        t = zlist_next (e->completed_tasks);
+        t = zlist_next (e->finished_tasks);
     }
 
     json_object_set_new (o, "tasks", tasks);

@@ -88,7 +88,7 @@ struct cron_entry {
     void *                 data;            /* Entry type specific data      */
 
     struct cron_task *  task;               /* Currently executing task      */
-    zlist_t          *  completed_tasks;    /* List of completed tasks       */
+    zlist_t          *  finished_tasks;     /* List of finished tasks       */
     int                 task_history_count; /* Max # of tasks in history     */
     int                 stop_on_failure;    /* Stop cron entry after failure */
 
