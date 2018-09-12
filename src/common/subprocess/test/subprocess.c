@@ -1287,8 +1287,8 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strncmp (ptr, "FOO_FD=", 7),
-            "environment variable FOO_FD created in subprocess");
+        ok (!strncmp (ptr, "FOO=", 4),
+            "environment variable FOO created in subprocess");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);

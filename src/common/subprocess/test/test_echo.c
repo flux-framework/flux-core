@@ -94,7 +94,7 @@ main (int argc, char *argv[])
         const char *fdstr;
         char channelstr[1024];
 
-        sprintf (channelstr, "%s_FD", channel_name);
+        sprintf (channelstr, "%s", channel_name);
 
         if (!(fdstr = getenv (channelstr))) {
             perror ("getenv");

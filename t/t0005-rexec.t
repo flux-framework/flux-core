@@ -118,7 +118,7 @@ test_expect_success 'basic rexec stdin / stdout long lines' '
 # pipe in /dev/null, we don't care about stdin for this test
 test_expect_success 'rexec check channel FD created' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec -i TEST_CHANNEL /usr/bin/env < /dev/null > output 2>&1 &&
-        grep "TEST_CHANNEL_FD=" output
+        grep "TEST_CHANNEL=" output
 '
 
 # rexec does not close TEST_CHANNEL, so we tell test_echo max

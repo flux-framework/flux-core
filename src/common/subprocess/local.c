@@ -244,7 +244,7 @@ static int channel_local_setup (flux_subprocess_t *p,
     }
 
     if (channel_flags & CHANNEL_FD) {
-        if (asprintf (&e, "%s_FD", name) < 0) {
+        if (asprintf (&e, "%s", name) < 0) {
             flux_log_error (p->h, "asprintf");
             goto error;
         }
