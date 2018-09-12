@@ -73,7 +73,7 @@ static int cron_entry_stop (cron_entry_t *e);
 static void cron_entry_completion_handler (flux_t *h, cron_task_t *t,
     void *arg);
 static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, void *data, int datalen, bool eof);
+    bool is_stderr, const char *data, int datalen, bool eof);
 static int cron_entry_run_task (cron_entry_t *e);
 static int cron_entry_defer (cron_entry_t *e);
 
@@ -151,21 +151,13 @@ int cron_entry_schedule_task (cron_entry_t *e)
 
 /**************************************************************************/
 
-static void cron_entry_loglines (flux_t *h, cron_entry_t *e, int level, char *s)
-{
-    char *p, *saveptr = NULL;
-    while ((p = strtok_r (s, "\n", &saveptr))) {
-        flux_log (h, level, "cron-%ju[%s]: rank=%d: command=\"%s\": \"%s\"",
-                e->id, e->name, e->rank, e->command, p);
-        s = NULL;
-    }
-}
-
 static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, void *data, int datalen, bool eof)
+    bool is_stderr, const char *data, int datalen, bool eof)
 {
-    if (data)
-        cron_entry_loglines (h, arg, is_stderr ? LOG_ERR : LOG_INFO, data);
+    cron_entry_t *e = arg;
+    int level = is_stderr ? LOG_ERR : LOG_INFO;
+    flux_log (h, level, "cron-%ju[%s]: rank=%d: command=\"%s\": \"%s\"",
+              e->id, e->name, e->rank, e->command, data);
 }
 
 /* Push task t onto the front of the completed tasks list for

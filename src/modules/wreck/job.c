@@ -48,7 +48,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/libsubprocess/zio.h"
+#include "src/common/subprocess/subprocess.h"
 
 #include "rcalc.h"
 #include "wreck_job.h"
@@ -537,190 +537,185 @@ static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
     return (0);
 }
 
-static void spawn_io_cb (flux_t *h, struct wreck_job *job,
-                         const flux_msg_t *msg)
+static void completion_cb (flux_subprocess_t *p)
 {
-    const char *stream = "stdout";
-    const char *json_str;
-    void *data = NULL;
-    int level = LOG_INFO;
-    int len;
+    flux_t *h;
+    struct wreck_job *job = NULL;
+    int tmp;
 
-    if (flux_msg_get_string (msg, &json_str) < 0)
-        return;
+    h = flux_subprocess_get_context (p, "handle");
+    job = flux_subprocess_get_context (p, "job");
 
-    if ((len = zio_json_decode (json_str, &data, NULL)) < 0) {
-        flux_log_error (h, "wrexecd: io decode");
+    assert (h && job);
+
+    /* skip output text if exit code == 0 */
+    if (!(tmp = flux_subprocess_exit_code (p)))
+        goto cleanup;
+
+    if (tmp > 0) {
+        flux_log_error (h, "job%ju: wrexecd: Exit %d",
+                        (uintmax_t) job->id, tmp);
     }
-    if (len > 0) {
-        (void) flux_msg_unpack (msg, "{s:s}", "name", &stream);
-        if (strcmp (stream, "stderr") == 0)
-            level = LOG_ERR;
-        flux_log (h, level, "job%ju: wrexecd says: %s",
-                            (uintmax_t) job->id,
-                            (char *) data);
-    }
-    free (data);
-    return;
-}
-
-static void cmb_exec_cb (flux_future_t *f, void *arg)
-{
-    int64_t pid = 0;
-    const char *type = NULL;
-    const char *state = NULL;
-    int status = 1;
-    const flux_msg_t *msg;
-    flux_t *h = flux_future_get_flux (f);
-    struct wreck_job *job = arg;
-
-    if (flux_future_get (f, (const void **)&msg) < 0) {
-        flux_log_error (h, "cmb_exec_cb: flux_future_get");
-        flux_future_destroy (f);
-        return;
-    }
-    if (flux_msg_unpack (msg, "{s?s,s?s,s?i,s:i}",
-                              "type", &type, "state", &state,
-                              "status", &status, "pid", &pid) < 0) {
-        flux_log_error (h, "cmb_exec_cb: flux_msg_unpack");
-        flux_future_destroy (f);
-        return;
-    }
-
-    if (type && strcmp (type, "io") == 0)
-        spawn_io_cb (h, job, msg);
-    else if (state && strcmp (state, "Exited") == 0) {
-        if (WIFSIGNALED (status))
+    else if (tmp < 0) {
+        if ((tmp = flux_subprocess_signaled (p)) < 0)
+            flux_log_error (h, "job%ju: unknown exit status", (uintmax_t) job->id);
+        else
             flux_log_error (h, "job%ju: wrexecd: %s",
-                                (uintmax_t) job->id,
-                                strsignal (WTERMSIG (status)));
-        else if (WEXITSTATUS (status) != 0)
-            flux_log_error (h, "job%ju: wrexecd: Exit %d",
-                                (uintmax_t) job->id, WEXITSTATUS (status));
+                            (uintmax_t) job->id, strsignal (tmp));
 
-        wreck_job_destroy (job);
-        /* Done with this job, it is safe to destroy future */
-        flux_future_destroy (f);
-        return;
     }
-    else flux_log (h, LOG_ERR, "job%ju: unknown state %s",
-                               (uintmax_t) job->id, state ? state : "NULL");
-    flux_future_reset (f);
-    return;
+
+cleanup:
+    wreck_job_destroy (job);
+    flux_subprocess_destroy (p);
 }
 
-static json_t *wrexecd_cmdline_create (flux_t *h, struct wreck_job *job)
+static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
-    json_t *o, *s;
+    flux_t *h;
+    struct wreck_job *job;
+
+    h = flux_subprocess_get_context (p, "handle");
+    job = flux_subprocess_get_context (p, "job");
+
+    assert (h && job);
+
+    // XXX: Update job state to failed
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
+        flux_log_error (h, "spawn: job%ju: wrexecd exec failure", (uintmax_t) job->id);
+        flux_subprocess_destroy (p);
+    }
+    else if (state == FLUX_SUBPROCESS_FAILED) {
+        flux_log_error (h, "spawn: job%ju: wrexecd failure", (uintmax_t) job->id);
+        flux_subprocess_destroy (p);
+    }
+}
+
+static void io_cb (flux_subprocess_t *p, const char *stream)
+{
+    int lenp = 0;
+    const char *ptr;
+
+    if ((ptr = flux_subprocess_read_line (p, stream, &lenp))
+        && lenp > 0) {
+        flux_t *h;
+        struct wreck_job *job;
+        int level = LOG_INFO;
+
+        h = flux_subprocess_get_context (p, "handle");
+        job = flux_subprocess_get_context (p, "job");
+
+        assert (h && job);
+
+        if (!strcasecmp (stream, "STDERR"))
+            level = LOG_ERR;
+
+        flux_log (h, level,
+                  "job%ju: wrexecd says: %s",
+                  (uintmax_t) job->id, ptr);
+    }
+}
+
+static flux_cmd_t *wrexecd_cmd_create (flux_t *h, struct wreck_job *job)
+{
+    flux_cmd_t *cmd = NULL;
     const char *wrexecd_path;
+    char *cwd = NULL;
     char buf [4096];
     int n;
 
+    if (!(cmd = flux_cmd_create (0, NULL, NULL))) {
+        flux_log_error (h, "wrexecd_cmd_create: flux_cmd_create");
+        goto error;
+    }
     if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path", NULL))) {
-        flux_log_error (h, "wrexecd_cmdline_create: flux_attr_get");
-        return (NULL);
-    }
-    if (!(o = json_array ())) {
-        flux_log_error (h, "wrexecd_cmdline_create: json_array");
-        return (NULL);
-    }
-    if (!(s = json_string (wrexecd_path))) {
-        flux_log_error (h, "wrexecd_cmdline_create: json_string");
+        flux_log_error (h, "wrexecd_cmd_create: flux_attr_get");
         goto error;
     }
-    if (json_array_append_new (o, s) < 0) {
-        json_decref (s);
-        flux_log_error (h, "wrexecd_cmdline_create: json_array_append_new");
+    if (flux_cmd_argv_append (cmd, "%s", wrexecd_path) < 0) {
+        flux_log_error (h, "wrexecd_cmd_create: flux_cmd_argv_append");
         goto error;
     }
-
     n = snprintf (buf, sizeof(buf), "--lwj-id=%ju", (uintmax_t) job->id);
     if ((n >= sizeof (buf)) || (n < 0)) {
         flux_log_error (h, "failed to append id to cmdline for job%ju\n",
                             (uintmax_t) job->id);
         goto error;
     }
-    json_array_append_new (o, json_string (buf));
-
+    if (flux_cmd_argv_append (cmd, "%s", buf) < 0) {
+        flux_log_error (h, "wrexecd_cmd_create: flux_cmd_argv_append");
+        goto error;
+    }
     n = snprintf (buf, sizeof (buf), "--kvs-path=%s", job->kvs_path);
     if ((n >= sizeof (buf)) || (n < 0)) {
         flux_log_error (h, "failed to append kvspath to cmdline for job%ju\n",
                             (uintmax_t) job->id);
         goto error;
     }
-    json_array_append_new (o, json_string (buf));
+    if (flux_cmd_argv_append (cmd, "%s", buf) < 0) {
+        flux_log_error (h, "wrexecd_cmd_create: flux_cmd_argv_append");
+        goto error;
+    }
+    /* flux_rexec() requires cwd to be set */
+    if (!(cwd = get_current_dir_name ())) {
+        flux_log_error (h, "wrexecd_cmd_create: get_current_dir_name");
+        goto error;
+    }
+    if (flux_cmd_setcwd (cmd, cwd) < 0) {
+        flux_log_error (h, "wrexecd_cmd_create: flux_cmd_setcwd");
+        goto error;
+    }
 
-    return (o);
+    free (cwd);
+    return (cmd);
 error:
-    json_decref (o);
+    free (cwd);
+    flux_cmd_destroy (cmd);
     return (NULL);
-}
-
-static void spawn_continuation (flux_future_t *f, void *arg)
-{
-    flux_t *h = flux_future_get_flux (f);
-    struct wreck_job *job = arg;
-    const char *state = NULL;
-    int rank;
-    pid_t pid;
-
-    /* State should be either "Running" or "Exec Failed". In latter
-     *  case the pid key will not be included in the message, which
-     *  is why it is optional below
-     */
-    if (flux_rpc_get_unpack (f, "{s:i,s?i,s:s}",
-                            "rank", &rank, "pid", &pid,
-                            "state", &state) < 0) {
-        flux_log_error (h, "spawn: rpc_unpack");
-        goto err;
-    }
-    if (strcmp (state, "Exec Failure") == 0) {
-        flux_log_error (h, "spawn: job%ju: wrexecd exec failure",
-                           (uintmax_t) job->id);
-        // XXX: Update job state to failed
-        goto err;
-    }
-    else if (strcmp (state, "Running") != 0) {
-        flux_log_error (h, "spawn: wrexecd for job %ju unexpected state %s",
-                           (uintmax_t) job->id, state);
-        goto err;
-    }
-
-    /* Reset future. setup continuation for remaining cmb.exec responses */
-    flux_future_reset (f);
-    if (flux_future_then (f, -1., cmb_exec_cb, job) < 0)
-        flux_log_error (h, "spawn_continuation: flux_future_then");
-    return;
-
-err:
-    flux_future_destroy (f);
-    return;
 }
 
 static int spawn_exec_handler (flux_t *h, struct wreck_job *job)
 {
-    flux_future_t *f = NULL;
-    json_t *cmdline = wrexecd_cmdline_create (h, job);
+    flux_cmd_t *cmd = NULL;
+    flux_subprocess_t *p = NULL;
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_state_change = state_change_cb,
+        .on_channel_out = NULL,
+        .on_stdout = io_cb,
+        .on_stderr = io_cb
+    };
 
-    if (!cmdline)
-        return (-1);
-    if (!(f = flux_rpc_pack (h, "cmb.exec", FLUX_NODEID_ANY, 0,
-                             "{s:o}", "cmdline", cmdline))) {
-        flux_log_error (h, "spawn_exec_handler: flux_rpc");
+    if (!(cmd = wrexecd_cmd_create (h, job))) {
+        flux_log_error (h, "wrexecd_cmd_create");
         goto error;
     }
-    if (flux_future_then (f, -1., spawn_continuation, job) < 0) {
-        flux_log_error (h, "spawn_exec_handler: flux_future_then");
+
+    if (!(p = flux_rexec (h, FLUX_NODEID_ANY, 0, cmd, &ops))) {
+        flux_log_error (h, "flux_rexec");
         goto error;
     }
+
+    if (flux_subprocess_set_context (p, "handle", h) < 0) {
+        flux_log_error (h, "flux_subprocess_set_context");
+        goto error;
+    }
+
+    if (flux_subprocess_set_context (p, "job", job) < 0) {
+        flux_log_error (h, "flux_subprocess_set_context");
+        goto error;
+    }
+
     /*  Take a reference on this job since it is now embedded in
-     *   a future.
+     *   a flux rexec.
      */
+    flux_cmd_destroy (cmd);
     wreck_job_incref (job);
     return (0);
+
 error:
-    json_decref (cmdline);
-    flux_future_destroy (f);
+    flux_cmd_destroy (cmd);
+    flux_subprocess_destroy (p);
     return (-1);
 }
 

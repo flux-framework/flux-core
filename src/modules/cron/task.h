@@ -35,7 +35,7 @@ typedef struct cron_task cron_task_t;
 /*  io callback fn for cron task
  */
 typedef void (*cron_task_io_f) (flux_t *h, cron_task_t *t, void *arg,
-                                bool is_stderr, void *data, int datalen,
+                                bool is_stderr, const char *data, int datalen,
                                 bool eof);
 
 /*  task state change handler for cron task, check state with
@@ -77,7 +77,7 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb);
  *   efficiency).
  */
 int cron_task_run (cron_task_t *t,
-                   int rank, const char *cmd,
+                   int rank, const char *command,
                    const char *cwd,
                    json_t *env);
 

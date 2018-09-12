@@ -41,7 +41,7 @@
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/dgetline.h"
-#include "src/common/libsubprocess/subprocess.h"
+#include "src/common/subprocess/subprocess.h"
 
 #define DEFAULT_KILLER_TIMEOUT 2.0
 
@@ -49,7 +49,7 @@ static struct {
     double killer_timeout;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
-    struct subprocess_manager *sm;
+    zlist_t *subprocesses;
     optparse_t *opts;
     int size;
     int count;
@@ -62,10 +62,8 @@ static struct {
 
 struct client {
     int rank;
-    int fd;
-    struct subprocess *p;
-    flux_watcher_t *w;
-    char buf[SIMPLE_MAX_PROTO_LINE];
+    flux_subprocess_t *p;
+    flux_cmd_t *cmd;
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
@@ -278,54 +276,92 @@ char *find_broker (const char *searchpath)
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
-    struct subprocess *p;
+    flux_subprocess_t *p;
 
-    p = subprocess_manager_first (ctx.sm);
+    p = zlist_first (ctx.subprocesses);
     while (p) {
-        if (subprocess_pid (p))
-            (void)subprocess_kill (p, SIGKILL);
-        p = subprocess_manager_next (ctx.sm);
+        flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
+        if (f)
+            flux_future_destroy (f);
+        p = zlist_next (ctx.subprocesses);
     }
 }
 
-static int child_report (struct subprocess *p)
+static void completion_cb (flux_subprocess_t *p)
 {
-    struct client *cli = subprocess_get_context (p, "cli");
-    pid_t pid = subprocess_pid (p);
-    int sig;
+    struct client *cli = flux_subprocess_get_context (p, "cli");
+    int rc;
 
-    if ((sig = subprocess_stopped (p)))
-        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
-    else if ((subprocess_continued (p)))
-        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
-    else if ((sig = subprocess_signaled (p)))
-        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
-    else if (subprocess_exited (p)) {
-        int rc = subprocess_exit_code (p);
-        if (rc >= 128)
-            log_msg ("%d (pid %d) exited with rc=%d (%s)", cli->rank, pid, rc,
-                                                       strsignal (rc - 128));
-        else if (rc > 0)
-            log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, rc);
-    } else
-        log_msg ("%d (pid %d) status=%d", cli->rank, pid,
-                                      subprocess_exit_status (p));
-    return 0;
-}
+    assert (cli);
 
-static int child_exit (struct subprocess *p)
-{
-    struct client *cli = subprocess_get_context (p, "cli");
-    int rc = subprocess_exit_code (p);
+    if ((rc = flux_subprocess_exit_code (p)) < 0) {
+        /* bash standard, signals + 128 */
+        if ((rc = flux_subprocess_signaled (p)) >= 0)
+            rc += 128;
+    }
 
-    if (ctx.exit_rc < rc)
+    if (rc > ctx.exit_rc)
         ctx.exit_rc = rc;
+
     if (--ctx.count > 0)
         flux_watcher_start (ctx.timer);
     else
         flux_watcher_stop (ctx.timer);
+
     client_destroy (cli);
-    return 0;
+}
+
+static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+{
+    struct client *cli = flux_subprocess_get_context (p, "cli");
+
+    assert (cli);
+
+    if (state == FLUX_SUBPROCESS_FAILED) {
+        log_errn (errno, "%d FAILED", cli->rank);
+        if (--ctx.count > 0)
+            flux_watcher_start (ctx.timer);
+        else
+            flux_watcher_stop (ctx.timer);
+        client_destroy (cli);
+    }
+    else if (state == FLUX_SUBPROCESS_EXITED) {
+        pid_t pid = flux_subprocess_pid (p);
+        int status;
+
+        if ((status = flux_subprocess_status (p)) >= 0) {
+            if (WIFSIGNALED (status))
+                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WSTOPSIG (status)));
+            else if (WIFCONTINUED (status))
+                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
+            else if (WIFSIGNALED (status))
+                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WTERMSIG (status)));
+            else if (WIFEXITED (status))
+                log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, WEXITSTATUS (status));
+        } else
+            log_msg ("%d (pid %d) exited, unknown status", cli->rank, pid);
+    }
+}
+
+void channel_cb (flux_subprocess_t *p, const char *stream)
+{
+    struct client *cli = flux_subprocess_get_context (p, "cli");
+    const char *ptr;
+    int rc, lenp;
+
+    assert (cli);
+    assert (!strcmp (stream, "PMI"));
+
+    if (!(ptr = flux_subprocess_read_line (p, stream, &lenp)))
+        log_err_exit ("%s: flux_subprocess_read_line", __FUNCTION__);
+
+    if (lenp) {
+        rc = pmi_simple_server_request (ctx.pmi.srv, ptr, cli);
+        if (rc < 0)
+            log_err_exit ("%s: pmi_simple_server_request", __FUNCTION__);
+        if (rc == 1)
+            (void) flux_subprocess_close (p, stream);
+    }
 }
 
 void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *name)
@@ -352,30 +388,13 @@ char *create_scratch_dir (const char *session_id)
 static int pmi_response_send (void *client, const char *buf)
 {
     struct client *cli = client;
-    return dputline (cli->fd, buf);
+    return flux_subprocess_write (cli->p, "PMI", buf, strlen (buf));
 }
 
 static void pmi_debug_trace (void *client, const char *buf)
 {
     struct client *cli = client;
     fprintf (stderr, "%d: %s", cli->rank, buf);
-}
-
-void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
-                    int revents, void *arg)
-{
-    struct client *cli = arg;
-    int rc;
-    if (dgetline (cli->fd, cli->buf, sizeof (cli->buf)) < 0)
-        log_err_exit ("%s", __FUNCTION__);
-    rc = pmi_simple_server_request (ctx.pmi.srv, cli->buf, cli);
-    if (rc < 0)
-        log_err_exit ("%s", __FUNCTION__);
-    if (rc == 1) {
-        close (cli->fd);
-        cli->fd = -1;
-        flux_watcher_stop (w);
-    }
 }
 
 int pmi_kvs_put (void *arg, const char *kvsname,
@@ -454,17 +473,11 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
                               int rank, const char *cmd_argz, size_t cmd_argz_len)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
-    int client_fd;
+    char *arg;
     char * argz = NULL;
     size_t argz_len = 0;
 
     cli->rank = rank;
-    cli->fd = -1;
-    if (!(cli->p = subprocess_create (ctx.sm)))
-        goto fail;
-    subprocess_set_context (cli->p, "cli", cli);
-    subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
-    subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
     add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     argz_add (&argz, &argz_len, broker_path);
     char *run_dir = xasprintf ("%s/%d", scratch_dir, rank);
@@ -480,24 +493,25 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
 
-    subprocess_set_args_from_argz (cli->p, argz, argz_len);
+    if (!(cli->cmd = flux_cmd_create (0, NULL, environ)))
+        goto fail;
+    arg = argz_next (argz, argz_len, NULL);
+    while (arg) {
+        if (flux_cmd_argv_append (cli->cmd, arg) < 0)
+            log_err_exit ("flux_cmd_argv_append");
+        arg = argz_next (argz, argz_len, arg);
+    }
     free (argz);
 
-    subprocess_set_environ (cli->p, environ);
-
-    if ((cli->fd = subprocess_socketpair (cli->p, &client_fd)) < 0)
-        goto fail;
-    subprocess_set_context (cli->p, "client", cli);
-    cli->w = flux_fd_watcher_create (ctx.reactor, cli->fd, FLUX_POLLIN,
-                                     pmi_simple_cb, cli);
-    if (!cli->w)
-        goto fail;
-    flux_watcher_start (cli->w);
-    subprocess_setenvf (cli->p, "PMI_FD", 1, "%d", client_fd);
-    subprocess_setenvf (cli->p, "PMI_RANK", 1, "%d", rank);
-    subprocess_setenvf (cli->p, "PMI_SIZE", 1, "%d", ctx.size);
+    if (flux_cmd_add_channel (cli->cmd, "PMI") < 0)
+        log_err_exit ("flux_cmd_add_channel");
+    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0)
+        log_err_exit ("flux_cmd_setenvf");
+    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.size) < 0)
+        log_err_exit ("flux_cmd_setenvf");
     return cli;
 fail:
+    free (argz);
     client_destroy (cli);
     return NULL;
 }
@@ -505,24 +519,23 @@ fail:
 void client_destroy (struct client *cli)
 {
     if (cli) {
-        flux_watcher_destroy (cli->w);
-        if (cli->fd != -1)
-            close (cli->fd);
         if (cli->p)
-            subprocess_destroy (cli->p);
+            flux_subprocess_destroy (cli->p);
+        if (cli->cmd)
+            flux_cmd_destroy (cli->cmd);
         free (cli);
     }
 }
 
 void client_dumpargs (struct client *cli)
 {
-    int i, argc = subprocess_get_argc (cli->p);
+    int i, argc = flux_cmd_argc (cli->cmd);
     char *az = NULL;
     size_t az_len = 0;
     int e;
 
     for (i = 0; i < argc; i++)
-        if ((e = argz_add (&az, &az_len, subprocess_get_arg (cli->p, i))) != 0)
+        if ((e = argz_add (&az, &az_len, flux_cmd_arg (cli->cmd, i))) != 0)
             log_errn_exit (e, "argz_add");
     argz_stringify (az, az_len, ' ');
     log_msg ("%d: %s", cli->rank, az);
@@ -555,7 +568,24 @@ void pmi_server_finalize (void)
 
 int client_run (struct client *cli)
 {
-    return subprocess_run (cli->p);
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_state_change = state_cb,
+        .on_channel_out = channel_cb,
+        .on_stdout = NULL,
+        .on_stderr = NULL,
+    };
+    /* We want stdio fallthrough so subprocess can capture tty if
+     * necessary (i.e. an interactive shell)
+     */
+    if (!(cli->p = flux_local_exec (ctx.reactor,
+                                    FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
+                                    cli->cmd,
+                                    &ops)))
+        log_err_exit ("flux_exec");
+    if (flux_subprocess_set_context (cli->p, "cli", cli) < 0)
+        log_err_exit ("flux_subprocess_set_context");
+    return 0;
 }
 
 /* Start an internal PMI server, and then launch "size" number of
@@ -580,10 +610,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
                                                   ctx.killer_timeout, 0.,
                                                   killer, NULL)))
         log_err_exit ("flux_timer_watcher_create");
-    if (!(ctx.sm = subprocess_manager_create ()))
-        log_err_exit ("subprocess_manager_create");
-    if (subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor) < 0)
-        log_err_exit ("subprocess_manager_set reactor");
+    if (!(ctx.subprocesses = zlist_new ()))
+        log_err_exit ("zlist_new");
     session_id = xasprintf ("%d", getpid ());
 
     if (optparse_hasopt (ctx.opts, "scratchdir"))
@@ -607,7 +635,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
             continue;
         }
         if (client_run (cli) < 0)
-            log_err_exit ("subprocess_run");
+            log_err_exit ("client_run");
         ctx.count++;
     }
     if (flux_reactor_run (ctx.reactor, 0) < 0)
@@ -618,7 +646,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     free (session_id);
     free (scratch_dir);
 
-    subprocess_manager_destroy (ctx.sm);
+    zlist_destroy (&ctx.subprocesses);
     flux_watcher_destroy (ctx.timer);
     flux_reactor_destroy (ctx.reactor);
 

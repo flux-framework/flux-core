@@ -66,8 +66,6 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libsubprocess/zio.h"
-#include "src/common/libsubprocess/subprocess.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -137,10 +135,6 @@ typedef struct {
     hello_t *hello;
     flux_t *enclosing_h;
     runlevel_t *runlevel;
-
-    /* Subprocess management
-     */
-    struct subprocess_manager *sm;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
@@ -340,10 +334,6 @@ int main (int argc, char *argv[])
 
     init_attrs (ctx.attrs, getpid());
 
-    if (!(ctx.sm = subprocess_manager_create ()))
-        oom ();
-    subprocess_manager_set (ctx.sm, SM_WAIT_FLAGS, WNOHANG);
-
     parse_command_line_arguments(argc, argv, &ctx, &sec_typemask);
 
     /* Record the instance owner: the effective uid of the broker.
@@ -397,8 +387,6 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_handle_create");
     if (flux_set_reactor (ctx.h, ctx.reactor) < 0)
         log_err_exit ("flux_set_reactor");
-
-    subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor);
 
     /* Prepare signal handling
      */
@@ -568,7 +556,6 @@ int main (int argc, char *argv[])
             log_err_exit ("conf.pmi_library_path is not set");
 
         runlevel_set_size (ctx.runlevel, size);
-        runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
         runlevel_set_flux (ctx.runlevel, ctx.h);
@@ -609,8 +596,8 @@ int main (int argc, char *argv[])
         log_msg_exit ("heaptrace_initialize");
     if (sequence_hash_initialize (ctx.h) < 0)
         log_err_exit ("sequence_hash_initialize");
-    if (exec_initialize (ctx.h, ctx.sm, rank, ctx.attrs) < 0)
-        log_err_exit ("exec_initialize");
+    if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
+        log_err_exit ("exec2_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
     if (rusage_initialize (ctx.h, "cmb") < 0)
@@ -718,7 +705,6 @@ int main (int argc, char *argv[])
     }
     runlevel_destroy (ctx.runlevel);
     free (ctx.init_shell_cmd);
-    subprocess_manager_destroy (ctx.sm);
 
     return exit_rc;
 }
@@ -831,7 +817,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
+    int loglevel = !strcmp (name, "STDERR") ? LOG_ERR : LOG_INFO;
     int runlevel = runlevel_get_level (r);
 
     flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);
