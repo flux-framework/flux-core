@@ -19,6 +19,7 @@ RUN apt-get -qq update \
             libboost-all-dev \
             libyaml-cpp-dev \
             libmunge-dev \
+            munge \
             libczmq-dev \
             libjansson-dev \
             libhwloc-dev \
@@ -37,6 +38,8 @@ RUN apt-get -qq update \
             clang-tidy \
             ccache \
             valgrind \
+            libpmix-dev \
+            libpmi-pmix-dev \
  && luarocks install luaposix \
  && /usr/bin/gem install asciidoctor \
  && rm -rf /var/lib/apt/lists/*
