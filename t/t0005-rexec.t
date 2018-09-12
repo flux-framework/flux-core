@@ -121,7 +121,7 @@ test_expect_success 'rexec check channel FD created' '
         grep "TEST_CHANNEL_FD=" output
 '
 
-# execbasic does not close TEST_CHANNEL, so we tell test_echo max
+# rexec does not close TEST_CHANNEL, so we tell test_echo max
 # bytes we're feeding in
 test_expect_success 'rexec channel input' '
 	echo -n "foobar" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i TEST_CHANNEL ${TEST_SUBPROCESS_DIR}/test_echo -c TEST_CHANNEL -P -O -b 6 > output 2>&1 &&
@@ -129,7 +129,7 @@ test_expect_success 'rexec channel input' '
         test_cmp expected output
 '
 
-# execbasic does not close TEST_CHANNEL, so we tell test_echo max
+# rexec does not close TEST_CHANNEL, so we tell test_echo max
 # bytes we're feeding in
 test_expect_success 'rexec channel input and output' '
 	echo -n "foobaz" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i TEST_CHANNEL ${TEST_SUBPROCESS_DIR}/test_echo -c TEST_CHANNEL -P -C -b 6 > output 2>&1 &&
@@ -137,7 +137,7 @@ test_expect_success 'rexec channel input and output' '
         test_cmp expected output
 '
 
-# execbasic does not close TEST_CHANNEL, so we tell test_echo max
+# rexec does not close TEST_CHANNEL, so we tell test_echo max
 # bytes we're feeding in
 test_expect_success 'rexec channel input and output multiple lines' '
 	/bin/echo -en "foo\nbar\nbaz\n" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i TEST_CHANNEL ${TEST_SUBPROCESS_DIR}/test_echo -c TEST_CHANNEL -C -n -b 6 > output 2>&1 &&
