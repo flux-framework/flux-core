@@ -314,14 +314,6 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_argv_append");
         goto error;
     }
-    if (!cwd) {
-        /* flux_rexec() requires a cwd */
-        if (!(tmp_cwd = get_current_dir_name ())) {
-            flux_log_error (t->h, "exec_cmd_create: get_get_current_dir_name");
-            goto error;
-        }
-        cwd = tmp_cwd;
-    }
     if (flux_cmd_setcwd (cmd, cwd) < 0) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_setcwd");
         goto error;

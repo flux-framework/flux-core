@@ -62,6 +62,7 @@ struct cron_ctx {
     double                 sync_epsilon;    /* allow tasks to run for this
                                                number of seconds after last-
                                                sync before deferring         */
+    char *                 cwd;             /* cwd to avoid constant lookups */
 };
 
 /**************************************************************************
@@ -470,7 +471,10 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
         goto out_err;
     }
 
-    if (cwd && (e->cwd = strdup (cwd)) == NULL) {
+    if (!cwd)
+        cwd = ctx->cwd;
+
+    if ((e->cwd = strdup (cwd)) == NULL) {
         flux_log_error (h, "cron.create: strdup (cwd)");
         errno = ENOMEM;
         goto out_err;
@@ -541,6 +545,7 @@ static void cron_ctx_destroy (cron_ctx_t *ctx)
     }
     if (ctx->deferred)
         zlist_destroy (&ctx->deferred);
+    free (ctx->cwd);
     free (ctx);
 }
 
@@ -590,6 +595,12 @@ static cron_ctx_t * cron_ctx_create (flux_t *h)
         flux_log_error (h, "cron_ctx_create: zlist_new");
         goto error;
     }
+
+    if (!(ctx->cwd = get_current_dir_name ())) {
+        flux_log_error (h, "cron_ctx_create: get_get_current_dir_name");
+        goto error;
+    }
+
     ctx->h = h;
     return ctx;
 error:
