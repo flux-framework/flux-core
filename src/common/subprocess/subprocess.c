@@ -937,12 +937,6 @@ void flux_subprocess_unref (flux_subprocess_t *p)
     }
 }
 
-void flux_subprocess_destroy (void *arg)
-{
-    flux_subprocess_t *p = arg;
-    flux_subprocess_unref (p);
-}
-
 flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
