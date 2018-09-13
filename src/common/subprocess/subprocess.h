@@ -310,7 +310,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
  */
 void flux_subprocess_ref (flux_subprocess_t *p);
 void flux_subprocess_unref (flux_subprocess_t *p);
-void flux_subprocess_destroy (void *arg);
+#define flux_subprocess_destroy(x) flux_subprocess_unref(x)
 
 /*  Return current state value of subprocess.  Note this may differ
  *  than state returned in on_state_change callback, as a subprocess

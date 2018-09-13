@@ -215,6 +215,12 @@ static void signal_cb (int signum)
     }
 }
 
+void subprocess_destroy (void *arg)
+{
+    flux_subprocess_t *p = arg;
+    flux_subprocess_destroy (p);
+}
+
 int main (int argc, char *argv[])
 {
     const char *optargp;
@@ -302,7 +308,7 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_rexec");
         if (zlist_append (subprocesses, p) < 0)
             log_err_exit ("zlist_append");
-        if (!zlist_freefn (subprocesses, p, flux_subprocess_destroy, true))
+        if (!zlist_freefn (subprocesses, p, subprocess_destroy, true))
             log_err_exit ("zlist_freefn");
     }
 
