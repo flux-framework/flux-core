@@ -350,7 +350,7 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     int rc, lenp;
 
     assert (cli);
-    assert (!strcmp (stream, "PMI"));
+    assert (!strcmp (stream, "PMI_FD"));
 
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp)))
         log_err_exit ("%s: flux_subprocess_read_line", __FUNCTION__);
@@ -388,7 +388,7 @@ char *create_scratch_dir (const char *session_id)
 static int pmi_response_send (void *client, const char *buf)
 {
     struct client *cli = client;
-    return flux_subprocess_write (cli->p, "PMI", buf, strlen (buf));
+    return flux_subprocess_write (cli->p, "PMI_FD", buf, strlen (buf));
 }
 
 static void pmi_debug_trace (void *client, const char *buf)
@@ -503,7 +503,7 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     }
     free (argz);
 
-    if (flux_cmd_add_channel (cli->cmd, "PMI") < 0)
+    if (flux_cmd_add_channel (cli->cmd, "PMI_FD") < 0)
         log_err_exit ("flux_cmd_add_channel");
     if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0)
         log_err_exit ("flux_cmd_setenvf");

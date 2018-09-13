@@ -177,9 +177,9 @@ const char *flux_cmd_getcwd (const flux_cmd_t *cmd);
  *   and read from it via flux_subprocess_read(), which is typically
  *   called from a callback set in 'on_channel_out'.
  *
- *  The `name` argument is also used as the name of an environment variable
+ *  The `name` argument is also used as the name of the environment variable
  *   in the subprocess environment that is set to the file descriptor number
- *   of the process side of the socketpair. E.g. name = "FLUX_PMI" would
+ *   of the process side of the socketpair. E.g. name = "FLUX_PMI_FD" would
  *   result in the environment variable "FLUX_PMI_FD=N" set in the process
  *   environment.
  */
