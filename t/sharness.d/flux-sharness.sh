@@ -7,7 +7,7 @@
 #  Extra functions for Flux testsuite
 #
 run_timeout() {
-    perl -e 'alarm shift @ARGV; exec @ARGV' "$@"
+    perl -e 'use Time::HiRes qw( ualarm ) ; ualarm ((shift @ARGV) * 1000000) ; exec @ARGV' "$@"
 }
 
 #
