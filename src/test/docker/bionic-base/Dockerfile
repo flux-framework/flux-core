@@ -2,9 +2,11 @@ FROM ubuntu:bionic
 
 LABEL maintainer="Tom Scogland <scogland1@llnl.gov>"
 
-RUN apt-get -qq update \
+# The staggered install is intentional, to get all sources
+RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
             wget \
+            ca-certificates \
             cmake \
             build-essential \
             sudo \
@@ -12,7 +14,6 @@ RUN apt-get -qq update \
             vim \
             dh-autoreconf \
             ninja-build \
-            ca-certificates \
             autotools-dev \
             autoconf \
             libtool \
@@ -38,14 +39,25 @@ RUN apt-get -qq update \
             clang-tidy \
             ccache \
             valgrind \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN luarocks install luaposix
+RUN /usr/bin/gem install asciidoctor
+
+RUN apt-get update \
+ && apt-get -qq install -y \
             libpmix-dev \
             libpmi-pmix-dev \
- && luarocks install luaposix \
- && /usr/bin/gem install asciidoctor \
+	    mpich \
+ && sudo update-alternatives --set mpi /usr/include/mpich \
  && rm -rf /var/lib/apt/lists/*
 
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
 # NOTE: we need asciidoctor 1.5.7 to handle manpages, install with gem install
+
+# Fix pmix link bug in ubuntu bionic package
+RUN rm /usr/lib/x86_64-linux-gnu/pmix/lib/libpmix.so \
+ && ln -s /usr/lib/x86_64-linux-gnu/pmix/lib/libpmix.so.2 /usr/lib/x86_64-linux-gnu/pmix/lib/libpmix.so
 
 RUN useradd -ms /bin/bash flux \
  && printf "flux:flux" | chpasswd \
