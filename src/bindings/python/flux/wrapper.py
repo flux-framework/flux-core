@@ -243,11 +243,12 @@ class Wrapper(WrapperBase):
 
     def __getattr__(self, name):
         fun = None
-        llib = self.__getattribute__("lib")
         if re.match('__.*__', name):
             # This is a python internal name, skip it
             raise AttributeError
+
         # try it bare
+        llib = getattr(self, "lib")
         try:
             fun = getattr(llib, name)
         except AttributeError:
@@ -260,17 +261,20 @@ class Wrapper(WrapperBase):
                     pass
         if fun is None:
             # Return a proxy class to generate a good error on call
-            setattr(self.__class__, name, ErrorPrinter(name, self.prefixes))
-            return self.__getattribute__(name)
+            error_printer = ErrorPrinter(name, self.prefixes)
+            setattr(self, name, error_printer)
+            return error_printer
 
         if not callable(fun):  # pragma: no cover
+            setattr(self, name, fun)
             return fun
 
         new_fun = self.check_wrap(fun, name)
         new_method = six.create_bound_method(new_fun, self)
-        # Store the wrapper function into the class to prevent a second lookup
-        setattr(self.__class__, name, new_method)
-        return self.__getattribute__(name)
+
+        # Store the wrapper function into the instance to prevent a second lookup
+        setattr(self, name, new_method)
+        return new_method
 
     def __clear(self):
         # avoid recursion
