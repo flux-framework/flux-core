@@ -28,7 +28,7 @@ script:
  - mkdir -p ~/.ccache
  - |
    docker run --rm --user='root' -v $HOME:/home/flux -v ${TRAVIS_BUILD_DIR}:/usr/src fluxrm/testenv:$IMG chown -R flux /home/flux /usr/src
-   docker run --rm -w /usr/src -v $HOME:/home/flux/ -v ${TRAVIS_BUILD_DIR}:/usr/src -e CC,CXX,COVERAGE,CPPFLAGS,ARGS,T_INSTALL,CPPCHECK,chain_lint,LUA_VERSION,ASAN_OPTIONS,TRAVIS_PULL_REQUEST -e LSAN_OPTIONS -e COMPILER -e DO_BUILD -e DO_TEST fluxrm/testenv:$IMG ./src/test/travis_run.sh
+   docker run --rm -w /usr/src -v $HOME:/home/flux/ -v ${TRAVIS_BUILD_DIR}:/usr/src --env-file ./src/test/docker_env_file fluxrm/testenv:$IMG ./src/test/travis_run.sh
 
 after_success:
  - ccache -s

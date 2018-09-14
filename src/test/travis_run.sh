@@ -1,6 +1,8 @@
 #!/bin/bash
 set -ex
 
+env
+
 # Skip build if we already ran coverity-scan
 test "${TRAVIS_BRANCH}" != 'coverity_scan' || exit 0
 # Force git to update the shallow clone and include tags so git-describe works
