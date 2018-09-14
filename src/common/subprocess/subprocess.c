@@ -319,7 +319,11 @@ int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
     return server_terminate_by_uuid (s, id);
 }
 
-void flux_subprocess_output (flux_subprocess_t *p, const char *stream)
+/*
+ * Convenience Functions:
+ */
+
+void flux_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
     FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
@@ -327,7 +331,7 @@ void flux_subprocess_output (flux_subprocess_t *p, const char *stream)
     int lenp;
 
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
-        log_err ("flux_subprocess_output: read_line");
+        log_err ("flux_standard_output: read_line");
         return;
     }
 
@@ -336,7 +340,7 @@ void flux_subprocess_output (flux_subprocess_t *p, const char *stream)
     if (!lenp
         && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-            log_err ("flux_subprocess_output: read_line");
+            log_err ("flux_standard_output: read_line");
             return;
         }
     }

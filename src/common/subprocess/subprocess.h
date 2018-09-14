@@ -105,12 +105,17 @@ void flux_subprocess_server_stop (flux_subprocess_server_t *s);
 int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
                                               const char *id);
 
-/*  General output callback that will send output from the subprocess
- *  to stdout or stderr.  Set to `on_stdout` and/or `on_stderr` in
- *  flux_subprocess_ops_t.  Can also be used for 'on_channel_out'
- *  callback, sending all output to stdout.
+/*
+ * Convenience Functions:
  */
-void flux_subprocess_output (flux_subprocess_t *p, const char *stream);
+
+/*  General output callback that will send output from the subprocess
+ *  to stdout or stderr.  Set the `on_stdout` and/or `on_stderr`
+ *  callbacks in flux_subprocess_ops_t and this function will output
+ *  to stdout/stderr respectively.  You can also set 'on_channel_out'
+ *  to this function, which will send all channel output to stdout.
+ */
+void flux_standard_output (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Commands:
