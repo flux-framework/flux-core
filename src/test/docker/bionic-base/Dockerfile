@@ -13,11 +13,9 @@ RUN apt-get update \
             git \
             vim \
             dh-autoreconf \
-            ninja-build \
             autotools-dev \
             autoconf \
             libtool \
-            libboost-all-dev \
             libyaml-cpp-dev \
             libmunge-dev \
             munge \
@@ -46,11 +44,24 @@ RUN /usr/bin/gem install asciidoctor
 
 RUN apt-get update \
  && apt-get -qq install -y \
+            pkg-config \
             libpmix-dev \
             libpmi-pmix-dev \
 	    mpich \
+            libsodium-dev \
+            uuid-dev  \
  && sudo update-alternatives --set mpi /usr/include/mpich \
  && rm -rf /var/lib/apt/lists/*
+
+# Install flux-security by hand for now:
+RUN wget https://github.com/flux-framework/flux-security/releases/download/v0.2.0/flux-security-0.2.0.tar.gz \
+ && tar xvfz flux-security-0.2.0.tar.gz \
+ && cd flux-security-0.2.0 \
+ && ./configure --prefix=/usr \
+ && make -j 4 \
+ && make install \
+ && cd .. \
+ && rm -rf flux-security-0.2.0 flux-security-0.2.0.tar.gz
 
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
 # NOTE: we need asciidoctor 1.5.7 to handle manpages, install with gem install
