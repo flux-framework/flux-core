@@ -15,7 +15,6 @@ https://github.com/zeromq/zeromq4-1/releases/download/v4.1.4/zeromq-4.1.4.tar.gz
 https://github.com/zeromq/czmq/archive/v3.0.2.tar.gz \
 http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
 http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.1.tar.gz \
-https://github.com/pmix/pmix/releases/download/v3.0.0/pmix-3.0.0.tar.gz \
 http://www.digip.org/jansson/releases/jansson-2.9.tar.gz \
 https://github.com/flux-framework/flux-security/releases/download/v0.2.0/flux-security-0.2.0.tar.gz \
 http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz \
