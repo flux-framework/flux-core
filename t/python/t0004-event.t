@@ -6,12 +6,18 @@ import flux.core as core
 from subflux import rerun_under_flux
 
 def __flux_size():
-  return 2
+    return 2
+
 
 class TestEvent(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         """Create a handle, connect to flux"""
         self.f = core.Flux()
+
+    @classmethod
+    def tearDownClass(self):
+        self.f.close()
 
     def test_t1_0_sub(self):
         """Subscribe to an event"""

@@ -17,10 +17,12 @@ def __flux_size():
     return 8
 
 class TestBarrier(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         self.f = core.Flux()
 
-    def tearDown(self):
+    @classmethod
+    def tearDownClass(self):
         self.f.close()
 
     def test_single(self):

@@ -7,9 +7,13 @@ def __flux_size():
   return 2
 
 class TestTimer(unittest.TestCase):
-    def setUp(self):
-        """Create a handle, connect to flux"""
+    @classmethod
+    def setUpClass(self):
         self.f = core.Flux()
+
+    @classmethod
+    def tearDownClass(self):
+        self.f.close()
 
     def test_timer_add_negative(self):
         """Add a negative timer"""

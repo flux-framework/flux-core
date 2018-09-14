@@ -11,9 +11,14 @@ def __flux_size():
     return 2
 
 class TestHandle(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         """Create a handle, connect to flux"""
         self.f = core.Flux()
+
+    @classmethod
+    def tearDownClass(self):
+        self.f.close()
 
     def test_create_handle(self):
         """Successfully connected to flux"""
