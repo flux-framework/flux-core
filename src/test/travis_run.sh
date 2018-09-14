@@ -44,7 +44,7 @@ sudo sh -c "echo '#error Non-build-tree flux/core.h!' > /usr/local/include/flux/
 ./autogen.sh
 mkdir -p travis-build
 cd travis-build
-CONF=../configure $ARGS
+CONF="../configure $ARGS"
 
 if test "$COVERAGE" = "t" ; then
   # Enable coverage for $CC-coverage build
