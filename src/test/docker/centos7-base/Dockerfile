@@ -42,6 +42,13 @@ RUN yum -y update \
       valgrind \
  && yum clean all
 
+# The cmake from yum is incredibly ancient, download a less ancient one
+RUN wget -q --no-check-certificate https://cmake.org/files/v3.10/cmake-3.10.1-Linux-x86_64.tar.gz\
+ && tar -xzf cmake-3.10.1-Linux-x86_64.tar.gz\
+ && cp -fR cmake-3.10.1-Linux-x86_64/* /usr\
+ && rm -rf cmake-3.10.1-Linux-x86_64\
+ && rm cmake-3.10.1-Linux-x86_64.tar.gz
+
 RUN /usr/bin/gem install asciidoctor
 
 # Install flux-security by hand for now:
@@ -68,7 +75,7 @@ RUN mkdir caliper \
 
 RUN useradd -ms /bin/bash flux \
  && printf "flux:flux" | chpasswd \
- && adduser flux sudo \
+ && usermod -G wheel flux \
  && printf "flux ALL= NOPASSWD: ALL\\n" >> /etc/sudoers
 
 USER flux
