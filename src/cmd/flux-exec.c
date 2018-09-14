@@ -142,7 +142,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     int lenp;
 
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp)))
-        log_err_exit ("flux_subprocess_output: read_line");
+        log_err_exit ("flux_subprocess_read_line");
 
     /* if process exited, read remaining stuff or EOF, otherwise
      * wait for future newline */
@@ -150,7 +150,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
         && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
 
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp)))
-            log_err_exit ("flux_subprocess_output: read_line");
+            log_err_exit ("flux_subprocess_read");
     }
 
     if (lenp) {
