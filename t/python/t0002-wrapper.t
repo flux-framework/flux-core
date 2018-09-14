@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-
 import unittest
 
 import flux
 import flux.core as core
 from flux.core.inner import ffi, raw
 import flux.wrapper
+from subflux import rerun_under_flux
 
+def __flux_size():
+    return 1
 
 class TestWrapper(unittest.TestCase):
     def test_call_non_existant(self):
@@ -47,5 +49,6 @@ class TestWrapper(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    from pycotap import TAPTestRunner
-    unittest.main(testRunner=TAPTestRunner())
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+        unittest.main(testRunner=TAPTestRunner())

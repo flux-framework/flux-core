@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 import unittest
+
 import errno
 import flux.core as core
+from subflux import rerun_under_flux
+
+def __flux_size():
+  return 2
 
 json_str = '{"a":42}';
 class TestRequestMethods(unittest.TestCase):
@@ -22,5 +27,6 @@ class TestRequestMethods(unittest.TestCase):
         )
 
 if __name__ == '__main__':
-  from pycotap import TAPTestRunner
-  unittest.main(testRunner=TAPTestRunner())
+    if rerun_under_flux(__flux_size()):
+      from pycotap import TAPTestRunner
+      unittest.main(testRunner=TAPTestRunner())
