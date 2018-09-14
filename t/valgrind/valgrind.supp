@@ -60,3 +60,16 @@
    obj:*
    fun:_dl_lookup_symbol_x
 }
+{
+   <sec_actor_stack_frame>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   ...
+   fun:zactor_new
+   fun:flux_sec_comms_init
+   fun:overlay_sec_init
+   fun:overlay_bind
+   fun:boot_pmi
+   fun:main
+}

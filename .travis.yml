@@ -1,124 +1,37 @@
+sudo: required
+services: docker
+dist: trusty
 language: c
-
-sudo: true
 
 matrix:
   include:
     - compiler: gcc
-      env: LUA_VERSION=5.1
+      env: IMG=bionic-base LUA_VERSION=5.2
     - compiler: clang
-      env: LUA_VERSION=5.1
+      env: IMG=clang6 LUA_VERSION=5.2 CC=clang-6.0 CXX=clang++-6.0
     - compiler: gcc
-      env: LUA_VERSION=5.1 COVERAGE=t ARGS="--with-flux-security --with-pmix --enable-caliper --enable-pylint"
+      env: IMG=bionic-base LUA_VERSION=5.2 COVERAGE=t ARGS="--with-flux-security --with-pmix --enable-caliper --enable-pylint"
     - compiler: gcc
-      env: LUA_VERSION=5.1 T_INSTALL=t
+      env: IMG=bionic-base LUA_VERSION=5.2 T_INSTALL=t
     - compiler: clang
-      env: LUA_VERSION=5.1 CPPCHECK=t ARGS="--with-flux-security --with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
+      env: IMG=clang6 LUA_VERSION=5.2 CPPCHECK=t ARGS="--with-flux-security --with-pmix --enable-sanitizer" CC=clang-6.0 CXX=clang++-6.0
     - compiler: gcc
-      env: LUA_VERSION=5.2 CC=gcc-8 CXX=g++-8 ARGS="--with-flux-security --with-pmix" chain_lint=t
+      env: IMG=bionic-base LUA_VERSION=5.2 CC=gcc-8 CXX=g++-8 ARGS="--with-flux-security --with-pmix" chain_lint=t
     - compiler: clang
-      env: LUA_VERSION=5.2 ARGS="--with-flux-security --with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
+      env: IMG=clang6 LUA_VERSION=5.2 ARGS="--with-flux-security --with-pmix --enable-caliper" CC=clang-6.0 CXX=clang++-6.0
       
 cache:
   directories:
-    - $HOME/local
     - $HOME/.ccache
-    - $HOME/.local
-
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-      - llvm-toolchain-precise-3.8
-      - george-edison55-precise-backports # CMake 3.0
-    packages:
-      - cmake
-      - cmake-data
-      - clang-3.8
-      - gcc-8
-      - g++-8
-      - libmunge-dev
-      - uuid-dev
-      - aspell
-      - aspell-en
-      - ccache
-      - apport # for coredumps
-      - gdb
-      - valgrind
-      - libyaml-cpp-dev
-      - libboost-dev # for yaml-cpp 0.5.1. >=0.5.2 no longer need boost
-      - libevent-dev # pmix needs this
-
-  coverity_scan:
-    project:
-      name: "grondo/flux-core"
-      description: "Build submitted via Travis CI"
-    notification_email: mark.grondona@gmail.com
-    build_command_prepend: "./autogen.sh && ./configure"
-    build_command:   "make -j 4"
-    branch_pattern: coverity_scan
-
-env:
-  global:
-   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
-   #   via the "travis encrypt" command using the project repo's public key
-   - secure: "T06LmG6hAwmRculQGfmV06A0f2i9rPoc8itDwyWkmg2CbtCqDyYV93V53jsVknqKA1LA9+Yo7Q3bJnnEAWI7kWAptTcL5ipRycYkl5FqoYawkwRdQW3giZwbs9zRchrwFmZ03N0hRfl31IntXhDmj5EkHOZoduMpkQFFGo0XDC4="
-
-before_install:
-  # Do not run coverity-scan on every build in matrix
-  - test "${TRAVIS_BRANCH}" != 'coverity_scan' -o "${TRAVIS_JOB_NUMBER##*.}" = '1' || exit 0
-  #
-  - test "$TRAVIS_PULL_REQUEST" == "false" || export CCACHE_READONLY=1
-  - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
-
-  - rm -rf $HOME/.luarocks
-  - $(./src/test/travis-dep-builder.sh --printenv)
-  - ./src/test/travis-dep-builder.sh --cachedir=$HOME/local/.cache
-
-  # coveralls-lcov required only for coveralls upload:
-  - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
-
-  # Ensure we always use internal <flux/core.h> by placing a dummy file
-  #  in the same path as ZMQ_FLAGS:
-  - mkdir -p $HOME/local/include/flux
-  - echo '#error Non-build-tree flux/core.h!' > $HOME/local/include/flux/core.h
 
 script:
- # Skip build if we already ran coverity-scan
- - test "${TRAVIS_BRANCH}" != 'coverity_scan' || exit 0
- # Force git to update the shallow clone and include tags so git-describe works
- - git fetch --unshallow --tags
- - ulimit -c unlimited
- - export CC="ccache $CC"
- - export MAKECMDS="make distcheck"
- # Ensure travis builds libev such that libfaketime will work:
- # (force libev to *not* use syscall interface for clock_gettime())
- - export CPPFLAGS="$CPPFLAGS -DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
-
- # Travis has limited resources, even though number of processors might
- #  might appear to be large. Limit session size for testing to 5 to avoid
- #  spurious timeouts.
- - export FLUX_TEST_SIZE_MAX=5
-
- # Invoke MPI tests
- - export TEST_MPI=t
-
- # Enable coverage for $CC-coverage build
- # We can't use distcheck here, it doesn't play well with coverage testing:
- - if test "$COVERAGE" = "t" ; then ARGS="$ARGS --enable-code-coverage"; MAKECMDS="make -j 2 && make -j 2 check-code-coverage && lcov -l flux*-coverage.info"; fi
- # Use make install for T_INSTALL:
- - if test "$T_INSTALL" = "t" ; then ARGS="$ARGS --prefix=/tmp/flux"; MAKECMDS="make && make install && /tmp/flux/bin/flux keygen && FLUX_TEST_INSTALLED_PATH=/tmp/flux/bin make -j 2 check"; fi
- # Use src/test/cppcheck.sh instead of make?:
- - if test "$CPPCHECK" = "t" ; then MAKECMDS="sh -x src/test/cppcheck.sh && make"; fi
-
- - export FLUX_TESTS_LOGFILE=t
- - export DISTCHECK_CONFIGURE_FLAGS=${ARGS}
- - if test "$COVERITY_SCAN_BRANCH" != "1" ; then ./autogen.sh && ./configure ${ARGS} && eval ${MAKECMDS}; fi
+ - mkdir -p ~/.ccache
+ - |
+   docker run --rm --user='root' -v $HOME:/home/flux -v ${TRAVIS_BUILD_DIR}:/usr/src fluxrm/testenv:$IMG chown -R flux /home/flux /usr/src
+   docker run --rm -w /usr/src -v $HOME:/home/flux/ -v ${TRAVIS_BUILD_DIR}:/usr/src --env-file ./src/test/docker_env_file fluxrm/testenv:$IMG ./src/test/travis_run.sh
 
 after_success:
  - ccache -s
- # Upload results to coveralls.io for first job of N
- - if test "$COVERAGE" = "t" ; then coveralls-lcov flux*-coverage.info; bash <(curl -s https://codecov.io/bash) ; fi
 
 after_failure:
  - find . -name test-suite.log | xargs -i sh -c 'printf "===XXX {} XXX===";cat {}'
