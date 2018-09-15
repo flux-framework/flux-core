@@ -9,15 +9,15 @@ matrix:
     - compiler: clang
       env: LUA_VERSION=5.1
     - compiler: gcc
-      env: LUA_VERSION=5.1 COVERAGE=t ARGS="--with-flux-security --with-pmix --enable-caliper --enable-pylint"
+      env: LUA_VERSION=5.1 COVERAGE=t ARGS="--with-flux-security --enable-caliper --enable-pylint"
     - compiler: gcc
       env: LUA_VERSION=5.1 T_INSTALL=t
     - compiler: clang
-      env: LUA_VERSION=5.1 CPPCHECK=t ARGS="--with-flux-security --with-pmix --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
+      env: LUA_VERSION=5.1 CPPCHECK=t ARGS="--with-flux-security --enable-sanitizer" CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
-      env: LUA_VERSION=5.2 CC=gcc-8 CXX=g++-8 ARGS="--with-flux-security --with-pmix" chain_lint=t
+      env: LUA_VERSION=5.2 CC=gcc-8 CXX=g++-8 ARGS="--with-flux-security" chain_lint=t
     - compiler: clang
-      env: LUA_VERSION=5.2 ARGS="--with-flux-security --with-pmix --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
+      env: LUA_VERSION=5.2 ARGS="--with-flux-security --enable-caliper" CC=clang-3.8 CXX=clang++-3.8
       
 cache:
   directories:
@@ -47,7 +47,6 @@ addons:
       - valgrind
       - libyaml-cpp-dev
       - libboost-dev # for yaml-cpp 0.5.1. >=0.5.2 no longer need boost
-      - libevent-dev # pmix needs this
 
   coverity_scan:
     project:
