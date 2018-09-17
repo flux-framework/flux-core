@@ -114,8 +114,8 @@ int main (int argc, char *argv[])
         .on_completion = completion_cb,
         .on_state_change = state_cb,
         .on_channel_out = NULL,
-        .on_stdout = flux_subprocess_output,
-        .on_stderr = flux_subprocess_output,
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output,
     };
     const char *optargp;
     int optindex;
@@ -153,7 +153,7 @@ int main (int argc, char *argv[])
             && strcmp (optargp, "STDERR")) {
             if (flux_cmd_add_channel (cmd, optargp) < 0)
                 log_err_exit ("flux_cmd_add_channel");
-            ops.on_channel_out = flux_subprocess_output;
+            ops.on_channel_out = flux_standard_output;
         }
     }
 

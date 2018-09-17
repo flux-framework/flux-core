@@ -416,8 +416,8 @@ void test_basic_default_output (flux_reactor_t *r)
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
-        .on_stdout = flux_subprocess_output,
-        .on_stderr = flux_subprocess_output
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1375,7 +1375,7 @@ void test_channel_fd_in (flux_reactor_t *r)
         .on_completion = completion_cb,
         .on_channel_out = NULL,
         .on_stdout = channel_in_cb,
-        .on_stderr = flux_subprocess_output
+        .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
     channel_in_cb_count = 0;
@@ -1441,8 +1441,8 @@ void test_channel_fd_in_and_out (flux_reactor_t *r)
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
         .on_channel_out = channel_in_and_out_cb,
-        .on_stdout = flux_subprocess_output,
-        .on_stderr = flux_subprocess_output
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
     channel_in_and_out_cb_count = 0;
@@ -1527,8 +1527,8 @@ void test_channel_multiple_lines (flux_reactor_t *r)
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
         .on_channel_out = channel_multiple_lines_cb,
-        .on_stdout = flux_subprocess_output,
-        .on_stderr = flux_subprocess_output
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
     multiple_lines_channel_cb_count = 0;
@@ -1609,9 +1609,9 @@ void test_bufsize (flux_reactor_t *r)
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
-        .on_channel_out = flux_subprocess_output,
-        .on_stdout = flux_subprocess_output,
-        .on_stderr = flux_subprocess_output
+        .on_channel_out = flux_standard_output,
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1642,9 +1642,9 @@ void test_bufsize_error (flux_reactor_t *r)
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
-        .on_channel_out = flux_subprocess_output,
-        .on_stdout = flux_subprocess_output,
-        .on_stderr = flux_subprocess_output
+        .on_channel_out = flux_standard_output,
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
     };
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p == NULL
