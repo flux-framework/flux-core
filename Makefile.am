@@ -13,18 +13,18 @@ ACLOCAL_AMFLAGS = -I config
 
 CODE_COVERAGE_IGNORE_PATTERN = \
 	"$(abs_top_builddir)/t/*" \
-	"/test/*.c" \
-	"/tests/*.c" \
-	"man3/*.c" \
-	"libtap/*" \
-	"libjsonc/*" \
-	"libev/*" \
-	"/usr/*" \
-	"bindings/python/*" \
-	"common/liblsd/*" \
-	"common/libutil/sds.*" \
-	"common/libminilzo/*" \
-	"common/liboptparse/getopt*"
+	"*/test/*.c" \
+	"*/tests/*.c" \
+	"*/man3/*.c" \
+	"*/libtap/*" \
+	"*/libev/*" \
+	"/usr/include/*" \
+	"/usr/lib*" \
+	"*/bindings/python/*" \
+	"*/common/liblsd/*" \
+	"*/common/libutil/sds.*" \
+	"*/common/libminilzo/*" \
+	"*/common/liboptparse/getopt*"
 
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
