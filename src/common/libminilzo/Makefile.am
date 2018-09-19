@@ -1,13 +1,13 @@
 AM_CFLAGS = \
 	$(WARNING_CFLAGS) \
-	$(CODE_COVERAGE_CFLAGS)
+	$(CODE_COVERAGE_CFLAGS) \
+	-Wno-strict-aliasing -Wno-error=strict-aliasing
 
 AM_LDFLAGS = \
 	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	-Wno-strict-aliasing -Wno-error=strict-aliasing
+	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 noinst_LTLIBRARIES = libminilzo.la
 
