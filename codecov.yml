@@ -13,7 +13,8 @@ coverage:
  - ".*/bindings/python/.*"
  - ".*/common/libutil/sds.*"
  - ".*/common/libminilzo/.*"
- - ".*/usr/.*"
+ - "/usr/include/.*"
+ - "/usr/lib/.*"
 
 comment:
  layout: "header, diff, changes, tree"
