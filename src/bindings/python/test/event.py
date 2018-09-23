@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import unittest
 import errno
 import os
@@ -35,11 +36,11 @@ class TestEvent(unittest.TestCase):
             self.f.event_send("testevent.1", {'test': 'yay!'}), 0)
         evt = self.f.event_recv()
         self.assertIsNotNone(evt)
-        self.assertEqual(evt.topic, 'testevent.1')
+        self.assertEqual(evt.topic, b'testevent.1')
         pld = evt.payload
         self.assertIsNotNone(pld)
         self.assertEqual(pld['test'], 'yay!')
         self.assertIsNotNone(evt.payload_str)
-        print evt.payload_str
+        print ( evt.payload_str )
 
 

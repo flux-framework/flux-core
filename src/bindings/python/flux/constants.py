@@ -2,7 +2,7 @@
 
 import sys
 import re
-from flux._core import lib
+from _flux._core import lib
 
 MOD = sys.modules[__name__]
 # Inject enum/define names matching ^FLUX_[A-Z_]+$ into module

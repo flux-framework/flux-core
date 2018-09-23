@@ -1,4 +1,5 @@
 import json
+import six
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 import flux.constants
@@ -33,15 +34,15 @@ class RPC(WrapperPimpl):
 
                 if payload is None or payload == ffi.NULL:
                     payload = ffi.NULL
-                elif not isinstance(payload, basestring):
+                elif not (isinstance(payload, six.string_types)):
                     payload = json.dumps(payload)
 
-                if isinstance(nodeid, basestring):
+                if isinstance(nodeid, six.binary_type):
                     # String version is multiple nodeids
-                    self.handle = lib.flux_rpc_multi(
+                    self.handle = raw.flux_rpc_multi(
                         flux_handle, topic, payload, nodeid, flags)
                 else:
-                    self.handle = lib.flux_rpc(
+                    self.handle = raw.flux_rpc(
                         flux_handle, topic, payload, nodeid, flags)
 
     def __init__(self,
@@ -61,11 +62,7 @@ class RPC(WrapperPimpl):
         self.then_args = None
         self.then_cb = None
 
-    def check(self):
-        return bool(self.pimpl.check())
 
-    def completed(self):
-        return bool(self.pimpl.completed())
 
     def get_str(self):
         j_str = ffi.new('char *[1]')
@@ -75,11 +72,3 @@ class RPC(WrapperPimpl):
     def get(self):
         return json.loads(self.get_str())
 
-    def then(self, callback, args):
-        def cb_then_wrapper(trash, arg):
-            rpc_handle = ffi.from_handle(arg)
-            callback(rpc_handle, rpc_handle.then_args)
-        # Save the callback to keep it from getting collected
-        self.then_cb = ffi.callback('flux_then_f', cb_then_wrapper)
-        self.then_args = args
-        return self.pimpl.then(self.then_cb, ffi.new_handle(self))
