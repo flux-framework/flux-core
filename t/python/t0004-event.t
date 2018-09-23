@@ -28,7 +28,7 @@ class TestEvent(unittest.TestCase):
         """Unsubscribe from an event"""
         self.assertGreaterEqual(self.f.event_subscribe("testevent.2"), 0)
         self.assertGreaterEqual(self.f.event_unsubscribe("testevent.2"), 0)
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaisesRegexp(EnvironmentError, "No such file"):
             self.f.event_unsubscribe("nonexistent.event")
 
     def test_full_event(self):

@@ -121,7 +121,7 @@ class TestKVS(unittest.TestCase):
             ])
 
     def test_read_non_existent_basedir(self):
-        with self.assertRaisesRegex(EnvironmentError, "No such file"):
+        with self.assertRaisesRegexp(EnvironmentError, "No such file"):
             print(flux.kvs.KVSDir(
                 self.f,
                 'crazykeythatclearlydoesntexistandneverwillinanyuniverse')
