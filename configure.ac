@@ -146,14 +146,14 @@ AC_ARG_ENABLE(python,
 AC_MSG_RESULT($enable_python)
 
 if test "$enable_python" = "yes"; then
-  AM_PATH_PYTHON([2.7])
+  AX_PYTHON_DEVEL([>='2.7'])
+  AM_PATH_PYTHON([$ac_python_version])
   if test "X$PYTHON" != "X"; then
     # Flag for PYTHON_LDFLAGS workaround below.
     if test -n "$PYTHON_LDFLAGS"; then
       ac_python_ldflags_set_by_user=true
     fi
 
-    AX_PYTHON_DEVEL
     #TODO: write this manually to add a version check
     AM_CHECK_PYMOD(cffi,
                    [cffi.__version_info__ >= (1,1)],

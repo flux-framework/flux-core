@@ -45,5 +45,11 @@ RUN case $OS in \
      centos*) usermod -G wheel $USER && usermod -G wheel flux ;; \
     esac
 
+# Make sure user in appropriate group for sudo on different platorms
+RUN case $OS in \
+     ubuntu*) apt-get -qq install -y --no-install-recommends python-six python3-six ;; \
+     centos*) yum -y install python-six python34-devel python34-cffi python34-six ;; \
+    esac
+
 USER $USER
 WORKDIR /home/$USER
