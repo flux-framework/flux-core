@@ -10,6 +10,7 @@
 #include "kvs_watch.h"
 #include "kvs_txn.h"
 #include "kvs_commit.h"
+#include "kvs_eventlog.h"
 
 #ifdef __cplusplus
 extern "C" {

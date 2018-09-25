@@ -167,6 +167,20 @@ display the namespace owner.  If '-s' is specified, display the root
 sequence number.  If '-w' is specified, display the current root,
 then a new value each time it is updated, up to 'count', if specified.
 
+*eventlog get* [-w] [-c count] [-u] 'key'::
+Display the contents of an RFC 18 KVS eventlog referred to by 'key'.
+If '-u' is specified, display the log in raw form, otherwise format the
+dates as ISO 8601.  If '-w' is specified, after the existing contents
+have been displayed, the eventlog is monitored and updates are
+displayed as they are committed.  This runs until the program is
+interrupted or an error occurs, unless the number of events is limited
+with the '-c' option.
+
+*eventlog append* [-t SECONDS] 'key' 'name' ['context ...']::
+Append an event to an RFC 18 KVS eventlog referred to by 'key'.
+The event 'name' and optional 'context' are specified on the command line.
+The timestamp may optionally be specified with '-t' as decimal seconds since
+the UNIX epoch (UTC), otherwise the current wall clock is used.
 
 AUTHOR
 ------

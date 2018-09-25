@@ -7,7 +7,6 @@ test_description='Test KVS get --watch'
 test_under_flux 4 kvs
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
-commit_order=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
 test_expect_success 'flux kvs get --watch --count=1 works' '
 	flux kvs put test.a=42 &&

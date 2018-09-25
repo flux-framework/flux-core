@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <jansson.h>
 #include <czmq.h>
+#include <argz.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -55,6 +56,7 @@ int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
 int cmd_ls (optparse_t *p, int argc, char **argv);
 int cmd_getroot (optparse_t *p, int argc, char **argv);
+int cmd_eventlog (optparse_t *p, int argc, char **argv);
 
 static int get_window_width (optparse_t *p, int fd);
 static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
@@ -340,6 +342,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_getroot,
       0,
       getroot_opts
+    },
+    { "eventlog",
+      NULL,
+      "Manipulate a KVS eventlog",
+      cmd_eventlog,
+      0,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -1744,6 +1753,266 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
+    return (0);
+}
+
+/* combine 'argv' elements into one space-separated string (caller must free).
+ * assumes 'argv' is NULL terminated.
+ */
+static char *eventlog_context_from_args (char **argv)
+{
+    size_t context_len;
+    char *context;
+    error_t e;
+
+    if ((e = argz_create (argv, &context, &context_len)) != 0)
+        log_errn_exit (e, "argz_create");
+    argz_stringify (context, context_len, ' ');
+    return context;
+}
+
+/* Encode event from broken out args.
+ * If timestamp < 0, use wall clock.
+ * Enclose event in a KVS transaction and send the commit request.
+ */
+static flux_future_t *eventlog_append_event (flux_t *h, const char *key,
+                                             double timestamp,
+                                             const char *name,
+                                             const char *context)
+{
+    flux_kvs_txn_t *txn;
+    char *event;
+    flux_future_t *f;
+
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (timestamp < 0.)
+        event = flux_kvs_event_encode (name, context);
+    else
+        event = flux_kvs_event_encode_timestamp  (timestamp, name, context);
+    if (!event)
+        log_err_exit ("flux_kvs_event_encode");
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, event) < 0)
+        log_err_exit ("flux_kvs_txn_put");
+    if (!(f = flux_kvs_commit (h, 0, txn)))
+        log_err_exit ("flux_kvs_commit");
+    return f;
+}
+
+int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h = optparse_get_data (p, "flux_handle");
+    int optindex = optparse_option_index (p);
+    const char *key;
+    const char *name;
+    char *context = NULL;
+    flux_future_t *f;
+    double timestamp = optparse_get_double (p, "timestamp", -1.);
+
+    if (argc - optindex < 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    key = argv[optindex++];
+    name = argv[optindex++];
+    if (optindex < argc)
+        context = eventlog_context_from_args (argv + optindex);
+
+    f = eventlog_append_event (h, key, timestamp, name, context);
+    if (flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+
+    flux_future_destroy (f);
+    free (context);
+
+    return (0);
+}
+
+struct eventlog_get_ctx {
+    struct flux_kvs_eventlog *log;
+    optparse_t *p;
+    int maxcount;
+    int count;
+};
+
+/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
+ * with microsecond precision
+ */
+static int eventlog_timestr (double timestamp, char *buf, size_t size)
+{
+    time_t sec = timestamp;
+    unsigned long usec = (timestamp - sec)*1E6;
+    struct tm tm;
+
+    if (!gmtime_r (&sec, &tm))
+        return -1;
+    if (strftime (buf, size, "%FT%T", &tm) == 0)
+        return -1;
+    size -= strlen (buf);
+    buf += strlen (buf);
+    if (snprintf (buf, size, ".%.6luZ", usec) >= size)
+        return -1;
+    return 0;
+}
+
+/* print event with human-readable time
+ */
+static void eventlog_prettyprint (FILE *f, const char *s)
+{
+    double timestamp;
+    flux_kvs_event_name_t name;
+    flux_kvs_event_context_t context;
+    char buf[64];
+
+    if (flux_kvs_event_decode (s, &timestamp, name, context) < 0)
+        log_err_exit ("flux_kvs_event_decode");
+    if (eventlog_timestr (timestamp, buf, sizeof (buf)) < 0)
+        log_msg_exit ("error converting timestamp to ISO 8601");
+
+    fprintf (f, "%s %s%s%s\n", buf, name, *context ? " " : "", context);
+}
+
+void eventlog_get_continuation (flux_future_t *f, void *arg)
+{
+    struct eventlog_get_ctx *ctx = arg;
+    const char *s;
+    const char *event;
+    bool limit_reached = false;
+
+    /* Handle cancelled lookup (FLUX_KVS_WATCH flag only).
+     * Destroy the future and return (reactor will then terminate).
+     * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
+     */
+    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
+                                          && errno == ENODATA) {
+        flux_future_destroy (f);
+        return;
+    }
+
+    /* Each KVS get response returns a new snapshot of the eventlog.
+     * Pass it to eventlog_update() which ensures the shapshot is consistent
+     * with any existing events in the log, and makes new events available to
+     * the iterator.
+     */
+    if (flux_kvs_lookup_get (f, &s) < 0)
+        log_err_exit ("flux_kvs_lookup_get");
+    if (flux_kvs_eventlog_update (ctx->log, s) < 0)
+        log_err_exit ("flux_kvs_eventlog_update");
+
+    /* Display any new events.
+     */
+    while ((event = flux_kvs_eventlog_next (ctx->log)) && !limit_reached) {
+        if (optparse_hasopt (ctx->p, "unformatted"))
+            printf ("%s", event);
+        else
+            eventlog_prettyprint (stdout, event);
+        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
+            limit_reached = true;
+    }
+    fflush (stdout);
+
+    /* If watching, re-arm future for next response.
+     * If --count limit has been reached, send a cancel request.
+     * The resulting ENODATA error response is handled above.
+     */
+    if (optparse_hasopt (ctx->p, "watch")) {
+        flux_future_reset (f);
+        if (limit_reached) {
+            if (flux_kvs_lookup_cancel (f) < 0)
+                log_err_exit ("flux_kvs_lookup_cancel");
+        }
+    }
+    else
+        flux_future_destroy (f);
+}
+
+int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h = optparse_get_data (p, "flux_handle");
+    int optindex = optparse_option_index (p);
+    const char *key;
+    flux_future_t *f;
+    int flags = 0;
+    struct eventlog_get_ctx ctx;
+
+    if (argc - optindex != 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    key = argv[optindex++];
+    if (optparse_hasopt (p, "watch"))
+        flags |= FLUX_KVS_WATCH;
+
+    if (!(ctx.log = flux_kvs_eventlog_create()))
+        log_err_exit ("flux_kvs_eventlog_create");
+    ctx.p = p;
+    ctx.count = 0;
+    ctx.maxcount = optparse_get_int (p, "count", 0);
+
+    if (!(f = flux_kvs_lookup (h, flags, key)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_kvs_eventlog_destroy (ctx.log);
+
+    return (0);
+}
+
+static struct optparse_option eventlog_append_opts[] =  {
+    { .name = "timestamp", .key = 't', .has_arg = 1, .arginfo = "SECONDS",
+      .usage = "Specify timestamp in seconds since epoch",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option eventlog_get_opts[] =  {
+    { .name = "watch", .key = 'w', .has_arg = 0,
+      .usage = "Monitor eventlog",
+    },
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
+      .usage = "Display at most COUNT events",
+    },
+    { .name = "unformatted", .key = 'u', .has_arg = 0,
+      .usage = "Show event in RFC 18 form",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_subcommand eventlog_subcommands[] = {
+    { "append",
+      "[-t SECONDS] key name [context ...]",
+      "Append to eventlog",
+      cmd_eventlog_append,
+      0,
+      eventlog_append_opts,
+    },
+    { "get",
+      "[-u] [-w] [-c COUNT] key",
+      "Get eventlog",
+      cmd_eventlog_get,
+      0,
+      eventlog_get_opts,
+    },
+    OPTPARSE_SUBCMD_END
+};
+
+int cmd_eventlog (optparse_t *p, int argc, char **argv)
+{
+    int optindex;
+
+    if (optparse_reg_subcommands (p, eventlog_subcommands) != OPTPARSE_SUCCESS)
+        log_msg_exit ("eventlog: optparse_reg_subcommands failed");
+
+    optindex = optparse_parse_args (p, argc, argv);
+    if (optindex < 0)
+        log_msg_exit ("eventlog: optparse_parse_args failed");
+
+    if (optparse_run_subcommand (p, argc, argv) != OPTPARSE_SUCCESS)
+        log_msg_exit ("eventlog: optparse_run_subcommand failed");
+
     return (0);
 }
 
