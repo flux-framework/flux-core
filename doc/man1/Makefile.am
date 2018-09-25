@@ -50,21 +50,12 @@ STDERR_DEVNULL = $(stderr_devnull_$(V))
 stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
 stderr_devnull_0 = 2>/dev/null
 
-if ENABLE_ADOC
 .adoc.1:
 	$(AM_V_GEN)$(ADOC) --attribute mansource=$(PACKAGE_NAME) \
-	    --attribute manversion=$(PACKAGE_VERSION) \
-	    --attribute manmanual="Flux Command Reference" \
-	    --destination-dir $(builddir) \
-	    --doctype manpage --backend manpage $< $(STDERR_DEVNULL)
-else
-.adoc.1:
-	$(AM_V_GEN)$(A2X) --attribute mansource=$(PACKAGE_NAME) \
-	    --attribute manversion=$(PACKAGE_VERSION) \
-	    --attribute manmanual="Flux Command Reference" \
-	    --destination-dir=$(builddir) \
-	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
-endif
+	--attribute manversion=$(PACKAGE_VERSION) \
+	--attribute manmanual="Flux Command Reference" \
+	--destination-dir $(builddir) \
+	--doctype manpage $(ADOC_FORMAT_OPT) manpage $< $(STDERR_DEVNULL)
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc NODESET.adoc
 
