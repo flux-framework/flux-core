@@ -21,14 +21,15 @@ AM_TESTS_ENVIRONMENT = \
 	test -n "$$LUA_PATH" && export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";\
 	test -n "$$FLUX_TEST_INSTALLED_PATH" && \
 	export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;"; \
-	PYTHONPATH="$(top_builddir)/src/bindings/python:$(top_srcdir)/t/python/tap:$$PYTHONPATH";
+	export PYTHONPATH="$(top_builddir)/src/bindings/python:$(top_srcdir)/t/python/tap:$(PYTHON_SITE_PKG):$$PYTHONPATH";
 
-TEST_EXTENSIONS = .t
+TEST_EXTENSIONS = .t .py
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
-	$(top_srcdir)/config/tap-driver.sh
+        $(top_srcdir)/config/tap-driver.sh
+PY_LOG_DRIVER = $(PYTHON) $(top_srcdir)/config/tap-driver.py
 
 lua_SCRIPTS = \
-	fluxometer.lua
+        fluxometer.lua
 
 install-data-local:
 	$(INSTALL) -m644 fluxometer/conf.lua.installed \
@@ -119,14 +120,14 @@ endif
 
 if HAVE_PYTHON
 TESTS += \
-	python/t0001-handle.t \
-	python/t0002-wrapper.t \
-	python/t0003-barrier.t \
-	python/t0004-event.t \
-	python/t0005-kvs.t \
-	python/t0006-request.t \
-	python/t0007-watchers.t \
-	python/t0008-jsc.t
+	python/t0001-handle.py \
+	python/t0002-wrapper.py \
+	python/t0003-barrier.py \
+	python/t0004-event.py \
+	python/t0005-kvs.py \
+	python/t0006-request.py \
+	python/t0007-watchers.py \
+	python/t0008-jsc.py
 endif
 
 EXTRA_DIST= \
@@ -223,13 +224,13 @@ check_SCRIPTS = \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
-	python/t0001-handle.t \
-	python/t0002-wrapper.t \
-	python/t0003-barrier.t \
-	python/t0004-event.t \
-	python/t0005-kvs.t \
-	python/t0006-request.t \
-	python/t0007-watchers.t \
+	python/t0001-handle.py \
+	python/t0002-wrapper.py \
+	python/t0003-barrier.py \
+	python/t0004-event.py \
+	python/t0005-kvs.py \
+	python/t0006-request.py \
+	python/t0007-watchers.py \
 	python/t0008-jsc.py
 
 check_PROGRAMS = \
