@@ -65,7 +65,7 @@ AC_PROG_AWK
 AC_ARG_ENABLE([docs],
 	      AS_HELP_STRING([--disable-docs], [disable building docs]))
 AS_IF([test "x$enable_docs" != "xno"], [
-  AC_CHECK_PROGS(ADOC, [a2x asciidoctor],[not-found])
+  AC_CHECK_PROGS(ADOC, [a2x asciidoctor])
   AS_IF([test "$ADOC" == "a2x"], [
 	ADOC_FORMAT_OPT="--format"
 	AC_SUBST([ADOC_FORMAT_OPT])
@@ -75,7 +75,7 @@ AS_IF([test "x$enable_docs" != "xno"], [
 	AC_SUBST([ADOC_FORMAT_OPT])
   ])
 ])
-AM_CONDITIONAL([ENABLE_DOCS], [test "$ADOC" != "not-found"])
+AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])
 
 ##
@@ -379,7 +379,7 @@ AC_CONFIG_LINKS([ \
 AC_OUTPUT
 
 AS_IF([test "x$enable_docs" != "xno"], [
-  if test "$ADOC" == "not-found"; then
+  if test -z "$ADOC"; then
     AC_MSG_WARN([No asciidoc formatter found. Manual pages will not be generated.])
   fi
 ])
