@@ -21,7 +21,7 @@ def get_key_direct(flux_handle, key):
     if valp[0] == ffi.NULL:
         return None
     else:
-        return json.loads(ffi.string(valp[0]))
+        return json.loads(ffi.string(valp[0]).decode('utf-8'))
 
 
 def exists(flux_handle, key):
@@ -90,7 +90,7 @@ def watch_once(flux_handle, key):
         if out_json_str[0] == ffi.NULL:
             return None
         else:
-            return json.loads(ffi.string(out_json_str[0]))
+            return json.loads(ffi.string(out_json_str[0]).decode('utf-8'))
 
 
 class KVSDir(WrapperPimpl, collections.MutableMapping):
@@ -133,7 +133,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
     def key_at(self, key):
         p_str = self.pimpl.key_at(key)
-        return p_str
+        return p_str.decode('utf-8')
 
     def exists(self, name):
         return self.pimpl.exists(name)
@@ -171,7 +171,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             ret = RAW.flux_kvsitr_next(self.itr)
             if ret is None or ret == ffi.NULL:
                 raise StopIteration()
-            return ffi.string(ret)
+            return ret.decode('utf-8')
 
         def next(self):
             return self.__next__()
@@ -292,7 +292,7 @@ def kvs_watch_wrapper(key, value, arg, errnum):
     if errnum == errno.ENOENT:
         value = None
     else:
-        value = json.loads(ffi.string(value))
+        value = json.loads(ffi.string(value).decode('utf-8'))
     key = ffi.string(key)
     ret = callback(key, value, real_arg, errnum)
     return ret if ret is not None else 0

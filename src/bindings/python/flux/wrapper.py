@@ -171,9 +171,7 @@ class FunctionWrapper(object):
                 # Unpack wrapper objects
                 args[i] = args[i].handle
             elif isinstance(args[i], six.text_type):
-                # convert unicode string to ascii to make cffi happy
-                print("converting", args[i])
-                args[i] = bytes(args[i], 'UTF-8')
+                args[i] = args[i].encode("utf-8")
 
         try:
             result = self.fun(*args)

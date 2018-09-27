@@ -13,7 +13,8 @@ __all__ = ['Message',
 
 
 def msg_typestr(msg_type):
-    return ffi.string(raw.flux_msg_typestr(msg_type))
+    # the returned string is guaranteed to be ascii
+    return ffi.string(raw.flux_msg_typestr(msg_type)).decode('ascii')
 
 
 class Message(WrapperPimpl):
@@ -67,7 +68,7 @@ class Message(WrapperPimpl):
     def topic(self):
         topic_string = ffi.new('char *[1]')
         self.pimpl.get_topic(topic_string)
-        return ffi.string(topic_string[0])
+        return ffi.string(topic_string[0]).decode('utf-8')
 
     @topic.setter
     def topic(self, value):
@@ -78,7 +79,7 @@ class Message(WrapperPimpl):
         string = ffi.new('char *[1]')
         if self.pimpl.has_payload():
             self.pimpl.get_string(ffi.cast('char**', string))
-            return ffi.string(string[0])
+            return ffi.string(string[0]).decode('utf-8')
         else:
             return None
 

@@ -34,6 +34,8 @@ class RPC(WrapperPimpl):
                 payload = ffi.NULL
             elif not (isinstance(payload, six.string_types)):
                 payload = json.dumps(payload)
+            elif isinstance(payload, six.text_type):
+                payload = payload.encode('UTF-8')
 
             self.handle = raw.flux_rpc(
                 flux_handle, topic, payload, nodeid, flags)
@@ -61,5 +63,5 @@ class RPC(WrapperPimpl):
         return ffi.string(j_str[0])
 
     def get(self):
-        return json.loads(self.get_str())
+        return json.loads(self.get_str().decode('utf-8'))
 
