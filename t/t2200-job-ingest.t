@@ -60,6 +60,13 @@ test_expect_success 'job-ingest: submitter userid stored in KVS' '
 	test $jobuserid -eq $myuserid
 '
 
+test_expect_success 'job-ingest: eventlog created with submit entry' '
+	jobid=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	flux kvs eventlog get ${kvsdir}.eventlog >eventlog &&
+	grep -q " submit" eventlog
+'
+
 test_expect_success 'job-ingest: valid jobspecs accepted' '
 	test_valid ${JOBSPEC}/valid/*
 '
