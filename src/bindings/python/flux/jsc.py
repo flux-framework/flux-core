@@ -85,3 +85,9 @@ def job_num2state(job_state):
         return None
     else:
         return ret.decode('ascii')
+
+def job_state2num(job_state):
+    if isinstance(job_state, six.text_type):
+        # jsc doesn't use utf-8 internally, catch erroneous unicode here
+        job_state.encode('ascii')
+    return RAW.job_state2num(job_state)
