@@ -282,7 +282,9 @@ bool flux_is_installed (void)
      *   clearly can't be from the installed path:
      */
 
-    if (!(bindir = realpath (conf_bindir, NULL)) && (errno != ENOENT))
+    if (!(bindir = realpath (conf_bindir, NULL))
+       && (errno != ENOENT)
+       && (errno != EACCES))
         log_err_exit ("realpath (%s)", conf_bindir);
     else if (bindir && !strcmp (selfdir, bindir))
         ret = false;

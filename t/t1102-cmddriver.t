@@ -87,7 +87,11 @@ test_expect_success READLINK 'cmddriver adds its own path to PATH if called with
 	fluxdir=\$(dirname \$fluxcmd) &&
 	PATH='/bin:/usr/bin' \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
 "
-
+test_expect_success READLINK 'cmddriver moves its own path to the front of PATH' "
+	fluxcmd=\$(readlink -f \$(which flux)) &&
+	fluxdir=\$(dirname \$fluxcmd) &&
+	PATH=/bin:\$fluxdir \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
+"
 test_expect_success 'FLUX_*_PREPEND environment variables work' '
 	( FLUX_CONNECTOR_PATH_PREPEND=/foo \
 	  flux /usr/bin/printenv | grep "FLUX_CONNECTOR_PATH=/foo" &&
