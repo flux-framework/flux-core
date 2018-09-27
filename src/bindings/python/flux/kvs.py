@@ -129,12 +129,10 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
     def commit(self, flags=0):
-        commit(self.fhdl.handle, flags)
+        return commit(self.fhdl.handle, flags)
 
     def key_at(self, key):
-        c_str = self.pimpl.key_at(key)
-        p_str = ffi.string(c_str)
-        lib.free(c_str)
+        p_str = self.pimpl.key_at(key)
         return p_str
 
     def exists(self, name):
@@ -150,7 +148,8 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     def __setitem__(self, key, value):
         # Turn it into json
         json_str = json.dumps(value)
-        self.pimpl.put(key, json_str)
+        if (self.pimpl.put(key, json_str) < 0):
+            print("Error setting item in KVS")
 
     def __delitem__(self, key):
         self.pimpl.unlink(key)
