@@ -163,13 +163,20 @@ static void environment_push_inner (struct environment *e,
         argz_create_sep (value, item->sep, &split_value, &split_value_len);
         char *entry = 0;
         while((entry = argz_next (split_value, split_value_len, entry))) {
-            if ((!strlen(entry)) || find_env_item(item, entry))
+            char *found;
+            if ((!strlen(entry)))
                 continue;
-            if (before) {
+            /*
+             * If an existing entry is found matching this entry, and
+             *  the `before` flag is set, then delete the existing entry so
+             *  it is effectively pushed to the front (without duplication)
+             */
+            if ((found = find_env_item (item, entry)) && before)
+                argz_delete (&item->argz, &item->argz_len, found);
+            if (before)
                 argz_insert (&item->argz, &item->argz_len, item->argz, entry);
-            } else {
+            else if (found == NULL)
                 argz_add(&item->argz, &item->argz_len, entry);
-            }
         }
         free(split_value);
     } else {
