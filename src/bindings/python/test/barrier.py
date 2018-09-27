@@ -8,13 +8,17 @@ import flux
 import flux.kvs
 import json
 import multiprocessing as mp
+
+from six import print_ as print
+from six.moves import range as range
+
 import sideflux
 from pycotap import TAPTestRunner
 
 def barr_count(x, name, count):
-  print proc, x
+  print(proc, x)
   f = core.Flux()
-  f.barrier(name,count) 
+  f.barrier(name,count)
 
 class TestBarrier(unittest.TestCase):
     def setUp(self):
@@ -30,10 +34,10 @@ class TestBarrier(unittest.TestCase):
         self.f.barrier('testbarrier1', 1)
 
     def test_eight(self):
-      for i in xrange(1,9):
+      for i in range(1,9):
         p = mp.Pool(i)
         reslist = []
-        for j in xrange(0, i):
+        for j in range(0, i):
           res = p.apply_async(barr_count, (j, 'testbarrier2', i))
           reslist.append(res)
 
