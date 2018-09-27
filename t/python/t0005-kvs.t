@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import unittest
+import six
 
 import flux
 import flux.kvs
@@ -34,6 +35,7 @@ class TestKVS(unittest.TestCase):
         kd.commit()
         nv = kd[key]
         self.assertEqual(value, nv)
+        self.assertFalse(isinstance(nv, six.binary_type))
         return kd
 
     def test_set_int(self):
@@ -44,6 +46,9 @@ class TestKVS(unittest.TestCase):
 
     def test_set_string(self):
         self.set_and_check_context('string', "stuff")
+
+    def test_set_unicode(self):
+        self.set_and_check_context(u'unicode', u'\u32db \u263a \u32e1')
 
     def test_set_list(self):
         self.set_and_check_context('list', [1, 2, 3, 4])
@@ -116,7 +121,7 @@ class TestKVS(unittest.TestCase):
             ])
 
     def test_read_non_existent_basedir(self):
-        with self.assertRaisesRegexp(EnvironmentError, "No such file"):
+        with self.assertRaisesRegex(EnvironmentError, "No such file"):
             print(flux.kvs.KVSDir(
                 self.f,
                 'crazykeythatclearlydoesntexistandneverwillinanyuniverse')

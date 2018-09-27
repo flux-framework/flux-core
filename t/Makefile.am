@@ -229,7 +229,8 @@ check_SCRIPTS = \
 	python/t0004-event.t \
 	python/t0005-kvs.t \
 	python/t0006-request.t \
-	python/t0007-watchers.t
+	python/t0007-watchers.t \
+	python/t0008-jsc.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

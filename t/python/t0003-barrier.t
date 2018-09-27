@@ -12,6 +12,7 @@ def barr_count(x, name, count):
     print(x, name, count)
     f = core.Flux()
     f.barrier(name,count)
+    f.close()
 
 def __flux_size():
     return 8
@@ -27,14 +28,16 @@ class TestBarrier(unittest.TestCase):
 
     def test_single(self):
         self.f.barrier('testbarrier1', 1)
+        self.f.barrier(u'testbarrier1', 1)
 
     def test_eight(self):
-      for i in range(1,9):
-        p = mp.Pool(i)
-        reslist = []
-        for j in range(0, i):
-          res = p.apply_async(barr_count, (j, 'testbarrier2', i))
-          reslist.append(res)
+        for topic in [b'testbarrier2', u'\xa3', u'\u32db \u263a \u32e1']:
+            for i in range(1, 9):
+                p = mp.Pool(i)
+                reslist = []
+                for j in range(0, i):
+                    res = p.apply_async(barr_count, (j, topic, i))
+                    reslist.append(res)
 
 if __name__ == '__main__':
     if rerun_under_flux(__flux_size()):
