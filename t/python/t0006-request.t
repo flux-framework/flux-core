@@ -2,7 +2,6 @@
 import unittest
 import errno
 import flux.core as core
-from pycotap import TAPTestRunner
 
 json_str = '{"a":42}';
 class TestRequestMethods(unittest.TestCase):
@@ -23,4 +22,5 @@ class TestRequestMethods(unittest.TestCase):
         )
 
 if __name__ == '__main__':
-      unittest.main(testRunner=TAPTestRunner())
+  from pycotap import TAPTestRunner
+  unittest.main(testRunner=TAPTestRunner())

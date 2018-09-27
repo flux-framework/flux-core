@@ -1,9 +1,10 @@
+#!/usr/bin/env python
+
 import unittest
-import errno
-import os
-import re
+
+import flux
 import flux.core as core
-from flux.core.inner import ffi, lib, raw
+from flux.core.inner import ffi, raw
 import flux.wrapper
 
 
@@ -46,4 +47,5 @@ class TestWrapper(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    from pycotap import TAPTestRunner
+    unittest.main(testRunner=TAPTestRunner())

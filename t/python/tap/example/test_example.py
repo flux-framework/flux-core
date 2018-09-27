@@ -14,7 +14,7 @@ class MyTests(unittest.TestCase):
     self.assertEqual(0, 0)
 
   @unittest.skip("Not finished yet")
-  def test_that_it_skips(self): 
+  def test_that_it_skips(self):
     raise Exception("Does not happen")
 
   def test_that_it_fails(self):

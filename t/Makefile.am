@@ -20,7 +20,8 @@ AM_CPPFLAGS = \
 AM_TESTS_ENVIRONMENT = \
 	test -n "$$LUA_PATH" && export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";\
 	test -n "$$FLUX_TEST_INSTALLED_PATH" && \
-        export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;";
+	export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;"; \
+	PYTHONPATH="$(top_builddir)/src/bindings/python:$(top_srcdir)/t/python/tap:$$PYTHONPATH";
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -118,7 +119,14 @@ endif
 
 if HAVE_PYTHON
 TESTS += \
-	 $(top_builddir)/t/t9990-python-tests.t
+	python/t0001-handle.t \
+	python/t0002-wrapper.t \
+	python/t0003-barrier.t \
+	python/t0004-event.t \
+	python/t0005-kvs.t \
+	python/t0006-request.t \
+	python/t0007-watchers.t \
+	python/t0008-jsc.t
 endif
 
 EXTRA_DIST= \
@@ -140,7 +148,7 @@ EXTRA_DIST= \
 	jobspec
 
 clean-local:
-	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
+	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__
 
 check_SCRIPTS = \
 	t0000-sharness.t \
@@ -212,7 +220,16 @@ check_SCRIPTS = \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
 	t0018-jobspec.t \
-	$(top_builddir)/t/t9990-python-tests.t
+	python/__init__.py \
+	python/subflux.py \
+	python/tap \
+	python/t0001-handle.t \
+	python/t0002-wrapper.t \
+	python/t0003-barrier.t \
+	python/t0004-event.t \
+	python/t0005-kvs.t \
+	python/t0006-request.t \
+	python/t0007-watchers.t
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

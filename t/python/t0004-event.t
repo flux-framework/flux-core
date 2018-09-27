@@ -1,19 +1,12 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import unittest
-import errno
-import os
-import sys
+
 import flux.core as core
-import flux
-import flux.kvs
-import json
-from pycotap import TAPTestRunner
-from sideflux import run_beside_flux
+from subflux import rerun_under_flux
 
 def __flux_size():
   return 2
-
 
 class TestEvent(unittest.TestCase):
     def setUp(self):
@@ -26,8 +19,8 @@ class TestEvent(unittest.TestCase):
 
     def test_t1_1_unsub(self):
         """Unsubscribe from an event"""
-        self.assertGreaterEqual(self.f.event_subscribe("testevent.1"), 0)
-        self.assertGreaterEqual(self.f.event_unsubscribe("testevent.1"), 0)
+        self.assertGreaterEqual(self.f.event_subscribe("testevent.2"), 0)
+        self.assertGreaterEqual(self.f.event_unsubscribe("testevent.2"), 0)
 
     def test_full_event(self):
         """Subscribe send receive and unpack event"""
@@ -43,4 +36,7 @@ class TestEvent(unittest.TestCase):
         self.assertIsNotNone(evt.payload_str)
         print ( evt.payload_str )
 
-
+if __name__ == '__main__':
+    if rerun_under_flux(__flux_size()):
+      from pycotap import TAPTestRunner
+      unittest.main(testRunner=TAPTestRunner())

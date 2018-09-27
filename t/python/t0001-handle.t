@@ -1,18 +1,14 @@
 #!/usr/bin/env python
+from __future__ import print_function
+
 import unittest
-import errno
-import os
-import sys
-import flux.core as core
-import flux
-import flux.kvs
-import json
 import syslog
-from pycotap import TAPTestRunner
-from sideflux import run_beside_flux
+
+import flux.core as core
+from subflux import rerun_under_flux
 
 def __flux_size():
-  return 2
+    return 2
 
 class TestHandle(unittest.TestCase):
     def setUp(self):
@@ -41,6 +37,11 @@ class TestHandle(unittest.TestCase):
             self.assertEqual(j['pad'], 'stuff')
 
     def test_get_rank(self):
-      """Get flux rank"""
-      rank = self.f.get_rank()
-      self.assertEqual(rank, 0)
+        """Get flux rank"""
+        rank = self.f.get_rank()
+        self.assertEqual(rank, 0)
+
+if __name__ == '__main__':
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+        unittest.main(testRunner=TAPTestRunner())

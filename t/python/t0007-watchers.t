@@ -1,14 +1,7 @@
 #!/usr/bin/env python
 import unittest
-import errno
-import os
-import sys
 import flux.core as core
-import flux
-import flux.kvs
-import json
-from pycotap import TAPTestRunner
-from sideflux import run_beside_flux
+from subflux import rerun_under_flux
 
 def __flux_size():
   return 2
@@ -51,4 +44,7 @@ class TestTimer(unittest.TestCase):
             self.assertEqual(ret, 0, msg="Reactor exit")
             self.assertTrue(timer_ran[0], msg="Timer did not run successfully")
 
-
+if __name__ == '__main__':
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+        unittest.main(testRunner=TAPTestRunner())

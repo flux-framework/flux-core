@@ -87,16 +87,16 @@ class TAPTestRunnerTest(unittest.TestCase):
       "TAP version 13\n"
       "not ok 1 __main__.OutputTest.test_failing\n"
       "  ---\n"
-      "    output: |\n"  
-      "      Foo\n"  
-      "      Traceback (most recent call last):\n"  
-      "        File \"test.py\", line X, in test_failing\n"  
-      "          self.assertEqual(1, 2)\n"  
-      "      AssertionError: 1 != 2\n"  
+      "    output: |\n"
+      "      Foo\n"
+      "      Traceback (most recent call last):\n"
+      "        File \"test.py\", line X, in test_failing\n"
+      "          self.assertEqual(1, 2)\n"
+      "      AssertionError: 1 != 2\n"
       "  ...\n"
       "ok 2 __main__.OutputTest.test_passing\n"
       "  ---\n"
-      "    output: |\n"  
+      "    output: |\n"
       "      Foo\n"
       "      Baz\n"
       "      Bar\n"
@@ -145,18 +145,18 @@ class TAPTestRunnerTest(unittest.TestCase):
     ))
 
   def test_different_error_and_test_output_log(self):
-    self.run_test(TAPTestRunnerTest.OutputTest, 
+    self.run_test(TAPTestRunnerTest.OutputTest,
         message_log = LogMode.LogToYAML, test_output_log = LogMode.LogToDiagnostics)
     self.assertEqual(self.process_output(self.output_stream.getvalue()), (
       "TAP version 13\n"
       "not ok 1 __main__.OutputTest.test_failing\n"
       "# Foo\n"
       "  ---\n"
-      "    message: |\n"  
-      "      Traceback (most recent call last):\n"  
-      "        File \"test.py\", line X, in test_failing\n"  
-      "          self.assertEqual(1, 2)\n"  
-      "      AssertionError: 1 != 2\n"  
+      "    message: |\n"
+      "      Traceback (most recent call last):\n"
+      "        File \"test.py\", line X, in test_failing\n"
+      "          self.assertEqual(1, 2)\n"
+      "      AssertionError: 1 != 2\n"
       "  ...\n"
       "ok 2 __main__.OutputTest.test_passing\n"
       "# Foo\n"

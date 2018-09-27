@@ -1,34 +1,27 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import unittest
-import errno
-import os
-import sys
-import flux.core as core
-import flux
-import flux.kvs
-import json
 import multiprocessing as mp
 
-from six import print_ as print
 from six.moves import range as range
 
-import sideflux
-from pycotap import TAPTestRunner
+import flux.core as core
+from subflux import rerun_under_flux
 
 def barr_count(x, name, count):
-  print(proc, x)
-  f = core.Flux()
-  f.barrier(name,count)
+    print(x, name, count)
+    f = core.Flux()
+    f.barrier(name,count)
+
+def __flux_size():
+    return 8
 
 class TestBarrier(unittest.TestCase):
     def setUp(self):
-        """Create a handle, connect to flux"""
-        self.sf = sideflux.SideFlux(8)
-        self.sf.start()
-        self.f = core.Flux(self.sf.flux_uri)
+        self.f = core.Flux()
 
     def tearDown(self):
-        self.sf.destroy()
+        self.f.close()
 
     def test_single(self):
         self.f.barrier('testbarrier1', 1)
@@ -42,5 +35,6 @@ class TestBarrier(unittest.TestCase):
           reslist.append(res)
 
 if __name__ == '__main__':
-      unittest.main(testRunner=TAPTestRunner())
-
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+        unittest.main(testRunner=TAPTestRunner())

@@ -1,20 +1,15 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import unittest
-import errno
-import os
-import sys
-import flux.core as core
+
 import flux
 import flux.kvs
-import json
-from pycotap import TAPTestRunner
-from sideflux import run_beside_flux
+import flux.core as core
 
+from subflux import rerun_under_flux
 
 def __flux_size():
     return 2
-
 
 class TestKVS(unittest.TestCase):
     def setUp(self):
@@ -150,3 +145,8 @@ class TestKVS(unittest.TestCase):
 
         for r, ds, fs in walk_gen:
             pass
+
+if __name__ == '__main__':
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+        unittest.main(testRunner=TAPTestRunner())
