@@ -64,6 +64,8 @@ test_monotonicity() {
 test_expect_success NO_CHAIN_LINT 'flux kvs getroot --watch yields monotonic sequence' '
 	flux kvs getroot --watch --count=20 --sequence >seq.out &
 	pid=$! &&
+	$waitfile --count=1 --timeout=10 \
+	          --pattern="[0-9]+" seq.out >/dev/null &&
 	for i in $(seq 1 20); \
 	    do flux kvs put --no-merge test.c=$i; \
 	done &&

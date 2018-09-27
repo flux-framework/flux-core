@@ -52,6 +52,7 @@ test_expect_success 'flux-wreck: per-job epilog.pre' '
 test_expect_success 'flux-wreck: global epilog.post' '
 	flux kvs put --json lwj.epilog.post="$epilog_path" &&
 	flux wreckrun /bin/true &&
+	LWJ=$(last_job_path) &&
 	wait_for_complete $LWJ &&
 	${eventtrace} -t 5 epilog.test epilog.test.done \
                            flux event pub epilog.test
@@ -59,6 +60,7 @@ test_expect_success 'flux-wreck: global epilog.post' '
 test_expect_success 'flux-wreck: per-job epilog.post' '
 	flux kvs unlink lwj.epilog.post &&
 	flux wreckrun -p "$epilog_path" /bin/true &&
+	LWJ=$(last_job_path) &&
 	wait_for_complete $LWJ &&
 	${eventtrace} -t 5 epilog.test epilog.test.done \
                            flux event pub epilog.test

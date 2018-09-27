@@ -16,10 +16,10 @@ test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
 '
 test_expect_success 'run_timeout works' '
-	test_expect_code 142 run_timeout 1 sleep 2
+	test_expect_code 142 run_timeout 0.001 sleep 2
 '
 test_expect_success 'test run_timeout with success' '
-	run_timeout 1 /bin/true
+	run_timeout 0.01 /bin/true
 '
 test_expect_success 'we can find a flux binary' '
 	flux --help >/dev/null
@@ -46,8 +46,13 @@ ARGS="-o -Sinit.rc2_timeout=10"
 BUG1006="-o,--shutdown-grace=0.1"
 ARGS="$ARGS $BUG1006"
 
+# Minimal is sufficient for these tests, but test_under_flux unavailable
+# clear the RC paths
+export FLUX_RC1_PATH=""
+export FLUX_RC3_PATH=""
+
 test_expect_success 'broker --shutdown-grace option works' '
-	flux start -o,--shutdown-grace=0.1 /bin/true
+	flux start -o,--shutdown-grace=0.1 -o -Sbroker.rc1_path=/bin/true /bin/true
 '
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} 'flux comms info' | grep 'size=1'

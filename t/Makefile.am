@@ -13,8 +13,14 @@ AM_CPPFLAGS = \
 #   fluxometer.lua is found. O/w, if LUA_PATH is *not* set, ./?.lua already
 #   appears in the default LUA_PATH, so do nothing.
 #
+#  If we're testing with "installed" Flux, then also add path to Lua bindings
+#   to LUA_CPATH, so that non-installed test modules can be found (at this
+#   time, only lalarm.so)
+#
 AM_TESTS_ENVIRONMENT = \
-	test -n "$$LUA_PATH" && export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";
+	test -n "$$LUA_PATH" && export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";\
+	test -n "$$FLUX_TEST_INSTALLED_PATH" && \
+        export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;";
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \

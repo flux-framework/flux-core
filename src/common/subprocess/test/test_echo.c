@@ -124,7 +124,7 @@ main (int argc, char *argv[])
 
         memset (buf, '\0', 1024);
         while ((len = read (fd, buf, 1024)) > 0) {
-            char outbuf[1024];
+            char outbuf[1025]; /* add extra char for -Werror=format-overflow */
 
             sprintf (outbuf,
                      "%s%s",
