@@ -325,6 +325,7 @@ static int batch_add_job (struct batch *batch, struct job *job,
     char key[64];
     int saved_errno;
     json_t *id;
+    char *event = NULL;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -344,17 +345,25 @@ static int batch_add_job (struct batch *batch, struct job *job,
         goto error;
     if (flux_kvs_txn_pack (batch->txn, 0, key, "i", userid) < 0)
         goto error;
+    if (make_key (key, sizeof (key), job, "eventlog") < 0)
+        goto error;
+    if (!(event = flux_kvs_event_encode ("submit", NULL)))
+        goto error;
+    if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, event) < 0)
+        goto error;
     if (!(id = json_integer (job->id)))
         goto nomem;
     if (json_array_append_new (batch->idlist, id) < 0) {
         json_decref (id);
         goto nomem;
     }
+    free (event);
     return 0;
 nomem:
     errno = ENOMEM;
 error:
     saved_errno = errno;
+    free (event);
     zlist_remove (batch->jobs, job);
     if (make_key (key, sizeof (key), job, NULL) == 0)
         (void)flux_kvs_txn_unlink (batch->txn, 0, key);
