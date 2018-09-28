@@ -5,7 +5,7 @@ language: c
 
 matrix:
   include:
-    - name: "Ubuntu no configure flags"
+    - name: "Ubuntu: no configure flags"
       compiler: gcc
     - name: "Ubuntu: gcc-8 --with-flux-security/caliper, distcheck"
       compiler: gcc-8
@@ -26,17 +26,18 @@ matrix:
       env:
        - COVERAGE=t
        - ARGS="--with-flux-security --enable-caliper"
-    - name: "Ubuntu: TEST_INSTALL"
+    - name: "Ubuntu: TEST_INSTALL docker-deploy"
       compiler: gcc
       env:
        - ARGS="--with-flux-security --enable-caliper"
        - TEST_INSTALL=t
        - DOCKER_TAG=t
-    - name: "Centos 7: --with-flux-security --enable-caliper"
+    - name: "Centos 7: --with-flux-security --enable-caliper docker-deploy"
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper"
+       - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
        - IMG=centos7-base
+       - DOCKER_TAG=t
 
 env:
   global:
@@ -58,7 +59,7 @@ script:
  #  Tag image if this build is on master or result of a tag:
  - |
   if test "$DOCKER_TAG" = "t" \
-    -a "$TRAVIS_REPO_SLUG" = "grondo/flux-core" \
+    -a "$TRAVIS_REPO_SLUG" = "flux-framework/flux-core" \
     -a "$TRAVIS_PULL_REQUEST" = "false" \
     -a \( "$TRAVIS_BRANCH" = "master" -o -n "$TRAVIS_TAG" \); then
      export TAGNAME="${DOCKERREPO}:${IMG}-${TRAVIS_TAG:-latest}"
