@@ -68,7 +68,6 @@ which docker \
 CONFIGURE_ARGS="$@"
 
 echo "Building image $IMAGE for user $USER $(id -u) group=$(id -g)"
-set -x
 docker build \
     ${NO_CACHE} \
     ${QUIET} \
