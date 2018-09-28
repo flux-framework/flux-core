@@ -66,7 +66,9 @@ RUN apt-get -qq install -y --no-install-recommends \
         faketime \
         libfaketime \
         pylint \
-        cppcheck
+        cppcheck \
+        aspell \
+        aspell-en
 
 RUN rm -rf /var/lib/apt/lists/*
 

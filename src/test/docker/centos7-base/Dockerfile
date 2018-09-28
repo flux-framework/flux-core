@@ -44,6 +44,8 @@ RUN yum -y update \
       yaml-cpp-devel \
       valgrind \
       man-db \
+      aspell \
+      aspell-en \
  && yum clean all
 
 # The cmake from yum is incredibly ancient, download a less ancient one
