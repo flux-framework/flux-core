@@ -1,5 +1,5 @@
 from flux.wrapper import Wrapper
-from flux._core import ffi, lib
+from _flux._core import ffi, lib
 from flux.core.inner import raw
 from flux.rpc import RPC
 from flux.message import Message

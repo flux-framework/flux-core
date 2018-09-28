@@ -1,4 +1,4 @@
-from flux._core import ffi, lib
+from _flux._core import ffi, lib
 from flux.wrapper import Wrapper
 
 

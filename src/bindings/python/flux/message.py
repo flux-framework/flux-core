@@ -1,5 +1,7 @@
 import json
+
 import six
+
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 from flux.core.watchers import Watcher

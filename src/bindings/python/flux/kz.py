@@ -2,7 +2,7 @@ import errno
 import os
 import sys
 
-from flux._kz import ffi, lib
+from _flux._kz import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 
 

@@ -1,7 +1,7 @@
 import json
 import collections
 import errno
-from flux._kvs import ffi, lib
+from _flux._kvs import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 
 

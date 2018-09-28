@@ -179,6 +179,8 @@ if test "$enable_python" = "yes"; then
   fi
   AS_VAR_SET(fluxpydir, $pyexecdir/flux)
   AC_SUBST(fluxpydir)
+  AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
+  AC_SUBST(fluxsodir)
   AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
   AC_SUBST(fluxpymoddir)
 
@@ -330,6 +332,7 @@ AC_CONFIG_FILES( \
   src/bindings/python/Makefile \
   src/bindings/python/flux/Makefile \
   src/bindings/python/flux/core/Makefile \
+  src/bindings/python/_flux/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/connectors/Makefile \

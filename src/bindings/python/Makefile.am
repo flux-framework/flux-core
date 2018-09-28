@@ -1,5 +1,5 @@
 
-SUBDIRS=flux
+SUBDIRS=_flux flux
 
 EXTRA_DIST = pycotap test test_commands make_binding.py .pylintrc
 
