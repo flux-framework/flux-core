@@ -7,7 +7,8 @@ test_description='Test flux job command'
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
-if flux job --help 2>&1 | grep -q sign-type; then
+
+if flux job submitbench --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
 fi
 
