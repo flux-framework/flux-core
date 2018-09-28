@@ -50,10 +50,8 @@ cache:
     - $HOME/.ccache
 
 before_install:
-  # coveralls-lcov required only for coveralls upload:
-  - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
-
-script:
+ # coveralls-lcov required only for coveralls upload:
+ - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
  - if test -z "${IMG}"; then IMG="bionic-base"; fi
  #
  #  Tag image if this build is on master or result of a tag:
@@ -65,6 +63,8 @@ script:
      export TAGNAME="${DOCKERREPO}:${IMG}-${TRAVIS_TAG:-latest}"
      echo "Tagging new image $TAGNAME"
   fi
+ 
+script:
  - |
   src/test/docker/docker-run-checks.sh -j2 \
     --quiet \
