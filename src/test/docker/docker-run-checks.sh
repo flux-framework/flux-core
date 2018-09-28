@@ -62,13 +62,16 @@ done
 
 TOP=$(git rev-parse --show-toplevel 2>&1) \
     || die "not inside flux-core git repository!"
-which docker \
+which docker >/dev/null \
     || die "unable to find a docker binary"
 
 CONFIGURE_ARGS="$@"
 
-echo "Building image $IMAGE for user $USER $(id -u) group=$(id -g)"
-docker build \
+. ${TOP}/src/test/travis-lib.sh
+
+travis_fold "docker_build" \
+  "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
+  docker build \
     ${NO_CACHE} \
     ${QUIET} \
     --build-arg OS=$IMAGE \
@@ -108,6 +111,7 @@ docker run --rm \
     -e JOBS \
     -e HOME \
     -e USER \
+    -e TRAVIS \
     ${INTERACTIVE:+--tty --interactive} \
     travis-builder:${IMAGE} \
     ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \

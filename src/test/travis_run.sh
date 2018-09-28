@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 #  Test runner script meant to be executed inside of a docker container
 #
@@ -19,7 +19,9 @@
 #
 #  CC, CXX, LDFLAGS, CFLAGS, etc.
 #
-set -ex
+
+# source travis_fold and travis_time functions:
+. src/test/travis-lib.sh
 
 ARGS="$@"
 JOBS=${JOBS:-2}
@@ -29,7 +31,8 @@ MAKECMDS="make -j ${JOBS} ${DISTCHECK:+dist}check"
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"
 
 # Force git to update the shallow clone and include tags so git-describe works
-git fetch --unshallow --tags || true
+travis_fold "git_fetch_tags" "git fetch --unshallow --tags" \
+ git fetch --unshallow --tags || true
 ulimit -c unlimited
 
 # Manually update ccache symlinks (XXX: Is this really necessary?)
@@ -86,7 +89,8 @@ if test "$CPPCHECK" = "t"; then
     sh -x src/test/cppcheck.sh
 fi
 
-./autogen.sh
-./configure ${ARGS}
-make clean
+travis_fold "autogen.sh" "./autogen.sh..." ./autogen.sh
+travis_fold "configure"  "./configure ${ARGS}..." ./configure ${ARGS}
+travis_fold "make_clean" "make clean..." make clean
+
 eval ${MAKECMDS}
