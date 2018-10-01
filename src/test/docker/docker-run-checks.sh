@@ -10,13 +10,14 @@
 IMAGE=bionic-base
 FLUX_SECURITY_VERSION=0.2.0
 JOBS=2
+MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 
 #
 declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,distcheck,tag:"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:"
 declare -r short_opts="hqIdi:S:j:t:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -28,6 +29,7 @@ Uses the current git repo for the build.\n\
 Options:\n\
  -h, --help                    Display this message\n\
      --no-cache                Disable docker caching\n\
+     --no-home                 Skip mounting the host home directory\n\
  -q, --quiet                   Add --quiet to docker-build\n\
  -t, --tag=TAG                 If checks succeed, tag image as NAME\n\
  -i, --image=NAME              Use base docker image NAME (default=$IMAGE)\n\
@@ -38,11 +40,18 @@ Options:\n\
                                 image with interactive shell.\n\
 "
 
-GETOPTS=`/usr/bin/getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
-if test $? != 0; then
-    die "$usage"
+# check if running in OSX
+if [[ "$(uname)" == "Darwin" ]]; then
+    # BSD getopt
+    GETOPTS=`/usr/bin/getopt $short_opts -- $*`
+else
+    # GNU getopt
+    GETOPTS=`/usr/bin/getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
+    if [[ $? != 0 ]]; then
+        die "$usage"
+    fi
+    eval set -- "$GETOPTS"
 fi
-eval set -- "$GETOPTS"
 while true; do
     case "$1" in
       -h|--help)                   echo -ne "$usage";          exit 0  ;;
@@ -50,9 +59,10 @@ while true; do
       -i|--image)                  IMAGE="$2";                 shift 2 ;;
       -S|--flux-security-version)  FLUX_SECURITY_VERSION="$2"; shift 2 ;;
       -j|--jobs)                   JOBS="$2";                  shift 2 ;;
-      -I|--interactive)            INTERACTIVE=${SHELL};       shift   ;;
+      -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
+      --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
       --)                          shift; break;                       ;;
       *)                           die "Invalid option '$1'\n$usage"   ;;
@@ -84,7 +94,9 @@ travis_fold "docker_build" \
     $TOP/src/test/docker/travis \
     || die "docker build failed"
 
-echo "mounting $HOME as /home/$USER"
+if [[ -n "$MOUNT_HOME_ARGS" ]]; then
+    echo "mounting $HOME as /home/$USER"
+fi
 echo "mounting $TOP as /usr/src"
 
 export JOBS
@@ -93,8 +105,8 @@ export chain_lint
 
 docker run --rm \
     --workdir=/usr/src \
-    --volume=$HOME:/home/$USER \
     --volume=$TOP:/usr/src \
+    $MOUNT_HOME_ARGS \
     -e CC \
     -e CXX \
     -e LDFLAGS \
@@ -109,7 +121,6 @@ docker run --rm \
     -e DISTCHECK \
     -e chain_lint \
     -e JOBS \
-    -e HOME \
     -e USER \
     -e TRAVIS \
     ${INTERACTIVE:+--tty --interactive} \
