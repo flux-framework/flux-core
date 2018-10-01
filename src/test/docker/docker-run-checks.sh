@@ -123,6 +123,7 @@ docker run --rm \
     -e JOBS \
     -e USER \
     -e TRAVIS \
+    -e TAP_DRIVER_QUIET \
     ${INTERACTIVE:+--tty --interactive} \
     travis-builder:${IMAGE} \
     ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \
