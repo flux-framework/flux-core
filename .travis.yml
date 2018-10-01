@@ -41,6 +41,7 @@ matrix:
 
 env:
   global:
+   - TAP_DRIVER_QUIET=1
    - DOCKERREPO=fluxrm/flux-core
    - DOCKER_USERNAME=travisflux
    - secure: "Uga2i1Yu0PvWMFzOYvM9yxnAMDTgY17ZqeFlIN8MV3uoTCy6y61GULrMkKuhuI1sUfyugpFWVKIJo5jwTpsfG84f3o9lUTRgLPpTA2Xls8A/rmurF/QacVv6hZ2Zs2LQVlrM8BkT36TpT2NfWW2D2238kovqz3l5gIZKMClMvyk="
