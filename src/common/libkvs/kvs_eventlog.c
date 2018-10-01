@@ -34,8 +34,6 @@
 
 #include "kvs_eventlog.h"
 
-#define MAX_KVS_EVENT_NAME  (sizeof (flux_kvs_event_name_t) - 1)
-#define MAX_KVS_EVENT_CONTEXT (sizeof (flux_kvs_event_context_t) - 1)
 
 /* eventlog is a list of RFC 18 events.
  * Once appended to the list, pointers to the events can be accessed by users
@@ -145,7 +143,7 @@ static bool event_validate (const char *tok, size_t toklen)
 
     if (!(s = strndup (tok, toklen)))
         return false;
-    rc = flux_kvs_event_decode (s, NULL, NULL, NULL);
+    rc = flux_kvs_event_decode (s, NULL, NULL, 0, NULL, 0);
     free (s);
     if (rc < 0)
         return false;
@@ -269,8 +267,8 @@ static const char *strnchr (const char *s, int c, size_t size)
 
 int flux_kvs_event_decode (const char *s,
                            double *timestamp,
-                           flux_kvs_event_name_t name,
-                           flux_kvs_event_context_t context)
+                           char *name, int name_size,
+                           char *context, int context_size)
 {
     const char *input;
     double t;
@@ -295,11 +293,13 @@ int flux_kvs_event_decode (const char *s,
     /* name */
     if (!(cp = strchr (input, ' ')) && !(cp = strchr (input, '\n')))
         goto error_inval;
-    if ((toklen = cp - input) > MAX_KVS_EVENT_NAME || toklen == 0)
+    if ((toklen = cp - input) > FLUX_KVS_MAX_EVENT_NAME || toklen == 0)
         goto error_inval;
     if (strnchr (input, '\n', toklen))
         goto error_inval;
     if (name) {
+        if (name_size < toklen + 1)
+            goto error_inval;
         memcpy (name, input, toklen);
         name[toklen] = '\0';
     }
@@ -313,9 +313,11 @@ int flux_kvs_event_decode (const char *s,
     else {
         if (!(cp = strchr (input, '\n')))
             goto error_inval;
-        if ((toklen = cp - input) > MAX_KVS_EVENT_CONTEXT)
+        if ((toklen = cp - input) > FLUX_KVS_MAX_EVENT_CONTEXT)
             goto error_inval;
         if (context) {
+            if (context_size < toklen + 1)
+                goto error_inval;
             memcpy (context, input, toklen);
             context[toklen] = '\0';
         }
@@ -337,12 +339,12 @@ char *flux_kvs_event_encode_timestamp (double timestamp, const char *name,
     int namelen;
 
     if (!name || timestamp <= 0.
-              || (namelen = strlen (name)) > MAX_KVS_EVENT_NAME
+              || (namelen = strlen (name)) > FLUX_KVS_MAX_EVENT_NAME
               || namelen == 0
               || strchr (name, ' ') != NULL
               || strchr (name, '\n') != NULL
               || (context && (strchr (context, '\n') != NULL
-                            || strlen (context) > MAX_KVS_EVENT_CONTEXT))) {
+                        || strlen (context) > FLUX_KVS_MAX_EVENT_CONTEXT))) {
         errno = EINVAL;
         return NULL;
     }
