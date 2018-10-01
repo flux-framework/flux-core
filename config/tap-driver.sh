@@ -57,6 +57,10 @@ The '--test-name', '-log-file' and '--trs-file' options are mandatory.
 END
 }
 
+# If TAP_DRIVER_QUIET set, do not print a result for each line, just
+# a final summary
+: ${TAP_DRIVER_QUIET:=0}
+
 # TODO: better error handling in option parsing (in particular, ensure
 # TODO: $log_file, $trs_file and $test_name are defined).
 test_name= # Used for reporting.
@@ -152,6 +156,7 @@ fi
         -v ignore_exit="$ignore_exit" \
         -v comments="$comments" \
         -v diag_string="$diag_string" \
+        -v quiet="$TAP_DRIVER_QUIET" \
 '
 # TODO: the usages of "cat >&3" below could be optimized when using
 #       GNU awk, and/on on systems that supports /dev/fd/.
@@ -224,6 +229,20 @@ function get_global_test_result()
     return "PASS";
 }
 
+function summarize_global_test_result()
+{
+    i = 0
+    for (k in test_results_list) {
+        i += 1
+	totals[ test_results_list[k] ] += 1
+    }
+    res = sprintf ("N=%-3d PASS=%-3d FAIL=%d SKIP=%d XPASS=%d XFAIL=%d",
+                     i, totals["PASS"], totals["FAIL"],
+                        totals["SKIP"], totals["XPASS"],
+                        totals["XFAIL"])
+    return res
+}
+
 function stringify_result_obj(result_obj)
 {
   if (result_obj["is_unplanned"] || result_obj["number"] != testno)
@@ -272,7 +291,8 @@ function report(result, details)
   if (length(details))
     msg = msg " " details
   # Output on console might be colorized.
-  print decorate_result(result) msg
+  if (!quiet || result ~ /^(FAIL|ERROR)/)
+      print decorate_result(result) msg
   # Log the result in the log file too, to help debugging (this is
   # especially true when said result is a TAP error or "Bail out!").
   print result msg | "cat >&3";
@@ -604,6 +624,13 @@ while (1)
 ## -------- ##
 ##  FINISH  ##
 ## -------- ##
+# In quiet mode, issue summary now:
+if (quiet) {
+    printf ("%26s: %5s: %s\n",
+            test_script_name,
+            decorate_result(get_global_test_result()),
+            summarize_global_test_result())
+}
 
 # A "Bail out!" directive should cause us to ignore any following TAP
 # error, as well as a non-zero exit status from the TAP producer.
