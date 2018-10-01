@@ -38,11 +38,18 @@ Options:\n\
                                 image with interactive shell.\n\
 "
 
-GETOPTS=`/usr/bin/getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
-if test $? != 0; then
-    die "$usage"
+# check if running in OSX
+if [[ "$(uname)" == "Darwin" ]]; then
+    # BSD getopt
+    GETOPTS=`/usr/bin/getopt $short_opts -- $*`
+else
+    # GNU getopt
+    GETOPTS=`/usr/bin/getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
+    if [[ $? != 0 ]]; then
+        die "$usage"
+    fi
+    eval set -- "$GETOPTS"
 fi
-eval set -- "$GETOPTS"
 while true; do
     case "$1" in
       -h|--help)                   echo -ne "$usage";          exit 0  ;;
