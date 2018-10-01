@@ -59,7 +59,7 @@ while true; do
       -i|--image)                  IMAGE="$2";                 shift 2 ;;
       -S|--flux-security-version)  FLUX_SECURITY_VERSION="$2"; shift 2 ;;
       -j|--jobs)                   JOBS="$2";                  shift 2 ;;
-      -I|--interactive)            INTERACTIVE=${SHELL};       shift   ;;
+      -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
