@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -9,7 +9,10 @@
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the Free
  *  Software Foundation; either version 2 of the license, or (at your option)
- *  any later version.
+ *  any later version.  Additionally, the libflux-core library may be
+ *  redistributed under the terms of the GNU Lesser General Public License as
+ *  published by the Free Software Foundation, either version 2 of the license,
+ *  or (at your option) any later version.
  *
  *  Flux is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
@@ -29,9 +32,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <jansson.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #if HAVE_FLUX_SECURITY
@@ -42,10 +47,21 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
 
+int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submitbench (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option list_opts[] =  {
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
+      .usage = "Limit output to N jobs",
+    },
+    { .name = "suppress-header", .key = 's', .has_arg = 0,
+      .usage = "Suppress printing of header line",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -86,6 +102,13 @@ static struct optparse_option id_opts[] =  {
 };
 
 static struct optparse_subcommand subcommands[] = {
+    { "list",
+      "[OPTIONS]",
+      "List active jobs",
+      cmd_list,
+      0,
+      list_opts
+    },
     { "submitbench",
       "[OPTIONS] jobspec",
       "Run job(s)",
@@ -161,6 +184,88 @@ int main (int argc, char *argv[])
     optparse_destroy (p);
     log_fini ();
     return (exitval);
+}
+
+/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
+ * with second precision
+ */
+static int iso_timestr (double timestamp, char *buf, size_t size)
+{
+    time_t sec = timestamp;
+    struct tm tm;
+
+    if (!gmtime_r (&sec, &tm))
+        return -1;
+    if (strftime (buf, size, "%FT%TZ", &tm) == 0)
+        return -1;
+    return 0;
+}
+
+/* convert job status flags to string
+ */
+const char *flagstr (char *buf, int bufsz, int flags)
+{
+    (void)snprintf (buf, bufsz, "%s%s%s%s",
+                    (flags & FLUX_JOB_RESOURCE_REQUESTED) ? "r" : "",
+                    (flags & FLUX_JOB_RESOURCE_ALLOCATED) ? "R" : "",
+                    (flags & FLUX_JOB_EXEC_REQUESTED)     ? "x" : "",
+                    (flags & FLUX_JOB_EXEC_RUNNING)       ? "X" : "");
+
+    return buf;
+}
+
+int cmd_list (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    int max_entries = optparse_get_int (p, "count", 0);
+    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"flags\"]";
+    flux_t *h;
+    flux_future_t *f;
+    json_t *jobs;
+    size_t index;
+    json_t *value;
+
+    if (optindex != argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (!(f = flux_job_list (h, max_entries, attrs)))
+        log_err_exit ("flux_job_list");
+    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
+        log_err_exit ("flux_job_list");
+    if (!optparse_hasopt (p, "suppress-header"))
+        printf ("%s\t\t%s\t%s\t%s\t%s\n",
+                "JOBID", "USERID", "PRI", "FLAGS", "T_SUBMIT");
+    json_array_foreach (jobs, index, value) {
+        flux_jobid_t id;
+        int priority;
+        uint32_t userid;
+        double t_submit;
+        char timestr[80];
+        int flags;
+        char buf[16];
+        if (json_unpack (value, "{s:I s:i s:i s:f s:i}",
+                                "id", &id,
+                                "priority", &priority,
+                                "userid", &userid,
+                                "t_submit", &t_submit,
+                                "flags", &flags) < 0)
+            log_msg_exit ("error parsing job data");
+        if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
+            log_err_exit ("time conversion error");
+        printf ("%llu\t%lu\t%d\t%s\t%s\n", (unsigned long long)id,
+                                       (unsigned long)userid,
+                                       priority,
+                                       flagstr (buf, sizeof (buf), flags),
+                                       timestr);
+    }
+    flux_future_destroy (f);
+    flux_close (h);
+
+   return (0);
 }
 
 struct submitbench_ctx {
