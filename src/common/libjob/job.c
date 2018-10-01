@@ -9,7 +9,10 @@
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the Free
  *  Software Foundation; either version 2 of the license, or (at your option)
- *  any later version.
+ *  any later version.  Additionally, the libflux-core library may be
+ *  redistributed under the terms of the GNU Lesser General Public License as
+ *  published by the Free Software Foundation, either version 2 of the license,
+ *  or (at your option) any later version.
  *
  *  Flux is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
@@ -31,6 +34,8 @@
 #if HAVE_FLUX_SECURITY
 #include <flux/security/sign.h>
 #endif
+#include <jansson.h>
+
 #include "job.h"
 #include "sign_none.h"
 
@@ -135,6 +140,29 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *jobid)
         return -1;
     *jobid = id;
     return 0;
+}
+
+flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
+{
+    flux_future_t *f;
+    json_t *o = NULL;
+    int saved_errno;
+
+    if (!h || max_entries < 0 || !json_str
+           || !(o = json_loads (json_str, 0, NULL))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(f = flux_rpc_pack (h, "job-manager.list", FLUX_NODEID_ANY, 0,
+                             "{s:i s:o}",
+                             "max_entries", max_entries,
+                             "attrs", o))) {
+        saved_errno = errno;
+        json_decref (o);
+        errno = saved_errno;
+        return NULL;
+    }
+    return f;
 }
 
 /*
