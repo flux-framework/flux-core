@@ -717,30 +717,50 @@ fatal:
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  * So will message counters.
  */
-int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
+static int requeue (flux_t *h, flux_msg_t *msg, int flags)
 {
     h = lookup_clone_ancestor (h);
-    flux_msg_t *cpy;
     int rc;
 
     if (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD) {
         errno = EINVAL;
         goto fatal;
     }
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto fatal;
     if (flags == FLUX_RQ_TAIL)
-        rc = msglist_append (h->queue, cpy);
+        rc = msglist_append (h->queue, msg);
     else
-        rc = msglist_push (h->queue, cpy);
-    if (rc < 0) {
-        flux_msg_destroy (cpy);
+        rc = msglist_push (h->queue, msg);
+    if (rc < 0)
         goto fatal;
-    }
     return 0;
 fatal:
     FLUX_FATAL (h);
     return -1;
+}
+
+int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
+{
+    flux_msg_t *cpy = NULL;
+
+    if (!(cpy = flux_msg_copy (msg, true))) {
+        FLUX_FATAL (h);
+        return -1;
+    }
+
+    if (requeue (h, cpy, flags) < 0) {
+        flux_msg_destroy (cpy);
+        return -1;
+    }
+
+    return 0;
+}
+
+int flux_requeue_nocopy (flux_t *h, flux_msg_t *msg, int flags)
+{
+    if (requeue (h, msg, flags) < 0)
+        return -1;
+
+    return 0;
 }
 
 int flux_event_subscribe (flux_t *h, const char *topic)

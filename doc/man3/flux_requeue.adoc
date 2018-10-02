@@ -5,7 +5,7 @@ flux_requeue(3)
 
 NAME
 ----
-flux_requeue - requeue a message
+flux_requeue, flux_requeue_nocopy - requeue a message
 
 
 SYNOPSIS
@@ -14,12 +14,18 @@ SYNOPSIS
 
 int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
 
+int flux_requeue_nocopy (flux_t *h, flux_msg_t *msg, int flags);
+
 
 DESCRIPTION
 -----------
 
 `flux_requeue()` requeues a _msg_ in handle _h_.  The message
 can be received with `flux_recv()` as though it arrived from the broker.
+
+`flux_requeue_nocopy()` is identical to `flux_requeue()`, but does not
+copy the message_.  It instead takes ownership of the _msg_ passed in
+by the caller.
 
 _flags_ must be set to one of the following values:
 
@@ -33,8 +39,8 @@ _msg_ is placed at the head of the message queue.
 RETURN VALUE
 ------------
 
-`flux_requeue()` returns  zero on success.  On error, -1 is returned,
-and errno is set appropriately.
+`flux_requeue()` and `flux_requeue_nocopy()` return zero on success.
+On error, -1 is returned, and errno is set appropriately.
 
 
 ERRORS

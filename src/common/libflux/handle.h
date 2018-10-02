@@ -148,6 +148,11 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags);
  */
 int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
 
+/* Requeue a message without copying
+ * Identical to flux_requeue(), but takes ownership of 'msg'.
+ */
+int flux_requeue_nocopy (flux_t *h, flux_msg_t *msg, int flags);
+
 /* Obtain a bitmask of FLUX_POLL* bits for the flux handle.
  * Returns bitmask on success, -1 on error with errno set.
  * See flux_pollfd() comment below.
