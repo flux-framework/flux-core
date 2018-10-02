@@ -18,7 +18,7 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
 DESCRIPTION
 -----------
 
-`flux_requeue()` requeues a _msg)_ in handle _h_.  The message
+`flux_requeue()` requeues a _msg_ in handle _h_.  The message
 can be received with `flux_recv()` as though it arrived from the broker.
 
 _flags_ must be set to one of the following values:
