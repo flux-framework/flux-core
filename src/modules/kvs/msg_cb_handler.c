@@ -68,6 +68,21 @@ void msg_cb_handler_destroy (msg_cb_handler_t *mcb)
     }
 }
 
+int msg_cb_handler_msg_aux_set (msg_cb_handler_t *mcb, const char *name,
+                                void *aux, flux_free_f destroy)
+{
+    if (mcb && mcb->msg)
+        return flux_msg_aux_set (mcb->msg, name, aux, destroy);
+    return -1;
+}
+
+void *msg_cb_handler_msg_aux_get (msg_cb_handler_t *mcb, const char *name)
+{
+    if (mcb && mcb->msg)
+        return flux_msg_aux_get (mcb->msg, name);
+    return NULL;
+}
+
 void msg_cb_handler_call (msg_cb_handler_t *mcb)
 {
     if (mcb && mcb->cb)

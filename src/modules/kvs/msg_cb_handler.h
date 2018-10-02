@@ -14,6 +14,11 @@ msg_cb_handler_t *msg_cb_handler_create (flux_t *h, flux_msg_handler_t *w,
 
 void msg_cb_handler_destroy (msg_cb_handler_t *mcb);
 
+/* Set/get auxiliary data in the flux message stored in a msg_cb_handler_t */
+int msg_cb_handler_msg_aux_set (msg_cb_handler_t *mcb, const char *name,
+                                void *aux, flux_free_f destroy);
+void *msg_cb_handler_msg_aux_get (msg_cb_handler_t *mcb, const char *name);
+
 void msg_cb_handler_call (msg_cb_handler_t *mcb);
 
 const flux_msg_t *msg_cb_handler_get_msgcopy (msg_cb_handler_t *mcb);

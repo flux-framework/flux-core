@@ -25,6 +25,12 @@ int main (int argc, char *argv[])
     ok (!msg_cb_handler_get_msgcopy (NULL),
         "msg_cb_handler_get_msgcopy returns NULL on bad input");
 
+    ok (msg_cb_handler_msg_aux_set (NULL, NULL, NULL, NULL) < 0,
+        "msg_cb_handler_msg_aux_set returns < 0 on bad input");
+
+    ok (msg_cb_handler_msg_aux_get (NULL, NULL) == NULL,
+        "msg_cb_handler_msg_aux_get returns NULL on bad input");
+
     /* test empty callback handler */
 
     ok ((mcb = msg_cb_handler_create (NULL, NULL, NULL, NULL, NULL)) != NULL,
@@ -48,6 +54,13 @@ int main (int argc, char *argv[])
     /* msg handler cb & msg cannot be NULL */
     ok ((mcb = msg_cb_handler_create (NULL, NULL, msg, &count, msghand)) != NULL,
         "msg_cb_handler_create works");
+
+    ok (msg_cb_handler_msg_aux_set (mcb, "myaux", "val", NULL) == 0,
+        "msg_cb_handler_msg_aux_set works");
+
+    str = msg_cb_handler_msg_aux_get (mcb, "myaux");
+    ok (str && !strcmp (str, "val"),
+        "msg_cb_handler_msg_aux_get works and returns correct value");
 
     count = 0;
     msg_cb_handler_call (mcb);
