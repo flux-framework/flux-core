@@ -59,13 +59,17 @@ wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
                                  const flux_msg_t *msg, void *arg,
                                  flux_msg_handler_f cb);
 
+/* Set/get auxiliary data to the flux message stored in a wait_t */
+int wait_msg_aux_set (wait_t *w, const char *name, void *aux,
+                      flux_free_f destroy);
+void *wait_msg_aux_get (wait_t *w, const char *name);
+
 /* Destroy all wait_t's fitting message match critieria, tested with
  * wait_test_msg_f callback.
  * On error, the waitqueue is unaltered.
  */
 typedef bool (*wait_test_msg_f)(const flux_msg_t *msg, void *arg);
 int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg);
-
 
 #endif /* !_FLUX_KVS_WAITQUEUE_H */
 

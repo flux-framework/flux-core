@@ -91,6 +91,21 @@ void wait_destroy (wait_t *w)
     }
 }
 
+int wait_msg_aux_set (wait_t *w, const char *name, void *aux,
+                      flux_free_f destroy)
+{
+    if (w && w->mcb)
+        return msg_cb_handler_msg_aux_set (w->mcb, name, aux, destroy);
+    return -1;
+}
+
+void *wait_msg_aux_get (wait_t *w, const char *name)
+{
+    if (w && w->mcb)
+        return msg_cb_handler_msg_aux_get (w->mcb, name);
+    return NULL;
+}
+
 waitqueue_t *wait_queue_create (void)
 {
     waitqueue_t *q = calloc (1, sizeof (*q));
