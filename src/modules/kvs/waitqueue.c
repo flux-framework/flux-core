@@ -206,7 +206,8 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
                 goto error;
             }
             /* prevent wait_runone from restarting handler by clearing
-             * callback function */
+             * callback function (i.e. if wait is on multiple
+             * queues) */
             msg_cb_handler_set_cb (w->mcb, NULL);
             count++;
         }
