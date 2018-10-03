@@ -162,8 +162,6 @@ void basic_api (void)
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ,
                              NULL)) != NULL,
         "lookup_create works");
-    ok (lookup_validate (lh) == true,
-        "lookup_validate works");
     ok (lookup_get_current_epoch (lh) == 42,
         "lookup_get_current_epoch works");
     ok ((tmp = lookup_get_namespace (lh)) != NULL,
@@ -232,8 +230,6 @@ void basic_api_errors (void)
     ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails b/c lookup not yet started");
 
-    ok (lookup_validate (NULL) == false,
-        "lookup_validate fails on NULL pointer");
     ok (lookup (NULL) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on NULL pointer");
     ok (lookup_get_errnum (NULL) == EINVAL,
@@ -257,8 +253,6 @@ void basic_api_errors (void)
 
     /* Now lh destroyed */
 
-    ok (lookup_validate (lh) == false,
-        "lookup_validate fails on bad pointer");
     ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on bad pointer");
     ok (lookup_get_errnum (lh) == EINVAL,

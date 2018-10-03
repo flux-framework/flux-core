@@ -40,9 +40,6 @@ lookup_t *lookup_create (struct cache *cache,
 /* Destroy a lookup handle */
 void lookup_destroy (lookup_t *lh);
 
-/* Determine if lookup handle valid */
-bool lookup_validate (lookup_t *lh);
-
 /* Get errnum, should be checked after lookup() returns true to see if
  * an error occurred or not */
 int lookup_get_errnum (lookup_t *lh);
