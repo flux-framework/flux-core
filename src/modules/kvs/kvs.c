@@ -48,7 +48,6 @@
 #include "waitqueue.h"
 #include "cache.h"
 #include "kvs_util.h"
-#include "msg_cb_handler.h"
 
 #include "lookup.h"
 #include "treq.h"
@@ -342,8 +341,7 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
 static void getroot_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    msg_cb_handler_t *mcb;
-    const flux_msg_t *msg;
+    flux_msg_t *msg = NULL;
     const char *namespace;
     int rootseq, flags;
     uint32_t owner;
@@ -351,10 +349,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
     struct kvsroot *root;
     int save_errno;
 
-    mcb = flux_future_aux_get (f, "handler");
-    assert (mcb);
-
-    msg = msg_cb_handler_get_msgcopy (mcb);
+    msg = flux_future_aux_get (f, "msg");
     assert (msg);
 
     if (flux_request_unpack (msg, NULL, "{ s:s }",
@@ -403,7 +398,11 @@ static void getroot_completion (flux_future_t *f, void *arg)
     if (!root->remove)
         setroot (ctx, root, ref, rootseq);
 
-    msg_cb_handler_call (mcb);
+    /* flux_requeue_nocopy takes ownership of 'msg', no need to destroy */
+    if (flux_requeue_nocopy (ctx->h, msg, FLUX_RQ_HEAD) < 0) {
+        flux_log_error (ctx->h, "%s: flux_requeue_nocopy", __FUNCTION__);
+        goto error;
+    }
 
     flux_future_destroy (f);
     return;
@@ -411,6 +410,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
 error:
     if (flux_respond (ctx->h, msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    flux_msg_destroy (msg);
     flux_future_destroy (f);
 }
 
@@ -422,7 +422,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                                  flux_msg_handler_f cb)
 {
     flux_future_t *f = NULL;
-    msg_cb_handler_t *mcb = NULL;
+    flux_msg_t *msgcpy = NULL;
     int saved_errno;
 
     if (!(f = flux_rpc_pack (ctx->h, "kvs.getroot", FLUX_NODEID_UPSTREAM, 0,
@@ -430,23 +430,22 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                              "namespace", namespace)))
         goto error;
 
-    if (!(mcb = msg_cb_handler_create (ctx->h, mh, msg, ctx, cb))) {
-        flux_log_error (ctx->h, "%s: msg_cb_handler_create", __FUNCTION__);
+    if (!(msgcpy = flux_msg_copy (msg, true))) {
+        flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
         goto error;
     }
 
     if (lh
-        && msg_cb_handler_msg_aux_set (mcb, "lookup_handle", lh, NULL) < 0) {
-        flux_log_error (ctx->h, "%s: msg_cb_handler_aux_set", __FUNCTION__);
+        && flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
         goto error;
     }
 
-    if (flux_future_aux_set (f, "handler", mcb,
-                             (flux_free_f)msg_cb_handler_destroy) < 0) {
+    /* we will manage destruction of the 'msg' on errors */
+    if (flux_future_aux_set (f, "msg", msgcpy, NULL) < 0) {
         flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
-    mcb = NULL;                 /* owned by future now */
 
     if (flux_future_then (f, -1., getroot_completion, ctx) < 0)
         goto error;
@@ -454,7 +453,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
     return 0;
 error:
     saved_errno = errno;
-    msg_cb_handler_destroy (mcb);
+    flux_msg_destroy (msgcpy);
     flux_future_destroy (f);
     errno = saved_errno;
     return -1;
