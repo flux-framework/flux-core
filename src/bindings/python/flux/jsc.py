@@ -48,8 +48,7 @@ def query_jcb(flux_handle, jobid, key):
     RAW.query_jcb(flux_handle, jobid, key, jcb_str)
     if jcb_str[0] == ffi.NULL:
         return None
-    else:
-        return json.loads(ffi.string(jcb_str[0]).decode('utf-8'))
+    return json.loads(ffi.string(jcb_str[0]).decode('utf-8'))
 
 
 def update_jcb(flux_handle, jobid, key, jcb):
@@ -83,8 +82,7 @@ def job_num2state(job_state):
     ret = RAW.job_num2state(job_state)
     if ret == ffi.NULL:
         return None
-    else:
-        return ret.decode('ascii')
+    return ret.decode('ascii')
 
 def job_state2num(job_state):
     if isinstance(job_state, six.text_type):

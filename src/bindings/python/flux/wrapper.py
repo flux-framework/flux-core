@@ -182,7 +182,8 @@ class FunctionWrapper(object):
         if result == calling_object.ffi.NULL:
             result = None
 
-        elif result is not None and self.function_type.result is calling_object.ffi.typeof("char *"):
+        elif result is not None and \
+             self.function_type.result is calling_object.ffi.typeof("char *"):
             result = calling_object.ffi.string(result)
 
         # Convert errno errors into python exceptions
@@ -221,6 +222,7 @@ class Wrapper(WrapperBase):
 
     def check_handle(self, name, fun_type):
         if self.match is not None and self._handle is not None:
+            # pylint: disable=no-else-return
             if (fun_type.kind == 'function' and
                     fun_type.args[0] == self.match):
                 # first argument is of handle type
@@ -270,7 +272,8 @@ class Wrapper(WrapperBase):
         new_fun = self.check_wrap(fun, name)
         new_method = six.create_bound_method(new_fun, self)
 
-        # Store the wrapper function into the instance to prevent a second lookup
+        # Store the wrapper function into the instance
+        # to prevent a second lookup
         setattr(self, name, new_method)
         return new_method
 

@@ -22,13 +22,13 @@ matrix:
        - ARGS="--with-flux-security --enable-caliper"
        - DISTCHECK=t
        - PYTHON_VERSION=2.7
-    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security"
+    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security --enable-pylint"
       compiler: clang-6.0
       env:
        - CC=clang-6.0
        - CXX=clang++-6.0
        - chain_lint=t
-       - ARGS="--with-flux-security"
+       - ARGS="--with-flux-security --enable-pylint"
        - PYTHON_VERSION=2.7
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
       compiler: gcc

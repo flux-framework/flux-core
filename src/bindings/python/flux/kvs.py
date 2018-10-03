@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import json
 import collections
 import errno
@@ -20,8 +22,7 @@ def get_key_direct(flux_handle, key):
     RAW.flux_kvs_get(flux_handle, key, valp)
     if valp[0] == ffi.NULL:
         return None
-    else:
-        return json.loads(ffi.string(valp[0]).decode('utf-8'))
+    return json.loads(ffi.string(valp[0]).decode('utf-8'))
 
 
 def exists(flux_handle, key):
@@ -84,13 +85,12 @@ def watch_once(flux_handle, key):
         # The wrapper automatically unpacks directory's handle
         RAW.flux_kvs_watch_once_dir(flux_handle, directory)
         return directory
-    else:
-        out_json_str = ffi.new('char *[1]')
-        RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
-        if out_json_str[0] == ffi.NULL:
-            return None
-        else:
-            return json.loads(ffi.string(out_json_str[0]).decode('utf-8'))
+
+    out_json_str = ffi.new('char *[1]')
+    RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
+    if out_json_str[0] == ffi.NULL:
+        return None
+    return json.loads(ffi.string(out_json_str[0]).decode('utf-8'))
 
 
 class KVSDir(WrapperPimpl, collections.MutableMapping):
@@ -98,16 +98,15 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
     class InnerWrapper(Wrapper):
 
+        # pylint: disable=no-value-for-parameter
         def __init__(self, flux_handle=None, path='.', handle=None):
             dest = RAW.flux_kvsdir_destroy
-            super(self.__class__, self).__init__(ffi, lib,
-                                                 handle=handle,
-                                                 match=ffi.typeof(
-                                                     'flux_kvsdir_t *'),
-                                                 prefixes=[
-                                                     'flux_kvsdir_',
-                                                 ],
-                                                 destructor=dest)
+            super(KVSDir.InnerWrapper, self).__init__(
+                ffi, lib,
+                handle=handle,
+                match=ffi.typeof('flux_kvsdir_t *'),
+                prefixes=['flux_kvsdir_',],
+                destructor=dest)
 
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError("flux_handle must be a valid Flux object or "
@@ -148,7 +147,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     def __setitem__(self, key, value):
         # Turn it into json
         json_str = json.dumps(value)
-        if (self.pimpl.put(key, json_str) < 0):
+        if self.pimpl.put(key, json_str) < 0:
             print("Error setting item in KVS")
 
     def __delitem__(self, key):
@@ -157,6 +156,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     class KVSDirIterator(collections.Iterator):
 
         def __init__(self, kvsdir):
+            super(KVSDir.KVSDirIterator, self).__init__()
             self.kvsdir = kvsdir
             self.itr = None
             self.itr = RAW.flux_kvsitr_create(kvsdir.handle)

@@ -46,8 +46,6 @@ def kz_stream_handler(kz_handle, arg):
             else:
                 raise err
 
-    return None
-
 
 KZWATCHES = {}
 
@@ -90,12 +88,11 @@ class KZStream(WrapperPimpl):
             if handle is None:
                 handle = RAW.kz_open(flux_handle, name, flags)
 
-            super(self.__class__, self).__init__(ffi, lib,
-                                                 handle=handle,
-                                                 match=ffi.typeof('kz_t *'),
-                                                 prefixes=[
-                                                     'kz_',
-                                                 ], )
+            super(KZStream.InnerWrapper, self).__init__(
+                ffi, lib,
+                handle=handle,
+                match=ffi.typeof('kz_t *'),
+                prefixes=['kz_'])
 
         def __del__(self):
             if self.handle is not None:

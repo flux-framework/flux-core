@@ -18,21 +18,19 @@ class RPC(WrapperPimpl):
             # hold a reference for destructor ordering
             self._handle = flux_handle
             dest = raw.flux_future_destroy
-            super(self.__class__, self).__init__(ffi, lib,
-                                                 handle=None,
-                                                 match=ffi.typeof(
-                                                     lib.flux_rpc).result,
-                                                 prefixes=[
-                                                     'flux_rpc_',
-                                                 ],
-                                                 destructor=dest,)
+            super(RPC.InnerWrapper, self).__init__(
+                ffi, lib,
+                handle=None,
+                match=ffi.typeof(lib.flux_rpc).result,
+                prefixes=['flux_rpc_'],
+                destructor=dest)
             if isinstance(flux_handle, Wrapper):
                 flux_handle = flux_handle.handle
 
 
             if payload is None or payload == ffi.NULL:
                 payload = ffi.NULL
-            elif not (isinstance(payload, six.string_types)):
+            elif not isinstance(payload, six.string_types):
                 payload = json.dumps(payload)
             elif isinstance(payload, six.text_type):
                 payload = payload.encode('UTF-8')
@@ -64,4 +62,3 @@ class RPC(WrapperPimpl):
 
     def get(self):
         return json.loads(self.get_str().decode('utf-8'))
-

@@ -26,14 +26,11 @@ class Message(WrapperPimpl):
                      type_id=flux.constants.FLUX_MSGTYPE_REQUEST,
                      handle=None,
                      destruct=False,):
-            super(self.__class__, self).__init__(
+            super(Message.InnerWrapper, self).__init__(
                 ffi, lib,
                 handle=handle,
                 match=ffi.typeof(lib.flux_msg_create).result,
-                prefixes=[
-                    'flux_msg_',
-                    'FLUX_MSG',
-                ],
+                prefixes=['flux_msg_', 'FLUX_MSG'],
                 destructor=raw.flux_msg_destroy if destruct else None,)
             if handle is None:
                 self.handle = raw.flux_msg_create(type_id)
@@ -80,8 +77,7 @@ class Message(WrapperPimpl):
         if self.pimpl.has_payload():
             self.pimpl.get_string(ffi.cast('char**', string))
             return ffi.string(string[0]).decode('utf-8')
-        else:
-            return None
+        return None
 
     @payload_str.setter
     def payload_str(self, value):
