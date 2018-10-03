@@ -546,8 +546,7 @@ lookup_t *lookup_create (struct cache *cache,
                          uint32_t rolemask,
                          uint32_t userid,
                          int flags,
-                         flux_t *h,
-                         void *aux)
+                         flux_t *h)
 {
     lookup_t *lh = NULL;
     char *ns_prefix = NULL;
@@ -614,7 +613,6 @@ lookup_t *lookup_create (struct cache *cache,
     }
 
     lh->h = h;
-    lh->aux = aux;
 
     lh->rolemask = rolemask;
     lh->userid = userid;
@@ -772,13 +770,6 @@ const char *lookup_get_namespace (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC)
         return lh->namespace;
-    return NULL;
-}
-
-void *lookup_get_aux_data (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->aux;
     return NULL;
 }
 

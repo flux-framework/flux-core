@@ -1332,8 +1332,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   rolemask,
                                   userid,
                                   flags,
-                                  h,
-                                  NULL)))
+                                  h)))
             goto done;
     }
     else {
@@ -1471,8 +1470,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   rolemask,
                                   userid,
                                   flags,
-                                  h,
-                                  NULL)))
+                                  h)))
             goto done;
     }
     else {
