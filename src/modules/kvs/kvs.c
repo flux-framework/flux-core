@@ -418,10 +418,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                                  const char *namespace,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
-                                 flux_msg_handler_f cb,
-                                 int *rootseq,
-                                 blobref_t rootref,
-                                 int *flagsp)
+                                 flux_msg_handler_f cb)
 {
     flux_future_t *f = NULL;
     msg_cb_handler_t *mcb = NULL;
@@ -463,8 +460,6 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
                                 bool *stall)
 {
     struct kvsroot *root;
-    blobref_t rootref;
-    int rootseq, flags;
 
     (*stall) = false;
 
@@ -474,8 +469,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
             return NULL;
         }
         else {
-            if (getroot_request_send (ctx, namespace, mh, msg, cb,
-                                      &rootseq, rootref, &flags) < 0) {
+            if (getroot_request_send (ctx, namespace, mh, msg, cb) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
