@@ -7,6 +7,13 @@ matrix:
   include:
     - name: "Ubuntu: no configure flags"
       compiler: gcc
+      env:
+       - PYTHON_VERSION=2.7
+    - name: "Ubuntu: py3.6 distcheck"
+      compiler: gcc
+      env:
+       - DISTCHECK=t
+       - PYTHON_VERSION=3.6
     - name: "Ubuntu: gcc-8 --with-flux-security/caliper, distcheck"
       compiler: gcc-8
       env:
@@ -14,30 +21,40 @@ matrix:
        - CXX=g++-8
        - ARGS="--with-flux-security --enable-caliper"
        - DISTCHECK=t
-    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security"
+       - PYTHON_VERSION=2.7
+    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security --enable-pylint"
       compiler: clang-6.0
       env:
        - CC=clang-6.0
        - CXX=clang++-6.0
        - chain_lint=t
-       - ARGS="--with-flux-security"
+       - ARGS="--with-flux-security --enable-pylint"
+       - PYTHON_VERSION=2.7
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
       compiler: gcc
       env:
        - COVERAGE=t
        - ARGS="--with-flux-security --enable-caliper"
+       - PYTHON_VERSION=2.7
     - name: "Ubuntu: TEST_INSTALL docker-deploy"
       compiler: gcc
       env:
        - ARGS="--with-flux-security --enable-caliper"
        - TEST_INSTALL=t
        - DOCKER_TAG=t
+       - PYTHON_VERSION=2.7
     - name: "Centos 7: --with-flux-security --enable-caliper docker-deploy"
       compiler: gcc
       env:
        - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
        - IMG=centos7-base
        - DOCKER_TAG=t
+       - PYTHON_VERSION=2.7
+    - name: "Centos 7: py3.4"
+      compiler: gcc
+      env:
+       - IMG=centos7-base
+       - PYTHON_VERSION=3.4
 
 env:
   global:
@@ -68,7 +85,6 @@ before_install:
 script:
  - |
   src/test/docker/docker-run-checks.sh -j2 \
-    --quiet \
     --image=${IMG} \
     ${TAGNAME:+--tag=${TAGNAME}} \
     -- ${ARGS}

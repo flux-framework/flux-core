@@ -1,5 +1,8 @@
+import json
+import six
+
 from flux.wrapper import Wrapper
-from flux._jsc import ffi, lib
+from _flux._jsc import ffi, lib
 
 # Constants taken from jstatctl.h
 JSC_STATE_PAIR = "state-pair"
@@ -45,18 +48,22 @@ def query_jcb(flux_handle, jobid, key):
     RAW.query_jcb(flux_handle, jobid, key, jcb_str)
     if jcb_str[0] == ffi.NULL:
         return None
-    else:
-        return ffi.string(jcb_str[0])
+    return json.loads(ffi.string(jcb_str[0]).decode('utf-8'))
 
 
 def update_jcb(flux_handle, jobid, key, jcb):
+    # TODO: validate the key is one of the constants in jstatctl.h
+    if isinstance(jcb, six.text_type):
+        jcb = jcb.encode('utf-8')
+    elif not isinstance(jcb, six.binary_type):
+        jcb = json.dumps(jcb).encode('utf-8')
     return RAW.jsc_update_jcb(flux_handle, jobid, key, jcb)
 
 
 @ffi.callback('jsc_handler_f')
 def jsc_notify_wrapper(jcb, arg, errnum):
     if jcb != ffi.NULL:
-        jcb = ffi.string(jcb)
+        jcb = ffi.string(jcb).decode('utf-8')
     callback, real_arg = ffi.from_handle(arg)
     ret = callback(jcb, real_arg, errnum)
     return ret if ret is not None else 0
@@ -75,5 +82,10 @@ def job_num2state(job_state):
     ret = RAW.job_num2state(job_state)
     if ret == ffi.NULL:
         return None
-    else:
-        return ffi.string(ret)
+    return ret.decode('ascii')
+
+def job_state2num(job_state):
+    if isinstance(job_state, six.text_type):
+        # jsc doesn't use utf-8 internally, catch erroneous unicode here
+        job_state.encode('ascii')
+    return RAW.job_state2num(job_state)

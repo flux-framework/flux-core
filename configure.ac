@@ -146,14 +146,14 @@ AC_ARG_ENABLE(python,
 AC_MSG_RESULT($enable_python)
 
 if test "$enable_python" = "yes"; then
-  AM_PATH_PYTHON([2.7])
+  AX_PYTHON_DEVEL([>='2.7'])
+  AM_PATH_PYTHON([$ac_python_version])
   if test "X$PYTHON" != "X"; then
     # Flag for PYTHON_LDFLAGS workaround below.
     if test -n "$PYTHON_LDFLAGS"; then
       ac_python_ldflags_set_by_user=true
     fi
 
-    AX_PYTHON_DEVEL
     #TODO: write this manually to add a version check
     AM_CHECK_PYMOD(cffi,
                    [cffi.__version_info__ >= (1,1)],
@@ -179,6 +179,8 @@ if test "$enable_python" = "yes"; then
   fi
   AS_VAR_SET(fluxpydir, $pyexecdir/flux)
   AC_SUBST(fluxpydir)
+  AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
+  AC_SUBST(fluxsodir)
   AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
   AC_SUBST(fluxpymoddir)
 
@@ -330,6 +332,7 @@ AC_CONFIG_FILES( \
   src/bindings/python/Makefile \
   src/bindings/python/flux/Makefile \
   src/bindings/python/flux/core/Makefile \
+  src/bindings/python/_flux/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/connectors/Makefile \
@@ -366,11 +369,6 @@ AC_CONFIG_FILES( \
   t/fluxometer/conf.lua \
   t/fluxometer/conf.lua.installed \
 )
-
-AC_CONFIG_FILES(
-  [t/t9990-python-tests.t:t/t9990-python-tests.t.in],
-  [chmod +x t/t9990-python-tests.t]
-                )
 
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \

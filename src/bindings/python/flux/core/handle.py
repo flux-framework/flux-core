@@ -1,8 +1,10 @@
+import six
+
 from flux.wrapper import Wrapper
-from flux._core import ffi, lib
-from flux.core.inner import raw
 from flux.rpc import RPC
 from flux.message import Message
+from flux.core.inner import raw
+from _flux._core import ffi, lib
 
 class Flux(Wrapper):
     """
@@ -13,15 +15,12 @@ class Flux(Wrapper):
   """
 
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
-        super(self.__class__, self).__init__(
+        super(Flux, self).__init__(
             ffi, lib,
             handle=handle,
             match=ffi.typeof(lib.flux_open).result,
             filter_match=False,
-            prefixes=[
-                'flux_',
-                'FLUX_',
-            ],
+            prefixes=['flux_', 'FLUX_',],
             destructor=raw.flux_close,)
 
         if handle is None:
@@ -36,6 +35,8 @@ class Flux(Wrapper):
         :param fstring: A string to log, C-style formatting is *not* supported
         """
         # Short-circuited because variadics can't be wrapped cleanly
+        if isinstance(fstring, six.text_type):
+            fstring = fstring.encode('utf-8')
         lib.flux_log(self.handle, level, fstring)
 
     def send(self, message, flags=0):
@@ -60,8 +61,7 @@ class Flux(Wrapper):
         handle = self.flux_recv(match[0], flags)
         if handle is not None:
             return Message(handle=handle)
-        else:  # pragma: no cover
-            return None
+        return None
 
     def rpc_send(self, topic,
                  payload=ffi.NULL,

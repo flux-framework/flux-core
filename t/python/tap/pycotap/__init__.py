@@ -129,9 +129,9 @@ class TAPTestResult(unittest.TestResult):
 
 
 class TAPTestRunner(object):
-  def __init__(self, 
+  def __init__(self,
       message_log = LogMode.LogToYAML,
-      test_output_log = LogMode.LogToDiagnostics, 
+      test_output_log = LogMode.LogToDiagnostics,
       output_stream = sys.stdout, error_stream = sys.stderr):
     self.output_stream = output_stream
     self.error_stream = error_stream
@@ -140,9 +140,9 @@ class TAPTestRunner(object):
 
   def run(self, test):
     result = TAPTestResult(
-        self.output_stream, 
-        self.error_stream, 
-        self.message_log, 
+        self.output_stream,
+        self.error_stream,
+        self.message_log,
         self.test_output_log)
     test(result)
     result.printErrors()

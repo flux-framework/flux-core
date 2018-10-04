@@ -51,9 +51,10 @@ declare -A extra_cmake_opts=(\
 #
 pips="\
 hererocks \
-cffi==1.5 \
+cffi==1.11 \
+six==1.10 \
 coverage \
-pylint==1.5.6
+pylint
 "
 #
 #  Lua rocks files to download and install:
@@ -72,12 +73,13 @@ Download and install to a local prefix (default=$prefix) dependencies\n\
 for building flux-framework/flux-core\n\
 \n\
 Options:\n\
- -v, --verbose           Be verbose.\n\
- -P, --printenv          Print environment variables to stdout\n\
- -c, --cachedir=DIR      Check for precompiled dependency cache in DIR\n\
- -e, --max-cache-age=N   Expire cache in N days from creation\n\
- -p, --prefix=DIR        Install software into prefix\n\
- -L, --lua-version=VER   Install Lua version with hererocks\n
+ -v, --verbose                 Be verbose.\n\
+ -P, --printenv                Print environment variables to stdout\n\
+ -c, --cachedir=DIR            Check for precompiled dependency cache in DIR\n\
+ -e, --max-cache-age=N         Expire cache in N days from creation\n\
+ -p, --prefix=DIR              Install software into prefix\n\
+ -L, --lua-version=VER         Install Lua version with hererocks\n
+ --python-major-version=VER    Major version of python to use (i.e., 2 or 3)\n
 "
 
 die() { echo -e "$prog: $@"; exit 1; }
@@ -92,14 +94,15 @@ fi
 eval set -- "$GETOPTS"
 while true; do
     case "$1" in
-      -v|--verbose)          verbose=t;     shift   ;;
-      -c|--cachedir)         cachedir="$2"; shift 2 ;;
-      -e|--max-cache-age)    cacheage="$2"; shift 2 ;;
-      -p|--prefix)           prefix="$2";   shift 2 ;;
-      -P|--printenv)         print_env=1;   shift   ;;
-      -L|--lua-verson)       LUA_VERSION="$2"; shift 2 ;;
-      --)                    shift ; break;         ;;
-      *)                     die "Invalid option '$1'\n$usage" ;;
+      -v|--verbose)             verbose=t;                 shift          ;;
+      -c|--cachedir)            cachedir="$2";             shift 2        ;;
+      -e|--max-cache-age)       cacheage="$2";             shift 2        ;;
+      -p|--prefix)              prefix="$2";               shift 2        ;;
+      -P|--printenv)            print_env=1;               shift          ;;
+      -L|--lua-verson)          LUA_VERSION="$2";          shift 2        ;;
+      --python-major-verson)    PYTHON_MAJOR_VERSION="$2"; shift 2        ;;
+      --)                                                  shift ; break; ;;
+      *)                        die "Invalid option '$1'\n$usage"         ;;
     esac
 done
 
@@ -150,9 +153,18 @@ add_cache ()
     touch "${cachedir}/$(sanitize ${1})"
 }
 
-pip help >/dev/null 2>&1 || die "Required command pip not installed"
-# pip install --user --upgrade pip || die "Failed to update pip"
-pip install --user $pips || die "Failed to install required python packages"
+if [[ -z "$PYTHON_MAJOR_VERSION" && -n "$PYTHON_VERSION" ]]; then
+    python_version_array=( ${PYTHON_VERSION//./ } )
+    PYTHON_MAJOR_VERSION="${python_version_array[0]}"
+fi
+
+PIP=pip
+if [[ "$PYTHON_MAJOR_VERSION" -eq 3 ]]; then
+    PIP=pip3
+fi
+${PIP} help >/dev/null 2>&1 || die "Required command ${PIP} not installed"
+# ${PIP} install --user --upgrade pip || die "Failed to update pip"
+${PIP} install --user $pips || die "Failed to install required python packages"
 
 if ! test -x ${prefix}/bin/lua${LUA_VERSION}; then
   # Use hererocks to get specific Lua version

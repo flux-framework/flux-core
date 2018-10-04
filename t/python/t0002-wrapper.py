@@ -1,11 +1,14 @@
+#!/usr/bin/env python
 import unittest
-import errno
-import os
-import re
-import flux.core as core
-from flux.core.inner import ffi, lib
-import flux.wrapper
 
+import flux
+import flux.core as core
+from flux.core.inner import ffi, raw
+import flux.wrapper
+from subflux import rerun_under_flux
+
+def __flux_size():
+    return 1
 
 class TestWrapper(unittest.TestCase):
     def test_call_non_existant(self):
@@ -33,7 +36,7 @@ class TestWrapper(unittest.TestCase):
     def test_set_pimpl_handle(self):
       f = core.Flux('loop://')
       r = f.rpc_create('topic')
-      r.handle = lib.flux_rpc(f.handle, 'other topic', ffi.NULL, flux.FLUX_NODEID_ANY, 0)
+      r.handle = raw.flux_rpc(f.handle, 'other topic', ffi.NULL, flux.constants.FLUX_NODEID_ANY, 0)
 
     def test_set_pimpl_handle_invalid(self):
       f = core.Flux('loop://')
@@ -42,8 +45,10 @@ class TestWrapper(unittest.TestCase):
           r.handle = f.rpc_create("other topic")
 
     def test_read_basic_value(self):
-      self.assertGreater(flux.core.inner.raw.FLUX_NODEID_ANY, 0)
+      self.assertGreater(flux.constants.FLUX_NODEID_ANY, 0)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+        unittest.main(testRunner=TAPTestRunner())

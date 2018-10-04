@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import re
 
@@ -109,7 +110,7 @@ ffi.include({module}_ffi)
 
 
 
-  print >>modfile, '''
+  print('''
 #pylint: skip-file
 # This is a generated file... linting is less than useful
 from cffi import FFI
@@ -124,6 +125,10 @@ ffi.set_source('{full_mod}',
 void * unpack_long(ptrdiff_t num){{
   return (void*)num;
 }}
+// TODO: remove this when we can use cffi 1.10
+#ifdef __GNUC__
+#pragma GCC visibility push(default)
+#endif
             """,
             libraries=['{library}'])
 
@@ -148,4 +153,4 @@ if __name__ == "__main__":
         header=include_head,
         extra_source=args.extra_source,
         includes=ffi_include
-        )
+        ),file=modfile)

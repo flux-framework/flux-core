@@ -1,4 +1,7 @@
 import json
+
+import six
+
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 from flux.core.watchers import Watcher
@@ -10,7 +13,8 @@ __all__ = ['Message',
 
 
 def msg_typestr(msg_type):
-    return ffi.string(raw.flux_msg_typestr(msg_type))
+    # the returned string is guaranteed to be ascii
+    return ffi.string(raw.flux_msg_typestr(msg_type)).decode('ascii')
 
 
 class Message(WrapperPimpl):
@@ -22,14 +26,11 @@ class Message(WrapperPimpl):
                      type_id=flux.constants.FLUX_MSGTYPE_REQUEST,
                      handle=None,
                      destruct=False,):
-            super(self.__class__, self).__init__(
+            super(Message.InnerWrapper, self).__init__(
                 ffi, lib,
                 handle=handle,
                 match=ffi.typeof(lib.flux_msg_create).result,
-                prefixes=[
-                    'flux_msg_',
-                    'FLUX_MSG',
-                ],
+                prefixes=['flux_msg_', 'FLUX_MSG'],
                 destructor=raw.flux_msg_destroy if destruct else None,)
             if handle is None:
                 self.handle = raw.flux_msg_create(type_id)
@@ -54,7 +55,7 @@ class Message(WrapperPimpl):
     def from_event_encode(cls, topic, payload=None):
         if payload is None:
             payload = ffi.NULL
-        elif not isinstance(payload, basestring):
+        elif not isinstance(payload, six.string_types):
             # Convert dict or list into json string
             payload = json.dumps(payload)
         handle = raw.flux_event_encode(topic, payload)
@@ -64,7 +65,7 @@ class Message(WrapperPimpl):
     def topic(self):
         topic_string = ffi.new('char *[1]')
         self.pimpl.get_topic(topic_string)
-        return ffi.string(topic_string[0])
+        return ffi.string(topic_string[0]).decode('utf-8')
 
     @topic.setter
     def topic(self, value):
@@ -75,9 +76,8 @@ class Message(WrapperPimpl):
         string = ffi.new('char *[1]')
         if self.pimpl.has_payload():
             self.pimpl.get_string(ffi.cast('char**', string))
-            return ffi.string(string[0])
-        else:
-            return None
+            return ffi.string(string[0]).decode('utf-8')
+        return None
 
     @payload_str.setter
     def payload_str(self, value):

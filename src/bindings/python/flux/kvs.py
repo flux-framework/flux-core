@@ -1,7 +1,9 @@
+from __future__ import print_function
+
 import json
 import collections
 import errno
-from flux._kvs import ffi, lib
+from _flux._kvs import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 
 
@@ -20,8 +22,7 @@ def get_key_direct(flux_handle, key):
     RAW.flux_kvs_get(flux_handle, key, valp)
     if valp[0] == ffi.NULL:
         return None
-    else:
-        return json.loads(ffi.string(valp[0]))
+    return json.loads(ffi.string(valp[0]).decode('utf-8'))
 
 
 def exists(flux_handle, key):
@@ -84,13 +85,12 @@ def watch_once(flux_handle, key):
         # The wrapper automatically unpacks directory's handle
         RAW.flux_kvs_watch_once_dir(flux_handle, directory)
         return directory
-    else:
-        out_json_str = ffi.new('char *[1]')
-        RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
-        if out_json_str[0] == ffi.NULL:
-            return None
-        else:
-            return json.loads(ffi.string(out_json_str[0]))
+
+    out_json_str = ffi.new('char *[1]')
+    RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
+    if out_json_str[0] == ffi.NULL:
+        return None
+    return json.loads(ffi.string(out_json_str[0]).decode('utf-8'))
 
 
 class KVSDir(WrapperPimpl, collections.MutableMapping):
@@ -98,16 +98,15 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
     class InnerWrapper(Wrapper):
 
+        # pylint: disable=no-value-for-parameter
         def __init__(self, flux_handle=None, path='.', handle=None):
             dest = RAW.flux_kvsdir_destroy
-            super(self.__class__, self).__init__(ffi, lib,
-                                                 handle=handle,
-                                                 match=ffi.typeof(
-                                                     'flux_kvsdir_t *'),
-                                                 prefixes=[
-                                                     'flux_kvsdir_',
-                                                 ],
-                                                 destructor=dest)
+            super(KVSDir.InnerWrapper, self).__init__(
+                ffi, lib,
+                handle=handle,
+                match=ffi.typeof('flux_kvsdir_t *'),
+                prefixes=['flux_kvsdir_',],
+                destructor=dest)
 
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError("flux_handle must be a valid Flux object or "
@@ -129,13 +128,11 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
     def commit(self, flags=0):
-        commit(self.fhdl.handle, flags)
+        return commit(self.fhdl.handle, flags)
 
     def key_at(self, key):
-        c_str = self.pimpl.key_at(key)
-        p_str = ffi.string(c_str)
-        lib.free(c_str)
-        return p_str
+        p_str = self.pimpl.key_at(key)
+        return p_str.decode('utf-8')
 
     def exists(self, name):
         return self.pimpl.exists(name)
@@ -150,7 +147,8 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     def __setitem__(self, key, value):
         # Turn it into json
         json_str = json.dumps(value)
-        self.pimpl.put(key, json_str)
+        if self.pimpl.put(key, json_str) < 0:
+            print("Error setting item in KVS")
 
     def __delitem__(self, key):
         self.pimpl.unlink(key)
@@ -158,6 +156,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     class KVSDirIterator(collections.Iterator):
 
         def __init__(self, kvsdir):
+            super(KVSDir.KVSDirIterator, self).__init__()
             self.kvsdir = kvsdir
             self.itr = None
             self.itr = RAW.flux_kvsitr_create(kvsdir.handle)
@@ -172,7 +171,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             ret = RAW.flux_kvsitr_next(self.itr)
             if ret is None or ret == ffi.NULL:
                 raise StopIteration()
-            return ffi.string(ret)
+            return ret.decode('utf-8')
 
         def next(self):
             return self.__next__()
@@ -293,7 +292,7 @@ def kvs_watch_wrapper(key, value, arg, errnum):
     if errnum == errno.ENOENT:
         value = None
     else:
-        value = json.loads(ffi.string(value))
+        value = json.loads(ffi.string(value).decode('utf-8'))
     key = ffi.string(key)
     ret = callback(key, value, real_arg, errnum)
     return ret if ret is not None else 0

@@ -39,6 +39,10 @@ RUN yum -y update \
       pkgconfig \
       python-devel \
       python-cffi \
+      python-six \
+      python34-devel \
+      python34-cffi \
+      python34-six \
       ruby \
       sqlite \
       yaml-cpp-devel \

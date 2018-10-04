@@ -6,8 +6,7 @@ number of assumptions about the error propagation and handling that flux uses.
 import re
 import os
 import inspect
-from types import MethodType
-
+import six
 
 class MissingFunctionError(Exception):
 
@@ -113,16 +112,14 @@ Handle type: {htype}
 
 class InvalidArguments(ValueError):
 
-    def __init__(self, name, signature, arguments, err_msg):
+    def __init__(self, name, signature, arguments):
         message = """
 Invalid arguments passed to wrapped C function:
-cffi error: {err_msg}
 Name: {name}
 C signature: {c_type}
 Arguments: {arguments}
           """.format(name=name,
                      c_type=signature,
-                     err_msg=err_msg,
                      arguments=arguments)
         super(InvalidArguments, self).__init__(message)
 
@@ -156,7 +153,6 @@ class FunctionWrapper(object):
                 self.arg_trans.append(i)
 
     def __call__(self, calling_object, *args_in):
-        # print holder.__name__, 'got', calling_object, args_in
         calling_object.ffi.errno = 0
         caller = calling_object.handle
         args = [caller, ] + \
@@ -174,18 +170,21 @@ class FunctionWrapper(object):
             elif isinstance(args[i], WrapperBase):
                 # Unpack wrapper objects
                 args[i] = args[i].handle
-            elif isinstance(args[i], unicode):
-                # convert unicode string to ascii to make cffi happy
-                args[i] = str(args[i])
+            elif isinstance(args[i], six.text_type):
+                args[i] = args[i].encode("utf-8")
 
         try:
             result = self.fun(*args)
         except TypeError as err:
-            raise InvalidArguments(self.name, self.ffi.getctype(
-                self.function_type), args_in, err.message)
+            six.raise_from(InvalidArguments(self.name, self.ffi.getctype(
+                self.function_type), args_in), err)
 
         if result == calling_object.ffi.NULL:
             result = None
+
+        elif result is not None and \
+             self.function_type.result is calling_object.ffi.typeof("char *"):
+            result = calling_object.ffi.string(result)
 
         # Convert errno errors into python exceptions
 
@@ -223,6 +222,7 @@ class Wrapper(WrapperBase):
 
     def check_handle(self, name, fun_type):
         if self.match is not None and self._handle is not None:
+            # pylint: disable=no-else-return
             if (fun_type.kind == 'function' and
                     fun_type.args[0] == self.match):
                 # first argument is of handle type
@@ -243,11 +243,12 @@ class Wrapper(WrapperBase):
 
     def __getattr__(self, name):
         fun = None
-        llib = self.__getattribute__("lib")
         if re.match('__.*__', name):
             # This is a python internal name, skip it
             raise AttributeError
+
         # try it bare
+        llib = getattr(self, "lib")
         try:
             fun = getattr(llib, name)
         except AttributeError:
@@ -260,17 +261,21 @@ class Wrapper(WrapperBase):
                     pass
         if fun is None:
             # Return a proxy class to generate a good error on call
-            setattr(self.__class__, name, ErrorPrinter(name, self.prefixes))
-            return self.__getattribute__(name)
+            error_printer = ErrorPrinter(name, self.prefixes)
+            setattr(self, name, error_printer)
+            return error_printer
 
         if not callable(fun):  # pragma: no cover
+            setattr(self, name, fun)
             return fun
 
         new_fun = self.check_wrap(fun, name)
-        new_method = MethodType(new_fun, None, self.__class__)
-        # Store the wrapper function into the class to prevent a second lookup
-        setattr(self.__class__, name, new_method)
-        return self.__getattribute__(name)
+        new_method = six.create_bound_method(new_fun, self)
+
+        # Store the wrapper function into the instance
+        # to prevent a second lookup
+        setattr(self, name, new_method)
+        return new_method
 
     def __clear(self):
         # avoid recursion
