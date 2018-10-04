@@ -31,10 +31,11 @@ _core_build.py: $(MAKE_BINDING)
 		--add_long_sub 'FLUX_SEC_TYPE_ALL.*\n.*\),|||FLUX_SEC_TYPE_ALL = 7,'\
 		flux.h
 
+BUILT_SOURCES= _core.c _jsc.c _kvs.c _kz.c
 fluxso_LTLIBRARIES = _core.la _kvs.la _jsc.la _kz.la
 fluxso_PYTHON = __init__.py
 
-_core_la_SOURCES = _core.c
+nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
 _core_la_DEPENDENCIES = _core_build.py
 
@@ -46,7 +47,7 @@ _jsc_build.py: $(top_srcdir)/src/common/libjsc/jstatctl.h $(MAKE_BINDING) _core_
 		--include_ffi _core_build \
 		jstatctl.h
 
-_jsc_la_SOURCES = _jsc.c
+nodist__jsc_la_SOURCES = _jsc.c
 _jsc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libjsc
 _jsc_la_LIBADD = $(common_libs)
 _jsc_la_DEPENDENCIES = _jsc_build.py
@@ -59,7 +60,7 @@ _kvs_build.py: $(top_srcdir)/src/common/libkvs/kvs.h $(MAKE_BINDING) _core_build
 		--include_ffi _core_build \
 		kvs.h
 
-_kvs_la_SOURCES = _kvs.c
+nodist__kvs_la_SOURCES = _kvs.c
 _kvs_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libkvs
 _kvs_la_LIBADD = $(common_libs)
 _kvs_la_DEPENDENCIES = _kvs_build.py
@@ -73,7 +74,7 @@ _kz_build.py: $(top_srcdir)/src/common/libkz/kz.h $(MAKE_BINDING) _core_build.py
 		--add_sub '.*KZ_FLAGS_DELAYCOMMIT.*,|||KZ_FLAGS_DELAYCOMMIT = 0x0c00' \
 		kz.h
 
-_kz_la_SOURCES = _kz.c $(top_srcdir)/src/common/libkz/kz.h
+nodist__kz_la_SOURCES = _kz.c $(top_srcdir)/src/common/libkz/kz.h
 _kz_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libkz
 _kz_la_LIBADD = $(common_libs)
 _kz_la_DEPENDENCIES = _kz_build.py
@@ -82,9 +83,10 @@ _kz_la_DEPENDENCIES = _kz_build.py
 
 lib-copy-vpath: ${fluxso_PYTHON} ${fluxso_LTLIBRARIES}
 	-echo Copying libraries to where they can be used by python in-tree
-	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp $(top_srcdir)/src/bindings/python/_flux/*.py ./; \
+	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp $(top_srcdir)/src/bindings/python/_flux/__init__.py ./; \
 	for LIB in ${fluxso_LTLIBRARIES:la=so} ; do \
-		cp -f .libs/$$LIB ./ ; \
+		test -e .libs/$$LIB && \
+		$(LN_S) .libs/$$LIB ./ || true; \
 	done
 
 all-local: lib-copy-vpath
