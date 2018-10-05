@@ -154,12 +154,16 @@ if test "$enable_python" = "yes"; then
       ac_python_ldflags_set_by_user=true
     fi
 
-    #TODO: write this manually to add a version check
     AM_CHECK_PYMOD(cffi,
                    [cffi.__version_info__ >= (1,1)],
                    ,
                    [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
                    )
+    AM_CHECK_PYMOD(six,
+                   [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
+                   ,
+                   [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
+                 )
 
     # Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
     # (e.g. /usr/lib64).  Placing a standard path earlier in the linker
@@ -198,6 +202,11 @@ AC_ARG_ENABLE([pylint],
 AS_IF([test "x$enable_pylint" = "xyes"], [
   AC_CHECK_PROG(PYLINT,[pylint],[pylint])
   AS_IF([test "x$PYLINT" != "xpylint"], [AC_MSG_ERROR([No pylint found in PATH])])
+  AM_CHECK_PYMOD(pylint,
+                   [StrictVersion(pylint.__version__) >= StrictVersion('1.4.5')],
+                   ,
+                   [AC_MSG_ERROR([could not find python module pylint, version 1.4.5+ required])]
+                 )
 ])
 AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 

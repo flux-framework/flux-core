@@ -51,10 +51,10 @@ declare -A extra_cmake_opts=(\
 #
 pips="\
 hererocks \
-cffi==1.11 \
-six==1.10 \
+'cffi>=1.11' \
+'six>=1.9' \
 coverage \
-pylint
+'pylint>=1.4.5'
 "
 #
 #  Lua rocks files to download and install:

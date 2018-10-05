@@ -33,17 +33,22 @@ Protocols and API's used in Flux will be documented as Flux RFC's.
 
 flux-core requires the following packages to build:
 ```
+autoconf
+automake
+libtool
 zeromq4-devel >= 4.0.4   # built --with-libsodium
 czmq-devel >= 3.0.1
 munge-devel
 jansson-devel >= 2.6
-lua-5.1-devel
+lua-devel >= 5.1, < 5.3
 luaposix
-libhwloc-devel >= v1.11.1
+libhwloc-devel >= v1.11.1, < 2.0
 yaml-cpp-devel >= 0.5.1
 # for python bindings
 python-devel >= 2.7
 python-cffi >= 1.1
+python-six >= 1.9
+libsqlite3-devel
 # for man pages
 asciidoc
 # or
