@@ -34,13 +34,13 @@
 
 #include "wreck_job.h"
 
-typedef char hashkey_t[16];
+#define HASHKEY_LEN 16
 
-static char *idkey (hashkey_t key, int64_t id)
+static char *idkey (char *key, int key_len, int64_t id)
 {
-    size_t keysz = sizeof (hashkey_t);
-    int n = snprintf (key, keysz, "%lld", (long long)id);
-    assert (n < keysz);
+    assert (key_len >= HASHKEY_LEN);
+    int n = snprintf (key, key_len, "%lld", (long long)id);
+    assert (n < key_len);
     return key;
 }
 
@@ -85,12 +85,12 @@ const char *wreck_job_get_state (struct wreck_job *job)
 
 int wreck_job_insert (struct wreck_job *job, zhash_t *hash)
 {
-    hashkey_t key;
+    char key[HASHKEY_LEN];
     if (!job || !hash) {
         errno = EINVAL;
         return -1;
     }
-    if (zhash_lookup (hash, idkey (key, job->id)) != NULL) {
+    if (zhash_lookup (hash, idkey (key, HASHKEY_LEN, job->id)) != NULL) {
         errno = EEXIST;
         return -1;
     }
@@ -101,14 +101,14 @@ int wreck_job_insert (struct wreck_job *job, zhash_t *hash)
 
 struct wreck_job *wreck_job_lookup (int64_t id, zhash_t *hash)
 {
-    hashkey_t key;
+    char key[HASHKEY_LEN];
     struct wreck_job *job;
 
     if (id <= 0 || !hash) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(job = zhash_lookup (hash, idkey (key, id)))) {
+    if (!(job = zhash_lookup (hash, idkey (key, HASHKEY_LEN, id)))) {
         errno = ENOENT;
         return NULL;
     }
@@ -117,9 +117,9 @@ struct wreck_job *wreck_job_lookup (int64_t id, zhash_t *hash)
 
 void wreck_job_delete (int64_t id, zhash_t *hash)
 {
-    hashkey_t key;
+    char key[HASHKEY_LEN];
     if (id > 0 && hash != NULL)
-        zhash_delete (hash, idkey (key, id));
+        zhash_delete (hash, idkey (key, HASHKEY_LEN, id));
 }
 
 void wreck_job_set_aux (struct wreck_job *job, void *item, flux_free_f destroy)
