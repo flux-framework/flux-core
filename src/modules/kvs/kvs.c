@@ -418,10 +418,8 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                                  const char *namespace,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
-                                 flux_msg_handler_f cb,
-                                 int *rootseq,
-                                 blobref_t rootref,
-                                 int *flagsp)
+                                 void *arg,
+                                 flux_msg_handler_f cb)
 {
     flux_future_t *f = NULL;
     msg_cb_handler_t *mcb = NULL;
@@ -432,7 +430,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                              "namespace", namespace)))
         goto error;
 
-    if (!(mcb = msg_cb_handler_create (ctx->h, mh, msg, ctx, cb))) {
+    if (!(mcb = msg_cb_handler_create (ctx->h, mh, msg, arg, cb))) {
         flux_log_error (ctx->h, "%s: msg_cb_handler_create", __FUNCTION__);
         goto error;
     }
@@ -459,12 +457,11 @@ error:
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
                                 flux_msg_handler_t *mh,
                                 const flux_msg_t *msg,
+                                void *arg,
                                 flux_msg_handler_f cb,
                                 bool *stall)
 {
     struct kvsroot *root;
-    blobref_t rootref;
-    int rootseq, flags;
 
     (*stall) = false;
 
@@ -474,8 +471,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
             return NULL;
         }
         else {
-            if (getroot_request_send (ctx, namespace, mh, msg, cb,
-                                      &rootseq, rootref, &flags) < 0) {
+            if (getroot_request_send (ctx, namespace, mh, msg, arg, cb) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
@@ -497,6 +493,7 @@ static struct kvsroot *getroot_namespace_prefix (kvs_ctx_t *ctx,
                                                  const char *namespace,
                                                  flux_msg_handler_t *mh,
                                                  const flux_msg_t *msg,
+                                                 void *arg,
                                                  flux_msg_handler_f cb,
                                                  bool *stall,
                                                  json_t *ops,
@@ -527,6 +524,7 @@ static struct kvsroot *getroot_namespace_prefix (kvs_ctx_t *ctx,
                           ns_prefix ? ns_prefix : namespace,
                           mh,
                           msg,
+                          arg,
                           cb,
                           stall)))
         goto done;
@@ -1365,7 +1363,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        if (!getroot (ctx, namespace, mh, msg, lookup_request_cb,
+        if (!getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
                       &stall)) {
             if (stall)
                 goto stall;
@@ -1506,7 +1504,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        if (!getroot (ctx, namespace, mh, msg, watch_request_cb,
+        if (!getroot (ctx, namespace, mh, msg, lh, watch_request_cb,
                       &stall)) {
             if (stall)
                 goto stall;
@@ -1836,6 +1834,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                            namespace,
                                            mh,
                                            msg,
+                                           ctx,
                                            commit_request_cb,
                                            &stall,
                                            ops,
@@ -2023,6 +2022,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                            namespace,
                                            mh,
                                            msg,
+                                           ctx,
                                            fence_request_cb,
                                            &stall,
                                            ops,
@@ -2134,7 +2134,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace, mh, msg, sync_request_cb,
+    if (!(root = getroot (ctx, namespace, mh, msg, ctx, sync_request_cb,
                           &stall))) {
         if (stall)
             goto stall;
@@ -2198,7 +2198,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * first.
          */
         bool stall = false;
-        if (!(root = getroot (ctx, namespace, mh, msg, getroot_request_cb,
+        if (!(root = getroot (ctx, namespace, mh, msg, ctx, getroot_request_cb,
                               &stall))) {
             if (stall)
                 goto done;

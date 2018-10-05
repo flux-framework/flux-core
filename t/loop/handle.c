@@ -142,6 +142,7 @@ int main (int argc, char *argv[])
         BAIL_OUT ("couldn't encode request");
     ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
         "flux_requeue bar HEAD works");
+    flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
@@ -167,6 +168,7 @@ int main (int argc, char *argv[])
         BAIL_OUT ("couldn't encode request");
     ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0,
         "flux_requeue bar TAIL works");
+    flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
