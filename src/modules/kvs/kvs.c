@@ -591,7 +591,7 @@ done:
 
 /* Send content load request and setup contination to handle response.
  */
-static int content_load_request_send (kvs_ctx_t *ctx, const blobref_t ref)
+static int content_load_request_send (kvs_ctx_t *ctx, const char *ref)
 {
     flux_future_t *f = NULL;
     char *refcpy;
@@ -619,7 +619,7 @@ error:
 
 /* Return 0 on success, -1 on error.  Set stall variable appropriately
  */
-static int load (kvs_ctx_t *ctx, const blobref_t ref, wait_t *wait, bool *stall)
+static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
 {
     struct cache_entry *entry = cache_lookup (ctx->cache, ref, ctx->epoch);
     int saved_errno, ret;
@@ -2259,7 +2259,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
 static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
 {
     struct cache_entry *entry;
-    blobref_t ref;
+    char ref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     int len;
 
@@ -2272,7 +2272,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         goto done;
     }
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (ref)) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto done;
     }
@@ -2551,7 +2551,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
 {
     struct kvsroot *root;
     json_t *rootdir = NULL;
-    blobref_t ref;
+    char ref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     int len;
 
@@ -2583,7 +2583,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
     }
     len = strlen (data);
 
-    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (ref)) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto cleanup_remove_root;
     }
@@ -2888,7 +2888,7 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 /* Store initial root in local cache, and flush to content cache
  * synchronously.  The corresponding blobref is written into 'ref'.
  */
-static int store_initial_rootdir (kvs_ctx_t *ctx, blobref_t ref)
+static int store_initial_rootdir (kvs_ctx_t *ctx, char *ref, int ref_len)
 {
     struct cache_entry *entry;
     int saved_errno, ret;
@@ -2905,7 +2905,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, blobref_t ref)
     if (!(data = treeobj_encode (rootdir)))
         goto error;
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref, ref_len) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
@@ -2966,10 +2966,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     process_args (ctx, argc, argv);
     if (ctx->rank == 0) {
         struct kvsroot *root;
-        blobref_t rootref;
+        char rootref[BLOBREF_MAX_STRING_SIZE];
         uint32_t owner = geteuid ();
 
-        if (store_initial_rootdir (ctx, rootref) < 0) {
+        if (store_initial_rootdir (ctx, rootref, sizeof (rootref)) < 0) {
             flux_log_error (h, "storing initial root object");
             goto done;
         }

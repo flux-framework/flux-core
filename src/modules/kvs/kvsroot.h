@@ -16,7 +16,7 @@ struct kvsroot {
     char *namespace;
     uint32_t owner;
     int seq;
-    blobref_t ref;
+    char ref[BLOBREF_MAX_STRING_SIZE];
     kvstxn_mgr_t *ktm;
     treq_mgr_t *trm;
     waitqueue_t *watchlist;

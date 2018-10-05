@@ -21,12 +21,16 @@ struct lookup_ref_data
     int count;
 };
 
-static int treeobj_hash (const char *hash_name, json_t *obj, blobref_t blobref)
+static int treeobj_hash (const char *hash_name, json_t *obj,
+                         char *blobref, int blobref_len)
 {
     char *tmp = NULL;
     int rc = -1;
 
-    if (!hash_name || !obj || !blobref) {
+    if (!hash_name
+        || !obj
+        || !blobref
+        || blobref_len < BLOBREF_MAX_STRING_SIZE) {
         errno = EINVAL;
         goto error;
     }
@@ -37,7 +41,8 @@ static int treeobj_hash (const char *hash_name, json_t *obj, blobref_t blobref)
     if (!(tmp = treeobj_encode (obj)))
         goto error;
 
-    if (blobref_hash (hash_name, (uint8_t *)tmp, strlen (tmp), blobref) < 0)
+    if (blobref_hash (hash_name, (uint8_t *)tmp, strlen (tmp), blobref,
+                      blobref_len) < 0)
         goto error;
     rc = 0;
 error:
@@ -429,8 +434,8 @@ void lookup_root (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t valref_ref;
-    blobref_t root_ref;
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -446,11 +451,11 @@ void lookup_root (void) {
      * treeobj dir, no entries
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     root = treeobj_create_dir ();
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -529,11 +534,11 @@ void lookup_basic (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t valref_ref;
-    blobref_t valref2_ref;
-    blobref_t dirref_ref;
-    blobref_t dirref_test_ref;
-    blobref_t root_ref;
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char valref2_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref_test_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -564,16 +569,16 @@ void lookup_basic (void) {
      * "dirref" : dirref to dirref_ref
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
-    blobref_hash ("sha1", "efgh", 4, valref2_ref);
+    blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (valref2_ref));
     cache_insert (cache, valref2_ref, create_cache_entry_raw (strdup ("efgh"), 4));
 
     dirref_test = treeobj_create_dir ();
     treeobj_insert_entry (dirref_test, "dummy", treeobj_create_val ("dummy", 5));
 
-    treeobj_hash ("sha1", dirref_test, dirref_test_ref);
+    treeobj_hash ("sha1", dirref_test, dirref_test_ref, sizeof (dirref_test_ref));
     cache_insert (cache, dirref_test_ref, create_cache_entry_treeobj (dirref_test));
 
     dir = treeobj_create_dir ();
@@ -596,13 +601,13 @@ void lookup_basic (void) {
 
     treeobj_insert_entry (dirref, "valref_multi_with_dirref", valref_multi_with_dirref);
 
-    treeobj_hash ("sha1", dirref, dirref_ref);
+    treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
 
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -826,9 +831,9 @@ void lookup_errors (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t dirref_ref;
-    blobref_t valref_ref;
-    blobref_t root_ref;
+    char dirref_ref[BLOBREF_MAX_STRING_SIZE];
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -855,12 +860,12 @@ void lookup_errors (void) {
      * "dirref_multi" : dirref to [ dirref_ref, dirref_ref ]
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", dirref, dirref_ref);
+    treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     dir = treeobj_create_dir ();
@@ -881,7 +886,7 @@ void lookup_errors (void) {
 
     treeobj_insert_entry (root, "dirref_multi", dirref_multi);
 
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -1189,7 +1194,7 @@ void lookup_security (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_ref;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1205,7 +1210,7 @@ void lookup_security (void) {
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
 
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1344,11 +1349,11 @@ void lookup_links (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t valref_ref;
-    blobref_t dirref3_ref;
-    blobref_t dirref2_ref;
-    blobref_t dirref1_ref;
-    blobref_t root_ref;
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref3_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref1_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1382,12 +1387,12 @@ void lookup_links (void) {
      * "dirref2" : dirref to "dirref2_ref
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     dirref3 = treeobj_create_dir ();
     treeobj_insert_entry (dirref3, "val", treeobj_create_val ("baz", 3));
-    treeobj_hash ("sha1", dirref3, dirref3_ref);
+    treeobj_hash ("sha1", dirref3, dirref3_ref, sizeof (dirref3_ref));
     cache_insert (cache, dirref3_ref, create_cache_entry_treeobj (dirref3));
 
     dir = treeobj_create_dir ();
@@ -1399,7 +1404,7 @@ void lookup_links (void) {
     treeobj_insert_entry (dirref2, "dir", dir);
     treeobj_insert_entry (dirref2, "dirref", treeobj_create_dirref (dirref3_ref));
     treeobj_insert_entry (dirref2, "symlink", treeobj_create_symlink ("dirref2.val"));
-    treeobj_hash ("sha1", dirref2, dirref2_ref);
+    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
     cache_insert (cache, dirref2_ref, create_cache_entry_treeobj (dirref2));
 
     dirref1 = treeobj_create_dir ();
@@ -1408,13 +1413,13 @@ void lookup_links (void) {
     treeobj_insert_entry (dirref1, "link2valref", treeobj_create_symlink ("dirref2.valref"));
     treeobj_insert_entry (dirref1, "link2dir", treeobj_create_symlink ("dirref2.dir"));
     treeobj_insert_entry (dirref1, "link2symlink", treeobj_create_symlink ("dirref2.symlink"));
-    treeobj_hash ("sha1", dirref1, dirref1_ref);
+    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
     cache_insert (cache, dirref1_ref, create_cache_entry_treeobj (dirref1));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -1600,9 +1605,9 @@ void lookup_alt_root (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t dirref1_ref;
-    blobref_t dirref2_ref;
-    blobref_t root_ref;
+    char dirref1_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1624,18 +1629,18 @@ void lookup_alt_root (void) {
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", dirref1, dirref1_ref);
+    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
     cache_insert (cache, dirref1_ref, create_cache_entry_treeobj (dirref1));
 
     dirref2 = treeobj_create_dir ();
     treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", dirref2, dirref2_ref);
+    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
     cache_insert (cache, dirref2_ref, create_cache_entry_treeobj (dirref2));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -1684,9 +1689,9 @@ void lookup_root_symlink (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_ref;
-    blobref_t valref_ref;
-    blobref_t dirref_ref;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1707,19 +1712,19 @@ void lookup_root_symlink (void) {
      * "dirref" : dirref to dirref_ref
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "symlinkroot", treeobj_create_symlink ("."));
-    treeobj_hash ("sha1", dirref, dirref_ref);
+    treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
     treeobj_insert_entry (root, "symlinkroot", treeobj_create_symlink ("."));
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -1838,8 +1843,8 @@ void lookup_namespace_prefix (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_ref1;
-    blobref_t root_ref2;
+    char root_ref1[BLOBREF_MAX_STRING_SIZE];
+    char root_ref2[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1857,13 +1862,13 @@ void lookup_namespace_prefix (void) {
 
     root1 = treeobj_create_dir ();
     treeobj_insert_entry (root1, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", root1, root_ref1);
+    treeobj_hash ("sha1", root1, root_ref1, sizeof (root_ref1));
 
     cache_insert (cache, root_ref1, create_cache_entry_treeobj (root1));
 
     root2 = treeobj_create_dir ();
     treeobj_insert_entry (root2, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", root2, root_ref2);
+    treeobj_hash ("sha1", root2, root_ref2, sizeof (root_ref2));
 
     cache_insert (cache, root_ref2, create_cache_entry_treeobj (root2));
 
@@ -1995,8 +2000,8 @@ void lookup_namespace_prefix_symlink (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_refA;
-    blobref_t root_refB;
+    char root_refA[BLOBREF_MAX_STRING_SIZE];
+    char root_refB[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -2026,13 +2031,13 @@ void lookup_namespace_prefix_symlink (void) {
     treeobj_insert_entry (rootA, "symlink2B", treeobj_create_symlink ("ns:B/."));
     treeobj_insert_entry (rootA, "symlink2A-val", treeobj_create_symlink ("ns:A/val"));
     treeobj_insert_entry (rootA, "symlink2B-val", treeobj_create_symlink ("ns:B/val"));
-    treeobj_hash ("sha1", rootA, root_refA);
+    treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
 
     cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
 
     rootB = treeobj_create_dir ();
     treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
-    treeobj_hash ("sha1", rootB, root_refB);
+    treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
 
     cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
 
@@ -2163,9 +2168,9 @@ void lookup_namespace_prefix_symlink_security (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_refA;
-    blobref_t root_refB;
-    blobref_t root_refC;
+    char root_refA[BLOBREF_MAX_STRING_SIZE];
+    char root_refB[BLOBREF_MAX_STRING_SIZE];
+    char root_refC[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -2190,19 +2195,19 @@ void lookup_namespace_prefix_symlink_security (void) {
     treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
     treeobj_insert_entry (rootA, "symlink2B", treeobj_create_symlink ("ns:B/."));
     treeobj_insert_entry (rootA, "symlink2C", treeobj_create_symlink ("ns:C/."));
-    treeobj_hash ("sha1", rootA, root_refA);
+    treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
 
     cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
 
     rootB = treeobj_create_dir ();
     treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
-    treeobj_hash ("sha1", rootB, root_refB);
+    treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
 
     cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
 
     rootC = treeobj_create_dir ();
     treeobj_insert_entry (rootC, "val", treeobj_create_val ("3", 1));
-    treeobj_hash ("sha1", rootC, root_refC);
+    treeobj_hash ("sha1", rootC, root_refC, sizeof (root_refC));
 
     cache_insert (cache, root_refC, create_cache_entry_treeobj (rootC));
 
@@ -2280,8 +2285,8 @@ void lookup_stall_namespace (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_ref1;
-    blobref_t root_ref2;
+    char root_ref1[BLOBREF_MAX_STRING_SIZE];
+    char root_ref2[BLOBREF_MAX_STRING_SIZE];
     const char *tmp;
 
     ok ((cache = cache_create ()) != NULL,
@@ -2300,11 +2305,11 @@ void lookup_stall_namespace (void) {
 
     root1 = treeobj_create_dir ();
     treeobj_insert_entry (root1, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", root1, root_ref1);
+    treeobj_hash ("sha1", root1, root_ref1, sizeof (root_ref1));
 
     root2 = treeobj_create_dir ();
     treeobj_insert_entry (root2, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", root2, root_ref2);
+    treeobj_hash ("sha1", root2, root_ref2, sizeof (root_ref2));
 
     cache_insert (cache, root_ref1, create_cache_entry_treeobj (root1));
     cache_insert (cache, root_ref2, create_cache_entry_treeobj (root2));
@@ -2434,7 +2439,7 @@ void lookup_stall_ref_root (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_ref;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -2449,7 +2454,7 @@ void lookup_stall_ref_root (void) {
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
@@ -2502,15 +2507,15 @@ void lookup_stall_ref (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t valref1_ref;
-    blobref_t valref2_ref;
-    blobref_t valref3_ref;
-    blobref_t valref4_ref;
-    blobref_t valrefmisc1_ref;
-    blobref_t valrefmisc2_ref;
-    blobref_t dirref1_ref;
-    blobref_t dirref2_ref;
-    blobref_t root_ref;
+    char valref1_ref[BLOBREF_MAX_STRING_SIZE];
+    char valref2_ref[BLOBREF_MAX_STRING_SIZE];
+    char valref3_ref[BLOBREF_MAX_STRING_SIZE];
+    char valref4_ref[BLOBREF_MAX_STRING_SIZE];
+    char valrefmisc1_ref[BLOBREF_MAX_STRING_SIZE];
+    char valrefmisc2_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref1_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -2553,12 +2558,12 @@ void lookup_stall_ref (void) {
      *
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref1_ref);
-    blobref_hash ("sha1", "efgh", 4, valref2_ref);
-    blobref_hash ("sha1", "ijkl", 4, valref3_ref);
-    blobref_hash ("sha1", "mnop", 4, valref4_ref);
-    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref);
-    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref);
+    blobref_hash ("sha1", "abcd", 4, valref1_ref, sizeof (valref1_ref));
+    blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (valref2_ref));
+    blobref_hash ("sha1", "ijkl", 4, valref3_ref, sizeof (valref3_ref));
+    blobref_hash ("sha1", "mnop", 4, valref4_ref, sizeof (valref4_ref));
+    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref, sizeof (valrefmisc1_ref));
+    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref, sizeof (valrefmisc2_ref));
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
@@ -2574,17 +2579,17 @@ void lookup_stall_ref (void) {
     treeobj_append_blobref (valref_tmp, valrefmisc2_ref);
     treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp);
 
-    treeobj_hash ("sha1", dirref1, dirref1_ref);
+    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
 
     dirref2 = treeobj_create_dir ();
     treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", dirref2, dirref2_ref);
+    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
@@ -2840,9 +2845,9 @@ void lookup_stall_namespace_removed (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t valref_ref;
-    blobref_t dirref_ref;
-    blobref_t root_ref;
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -2862,17 +2867,17 @@ void lookup_stall_namespace_removed (void) {
      *
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
 
     dirref = treeobj_create_dir ();
     valref = treeobj_create_valref (valref_ref);
     treeobj_insert_entry (dirref, "valref", valref);
 
-    treeobj_hash ("sha1", dirref, dirref_ref);
+    treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
-    treeobj_hash ("sha1", root, root_ref);
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
@@ -3167,8 +3172,8 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
-    blobref_t root_refA;
-    blobref_t root_refB;
+    char root_refA[BLOBREF_MAX_STRING_SIZE];
+    char root_refB[BLOBREF_MAX_STRING_SIZE];
     const char *tmp;
 
     ok ((cache = cache_create ()) != NULL,
@@ -3189,13 +3194,13 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
     rootA = treeobj_create_dir ();
     treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
     treeobj_insert_entry (rootA, "symlink", treeobj_create_symlink ("ns:B/."));
-    treeobj_hash ("sha1", rootA, root_refA);
+    treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
 
     cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
 
     rootB = treeobj_create_dir ();
     treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
-    treeobj_hash ("sha1", rootB, root_refB);
+    treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
 
     cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
 

@@ -5,7 +5,6 @@
 #include <czmq.h>
 
 #include "cache.h"
-#include "src/common/libutil/blobref.h"
 
 typedef struct kvstxn_mgr kvstxn_mgr_t;
 typedef struct kvstxn kvstxn_t;
@@ -85,7 +84,7 @@ const char *kvstxn_get_newroot_ref (kvstxn_t *kt);
  */
 kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
-                                 const blobref_t rootdir_ref);
+                                 const char *rootdir_ref);
 
 /* on stall, iterate through all missing refs that the caller should
  * load into the cache
