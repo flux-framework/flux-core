@@ -38,6 +38,7 @@ int main (int argc, char *argv[])
     waitqueue_t *q2;
     wait_t *w;
     flux_msg_t *msg;
+    char *str;
     int count;
     int i;
 
@@ -52,6 +53,32 @@ int main (int argc, char *argv[])
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
        "wait_create works");
+    wait_destroy (w);
+    ok (count == 0,
+        "wait_destroy didn't run callback");
+
+    /* corner case checks */
+
+    ok (wait_msg_aux_set (NULL, NULL, NULL, NULL) < 0,
+        "wait_msg_aux_set returns -1 on bad input");
+    ok (!wait_msg_aux_get (NULL, NULL),
+        "wait_msg_aux_set returns NULL on bad input");
+
+    /* Create/destroy wait_t with msg handler, and set/get aux data
+     */
+    count = 0;
+    msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    ok (msg != NULL,
+        "flux_msg_create works");
+    w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand);
+    ok (w != NULL,
+        "wait_create_msg_handler with non-NULL msg works");
+    ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0,
+        "wait_msg_aux_set works");
+    str = wait_msg_aux_get (w, "aux");
+    ok (str && !strcmp (str, "val"),
+        "wait_msg_aux_get works and returns correct value");
+    flux_msg_destroy (msg);
     wait_destroy (w);
     ok (count == 0,
         "wait_destroy didn't run callback");

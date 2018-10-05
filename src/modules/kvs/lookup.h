@@ -35,14 +35,10 @@ lookup_t *lookup_create (struct cache *cache,
                          uint32_t rolemask,
                          uint32_t userid,
                          int flags,
-                         flux_t *h,
-                         void *aux);
+                         flux_t *h);
 
 /* Destroy a lookup handle */
 void lookup_destroy (lookup_t *lh);
-
-/* Determine if lookup handle valid */
-bool lookup_validate (lookup_t *lh);
 
 /* Get errnum, should be checked after lookup() returns true to see if
  * an error occurred or not */
@@ -83,9 +79,6 @@ int lookup_get_current_epoch (lookup_t *lh);
  * Convenient if replaying RPC and don't have it presently.
  */
 const char *lookup_get_namespace (lookup_t *lh);
-
-/* Get auxiliarry data set by user in lookup_create() */
-void *lookup_get_aux_data (lookup_t *lh);
 
 /* Set a new current epoch.  Convenience on RPC replays and epoch may
  * be new */

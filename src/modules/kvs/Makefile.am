@@ -25,8 +25,6 @@ kvs_la_SOURCES = \
 	treq.c \
 	kvstxn.h \
 	kvstxn.c \
-	msg_cb_handler.h \
-	msg_cb_handler.c \
 	kvsroot.h \
 	kvsroot.c
 
@@ -43,7 +41,6 @@ TESTS = \
 	test_treq.t \
 	test_kvstxn.t \
 	test_kvs_util.t \
-	test_msg_cb_handler.t \
 	test_kvsroot.t
 
 test_ldadd = \
@@ -67,7 +64,6 @@ test_waitqueue_t_SOURCES = test/waitqueue.c
 test_waitqueue_t_CPPFLAGS = $(test_cppflags)
 test_waitqueue_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -76,7 +72,6 @@ test_cache_t_CPPFLAGS = $(test_cppflags)
 test_cache_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -86,7 +81,6 @@ test_lookup_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvsroot.o \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/treq.o \
@@ -109,7 +103,6 @@ test_kvstxn_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvsroot.o \
 	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -117,12 +110,6 @@ test_kvs_util_t_SOURCES = test/kvs_util.c
 test_kvs_util_t_CPPFLAGS = $(test_cppflags)
 test_kvs_util_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
-	$(test_ldadd)
-
-test_msg_cb_handler_t_SOURCES = test/msg_cb_handler.c
-test_msg_cb_handler_t_CPPFLAGS = $(test_cppflags)
-test_msg_cb_handler_t_LDADD = \
-	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(test_ldadd)
 
 test_kvsroot_t_SOURCES = test/kvsroot.c
@@ -133,6 +120,5 @@ test_kvsroot_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/treq.o \
-	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)

@@ -48,7 +48,6 @@
 #include "waitqueue.h"
 #include "cache.h"
 #include "kvs_util.h"
-#include "msg_cb_handler.h"
 
 #include "lookup.h"
 #include "treq.h"
@@ -342,8 +341,7 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
 static void getroot_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    msg_cb_handler_t *mcb;
-    const flux_msg_t *msg;
+    flux_msg_t *msg = NULL;
     const char *namespace;
     int rootseq, flags;
     uint32_t owner;
@@ -351,10 +349,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
     struct kvsroot *root;
     int save_errno;
 
-    mcb = flux_future_aux_get (f, "handler");
-    assert (mcb);
-
-    msg = msg_cb_handler_get_msgcopy (mcb);
+    msg = flux_future_aux_get (f, "msg");
     assert (msg);
 
     if (flux_request_unpack (msg, NULL, "{ s:s }",
@@ -403,7 +398,11 @@ static void getroot_completion (flux_future_t *f, void *arg)
     if (!root->remove)
         setroot (ctx, root, ref, rootseq);
 
-    msg_cb_handler_call (mcb);
+    /* flux_requeue_nocopy takes ownership of 'msg', no need to destroy */
+    if (flux_requeue_nocopy (ctx->h, msg, FLUX_RQ_HEAD) < 0) {
+        flux_log_error (ctx->h, "%s: flux_requeue_nocopy", __FUNCTION__);
+        goto error;
+    }
 
     flux_future_destroy (f);
     return;
@@ -411,6 +410,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
 error:
     if (flux_respond (ctx->h, msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    flux_msg_destroy (msg);
     flux_future_destroy (f);
 }
 
@@ -418,11 +418,11 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                                  const char *namespace,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
-                                 void *arg,
+                                 lookup_t *lh,
                                  flux_msg_handler_f cb)
 {
     flux_future_t *f = NULL;
-    msg_cb_handler_t *mcb = NULL;
+    flux_msg_t *msgcpy = NULL;
     int saved_errno;
 
     if (!(f = flux_rpc_pack (ctx->h, "kvs.getroot", FLUX_NODEID_UPSTREAM, 0,
@@ -430,17 +430,22 @@ static int getroot_request_send (kvs_ctx_t *ctx,
                              "namespace", namespace)))
         goto error;
 
-    if (!(mcb = msg_cb_handler_create (ctx->h, mh, msg, arg, cb))) {
-        flux_log_error (ctx->h, "%s: msg_cb_handler_create", __FUNCTION__);
+    if (!(msgcpy = flux_msg_copy (msg, true))) {
+        flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
         goto error;
     }
 
-    if (flux_future_aux_set (f, "handler", mcb,
-                             (flux_free_f)msg_cb_handler_destroy) < 0) {
+    if (lh
+        && flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
+        goto error;
+    }
+
+    /* we will manage destruction of the 'msg' on errors */
+    if (flux_future_aux_set (f, "msg", msgcpy, NULL) < 0) {
         flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
-    mcb = NULL;                 /* owned by future now */
 
     if (flux_future_then (f, -1., getroot_completion, ctx) < 0)
         goto error;
@@ -448,7 +453,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
     return 0;
 error:
     saved_errno = errno;
-    msg_cb_handler_destroy (mcb);
+    flux_msg_destroy (msgcpy);
     flux_future_destroy (f);
     errno = saved_errno;
     return -1;
@@ -457,7 +462,7 @@ error:
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
                                 flux_msg_handler_t *mh,
                                 const flux_msg_t *msg,
-                                void *arg,
+                                lookup_t *lh,
                                 flux_msg_handler_f cb,
                                 bool *stall)
 {
@@ -471,7 +476,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
             return NULL;
         }
         else {
-            if (getroot_request_send (ctx, namespace, mh, msg, arg, cb) < 0) {
+            if (getroot_request_send (ctx, namespace, mh, msg, lh, cb) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
@@ -493,7 +498,6 @@ static struct kvsroot *getroot_namespace_prefix (kvs_ctx_t *ctx,
                                                  const char *namespace,
                                                  flux_msg_handler_t *mh,
                                                  const flux_msg_t *msg,
-                                                 void *arg,
                                                  flux_msg_handler_f cb,
                                                  bool *stall,
                                                  json_t *ops,
@@ -524,7 +528,7 @@ static struct kvsroot *getroot_namespace_prefix (kvs_ctx_t *ctx,
                           ns_prefix ? ns_prefix : namespace,
                           mh,
                           msg,
-                          arg,
+                          NULL,
                           cb,
                           stall)))
         goto done;
@@ -1274,7 +1278,7 @@ static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
 static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    kvs_ctx_t *ctx = NULL;
+    kvs_ctx_t *ctx = arg;
     int flags;
     const char *namespace;
     const char *key;
@@ -1287,11 +1291,10 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int rc = -1;
     int ret;
 
-    /* if bad lh, then first time rpc and not a replay */
-    if (lookup_validate (arg) == false) {
+    /* if lookup_handle exists in msg as aux data, is a replay */
+    lh = flux_msg_aux_get (msg, "lookup_handle");
+    if (!lh) {
         uint32_t rolemask, userid;
-
-        ctx = arg;
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:s s:i }",
                                  "key", &key,
@@ -1329,23 +1332,17 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   rolemask,
                                   userid,
                                   flags,
-                                  h,
-                                  ctx)))
+                                  h)))
             goto done;
     }
     else {
         int err;
-
-        lh = arg;
 
         /* error in prior load(), waited for in flight rpcs to complete */
         if ((err = lookup_get_aux_errnum (lh))) {
             errno = err;
             goto done;
         }
-
-        ctx = lookup_get_aux_data (lh);
-        assert (ctx);
 
         ret = lookup_set_current_epoch (lh, ctx->epoch);
         assert (ret == 0);
@@ -1373,8 +1370,13 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
+        if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
                                               lookup_request_cb)))
+            goto done;
+
+        /* do not destroy lookup_handle on message destruction, we
+         * manage it in here */
+        if (wait_msg_aux_set (wait, "lookup_handle", lh, NULL) < 0)
             goto done;
 
         cbd.ctx = ctx;
@@ -1425,7 +1427,7 @@ stall:
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    kvs_ctx_t *ctx = NULL;
+    kvs_ctx_t *ctx = arg;
     json_t *oval = NULL;
     json_t *val = NULL;
     flux_msg_t *cpy = NULL;
@@ -1442,11 +1444,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int rc = -1;
     int saved_errno, ret;
 
-    /* if bad lh, then first time rpc and not a replay */
-    if (lookup_validate (arg) == false) {
+    /* if lookup_handle exists in msg as aux data, is a replay */
+    lh = flux_msg_aux_get (msg, "lookup_handle");
+    if (!lh) {
         uint32_t rolemask, userid;
-
-        ctx = arg;
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:s s:o s:i }",
                                  "key", &key,
@@ -1469,23 +1470,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   rolemask,
                                   userid,
                                   flags,
-                                  h,
-                                  ctx)))
+                                  h)))
             goto done;
     }
     else {
         int err;
-
-        lh = arg;
 
         /* error in prior load(), waited for in flight rpcs to complete */
         if ((err = lookup_get_aux_errnum (lh))) {
             errno = err;
             goto done;
         }
-
-        ctx = lookup_get_aux_data (lh);
-        assert (ctx);
 
         ret = lookup_set_current_epoch (lh, ctx->epoch);
         assert (ret == 0);
@@ -1514,8 +1509,13 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
+        if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
                                               watch_request_cb)))
+            goto done;
+
+        /* do not destroy lookup_handle on message destruction, we
+         * manage it in here */
+        if (wait_msg_aux_set (wait, "lookup_handle", lh, NULL) < 0)
             goto done;
 
         cbd.ctx = ctx;
@@ -1834,7 +1834,6 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                            namespace,
                                            mh,
                                            msg,
-                                           ctx,
                                            commit_request_cb,
                                            &stall,
                                            ops,
@@ -2022,7 +2021,6 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                            namespace,
                                            mh,
                                            msg,
-                                           ctx,
                                            fence_request_cb,
                                            &stall,
                                            ops,
@@ -2134,7 +2132,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace, mh, msg, ctx, sync_request_cb,
+    if (!(root = getroot (ctx, namespace, mh, msg, NULL, sync_request_cb,
                           &stall))) {
         if (stall)
             goto stall;
@@ -2198,8 +2196,8 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * first.
          */
         bool stall = false;
-        if (!(root = getroot (ctx, namespace, mh, msg, ctx, getroot_request_cb,
-                              &stall))) {
+        if (!(root = getroot (ctx, namespace, mh, msg, NULL,
+                              getroot_request_cb, &stall))) {
             if (stall)
                 goto done;
             goto error;

@@ -15,8 +15,6 @@
 #include "src/modules/kvs/kvs_util.h"
 #include "src/common/libutil/blobref.h"
 
-int aux_global;
-
 struct lookup_ref_data
 {
     const char *ref;
@@ -162,11 +160,8 @@ void basic_api (void)
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ,
-                             NULL,
-                             &aux_global)) != NULL,
+                             NULL)) != NULL,
         "lookup_create works");
-    ok (lookup_validate (lh) == true,
-        "lookup_validate works");
     ok (lookup_get_current_epoch (lh) == 42,
         "lookup_get_current_epoch works");
     ok ((tmp = lookup_get_namespace (lh)) != NULL,
@@ -179,8 +174,6 @@ void basic_api (void)
         "lookup_set_current_epoch works");
     ok (lookup_get_current_epoch (lh) == 43,
         "lookup_get_current_epoch works");
-    ok (lookup_get_aux_data (lh) == &aux_global,
-        "lookup_get_aux_data returns correct aux pointer");
     ok (lookup_get_aux_errnum (lh) == 0,
         "lookup_get_aux_errnum returns no error");
     ok (lookup_set_aux_errnum (lh, EINVAL) == EINVAL,
@@ -209,7 +202,6 @@ void basic_api_errors (void)
                        FLUX_ROLE_OWNER,
                        0,
                        0,
-                       NULL,
                        NULL) == NULL,
         "lookup_create fails on bad input");
 
@@ -228,7 +220,6 @@ void basic_api_errors (void)
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create works");
 
@@ -239,8 +230,6 @@ void basic_api_errors (void)
     ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails b/c lookup not yet started");
 
-    ok (lookup_validate (NULL) == false,
-        "lookup_validate fails on NULL pointer");
     ok (lookup (NULL) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on NULL pointer");
     ok (lookup_get_errnum (NULL) == EINVAL,
@@ -255,8 +244,6 @@ void basic_api_errors (void)
         "lookup_get_current_epoch fails on NULL pointer");
     ok (lookup_get_namespace (NULL) == NULL,
         "lookup_get_namespace fails on NULL pointer");
-    ok (lookup_get_aux_data (NULL) == NULL,
-        "lookup_get_aux_data fails on NULL pointer");
     ok (lookup_set_current_epoch (NULL, 42) < 0,
         "lookup_set_current_epoch fails on NULL pointer");
     /* lookup_destroy ok on NULL pointer */
@@ -266,8 +253,6 @@ void basic_api_errors (void)
 
     /* Now lh destroyed */
 
-    ok (lookup_validate (lh) == false,
-        "lookup_validate fails on bad pointer");
     ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on bad pointer");
     ok (lookup_get_errnum (lh) == EINVAL,
@@ -282,8 +267,6 @@ void basic_api_errors (void)
         "lookup_get_current_epoch fails on bad pointer");
     ok (lookup_get_namespace (lh) == NULL,
         "lookup_get_namespace fails on bad pointer");
-    ok (lookup_get_aux_data (lh) == NULL,
-        "lookup_get_aux_data fails on bad pointer");
     ok (lookup_set_current_epoch (lh, 42) < 0,
         "lookup_set_current_epoch fails on bad pointer");
     /* lookup_destroy ok on bad pointer */
@@ -482,7 +465,6 @@ void lookup_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on root, no flags, works");
     check_error (lh, EISDIR, "root no flags");
@@ -497,7 +479,6 @@ void lookup_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_READDIR, works");
     check_value (lh, root, "root w/ FLUX_KVS_READDIR");
@@ -512,7 +493,6 @@ void lookup_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_TREEOBJ, works");
     test = treeobj_create_dirref (root_ref);
@@ -529,7 +509,6 @@ void lookup_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_READDIR, bad root_ref, should EINVAL");
     check_error (lh, EINVAL, "root w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
@@ -638,7 +617,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref");
     check_value (lh, dirref, "lookup dirref");
@@ -653,7 +631,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.valref");
     test = treeobj_create_val ("abcd", 4);
@@ -674,7 +651,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref.valref_with_dirref");
     check_treeobj_val_result (lh, "lookup dirref.valref_with_dirref");
@@ -689,7 +665,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on valref_multi");
     test = treeobj_create_val ("abcdefgh", 8);
@@ -710,7 +685,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref.valref_multi_with_dirref");
     check_treeobj_val_result (lh, "lookup dirref.valref_multi_with_dirref");
@@ -725,7 +699,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.val");
     test = treeobj_create_val ("foo", 3);
@@ -742,7 +715,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.dir");
     check_value (lh, dir, "lookup dirref.dir");
@@ -757,7 +729,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.symlink");
     test = treeobj_create_symlink ("baz");
@@ -774,7 +745,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref (treeobj)");
     test = treeobj_create_dirref (dirref_ref);
@@ -791,7 +761,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.valref (treeobj)");
     test = treeobj_create_valref (valref_ref);
@@ -808,7 +777,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.val (treeobj)");
     test = treeobj_create_val ("foo", 3);
@@ -825,7 +793,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.dir (treeobj)");
     check_value (lh, dir, "lookup dirref.dir treeobj");
@@ -840,7 +807,6 @@ void lookup_basic (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on path dirref.symlink (treeobj)");
     test = treeobj_create_symlink ("baz");
@@ -931,7 +897,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on bad path in path");
     check_value (lh, NULL, "lookup bad path");
@@ -947,7 +912,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val in path");
     check_value (lh, NULL, "lookup val in path");
@@ -963,7 +927,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on valref in path");
     check_value (lh, NULL, "lookup valref in path");
@@ -978,7 +941,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dir in path");
     check_error (lh, ENOTRECOVERABLE, "lookup dir in path");
@@ -993,7 +955,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on link loop");
     check_error (lh, ELOOP, "lookup infinite links");
@@ -1008,7 +969,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref");
     check_error (lh, EINVAL, "lookup dirref, expecting link");
@@ -1023,7 +983,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dir");
     check_error (lh, EINVAL, "lookup dir, expecting link");
@@ -1038,7 +997,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on valref");
     check_error (lh, EINVAL, "lookup valref, expecting link");
@@ -1053,7 +1011,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val");
     check_error (lh, EINVAL, "lookup val, expecting link");
@@ -1068,7 +1025,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref");
     check_error (lh, EISDIR, "lookup dirref, not expecting dirref");
@@ -1083,7 +1039,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dir");
     check_error (lh, EISDIR, "lookup dir, not expecting dir");
@@ -1098,7 +1053,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on valref");
     check_error (lh, ENOTDIR, "lookup valref, expecting dir");
@@ -1113,7 +1067,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val");
     check_error (lh, ENOTDIR, "lookup val, expecting dir");
@@ -1128,7 +1081,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK | FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlink");
     check_error (lh, ENOTDIR, "lookup symlink, expecting dir");
@@ -1143,7 +1095,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref_bad");
     check_error (lh, ENOTRECOVERABLE, "lookup dirref_bad");
@@ -1159,7 +1110,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref_bad, in middle of path");
     check_error (lh, ENOTRECOVERABLE, "lookup dirref_bad, in middle of path");
@@ -1174,7 +1124,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on bad root_ref");
     check_error (lh, EINVAL, "lookup bad root_ref");
@@ -1189,7 +1138,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref_multi");
     check_error (lh, ENOTRECOVERABLE, "lookup dirref_multi");
@@ -1205,7 +1153,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref_multi, part of path");
     check_error (lh, ENOTRECOVERABLE, "lookup dirref_multi, part of path");
@@ -1224,7 +1171,6 @@ void lookup_errors (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on bad root_ref for double call test");
     ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
@@ -1275,7 +1221,6 @@ void lookup_security (void) {
                              FLUX_ROLE_OWNER,
                              5,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val with rolemask owner and valid owner");
     test = treeobj_create_val ("foo", 3);
@@ -1291,7 +1236,6 @@ void lookup_security (void) {
                              FLUX_ROLE_USER,
                              5,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val with rolemask user and valid owner");
     test = treeobj_create_val ("foo", 3);
@@ -1307,7 +1251,6 @@ void lookup_security (void) {
                              FLUX_ROLE_USER,
                              6,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner");
@@ -1322,7 +1265,6 @@ void lookup_security (void) {
                              FLUX_ROLE_USER,
                              6,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on val with rolemask user and invalid owner w/ root_ref");
     test = treeobj_create_val ("foo", 3);
@@ -1338,7 +1280,6 @@ void lookup_security (void) {
                              FLUX_ROLE_OWNER,
                              6,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on ns:altnamespace/val with rolemask owner and valid owner");
     test = treeobj_create_val ("foo", 3);
@@ -1354,7 +1295,6 @@ void lookup_security (void) {
                              FLUX_ROLE_OWNER,
                              7,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on ns:altnamespace/val with rolemask owner and invalid owner");
     test = treeobj_create_val ("foo", 3);
@@ -1370,7 +1310,6 @@ void lookup_security (void) {
                              FLUX_ROLE_USER,
                              6,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on ns:altnamespace/val with rolemask user and valid owner");
     test = treeobj_create_val ("foo", 3);
@@ -1386,7 +1325,6 @@ void lookup_security (void) {
                              FLUX_ROLE_USER,
                              7,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on ns:altnamespace/val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on ns:altnamespace/val with rolemask user and invalid owner");
@@ -1491,7 +1429,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to val via two links");
     test = treeobj_create_val ("foo", 3);
@@ -1508,7 +1445,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to val");
     test = treeobj_create_val ("foo", 3);
@@ -1525,7 +1461,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to valref");
     test = treeobj_create_val ("abcd", 4);
@@ -1542,7 +1477,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to dir");
     check_value (lh, dir, "dirref1.link2dirref.dir");
@@ -1557,7 +1491,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to dirref");
     check_value (lh, dirref3, "dirref1.link2dirref.dirref");
@@ -1572,7 +1505,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to symlink");
     test = treeobj_create_symlink ("dirref2.val");
@@ -1589,7 +1521,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to val (last part path)");
     test = treeobj_create_val ("foo", 3);
@@ -1606,7 +1537,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to valref (last part path)");
     test = treeobj_create_val ("abcd", 4);
@@ -1623,7 +1553,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to dir (last part path)");
     check_value (lh, dir, "dirref1.link2dir");
@@ -1638,7 +1567,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to dirref (last part path)");
     check_value (lh, dirref2, "dirref1.link2dirref");
@@ -1653,7 +1581,6 @@ void lookup_links (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READLINK,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create link to symlink (last part path)");
     test = treeobj_create_symlink ("dirref2.symlink");
@@ -1723,7 +1650,6 @@ void lookup_alt_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create val w/ dirref1 root_ref");
     test = treeobj_create_val ("foo", 3);
@@ -1740,7 +1666,6 @@ void lookup_alt_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create val w/ dirref2 root_ref");
     test = treeobj_create_val ("bar", 3);
@@ -1809,7 +1734,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlinkroot, no flags, works");
     check_error (lh, EISDIR, "symlinkroot no flags");
@@ -1824,7 +1748,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, works");
     check_value (lh, root, "symlinkroot w/ FLUX_KVS_READDIR");
@@ -1839,7 +1762,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on dirref.symlinkroot w/ flag = FLUX_KVS_READDIR, works");
     check_value (lh, root, "dirref.symlinkroot w/ FLUX_KVS_READDIR");
@@ -1855,7 +1777,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_TREEOBJ, works");
     test = treeobj_create_symlink (".");
@@ -1871,7 +1792,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlinkroot.val, works");
     test = treeobj_create_val ("foo", 3);
@@ -1888,7 +1808,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, and alt root_ref, works");
     check_value (lh, dirref, "symlinkroot w/ FLUX_KVS_READDIR, and alt root_ref");
@@ -1903,7 +1822,6 @@ void lookup_root_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, bad root_ref, should EINVAL");
     check_error (lh, EINVAL, "symlinkroot w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
@@ -1961,7 +1879,6 @@ void lookup_namespace_prefix (void) {
                        FLUX_ROLE_OWNER,
                        0,
                        0,
-                       NULL,
                        NULL) == NULL
         && errno == EINVAL,
         "lookup_create fails with EINVAL on namespace prefix and no key suffix");
@@ -1975,7 +1892,6 @@ void lookup_namespace_prefix (void) {
                        FLUX_ROLE_OWNER,
                        0,
                        0,
-                       NULL,
                        NULL) == NULL
         && errno == EINVAL,
         "lookup_create fails with EINVAL on bad namespace prefix");
@@ -1989,7 +1905,6 @@ void lookup_namespace_prefix (void) {
                        FLUX_ROLE_OWNER,
                        0,
                        0,
-                       NULL,
                        NULL) == NULL
         && errno == EINVAL,
         "lookup_create fails with EINVAL on namespace chains");
@@ -2003,7 +1918,6 @@ void lookup_namespace_prefix (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create val on namespace foo");
     test = treeobj_create_val ("foo", 3);
@@ -2019,7 +1933,6 @@ void lookup_namespace_prefix (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create val on namespace bar");
     test = treeobj_create_val ("bar", 3);
@@ -2035,7 +1948,6 @@ void lookup_namespace_prefix (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create . on namespace foo");
     test = treeobj_create_dirref (root_ref1);
@@ -2051,7 +1963,6 @@ void lookup_namespace_prefix (void) {
                        FLUX_ROLE_OWNER,
                        0,
                        0,
-                       NULL,
                        NULL) == NULL
         && errno == EINVAL,
         "lookup_create fails with EINVAL on namespace prefix and root_ref");
@@ -2066,7 +1977,6 @@ void lookup_namespace_prefix (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create val on namespace foo with root_ref");
     test = treeobj_create_val ("foo", 3);
@@ -2138,7 +2048,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2BAD on namespace A");
     check_error (lh, EINVAL, "symlink2BAD on namespace A");
@@ -2152,7 +2061,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2chain on namespace A");
     check_error (lh, EINVAL, "symlink2chain on namespace A");
@@ -2166,7 +2074,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2A.val on namespace A");
     test = treeobj_create_val ("1", 1);
@@ -2182,7 +2089,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2B.val on namespace A");
     test = treeobj_create_val ("2", 1);
@@ -2198,7 +2104,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2A-val on namespace A");
     test = treeobj_create_val ("1", 1);
@@ -2214,7 +2119,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2B-val on namespace A");
     test = treeobj_create_val ("2", 1);
@@ -2230,7 +2134,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2A on namespace A, readdir");
     check_value (lh, rootA, "symlink2A on namespace A, readdir");
@@ -2244,7 +2147,6 @@ void lookup_namespace_prefix_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink2B on namespace A, readdir");
     check_value (lh, rootB, "symlink2B on namespace A, readdir");
@@ -2317,7 +2219,6 @@ void lookup_namespace_prefix_symlink_security (void) {
                              FLUX_ROLE_OWNER,
                              1000,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlink2B.val with rolemask owner");
     test = treeobj_create_val ("2", 1);
@@ -2333,7 +2234,6 @@ void lookup_namespace_prefix_symlink_security (void) {
                              FLUX_ROLE_OWNER,
                              1000,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlink2C.val with rolemask owner");
     test = treeobj_create_val ("3", 1);
@@ -2349,7 +2249,6 @@ void lookup_namespace_prefix_symlink_security (void) {
                              FLUX_ROLE_USER,
                              1000,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlink2B.val with rolemask user and valid owner");
     test = treeobj_create_val ("2", 1);
@@ -2365,7 +2264,6 @@ void lookup_namespace_prefix_symlink_security (void) {
                              FLUX_ROLE_USER,
                              1000,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create on symlink2C.val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on symlink2C.val with rolemask user and invalid owner");
@@ -2424,7 +2322,6 @@ void lookup_stall_namespace (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest");
     ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
@@ -2451,7 +2348,6 @@ void lookup_stall_namespace (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest #2");
     test = treeobj_create_val ("foo", 3);
@@ -2469,7 +2365,6 @@ void lookup_stall_namespace (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest");
     ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
@@ -2496,7 +2391,6 @@ void lookup_stall_namespace (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest #2");
     test = treeobj_create_val ("bar", 3);
@@ -2514,7 +2408,6 @@ void lookup_stall_namespace (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest on root .");
     ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
@@ -2572,7 +2465,6 @@ void lookup_stall_ref_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest \".\"");
     check_stall (lh, EAGAIN, 1, root_ref, "root \".\" stall");
@@ -2592,7 +2484,6 @@ void lookup_stall_ref_root (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_READDIR,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest \".\"");
     check_value (lh, root, "root \".\" #2");
@@ -2709,7 +2600,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.val");
     check_stall (lh, EAGAIN, 1, root_ref, "dirref1.val stall #1");
@@ -2736,7 +2626,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create dirref1.val");
     test = treeobj_create_val ("foo", 3);
@@ -2753,7 +2642,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest symlink.val");
     check_stall (lh, EAGAIN, 1, dirref2_ref, "symlink.val stall");
@@ -2775,7 +2663,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create symlink.val");
     test = treeobj_create_val ("bar", 3);
@@ -2792,7 +2679,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valref");
     check_stall (lh, EAGAIN, 1, valref1_ref, "dirref1.valref stall");
@@ -2814,7 +2700,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valref");
     test = treeobj_create_val ("abcd", 4);
@@ -2831,7 +2716,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valref_multi");
     /* should only be one missing ref, as we loaded one of the refs in
@@ -2855,7 +2739,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valref");
     test = treeobj_create_val ("abcdefgh", 8);
@@ -2872,7 +2755,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valref_multi2");
     /* should two missing refs, as we have not loaded either here */
@@ -2896,7 +2778,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valref");
     test = treeobj_create_val ("ijklmnop", 8);
@@ -2913,7 +2794,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valrefmisc");
     /* don't call check_stall, this is primarily to test if callback
@@ -2936,7 +2816,6 @@ void lookup_stall_ref (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valrefmisc_multi");
     /* don't call check_stall, this is primarily to test if callback
@@ -3014,7 +2893,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1");
@@ -3043,7 +2921,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2");
@@ -3070,7 +2947,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
@@ -3105,7 +2981,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_USER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1");
@@ -3137,7 +3012,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_USER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2");
@@ -3168,7 +3042,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_USER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
@@ -3206,7 +3079,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref w/ root_ref");
 
@@ -3248,7 +3120,6 @@ void lookup_stall_namespace_removed (void) {
                              FLUX_ROLE_USER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref.valref w/ root_ref & role user ");
 
@@ -3339,7 +3210,6 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest on symlink.val");
     ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
@@ -3375,7 +3245,6 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create stalltest #2");
     test = treeobj_create_val ("2", 1);

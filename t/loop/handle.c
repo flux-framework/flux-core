@@ -43,7 +43,7 @@ int main (int argc, char *argv[])
     flux_msg_t *msg;
     const char *topic;
 
-    plan (33);
+    plan (46);
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
                   flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
@@ -169,6 +169,62 @@ int main (int argc, char *argv[])
     ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0,
         "flux_requeue bar TAIL works");
     flux_msg_destroy (msg);
+    ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
+       "flux_pollevents shows FLUX_POLLIN set after requeue");
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
+        && flux_request_decode (msg, &topic, NULL) == 0
+        && !strcmp (topic, "foo"),
+        "flux_recv got foo");
+    flux_msg_destroy (msg);
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
+        && flux_request_decode (msg, &topic, NULL) == 0
+        && !strcmp (topic, "bar"),
+        "flux_recv got bar");
+    flux_msg_destroy (msg);
+    ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
+       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+
+    /* flux_requeue_nocopy bad flags */
+    if (!(msg = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("couldn't encode request");
+    errno = 0;
+    ok (flux_requeue_nocopy (h, msg, 0) < 0 && errno == EINVAL,
+        "flux_requeue_nocopy fails with EINVAL if HEAD|TAIL unspecified");
+    flux_msg_destroy (msg);
+
+    /* flux_requeue_nocopy: add foo, bar to HEAD; then receive bar, foo */
+    if (!(msg = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("couldn't encode request");
+    ok (flux_requeue_nocopy (h, msg, FLUX_RQ_HEAD) == 0,
+        "flux_requeue_nocopy foo HEAD works");
+    if (!(msg = flux_request_encode ("bar", NULL)))
+        BAIL_OUT ("couldn't encode request");
+    ok (flux_requeue_nocopy (h, msg, FLUX_RQ_HEAD) == 0,
+        "flux_requeue_nocopy bar HEAD works");
+    ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
+       "flux_pollevents shows FLUX_POLLIN set after requeue");
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
+        && flux_request_decode (msg, &topic, NULL) == 0
+        && !strcmp (topic, "bar"),
+        "flux_recv got bar");
+    flux_msg_destroy (msg);
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
+        && flux_request_decode (msg, &topic, NULL) == 0
+        && !strcmp (topic, "foo"),
+        "flux_recv got foo");
+    flux_msg_destroy (msg);
+    ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
+       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+
+    /* flux_requeue_nocopy: add foo, bar to TAIL; then receive foo, bar */
+    if (!(msg = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("couldn't encode request");
+    ok (flux_requeue_nocopy (h, msg, FLUX_RQ_TAIL) == 0,
+        "flux_requeue_nocopy foo TAIL works");
+    if (!(msg = flux_request_encode ("bar", NULL)))
+        BAIL_OUT ("couldn't encode request");
+    ok (flux_requeue_nocopy (h, msg, FLUX_RQ_TAIL) == 0,
+        "flux_requeue_nocopy bar TAIL works");
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL

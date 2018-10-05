@@ -584,7 +584,6 @@ void verify_value (struct cache *cache,
                              FLUX_ROLE_OWNER,
                              0,
                              0,
-                             NULL,
                              NULL)) != NULL,
         "lookup_create key %s", key);
 
