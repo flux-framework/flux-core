@@ -168,13 +168,14 @@ inval:
 
 static int hashtostr (struct blobhash *bh,
                       const void *hash, int len,
-                      blobref_t blobref)
+                      char *blobref, int blobref_len)
 {
-    int size = sizeof (blobref_t);
     uint8_t *ihash = (uint8_t *)hash;
     int i;
 
-    if (len != bh->hashlen || size < bh->hashlen*2 + strlen (bh->name) + 2) {
+    if (len != bh->hashlen
+        || !blobref
+        || blobref_len < bh->hashlen*2 + strlen (bh->name) + 2) {
         errno = EINVAL;
         return -1;
     }
@@ -191,7 +192,7 @@ static int hashtostr (struct blobhash *bh,
 
 int blobref_hashtostr (const char *hashtype,
                        const void *hash, int len,
-                       blobref_t blobref)
+                       void *blobref, int blobref_len)
 {
     struct blobhash *bh;
 
@@ -199,13 +200,13 @@ int blobref_hashtostr (const char *hashtype,
         errno = EINVAL;
         return -1;
     }
-    return hashtostr (bh, hash, len, blobref);
+    return hashtostr (bh, hash, len, blobref, blobref_len);
 }
 
 
 int blobref_hash (const char *hashtype,
                   const void *data, int len,
-                  blobref_t blobref)
+                  void *blobref, int blobref_len)
 {
     struct blobhash *bh;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
@@ -215,7 +216,7 @@ int blobref_hash (const char *hashtype,
         return -1;
     }
     bh->hashfun (data, len, hash, bh->hashlen);
-    return hashtostr (bh, hash, bh->hashlen, blobref);
+    return hashtostr (bh, hash, bh->hashlen, blobref, blobref_len);
 }
 
 int blobref_validate (const char *blobref)

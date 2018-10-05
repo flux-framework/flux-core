@@ -18,7 +18,7 @@ int main (int argc, char *argv[])
     uint8_t *data;
     int size;
     char *hashtype;
-    blobref_t blobref;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
 
     if (argc != 2) {
         fprintf (stderr, "Usage: cat file | blobref hashtype\n");
@@ -29,7 +29,7 @@ int main (int argc, char *argv[])
     if ((size = read_all (STDIN_FILENO, (void **)&data)) < 0)
         log_err_exit ("read");
 
-    if (blobref_hash (hashtype, data, size, blobref) < 0)
+    if (blobref_hash (hashtype, data, size, blobref, sizeof (blobref)) < 0)
         log_err_exit ("blobref_hash");
     printf ("%s\n", blobref);
     return 0;

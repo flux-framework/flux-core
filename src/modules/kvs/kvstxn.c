@@ -37,6 +37,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/base64.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
 
@@ -66,7 +67,7 @@ struct kvstxn {
     json_t *names;
     int flags;
     json_t *rootcpy;   /* working copy of root dir */
-    blobref_t newroot;
+    char newroot[BLOBREF_MAX_STRING_SIZE];
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
     int internal_flags;
@@ -251,7 +252,7 @@ void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
 {
     if (kt->state == KVSTXN_STATE_STORE
         || kt->state == KVSTXN_STATE_PRE_FINISHED) {
-        blobref_t ref;
+        char ref[BLOBREF_MAX_STRING_SIZE];
         const void *data;
         int len;
         int ret;
@@ -265,7 +266,7 @@ void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
         ret = cache_entry_get_raw (entry, &data, &len);
         assert (ret == 0);
 
-        blobref_hash (kt->ktm->hash_name, data, len, ref);
+        blobref_hash (kt->ktm->hash_name, data, len, ref, sizeof (ref));
 
         ret = cache_remove_entry (kt->ktm->cache, ref);
         assert (ret == 1);
@@ -289,7 +290,8 @@ static void cleanup_dirty_cache_list (kvstxn_t *kt)
  * entry needs to be flushed to content store
  */
 static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
-                        bool is_raw, blobref_t ref, struct cache_entry **entryp)
+                        bool is_raw, char *ref, int ref_len,
+                        struct cache_entry **entryp)
 {
     struct cache_entry *entry;
     int saved_errno, rc;
@@ -325,7 +327,7 @@ static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
         }
         len = strlen (data);
     }
-    if (blobref_hash (kt->ktm->hash_name, data, len, ref) < 0) {
+    if (blobref_hash (kt->ktm->hash_name, data, len, ref, ref_len) < 0) {
         flux_log_error (kt->ktm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
@@ -376,7 +378,7 @@ static int kvstxn_unroll (kvstxn_t *kt, int current_epoch, json_t *dir)
     json_t *dir_entry;
     json_t *dir_data;
     json_t *ktmp;
-    blobref_t ref;
+    char ref[BLOBREF_MAX_STRING_SIZE];
     int ret;
     struct cache_entry *entry;
     void *iter;
@@ -397,7 +399,7 @@ static int kvstxn_unroll (kvstxn_t *kt, int current_epoch, json_t *dir)
             if (kvstxn_unroll (kt, current_epoch, dir_entry) < 0) /* depth first */
                 return -1;
             if ((ret = store_cache (kt, current_epoch, dir_entry,
-                                    false, ref, &entry)) < 0)
+                                    false, ref, sizeof (ref), &entry)) < 0)
                 return -1;
             if (ret) {
                 if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
@@ -425,7 +427,7 @@ static int kvstxn_unroll (kvstxn_t *kt, int current_epoch, json_t *dir)
             assert (str);
             if (strlen (str) > BLOBREF_MAX_STRING_SIZE) {
                 if ((ret = store_cache (kt, current_epoch, val_data,
-                                        true, ref, &entry)) < 0)
+                                        true, ref, sizeof (ref), &entry)) < 0)
                     return -1;
                 if (ret) {
                     if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
@@ -450,7 +452,7 @@ static int kvstxn_unroll (kvstxn_t *kt, int current_epoch, json_t *dir)
 }
 
 static int kvstxn_val_data_to_cache (kvstxn_t *kt, int current_epoch,
-                                     json_t *val, blobref_t ref)
+                                     json_t *val, char *ref, int ref_len)
 {
     struct cache_entry *entry;
     json_t *val_data;
@@ -460,7 +462,7 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt, int current_epoch,
         return -1;
 
     if ((ret = store_cache (kt, current_epoch, val_data,
-                            true, ref, &entry)) < 0)
+                            true, ref, ref_len, &entry)) < 0)
         return -1;
 
     if (ret) {
@@ -492,7 +494,7 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
             return -1;
     }
     else if (treeobj_is_valref (entry)) {
-        blobref_t ref;
+        char ref[BLOBREF_MAX_STRING_SIZE];
         json_t *cpy;
 
         /* treeobj is valref, so we need to append the new data's
@@ -506,7 +508,8 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
          * sitting in the KVS cache.
          */
 
-        if (kvstxn_val_data_to_cache (kt, current_epoch, dirent, ref) < 0)
+        if (kvstxn_val_data_to_cache (kt, current_epoch, dirent, ref,
+                                      sizeof (ref)) < 0)
             return -1;
 
         if (!(cpy = treeobj_deep_copy (entry)))
@@ -524,17 +527,20 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
     }
     else if (treeobj_is_val (entry)) {
         json_t *ktmp;
-        blobref_t ref1, ref2;
+        char ref1[BLOBREF_MAX_STRING_SIZE];
+        char ref2[BLOBREF_MAX_STRING_SIZE];
 
         /* treeobj entry is val, so we need to convert the treeobj
          * into a valref first.  Then the procedure is basically the
          * same as the treeobj valref case above.
          */
 
-        if (kvstxn_val_data_to_cache (kt, current_epoch, entry, ref1) < 0)
+        if (kvstxn_val_data_to_cache (kt, current_epoch, entry, ref1,
+                                      sizeof (ref1)) < 0)
             return -1;
 
-        if (kvstxn_val_data_to_cache (kt, current_epoch, dirent, ref2) < 0)
+        if (kvstxn_val_data_to_cache (kt, current_epoch, dirent, ref2,
+                                      sizeof (ref2)) < 0)
             return -1;
 
         if (!(ktmp = treeobj_create_valref (ref1)))
@@ -803,7 +809,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
 
 kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
-                                 const blobref_t rootdir_ref)
+                                 const char *rootdir_ref)
 {
     /* Incase user calls kvstxn_process() again */
     if (kt->errnum)
@@ -931,6 +937,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                       kt->rootcpy,
                                       false,
                                       kt->newroot,
+                                      sizeof (kt->newroot),
                                       &entry)) < 0)
             kt->errnum = errno;
         else if (sret

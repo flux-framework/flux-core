@@ -263,7 +263,7 @@ void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
     if (!root || !root_ref)
         return;
 
-    assert (strlen (root_ref) < sizeof (blobref_t));
+    assert (strlen (root_ref) < sizeof (root->ref));
 
     strcpy (root->ref, root_ref);
     root->seq = root_seq;
