@@ -52,8 +52,8 @@
  * For performance, the above actions are batched, so that if job requests
  * arrive within the 'batch_timeout' window, they are combined into one
  * KVS transaction and one event message.  The event message payload
- * contains an array of integer jobids, e.g.
- *   {"ids":[I,I,...]}
+ * contains an array of job objects, e.g.
+ *   {"jobs":[{"id":n, "userid":m},{"id":n, "userid",m},...]}
  *
  * The jobid is returned to the user in response to the "submit" RPC.
  * Responses are sent after the KVS commit for the batch is completed,
@@ -108,7 +108,7 @@ struct batch {
     struct job_ingest_ctx *ctx;
     flux_kvs_txn_t *txn;
     zlist_t *jobs;
-    json_t *idlist;
+    json_t *joblist;
 };
 
 static void job_destroy (struct job *job)
@@ -156,7 +156,7 @@ static void batch_destroy (struct batch *batch)
             while ((job = zlist_pop (batch->jobs)))
                 job_destroy (job);
             zlist_destroy (&batch->jobs);
-            json_decref (batch->idlist);
+            json_decref (batch->joblist);
         }
         free (batch);
         errno = saved_errno;
@@ -177,7 +177,7 @@ static struct batch *batch_create (struct job_ingest_ctx *ctx)
         goto nomem;
     if (!(batch->txn = flux_kvs_txn_create ()))
         goto error;
-    if (!(batch->idlist = json_array ()))
+    if (!(batch->joblist = json_array ()))
         goto nomem;
     batch->ctx = ctx;
     return batch;
@@ -213,7 +213,7 @@ static void batch_event_pub (struct batch *batch)
     flux_future_t *f;
 
     if (!(f = flux_event_publish_pack (h, "job-ingest.submit", 0, "{s:O}",
-                                       "ids", batch->idlist))) {
+                                       "jobs", batch->joblist))) {
         flux_log_error (h, "%s: flux_event_publish_pack", __FUNCTION__);
         goto error;
     }
@@ -324,7 +324,7 @@ static int batch_add_job (struct batch *batch, struct job *job,
 {
     char key[64];
     int saved_errno;
-    json_t *id;
+    json_t *jobentry;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -344,10 +344,12 @@ static int batch_add_job (struct batch *batch, struct job *job,
         goto error;
     if (flux_kvs_txn_pack (batch->txn, 0, key, "i", userid) < 0)
         goto error;
-    if (!(id = json_integer (job->id)))
+
+    if (!(jobentry = json_pack ("{s:I s:i}", "id", job->id,
+                                             "userid", userid)))
         goto nomem;
-    if (json_array_append_new (batch->idlist, id) < 0) {
-        json_decref (id);
+    if (json_array_append_new (batch->joblist, jobentry) < 0) {
+        json_decref (jobentry);
         goto nomem;
     }
     return 0;
