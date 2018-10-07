@@ -34,6 +34,7 @@ BROKER=${FLUX_BUILD_DIR}/src/broker/flux-broker
 FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
 
 test_expect_success 'valgrind reports no new errors on single broker run' '
+	run_timeout 120 \
 	libtool e flux ${VALGRIND} \
 		--tool=memcheck \
 		--leak-check=full \
