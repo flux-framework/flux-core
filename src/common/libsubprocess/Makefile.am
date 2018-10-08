@@ -13,15 +13,10 @@ noinst_LTLIBRARIES = libsubprocess.la
 
 libsubprocess_la_SOURCES = \
 	zio.c \
-	zio.h \
-	subprocess.c \
-	subprocess.h
+	zio.h
 
 
 TESTS = \
-	test_subprocess.t \
-	test_loop.t \
-	test_socketpair.t \
 	test_zio.t
 
 check_PROGRAMS = \
@@ -39,18 +34,6 @@ test_ldadd = \
 test_cppflags = \
 	$(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src/common/libtap
-
-test_subprocess_t_SOURCES = test/subprocess.c
-test_subprocess_t_CPPFLAGS = $(test_cppflags)
-test_subprocess_t_LDADD = $(test_ldadd)
-
-test_socketpair_t_SOURCES = test/socketpair.c
-test_socketpair_t_CPPFLAGS = $(test_cppflags)
-test_socketpair_t_LDADD = $(test_ldadd)
-
-test_loop_t_SOURCES = test/loop.c
-test_loop_t_CPPFLAGS = $(test_cppflags)
-test_loop_t_LDADD = $(test_ldadd)
 
 test_zio_t_SOURCES = test/zio.c
 test_zio_t_CPPFLAGS = $(test_cppflags)
