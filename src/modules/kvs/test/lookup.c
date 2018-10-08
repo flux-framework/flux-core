@@ -256,27 +256,6 @@ void basic_api_errors (void)
 
     lookup_destroy (lh);
 
-    /* Now lh destroyed */
-
-    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
-        "lookup does not segfault on bad pointer");
-    ok (lookup_get_errnum (lh) == EINVAL,
-        "lookup_get_errnum returns EINVAL on bad pointer");
-    ok (lookup_get_value (lh) == NULL,
-        "lookup_get_value fails on bad pointer");
-    ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
-        "lookup_iter_missing_refs fails on bad pointer");
-    ok (lookup_missing_namespace (lh) == NULL,
-        "lookup_missing_namespace fails on bad pointer");
-    ok (lookup_get_current_epoch (lh) < 0,
-        "lookup_get_current_epoch fails on bad pointer");
-    ok (lookup_get_namespace (lh) == NULL,
-        "lookup_get_namespace fails on bad pointer");
-    ok (lookup_set_current_epoch (lh, 42) < 0,
-        "lookup_set_current_epoch fails on bad pointer");
-    /* lookup_destroy ok on bad pointer */
-    lookup_destroy (lh);
-
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
 }

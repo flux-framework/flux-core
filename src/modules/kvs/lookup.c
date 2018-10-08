@@ -49,8 +49,6 @@
  */
 #define SYMLINK_CYCLE_LIMIT 10
 
-#define LOOKUP_MAGIC 0x15151515
-
 typedef struct {
     int depth;
     char *path_copy;            /* for internal parsing, do not use */
@@ -62,8 +60,6 @@ typedef struct {
 } walk_level_t;
 
 struct lookup {
-    int magic;
-
     /* inputs from user */
     struct cache *cache;
     kvsroot_mgr_t *krm;
@@ -563,7 +559,6 @@ lookup_t *lookup_create (struct cache *cache,
         goto cleanup;
     }
 
-    lh->magic = LOOKUP_MAGIC;
     lh->cache = cache;
     lh->krm = krm;
     lh->current_epoch = current_epoch;
@@ -643,21 +638,20 @@ lookup_t *lookup_create (struct cache *cache,
 
 void lookup_destroy (lookup_t *lh)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC) {
+    if (lh) {
         free (lh->namespace);
         free (lh->root_ref);
         free (lh->path);
         json_decref (lh->val);
         free (lh->missing_namespace);
         zlist_destroy (&lh->levels);
-        lh->magic = ~LOOKUP_MAGIC;
         free (lh);
     }
 }
 
 int lookup_get_errnum (lookup_t *lh)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC) {
+    if (lh) {
         if (lh->state == LOOKUP_STATE_FINISHED)
             return lh->errnum;
         if (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
@@ -671,14 +665,14 @@ int lookup_get_errnum (lookup_t *lh)
 
 int lookup_get_aux_errnum (lookup_t *lh)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC)
+    if (lh)
         return lh->aux_errnum;
     return EINVAL;
 }
 
 int lookup_set_aux_errnum (lookup_t *lh, int errnum)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC) {
+    if (lh) {
         lh->aux_errnum = errnum;
         return lh->aux_errnum;
     }
@@ -688,7 +682,6 @@ int lookup_set_aux_errnum (lookup_t *lh, int errnum)
 json_t *lookup_get_value (lookup_t *lh)
 {
     if (lh
-        && lh->magic == LOOKUP_MAGIC
         && lh->state == LOOKUP_STATE_FINISHED
         && lh->errnum == 0)
         return json_incref (lh->val);
@@ -698,7 +691,6 @@ json_t *lookup_get_value (lookup_t *lh)
 int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 {
     if (lh
-        && lh->magic == LOOKUP_MAGIC
         && (lh->state == LOOKUP_STATE_CHECK_ROOT
             || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)) {
@@ -743,7 +735,6 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 const char *lookup_missing_namespace (lookup_t *lh)
 {
    if (lh
-       && lh->magic == LOOKUP_MAGIC
        && (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
            || lh->state == LOOKUP_STATE_WALK)) {
        return lh->missing_namespace;
@@ -754,21 +745,21 @@ const char *lookup_missing_namespace (lookup_t *lh)
 
 int lookup_get_current_epoch (lookup_t *lh)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC)
+    if (lh)
         return lh->current_epoch;
     return -1;
 }
 
 const char *lookup_get_namespace (lookup_t *lh)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC)
+    if (lh)
         return lh->namespace;
     return NULL;
 }
 
 int lookup_set_current_epoch (lookup_t *lh, int epoch)
 {
-    if (lh && lh->magic == LOOKUP_MAGIC) {
+    if (lh) {
         lh->current_epoch = epoch;
         return 0;
     }
@@ -954,7 +945,7 @@ lookup_process_t lookup (lookup_t *lh)
     bool is_replay = false;
     int refcount;
 
-    if (!lh || lh->magic != LOOKUP_MAGIC) {
+    if (!lh) {
         errno = EINVAL;
         return LOOKUP_PROCESS_ERROR;
     }
