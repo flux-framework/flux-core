@@ -8,7 +8,7 @@ SUBDIRS = libtap \
 	  libkvs \
 	  libjsc \
 	  libjob \
-	  libsubprocess \
+	  libzio \
 	  libcompat \
 	  liboptparse \
 	  libidset \
@@ -34,7 +34,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libkz/libkz.la \
-	$(builddir)/libsubprocess/libsubprocess.la \
+	$(builddir)/libzio/libzio.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(LIBMUNGE) $(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \

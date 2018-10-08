@@ -43,7 +43,7 @@
 
 #include "src/common/libcompat/reactor.h"
 #include "src/common/libkz/kz.h"
-#include "src/common/libsubprocess/zio.h"
+#include "src/common/libzio/zio.h"
 
 #include "jansson-lua.h"
 #include "kvs-lua.h"

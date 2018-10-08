@@ -52,7 +52,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/libsubprocess/zio.h"
+#include "src/common/libzio/zio.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libkz/kz.h"
 

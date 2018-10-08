@@ -9,9 +9,9 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	$(ZMQ_CFLAGS)
 
-noinst_LTLIBRARIES = libsubprocess.la
+noinst_LTLIBRARIES = libzio.la
 
-libsubprocess_la_SOURCES = \
+libzio_la_SOURCES = \
 	zio.c \
 	zio.h
 
