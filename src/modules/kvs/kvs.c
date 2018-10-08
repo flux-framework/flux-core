@@ -54,8 +54,6 @@
 #include "kvstxn.h"
 #include "kvsroot.h"
 
-#define KVS_MAGIC 0xdeadbeef
-
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
 const int max_lastuse_age = 5;
@@ -72,7 +70,6 @@ const int max_namespace_age = 1000;
 const bool event_includes_rootdir = true;
 
 typedef struct {
-    int magic;
     struct cache *cache;    /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
     int faults;                 /* for kvs.stats.get, etc. */
@@ -130,7 +127,6 @@ static kvs_ctx_t *getctx (flux_t *h)
             saved_errno = ENOMEM;
             goto error;
         }
-        ctx->magic = KVS_MAGIC;
         if (!(r = flux_get_reactor (h))) {
             saved_errno = errno;
             goto error;
