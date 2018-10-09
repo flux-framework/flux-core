@@ -31,7 +31,8 @@
 #include "job.h"
 
 
-flux_future_t *flux_job_submit (flux_t *h, const char *J, int flags)
+flux_future_t *flux_job_submit (flux_t *h, const char *J, int priority,
+                                int flags)
 {
     flux_future_t *f;
 
@@ -40,8 +41,9 @@ flux_future_t *flux_job_submit (flux_t *h, const char *J, int flags)
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, "job-ingest.submit", FLUX_NODEID_ANY, 0,
-                             "{s:s s:i}",
+                             "{s:s s:i s:i}",
                              "J", J,
+                             "priority", priority,
                              "flags", flags)))
         return NULL;
     return f;

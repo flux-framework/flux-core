@@ -12,7 +12,7 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     errno = 0;
-    ok (flux_job_submit (NULL, NULL, 0) == NULL && errno == EINVAL,
+    ok (flux_job_submit (NULL, NULL, 0, 0) == NULL && errno == EINVAL,
         "flux_job_submit with NULL args fails with EINVAL");
 
     errno = 0;
