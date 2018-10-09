@@ -56,6 +56,9 @@ static struct optparse_option submitbench_opts[] =  {
     { .name = "fanout", .key = 'f', .has_arg = 1, .arginfo = "N",
       .usage = "Run at most N RPCs in parallel",
     },
+    { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
+      .usage = "Set job priority (0-31, default=16)",
+    },
 #if HAVE_FLUX_SECURITY
     { .name = "reuse-signature", .key = 'R', .has_arg = 0,
       .usage = "Sign jobspec once and reuse the result for multiple RPCs",
@@ -178,6 +181,7 @@ struct submitbench_ctx {
     void *jobspec;
     int jobspecsz;
     const char *J;
+    int priority;
 };
 
 /* Read entire file 'name' ("-" for stdin).  Exit program on error.
@@ -263,13 +267,13 @@ void submitbench_check (flux_reactor_t *r, flux_watcher_t *w,
                 log_err_exit ("flux_sign_wrap: %s",
                               flux_security_last_error (ctx->sec));
         }
-        if (!(f = flux_job_submit (ctx->h, ctx->J, ctx->flags)))
+        if (!(f = flux_job_submit (ctx->h, ctx->J, ctx->priority, ctx->flags)))
             log_err_exit ("flux_job_submit");
 #else
         char *cpy = strndup (ctx->jobspec, ctx->jobspecsz);
         if (!cpy)
             log_err_exit ("strndup");
-        if (!(f = flux_job_submit (ctx->h, cpy, ctx->flags)))
+        if (!(f = flux_job_submit (ctx->h, cpy, ctx->priority, ctx->flags)))
             log_err_exit ("flux_job_submit");
         free (cpy);
 #endif
@@ -306,6 +310,7 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     ctx.max_queue_depth = optparse_get_int (p, "fanout", 256);
     ctx.totcount = optparse_get_int (p, "repeat", 1);
     ctx.jobspecsz = read_jobspec (argv[optindex++], &ctx.jobspec);
+    ctx.priority = optparse_get_int (p, "priority", FLUX_JOB_PRIORITY_DEFAULT);
 
     /* Prep/check/idle watchers perform flow control, keeping
      * at most ctx.max_queue_depth RPCs outstanding.
