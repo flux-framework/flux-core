@@ -8,13 +8,13 @@ SUBDIRS = libtap \
 	  libkvs \
 	  libjsc \
 	  libjob \
-	  libsubprocess \
+	  libzio \
 	  libcompat \
 	  liboptparse \
 	  libidset \
 	  libtomlc99 \
 	  libkz \
-          subprocess
+          libsubprocess
 
 if ENABLE_JOBSPEC
 SUBDIRS += libjobspec
@@ -34,7 +34,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libkz/libkz.la \
-	$(builddir)/libsubprocess/libsubprocess.la \
+	$(builddir)/libzio/libzio.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(LIBMUNGE) $(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
@@ -53,7 +53,7 @@ libflux_core_la_LIBADD = \
 	$(builddir)/libkvs/libkvs.la \
 	$(builddir)/libjsc/libjsc.la \
 	$(builddir)/libjob/libjob.la \
-	$(builddir)/subprocess/libsubprocess.la \
+	$(builddir)/libsubprocess/libsubprocess.la \
 	libflux-internal.la
 libflux_core_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-core.map \

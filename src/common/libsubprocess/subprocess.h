@@ -1,348 +1,375 @@
-/*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
- *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
- *  LLNL-CODE-658032 All rights reserved.
+#ifndef _FLUX_CORE_SUBPROCESS_H
+#define _FLUX_CORE_SUBPROCESS_H
+
+#include <flux/core.h>
+
+/*
+ *  flux_cmd_t: An object that defines a command to be run, either
+ *   remotely or as a child of the current process. Includes cmdline
+ *   arguments, environment, and working directory. A flux_cmd_t is
+ *   used to create Flux subprocesses.
+ */
+typedef struct flux_command flux_cmd_t;
+
+/*
+ *  flux_subprocess_t: A subprocess is an instantiation of a command
+ *   as a remote or local process. A subprocess has a state (e.g.
+ *   initialized, starting, running, exited, completed), a PID, and
+ *   a rank if running remotely.
+ */
+typedef struct flux_subprocess flux_subprocess_t;
+
+/*  flux_subprocess_server_t: Handler for a subprocess remote server */
+typedef struct flux_subprocess_server flux_subprocess_server_t;
+
+/*
+ * Subprocess states, on changes, will lead to calls to
+ * on_state_change below.
  *
- *  This file is part of the Flux resource manager framework.
- *  For details, see https://github.com/flux-framework.
+ * Possible state changes:
  *
- *  This program is free software; you can redistribute it and/or modify it
- *  under the terms of the GNU General Public License as published by the Free
- *  Software Foundation; either version 2 of the license, or (at your option)
- *  any later version.
- *
- *  Flux is distributed in the hope that it will be useful, but WITHOUT
- *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
- *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
- *  See also:  http://www.gnu.org/licenses/
-\*****************************************************************************/
-
-#ifndef _SUBPROCESS_H
-#define _SUBPROCESS_H
-
-#include <stdbool.h>
-
-struct subprocess_manager;
-struct subprocess;
-
-typedef enum sm_item {
-    SM_WAIT_FLAGS,
-    SM_FLUX,
-    SM_REACTOR,
-} sm_item_t;
-
-
-/* Supported hook entry points:
+ * init -> started
+ * started -> exec failed
+ * started -> running
+ * running -> exited
+ * any state -> failed
  */
 typedef enum {
-    SUBPROCESS_PRE_EXEC,   /* In child, just before exec(2)                  */
-    SUBPROCESS_POST_FORK,  /* In parent, after fork(2), before child exec(2) */
-    SUBPROCESS_RUNNING,    /* In parent, after child exec(2)                 */
-    SUBPROCESS_STATUS,     /* Any change in status from waitpid(2)           */
-    SUBPROCESS_EXIT,       /* Subprocess has exited and been reaped          */
-    SUBPROCESS_COMPLETE,   /* Subprocess has exited and all I/O complete     */
-    SUBPROCESS_HOOK_COUNT
-} subprocess_hook_t;
-
-/* Prototype for generic subprocess callbacks:
- */
-typedef int (*subprocess_cb_f) (struct subprocess *p);
-
-/* I/O specific callback. Output passed in JSON arg
- */
-typedef int (*subprocess_io_cb_f) (struct subprocess *p, const char *json_str);
+    FLUX_SUBPROCESS_INIT,         /* initial state */
+    FLUX_SUBPROCESS_STARTED,      /* fork() has been issued/requested */
+    FLUX_SUBPROCESS_EXEC_FAILED,  /* exec(2) has failed, only for rexec() */
+    FLUX_SUBPROCESS_RUNNING,      /* exec(2) has been called */
+    FLUX_SUBPROCESS_EXITED,       /* process has exited */
+    FLUX_SUBPROCESS_FAILED,       /* internal failure, catch all for
+                                   * all other errors */
+} flux_subprocess_state_t;
 
 /*
- *  Create a subprocess manager to manage creation, destruction, and
- *   management of subprocess.
+ * Subprocess flags
  */
-struct subprocess_manager * subprocess_manager_create (void);
+enum {
+    /* flux_exec(): let parent stdin, stdout, stderr, carry to child.
+     * Do not create "STDIN", "STDOUT", or "STDERR" channels.  Subsequently,
+     * flux_subprocess_write()/close()/read()/read_line() will fail on
+     * streams of "STDIN", "STDOUT", or "STDERR".
+     */
+    FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH = 1,
+    /* flux_exec(): call setpgrp() before exec(2) */
+    FLUX_SUBPROCESS_FLAGS_SETPGRP = 2,
+};
 
 /*
- *  Set value for item [item] in subprocess manager [sm]
- */
-int subprocess_manager_set (struct subprocess_manager *sm, int item, ...);
-
-/*
- *  Free memory associated with a subprocess manager object:
- */
-void subprocess_manager_destroy (struct subprocess_manager *sm);
-
-/*
- *  Execute a new subprocess with arguments argc,argv, and environment
- *   env. The child process will have forked, but not necessarily
- *   executed by the time this function returns.
- */
-struct subprocess * subprocess_manager_run (struct subprocess_manager *sm,
-	int argc, char *argv[], char **env);
-
-/*
- *  Wait for any child to exit and return the handle of the exited
- *   subprocess to caller.
- */
-struct subprocess * subprocess_manager_wait (struct subprocess_manager *sm);
-
-int subprocess_manager_reap_all (struct subprocess_manager *sm);
-
-/*
- *   Get the first subprocess known to subprocess manager [sm].
- */
-struct subprocess * subprocess_manager_first (struct subprocess_manager *sm);
-
-/*
- *   Get next subprocess known to subprocess manager [sm]. Returns NULL if
- *    there are no further subprocesses to iterate. Reset iteration with
- *    subprocess_manager_first above.
+ *  Typedefs for subprocess hooks and callbacks:
  *
  */
-struct subprocess * subprocess_manager_next (struct subprocess_manager *sm);
+typedef void (*flux_subprocess_f) (flux_subprocess_t *p);
+typedef void (*flux_subprocess_output_f) (flux_subprocess_t *p,
+                                          const char *stream);
+typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
+                                         flux_subprocess_state_t state);
 
 /*
- *  Create a new, empty handle for a subprocess object.
- */
-struct subprocess * subprocess_create (struct subprocess_manager *sm);
-
-/*
- *  Append function [fn] to the list of callbacks for hook type [hook_type].
- */
-int subprocess_add_hook (struct subprocess *p,
-			 subprocess_hook_t type,
-			 subprocess_cb_f fn);
-
-/*
- *  Set an IO callback
- */
-int subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn);
-
-/*
- *  Destroy a subprocess. Free memory and remove from subprocess
- *   manager list.
- */
-void subprocess_destroy (struct subprocess *p);
-
-/*
- *  Set an arbitrary context in the subprocess [p] with name [name].
- */
-int subprocess_set_context (struct subprocess *p, const char *name, void *ctx);
-
-/*
- *  Return the saved context for subprocess [p].
- */
-void *subprocess_get_context (struct subprocess *p, const char *name);
-
-/*
- *  Set argument vector for subprocess [p]. This function is only valid
- *   before subprocess_run() is called. Any existing args associated with
- *   subprocess are discarded.
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
- */
-int subprocess_set_args (struct subprocess *p, int argc, char *argv[]);
-
-/*
- *  Set argument vector for subprocess [p] from argz vector (argz, argz_len).
- *   This function is only valid before subprocess_run() is called. Any existing
- *   args associated with subprocess are discarded.
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
- */
-int subprocess_set_args_from_argz (struct subprocess *p, const char * argz, size_t argz_len);
-
-/*
- *  Identical subprocess_set_args(), subprocess_set_command() is a
- *   convenience function similar to system(3). That is, it will set
- *   arguments for subprocess [p] to
- *
- *     /bin/sh -c "command"
+ *  Functions for event-driven subprocess handling:
  *
  */
-int subprocess_set_command (struct subprocess *p, const char *command);
+typedef struct {
+    flux_subprocess_f on_completion;    /* Process exited and all I/O
+                                         * complete, will not be
+                                         * called if EXEC_FAILED or
+                                         * FAILED states reached.
+                                         */
+    flux_subprocess_state_f on_state_change;  /* Process state change        */
+    flux_subprocess_output_f on_channel_out; /* Read from channel when ready */
+    flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
+    flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
+} flux_subprocess_ops_t;
+
+/*
+ *  General support:
+ */
+
+/*  Start a subprocess server on the handle `h`. Registers message
+ *   handlers, etc for remote execution. "prefix" is the topic prefix
+ *   used to listen for this service, e.g. `broker` would listen
+ *   for `broker.exec`.
+ */
+flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
+                                                        const char *prefix,
+                                                        const char *local_uri,
+                                                        uint32_t rank);
+
+/*  Stop a subprocess server / cleanup flux_subprocess_server_t */
+void flux_subprocess_server_stop (flux_subprocess_server_t *s);
+
+/* Terminate all subprocesses started by a sender id */
+int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
+                                              const char *id);
+
+/*
+ * Convenience Functions:
+ */
+
+/*  General output callback that will send output from the subprocess
+ *  to stdout or stderr.  Set the `on_stdout` and/or `on_stderr`
+ *  callbacks in flux_subprocess_ops_t and this function will output
+ *  to stdout/stderr respectively.  You can also set 'on_channel_out'
+ *  to this function, which will send all channel output to stdout.
+ */
+void flux_standard_output (flux_subprocess_t *p, const char *stream);
+
+/*
+ *  Commands:
+ */
+
+/*
+ *  Create a cmd object, from which subprocesses can be created
+ */
+flux_cmd_t * flux_cmd_create (int argc, char *argv[], char **env);
+
+/*
+ *  Create a copy of a cmd object.
+ */
+flux_cmd_t * flux_cmd_copy (const flux_cmd_t *cmd);
+
+/*
+ *  Destroy and free command object `cmd`
+ */
+void flux_cmd_destroy (flux_cmd_t *cmd);
+
+/*
+ *  Append formatted string to argv of `cmd`.
+ */
+int flux_cmd_argv_append (flux_cmd_t *cmd, const char *fmt, ...);
+
+/*
+ *  Return the current argument count for `cmd`.
+ */
+int flux_cmd_argc (const flux_cmd_t *cmd);
+
+/*
+ *  Return the current argument at index n (range 0 to argc - 1)
+ */
+const char *flux_cmd_arg (const flux_cmd_t *cmd, int n);
+
+/*
+ *  Set a single environment variable (name) to formatted string `fmt`.
+ *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
+ */
+int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
+		      const char *name, const char *fmt, ...);
+
+/*
+ *  Unset environment variable `name` in the command object `cmd`.
+ */
+void flux_cmd_unsetenv (flux_cmd_t *cmd, const char *name);
+
+/*
+ *  Return current value for environment variable `name` as set in
+ *   command object `cmd`. If environment variable is not set then NULL
+ *   is returned.
+ */
+const char *flux_cmd_getenv (const flux_cmd_t *cmd, const char *name);
+
+/*
+ *  Set/get the working directory for the command `cmd`.
+ */
+int flux_cmd_setcwd (flux_cmd_t *cmd, const char *cwd);
+const char *flux_cmd_getcwd (const flux_cmd_t *cmd);
+
+/*
+ *  Request a channel for communication between process and caller.
+ *   Callers can write to the subproces via flux_subprocess_write()
+ *   and read from it via flux_subprocess_read(), which is typically
+ *   called from a callback set in 'on_channel_out'.
+ *
+ *  The `name` argument is also used as the name of the environment variable
+ *   in the subprocess environment that is set to the file descriptor number
+ *   of the process side of the socketpair. E.g. name = "FLUX_PMI_FD" would
+ *   result in the environment variable "FLUX_PMI_FD=N" set in the process
+ *   environment.
+ */
+int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
+
+/*
+ *  Set generic string options for command object `cmd`. As with environment
+ *   variables, this function adds the option `var` to with value `val` to
+ *   the options array for this command. This can be used to enable optional
+ *   behavior for executed processes (e.g. setpgrp(2))
+ *
+ *  String options, note that name indicates the 'name' argument used
+ *  in flux_cmd_add_channel() above.
+ *
+ *  name + "_BUFSIZE" = buffer size
+ *  STDIN_BUFSIZE = buffer size
+ *  STDOUT_BUFSIZE = buffer size
+ *  STDERR_BUFSIZE = buffer size
+ *
+ *  By default, stdio and channels use an internal buffer of 1 meg.
+ *  The buffer size can be adjusted with this option.
+ */
+int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
+const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 
 
 
 /*
- *  Append a single argument to the subprocess [p] argument vector.
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ *  Subprocesses:
  */
-int subprocess_argv_append (struct subprocess *p, const char *arg);
 
 /*
- *  Append a single argument to the subprocess [p] argument vector.
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ *  Asynchronously create a new subprocess described by command object
+ *   `cmd`.  flux_exec() and flux_local_exec() create a new subprocess
+ *   locally.  flux_rexec() creates a new subprocess on Flux rank
+ *   `rank`. Callbacks in `ops` structure that are non-NULL will be
+ *   called to process state changes, I/O, and completion.
+ *
+ *  'rank' can be set to FLUX_NODEID_ANY or FLUX_NODEID_UPSTREAM.
+ *
+ *  This function may return NULL (with errno set) on invalid
+ *   argument(s) (EINVAL), or failure of underlying Flux messaging
+ *   calls. Otherwise, a valid subprocess object is returned, though
+ *   there is no guarantee the subprocess has started running anywhere
+ *   by the time the call returns.
+ *
  */
-int subprocess_argv_append_argz (struct subprocess *p, const char *argz, size_t argz_len);
+flux_subprocess_t *flux_exec (flux_t *h, int flags,
+                              const flux_cmd_t *cmd,
+                              flux_subprocess_ops_t *ops);
+
+flux_subprocess_t *flux_local_exec (flux_reactor_t *r, int flags,
+                                    const flux_cmd_t *cmd,
+                                    flux_subprocess_ops_t *ops);
+
+flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
+                               const flux_cmd_t *cmd,
+                               flux_subprocess_ops_t *ops);
 
 
 /*
- *  Get argument at index [n] from current argv array for process [p]
- *  Returns NULL if n > argc - 1.
+ *  Write data to "stream" stream of subprocess `p`.  'stream' can be
+ *  "STDIN" or the name of a stream specified with
+ *  flux_cmd_add_channel().  If 'stream' is NULL, defaults to "STDIN".
+ *
+ *  Returns the total amount of data successfully buffered.
  */
-const char *subprocess_get_arg (struct subprocess *p, int n);
+int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
+                           const char *buf, size_t len);
 
 /*
- *  Return current argument count for subprocess [p].
+ *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
+ *  'stream' can be "STDIN" or the name of a stream specified with
+ *  flux_cmd_add_channel().  If 'stream' is NULL, defaults to "STDIN".
  */
-int subprocess_get_argc (struct subprocess *p);
+int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 
 /*
- *  Set working directory for subprocess [p].
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ *  Read up to `len` bytes of unread data from stream `stream`.  To
+ *   read all data, specify 'len' of -1.  'stream' can be "STDOUT",
+ *   "STDERR", or the name of a stream specified with
+ *   flux_cmd_add_channel().  If 'stream' is NULL, defaults to
+ *   "STDOUT".
+ *
+ *   Returns pointer to buffer on success and NULL on error with errno
+ *   set.  If reading from "STDOUT" or "STDERR", buffer is guaranteed
+ *   to be NUL terminated.  User shall not free returned pointer.
+ *   Length of buffer returned can optionally returned in 'lenp'.  A
+ *   length of 0 indicates that the subprocess has closed this stream.
  */
-int subprocess_set_cwd (struct subprocess *p, const char *cwd);
+const char *flux_subprocess_read (flux_subprocess_t *p,
+                                  const char *stream,
+                                  int len, int *lenp);
 
 /*
- *  Get working directory (if any) for subprocess [p].
- *   Returns (NULL) if no working directory is set.
+ *  Read line unread data from stream `stream`.  'stream' can be
+ *   "STDOUT", "STDERR", or the name of a stream specified with
+ *   flux_cmd_add_channel().  If 'stream' is NULL, defaults to
+ *   "STDOUT".
+ *
+ *   Returns pointer to buffer on success and NULL on error with errno
+ *   set.  If reading from "STDOUT" or "STDERR", buffer is guaranteed
+ *   to be NUL terminated.  User shall not free returned pointer.
+ *   Length of buffer returned can optionally returned in 'lenp'.
  */
-const char *subprocess_get_cwd (struct subprocess *p);
+const char *flux_subprocess_read_line (flux_subprocess_t *p,
+                                       const char *stream,
+                                       int *lenp);
+
+/* Identical to flux_subprocess_read_line(), but does not return
+ * trailing newline.
+ */
+const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
+                                               const char *stream,
+                                               int *lenp);
 
 /*
- *  Set initial subprocess environment. This function is only valid
- *   before subprocess_run() is called. Any existing environment array
- *   associated with this subprocess is discarded.
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ *  Create RPC to send signal `signo` to subprocess `p`.
+ *  This call returns a flux_future_t. Use flux_future_then(3) to register
+ *   a continuation callback when the kill operation is complete, or
+ *   flux_future_wait_for(3) to block until the kill operation is complete.
  */
-int subprocess_set_environ (struct subprocess *p, char **env);
+flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
 
 /*
- *  Set up a socketpair for communication between parent and child,
- *   and return the parent side of it, or -1 on error (errno set).
- *   Optionally return the child side in 'child_fd' if non-NULL.
- *   It is the caller's responsibility to close the parent fd.
+ *  Add/remove a reference to subprocess object `p`. The subprocess object
+ *   is destroyed once the last reference is removed.
  */
-int subprocess_socketpair (struct subprocess *p, int *child_fd);
+void flux_subprocess_ref (flux_subprocess_t *p);
+void flux_subprocess_unref (flux_subprocess_t *p);
+#define flux_subprocess_destroy(x) flux_subprocess_unref(x)
+
+/*  Return current state value of subprocess.  Note this may differ
+ *  than state returned in on_state_change callback, as a subprocess
+ *  may have already transitioned past that point (e.g. the callback
+ *  received a transition change to RUNNING, but the child subprocess
+ *  has already EXITED).
+ */
+flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p);
+
+/*  Return string value of state of subprocess
+ */
+const char *flux_subprocess_state_string (flux_subprocess_state_t state);
+
+int flux_subprocess_rank (flux_subprocess_t *p);
+
+/* Returns the errno causing the FLUX_SUBPROCESS_EXEC_FAILED or
+ * FLUX_SUBPROCESS_FAILED states to be reached.
+ */
+int flux_subprocess_fail_errno (flux_subprocess_t *p);
+
+/* Returns exit status as returned from wait(2).  Works only for
+ * FLUX_SUBPROCESS_EXITED state. */
+int flux_subprocess_status (flux_subprocess_t *p);
+
+/* Returns exit code if processes exited normally.  Works only for
+ * FLUX_SUBPROCESS_EXITED state. */
+int flux_subprocess_exit_code (flux_subprocess_t *p);
+
+/* Returns signal if process terminated via signal.  Works only for
+ * FLUX_SUBPROCESS_EXITED state. */
+int flux_subprocess_signaled (flux_subprocess_t *p);
+
+pid_t flux_subprocess_pid (flux_subprocess_t *p);
+
+/*  Return the command object associated with subprocess `p`.
+ */
+flux_cmd_t *flux_subprocess_get_cmd (flux_subprocess_t *p);
+
+/*  Return the reactor object associated with subprocess `p`.
+ */
+flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
 
 /*
- *  Setenv() equivalent with optional overwrite for subprocess [p].
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ *  Set arbitrary context `ctx` with name `name` on subprocess object `p`.
+ *
+ *  Returns 0 on success
  */
-int subprocess_setenv (struct subprocess *p,
-	const char *name, const char *val, int overwrite);
+int flux_subprocess_set_context (flux_subprocess_t *p,
+                                 const char *name, void *ctx);
 
 /*
- *   As above but allows formatted args.
+ *  Return pointer to any context associated with `p` under `name`. If
+ *   no such context exists, then NULL is returned.
  */
-int subprocess_setenvf (struct subprocess *p,
-	const char *name, int overwrite, const char *fmt, ...);
+void *flux_subprocess_get_context (flux_subprocess_t *p, const char *name);
 
-/*
- *  Unset [name] in the environment array of subprocess [p].
- *   Returns -1 with errno set to EINVAL if subprocess has already started.
- */
-int subprocess_unsetenv (struct subprocess *p, const char *name);
-
-/*
- *  getenv(3) equivalent for subprocess [p].
- */
-char *subprocess_getenv (struct subprocess *p, const char *name);
-
-/*
- *  Send signal [signo] to subprocess [p]
- */
-int subprocess_kill (struct subprocess *p, int signo);
-
-/*
- *  Return PID of process [p] if it is started.
- *   Returns (pid_t) -1 otherwise.
- */
-pid_t subprocess_pid (struct subprocess *p);
-
-/*
- *  Wait for and reap the subprocess [p]. After a successful return,
- *   subprocess_exited (p) will be true, and subprocess_exit* will
- *   be valid, etc.
- *  Returns -1 on failure.
- */
-int subprocess_reap (struct subprocess *p);
-
-/*
- *  Return 1 if subprocess [p] has exited.
- */
-int subprocess_exited (struct subprocess *p);
-
-/*
- *  Return exit status as returned by wait(2) for subprocess [p].
- */
-int subprocess_exit_status (struct subprocess *p);
-
-/*
- *  Return exit code for subprocess [p] if !subprocess_signaled()
- */
-int subprocess_exit_code (struct subprocess *p);
-
-/*
- *  Return number of the signal that caused process to exit,
- *   or 0 if process was not killed by a signal.
- */
-int subprocess_signaled (struct subprocess *p);
-
-/*
- *  Return number of the signal that caused process to stop,
- *   or 0 if process was not stopped.
- */
-int subprocess_stopped (struct subprocess *p);
-
-/*
- *  Return 1 if process was continued,
- *   or 0 if process was not contineud.
- */
-int subprocess_continued (struct subprocess *p);
-
-/*
- *  If state == "Exec Failure" then return the errno from exec(2)
- *   system call. Otherwise returns 0.
- */
-int subprocess_exec_error (struct subprocess *p);
-
-/*
- *  Return string representation of process [p] current state,
- *   "Pending", "Exec Failure", "Waiting", "Running", "Exited"
- */
-const char * subprocess_state_string (struct subprocess *p);
-
-/*
- *  Convenience function returning a state string corresponding to
- *   process [p] exit status.
- */
-const char * subprocess_exit_string (struct subprocess *p);
-
-/*
- *  Fork, but wait to exec(), subprocess [p].
- *   Returns -1 and EINVAL if subprocess argv is not initialized.
- *           -1 and errno on fork() failure.
- */
-int subprocess_fork (struct subprocess *p);
-
-/*
- *   Unblock subprocess [p] and allow it to call exec.
- *    Returns -1 and EINVAL if subprocess is not in state 'started'.
- *            -1 and error if exec failed.
- */
-int subprocess_exec (struct subprocess *p);
-
-/*
- *  Same as calling subprocess_fork() + subprocess_exec()
- */
-int subprocess_run (struct subprocess *p);
-
-
-int subprocess_flush_io (struct subprocess *p);
-
-/*
- *  Return 1 if all subprocess stdio has completed (i.e. stdout/stderr
- *   have received and processed EOF). If no IO handler is registered with
- *   a subprocess object then subprocess_io_complete() will always
- *   return 1.
- */
-int subprocess_io_complete (struct subprocess *p);
-
-/*
- *  Write data to stdin buffer of process [p]. If [eof] is true then EOF will
- *   be scheduled for stdin once all buffered data is written.
- */
-int subprocess_write (struct subprocess *p, void *buf, size_t count, bool eof);
-
-#endif /* !_SUBPROCESS_H */
+#endif /* !_FLUX_CORE_SUBPROCESS_H */

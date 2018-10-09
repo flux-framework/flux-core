@@ -34,7 +34,7 @@
 #include <assert.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/subprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess.h"
 
 #include "task.h"
 

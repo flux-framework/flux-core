@@ -48,7 +48,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/subprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess.h"
 
 #include "rcalc.h"
 #include "wreck_job.h"

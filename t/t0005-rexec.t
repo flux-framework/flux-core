@@ -11,7 +11,7 @@ Test rexec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
-TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/subprocess
+TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 
 test_expect_success 'basic rexec functionality (process success)' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec /bin/true

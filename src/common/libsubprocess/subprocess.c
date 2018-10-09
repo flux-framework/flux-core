@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -9,7 +9,10 @@
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the Free
  *  Software Foundation; either version 2 of the license, or (at your option)
- *  any later version.
+ *  any later version.  Additionally, Flux libraries may be redistributed
+ *  under the terms of the GNU Lesser General Public License as published
+ *  by the Free Software Foundation, either version 2 of the license,
+ *  or (at your option) any later version.
  *
  *  Flux is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
@@ -21,1109 +24,1074 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
-
 #if HAVE_CONFIG_H
 # include "config.h"
 #endif
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
+#include <wait.h>
+#include <unistd.h>
+#include <errno.h>
+
 #include <czmq.h>
-#include <argz.h>
-#include <envz.h>
-#include <jansson.h>
+
+#include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/fdwalk.h"
-#include "zio.h"
+#include "src/common/libutil/base64.h"
+
 #include "subprocess.h"
+#include "subprocess_private.h"
+#include "command.h"
+#include "local.h"
+#include "remote.h"
+#include "server.h"
+#include "util.h"
 
-#define FDA_LENGTH 16
+/*
+ * Primary Structures
+ */
 
-struct subprocess_manager {
-    zlist_t *processes;
-    int wait_flags;
-    flux_reactor_t *reactor;
-};
-
-struct subprocess {
-    struct subprocess_manager *sm;
-    zhash_t *zhash;
-
-    pid_t pid;
-
-    /* socketpair for synchronization */
-    int parentfd;
-    int childfd;
-
-    char *cwd;
-
-    size_t argz_len;
-    char *argz;
-
-    size_t envz_len;
-    char *envz;
-
-    int child_fda[FDA_LENGTH]; /* child end of subprocess_socketpair(s) */
-
-    int refcount;
-    int status;
-    int exec_error;
-
-    unsigned short started:1;
-    unsigned short running:1;
-    unsigned short exited:1;
-    unsigned short completed:1;
-
-
-    zio_t *zio_in;
-    zio_t *zio_out;
-    zio_t *zio_err;
-    flux_watcher_t *child_watcher;
-
-    subprocess_io_cb_f io_cb;
-
-    zlist_t *hooks [SUBPROCESS_HOOK_COUNT];
-};
-
-static void subprocess_free (struct subprocess *p);
-
-
-static void fda_zero (int fda[])
+void channel_destroy (void *arg)
 {
-    int i;
-    for (i = 0; i < FDA_LENGTH; i++)
-        fda[i] = -1;
-}
+    struct subprocess_channel *c = arg;
+    if (c && c->magic == CHANNEL_MAGIC) {
+        if (c->name)
+            free (c->name);
 
-static int fda_set (int fda[], int fd)
-{
-    int i;
-    for (i = 0; i < FDA_LENGTH; i++) {
-        if (fda[i] == fd || fda[i] == -1) {
-            fda[i] = fd;
-            return 0;
-        }
-    }
-    return -1;
-}
+        if (c->parent_fd != -1)
+            close (c->parent_fd);
+        if (c->child_fd != -1)
+            close (c->child_fd);
+        flux_watcher_destroy (c->buffer_write_w);
+        flux_watcher_destroy (c->buffer_read_w);
 
-static bool fda_isset (int fda[], int fd)
-{
-    int i;
-    for (i = 0; i < FDA_LENGTH; i++) {
-        if (fda[i] == fd)
-            return true;
-    }
-    return false;
-}
+        flux_buffer_destroy (c->write_buffer);
+        flux_buffer_destroy (c->read_buffer);
+        flux_watcher_destroy (c->in_prep_w);
+        flux_watcher_destroy (c->in_idle_w);
+        flux_watcher_destroy (c->in_check_w);
+        flux_watcher_destroy (c->out_prep_w);
+        flux_watcher_destroy (c->out_idle_w);
+        flux_watcher_destroy (c->out_check_w);
 
-static void fda_closeall (int fda[])
-{
-    int i;
-    for (i = 0; i < FDA_LENGTH; i++) {
-        if (fda[i] != -1) {
-            close (fda[i]);
-            fda[i] = -1;
-        }
+        c->magic = ~CHANNEL_MAGIC;
+        free (c);
     }
 }
 
-static int sigmask_unblock_all (void)
+struct subprocess_channel *channel_create (flux_subprocess_t *p,
+                                           flux_subprocess_output_f output_f,
+                                           const char *name,
+                                           int flags)
 {
-    sigset_t mask;
-    sigemptyset (&mask);
-    return sigprocmask (SIG_SETMASK, &mask, NULL);
+    struct subprocess_channel *c = calloc (1, sizeof (*c));
+    int save_errno;
+
+    if (!c)
+        return NULL;
+
+    c->magic = CHANNEL_MAGIC;
+
+    c->p = p;
+    c->output_f = output_f;
+    if (!(c->name = strdup (name)))
+        goto error;
+    c->flags = flags;
+
+    c->eof_sent_to_caller = false;
+    c->closed = false;
+
+    c->parent_fd = -1;
+    c->child_fd = -1;
+    c->buffer_write_w = NULL;
+    c->buffer_read_w = NULL;
+
+    c->write_buffer = NULL;
+    c->read_buffer = NULL;
+    c->write_eof_sent = false;
+    c->read_eof_received = false;
+    c->in_prep_w = NULL;
+    c->in_idle_w = NULL;
+    c->in_check_w = NULL;
+    c->out_prep_w = NULL;
+    c->out_idle_w = NULL;
+    c->out_check_w = NULL;
+
+    return c;
+
+error:
+    save_errno = errno;
+    channel_destroy (c);
+    errno = save_errno;
+    return NULL;
 }
 
-static void subprocess_ref (struct subprocess *p)
+static void subprocess_free (flux_subprocess_t *p)
 {
-    ++p->refcount;
-}
+    if (p && p->magic == SUBPROCESS_MAGIC) {
+        flux_cmd_destroy (p->cmd);
 
-static void subprocess_unref (struct subprocess *p)
-{
-    if (--p->refcount == 0)
-        subprocess_free (p);
-}
+        if (p->aux)
+            zhash_destroy (&p->aux);
+        if (p->channels)
+            zhash_destroy (&p->channels);
 
-static int subprocess_run_hooks (struct subprocess *p, zlist_t *hooks)
-{
-    subprocess_cb_f fn = zlist_first (hooks);
-    int rc = 0;
-    subprocess_ref (p);
-    while (fn) {
-        if ((rc = fn (p)) < 0)
-            goto done;
-        fn = zlist_next (hooks);
+        flux_watcher_destroy (p->child_w);
+
+        close_pair_fds (p->sync_fds);
+
+        flux_watcher_destroy (p->state_prep_w);
+        flux_watcher_destroy (p->state_idle_w);
+        flux_watcher_destroy (p->state_check_w);
+
+        flux_watcher_destroy (p->completed_prep_w);
+        flux_watcher_destroy (p->completed_idle_w);
+        flux_watcher_destroy (p->completed_check_w);
+
+        if (p->f)
+            flux_future_destroy (p->f);
+
+        p->magic = ~SUBPROCESS_MAGIC;
+        free (p);
     }
-done:
-    subprocess_unref (p);
-    return (rc);
+}
+
+static flux_subprocess_t * subprocess_create (flux_t *h,
+                                              flux_reactor_t *r,
+                                              int flags,
+                                              const flux_cmd_t *cmd,
+                                              flux_subprocess_ops_t *ops,
+                                              int rank,
+                                              bool local)
+{
+    flux_subprocess_t *p = calloc (1, sizeof (*p));
+    int save_errno;
+
+    if (!p)
+        return NULL;
+
+    p->magic = SUBPROCESS_MAGIC;
+
+    /* init fds, so on error we don't accidentally close stdin
+     * (i.e. fd == 0)
+     */
+    init_pair_fds (p->sync_fds);
+
+    /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
+     * and seen by parent */
+    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
+        goto error;
+
+    if (!(p->aux = zhash_new ())
+        || !(p->channels = zhash_new ()))
+        goto error;
+
+    p->state = FLUX_SUBPROCESS_INIT;
+    p->state_reported = p->state;
+
+    if (!(p->cmd = flux_cmd_copy (cmd)))
+        goto error;
+
+    if (ops)
+        p->ops = *ops;
+
+    p->h = h;
+    p->reactor = r;
+    p->rank = rank;
+    p->flags = flags;
+    p->kill_signum = 0;
+
+    p->local = local;
+
+    p->refcount = 1;
+    return (p);
+
+error:
+    save_errno = errno;
+    subprocess_free (p);
+    errno = save_errno;
+    return NULL;
+}
+
+static void subprocess_server_destroy (void *arg)
+{
+    flux_subprocess_server_t *s = arg;
+    if (s && s->magic == SUBPROCESS_SERVER_MAGIC) {
+        /* s->handlers handle in server_stop, this is for destroying
+         * things only
+         */
+        zhash_destroy (&s->subprocesses);
+        free (s->local_uri);
+        s->magic = ~SUBPROCESS_SERVER_MAGIC;
+        free (s);
+    }
+}
+
+static flux_subprocess_server_t *subprocess_server_create (flux_t *h,
+                                                           const char *local_uri,
+                                                           int rank)
+{
+    flux_subprocess_server_t *s = calloc (1, sizeof (*s));
+    int save_errno;
+
+    if (!s)
+        return NULL;
+
+    s->magic = SUBPROCESS_SERVER_MAGIC;
+    s->h = h;
+    if (!(s->r = flux_get_reactor (h)))
+        goto error;
+    if (!(s->subprocesses = zhash_new ()))
+        goto error;
+    if (!(s->local_uri = strdup (local_uri)))
+        goto error;
+    s->rank = rank;
+
+    return s;
+
+error:
+    save_errno = errno;
+    subprocess_server_destroy (s);
+    errno = save_errno;
+    return NULL;
 }
 
 /*
- *  Default handler for stdout/err: send output directly into
- *   stdout/err of caller...
+ * Accessors
  */
-static int send_output_to_stream (const char *name, const char *json_str)
+
+int subprocess_status (flux_subprocess_t *p)
 {
-    FILE *fp = stdout;
-    char *s = NULL;
-    bool eof;
-
-    int len = zio_json_decode (json_str, (void **) &s, &eof);
-
-    if (strcmp (name, "stderr") == 0)
-        fp = stderr;
-
-    if (len > 0)
-        fputs (s, fp);
-    if (eof)
-        fclose (fp);
-
-    free (s);
-    return (len);
+    assert (p);
+    return p->status;
 }
 
-static int check_completion (struct subprocess *p)
-{
-    if (!p->started)
-        return (0);
-    //if (p->completed) /* completion event already sent */
-     //   return (0);
+/*
+ *  General support:
+ */
 
-    /*
-     *  Check that all I/O is closed and subprocess has exited
-     *   (and been reaped)
-     */
-    if (subprocess_io_complete (p) && subprocess_exited (p)) {
-        p->completed = 1;
-        return subprocess_run_hooks (p, p->hooks [SUBPROCESS_COMPLETE]);
+flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
+                                                        const char *prefix,
+                                                        const char *local_uri,
+                                                        uint32_t rank)
+{
+    flux_subprocess_server_t *s = NULL;
+    int save_errno;
+
+    if (!h || !prefix || !local_uri) {
+        errno = EINVAL;
+        goto error;
     }
-    return (0);
+
+    if (!(s = subprocess_server_create (h, local_uri, rank)))
+        goto error;
+
+    if (server_start (s, prefix) < 0)
+        goto error;
+
+    return s;
+
+error:
+    save_errno = errno;
+    subprocess_server_destroy (s);
+    errno = save_errno;
+    return NULL;
 }
 
-static int output_handler (zio_t *z, const char *json_str, int len, void *arg)
+void flux_subprocess_server_stop (flux_subprocess_server_t *s)
 {
-    struct subprocess *p = (struct subprocess *) arg;
-    json_t *o = NULL;
-    json_t *new_o;
-    char *json_str_amended;
+    if (s && s->magic == SUBPROCESS_SERVER_MAGIC) {
+        server_stop (s);
+        subprocess_server_destroy (s);
+    }
+}
 
-    if (p->io_cb) {
-        if (!(o = json_loads (json_str, 0, NULL))) {
-            errno = EINVAL;
+int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
+                                              const char *id)
+{
+    if (!s || s->magic != SUBPROCESS_SERVER_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return server_terminate_by_uuid (s, id);
+}
+
+/*
+ * Convenience Functions:
+ */
+
+void flux_standard_output (flux_subprocess_t *p, const char *stream)
+{
+    /* everything except stderr goes to stdout */
+    FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
+    const char *ptr;
+    int lenp;
+
+    if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
+        log_err ("flux_standard_output: read_line");
+        return;
+    }
+
+    /* if process exited, read remaining stuff or EOF, otherwise
+     * wait for future newline */
+    if (!lenp
+        && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
+        if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
+            log_err ("flux_standard_output: read_line");
+            return;
+        }
+    }
+
+    if (lenp)
+        fwrite (ptr, lenp, 1, fstream);
+}
+
+/*
+ *  Process handling:
+ */
+
+void subprocess_check_completed (flux_subprocess_t *p)
+{
+    assert (p->state == FLUX_SUBPROCESS_EXITED);
+
+    /* we're also waiting for the "complete" to come from the remote end */
+    if (!p->local && !p->remote_completed)
+        return;
+
+    if (p->completed)
+        return;
+
+    if (p->channels_eof_sent == p->channels_eof_expected) {
+        p->completed = true;
+        flux_watcher_start (p->completed_prep_w);
+        flux_watcher_start (p->completed_check_w);
+    }
+}
+
+void state_change_start (flux_subprocess_t *p)
+{
+    if (p->ops.on_state_change) {
+        flux_watcher_start (p->state_prep_w);
+        flux_watcher_start (p->state_check_w);
+    }
+}
+
+static void state_change_prep_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    if (p->state_reported != p->state)
+        flux_watcher_start (p->state_idle_w);
+}
+
+static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
+{
+    assert (p->state != FLUX_SUBPROCESS_FAILED);
+
+    switch (p->state_reported) {
+    case FLUX_SUBPROCESS_INIT:
+        /* next state to report must be STARTED */
+        return FLUX_SUBPROCESS_STARTED;
+    case FLUX_SUBPROCESS_STARTED:
+        /* next state must be RUNNING or EXEC_FAILED */
+        if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
+            return FLUX_SUBPROCESS_EXEC_FAILED;
+        else /* p->state == FLUX_SUBPROCESS_RUNNING
+                || p->state == FLUX_SUBPROCESS_EXITED */
+            return FLUX_SUBPROCESS_RUNNING;
+    case FLUX_SUBPROCESS_RUNNING:
+        /* next state is EXITED */
+        return FLUX_SUBPROCESS_EXITED;
+    case FLUX_SUBPROCESS_EXEC_FAILED:
+    case FLUX_SUBPROCESS_EXITED:
+    case FLUX_SUBPROCESS_FAILED:
+        break;
+    }
+
+    /* shouldn't be possible to reach here */
+    assert (0);
+}
+
+static void state_change_check_cb (flux_reactor_t *r,
+                                   flux_watcher_t *w,
+                                   int revents,
+                                   void *arg)
+{
+    flux_subprocess_t *p = arg;
+    flux_subprocess_state_t next_state = FLUX_SUBPROCESS_INIT;
+
+    flux_watcher_stop (p->state_idle_w);
+
+    /* always a chance caller may destroy subprocess in callback */
+    flux_subprocess_ref (p);
+
+    if (p->state_reported != p->state) {
+        /* this is the ubiquitous fail state for internal failures,
+         * any state can jump to this state.  Even if some state changes
+         * occurred in between, we'll jump to this state.
+         */
+        if (p->state == FLUX_SUBPROCESS_FAILED)
+            next_state = FLUX_SUBPROCESS_FAILED;
+        else
+            next_state = state_change_next (p);
+
+        (*p->ops.on_state_change) (p, next_state);
+        p->state_reported = next_state;
+    }
+
+    /* once we hit one of these states, no more state changes */
+    if (p->state_reported == FLUX_SUBPROCESS_EXEC_FAILED
+        || p->state_reported == FLUX_SUBPROCESS_EXITED
+        || p->state_reported == FLUX_SUBPROCESS_FAILED) {
+        flux_watcher_stop (p->state_prep_w);
+        flux_watcher_stop (p->state_check_w);
+    }
+    else if (p->state == p->state_reported) {
+        flux_watcher_stop (p->state_prep_w);
+        flux_watcher_stop (p->state_check_w);
+    }
+
+    if (p->state_reported == FLUX_SUBPROCESS_EXITED)
+        subprocess_check_completed (p);
+
+    flux_subprocess_unref (p);
+}
+
+static int subprocess_setup_state_change (flux_subprocess_t *p)
+{
+    if (p->ops.on_state_change) {
+        p->state_prep_w = flux_prepare_watcher_create (p->reactor,
+                                                       state_change_prep_cb,
+                                                       p);
+        if (!p->state_prep_w) {
+            log_err ("flux_prepare_watcher_create");
             return -1;
         }
-        if (!(new_o = json_pack ("{s:i s:s s:s}", "pid", subprocess_pid (p),
-                                                  "type", "io",
-                                                  "name", zio_name (z))))
-            goto error;
-        if (json_object_update (o, new_o) < 0) {
-            json_decref (new_o);
-            goto error;
+
+        p->state_idle_w = flux_idle_watcher_create (p->reactor,
+                                                    NULL,
+                                                    p);
+        if (!p->state_idle_w) {
+            log_err ("flux_idle_watcher_create");
+            return -1;
         }
-        json_decref (new_o);
-        if (!(json_str_amended = json_dumps (o, JSON_COMPACT)))
-            goto error;
-        p->io_cb (p, json_str_amended);
-        free (json_str_amended);
-        json_decref (o);
-    }
-    else
-       send_output_to_stream (zio_name (z), json_str);
 
-    /*
-     * Check for process completion in case EOF from I/O stream and process
-     *  already registered exit
+        p->state_check_w = flux_check_watcher_create (p->reactor,
+                                                      state_change_check_cb,
+                                                      p);
+        if (!p->state_check_w) {
+            log_err ("flux_check_watcher_create");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void completed_prep_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    assert (p->completed);
+
+    flux_watcher_start (p->completed_idle_w);
+}
+
+static void completed_check_cb (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    assert (p->completed);
+
+    flux_watcher_stop (p->completed_idle_w);
+
+    /* always a chance caller may destroy subprocess in callback */
+    flux_subprocess_ref (p);
+
+    /* There is a small "racy" component, where the state we're at may
+     * not yet align with the state that has been reported to the
+     * user.  We would like to report state EXITED to the user before
+     * calling the completion callback.
+     *
+     * If no state change callback was specified, we must have reached
+     * state FLUX_SUBPROCESS_EXITED to have reached this point.
      */
-    check_completion (p);
-    return (0);
+    if (!p->ops.on_state_change
+        || p->state_reported == FLUX_SUBPROCESS_EXITED) {
+        if (p->ops.on_completion)
+            (*p->ops.on_completion) (p);
+
+        flux_watcher_stop (p->completed_prep_w);
+        flux_watcher_stop (p->completed_check_w);
+    }
+
+    flux_subprocess_unref (p);
+}
+
+static int subprocess_setup_completed (flux_subprocess_t *p)
+{
+    if (p->ops.on_completion) {
+        p->completed_prep_w = flux_prepare_watcher_create (p->reactor,
+                                                           completed_prep_cb,
+                                                           p);
+        if (!p->completed_prep_w) {
+            log_err ("flux_prepare_watcher_create");
+            return -1;
+        }
+
+        p->completed_idle_w = flux_idle_watcher_create (p->reactor,
+                                                        NULL,
+                                                        p);
+        if (!p->completed_idle_w) {
+            log_err ("flux_idle_watcher_create");
+            return -1;
+        }
+
+        p->completed_check_w = flux_check_watcher_create (p->reactor,
+                                                          completed_check_cb,
+                                                          p);
+        if (!p->completed_check_w) {
+            log_err ("flux_check_watcher_create");
+            return -1;
+        }
+
+        /* start when process completed */
+    }
+    return 0;
+}
+
+static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int flags,
+                                           const flux_cmd_t *cmd,
+                                           flux_subprocess_ops_t *ops)
+{
+    flux_subprocess_t *p = NULL;
+    int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
+                       | FLUX_SUBPROCESS_FLAGS_SETPGRP);
+    int save_errno;
+
+    if (!r || !cmd) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (flags & ~valid_flags) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!(p = subprocess_create (h, r, flags, cmd, ops, -1, true)))
+        goto error;
+
+    if (subprocess_local_setup (p) < 0)
+        goto error;
+
+    if (subprocess_setup_state_change (p) < 0)
+        goto error;
+
+    state_change_start (p);
+
+    if (subprocess_setup_completed (p) < 0)
+        goto error;
+
+    return p;
+
 error:
-    json_decref (o);
-    errno = EINVAL;
-    return -1;
+    save_errno = errno;
+    flux_subprocess_unref (p);
+    errno = save_errno;
+    return NULL;
 }
 
-static int hooks_table_init (struct subprocess *p)
+flux_subprocess_t * flux_exec (flux_t *h, int flags,
+                               const flux_cmd_t *cmd,
+                               flux_subprocess_ops_t *ops)
 {
-    int i;
-    for (i = 0; i < SUBPROCESS_HOOK_COUNT; i++) {
-        if (!(p->hooks [i] = zlist_new ()))
-            return (-1);
+    flux_reactor_t *r;
+
+    if (!h) {
+        errno = EINVAL;
+        return NULL;
     }
-    return (0);
+
+    if (!(r = flux_get_reactor (h)))
+        return NULL;
+
+    return flux_exec_wrap (h, r, flags, cmd, ops);
 }
 
-static void hooks_table_free (struct subprocess *p)
+flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
+                                     const flux_cmd_t *cmd,
+                                     flux_subprocess_ops_t *ops)
 {
-    int i;
-    for (i = 0; i < SUBPROCESS_HOOK_COUNT; i++) {
-        if (p->hooks [i])
-            zlist_destroy (&p->hooks [i]);
-    }
+    return flux_exec_wrap (NULL, r, flags, cmd, ops);
 }
 
-struct subprocess * subprocess_create (struct subprocess_manager *sm)
+flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
+                               const flux_cmd_t *cmd,
+                               flux_subprocess_ops_t *ops)
 {
-    int fds[2];
-    int saved_errno;
-    struct subprocess *p = xzmalloc (sizeof (*p));
+    flux_subprocess_t *p = NULL;
+    flux_reactor_t *r;
+    int save_errno;
 
-    memset (p, 0, sizeof (*p));
-    p->childfd = -1;
-    p->parentfd = -1;
-    fda_zero (p->child_fda);
+    if (!h
+        || (rank < 0
+            && rank != FLUX_NODEID_ANY
+            && rank != FLUX_NODEID_UPSTREAM)
+        || !cmd) {
+        errno = EINVAL;
+        return NULL;
+    }
 
-    p->sm = sm;
-    if (!(p->zhash = zhash_new ())
-     || hooks_table_init (p) < 0) {
-        errno = ENOMEM;
+    /* no flags supported yet */
+    if (flags) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    /* user required to set some args */
+    if (!flux_cmd_argc (cmd)) {
+        errno = EINVAL;
         goto error;
     }
 
-    p->pid = (pid_t) -1;
-    p->refcount = 1;
-
-    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0)
-        goto error;
-    p->childfd = fds[0];
-    p->parentfd = fds[1];
-
-    p->started = 0;
-    p->running = 0;
-    p->exited = 0;
-    p->completed = 0;
-
-    if (!(p->zio_in = zio_pipe_writer_create ("stdin", (void *) p)))
-        goto error;
-    if (!(p->zio_out = zio_pipe_reader_create ("stdout", (void *) p)))
-        goto error;
-    if (!(p->zio_err = zio_pipe_reader_create ("stderr", (void *) p)))
-        goto error;
-
-    zio_set_send_cb (p->zio_out, output_handler);
-    zio_set_send_cb (p->zio_err, output_handler);
-
-    if (zlist_append (sm->processes, (void *)p) < 0) {
-        errno = ENOMEM;
+    /* user required to set cwd */
+    if (!flux_cmd_getcwd (cmd)) {
+        errno = EINVAL;
         goto error;
     }
 
-    if (sm->reactor) {
-        zio_reactor_attach (p->zio_in, sm->reactor);
-        zio_reactor_attach (p->zio_err, sm->reactor);
-        zio_reactor_attach (p->zio_out, sm->reactor);
-    }
-    return (p);
+    if (!(r = flux_get_reactor (h)))
+        goto error;
+
+    if (!(p = subprocess_create (h, r, flags, cmd, ops, rank, false)))
+        goto error;
+
+    if (subprocess_remote_setup (p) < 0)
+        goto error;
+
+    if (subprocess_setup_state_change (p) < 0)
+        goto error;
+
+    if (subprocess_setup_completed (p) < 0)
+        goto error;
+
+    if (remote_exec (p) < 0)
+        goto error;
+
+    return p;
+
 error:
-    saved_errno = errno;
-    subprocess_destroy (p);
-    errno = saved_errno;
-    return (NULL);
+    save_errno = errno;
+    flux_subprocess_unref (p);
+    errno = save_errno;
+    return NULL;
 }
 
-void subprocess_destroy (struct subprocess *p)
+int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
+                           const char *buf, size_t len)
 {
-    subprocess_unref (p);
-}
+    struct subprocess_channel *c;
+    flux_buffer_t *fb;
+    int ret;
 
-static void subprocess_free (struct subprocess *p)
-{
-    assert (p != NULL);
-
-    if (p->sm)
-        zlist_remove (p->sm->processes, (void *) p);
-    zhash_destroy (&p->zhash);
-    hooks_table_free (p);
-
-    fda_closeall (p->child_fda);
-
-    if (p->argz)
-        free (p->argz);
-    if (p->envz)
-        free (p->envz);
-    if (p->cwd)
-        free (p->cwd);
-
-    zio_destroy (p->zio_in);
-    zio_destroy (p->zio_out);
-    zio_destroy (p->zio_err);
-
-    if (p->parentfd != -1)
-        close (p->parentfd);
-    if (p->childfd != -1)
-        close (p->childfd);
-    flux_watcher_destroy (p->child_watcher);
-
-    memset (p, 0, sizeof (*p));
-    free (p);
-}
-
-int
-subprocess_flush_io (struct subprocess *p)
-{
-    zio_flush (p->zio_in);
-    while (zio_read (p->zio_out) > 0) {};
-    while (zio_read (p->zio_err) > 0) {};
-    return (0);
-}
-
-int
-subprocess_write (struct subprocess *p, void *buf, size_t n, bool eof)
-{
-    int rc = 0;
-    if (n > 0)
-        rc = zio_write (p->zio_in, buf, n);
-    if (eof)
-        zio_write_eof (p->zio_in);
-    return (rc);
-}
-
-int subprocess_io_complete (struct subprocess *p)
-{
-    if (p->io_cb) {
-        if (zio_closed (p->zio_out) && zio_closed (p->zio_err))
-            return 1;
-        return 0;
-    }
-    return 1;
-}
-
-int
-subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn)
-{
-    p->io_cb = fn;
-    return (0);
-}
-
-int subprocess_add_hook (struct subprocess *p,
-                         subprocess_hook_t t, subprocess_cb_f fn)
-{
-    zlist_append (p->hooks [t], fn);
-    return (0);
-}
-
-int
-subprocess_set_context (struct subprocess *p, const char *name, void *ctx)
-{
-    return zhash_insert (p->zhash, name, ctx);
-}
-
-void *
-subprocess_get_context (struct subprocess *p, const char *name)
-{
-    return zhash_lookup (p->zhash, name);
-}
-
-static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
-{
-    int e;
-
-    if (*argzp != NULL) {
-        free (*argzp);
-        *argz_lenp = 0;
-    }
-
-    if (av && (e = argz_create (av, argzp, argz_lenp)) != 0) {
-        errno = e;
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
         return -1;
     }
-    return (0);
-}
 
-int subprocess_set_args (struct subprocess *p, int argc, char **argv)
-{
-    if (p->started || (argv [argc] != NULL)) {
+    if (!buf || !len) {
         errno = EINVAL;
-        return (-1);
-    }
-    return (init_argz (&p->argz, &p->argz_len, argv));
-}
-
-int subprocess_set_args_from_argz (struct subprocess *p, const char * argz, size_t argz_len)
-{
-    if (p->started || argz == NULL) {
-        errno = EINVAL;
-        return (-1);
-    }
-    free (p->argz);
-    p->argz_len = 0;
-    int e = argz_append (&p->argz, &p->argz_len, argz, argz_len);
-    return e ? (errno = e, -1) : 0;
-}
-
-const char * subprocess_get_arg (struct subprocess *p, int n)
-{
-    int i;
-    char *entry = NULL;
-
-    if (n > subprocess_get_argc (p))
-        return (NULL);
-
-    for (i = 0; i <= n; i++)
-        entry = argz_next (p->argz, p->argz_len, entry);
-
-    return (entry);
-}
-
-int subprocess_get_argc (struct subprocess *p)
-{
-    return (argz_count (p->argz, p->argz_len));
-}
-
-int subprocess_set_cwd (struct subprocess *p, const char *cwd)
-{
-    if (p->started) {
-        errno = EINVAL;
-        return (-1);
-    }
-    if (p->cwd)
-        free (p->cwd);
-    p->cwd = strdup (cwd);
-    return (0);
-}
-
-const char *subprocess_get_cwd (struct subprocess *p)
-{
-    return (p->cwd);
-}
-
-int subprocess_set_environ (struct subprocess *p, char **env)
-{
-    return (init_argz (&p->envz, &p->envz_len, env));
-}
-
-int subprocess_argv_append (struct subprocess *p, const char *s)
-{
-    int e;
-
-    if (p->started) {
-        errno = EINVAL;
-        return (-1);
-    }
-
-    if ((e = argz_add (&p->argz, &p->argz_len, s)) != 0) {
-        errno = e;
         return -1;
     }
-    return (0);
-}
 
-int subprocess_argv_append_argz (struct subprocess *p, const char *argz, size_t argz_len)
-{
-    int e;
+    if (!stream)
+        stream = "STDIN";
 
-    if (p->started) {
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_WRITE)) {
         errno = EINVAL;
-        return (-1);
-    }
-
-    if ((e = argz_append (&p->argz, &p->argz_len, argz, argz_len)) != 0) {
-        errno = e;
         return -1;
     }
-    return (0);
-}
 
-int subprocess_set_command (struct subprocess *p, const char *cmd)
-{
-    int e;
-
-    if (p->started) {
-        errno = EINVAL;
-        return (-1);
-    }
-    init_argz (&p->argz, &p->argz_len, NULL);
-
-    if ((e = argz_add (&p->argz, &p->argz_len, "sh")) != 0
-        || (e = argz_add (&p->argz, &p->argz_len, "-c")) != 0
-        || (e = argz_add (&p->argz, &p->argz_len, cmd)) != 0) {
-        errno = e;
-        return (-1);
-    }
-    return (0);
-}
-
-int subprocess_setenv (struct subprocess *p,
-    const char *k, const char *v, int overwrite)
-{
-    if (p->started) {
-        errno = EINVAL;
-        return (-1);
-    }
-    if (!overwrite && envz_entry (p->envz, p->envz_len, k)) {
-        errno = EEXIST;
+    if (c->closed) {
+        errno = EPIPE;
         return -1;
     }
-    if (envz_add (&p->envz, &p->envz_len, k, v) < 0) {
-        errno = ENOMEM;
-        return (-1);
-    }
-    return (0);
-}
 
-int subprocess_setenvf (struct subprocess *p,
-    const char *k, int overwrite, const char *fmt, ...)
-{
-    va_list ap;
-    char *val;
-    int rc;
+    if (p->local) {
+        if (p->state != FLUX_SUBPROCESS_STARTED
+            && p->state != FLUX_SUBPROCESS_RUNNING) {
+            errno = EPIPE;
+            return -1;
+        }
+        if (!(fb = flux_buffer_write_watcher_get_buffer (c->buffer_write_w))) {
+            log_err ("flux_buffer_write_watcher_get_buffer");
+            return -1;
+        }
 
-    va_start (ap, fmt);
-    rc = vasprintf (&val, fmt, ap);
-    va_end (ap);
-    if (rc < 0)
-        return (rc);
-
-    rc = subprocess_setenv (p, k, val, overwrite);
-    free (val);
-    return (rc);
-}
-
-int subprocess_unsetenv (struct subprocess *p, const char *name)
-{
-    if (p->started) {
-        errno = EINVAL;
-        return (-1);
-    }
-    envz_remove (&p->envz, &p->envz_len, name);
-    return (0);
-}
-
-char * subprocess_getenv (struct subprocess *p, const char *name)
-{
-    return (envz_get (p->envz, p->envz_len, name));
-}
-
-static char **expand_argz (char *argz, size_t argz_len)
-{
-    size_t len;
-    char **argv;
-
-    len = argz_count (argz, argz_len) + 1;
-    argv = xzmalloc (len * sizeof (char *));
-
-    argz_extract (argz, argz_len, argv);
-
-    return (argv);
-}
-
-char **subprocess_argv_expand (struct subprocess *p)
-{
-    return (expand_argz (p->argz, p->argz_len));
-}
-
-char **subprocess_env_expand (struct subprocess *p)
-{
-    envz_strip (&p->envz, &p->envz_len);
-    return (expand_argz (p->envz, p->envz_len));
-}
-
-int subprocess_socketpair (struct subprocess *p, int *child_fd)
-{
-    int fds[2];
-
-    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0)
-        return -1;
-    if (fda_set (p->child_fda, fds[1]) < 0) {
-        close (fds[0]);
-        close (fds[1]);
-        errno = ENFILE;
-        return -1;
-    }
-    if (child_fd)
-        *child_fd = fds[1];
-    return fds[0];
-}
-
-void do_prepare_open_fd (void *arg, int fd)
-{
-    struct subprocess *p = arg;
-    if (fd < 3 || fd == p->childfd)
-        return;
-    if (fda_isset (p->child_fda, fd)) {
-        int flags = fcntl (fd, F_GETFD, 0);
-        // XXX No way to return error to caller
-        if (flags >= 0)
-            (void) fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC);
-        return;
-    }
-    close (fd);
-}
-
-/* Close all fd's except the ones we are using.
- * Clear the close-on-exec flag for socketpair fd's we are passing to child.
- */
-static int preparefd_child (struct subprocess *p)
-{
-    return fdwalk (do_prepare_open_fd, (void *) p);
-}
-
-static int dup2_fd (int fd, int newfd)
-{
-    assert (fd >= 0);
-    assert (newfd >= 0);
-    return dup2 (fd, newfd);
-}
-
-static int child_io_setup (struct subprocess *p)
-{
-    /*
-     *  Close parent end of stdio in child:
-     */
-    if (zio_close_dst_fd (p->zio_in) < 0
-            || zio_close_src_fd (p->zio_out) < 0
-            || zio_close_src_fd (p->zio_err) < 0)
-        return (-1);
-
-    /*
-     *  Dup this process' fds onto zio
-     */
-    if (  (dup2_fd (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
-       || (dup2_fd (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
-       || (dup2_fd (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
-        return (-1);
-
-    return (0);
-}
-
-static int parent_io_setup (struct subprocess *p)
-{
-    /*
-     *  Close child end of stdio in parent:
-     */
-    if (zio_close_src_fd (p->zio_in) < 0
-            || zio_close_dst_fd (p->zio_out) < 0
-            || zio_close_dst_fd (p->zio_err) < 0)
-        return (-1);
-
-    return (0);
-}
-
-
-static int sp_barrier_read_error (int fd)
-{
-    int e;
-    ssize_t n = read (fd, &e, sizeof (int));
-    if (n < 0) {
-        log_err ("sp_read_error: read");
-        return (-1);
-    }
-    else if (n == sizeof (int)) {
-        /* exec failure */
-        return (e);
-    }
-    return (0);
-}
-
-static int sp_barrier_signal (int fd)
-{
-    char c = 0;
-    if (write (fd, &c, sizeof (c)) != 1) {
-        log_err ("sp_barrier_signal: write");
-        return (-1);
-    }
-    return (0);
-}
-
-static int sp_barrier_wait (int fd)
-{
-    char c;
-    int n;
-    if ((n = read (fd, &c, sizeof (c))) != 1) {
-        log_err ("sp_barrier_wait: read:fd=%d: (got %d)", fd, n);
-        return (-1);
-    }
-    return (0);
-}
-
-static void sp_barrier_write_error (int fd, int e)
-{
-    if (write (fd, &e, sizeof (int)) != sizeof (int)) {
-        log_err ("sp_barrier_error: write");
-    }
-}
-
-static void subprocess_child (struct subprocess *p)
-{
-    int errnum, code = 127;
-    char **argv;
-
-    sigmask_unblock_all ();
-    close (p->parentfd);
-    p->parentfd = -1;
-
-    if (p->io_cb)
-        child_io_setup (p);
-
-    if (p->cwd && chdir (p->cwd) < 0) {
-        log_err ("Couldn't change dir to %s: going to /tmp instead", p->cwd);
-        if (chdir ("/tmp") < 0)
-            _exit (1);
-    }
-
-    /*
-     *  Send ready signal to parent
-     */
-    sp_barrier_signal (p->childfd);
-
-    /*
-     *  Wait for ready signal from parent
-     */
-    sp_barrier_wait (p->childfd);
-
-    if (preparefd_child (p) < 0) {
-        log_err ("Failed to prepare child fds");
-        _exit (1);
-    }
-
-    if (subprocess_run_hooks (p, p->hooks [SUBPROCESS_PRE_EXEC]) < 0) {
-        log_err ("Failed to run subprocess hooks: %s\n", strerror (errno));
-        _exit (1);
-    }
-
-    environ = subprocess_env_expand (p);
-    argv = subprocess_argv_expand (p);
-    execvp (argv[0], argv);
-    /*
-     *  Exit code standards:
-     *    126 for permission/access denied or
-     *    127 for EEXIST (or anything else)
-     */
-    errnum = errno;
-    if (errnum == EPERM || errnum == EACCES)
-        code = 126;
-
-    /*
-     * XXX: close stdout and stderr here to avoid flushing buffers at exit.
-     *  This can cause duplicate output if parent was running in fully
-     *  bufferred mode, and there was buffered output.
-     */
-    close (STDOUT_FILENO);
-    close (STDERR_FILENO);
-    sp_barrier_write_error (p->childfd, errnum);
-    _exit (code);
-}
-
-int subprocess_exec (struct subprocess *p)
-{
-    int rc = 0;
-    if (sp_barrier_signal (p->parentfd) < 0)
-        return (-1);
-
-    if ((p->exec_error = sp_barrier_read_error (p->parentfd)) != 0) {
-        /*
-         * Reap child immediately. Expectation from caller is that
-         *  a call to subprocess_reap will not be necessary after exec
-         *  failure
-         */
-        subprocess_reap (p);
-        rc = -1;
+        if ((ret = flux_buffer_write (fb, buf, len)) < 0) {
+            log_err ("flux_buffer_write");
+            return -1;
+        }
     }
     else {
-        p->running = 1;
-        subprocess_run_hooks (p, p->hooks [SUBPROCESS_RUNNING]);
+        if (p->state != FLUX_SUBPROCESS_INIT
+            && p->state != FLUX_SUBPROCESS_STARTED
+            && p->state != FLUX_SUBPROCESS_RUNNING) {
+            errno = EPIPE;
+            return -1;
+        }
+        if ((ret = flux_buffer_write (c->write_buffer, buf, len)) < 0) {
+            log_err ("flux_buffer_write");
+            return -1;
+        }
     }
 
-    /* No longer need parentfd socket */
-    close (p->parentfd);
-    p->parentfd = -1;
-    if (rc < 0)
-        errno = p->exec_error;
-    return (rc);
+    return ret;
 }
 
-static void subprocess_process_wait_status (struct subprocess *p, int status)
+int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
 {
-    if (status < 0)
-        return;
-    p->status = status;
-    if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
-        p->exited = 1;
-        subprocess_run_hooks (p, p->hooks [SUBPROCESS_EXIT]);
-    }
-    subprocess_run_hooks (p, p->hooks [SUBPROCESS_STATUS]);
-    check_completion (p);
-}
+    struct subprocess_channel *c;
 
-
-static void child_watcher (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
-{
-    struct subprocess *p = arg;
-    subprocess_process_wait_status (p, flux_child_watcher_get_rstatus (w));
-}
-
-int subprocess_fork (struct subprocess *p)
-{
-    if (p->argz_len <= 0 || p->argz == NULL || p->started) {
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;
         return -1;
     }
 
-    if ((p->pid = fork ()) < 0)
-        return (-1);
+    if (!stream)
+        stream = "STDIN";
 
-    if (p->pid == 0)
-        subprocess_child (p); /* No return */
-
-    if (p->io_cb)
-        parent_io_setup (p);
-    if (p->sm->reactor) {     /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
-        p->child_watcher = flux_child_watcher_create (p->sm->reactor,
-                                                      p->pid, true,
-                                                      child_watcher, p);
-        flux_watcher_start (p->child_watcher);
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_WRITE)) {
+        errno = EINVAL;
+        return -1;
     }
 
-    close (p->childfd);
-    p->childfd = -1;
+    if (c->closed)
+        return 0;
 
-    fda_closeall (p->child_fda);
-
-    sp_barrier_wait (p->parentfd);
-    p->started = 1;
-
-    return (subprocess_run_hooks (p, p->hooks [SUBPROCESS_POST_FORK]));
-}
-
-int subprocess_run (struct subprocess *p)
-{
-    if (subprocess_fork (p) < 0)
-        return (-1);
-    return subprocess_exec (p);
-}
-
-int subprocess_kill (struct subprocess *p, int sig)
-{
-    if (p->pid < (pid_t) 0)
-        return (-1);
-    return (kill (p->pid, sig));
-}
-
-pid_t subprocess_pid (struct subprocess *p)
-{
-    return (p->pid);
-}
-
-int subprocess_exit_status (struct subprocess *p)
-{
-    return (p->status);
-}
-
-int subprocess_exited (struct subprocess *p)
-{
-    return (p->exited);
-}
-
-int subprocess_exit_code (struct subprocess *p)
-{
-    int sig;
-    int code = -1;
-    if (WIFEXITED (p->status))
-        code = WEXITSTATUS (p->status);
-    else if ((sig = subprocess_signaled (p)))
-        code = sig + 128;
-    return (code);
-}
-
-int subprocess_signaled (struct subprocess *p)
-{
-    if (WIFSIGNALED (p->status))
-        return (WTERMSIG (p->status));
-    return (0);
-}
-
-int subprocess_stopped (struct subprocess *p)
-{
-    if (WIFSTOPPED (p->status))
-        return (WSTOPSIG (p->status));
-    return (0);
-}
-
-int subprocess_continued (struct subprocess *p)
-{
-    if (WIFCONTINUED (p->status))
-        return (1);
-    return (0);
-}
-int subprocess_exec_error (struct subprocess *p)
-{
-    return (p->exec_error);
-}
-
-const char * subprocess_state_string (struct subprocess *p)
-{
-    if (!p->started)
-        return ("Pending");
-    if (p->exec_error)
-        return ("Exec Failure");
-    if (!p->running)
-        return ("Waiting");
-    if (!p->exited)
-        return ("Running");
-    return ("Exited");
-}
-
-const char * subprocess_exit_string (struct subprocess *p)
-{
-    if (p->exec_error)
-        return ("Exec Failure");
-
-    if (!p->exited)
-        return ("Process is still running or has not been started");
-
-    if (WIFSIGNALED (p->status)) {
-        int sig = WTERMSIG (p->status);
-        return (strsignal (sig));
+    if (p->local) {
+        if (p->state == FLUX_SUBPROCESS_STARTED
+            || p->state == FLUX_SUBPROCESS_RUNNING) {
+            if (flux_buffer_write_watcher_close (c->buffer_write_w) < 0) {
+                log_err ("flux_buffer_write_watcher_close");
+                return -1;
+            }
+        }
+        /* else p->state == FLUX_SUBPROCESS_EXEC_FAILED
+           || p->state == FLUX_SUBPROCESS_EXITED
+           || p->state == FLUX_SUBPROCESS_FAILED
+        */
+        c->closed = true;
+    }
+    else {
+        /* doesn't matter about state, b/c reactors will send closed.
+         * If those reactors are already turned off, it's b/c
+         * subprocess failed/exited.
+         */
+        c->closed = true;
     }
 
-    if (WEXITSTATUS (p->status) != 0)
-        return ("Exited with non-zero status");
-
-    return ("Exited");
+    return 0;
 }
 
-struct subprocess_manager * subprocess_manager_create (void)
+static const char *subprocess_read (flux_subprocess_t *p,
+                                    const char *stream,
+                                    int len, int *lenp,
+                                    bool read_line,
+                                    bool trimmed)
 {
-    struct subprocess_manager *sm = xzmalloc (sizeof (*sm));
+    struct subprocess_channel *c;
+    flux_buffer_t *fb;
+    const char *ptr;
 
-    if (!(sm->processes = zlist_new ())) {
-        errno = ENOMEM;
-        free (sm);
-        return (NULL);
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return NULL;
     }
 
-    return (sm);
-}
-
-void subprocess_manager_destroy (struct subprocess_manager *sm)
-{
-    size_t n = zlist_size (sm->processes);
-    assert (n == 0);
-
-    zlist_destroy (&sm->processes);
-    free (sm);
-}
-
-static struct subprocess *
-subprocess_manager_find_pid (struct subprocess_manager *sm, pid_t pid)
-{
-    struct subprocess *p = zlist_first (sm->processes);
-    while (p) {
-        if (p->pid == pid)
-            return (p);
-        p = zlist_next (sm->processes);
-    }
-    return (NULL);
-}
-
-struct subprocess *
-subprocess_manager_first (struct subprocess_manager *sm)
-{
-    return zlist_first (sm->processes);
-}
-
-struct subprocess *
-subprocess_manager_next (struct subprocess_manager *sm)
-{
-    return zlist_next (sm->processes);
-}
-
-struct subprocess *
-subprocess_manager_run (struct subprocess_manager *sm, int ac, char **av,
-    char **env)
-{
-    struct subprocess *p = subprocess_create (sm);
-    if (p == NULL)
-        return (NULL);
-
-    if ((subprocess_set_args (p, ac, av) < 0) ||
-        (env && subprocess_set_environ (p, env) < 0)) {
-        subprocess_destroy (p);
-        return (NULL);
+    if (!read_line && len == 0) {
+        errno = EINVAL;
+        return NULL;
     }
 
-    if (subprocess_run (p) < 0) {
-        subprocess_destroy (p);
-        return (NULL);
+    if (!stream)
+        stream = "STDOUT";
+
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_READ)) {
+        errno = EINVAL;
+        return NULL;
     }
 
-    return (p);
-}
-
-int subprocess_reap (struct subprocess *p)
-{
-    pid_t rc;
-    int status;
-    if (p->exited)
-        return (0);
-    rc = waitpid (p->pid, &status, 0);
-    if (rc <= 0)
-        return (-1);
-    subprocess_process_wait_status (p, status);
-    return (0);
-}
-
-struct subprocess *
-subprocess_manager_wait (struct subprocess_manager *sm)
-{
-    int status;
-    pid_t pid;
-    struct subprocess *p;
-
-    pid = waitpid (-1, &status, sm->wait_flags);
-    if ((pid < 0) || !(p = subprocess_manager_find_pid (sm, pid))) {
-        return (NULL);
+    if (p->local) {
+        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+            return NULL;
     }
-    subprocess_process_wait_status (p, status);
-    return (p);
-}
+    else
+        fb = c->read_buffer;
 
-int
-subprocess_manager_reap_all (struct subprocess_manager *sm)
-{
-    struct subprocess *p;
-    while ((p = subprocess_manager_wait (sm)))
-        check_completion (p);
-    return (0);
-}
-
-int
-subprocess_manager_set (struct subprocess_manager *sm, int item, ...)
-{
-    va_list ap;
-
-    if (!sm)
-        return (-1);
-
-    va_start (ap, item);
-    switch (item) {
-        case SM_WAIT_FLAGS:
-            sm->wait_flags = va_arg (ap, int);
-            break;
-        case SM_FLUX:
-            sm->reactor = flux_get_reactor ((flux_t *) va_arg (ap, void *));
-            break;
-        case SM_REACTOR:
-            sm->reactor = (flux_reactor_t *) va_arg (ap, void *);
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
+    if (read_line) {
+        if (trimmed) {
+            if (!(ptr = flux_buffer_read_trimmed_line (fb, lenp)))
+                return NULL;
+        }
+        else {
+            if (!(ptr = flux_buffer_read_line (fb, lenp)))
+                return NULL;
+        }
     }
-    va_end (ap);
-    return (0);
+    else {
+        if (!(ptr = flux_buffer_read (fb, len, lenp)))
+            return NULL;
+    }
+
+    return ptr;
 }
 
+const char *flux_subprocess_read (flux_subprocess_t *p,
+                                  const char *stream,
+                                  int len, int *lenp)
+{
+    return subprocess_read (p, stream, len, lenp, false, false);
+}
+
+const char *flux_subprocess_read_line (flux_subprocess_t *p,
+                                       const char *stream,
+                                       int *lenp)
+{
+    return subprocess_read (p, stream, 0, lenp, true, false);
+}
+
+const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
+                                               const char *stream,
+                                               int *lenp)
+{
+    return subprocess_read (p, stream, 0, lenp, true, true);
+}
+
+flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
+{
+    flux_future_t *f = NULL;
+
+    if (!p || p->magic != SUBPROCESS_MAGIC || !signum) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (p->kill_signum) {
+        /* XXX right errno? */
+        errno = EBUSY;
+        return NULL;
+    }
+
+    if (p->state != FLUX_SUBPROCESS_RUNNING) {
+        /* XXX right errno? */
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (p->local) {
+        int ret;
+        if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP)
+            ret = killpg (p->pid, signum);
+        else
+            ret = kill (p->pid, signum);
+        f = flux_future_create (NULL, NULL);
+        if (ret < 0)
+            flux_future_fulfill_error (f, errno, NULL);
+        else
+            flux_future_fulfill (f, NULL, NULL);
+    }
+    else {
+        if (!(f = remote_kill (p, signum))) {
+            int save_errno = errno;
+            f = flux_future_create (NULL, NULL);
+            flux_future_fulfill_error (f, save_errno, NULL);
+        }
+    }
+    p->kill_signum = signum;
+    return f;
+}
+
+void flux_subprocess_ref (flux_subprocess_t *p)
+{
+    if (p && p->magic == SUBPROCESS_MAGIC)
+        p->refcount++;
+}
+
+void flux_subprocess_unref (flux_subprocess_t *p)
+{
+    if (p && p->magic == SUBPROCESS_MAGIC) {
+        if (--p->refcount == 0)
+            subprocess_free (p);
+    }
+}
+
+flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    return p->state;
+}
+
+const char *flux_subprocess_state_string (flux_subprocess_state_t state)
+{
+    switch (state)
+    {
+    case FLUX_SUBPROCESS_INIT:
+        return "Init";
+    case FLUX_SUBPROCESS_STARTED:
+        return "Started";
+    case FLUX_SUBPROCESS_EXEC_FAILED:
+        return "Exec Failed";
+    case FLUX_SUBPROCESS_RUNNING:
+        return "Running";
+    case FLUX_SUBPROCESS_EXITED:
+        return "Exited";
+    case FLUX_SUBPROCESS_FAILED:
+        return "Failed";
+    }
+    return NULL;
+}
+
+int flux_subprocess_rank (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (p->local) {
+        errno = EINVAL;
+        return -1;
+    }
+    return p->rank;
+}
+
+int flux_subprocess_fail_errno (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (p->state != FLUX_SUBPROCESS_EXEC_FAILED
+        && p->state != FLUX_SUBPROCESS_FAILED) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
+        return p->exec_failed_errno;
+    else
+        return p->failed_errno;
+}
+
+int flux_subprocess_status (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (p->state != FLUX_SUBPROCESS_EXITED) {
+        errno = EINVAL;
+        return -1;
+    }
+    return p->status;
+}
+
+int flux_subprocess_exit_code (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (p->state != FLUX_SUBPROCESS_EXITED) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!WIFEXITED (p->status)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return WEXITSTATUS (p->status);
+}
+
+int flux_subprocess_signaled (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (p->state != FLUX_SUBPROCESS_EXITED) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!WIFSIGNALED (p->status)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return WTERMSIG (p->status);
+}
+
+pid_t flux_subprocess_pid (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    return p->pid;
+}
+
+flux_cmd_t * flux_subprocess_get_cmd (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return p->cmd;
+}
+
+flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return p->reactor;
+}
+
+int flux_subprocess_set_context (flux_subprocess_t *p, const char *name, void *x)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    return zhash_insert (p->aux, name, x);
+}
+
+void * flux_subprocess_get_context (flux_subprocess_t *p, const char *name)
+{
+    if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return zhash_lookup (p->aux, name);
+}
 
 /*
- *  vi: ts=4 sw=4 expandtab
+ * vi: ts=4 sw=4 expandtab
  */
