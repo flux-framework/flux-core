@@ -3,7 +3,7 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/subprocess/command.h"
+#include "src/common/libsubprocess/command.h"
 
 /*
  *  Check basic flux_cmd_create () with args

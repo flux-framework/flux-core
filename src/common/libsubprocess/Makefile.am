@@ -43,7 +43,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
         $(top_srcdir)/config/tap-driver.sh
 
 test_ldadd = \
-        $(top_builddir)/src/common/subprocess/libsubprocess.la \
+        $(top_builddir)/src/common/libsubprocess/libsubprocess.la \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la
@@ -58,7 +58,7 @@ test_cmd_t_LDADD = $(test_ldadd)
 
 test_subprocess_t_SOURCES = test/subprocess.c
 test_subprocess_t_CPPFLAGS = \
-	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/subprocess/\" \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
 	$(test_cppflags)
 test_subprocess_t_LDADD = $(test_ldadd)
 

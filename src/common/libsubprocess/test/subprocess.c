@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/subprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess.h"
 
 extern char **environ;
 
