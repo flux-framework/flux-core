@@ -60,6 +60,27 @@ test_expect_success 'job-ingest: submitter userid stored in KVS' '
 	test $jobuserid -eq $myuserid
 '
 
+test_expect_success 'job-ingest: priority stored in KVS' '
+	jobid=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	jobpri=$(flux kvs get --json ${kvsdir}.priority) &&
+	test $jobpri -eq 16
+'
+
+test_expect_success 'job-ingest: instance owner can submit priority=31' '
+	jobid=$(${SUBMITBENCH} --priority=31 ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	jobpri=$(flux kvs get --json ${kvsdir}.priority) &&
+	test $jobpri -eq 31
+'
+
+test_expect_success 'job-ingest: priority range is enforced' '
+	test_must_fail ${SUBMITBENCH} --priority=32 \
+		${JOBSPEC}/valid/basic.yaml &&
+	test_must_fail ${SUBMITBENCH} --priority="-1" \
+		${JOBSPEC}/valid/basic.yaml
+'
+
 test_expect_success 'job-ingest: valid jobspecs accepted' '
 	test_valid ${JOBSPEC}/valid/*
 '
