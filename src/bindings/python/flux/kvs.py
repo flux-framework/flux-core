@@ -19,11 +19,14 @@ RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 def get_key_direct(flux_handle, key):
     valp = ffi.new('char *[1]')
-    RAW.flux_kvs_get(flux_handle, key, valp)
+    future = RAW.flux_kvs_lookup(flux_handle, 0, key)
+    RAW.flux_kvs_lookup_get (future, valp)
     if valp[0] == ffi.NULL:
         return None
-    return json.loads(ffi.string(valp[0]).decode('utf-8'))
 
+    ret = json.loads(ffi.string(valp[0]).decode('utf-8'))
+    RAW.flux_future_destroy(future)
+    return ret
 
 def exists(flux_handle, key):
     try:
@@ -61,14 +64,35 @@ def get(flux_handle, key):
             raise err
     return get_dir(flux_handle, key)
 
-
 def put(flux_handle, key, value):
     json_str = json.dumps(value)
-    RAW.flux_kvs_put(flux_handle, key, json_str)
+    if (flux_handle._aux_txn is None):
+        flux_handle._aux_txn = RAW.flux_kvs_txn_create()
+    return RAW.flux_kvs_txn_put(flux_handle._aux_txn, 0, key, json_str)
 
+def put_mkdir(flux_handle, key):
+    if (flux_handle._aux_txn is None):
+        flux_handle._aux_txn = RAW.flux_kvs_txn_create()
+    return RAW.flux_kvs_txn_mkdir(flux_handle._aux_txn, 0, key)
+
+def put_unlink(flux_handle, key):
+    if (flux_handle._aux_txn is None):
+        flux_handle._aux_txn = RAW.flux_kvs_txn_create()
+    return RAW.flux_kvs_txn_unlink(flux_handle._aux_txn, 0, key)
+
+def put_symlink(flux_handle, key):
+    if (flux_handle._aux_txn is None):
+        flux_handle._aux_txn = RAW.flux_kvs_txn_create()
+    return RAW.flux_kvs_txn_symlink(flux_handle._aux_txn, 0, key)
 
 def commit(flux_handle, flags=0):
-    return RAW.flux_kvs_commit_anon(flux_handle, flags)
+    if flux_handle._aux_txn is None:
+        return -1
+    future = RAW.flux_kvs_commit(flux_handle, flags, flux_handle._aux_txn)
+    RAW.flux_future_get(future, None)
+    RAW.flux_kvs_txn_destroy(flux_handle._aux_txn)
+    flux_handle._aux_txn=None
+    return 0
 
 
 def dropcache(flux_handle):
@@ -128,14 +152,14 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
     def commit(self, flags=0):
-        return commit(self.fhdl.handle, flags)
+        return commit(self.fhdl, flags)
 
     def key_at(self, key):
         p_str = self.pimpl.key_at(key)
         return p_str.decode('utf-8')
 
     def exists(self, name):
-        return self.pimpl.exists(name)
+        return exists(self.fhdl, name)
 
     def __getitem__(self, key):
         try:
@@ -145,13 +169,11 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                 '{} not found under directory {}'.format(key, self.key_at('')))
 
     def __setitem__(self, key, value):
-        # Turn it into json
-        json_str = json.dumps(value)
-        if self.pimpl.put(key, json_str) < 0:
+        if put(self.fhdl, key, value) < 0:
             print("Error setting item in KVS")
 
     def __delitem__(self, key):
-        self.pimpl.unlink(key)
+        put_unlink(self.fhdl, key)
 
     class KVSDirIterator(collections.Iterator):
 
@@ -212,7 +234,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
           syntax, sub-dicts will be stored as json values in a single key
         """
 
-        self.pimpl.mkdir(key)
+        put_mkdir(self.fhdl, key)
         self.commit()
         new_kvsdir = KVSDir(self.fhdl, key)
         if contents is not None:
