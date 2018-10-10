@@ -276,7 +276,7 @@ static void list_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (!(jobs = list_jobs (ctx, userid, rolemask, max_entries, attrs)))
         goto error;
-    if (flux_respond_pack (h, msg, "{s:o}", "jobs", jobs) < 0)
+    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (jobs);
     return;
