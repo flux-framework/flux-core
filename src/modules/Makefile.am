@@ -9,7 +9,8 @@ SUBDIRS = \
  cron \
  aggregator \
  userdb \
- job-ingest
+ job-ingest \
+ job-manager
 
 if HAVE_PYTHON
 SUBDIRS += pymod

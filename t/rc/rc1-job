@@ -5,3 +5,4 @@ flux module load -r 0 kvs
 flux module load -r all -x 0 kvs
 
 flux module load -r all job-ingest
+flux module load -r 0 job-manager

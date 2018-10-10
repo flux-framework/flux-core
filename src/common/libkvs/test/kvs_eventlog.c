@@ -65,8 +65,8 @@ void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
     const char *s;
     int rc;
     double timestamp;
-    flux_kvs_event_name_t name;
-    flux_kvs_event_context_t context;
+    char name[MAX_KVS_EVENT_NAME + 1];
+    char context[MAX_KVS_EVENT_CONTEXT + 1];
 
     name[0] = '\0';
     context[0] = '\0';
@@ -82,7 +82,8 @@ void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
     else {
         ok (s != NULL,
             "flux_kvs_eventlog_%s != NULL", first ? "first" : "next");
-        rc = flux_kvs_event_decode (s, &timestamp, name, context);
+        rc = flux_kvs_event_decode (s, &timestamp, name, sizeof (name),
+                                                   context, sizeof (context));
         ok (rc == 0
             && timestamp == xtimestamp
             && (!xname || !strcmp (name, xname))
@@ -184,14 +185,15 @@ void bad_input (void)
         "flux_kvs_eventlog_next log=NULL returns NULL");
 
     errno = 0;
-    ok (flux_kvs_event_decode (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_event_decode (NULL, NULL, NULL, 0, NULL, 0) < 0
+        && errno == EINVAL,
         "flux_kvs_event_decode log=NULL fails with EINVAL");
 
     /* decode bad events */
     for (i = 0; badevent[i] != NULL; i++) {
         char buf[80];
         errno = 0;
-        ok (flux_kvs_event_decode (badevent[i], NULL, NULL, NULL) < 0
+        ok (flux_kvs_event_decode (badevent[i], NULL, NULL, 0, NULL, 0) < 0
             && errno == EINVAL,
             "flux_kvs_event_decode event=\"%s\" fails with EINVAL",
             printable (buf, badevent[i]));

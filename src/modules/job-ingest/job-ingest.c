@@ -52,8 +52,13 @@
  * For performance, the above actions are batched, so that if job requests
  * arrive within the 'batch_timeout' window, they are combined into one
  * KVS transaction and one event message.  The event message payload
- * contains an array of integer jobids, e.g.
- *   {"ids":[I,I,...]}
+ * contains an array of job objects, e.g.
+ *   {"jobs":[
+ *     {"id":n,"userid":m,"priority":o},
+ *     {"id":n,"userid":m,"priority":o},
+ *     ...
+ *     {"id":n,"userid":m,"priority":o},
+ *   ]}
  *
  * The jobid is returned to the user in response to the "submit" RPC.
  * Responses are sent after the KVS commit for the batch is completed,
@@ -108,7 +113,7 @@ struct batch {
     struct job_ingest_ctx *ctx;
     flux_kvs_txn_t *txn;
     zlist_t *jobs;
-    json_t *idlist;
+    json_t *joblist;
 };
 
 static void job_destroy (struct job *job)
@@ -156,7 +161,7 @@ static void batch_destroy (struct batch *batch)
             while ((job = zlist_pop (batch->jobs)))
                 job_destroy (job);
             zlist_destroy (&batch->jobs);
-            json_decref (batch->idlist);
+            json_decref (batch->joblist);
         }
         free (batch);
         errno = saved_errno;
@@ -177,7 +182,7 @@ static struct batch *batch_create (struct job_ingest_ctx *ctx)
         goto nomem;
     if (!(batch->txn = flux_kvs_txn_create ()))
         goto error;
-    if (!(batch->idlist = json_array ()))
+    if (!(batch->joblist = json_array ()))
         goto nomem;
     batch->ctx = ctx;
     return batch;
@@ -213,7 +218,7 @@ static void batch_event_pub (struct batch *batch)
     flux_future_t *f;
 
     if (!(f = flux_event_publish_pack (h, "job-ingest.submit", 0, "{s:O}",
-                                       "ids", batch->idlist))) {
+                                       "jobs", batch->joblist))) {
         flux_log_error (h, "%s: flux_event_publish_pack", __FUNCTION__);
         goto error;
     }
@@ -319,12 +324,12 @@ static int make_key (char *buf, int bufsz, struct job *job, const char *name)
  * On error, ensure that no remnants of job made into KVS transaction.
  */
 static int batch_add_job (struct batch *batch, struct job *job,
-                          const char *J, uint32_t userid,
+                          const char *J, uint32_t userid, int priority,
                           const char *jobspec, int jobspecsz)
 {
     char key[64];
     int saved_errno;
-    json_t *id;
+    json_t *jobentry;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -344,10 +349,17 @@ static int batch_add_job (struct batch *batch, struct job *job,
         goto error;
     if (flux_kvs_txn_pack (batch->txn, 0, key, "i", userid) < 0)
         goto error;
-    if (!(id = json_integer (job->id)))
+    if (make_key (key, sizeof (key), job, "priority") < 0)
+        goto error;
+    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", priority) < 0)
+        goto error;
+
+    if (!(jobentry = json_pack ("{s:I s:i s:i}", "id", job->id,
+                                                 "userid", userid,
+                                                 "priority", priority)))
         goto nomem;
-    if (json_array_append_new (batch->idlist, id) < 0) {
-        json_decref (id);
+    if (json_array_append_new (batch->joblist, jobentry) < 0) {
+        json_decref (jobentry);
         goto nomem;
     }
     return 0;
@@ -382,9 +394,11 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     int rc;
     uint32_t userid;
     uint32_t rolemask;
+    int priority;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
+    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i}",
                              "J", &J,
+                             "priority", &priority,
                              "flags", &flags) < 0)
         goto error;
     if (flags != 0) {
@@ -443,6 +457,21 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     jobspecsz = strlen (J);
     J = NULL;
 #endif
+    if (priority < FLUX_JOB_PRIORITY_MIN || priority > FLUX_JOB_PRIORITY_MAX) {
+        snprintf (errbuf, sizeof (errbuf), "priority range is [%d:%d]",
+                  FLUX_JOB_PRIORITY_MIN, FLUX_JOB_PRIORITY_MAX);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(rolemask & FLUX_ROLE_OWNER) && priority > FLUX_JOB_PRIORITY_DEFAULT) {
+        snprintf (errbuf, sizeof (errbuf),
+                  "only the instance owner can submit with priority >%d",
+                  FLUX_JOB_PRIORITY_MAX);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
 #if HAVE_JOBSPEC
     if (jobspec_validate (jobspec, jobspecsz, errbuf, sizeof (errbuf)) < 0) {
         errmsg = errbuf;
@@ -458,7 +487,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (!(job = job_create (&ctx->gen, msg)))
         goto error;
-    if (batch_add_job (ctx->batch, job, J, userid, jobspec, jobspecsz) < 0) {
+    if (batch_add_job (ctx->batch, job, J, userid, priority,
+                       jobspec, jobspecsz) < 0) {
         job_destroy (job);
         goto error;
     }

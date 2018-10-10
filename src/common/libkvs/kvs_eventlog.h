@@ -11,8 +11,9 @@ extern "C" {
  *   "timestamp name [context ...]\n"
  */
 
-typedef char flux_kvs_event_name_t[65];
-typedef char flux_kvs_event_context_t[257];
+#define MAX_KVS_EVENT_NAME      (64)
+#define MAX_KVS_EVENT_CONTEXT   (256)
+
 
 /* Create/destroy an eventlog
  */
@@ -41,13 +42,13 @@ const char *flux_kvs_eventlog_next (struct flux_kvs_eventlog *eventlog);
 
 /* Encode/decode an event.
  * flux_kvs_event_encode() sets timestamp to current wallclock.
- * flux_kvs_event_encode_timestmap() allows timestamp to be set to any value.
+ * flux_kvs_event_encode_timestamp() allows timestamp to be set to any value.
  * Caller must free return value of flux_kvs_event_encode().
  */
 int flux_kvs_event_decode (const char *s,
                            double *timestamp,
-                           flux_kvs_event_name_t name,
-                           flux_kvs_event_context_t context);
+                           char *name, int name_size,
+                           char *context, int context_size);
 char *flux_kvs_event_encode (const char *name, const char *context);
 char *flux_kvs_event_encode_timestamp (double timestamp,
                                        const char *name,

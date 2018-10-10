@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -9,7 +9,10 @@
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the Free
  *  Software Foundation; either version 2 of the license, or (at your option)
- *  any later version.
+ *  any later version.  Additionally, the libflux-core library may be
+ *  redistributed under the terms of the GNU Lesser General Public License as
+ *  published by the Free Software Foundation, either version 2 of the license,
+ *  or (at your option) any later version.
  *
  *  Flux is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
@@ -32,6 +35,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <jansson.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #if HAVE_FLUX_SECURITY
@@ -42,10 +46,21 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
 
+int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submitbench (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option list_opts[] =  {
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
+      .usage = "Limit output to N jobs",
+    },
+    { .name = "suppress-header", .key = 's', .has_arg = 0,
+      .usage = "Suppress printing of header line",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -55,6 +70,9 @@ static struct optparse_option submitbench_opts[] =  {
     },
     { .name = "fanout", .key = 'f', .has_arg = 1, .arginfo = "N",
       .usage = "Run at most N RPCs in parallel",
+    },
+    { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
+      .usage = "Set job priority (0-31, default=16)",
     },
 #if HAVE_FLUX_SECURITY
     { .name = "reuse-signature", .key = 'R', .has_arg = 0,
@@ -83,6 +101,13 @@ static struct optparse_option id_opts[] =  {
 };
 
 static struct optparse_subcommand subcommands[] = {
+    { "list",
+      "[OPTIONS]",
+      "List active jobs",
+      cmd_list,
+      0,
+      list_opts
+    },
     { "submitbench",
       "[OPTIONS] jobspec",
       "Run job(s)",
@@ -160,6 +185,48 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
+int cmd_list (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    int max_entries = optparse_get_int (p, "count", 0);
+    char *attrs = "[\"id\",\"userid\",\"priority\"]";
+    flux_t *h;
+    flux_future_t *f;
+    json_t *jobs;
+    size_t index;
+    json_t *value;
+
+    if (optindex != argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (!(f = flux_job_list (h, max_entries, attrs)))
+        log_err_exit ("flux_job_list");
+    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
+        log_err_exit ("flux_job_list");
+    if (!optparse_hasopt (p, "suppress-header"))
+        printf ("%s\t\t%s\t%s\n", "JOBID", "USERID", "PRIORITY");
+    json_array_foreach (jobs, index, value) {
+        flux_jobid_t id;
+        int priority;
+        uint32_t userid;
+        if (json_unpack (value, "{s:I s:i s:i}", "id", &id,
+                                                 "priority", &priority,
+                                                 "userid", &userid) < 0)
+            log_msg_exit ("error parsing job data");
+        printf ("%llu\t%lu\t%d\n", (unsigned long long)id,
+                                   (unsigned long)userid,
+                                   priority);
+    }
+    flux_future_destroy (f);
+    flux_close (h);
+
+   return (0);
+}
+
 struct submitbench_ctx {
     flux_t *h;
 #if HAVE_FLUX_SECURITY
@@ -178,6 +245,7 @@ struct submitbench_ctx {
     void *jobspec;
     int jobspecsz;
     const char *J;
+    int priority;
 };
 
 /* Read entire file 'name' ("-" for stdin).  Exit program on error.
@@ -263,13 +331,13 @@ void submitbench_check (flux_reactor_t *r, flux_watcher_t *w,
                 log_err_exit ("flux_sign_wrap: %s",
                               flux_security_last_error (ctx->sec));
         }
-        if (!(f = flux_job_submit (ctx->h, ctx->J, ctx->flags)))
+        if (!(f = flux_job_submit (ctx->h, ctx->J, ctx->priority, ctx->flags)))
             log_err_exit ("flux_job_submit");
 #else
         char *cpy = strndup (ctx->jobspec, ctx->jobspecsz);
         if (!cpy)
             log_err_exit ("strndup");
-        if (!(f = flux_job_submit (ctx->h, cpy, ctx->flags)))
+        if (!(f = flux_job_submit (ctx->h, cpy, ctx->priority, ctx->flags)))
             log_err_exit ("flux_job_submit");
         free (cpy);
 #endif
@@ -306,6 +374,7 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     ctx.max_queue_depth = optparse_get_int (p, "fanout", 256);
     ctx.totcount = optparse_get_int (p, "repeat", 1);
     ctx.jobspecsz = read_jobspec (argv[optindex++], &ctx.jobspec);
+    ctx.priority = optparse_get_int (p, "priority", FLUX_JOB_PRIORITY_DEFAULT);
 
     /* Prep/check/idle watchers perform flow control, keeping
      * at most ctx.max_queue_depth RPCs outstanding.
