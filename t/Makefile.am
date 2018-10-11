@@ -128,6 +128,11 @@ TESTS += \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
 	python/t0008-jsc.py
+
+if HAVE_FLUX_SECURITY
+TESTS += python/t0009-security.py
+endif
+
 endif
 
 EXTRA_DIST= \
@@ -232,7 +237,8 @@ check_SCRIPTS = \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
-	python/t0008-jsc.py
+	python/t0008-jsc.py \
+	python/t0009-security.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

@@ -227,8 +227,13 @@ AX_CODE_COVERAGE
 AC_ARG_WITH([flux-security], AS_HELP_STRING([--with-flux-security],
              [Build with flux-security]))
 AS_IF([test "x$with_flux_security" = "xyes"], [
-    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security], [], [])
+    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security],
+                      [flux_sec_incdir=`$PKG_CONFIG --variable=includedir flux-security`],
+                      [flux_sec_incdir=;])
+    AS_IF([test "x$flux_sec_incdir" = x],
+          [AC_MSG_ERROR([couldn't find flux-security or include directory])])
     AC_DEFINE([HAVE_FLUX_SECURITY], [1], [Define flux-security is available])
+    AC_SUBST(FLUX_SECURITY_INCDIR, $flux_sec_incdir)
 ])
 AM_CONDITIONAL([HAVE_FLUX_SECURITY], [test "x$with_flux_security" = "xyes"])
 
