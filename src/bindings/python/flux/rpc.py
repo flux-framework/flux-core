@@ -1,5 +1,8 @@
+import sys
 import json
+
 import six
+
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 import flux.constants
@@ -57,8 +60,18 @@ class RPC(WrapperPimpl):
 
     def get_str(self):
         j_str = ffi.new('char *[1]')
-        self.pimpl.get(j_str)
-        return ffi.string(j_str[0])
+        try:
+            self.pimpl.get(j_str)
+            return ffi.string(j_str[0])
+        except EnvironmentError as error:
+            exception_tuple = sys.exc_info()
+            try:
+                errmsg = raw.flux_future_error_string(self.handle)
+            except EnvironmentError:
+                six.reraise(*exception_tuple)
+            if errmsg is None:
+                six.reraise(*exception_tuple)
+            raise EnvironmentError(error.errno, errmsg.decode('utf-8'))
 
     def get(self):
         return json.loads(self.get_str().decode('utf-8'))
