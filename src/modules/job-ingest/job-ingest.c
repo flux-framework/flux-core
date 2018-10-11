@@ -189,6 +189,33 @@ error:
     return NULL;
 }
 
+/* Respond to all requestors (for each job) with errnum and errstr (required).
+ */
+static void batch_respond_error (struct batch *batch,
+                                 int errnum, const char *errstr)
+{
+    flux_t *h = batch->ctx->h;
+    struct job *job = zlist_first (batch->jobs);
+    while (job) {
+        if (flux_respond_error (h, job->msg, errnum, "%s", errstr) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+        job = zlist_next (batch->jobs);
+    }
+}
+
+/* Respond to all requestors (for each job) with their id.
+ */
+static void batch_respond_success (struct batch *batch)
+{
+    flux_t *h = batch->ctx->h;
+    struct job *job = zlist_first (batch->jobs);
+    while (job) {
+        if (flux_respond_pack (h, job->msg, "{s:I}", "id", job->id) < 0)
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        job = zlist_next (batch->jobs);
+    }
+}
+
 /* Get result of publishing event and log any error.
  * Finally destroy the batch.
  *
@@ -226,33 +253,6 @@ static void batch_event_pub (struct batch *batch)
     return;
 error:
     batch_destroy (batch);
-}
-
-/* Respond to all requestors (for each job) with errnum and errstr (required).
- */
-static void batch_respond_error (struct batch *batch,
-                                 int errnum, const char *errstr)
-{
-    flux_t *h = batch->ctx->h;
-    struct job *job = zlist_first (batch->jobs);
-    while (job) {
-        if (flux_respond_error (h, job->msg, errnum, "%s", errstr) < 0)
-            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-        job = zlist_next (batch->jobs);
-    }
-}
-
-/* Respond to all requestors (for each job) with their id.
- */
-static void batch_respond_success (struct batch *batch)
-{
-    flux_t *h = batch->ctx->h;
-    struct job *job = zlist_first (batch->jobs);
-    while (job) {
-        if (flux_respond_pack (h, job->msg, "{s:I}", "id", job->id) < 0)
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        job = zlist_next (batch->jobs);
-    }
 }
 
 /* Get result of KVS commit.
