@@ -1,0 +1,4 @@
+ok 1 - flux module load kvs
+# passed all 1 test(s)
+1..1
+error: manually loaded module(s) not unloaded: kvs
