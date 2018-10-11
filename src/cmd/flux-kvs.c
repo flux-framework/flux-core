@@ -1860,11 +1860,12 @@ static int eventlog_timestr (double timestamp, char *buf, size_t size)
 static void eventlog_prettyprint (FILE *f, const char *s)
 {
     double timestamp;
-    flux_kvs_event_name_t name;
-    flux_kvs_event_context_t context;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
     char buf[64];
 
-    if (flux_kvs_event_decode (s, &timestamp, name, context) < 0)
+    if (flux_kvs_event_decode (s, &timestamp, name, sizeof (name),
+                                              context, sizeof (context)) < 0)
         log_err_exit ("flux_kvs_event_decode");
     if (eventlog_timestr (timestamp, buf, sizeof (buf)) < 0)
         log_msg_exit ("error converting timestamp to ISO 8601");
