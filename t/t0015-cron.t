@@ -32,6 +32,17 @@ flux_cron() {
     test -n "$id" && echo ${id}
 }
 
+contains() {
+    string="$1"
+    substring="$2"
+    if test "${string#*$substring}" != "$string"
+    then
+        return 0    # $substring is in $string
+    else
+        return 1    # $substring is not in $string
+    fi
+}
+
 test_expect_success 'load cron module' '
     flux module load cron
 '
@@ -209,14 +220,16 @@ test_expect_success 'flux-cron event --after works' '
 test_expect_success 'flux-cron event --min-interval works' '
     id=$(flux_cron event --min-interval=.5s t.cron.trigger hostname) &&
     test_when_finished "flux cron delete ${id}" &&
-    cron_entry_check ${id} type event &&
-    cron_entry_check ${id} stopped false &&
-    cron_entry_check ${id} stats.count 0 &&
-    cron_entry_check ${id} typedata.min_interval 0.5 &&
+    dump=$(flux cron dump ${id}) &&
+    contains "$dump" "type = \"event\"" &&
+    contains "$dump" "stopped = false" &&
+    contains "$dump" "stats.count = 0" &&
+    contains "$dump" "typedata.min_interval = 0.5" &&
     flux event pub t.cron.trigger && flux event pub t.cron.trigger &&
     cron_entry_check ${id} stats.count 1 &&
     sleep 0.5 &&
-    cron_entry_check ${id} stats.count 2
+    count=$(flux cron dump -k stats.count ${id}) &&
+    test "$count" -gt "1"
 '
 test_expect_success 'flux-cron can set timeout on tasks' '
     id=$(flux_cron event -o timeout=0.1 t.cron.trigger sleep 120) &&
