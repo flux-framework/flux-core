@@ -31,8 +31,8 @@ SYNOPSIS
 
  int flux_kvs_event_decode (const char *s,
                             double *timestamp,
-                            flux_kvs_event_name_t name,
-                            flux_kvs_event_context_t context);
+                            char *name, int name_size,
+                            char *context, int context_size);
 
  char *flux_kvs_event_encode (const char *name, const char *context);
 
@@ -81,10 +81,13 @@ Pointers returned by these functions remain valid until the object
 is destroyed.
 
 `flux_kvs_event_decode()` decodes a raw event, copying the timestamp,
-name, and context fields to the supplied storage.  A field may be
-ignored by setting the corresponding parameter to zero.  If the optional
-context is not present, the supplied storage will be filled with the
-empty string.
+name, and context fields to the corresponding output parameters.
+It is advised that the _name_ be large enough to contain
+`FLUX_KVS_MAX_EVENT_NAME + 1` bytes, and _context_ large enough to contain
+`FLUX_KVS_MAX_EVENT_CONTEXT + 1` bytes.  If an output parameter is NULL,
+the corresponding field is parsed internally, but not copied.
+If _context_ is not NULL, and the event does not contain the optional
+context field, the empty string is be copied to the supplied storage.
 
 `flux_kvs_event_encode()` creates a raw event from the supplied fields.
 The timestamp is assigned the current wallclock time. The caller must
