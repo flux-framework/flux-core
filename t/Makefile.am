@@ -279,7 +279,8 @@ check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
 	request/req.la \
-	wreck/sched-dummy.la
+	wreck/sched-dummy.la \
+	ingest/job-manager-dummy.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -493,3 +494,9 @@ rexec_rexec_ps_SOURCES = rexec/rexec_ps.c
 rexec_rexec_ps_CPPFLAGS = $(test_cppflags)
 rexec_rexec_ps_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
+ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
+ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+ingest_job_manager_dummy_la_LIBADD = \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)
