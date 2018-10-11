@@ -25,7 +25,7 @@
 
 ARGS="$@"
 JOBS=${JOBS:-2}
-MAKECMDS="make -j ${JOBS} ${DISTCHECK:+dist}check"
+MAKECMDS="make --output-sync=line -j ${JOBS} ${DISTCHECK:+dist}check"
 
 # Add non-standard path for libfaketime to LD_LIBRARY_PATH:
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"
