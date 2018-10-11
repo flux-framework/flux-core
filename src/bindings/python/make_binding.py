@@ -10,7 +10,6 @@ parser.add_argument('--include_header', help='Include base path', type=str, defa
 parser.add_argument('--include_ffi', help='FFI module for inclusion', action='append', default=[]) 
 parser.add_argument('--package', help='Package prefix for module import', default=None)
 parser.add_argument('--path', help='Include base path', default='.')
-parser.add_argument('--lib_path', help='Library base path', default='.')
 parser.add_argument('--modname', help='Name for the module to be generated', default='_flux')
 parser.add_argument('--library', help='Library to include in the build', default='flux-core')
 parser.add_argument('--add_long_sub', help='Regex filter to apply whole-file of the form <match>|||<replacement>', action='append', default=[])
