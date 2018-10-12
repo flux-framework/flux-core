@@ -3,8 +3,11 @@ FROM centos:7
 LABEL maintainer="Tom Scogland <scogland1@llnl.gov>"
 
 # add EPEL so we don't have to build everything by hand
+# add scl and devtoolset-7 so we can use next-rhel tools, just make 4 for now
+# so we can avoid make sync issues on travis
 RUN yum -y update \
  && yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \
+ && yum -y install centos-release-scl-rh \
  && yum -y update \
  && yum -y install \
       which \
@@ -50,6 +53,7 @@ RUN yum -y update \
       man-db \
       aspell \
       aspell-en \
+      devtoolset-7-make \
  && yum clean all
 
 # The cmake from yum is incredibly ancient, download a less ancient one

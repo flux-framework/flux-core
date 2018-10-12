@@ -20,12 +20,26 @@
 #  CC, CXX, LDFLAGS, CFLAGS, etc.
 #
 
+# if make is old, and scl is here, and devtoolset is available and not turned
+# on, re-exec ourself with it active to get a newer make
+if make --version | grep 'GNU Make 4' 2>&1 > /dev/null ; then
+  MAKE="make --output-sync=target"
+else
+  MAKE="make" #use this if all else fails
+  if test "X$X_SCLS" = "X" ; then
+    if scl -l | grep devtoolset-7 2>&1 >/dev/null ; then
+      echo  bash "$0" "$@" | scl enable devtoolset-7 -
+      exit
+    fi
+  fi
+fi
+
 # source travis_fold and travis_time functions:
 . src/test/travis-lib.sh
 
 ARGS="$@"
 JOBS=${JOBS:-2}
-MAKECMDS="make --output-sync=line -j ${JOBS} ${DISTCHECK:+dist}check"
+MAKECMDS="${MAKE} -j ${JOBS} ${DISTCHECK:+dist}check"
 
 # Add non-standard path for libfaketime to LD_LIBRARY_PATH:
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"
@@ -61,16 +75,16 @@ sudo sh -c "mkdir -p /usr/include/flux \
 # We can't use distcheck here, it doesn't play well with coverage testing:
 if test "$COVERAGE" = "t"; then
     ARGS="$ARGS --enable-code-coverage"
-    MAKECMDS="make -j $JOBS && \
-              make -j $JOBS check-code-coverage && \
+    MAKECMDS="${MAKE} -j $JOBS && \
+              ${MAKE} -j $JOBS check-code-coverage && \
               lcov -l flux*-coverage.info"
 
 # Use make install for T_INSTALL:
 elif test "$TEST_INSTALL" = "t"; then
     ARGS="$ARGS --prefix=/usr --sysconfdir=/etc"
-    MAKECMDS="make -j $JOBS && sudo make install && \
+    MAKECMDS="${MAKE} -j $JOBS && sudo make install && \
               /usr/bin/flux keygen --force && \
-              FLUX_TEST_INSTALLED_PATH=/usr/bin make -j $JOBS check"
+              FLUX_TEST_INSTALLED_PATH=/usr/bin ${MAKE} -j $JOBS check"
 fi
 
 # Travis has limited resources, even though number of processors might
