@@ -33,8 +33,8 @@
 #include <flux/security/sign.h>
 #endif
 
-#include "src/common/libjob/job.h"
 #include "src/common/libutil/fluid.h"
+#include "src/common/libjob/sign_none.h"
 
 #if HAVE_JOBSPEC
 #include "jobspec.h"
@@ -388,12 +388,10 @@ static int batch_add_job (struct batch *batch, struct job *job,
         errno = ENOMEM;
         return -1;
     }
-    if (J != NULL) {
-        if (make_key (key, sizeof (key), job, "J-signed") < 0)
-            goto error;
-        if (flux_kvs_txn_put (batch->txn, 0, key, J) < 0)
-            goto error;
-    }
+    if (make_key (key, sizeof (key), job, "J-signed") < 0)
+        goto error;
+    if (flux_kvs_txn_put (batch->txn, 0, key, J) < 0)
+        goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
     if (flux_kvs_txn_put_raw (batch->txn, 0, key, jobspec, jobspecsz) < 0)
@@ -451,6 +449,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job *job = NULL;
     const char *J;
     const char *jobspec;
+    char *jobspec_cpy = NULL;
     const char *errmsg = NULL;
     char errbuf[80];
     int jobspecsz;
@@ -458,6 +457,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     uint32_t userid;
     uint32_t rolemask;
     int priority;
+    int64_t userid_signer;
+    const char *mech_type;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:i s:i}",
                              "J", &J,
@@ -488,14 +489,27 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 #if HAVE_FLUX_SECURITY
-    int64_t userid_signer;
-    const char *mech_type;
     if (flux_sign_unwrap_anymech (ctx->sec, J, (const void **)&jobspec,
                                   &jobspecsz, &mech_type, &userid_signer,
                                   FLUX_SIGN_NOVERIFY) < 0) {
         errmsg = flux_security_last_error (ctx->sec);
         goto error;
     }
+#else
+    uint32_t userid_signer_u32;
+    /* Simplified unwrap only understands mech=none.
+     * Unlike flux-security version, returned payload must be freed,
+     * and returned userid is a uint32_t.
+     */
+    if (sign_none_unwrap (J, (void **)&jobspec_cpy, &jobspecsz,
+                          &userid_signer_u32) < 0) {
+        errmsg = "could not unwrap jobspec";
+        goto error;
+    }
+    mech_type = "none";
+    jobspec = jobspec_cpy;
+    userid_signer = userid_signer_u32;
+#endif
     /* If the signature claims to be a user other than the submitting user,
      * do not allow that.
      */
@@ -517,24 +531,6 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
-#else
-    /* Without the IMP or a signing mechanism, users other than
-     * the instance owner can certainly not run.
-     */
-    if (!(rolemask & FLUX_ROLE_OWNER)) {
-        snprintf (errbuf, sizeof (errbuf),
-                  "only the instance owner can submit jobs");
-        errmsg = errbuf;
-        errno = EPERM;
-        goto error;
-    }
-    /* jobspec is passed in plaintext instead of the signed J.
-     * J-signed will not be written to the KVS.
-     */
-    jobspec = J;
-    jobspecsz = strlen (J);
-    J = NULL;
-#endif
 #if HAVE_JOBSPEC
     if (jobspec_validate (jobspec, jobspecsz, errbuf, sizeof (errbuf)) < 0) {
         errmsg = errbuf;
@@ -555,6 +551,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         job_destroy (job);
         goto error;
     }
+    free (jobspec_cpy);
     return;
 error:
     if (errmsg)
@@ -563,6 +560,7 @@ error:
         rc = flux_respond_error (h, msg, errno, NULL);
     if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    free (jobspec_cpy);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
