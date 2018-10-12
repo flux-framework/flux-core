@@ -431,7 +431,7 @@ void lookup_root (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     root = treeobj_create_dir ();
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
@@ -549,10 +549,10 @@ void lookup_basic (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (valref2_ref));
-    cache_insert (cache, valref2_ref, create_cache_entry_raw (strdup ("efgh"), 4));
+    cache_insert (cache, valref2_ref, create_cache_entry_raw ("efgh", 4));
 
     dirref_test = treeobj_create_dir ();
     treeobj_insert_entry (dirref_test, "dummy", treeobj_create_val ("dummy", 5));
@@ -840,7 +840,7 @@ void lookup_errors (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
@@ -1367,7 +1367,7 @@ void lookup_links (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     dirref3 = treeobj_create_dir ();
     treeobj_insert_entry (dirref3, "val", treeobj_create_val ("baz", 3));
@@ -1692,7 +1692,7 @@ void lookup_root_symlink (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "symlinkroot", treeobj_create_symlink ("."));
@@ -2667,7 +2667,7 @@ void lookup_stall_ref (void) {
         "lookup_create stalltest dirref1.valref");
     check_stall (lh, EAGAIN, 1, valref1_ref, "dirref1.valref stall");
 
-    cache_insert (cache, valref1_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref1_ref, create_cache_entry_raw ("abcd", 4));
 
     /* lookup dirref1.valref, should succeed */
     test = treeobj_create_val ("abcd", 4);
@@ -2706,7 +2706,7 @@ void lookup_stall_ref (void) {
      * the 'valref' above */
     check_stall (lh, EAGAIN, 1, valref2_ref, "dirref1.valref_multi stall");
 
-    cache_insert (cache, valref2_ref, create_cache_entry_raw (strdup ("efgh"), 4));
+    cache_insert (cache, valref2_ref, create_cache_entry_raw ("efgh", 4));
 
     /* lookup dirref1.valref_multi, should succeed */
     test = treeobj_create_val ("abcdefgh", 8);
@@ -2744,8 +2744,8 @@ void lookup_stall_ref (void) {
     /* should two missing refs, as we have not loaded either here */
     check_stall (lh, EAGAIN, 2, NULL, "dirref1.valref_multi2 stall");
 
-    cache_insert (cache, valref3_ref, create_cache_entry_raw (strdup ("ijkl"), 4));
-    cache_insert (cache, valref4_ref, create_cache_entry_raw  (strdup ("mnop"), 4));
+    cache_insert (cache, valref3_ref, create_cache_entry_raw ("ijkl", 4));
+    cache_insert (cache, valref4_ref, create_cache_entry_raw ("mnop", 4));
 
     /* lookup dirref1.valref_multi2, should succeed */
     test = treeobj_create_val ("ijklmnop", 8);
@@ -2935,7 +2935,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
@@ -3030,7 +3030,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
@@ -3083,7 +3083,7 @@ void lookup_stall_namespace_removed (void) {
 
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     test = treeobj_create_val ("abcd", 4);
     check_value (lh, test, "lookup_create dirref.valref w/ root_ref");
@@ -3126,7 +3126,7 @@ void lookup_stall_namespace_removed (void) {
 
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref & role user");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     test = treeobj_create_val ("abcd", 4);
     check_value (lh, test, "lookup_create dirref.valref w/ root_ref & role user");
