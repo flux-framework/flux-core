@@ -1415,7 +1415,7 @@ static void optparse_reset_one (optparse_t *p)
 
 void optparse_reset (optparse_t *p)
 {
-    zlist_t *cmds = subcmd_list_sorted (p);
+    zlist_t *cmds = NULL;
 
     if ((cmds = subcmd_list_sorted (p))) {
         const char *cmd = zlist_first (cmds);
