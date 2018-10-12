@@ -59,6 +59,15 @@ AS_CASE($ax_cv_cxx_compiler_vendor,
 AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
 
 X_AC_ENABLE_SANITIZER
+if test "x$san_enabled" != "xno" ; then
+  AC_DEFINE([DEEPBIND], [0],
+            [deepbind is unsupported with asan, musl and so-forth])
+else
+  AC_DEFINE([DEEPBIND], [RTLD_DEEPBIND],
+            [deepbind is unsupported with asan, musl and so-forth])
+fi
+
+
 LT_INIT
 AC_PROG_AWK
 
