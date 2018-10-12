@@ -255,24 +255,27 @@ void submitbench_check (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
     struct submitbench_ctx *ctx = arg;
+    int flags = ctx->flags;
 
     flux_watcher_stop (ctx->idle);
     if (ctx->txcount < ctx->totcount
                     && (ctx->txcount - ctx->rxcount) < ctx->max_queue_depth) {
         flux_future_t *f;
 #if HAVE_FLUX_SECURITY
-        if (!ctx->J || !optparse_hasopt (ctx->p, "reuse-signature")) {
-            if (!(ctx->J = flux_sign_wrap (ctx->sec, ctx->jobspec,
-                                           ctx->jobspecsz, ctx->sign_type, 0)))
-                log_err_exit ("flux_sign_wrap: %s",
-                              flux_security_last_error (ctx->sec));
+        if (ctx->sec) {
+            if (!ctx->J || !optparse_hasopt (ctx->p, "reuse-signature")) {
+                if (!(ctx->J = flux_sign_wrap (ctx->sec, ctx->jobspec,
+                                               ctx->jobspecsz,
+                                               ctx->sign_type, 0)))
+                    log_err_exit ("flux_sign_wrap: %s",
+                                  flux_security_last_error (ctx->sec));
+            }
+            flags |= FLUX_JOB_PRE_SIGNED;
         }
-        if (!(f = flux_job_submit (ctx->h, ctx->J, ctx->priority, ctx->flags)))
-            log_err_exit ("flux_job_submit");
-#else
-        if (!(f = flux_job_submit (ctx->h, ctx->jobspec, ctx->priority, ctx->flags)))
-            log_err_exit ("flux_job_submit");
 #endif
+        if (!(f = flux_job_submit (ctx->h, ctx->J ? ctx->J : ctx->jobspec,
+                                   ctx->priority, flags)))
+            log_err_exit ("flux_job_submit");
         if (flux_future_then (f, -1., submitbench_continuation, ctx) < 0)
             log_err_exit ("flux_future_then");
         ctx->txcount++;
@@ -292,12 +295,19 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 #if HAVE_FLUX_SECURITY
-    const char *sec_config = optparse_get_str (p, "security-config", NULL);
-    if (!(ctx.sec = flux_security_create (0)))
-        log_err_exit ("security");
-    if (flux_security_configure (ctx.sec, sec_config) < 0)
-        log_err_exit ("security config %s", flux_security_last_error (ctx.sec));
-    ctx.sign_type = optparse_get_str (p, "sign-type", NULL);
+    /* If any non-default security options are specified, create security
+     * context so jobspec can be pre-signed before submission.
+     */
+    if (optparse_hasopt (p, "security-config")
+                            || optparse_hasopt (p, "reuse-signature")
+                            || optparse_hasopt (p, "sign-type")) {
+        const char *sec_config = optparse_get_str (p, "security-config", NULL);
+        if (!(ctx.sec = flux_security_create (0)))
+            log_err_exit ("security");
+        if (flux_security_configure (ctx.sec, sec_config) < 0)
+            log_err_exit ("security config %s", flux_security_last_error (ctx.sec));
+        ctx.sign_type = optparse_get_str (p, "sign-type", NULL);
+    }
 #endif
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");

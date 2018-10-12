@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS)
+	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS) $(FLUX_SECURITY_CFLAGS)
 
 noinst_LTLIBRARIES = libjob.la
 fluxcoreinclude_HEADERS = job.h
@@ -33,7 +33,8 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux/libflux.la \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL) $(LIBMUNGE)
+        $(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) \
+        $(FLUX_SECURITY_LIBS) $(LIBDL) $(LIBMUNGE)
 
 test_cppflags = \
         $(AM_CPPFLAGS) \
