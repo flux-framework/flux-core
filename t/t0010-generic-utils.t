@@ -27,7 +27,7 @@ test_expect_success 'event: can subscribe' '
 '
 
 test_expect_success 'version: reports an expected string' '
-	flux version | grep -q "flux-core-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"
+	flux version | grep -Eq "flux-core-[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+(-[a-z0-9]+))?"
 '
 
 heaptrace_error_check()
