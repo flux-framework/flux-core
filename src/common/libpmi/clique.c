@@ -94,6 +94,7 @@ int pmi_process_mapping_parse (const char *s,
     }
     *nblocksp = nblocks;
     *blocksp = blocks;
+    free (argz);
     return PMI_SUCCESS;
 error:
     if (blocks)
