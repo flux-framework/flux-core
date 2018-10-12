@@ -13,7 +13,9 @@ noinst_LTLIBRARIES = libjob.la
 fluxcoreinclude_HEADERS = job.h
 
 libjob_la_SOURCES = \
-	job.c
+	job.c \
+	sign_none.c \
+	sign_none.h
 
 TESTS = \
         test_job.t
