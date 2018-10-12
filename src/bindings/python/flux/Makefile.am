@@ -9,6 +9,10 @@ fluxpy_PYTHON=\
 	      kz.py\
 	      sec.py
 
+if HAVE_FLUX_SECURITY
+fluxpy_PYTHON += security.py
+endif
+
 if ENABLE_PYLINT
 #TODO: there must be a better way to do this
 # scan flux bindings with pylint, currently fails on any exit but 0

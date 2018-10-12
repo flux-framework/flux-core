@@ -125,6 +125,7 @@ docker run --rm \
     -e TRAVIS \
     -e TAP_DRIVER_QUIET \
     --tty \
+    ${INTERACTIVE:+--interactive} \
     travis-builder:${IMAGE} \
     ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \
     || die "docker run failed"

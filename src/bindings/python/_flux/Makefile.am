@@ -79,6 +79,23 @@ _kz_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libkz
 _kz_la_LIBADD = $(common_libs)
 _kz_la_DEPENDENCIES = _kz_build.py
 
+if HAVE_FLUX_SECURITY
+BUILT_SOURCES += _security.c
+fluxso_LTLIBRARIES += _security.la
+_security_build.py: $(MAKE_BINDING)
+	$(PYTHON) $(MAKE_BINDING) --path $(FLUX_SECURITY_INCDIR)/flux/security \
+		--package _flux \
+		--modname _security \
+		--include_header flux/security/sign.h \
+		--add_sub '.*va_list.*|||' \
+		sign.h
+
+nodist__security_la_SOURCES = _security.c
+_security_la_CPPFLAGS = $(AM_CPPFLAGS) $(FLUX_SECURITY_CFLAGS)
+_security_la_LIBADD = $(common_libs) $(FLUX_SECURITY_LIBS)
+_security_la_DEPENDENCIES = _security_build.py
+endif
+
 .PHONY: lib-copy
 
 lib-copy-vpath: ${fluxso_PYTHON} ${fluxso_LTLIBRARIES}
