@@ -585,6 +585,8 @@ lookup_t *lookup_create (struct cache *cache,
             saved_errno = errno;
             goto cleanup;
         }
+        free (p_suffix);
+        p_suffix = NULL;
     }
     else {
         /* must duplicate strings, user may not keep pointer alive */
