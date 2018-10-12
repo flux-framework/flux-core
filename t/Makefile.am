@@ -141,6 +141,9 @@ EXTRA_DIST= \
 	sharness.sh \
 	sharness.d \
 	$(T) \
+	test-under-flux/expected.modcheck \
+	test-under-flux/t_modcheck.t \
+	test-under-flux/test.t \
 	rc/rc1-kvs \
 	rc/rc1-wreck \
 	rc/rc1-testenv \
