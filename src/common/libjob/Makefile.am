@@ -18,7 +18,8 @@ libjob_la_SOURCES = \
 	sign_none.h
 
 TESTS = \
-        test_job.t
+	test_job.t \
+	test_sign_none.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -41,3 +42,7 @@ test_cppflags = \
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
 test_job_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_sign_none_t_SOURCES = test/sign_none.c
+test_sign_none_t_CPPFLAGS = $(test_cppflags)
+test_sign_none_t_LDADD = $(test_ldadd) $(LIBDL)
