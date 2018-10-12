@@ -543,6 +543,7 @@ void lookup_root (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root);
 }
 
 /* lookup basic tests */
@@ -843,6 +844,12 @@ void lookup_basic (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref_test);
+    json_decref (dir);
+    json_decref (dirref);
+    json_decref (valref_multi);
+    json_decref (valref_multi_with_dirref);
+    json_decref (root);
 }
 
 /* lookup tests reach an error or "non-good" result */
@@ -1209,6 +1216,10 @@ void lookup_errors (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref);
+    json_decref (dir);
+    json_decref (root);
+    json_decref (dirref_multi);
 }
 
 void lookup_security (void) {
@@ -1359,6 +1370,7 @@ void lookup_security (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root);
 }
 
 /* lookup link tests */
@@ -1617,6 +1629,11 @@ void lookup_links (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref3);
+    json_decref (dir);
+    json_decref (dirref2);
+    json_decref (dirref1);
+    json_decref (root);
 }
 
 /* lookup alternate root tests */
@@ -1702,6 +1719,9 @@ void lookup_alt_root (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref1);
+    json_decref (dirref2);
+    json_decref (root);
 }
 
 /* lookup tests on root dir, if in a symlink */
@@ -1856,6 +1876,8 @@ void lookup_root_symlink (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref);
+    json_decref (root);
 }
 
 /* lookup namespace prefix tests */
@@ -2013,6 +2035,8 @@ void lookup_namespace_prefix (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root1);
+    json_decref (root2);
 }
 
 /* lookup namespace prefix symlink tests */
@@ -2181,6 +2205,8 @@ void lookup_namespace_prefix_symlink (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
 }
 
 void lookup_namespace_prefix_symlink_security (void) {
@@ -2298,6 +2324,9 @@ void lookup_namespace_prefix_symlink_security (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
+    json_decref (rootC);
 }
 
 /* lookup stall namespace tests */
@@ -2454,6 +2483,8 @@ void lookup_stall_namespace (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root1);
+    json_decref (root2);
 }
 
 /* lookup stall ref tests on root */
@@ -2518,12 +2549,15 @@ void lookup_stall_ref_root (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root);
 }
 
 /* lookup stall ref tests */
 void lookup_stall_ref (void) {
     json_t *root;
-    json_t *valref_tmp;
+    json_t *valref_tmp1;
+    json_t *valref_tmp2;
+    json_t *valref_tmp3;
     json_t *dirref1;
     json_t *dirref2;
     json_t *test;
@@ -2591,16 +2625,16 @@ void lookup_stall_ref (void) {
     dirref1 = treeobj_create_dir ();
     _treeobj_insert_entry_val (dirref1, "val", "foo", 3);
     _treeobj_insert_entry_valref (dirref1, "valref", valref1_ref);
-    valref_tmp = treeobj_create_valref (valref1_ref);
-    treeobj_append_blobref (valref_tmp, valref2_ref);
-    treeobj_insert_entry (dirref1, "valref_multi", valref_tmp);
-    valref_tmp = treeobj_create_valref (valref3_ref);
-    treeobj_append_blobref (valref_tmp, valref4_ref);
-    treeobj_insert_entry (dirref1, "valref_multi2", valref_tmp);
+    valref_tmp1 = treeobj_create_valref (valref1_ref);
+    treeobj_append_blobref (valref_tmp1, valref2_ref);
+    treeobj_insert_entry (dirref1, "valref_multi", valref_tmp1);
+    valref_tmp2 = treeobj_create_valref (valref3_ref);
+    treeobj_append_blobref (valref_tmp2, valref4_ref);
+    treeobj_insert_entry (dirref1, "valref_multi2", valref_tmp2);
     _treeobj_insert_entry_valref (dirref1, "valrefmisc", valrefmisc1_ref);
-    valref_tmp = treeobj_create_valref (valrefmisc1_ref);
-    treeobj_append_blobref (valref_tmp, valrefmisc2_ref);
-    treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp);
+    valref_tmp3 = treeobj_create_valref (valrefmisc1_ref);
+    treeobj_append_blobref (valref_tmp3, valrefmisc2_ref);
+    treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp3);
 
     treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
 
@@ -2858,6 +2892,12 @@ void lookup_stall_ref (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref1);
+    json_decref (valref_tmp1);
+    json_decref (valref_tmp2);
+    json_decref (valref_tmp3);
+    json_decref (dirref2);
+    json_decref (root);
 }
 
 void lookup_stall_namespace_removed (void) {
@@ -3185,6 +3225,9 @@ void lookup_stall_namespace_removed (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref);
+    json_decref (valref);
+    json_decref (root);
 }
 
 /* lookup stall namespace prefix in symlink tests */
@@ -3281,6 +3324,8 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
 }
 
 int main (int argc, char *argv[])
