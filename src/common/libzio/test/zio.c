@@ -154,6 +154,7 @@ void test_encode (void)
     ok (rlen == 0 && r != NULL && strcmp (r, q) == 0,
         "zio_json_decode returned empty string");
     free (r);
+    free (json);
 }
 
 int main (int argc, char **argv)
