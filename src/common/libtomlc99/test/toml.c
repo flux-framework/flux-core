@@ -291,6 +291,7 @@ void parse_good_input (void)
         ok (parse_good_file (results.gl_pathv[i], errbuf, 255) == true,
             "%s: %s", basename (results.gl_pathv[i]), errbuf);
     }
+    globfree (&results);
 }
 
 /* Recreate the TOML input from the tomlc99/test/extra directory.
