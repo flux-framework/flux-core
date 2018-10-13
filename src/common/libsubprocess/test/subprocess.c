@@ -85,6 +85,7 @@ void test_basic (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void completion_fail_cb (flux_subprocess_t *p)
@@ -120,6 +121,7 @@ void test_basic_fail (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_fail_cb_count == 1, "completion fail callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_basic_errors (flux_reactor_t *r)
@@ -277,6 +279,7 @@ void test_errors (flux_reactor_t *r)
         "flux_subprocess_write returns EPIPE b/c process already completed");
 
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void output_cb (flux_subprocess_t *p, const char *stream)
@@ -343,6 +346,7 @@ void test_basic_stdout (flux_reactor_t *r)
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
     ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_basic_stderr (flux_reactor_t *r)
@@ -374,6 +378,7 @@ void test_basic_stderr (flux_reactor_t *r)
     ok (stdout_output_cb_count == 0, "stdout output callback called 0 times");
     ok (stderr_output_cb_count == 2, "stderr output callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_basic_stdout_and_stderr (flux_reactor_t *r)
@@ -404,6 +409,7 @@ void test_basic_stdout_and_stderr (flux_reactor_t *r)
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
     ok (stderr_output_cb_count == 2, "stderr output callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_basic_default_output (flux_reactor_t *r)
@@ -430,6 +436,7 @@ void test_basic_default_output (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
@@ -484,6 +491,7 @@ void test_basic_stdout_default_stream (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (output_default_stream_cb_count == 2, "stdout output default stream callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_basic_stdin (flux_reactor_t *r)
@@ -517,6 +525,7 @@ void test_basic_stdin (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_basic_stdin_default_stream (flux_reactor_t *r)
@@ -550,6 +559,7 @@ void test_basic_stdin_default_stream (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
@@ -622,6 +632,7 @@ void test_basic_no_newline (flux_reactor_t *r)
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
     ok (stderr_output_cb_count == 2, "stderr output callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
@@ -689,6 +700,7 @@ void test_basic_trimmed_line (flux_reactor_t *r)
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
     ok (stderr_output_cb_count == 2, "stderr output callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
@@ -783,6 +795,7 @@ void test_basic_multiple_lines (flux_reactor_t *r)
     ok (multiple_lines_stdout_output_cb_count == 4, "stdout output callback called 4 times");
     ok (multiple_lines_stderr_output_cb_count == 4, "stderr output callback called 4 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_write_after_close (flux_reactor_t *r)
@@ -816,6 +829,7 @@ void test_write_after_close (flux_reactor_t *r)
         "flux_subprocess_write failed with EPIPE after a close");
 
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 #if 0
@@ -843,6 +857,7 @@ void test_flag_stdio_fallthrough (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 #endif
 
@@ -868,6 +883,7 @@ void test_flag_setpgrp (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void env_passed_cb (flux_subprocess_t *p, const char *stream)
@@ -925,6 +941,7 @@ void test_env_passed (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (env_passed_cb_count == 2, "channel fd callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void completion_sigterm_cb (flux_subprocess_t *p)
@@ -969,6 +986,8 @@ void test_kill (flux_reactor_t *r)
     ok (flux_reactor_run (r, 0) == 0, "reactor_run exits normally");
     ok (completion_sigterm_cb_count == 1, "completion sigterm callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_future_destroy (f);
+    flux_cmd_destroy (cmd);
 }
 
 void output_processes_cb (flux_subprocess_t *p, const char *stream)
@@ -1060,6 +1079,7 @@ void test_kill_setpgrp (flux_reactor_t *r)
         && errno == ESRCH,
         "kill fails with ESRCH, child pid killed %d", child_pid);
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void eof_cb (flux_subprocess_t *p, const char *stream)
@@ -1118,6 +1138,8 @@ void test_kill_eofs (flux_reactor_t *r)
     ok (stdout_eof_cb_count == 1, "stdout eof callback called 1 times");
     ok (stderr_eof_cb_count == 1, "stderr eof callback called 1 times");
     flux_subprocess_destroy (p);
+    flux_future_destroy (f);
+    flux_cmd_destroy (cmd);
 }
 
 void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -1159,6 +1181,7 @@ void test_state_change (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (state_change_cb_count == 3, "state change callback called 3 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_state_strings (void)
@@ -1233,6 +1256,7 @@ void test_context (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_refcount (flux_reactor_t *r)
@@ -1271,6 +1295,7 @@ void test_refcount (flux_reactor_t *r)
         "flux_subprocess_get_context returned correct pointer");
 
     flux_subprocess_unref (p);
+    flux_cmd_destroy (cmd);
 }
 
 void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
@@ -1328,6 +1353,7 @@ void test_channel_fd_env (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (channel_fd_env_cb_count == 2, "channel fd callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void channel_in_cb (flux_subprocess_t *p, const char *stream)
@@ -1395,6 +1421,7 @@ void test_channel_fd_in (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (channel_in_cb_count == 2, "channel in callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void channel_in_and_out_cb (flux_subprocess_t *p, const char *stream)
@@ -1463,6 +1490,7 @@ void test_channel_fd_in_and_out (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (channel_in_and_out_cb_count == 2, "channel out callback called 2 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
@@ -1555,6 +1583,7 @@ void test_channel_multiple_lines (flux_reactor_t *r)
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (multiple_lines_channel_cb_count == 4, "channel output callback called 4 times");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
@@ -1624,6 +1653,7 @@ void test_bufsize (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
 }
 
 void test_bufsize_error (flux_reactor_t *r)
@@ -1650,6 +1680,8 @@ void test_bufsize_error (flux_reactor_t *r)
     ok (p == NULL
         && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad bufsize input");
+
+    flux_cmd_destroy (cmd);
 }
 
 int main (int argc, char *argv[])

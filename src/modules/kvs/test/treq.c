@@ -123,6 +123,8 @@ void treq_basic_tests (void)
 
     ok (strstr (name, "3577") != NULL,
         "treq_get_name returns name with seq in it");
+
+    treq_destroy (tr);
 }
 
 void treq_ops_tests (void)
@@ -290,8 +292,10 @@ int treq_add_error_cb (treq_t *tr, void *data)
 
     tr2 = treq_create ("foobar", 1, 0);
 
-    if (treq_mgr_add_transaction (trm, tr2) < 0)
+    if (treq_mgr_add_transaction (trm, tr2) < 0) {
+        treq_destroy (tr2);
         return -1;
+    }
     return 0;
 }
 

@@ -143,6 +143,50 @@ void setup_kvsroot (kvsroot_mgr_t *krm,
     kvsroot_setroot (krm, root, ref, 0);
 }
 
+/* wraps treeobj_create_val() and treeobj_insert_entry(),
+ * so created val can be properly dereferenced
+ */
+void _treeobj_insert_entry_val (json_t *obj, const char *name,
+                                const void *data, int len)
+{
+    json_t *val = treeobj_create_val (data, len);
+    treeobj_insert_entry (obj, name, val);
+    json_decref (val);
+}
+
+/* wraps treeobj_create_symlink() and treeobj_insert_entry(), so
+ * created symlink can be properly dereferenced
+ */
+void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
+                                    const char *target)
+{
+    json_t *symlink = treeobj_create_symlink (target);
+    treeobj_insert_entry (obj, name, symlink);
+    json_decref (symlink);
+}
+
+/* wraps treeobj_create_valref() and treeobj_insert_entry(), so
+ * created valref can be properly dereferenced
+ */
+void _treeobj_insert_entry_valref (json_t *obj, const char *name,
+                                   const char *blobref)
+{
+    json_t *valref = treeobj_create_valref (blobref);
+    treeobj_insert_entry (obj, name, valref);
+    json_decref (valref);
+}
+
+/* wraps treeobj_create_dirref() and treeobj_insert_entry(), so
+ * created dirref can be properly dereferenced
+ */
+void _treeobj_insert_entry_dirref (json_t *obj, const char *name,
+                                   const char *blobref)
+{
+    json_t *dirref = treeobj_create_dirref (blobref);
+    treeobj_insert_entry (obj, name, dirref);
+    json_decref (dirref);
+}
+
 void basic_api (void)
 {
     struct cache *cache;
@@ -431,7 +475,7 @@ void lookup_root (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     root = treeobj_create_dir ();
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
@@ -499,6 +543,7 @@ void lookup_root (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root);
 }
 
 /* lookup basic tests */
@@ -549,26 +594,26 @@ void lookup_basic (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (valref2_ref));
-    cache_insert (cache, valref2_ref, create_cache_entry_raw (strdup ("efgh"), 4));
+    cache_insert (cache, valref2_ref, create_cache_entry_raw ("efgh", 4));
 
     dirref_test = treeobj_create_dir ();
-    treeobj_insert_entry (dirref_test, "dummy", treeobj_create_val ("dummy", 5));
+    _treeobj_insert_entry_val (dirref_test, "dummy", "dummy", 5);
 
     treeobj_hash ("sha1", dirref_test, dirref_test_ref, sizeof (dirref_test_ref));
     cache_insert (cache, dirref_test_ref, create_cache_entry_treeobj (dirref_test));
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (dir, "val", "bar", 3);
 
     dirref = treeobj_create_dir ();
-    treeobj_insert_entry (dirref, "valref", treeobj_create_valref (valref_ref));
-    treeobj_insert_entry (dirref, "valref_with_dirref", treeobj_create_valref (dirref_test_ref));
-    treeobj_insert_entry (dirref, "val", treeobj_create_val ("foo", 3));
+    _treeobj_insert_entry_valref (dirref, "valref", valref_ref);
+    _treeobj_insert_entry_valref (dirref, "valref_with_dirref", dirref_test_ref);
+    _treeobj_insert_entry_val (dirref, "val", "foo", 3);
     treeobj_insert_entry (dirref, "dir", dir);
-    treeobj_insert_entry (dirref, "symlink", treeobj_create_symlink ("baz"));
+    _treeobj_insert_entry_symlink (dirref, "symlink", "baz");
 
     valref_multi = treeobj_create_valref (valref_ref);
     treeobj_append_blobref (valref_multi, valref2_ref);
@@ -584,7 +629,7 @@ void lookup_basic (void) {
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    _treeobj_insert_entry_dirref (root, "dirref", dirref_ref);
 
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -799,6 +844,12 @@ void lookup_basic (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref_test);
+    json_decref (dir);
+    json_decref (dirref);
+    json_decref (valref_multi);
+    json_decref (valref_multi_with_dirref);
+    json_decref (root);
 }
 
 /* lookup tests reach an error or "non-good" result */
@@ -840,25 +891,25 @@ void lookup_errors (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     dirref = treeobj_create_dir ();
-    treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (dirref, "val", "bar", 3);
     treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("baz", 3));
+    _treeobj_insert_entry_val (dir, "val", "baz", 3);
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("symlinkstr"));
-    treeobj_insert_entry (root, "symlink1", treeobj_create_symlink ("symlink2"));
-    treeobj_insert_entry (root, "symlink2", treeobj_create_symlink ("symlink1"));
-    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
-    treeobj_insert_entry (root, "valref", treeobj_create_valref (valref_ref));
-    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    _treeobj_insert_entry_symlink (root, "symlink", "symlinkstr");
+    _treeobj_insert_entry_symlink (root, "symlink1", "symlink2");
+    _treeobj_insert_entry_symlink (root, "symlink2", "symlink1");
+    _treeobj_insert_entry_val (root, "val", "foo", 3);
+    _treeobj_insert_entry_valref (root, "valref", valref_ref);
+    _treeobj_insert_entry_dirref (root, "dirref", dirref_ref);
     treeobj_insert_entry (root, "dir", dir);
-    treeobj_insert_entry (root, "dirref_bad", treeobj_create_dirref (valref_ref));
+    _treeobj_insert_entry_dirref (root, "dirref_bad", valref_ref);
 
     dirref_multi = treeobj_create_dirref (dirref_ref);
     treeobj_append_blobref (dirref_multi, dirref_ref);
@@ -1165,6 +1216,10 @@ void lookup_errors (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref);
+    json_decref (dir);
+    json_decref (root);
+    json_decref (dirref_multi);
 }
 
 void lookup_security (void) {
@@ -1187,7 +1242,7 @@ void lookup_security (void) {
      */
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    _treeobj_insert_entry_val (root, "val", "foo", 3);
 
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
@@ -1315,6 +1370,7 @@ void lookup_security (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root);
 }
 
 /* lookup link tests */
@@ -1367,37 +1423,37 @@ void lookup_links (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     dirref3 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref3, "val", treeobj_create_val ("baz", 3));
+    _treeobj_insert_entry_val (dirref3, "val", "baz", 3);
     treeobj_hash ("sha1", dirref3, dirref3_ref, sizeof (dirref3_ref));
     cache_insert (cache, dirref3_ref, create_cache_entry_treeobj (dirref3));
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (dir, "val", "bar", 3);
 
     dirref2 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref2, "val", treeobj_create_val ("foo", 3));
-    treeobj_insert_entry (dirref2, "valref", treeobj_create_valref (valref_ref));
+    _treeobj_insert_entry_val (dirref2, "val", "foo", 3);
+    _treeobj_insert_entry_valref (dirref2, "valref", valref_ref);
     treeobj_insert_entry (dirref2, "dir", dir);
-    treeobj_insert_entry (dirref2, "dirref", treeobj_create_dirref (dirref3_ref));
-    treeobj_insert_entry (dirref2, "symlink", treeobj_create_symlink ("dirref2.val"));
+    _treeobj_insert_entry_dirref (dirref2, "dirref", dirref3_ref);
+    _treeobj_insert_entry_symlink (dirref2, "symlink", "dirref2.val");
     treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
     cache_insert (cache, dirref2_ref, create_cache_entry_treeobj (dirref2));
 
     dirref1 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref1, "link2dirref", treeobj_create_symlink ("dirref2"));
-    treeobj_insert_entry (dirref1, "link2val", treeobj_create_symlink ("dirref2.val"));
-    treeobj_insert_entry (dirref1, "link2valref", treeobj_create_symlink ("dirref2.valref"));
-    treeobj_insert_entry (dirref1, "link2dir", treeobj_create_symlink ("dirref2.dir"));
-    treeobj_insert_entry (dirref1, "link2symlink", treeobj_create_symlink ("dirref2.symlink"));
+    _treeobj_insert_entry_symlink (dirref1, "link2dirref", "dirref2");
+    _treeobj_insert_entry_symlink (dirref1, "link2val", "dirref2.val");
+    _treeobj_insert_entry_symlink (dirref1, "link2valref", "dirref2.valref");
+    _treeobj_insert_entry_symlink (dirref1, "link2dir", "dirref2.dir");
+    _treeobj_insert_entry_symlink (dirref1, "link2symlink", "dirref2.symlink");
     treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
     cache_insert (cache, dirref1_ref, create_cache_entry_treeobj (dirref1));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
-    treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
+    _treeobj_insert_entry_dirref (root, "dirref1", dirref1_ref);
+    _treeobj_insert_entry_dirref (root, "dirref2", dirref2_ref);
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1573,6 +1629,11 @@ void lookup_links (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref3);
+    json_decref (dir);
+    json_decref (dirref2);
+    json_decref (dirref1);
+    json_decref (root);
 }
 
 /* lookup alternate root tests */
@@ -1607,18 +1668,18 @@ void lookup_alt_root (void) {
      */
 
     dirref1 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
+    _treeobj_insert_entry_val (dirref1, "val", "foo", 3);
     treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
     cache_insert (cache, dirref1_ref, create_cache_entry_treeobj (dirref1));
 
     dirref2 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (dirref2, "val", "bar", 3);
     treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
     cache_insert (cache, dirref2_ref, create_cache_entry_treeobj (dirref2));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
-    treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
+    _treeobj_insert_entry_dirref (root, "dirref1", dirref1_ref);
+    _treeobj_insert_entry_dirref (root, "dirref2", dirref2_ref);
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1658,6 +1719,9 @@ void lookup_alt_root (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref1);
+    json_decref (dirref2);
+    json_decref (root);
 }
 
 /* lookup tests on root dir, if in a symlink */
@@ -1692,17 +1756,17 @@ void lookup_root_symlink (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     dirref = treeobj_create_dir ();
-    treeobj_insert_entry (dirref, "symlinkroot", treeobj_create_symlink ("."));
+    _treeobj_insert_entry_symlink (dirref, "symlinkroot", ".");
     treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
-    treeobj_insert_entry (root, "symlinkroot", treeobj_create_symlink ("."));
-    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    _treeobj_insert_entry_val (root, "val", "foo", 3);
+    _treeobj_insert_entry_symlink (root, "symlinkroot", ".");
+    _treeobj_insert_entry_dirref (root, "dirref", dirref_ref);
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1812,6 +1876,8 @@ void lookup_root_symlink (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref);
+    json_decref (root);
 }
 
 /* lookup namespace prefix tests */
@@ -1840,13 +1906,13 @@ void lookup_namespace_prefix (void) {
      */
 
     root1 = treeobj_create_dir ();
-    treeobj_insert_entry (root1, "val", treeobj_create_val ("foo", 3));
+    _treeobj_insert_entry_val (root1, "val", "foo", 3);
     treeobj_hash ("sha1", root1, root_ref1, sizeof (root_ref1));
 
     cache_insert (cache, root_ref1, create_cache_entry_treeobj (root1));
 
     root2 = treeobj_create_dir ();
-    treeobj_insert_entry (root2, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (root2, "val", "bar", 3);
     treeobj_hash ("sha1", root2, root_ref2, sizeof (root_ref2));
 
     cache_insert (cache, root_ref2, create_cache_entry_treeobj (root2));
@@ -1969,6 +2035,8 @@ void lookup_namespace_prefix (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root1);
+    json_decref (root2);
 }
 
 /* lookup namespace prefix symlink tests */
@@ -2003,19 +2071,19 @@ void lookup_namespace_prefix_symlink (void) {
      */
 
     rootA = treeobj_create_dir ();
-    treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
-    treeobj_insert_entry (rootA, "symlink2BAD", treeobj_create_symlink ("ns:A/"));
-    treeobj_insert_entry (rootA, "symlink2chain", treeobj_create_symlink ("ns:A/ns:B/."));
-    treeobj_insert_entry (rootA, "symlink2A", treeobj_create_symlink ("ns:A/."));
-    treeobj_insert_entry (rootA, "symlink2B", treeobj_create_symlink ("ns:B/."));
-    treeobj_insert_entry (rootA, "symlink2A-val", treeobj_create_symlink ("ns:A/val"));
-    treeobj_insert_entry (rootA, "symlink2B-val", treeobj_create_symlink ("ns:B/val"));
+    _treeobj_insert_entry_val (rootA, "val", "1", 1);
+    _treeobj_insert_entry_symlink (rootA, "symlink2BAD", "ns:A/");
+    _treeobj_insert_entry_symlink (rootA, "symlink2chain", "ns:A/ns:B/.");
+    _treeobj_insert_entry_symlink (rootA, "symlink2A", "ns:A/.");
+    _treeobj_insert_entry_symlink (rootA, "symlink2B", "ns:B/.");
+    _treeobj_insert_entry_symlink (rootA, "symlink2A-val", "ns:A/val");
+    _treeobj_insert_entry_symlink (rootA, "symlink2B-val", "ns:B/val");
     treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
 
     cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
 
     rootB = treeobj_create_dir ();
-    treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
+    _treeobj_insert_entry_val (rootB, "val", "2", 1);
     treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
 
     cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
@@ -2137,6 +2205,8 @@ void lookup_namespace_prefix_symlink (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
 }
 
 void lookup_namespace_prefix_symlink_security (void) {
@@ -2171,21 +2241,21 @@ void lookup_namespace_prefix_symlink_security (void) {
      */
 
     rootA = treeobj_create_dir ();
-    treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
-    treeobj_insert_entry (rootA, "symlink2B", treeobj_create_symlink ("ns:B/."));
-    treeobj_insert_entry (rootA, "symlink2C", treeobj_create_symlink ("ns:C/."));
+    _treeobj_insert_entry_val (rootA, "val", "1", 1);
+    _treeobj_insert_entry_symlink (rootA, "symlink2B", "ns:B/.");
+    _treeobj_insert_entry_symlink (rootA, "symlink2C", "ns:C/.");
     treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
 
     cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
 
     rootB = treeobj_create_dir ();
-    treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
+    _treeobj_insert_entry_val (rootB, "val", "2", 1);
     treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
 
     cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
 
     rootC = treeobj_create_dir ();
-    treeobj_insert_entry (rootC, "val", treeobj_create_val ("3", 1));
+    _treeobj_insert_entry_val (rootC, "val", "3", 1);
     treeobj_hash ("sha1", rootC, root_refC, sizeof (root_refC));
 
     cache_insert (cache, root_refC, create_cache_entry_treeobj (rootC));
@@ -2254,6 +2324,9 @@ void lookup_namespace_prefix_symlink_security (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
+    json_decref (rootC);
 }
 
 /* lookup stall namespace tests */
@@ -2283,11 +2356,11 @@ void lookup_stall_namespace (void) {
      */
 
     root1 = treeobj_create_dir ();
-    treeobj_insert_entry (root1, "val", treeobj_create_val ("foo", 3));
+    _treeobj_insert_entry_val (root1, "val", "foo", 3);
     treeobj_hash ("sha1", root1, root_ref1, sizeof (root_ref1));
 
     root2 = treeobj_create_dir ();
-    treeobj_insert_entry (root2, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (root2, "val", "bar", 3);
     treeobj_hash ("sha1", root2, root_ref2, sizeof (root_ref2));
 
     cache_insert (cache, root_ref1, create_cache_entry_treeobj (root1));
@@ -2410,6 +2483,8 @@ void lookup_stall_namespace (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root1);
+    json_decref (root2);
 }
 
 /* lookup stall ref tests on root */
@@ -2432,7 +2507,7 @@ void lookup_stall_ref_root (void) {
      */
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    _treeobj_insert_entry_val (root, "val", "foo", 3);
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -2474,12 +2549,15 @@ void lookup_stall_ref_root (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (root);
 }
 
 /* lookup stall ref tests */
 void lookup_stall_ref (void) {
     json_t *root;
-    json_t *valref_tmp;
+    json_t *valref_tmp1;
+    json_t *valref_tmp2;
+    json_t *valref_tmp3;
     json_t *dirref1;
     json_t *dirref2;
     json_t *test;
@@ -2545,29 +2623,29 @@ void lookup_stall_ref (void) {
     blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref, sizeof (valrefmisc2_ref));
 
     dirref1 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
-    treeobj_insert_entry (dirref1, "valref", treeobj_create_valref (valref1_ref));
-    valref_tmp = treeobj_create_valref (valref1_ref);
-    treeobj_append_blobref (valref_tmp, valref2_ref);
-    treeobj_insert_entry (dirref1, "valref_multi", valref_tmp);
-    valref_tmp = treeobj_create_valref (valref3_ref);
-    treeobj_append_blobref (valref_tmp, valref4_ref);
-    treeobj_insert_entry (dirref1, "valref_multi2", valref_tmp);
-    treeobj_insert_entry (dirref1, "valrefmisc", treeobj_create_valref (valrefmisc1_ref));
-    valref_tmp = treeobj_create_valref (valrefmisc1_ref);
-    treeobj_append_blobref (valref_tmp, valrefmisc2_ref);
-    treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp);
+    _treeobj_insert_entry_val (dirref1, "val", "foo", 3);
+    _treeobj_insert_entry_valref (dirref1, "valref", valref1_ref);
+    valref_tmp1 = treeobj_create_valref (valref1_ref);
+    treeobj_append_blobref (valref_tmp1, valref2_ref);
+    treeobj_insert_entry (dirref1, "valref_multi", valref_tmp1);
+    valref_tmp2 = treeobj_create_valref (valref3_ref);
+    treeobj_append_blobref (valref_tmp2, valref4_ref);
+    treeobj_insert_entry (dirref1, "valref_multi2", valref_tmp2);
+    _treeobj_insert_entry_valref (dirref1, "valrefmisc", valrefmisc1_ref);
+    valref_tmp3 = treeobj_create_valref (valrefmisc1_ref);
+    treeobj_append_blobref (valref_tmp3, valrefmisc2_ref);
+    treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp3);
 
     treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
 
     dirref2 = treeobj_create_dir ();
-    treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
+    _treeobj_insert_entry_val (dirref2, "val", "bar", 3);
     treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
-    treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
-    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
+    _treeobj_insert_entry_dirref (root, "dirref1", dirref1_ref);
+    _treeobj_insert_entry_dirref (root, "dirref2", dirref2_ref);
+    _treeobj_insert_entry_symlink (root, "symlink", "dirref2");
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -2667,7 +2745,7 @@ void lookup_stall_ref (void) {
         "lookup_create stalltest dirref1.valref");
     check_stall (lh, EAGAIN, 1, valref1_ref, "dirref1.valref stall");
 
-    cache_insert (cache, valref1_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref1_ref, create_cache_entry_raw ("abcd", 4));
 
     /* lookup dirref1.valref, should succeed */
     test = treeobj_create_val ("abcd", 4);
@@ -2706,7 +2784,7 @@ void lookup_stall_ref (void) {
      * the 'valref' above */
     check_stall (lh, EAGAIN, 1, valref2_ref, "dirref1.valref_multi stall");
 
-    cache_insert (cache, valref2_ref, create_cache_entry_raw (strdup ("efgh"), 4));
+    cache_insert (cache, valref2_ref, create_cache_entry_raw ("efgh", 4));
 
     /* lookup dirref1.valref_multi, should succeed */
     test = treeobj_create_val ("abcdefgh", 8);
@@ -2744,8 +2822,8 @@ void lookup_stall_ref (void) {
     /* should two missing refs, as we have not loaded either here */
     check_stall (lh, EAGAIN, 2, NULL, "dirref1.valref_multi2 stall");
 
-    cache_insert (cache, valref3_ref, create_cache_entry_raw (strdup ("ijkl"), 4));
-    cache_insert (cache, valref4_ref, create_cache_entry_raw  (strdup ("mnop"), 4));
+    cache_insert (cache, valref3_ref, create_cache_entry_raw ("ijkl", 4));
+    cache_insert (cache, valref4_ref, create_cache_entry_raw ("mnop", 4));
 
     /* lookup dirref1.valref_multi2, should succeed */
     test = treeobj_create_val ("ijklmnop", 8);
@@ -2814,6 +2892,12 @@ void lookup_stall_ref (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref1);
+    json_decref (valref_tmp1);
+    json_decref (valref_tmp2);
+    json_decref (valref_tmp3);
+    json_decref (dirref2);
+    json_decref (root);
 }
 
 void lookup_stall_namespace_removed (void) {
@@ -2855,7 +2939,7 @@ void lookup_stall_namespace_removed (void) {
     treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    _treeobj_insert_entry_dirref (root, "dirref", dirref_ref);
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -2935,7 +3019,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
@@ -3030,7 +3114,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
@@ -3083,7 +3167,7 @@ void lookup_stall_namespace_removed (void) {
 
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     test = treeobj_create_val ("abcd", 4);
     check_value (lh, test, "lookup_create dirref.valref w/ root_ref");
@@ -3126,7 +3210,7 @@ void lookup_stall_namespace_removed (void) {
 
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref & role user");
 
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("abcd", 4));
 
     test = treeobj_create_val ("abcd", 4);
     check_value (lh, test, "lookup_create dirref.valref w/ root_ref & role user");
@@ -3141,6 +3225,9 @@ void lookup_stall_namespace_removed (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (dirref);
+    json_decref (valref);
+    json_decref (root);
 }
 
 /* lookup stall namespace prefix in symlink tests */
@@ -3171,14 +3258,14 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
      */
 
     rootA = treeobj_create_dir ();
-    treeobj_insert_entry (rootA, "val", treeobj_create_val ("1", 1));
-    treeobj_insert_entry (rootA, "symlink", treeobj_create_symlink ("ns:B/."));
+    _treeobj_insert_entry_val (rootA, "val", "1", 1);
+    _treeobj_insert_entry_symlink (rootA, "symlink", "ns:B/.");
     treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
 
     cache_insert (cache, root_refA, create_cache_entry_treeobj (rootA));
 
     rootB = treeobj_create_dir ();
-    treeobj_insert_entry (rootB, "val", treeobj_create_val ("2", 1));
+    _treeobj_insert_entry_val (rootB, "val", "2", 1);
     treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
 
     cache_insert (cache, root_refB, create_cache_entry_treeobj (rootB));
@@ -3237,6 +3324,8 @@ void lookup_stall_namespace_prefix_in_symlink (void) {
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
 }
 
 int main (int argc, char *argv[])
