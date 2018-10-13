@@ -40,6 +40,8 @@ void check_codec (void)
         && grace == 3.14 && exitcode == 69 && rank ==41 
         && !strcmp (r, "foo"),
         "shutdown_decode works");
+
+    flux_msg_destroy (msg);
 }
 
 int main (int argc, char **argv)
