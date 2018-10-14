@@ -59,11 +59,17 @@ AS_CASE($ax_cv_cxx_compiler_vendor,
 AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
 
 X_AC_ENABLE_SANITIZER
-if test "x$san_enabled" != "xno" ; then
-  AC_DEFINE([DEEPBIND], [0],
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[
+  #include <dlfcn.h>
+  #if !(defined(RTLD_DEEPBIND))
+  #error nope
+  #endif
+])], [has_deepbind=yes], [has_deepbind=no])
+if test "x$san_enabled" != "xno" || test "x$has_deepbind" = "xno" ; then
+  AC_DEFINE([FLUX_DEEPBIND], [0],
             [deepbind is unsupported with asan, musl and so-forth])
 else
-  AC_DEFINE([DEEPBIND], [RTLD_DEEPBIND],
+  AC_DEFINE([FLUX_DEEPBIND], [RTLD_DEEPBIND],
             [deepbind is unsupported with asan, musl and so-forth])
 fi
 

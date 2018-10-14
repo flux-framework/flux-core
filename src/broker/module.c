@@ -531,7 +531,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     int rc;
 
     dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL | DEEPBIND))) {
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL | FLUX_DEEPBIND))) {
         log_msg ("%s", dlerror ());
         errno = ENOENT;
         return NULL;

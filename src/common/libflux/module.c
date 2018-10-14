@@ -263,7 +263,7 @@ char *flux_modname(const char *path)
     char *name = NULL;
 
     dlerror ();
-    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | DEEPBIND))) {
+    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
         int errnum = EINVAL;
         if ((np = dlsym (dso, "mod_name")) && *np)
             if (!(name = strdup (*np)))
