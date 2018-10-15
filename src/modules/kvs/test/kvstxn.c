@@ -851,9 +851,9 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "foo.key1", "1");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "bar.key2", "2");
 
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
     memcpy (rootref, newroot, sizeof (rootref));
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /* process the lingering transaction */
 
@@ -2524,12 +2524,12 @@ void kvstxn_process_fallback_merge (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "42");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key2", "43");
 
+    memcpy (rootref, newroot, sizeof (rootref));
+
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more transactions");
-
-    memcpy (rootref, newroot, sizeof (rootref));
 
     /*
      * Now we create an error in a merge by writing to "."
@@ -2585,9 +2585,9 @@ void kvstxn_process_fallback_merge (void)
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key3", "44");
 
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
     memcpy (rootref, newroot, sizeof (rootref));
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /* now we try and process the next transaction, which should be the bad one */
 
@@ -2814,9 +2814,9 @@ void kvstxn_namespace_prefix_symlink (void)
 
     verify_value (cache, krm, "A", newroot, "val", "100");
 
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
     memcpy (root_ref, newroot, sizeof (root_ref));
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
 
