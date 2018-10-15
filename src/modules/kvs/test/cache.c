@@ -165,6 +165,8 @@ void cache_entry_raw_tests (void)
         "cache entry succcessfully now not dirty");
 
     cache_entry_destroy (e); /* destroys data */
+    free (data);
+    free (data2);
     e = NULL;
 
     /* test empty cache entry later filled with zero-byte raw data.
@@ -200,7 +202,6 @@ void cache_entry_raw_tests (void)
 
     cache_entry_destroy (e);
     free (data);
-    free (data2);
 }
 
 void cache_entry_raw_and_treeobj_tests (void)
@@ -241,7 +242,7 @@ void cache_entry_raw_and_treeobj_tests (void)
      */
 
     o1 = treeobj_create_val ("foo", 3);
-    data = strdup (treeobj_encode (o1));
+    data = treeobj_encode (o1);
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
@@ -254,6 +255,7 @@ void cache_entry_raw_and_treeobj_tests (void)
     ok (json_equal ((json_t *)otmp, otest) == true,
         "treeobj returned from cache entry correct");
     json_decref (o1);
+    json_decref (otest);
     free (data);
     cache_entry_destroy (e);
 
