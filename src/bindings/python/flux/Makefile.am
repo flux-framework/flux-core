@@ -7,7 +7,8 @@ fluxpy_PYTHON=\
 	      constants.py\
 	      jsc.py\
 	      kz.py\
-	      sec.py
+	      sec.py \
+	      job.py
 
 if HAVE_FLUX_SECURITY
 fluxpy_PYTHON += security.py

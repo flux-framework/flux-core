@@ -31,8 +31,8 @@ _core_build.py: $(MAKE_BINDING)
 		--add_long_sub 'FLUX_SEC_TYPE_ALL.*\n.*\),|||FLUX_SEC_TYPE_ALL = 7,'\
 		flux.h
 
-BUILT_SOURCES= _core.c _jsc.c _kvs.c _kz.c
-fluxso_LTLIBRARIES = _core.la _kvs.la _jsc.la _kz.la
+BUILT_SOURCES= _core.c _jsc.c _kvs.c _kz.c _job.c
+fluxso_LTLIBRARIES = _core.la _kvs.la _jsc.la _kz.la _job.la
 fluxso_PYTHON = __init__.py
 
 nodist__core_la_SOURCES = _core.c
@@ -78,6 +78,19 @@ nodist__kz_la_SOURCES = _kz.c $(top_srcdir)/src/common/libkz/kz.h
 _kz_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libkz
 _kz_la_LIBADD = $(common_libs)
 _kz_la_DEPENDENCIES = _kz_build.py
+
+_job_build.py: $(top_srcdir)/src/common/libjob/job.h $(MAKE_BINDING) _core_build.py
+	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libjob \
+		--package _flux \
+		--modname _job \
+		--add_sub '.*va_list.*|||' \
+		--include_ffi _core_build \
+		job.h
+
+nodist__job_la_SOURCES = _job.c $(top_srcdir)/src/common/libjob/job.h
+_job_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libjob
+_job_la_LIBADD = $(common_libs)
+_job_la_DEPENDENCIES = _job_build.py
 
 if HAVE_FLUX_SECURITY
 BUILT_SOURCES += _security.c
