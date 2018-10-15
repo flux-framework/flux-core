@@ -524,6 +524,8 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
             json_decref (cpy);
             return -1;
         }
+
+        json_decref (cpy);
     }
     else if (treeobj_is_val (entry)) {
         json_t *ktmp;
@@ -555,6 +557,8 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
             json_decref (ktmp);
             return -1;
         }
+
+        json_decref (ktmp);
     }
     else if (treeobj_is_symlink (entry)) {
         /* Could use EPERM - operation not permitted, but want to
