@@ -121,53 +121,24 @@ test_expect_success 'flux-start --wrap option works with --size' '
 
 test_expect_success 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
-	mkdir -p test-under-flux && (
-		cd test-under-flux &&
-		cat >.test.t <<-EOF &&
-		#!/bin/sh
-		pwd
-		test_description="test_under_flux (in sub sharness)"
-		. "\$SHARNESS_TEST_SRCDIR"/sharness.sh
-		test_under_flux 2
-		test_expect_success "flux comms info" "
-			flux comms info
-		"
-		test_done
-		EOF
-	chmod +x .test.t &&
+        mkdir -p test-under-flux && (
+        cd test-under-flux &&
 	SHARNESS_TEST_DIRECTORY=`pwd` &&
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
-	run_timeout 5 ./.test.t --verbose --debug >out 2>err
+	run_timeout 5 "$SHARNESS_TEST_SRCDIR"/test-under-flux/test.t --verbose --debug >out 2>err
 	) &&
 	grep "size=2" test-under-flux/out
 '
 
 test_expect_success 'test_under_flux fails if loaded modules are not unloaded' '
-    mkdir -p test-under-flux && (
-		cd test-under-flux &&
-		cat >.test.modcheck.t <<-EOF &&
-		#!/bin/sh
-		test_description="test_under_flux with module loaded, but not unloaded"
-		. "\$SHARNESS_TEST_SRCDIR"/sharness.sh
-		test_under_flux 2 minimal
-		test_expect_success "flux module load kvs" "
-			flux module load -r 0 kvs
-		"
-		test_done
-		EOF
-		chmod +x .test.modcheck.t &&
-		SHARNESS_TEST_DIRECTORY=`pwd` &&
-		export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
-		test_expect_code 1 ./.test.modcheck.t 2>err.modcheck \
+        mkdir -p test-under-flux && (
+        cd test-under-flux &&
+	SHARNESS_TEST_DIRECTORY=`pwd` &&
+	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
+	test_expect_code 1 "$SHARNESS_TEST_SRCDIR"/test-under-flux/t_modcheck.t 2>err.modcheck \
 			| grep -v sharness: >out.modcheck
 	) &&
-	cat >expected.modcheck <<-EOF &&
-	ok 1 - flux module load kvs
-	# passed all 1 test(s)
-	1..1
-	error: manually loaded module(s) not unloaded: kvs
-	EOF
-	test_cmp expected.modcheck test-under-flux/out.modcheck
+	test_cmp "$SHARNESS_TEST_SRCDIR"/test-under-flux/expected.modcheck test-under-flux/out.modcheck
 '
 
 test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes' '
