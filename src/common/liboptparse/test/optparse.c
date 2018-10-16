@@ -645,6 +645,7 @@ void test_optional_argument (void)
     ok (rc == 2, "saw --optional-arg again", rc);
     is (optarg, "foo", "got argument to --optional-arg");
 
+    optparse_destroy (p);
 }
 
 int subcmd (optparse_t *p, int ac, char **av)
