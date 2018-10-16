@@ -243,7 +243,7 @@ static int l_kvsdir_watch (lua_State *L)
             goto err;
     }
     else {
-        /*  Otherwise, the alue at top of stack is initial json_object */
+        /*  Otherwise, the value at top of stack is initial json_object */
         lua_value_to_json_string (L, -1, &json_str);
     }
 
