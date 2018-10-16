@@ -144,6 +144,7 @@ void bad_input (void)
     struct flux_kvs_eventlog *log;
     char *s;
     int i;
+    char buf[512];
 
     lives_ok ({flux_kvs_eventlog_destroy (NULL);},
               "flux_kvs_eventlog_destroy log=NULL doesn't crash");
@@ -191,7 +192,6 @@ void bad_input (void)
 
     /* decode bad events */
     for (i = 0; badevent[i] != NULL; i++) {
-        char buf[80];
         errno = 0;
         ok (flux_kvs_event_decode (badevent[i], NULL, NULL, 0, NULL, 0) < 0
             && errno == EINVAL,
@@ -206,7 +206,6 @@ void bad_input (void)
 
     /* decode bad logs */
     for (i = 0; badlog[i] != NULL; i++) {
-        char buf[512];
         errno = 0;
         ok (flux_kvs_eventlog_decode (badlog[i]) == NULL && errno == EINVAL,
             "flux_kvs_eventlog_decode log=\"%s\" fails with EINVAL",

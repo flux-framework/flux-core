@@ -55,8 +55,8 @@ static int lua_string_to_cpu_setp (lua_State *L, int index, cpu_set_t *setp)
      *  If string begins with 0x, 00, or contains long string of digits
      *   separated by ',', or cstr_to_cpuset() fails then try hex_to_cpuset().
      */
-    if ((memcmp (s, "0x", 2L) == 0)
-            || (memcmp (s, "00", 2L) == 0)
+    if ((strncmp (s, "0x", 2L) == 0)
+            || (strncmp (s, "00", 2L) == 0)
             || ((strchr (s, ',') - s) >= 8)
             || ((err = cstr_to_cpuset (setp, s)) && err != E2BIG)) {
         err = hex_to_cpuset (setp, s);

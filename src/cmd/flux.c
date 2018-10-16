@@ -67,7 +67,7 @@ static const char *default_cmdhelp_pattern (optparse_t *p)
 
 void usage (optparse_t *p)
 {
-    char *help_pattern;
+    char *help_pattern = NULL;
     const char *val = getenv ("FLUX_CMDHELP_PATTERN");
     const char *def = default_cmdhelp_pattern (p);
 
@@ -80,6 +80,7 @@ void usage (optparse_t *p)
     optparse_print_usage (p);
     fprintf (stderr, "\n");
     emit_command_help (help_pattern, stderr);
+    free (help_pattern);
 }
 
 static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
