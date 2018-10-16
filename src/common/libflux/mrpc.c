@@ -473,6 +473,7 @@ static flux_mrpc_t *mrpc (flux_t *h,
     if (rv < 0)
         goto error;
     nodeset_iterator_destroy (itr);
+    nodeset_destroy (ns);
     return mrpc;
 error:
     flux_mrpc_destroy (mrpc);
