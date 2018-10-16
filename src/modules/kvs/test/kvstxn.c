@@ -139,7 +139,41 @@ struct cache *create_cache_with_empty_rootdir (char *ref, int ref_len)
     ok ((entry = create_cache_entry_treeobj (rootdir)) != NULL,
         "create_cache_entry_treeobj works");
     cache_insert (cache, ref, entry);
+    json_decref (rootdir);
     return cache;
+}
+
+/* wraps treeobj_create_val() and treeobj_insert_entry(),
+ * so created val can be properly dereferenced
+ */
+void _treeobj_insert_entry_val (json_t *obj, const char *name,
+                                const void *data, int len)
+{
+    json_t *val = treeobj_create_val (data, len);
+    treeobj_insert_entry (obj, name, val);
+    json_decref (val);
+}
+
+/* wraps treeobj_create_symlink() and treeobj_insert_entry(), so
+ * created symlink can be properly dereferenced
+ */
+void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
+                                    const char *target)
+{
+    json_t *symlink = treeobj_create_symlink (target);
+    treeobj_insert_entry (obj, name, symlink);
+    json_decref (symlink);
+}
+
+/* wraps treeobj_create_dirref() and treeobj_insert_entry(), so
+ * created dirref can be properly dereferenced
+ */
+void _treeobj_insert_entry_dirref (json_t *obj, const char *name,
+                                   const char *blobref)
+{
+    json_t *dirref = treeobj_create_dirref (blobref);
+    treeobj_insert_entry (obj, name, dirref);
+    json_decref (dirref);
 }
 
 void kvstxn_mgr_basic_tests (void)
@@ -375,8 +409,8 @@ void kvstxn_mgr_merge_tests (void)
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("transaction1"));
-    json_array_append (names, json_string ("transaction2"));
+    json_array_append_new (names, json_string ("transaction1"));
+    json_array_append_new (names, json_string ("transaction2"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -399,7 +433,7 @@ void kvstxn_mgr_merge_tests (void)
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("transaction1"));
+    json_array_append_new (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -421,7 +455,7 @@ void kvstxn_mgr_merge_tests (void)
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("transaction1"));
+    json_array_append_new (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -443,7 +477,7 @@ void kvstxn_mgr_merge_tests (void)
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("transaction1"));
+    json_array_append_new (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -491,7 +525,7 @@ void kvstxn_basic_tests (void)
     create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0x44);
 
     names = json_array ();
-    json_array_append (names, json_string ("transaction1"));
+    json_array_append_new (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -602,6 +636,7 @@ void verify_value (struct cache *cache,
         ok (json_equal (test, o) == true,
             "lookup_get_value returned matching value");
         json_decref (test);
+        json_decref (o);
     }
     else
         ok (lookup_get_value (lh) == NULL,
@@ -662,6 +697,7 @@ void kvstxn_basic_kvstxn_process_test (void)
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
     kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
 }
 
@@ -815,9 +851,9 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "foo.key1", "1");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "bar.key2", "2");
 
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
     memcpy (rootref, newroot, sizeof (rootref));
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /* process the lingering transaction */
 
@@ -936,6 +972,7 @@ void kvstxn_basic_root_not_dir (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 struct rootref_data {
@@ -960,6 +997,8 @@ int rootref_cb (kvstxn_t *kt, const char *ref, void *data)
 
     cache_insert (rd->cache, ref, entry);
 
+    json_decref (rootdir);
+
     return 0;
 }
 
@@ -978,7 +1017,6 @@ void kvstxn_process_root_missing (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
-
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
@@ -1088,7 +1126,7 @@ void kvstxn_process_missing_ref (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1096,7 +1134,7 @@ void kvstxn_process_missing_ref (void)
     /* don't add dir entry, we want it to miss  */
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -1152,6 +1190,8 @@ void kvstxn_process_missing_ref (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 int ref_error_cb (kvstxn_t *kt, const char *ref, void *data)
@@ -1197,7 +1237,7 @@ void kvstxn_process_error_callbacks (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1205,7 +1245,7 @@ void kvstxn_process_error_callbacks (void)
     /* don't add dir entry, we want it to miss  */
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -1247,6 +1287,8 @@ void kvstxn_process_error_callbacks (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 struct error_partway_data {
@@ -1294,7 +1336,7 @@ void kvstxn_process_error_callbacks_partway (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1302,7 +1344,7 @@ void kvstxn_process_error_callbacks_partway (void)
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -1342,6 +1384,8 @@ void kvstxn_process_error_callbacks_partway (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_invalid_operation (void)
@@ -1391,6 +1435,7 @@ void kvstxn_process_invalid_operation (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 void kvstxn_process_malformed_operation (void)
@@ -1488,6 +1533,7 @@ void kvstxn_process_invalid_hash (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 void kvstxn_process_follow_link (void)
@@ -1519,7 +1565,7 @@ void kvstxn_process_follow_link (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1527,8 +1573,8 @@ void kvstxn_process_follow_link (void)
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
-    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
+    _treeobj_insert_entry_symlink (root, "symlink", "dir");
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -1566,6 +1612,8 @@ void kvstxn_process_follow_link (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_dirval_test (void)
@@ -1592,7 +1640,7 @@ void kvstxn_process_dirval_test (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", dir);
@@ -1633,6 +1681,8 @@ void kvstxn_process_dirval_test (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_delete_test (void)
@@ -1663,7 +1713,7 @@ void kvstxn_process_delete_test (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1671,7 +1721,7 @@ void kvstxn_process_delete_test (void)
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -1710,6 +1760,8 @@ void kvstxn_process_delete_test (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_delete_nosubdir_test (void)
@@ -1762,6 +1814,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 void kvstxn_process_delete_filevalinpath_test (void)
@@ -1792,7 +1845,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1800,7 +1853,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -1834,6 +1887,8 @@ void kvstxn_process_delete_filevalinpath_test (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_bad_dirrefs (void)
@@ -1864,7 +1919,7 @@ void kvstxn_process_bad_dirrefs (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -1907,6 +1962,9 @@ void kvstxn_process_bad_dirrefs (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (dirref);
+    json_decref (root);
 }
 
 struct cache_count {
@@ -1954,7 +2012,7 @@ void kvstxn_process_big_fileval (void)
      */
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("42", 2));
+    _treeobj_insert_entry_val (root, "val", "42", 2);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2044,6 +2102,7 @@ void kvstxn_process_big_fileval (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 /* Test giant directory entry, as large json objects will iterate through
@@ -2095,22 +2154,22 @@ void kvstxn_process_giant_dir (void)
      */
 
     dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val0000", treeobj_create_val ("0", 1));
-    treeobj_insert_entry (dir, "val0010", treeobj_create_val ("1", 1));
-    treeobj_insert_entry (dir, "val0200", treeobj_create_val ("2", 1));
-    treeobj_insert_entry (dir, "val3000", treeobj_create_val ("3", 1));
-    treeobj_insert_entry (dir, "val0004", treeobj_create_val ("4", 1));
-    treeobj_insert_entry (dir, "val0050", treeobj_create_val ("5", 1));
-    treeobj_insert_entry (dir, "val0600", treeobj_create_val ("6", 1));
-    treeobj_insert_entry (dir, "val7000", treeobj_create_val ("7", 1));
-    treeobj_insert_entry (dir, "val0008", treeobj_create_val ("8", 1));
-    treeobj_insert_entry (dir, "val0090", treeobj_create_val ("9", 1));
-    treeobj_insert_entry (dir, "val0a00", treeobj_create_val ("A", 1));
-    treeobj_insert_entry (dir, "valB000", treeobj_create_val ("b", 1));
-    treeobj_insert_entry (dir, "val000c", treeobj_create_val ("C", 1));
-    treeobj_insert_entry (dir, "val00D0", treeobj_create_val ("d", 1));
-    treeobj_insert_entry (dir, "val0e00", treeobj_create_val ("E", 1));
-    treeobj_insert_entry (dir, "valF000", treeobj_create_val ("f", 1));
+    _treeobj_insert_entry_val (dir, "val0000", "0", 1);
+    _treeobj_insert_entry_val (dir, "val0010", "1", 1);
+    _treeobj_insert_entry_val (dir, "val0200", "2", 1);
+    _treeobj_insert_entry_val (dir, "val3000", "3", 1);
+    _treeobj_insert_entry_val (dir, "val0004", "4", 1);
+    _treeobj_insert_entry_val (dir, "val0050", "5", 1);
+    _treeobj_insert_entry_val (dir, "val0600", "6", 1);
+    _treeobj_insert_entry_val (dir, "val7000", "7", 1);
+    _treeobj_insert_entry_val (dir, "val0008", "8", 1);
+    _treeobj_insert_entry_val (dir, "val0090", "9", 1);
+    _treeobj_insert_entry_val (dir, "val0a00", "A", 1);
+    _treeobj_insert_entry_val (dir, "valB000", "b", 1);
+    _treeobj_insert_entry_val (dir, "val000c", "C", 1);
+    _treeobj_insert_entry_val (dir, "val00D0", "d", 1);
+    _treeobj_insert_entry_val (dir, "val0e00", "E", 1);
+    _treeobj_insert_entry_val (dir, "valF000", "f", 1);
 
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
@@ -2118,7 +2177,7 @@ void kvstxn_process_giant_dir (void)
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "dir", treeobj_create_dirref (dir_ref));
+    _treeobj_insert_entry_dirref (dir, "dir", dir_ref);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2171,6 +2230,8 @@ void kvstxn_process_giant_dir (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_append (void)
@@ -2201,11 +2262,11 @@ void kvstxn_process_append (void)
      */
 
     blobref_hash ("sha1", "ABCD", 4, valref_ref, sizeof (valref_ref));
-    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("ABCD"), 4));
+    cache_insert (cache, valref_ref, create_cache_entry_raw ("ABCD", 4));
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("abcd", 4));
-    treeobj_insert_entry (root, "valref", treeobj_create_val ("ABCD", 4));
+    _treeobj_insert_entry_val (root, "val", "abcd", 4);
+    _treeobj_insert_entry_val (root, "valref", "ABCD", 4);
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2316,6 +2377,7 @@ void kvstxn_process_append (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 void kvstxn_process_append_errors (void)
@@ -2325,6 +2387,7 @@ void kvstxn_process_append_errors (void)
     kvstxn_mgr_t *ktm;
     kvstxn_t *kt;
     json_t *root;
+    json_t *dir;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
     ok ((cache = cache_create ()) != NULL,
@@ -2339,9 +2402,10 @@ void kvstxn_process_append_errors (void)
      * "symlink" : symlink to "dir"
      */
 
+    dir = treeobj_create_dir ();
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dir ());
-    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
+    treeobj_insert_entry (root, "dir", dir);
+    _treeobj_insert_entry_symlink (root, "symlink", "dir");
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2392,6 +2456,8 @@ void kvstxn_process_append_errors (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
 }
 
 void kvstxn_process_fallback_merge (void)
@@ -2458,12 +2524,12 @@ void kvstxn_process_fallback_merge (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "42");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key2", "43");
 
+    memcpy (rootref, newroot, sizeof (rootref));
+
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more transactions");
-
-    memcpy (rootref, newroot, sizeof (rootref));
 
     /*
      * Now we create an error in a merge by writing to "."
@@ -2519,9 +2585,9 @@ void kvstxn_process_fallback_merge (void)
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key3", "44");
 
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
     memcpy (rootref, newroot, sizeof (rootref));
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /* now we try and process the next transaction, which should be the bad one */
 
@@ -2679,6 +2745,7 @@ void kvstxn_namespace_prefix (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
 }
 
@@ -2707,10 +2774,10 @@ void kvstxn_namespace_prefix_symlink (void)
      */
 
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "val", treeobj_create_val ("42", 2));
-    treeobj_insert_entry (root, "symlink2A", treeobj_create_symlink ("ns:A/."));
-    treeobj_insert_entry (root, "symlink2Achain", treeobj_create_symlink ("ns:A/ns:A/."));
-    treeobj_insert_entry (root, "symlink2B", treeobj_create_symlink ("ns:B/."));
+    _treeobj_insert_entry_val (root, "val", "42", 2);
+    _treeobj_insert_entry_symlink (root, "symlink2A", "ns:A/.");
+    _treeobj_insert_entry_symlink (root, "symlink2Achain", "ns:A/ns:A/.");
+    _treeobj_insert_entry_symlink (root, "symlink2B", "ns:B/.");
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2747,9 +2814,11 @@ void kvstxn_namespace_prefix_symlink (void)
 
     verify_value (cache, krm, "A", newroot, "val", "100");
 
+    memcpy (root_ref, newroot, sizeof (root_ref));
+
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
-    memcpy (root_ref, newroot, sizeof (root_ref));
+    kvstxn_mgr_destroy (ktm);
 
     /* Second test, namespace chain in symlink fails */
 
@@ -2770,6 +2839,8 @@ void kvstxn_namespace_prefix_symlink (void)
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
         "kvstxn_get_errnum return EINVAL");
+
+    kvstxn_mgr_destroy (ktm);
 
     /* Third test, namespace crossing in symlink results in error */
 
@@ -2796,6 +2867,7 @@ void kvstxn_namespace_prefix_symlink (void)
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
+    json_decref (root);
 }
 
 int main (int argc, char *argv[])
