@@ -29,7 +29,7 @@ allowed-types = [ "none" ]
         unsigned_str = u"hello world"
         signed_str = self.context.sign_wrap(unsigned_str, mech_type="none")
         unwrapped_payload, wrapping_user = self.context.sign_unwrap(signed_str)
-        unwrapped_str = unwrapped_payload.decode('utf-8')
+        unwrapped_str = unwrapped_payload[:].decode('utf-8')
 
         self.assertEqual(unsigned_str, unwrapped_str)
         self.assertEqual(wrapping_user, os.getuid())
