@@ -102,7 +102,7 @@ int main (int argc, char **argv)
      */
     val = attr_first (attrs);
     ok (val && !strcmp (val, "foo"),
-        "attr_first returned %s", val);
+        "attr_first returned foo");
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
     ok (attr_add (attrs, "foo1", "42", 0) == 0
@@ -112,19 +112,19 @@ int main (int argc, char **argv)
         "attr_add foo1, foo2, foo3, foo4 works");
     val = attr_first (attrs);
     ok (val && !strncmp (val, "foo", 3),
-        "attr_first returned %s", val);
+        "attr_first returned foo-prefixed attr");
     val = attr_next (attrs);
     ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned %s", val);
+        "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
     ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned %s", val);
+        "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
     ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned %s", val);
+        "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
     ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned %s", val);
+        "attr_next returned foo-prefixed attr");
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
 
@@ -134,28 +134,28 @@ int main (int argc, char **argv)
         "attr_add_active_int works");
     a = 0;
     ok (attr_get (attrs, "a", &val, NULL) == 0 && val && !strcmp (val, "0"),
-        "attr_get on active int tracks value: %s", val);
+        "attr_get on active int tracks val=0");
     a = 1;
     ok (attr_get (attrs, "a", &val, NULL) == 0 && !strcmp (val, "1"),
-        "attr_get on active int tracks value: %s", val);
+        "attr_get on active int tracks val=1");
     a = -1;
     ok (attr_get (attrs, "a", &val, NULL) == 0 && !strcmp (val, "-1"),
-        "attr_get on active int tracks value: %s", val);
+        "attr_get on active int tracks val=-1");
     a = INT_MAX - 1;
     ok (attr_get (attrs, "a", &val, NULL) == 0
         && strtol (val, NULL, 10) == INT_MAX - 1,
-        "attr_get on active int tracks value: %s", val);
+        "attr_get on active int tracks val=INT_MAX-1");
     a = INT_MIN + 1;
     ok (attr_get (attrs, "a", &val, NULL) == 0
         && strtol (val, NULL, 10) == INT_MIN + 1,
-        "attr_get on active int tracks value: %s", val);
+        "attr_get on active int tracks val=INT_MIN+1");
 
     ok (attr_set (attrs, "a", "0", false) == 0 && a == 0,
-        "attr_set on active int sets value: %d", a);
+        "attr_set on active int sets val=0");
     ok (attr_set (attrs, "a", "1", false) == 0 && a == 1,
-        "attr_set on active int sets value: %d", a);
+        "attr_set on active int sets val=1");
     ok (attr_set (attrs, "a", "-1", false) == 0 && a == -1,
-        "attr_set on active int sets value: %d", a);
+        "attr_set on active int sets val=-1");
     errno = 0;
     ok (attr_delete (attrs, "a", false) < 0 && errno == EPERM,
         "attr_delete on active attr fails with EPERM");
@@ -168,19 +168,19 @@ int main (int argc, char **argv)
         "attr_add_active_uint32 works");
     b = 0;
     ok (attr_get (attrs, "b", &val, NULL) == 0 && val && !strcmp (val, "0"),
-        "attr_get on active uin32_t tracks value: %s", val);
+        "attr_get on active uin32_t tracks val=0");
     b = 1;
     ok (attr_get (attrs, "b", &val, NULL) == 0 && !strcmp (val, "1"),
-        "attr_get on active uint32_t tracks value: %s", val);
+        "attr_get on active uint32_t tracks val=1");
     b = UINT_MAX - 1;
     ok (attr_get (attrs, "b", &val, NULL) == 0
         && strtoul (val, NULL, 10) == UINT_MAX - 1,
-        "attr_get on active uint32_t tracks value: %s", val);
+        "attr_get on active uint32_t tracks val=UINT_MAX-1");
 
     ok (attr_set (attrs, "b", "0", false) == 0 && b == 0,
-        "attr_set on active uint32_t sets value: %d", b);
+        "attr_set on active uint32_t sets val=0");
     ok (attr_set (attrs, "b", "1", false) == 0 && b == 1,
-        "attr_set on active uint32_t sets value: %d", b);
+        "attr_set on active uint32_t sets val=1");
     ok (attr_delete (attrs, "b", true) == 0,
         "attr_delete (force) works on active attr");
 
@@ -190,10 +190,10 @@ int main (int argc, char **argv)
         "attr_add_active_int FLUX_ATTRFLAG_IMMUTABLE works");
     c = 42;
     ok (attr_get (attrs, "c", &val, NULL) == 0 && val && !strcmp (val, "42"),
-        "attr_get returns initial value: %s", val);
+        "attr_get returns initial val=42");
     c = 43;
     ok (attr_get (attrs, "c", &val, NULL) == 0 && val && !strcmp (val, "42"),
-        "attr_get ignores value changes: %s", val);
+        "attr_get ignores value changes");
     errno = 0;
     ok (attr_delete (attrs, "c", true) < 0 && errno == EPERM,
         "attr_delete (force) fails with EPERM");
