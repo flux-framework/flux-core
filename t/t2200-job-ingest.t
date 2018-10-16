@@ -85,6 +85,12 @@ test_expect_success 'job-ingest: priority stored in KVS' '
 	test $jobpri -eq 16
 '
 
+test_expect_success 'job-ingest: eventlog stored in KVS' '
+	jobid=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	flux kvs eventlog get ${kvsdir}.eventlog | grep submit
+'
+
 test_expect_success 'job-ingest: instance owner can submit priority=31' '
 	jobid=$(${SUBMITBENCH} --priority=31 ${JOBSPEC}/valid/basic.yaml) &&
 	kvsdir=$(flux job id --to=kvs-active $jobid) &&
