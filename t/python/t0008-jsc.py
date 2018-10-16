@@ -20,7 +20,7 @@ def jsc_cb_wait_until_reserved(jcb_str, arg, errnum):
     if jobid == job_to_wait_for and new_state == 'reserved':
         flux_handle.reactor_stop(flux_handle.get_reactor())
 
-class TestKVS(unittest.TestCase):
+class TestJSC(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.f = core.Flux()

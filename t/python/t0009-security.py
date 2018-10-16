@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-from __future__ import print_function
 import os
-import sys
 import unittest
 from tempfile import NamedTemporaryFile
 
@@ -11,7 +9,7 @@ from flux.security import SecurityContext
 def __flux_size():
     return 1
 
-class TestKVS(unittest.TestCase):
+class TestSecurity(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         conf = b"""[sign]
