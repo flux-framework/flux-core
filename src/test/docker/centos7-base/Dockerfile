@@ -54,6 +54,7 @@ RUN yum -y update \
       aspell \
       aspell-en \
       devtoolset-7-make \
+      lz4-devel \
  && yum clean all
 
 # The cmake from yum is incredibly ancient, download a less ancient one

@@ -57,6 +57,7 @@ RUN apt-get -qq install -y --no-install-recommends \
         libjansson-dev \
         libmunge-dev \
         liblua5.2-dev \
+        liblz4-dev \
         libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
