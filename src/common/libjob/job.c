@@ -165,6 +165,22 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
     return f;
 }
 
+flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags)
+{
+    flux_future_t *f;
+
+    if (!h) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(f = flux_rpc_pack (h, "job-manager.purge", FLUX_NODEID_ANY, 0,
+                             "{s:I s:i}",
+                             "id", id,
+                             "flags", flags)))
+        return NULL;
+    return f;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

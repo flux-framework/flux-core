@@ -46,10 +46,19 @@ enum job_priority {
     FLUX_JOB_PRIORITY_MAX = 31,
 };
 
+enum job_status_flags {
+    FLUX_JOB_RESOURCE_REQUESTED     = 1,
+    FLUX_JOB_RESOURCE_ALLOCATED     = 2,
+    FLUX_JOB_EXEC_REQUESTED         = 4,
+    FLUX_JOB_EXEC_RUNNING           = 8,
+};
+
 typedef uint64_t flux_jobid_t;
 
 /* Submit a job to the system.
  * 'jobspec' should be RFC 14 jobspec.
+ * 'priority' should be a value from 0 to 31 (16 if not instance owner).
+ * 'flags' should be 0 for now.
  * The system assigns a jobid and returns it in the response.
  */
 flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
@@ -76,6 +85,10 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
  */
 flux_future_t *flux_job_list (flux_t *h, int max_entries,
                               const char *json_str);
+
+/* Remove a job from queue and KVS.
+ */
+flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags);
 
 #ifdef __cplusplus
 }
