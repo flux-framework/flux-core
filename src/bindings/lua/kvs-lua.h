@@ -4,6 +4,10 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+/* wrappers to store a default txn for all kvs write operations */
+flux_kvs_txn_t *lua_kvs_get_default_txn (flux_t *h);
+void lua_kvs_clear_default_txn (flux_t *h);
+
 int luaopen_kvs (lua_State *L);
 
 /*

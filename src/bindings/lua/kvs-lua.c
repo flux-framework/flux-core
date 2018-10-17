@@ -34,12 +34,37 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#include <assert.h>
+
 #include <flux/core.h>
 
 #include "jansson-lua.h"
 #include "lutil.h"
 
 static int l_kvsdir_commit (lua_State *L);
+
+/* aukey shared between wreck, lua, and kz */
+const char *lua_default_txn_auxkey = "flux::kvs_default_txn";
+flux_kvs_txn_t *lua_kvs_get_default_txn (flux_t *h)
+{
+    flux_kvs_txn_t *txn = NULL;
+
+    assert (h);
+
+    if (!(txn = flux_aux_get (h, lua_default_txn_auxkey))) {
+        if (!(txn = flux_kvs_txn_create ()))
+            goto done;
+        flux_aux_set (h, lua_default_txn_auxkey,
+                      txn, (flux_free_f)flux_kvs_txn_destroy);
+    }
+ done:
+    return txn;
+}
+
+void lua_kvs_clear_default_txn (flux_t *h)
+{
+    flux_aux_set (h, lua_default_txn_auxkey, NULL, NULL);
+}
 
 static flux_kvsdir_t *lua_get_kvsdir (lua_State *L, int index)
 {
@@ -87,15 +112,44 @@ static int l_kvsdir_kvsdir_new (lua_State *L)
     const char *key;
     flux_kvsdir_t *new;
     flux_kvsdir_t *d;
+    flux_t *h;
+    const char *rootref;
+    char *keyat = NULL;
+    flux_future_t *f = NULL;
+    const flux_kvsdir_t *subdir;
+    int rc = -1;
 
     d = lua_get_kvsdir (L, 1);
     key = luaL_checkstring (L, 2);
+    h = flux_kvsdir_handle (d);
+    rootref = flux_kvsdir_rootref (d);
 
-    if (flux_kvsdir_get_dir (d, &new, "%s", key) < 0)
-        return lua_pusherror (L, "flux_kvsdir_get_dir: %s",
-                              (char *)flux_strerror (errno));
+    if (!(keyat = flux_kvsdir_key_at (d, key))) {
+        rc = lua_pusherror (L, "flux_kvsdir_key_at: %s",
+                            (char *)flux_strerror (errno));
+        goto err;
+    }
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, keyat, rootref))) {
+        rc = lua_pusherror (L, "flux_kvs_lookupat: %s",
+                            (char *)flux_strerror (errno));
+        goto err;
+    }
+    if (flux_kvs_lookup_get_dir (f, &subdir) < 0) {
+        rc = lua_pusherror (L, "flux_kvs_lookup_get_dir: %s",
+                            (char *)flux_strerror (errno));
+        goto err;
+    }
+    if (!(new = flux_kvsdir_copy (subdir))) {
+        rc = lua_pusherror (L, "flux_kvsdir_copy: %s",
+                            (char *)flux_strerror (errno));
+        goto err;
+    }
 
-    return lua_push_kvsdir (L, new);
+    rc = lua_push_kvsdir (L, new);
+err:
+    free (keyat);
+    flux_future_destroy (f);
+    return rc;
 }
 
 static int l_kvsdir_tostring (lua_State *L)
@@ -107,41 +161,60 @@ static int l_kvsdir_tostring (lua_State *L)
 
 static int l_kvsdir_newindex (lua_State *L)
 {
-    int rc;
+    int rc = 0;
+    int ret = -1;
     flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
+    flux_t *h = flux_kvsdir_handle (d);
     const char *key = lua_tostring (L, 2);
+    flux_kvs_txn_t *txn;
+    char *keyat = NULL;
+
+    if (!(txn = lua_kvs_get_default_txn (h))) {
+        rc = lua_pusherror (L, "cannot get default transaction");
+        goto done;
+    }
+
+    if (!(keyat = flux_kvsdir_key_at (d, key))) {
+        rc = lua_pusherror (L, "flux_kvsdir_key_at: %s",
+                            (char *)flux_strerror (errno));
+        goto done;
+    }
 
     /*
      *  Process value;
      */
     if (lua_isnil (L, 3))
-        rc = flux_kvsdir_put (d, key, NULL);
+        ret = flux_kvs_txn_unlink (txn, 0, keyat);
     else if (lua_type (L, 3) == LUA_TNUMBER) {
         double val = lua_tonumber (L, 3);
         if (floor (val) == val)
-            rc = flux_kvsdir_pack (d, key, "I", (int64_t) val);
+            ret = flux_kvs_txn_pack (txn, 0, keyat, "I", (int64_t) val);
         else
-            rc = flux_kvsdir_pack (d, key, "f", val);
+            ret = flux_kvs_txn_pack (txn, 0, keyat, "f", val);
     }
     else if (lua_isboolean (L, 3))
-        rc = flux_kvsdir_pack (d, key, "b", (int)lua_toboolean (L, 3));
+        ret = flux_kvs_txn_pack (txn, 0, keyat, "b", (int)lua_toboolean (L, 3));
     else if (lua_isstring (L, 3))
-        rc = flux_kvsdir_pack (d, key, "s", lua_tostring (L, 3));
+        ret = flux_kvs_txn_pack (txn, 0, keyat, "s", lua_tostring (L, 3));
     else if (lua_istable (L, 3)) {
         char *json_str;
         lua_value_to_json_string (L, 3, &json_str);
-        rc = flux_kvsdir_put (d, key, json_str);
+        ret = flux_kvs_txn_put (txn, 0, keyat, json_str);
         free (json_str);
     }
     else {
-        return luaL_error (L, "Unsupported type for kvs assignment: %s",
-                            lua_typename (L, lua_type (L, 3)));
+        rc = luaL_error (L, "Unsupported type for kvs assignment: %s",
+                         lua_typename (L, lua_type (L, 3)));
+        goto done;
     }
-    if (rc < 0)
-        return lua_pusherror (L, "flux_kvsdir_put (key=%s, type=%s): %s",
-                           key, lua_typename (L, lua_type (L, 3)),
-                           flux_strerror (errno));
-    return (0);
+
+    if (ret < 0)
+        rc = lua_pusherror (L, "flux_kvs_txn_put/pack (key=%s, type=%s): %s",
+                            key, lua_typename (L, lua_type (L, 3)),
+                            flux_strerror (errno));
+done:
+    free (keyat);
+    return (rc);
 }
 
 static flux_kvsitr_t *lua_to_kvsitr (lua_State *L, int index)
@@ -205,9 +278,29 @@ static int l_kvsdir_commit (lua_State *L)
 {
     flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     if (lua_isnoneornil (L, 2)) {
-        if (flux_kvs_commit_anon (flux_kvsdir_handle (d), 0) < 0)
-            return lua_pusherror (L, "flux_kvs_commit_anon: %s",
+        flux_t *h;
+        flux_kvs_txn_t *txn;
+        flux_future_t *future;
+
+        h = flux_kvsdir_handle (d);
+
+        if (!(txn = lua_kvs_get_default_txn (h)))
+            return lua_pusherror (L, "cannot get default transaction");
+
+        if (!(future = flux_kvs_commit (h, 0, txn)))
+            return lua_pusherror (L, "flux_kvs_commit: %s",
                                   (char *)flux_strerror (errno));
+
+        if (flux_future_get (future, NULL) < 0) {
+            int saved_errno = errno;
+            flux_future_destroy (future);
+            lua_kvs_clear_default_txn (h);
+            errno = saved_errno;
+            return lua_pusherror (L, (char *)flux_strerror (errno));
+        }
+
+        flux_future_destroy (future);
+        lua_kvs_clear_default_txn (h);
     }
     lua_pushboolean (L, true);
     return (1);
@@ -217,11 +310,33 @@ static int l_kvsdir_unlink (lua_State *L)
 {
     flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     const char *key = luaL_checkstring (L, 2);
-    if (flux_kvsdir_unlink (d, key) < 0)
-            return lua_pusherror (L, "unlink: %s",
-                                  (char *)flux_strerror (errno));
+    flux_t *h = flux_kvsdir_handle (d);
+    flux_kvs_txn_t *txn;
+    char *keyat = NULL;
+    int rc = -1;
+
+    if (!(txn = lua_kvs_get_default_txn (h))) {
+        rc = lua_pusherror (L, "cannot get default transaction");
+        goto done;
+    }
+
+    if (!(keyat = flux_kvsdir_key_at (d, key))) {
+        rc = lua_pusherror (L, "flux_kvsdir_key_at: %s",
+                            (char *)flux_strerror (errno));
+        goto done;
+    }
+
+    if (flux_kvs_txn_unlink (txn, 0, keyat) < 0) {
+        rc = lua_pusherror (L, "flux_kvs_txn_unlink: %s",
+                            (char *)flux_strerror (errno));
+        goto done;
+    }
+
     lua_pushboolean (L, true);
-    return (1);
+    rc = 1;
+done:
+    free (keyat);
+    return (rc);
 }
 
 
@@ -231,7 +346,9 @@ static int l_kvsdir_watch (lua_State *L)
     void *h;
     char *key;
     char *json_str = NULL;
+    const char *json_str_ptr;
     flux_kvsdir_t *dir;
+    flux_future_t *f = NULL;
 
     dir = lua_get_kvsdir (L, 1);
     h = flux_kvsdir_handle (dir);
@@ -239,12 +356,18 @@ static int l_kvsdir_watch (lua_State *L)
 
     if (lua_isnoneornil (L, 3)) {
         /* Need to fetch initial value */
-        if (((rc = flux_kvs_get (h, key, &json_str)) < 0) && (errno != ENOENT))
+        if (!(f = flux_kvs_lookup (h, 0, key))) {
+            rc = -1;
+            goto err;
+        }
+        if ((rc = flux_kvs_lookup_get (f, &json_str_ptr)) < 0
+            && (errno != ENOENT))
             goto err;
     }
     else {
         /*  Otherwise, the value at top of stack is initial json_object */
         lua_value_to_json_string (L, -1, &json_str);
+        json_str_ptr = json_str;
     }
 
     rc = flux_kvs_watch_once (h, key, &json_str);
@@ -256,6 +379,7 @@ err:
 
     json_object_string_to_lua (L, json_str);
     free (json_str);
+    flux_future_destroy (f);
     return (1);
 }
 
@@ -278,7 +402,8 @@ static int l_kvsdir_index (lua_State *L)
     flux_kvsdir_t *d;
     const char *key = lua_tostring (L, 2);
     char *fullkey = NULL;
-    char *json_str = NULL;
+    const char *json_str;
+    flux_future_t *future = NULL;
 
     if (key == NULL)
         return luaL_error (L, "kvsdir: invalid index");
@@ -291,7 +416,8 @@ static int l_kvsdir_index (lua_State *L)
     f = flux_kvsdir_handle (d);
     fullkey = flux_kvsdir_key_at (d, key);
 
-    if (flux_kvs_get (f, fullkey, &json_str) == 0)
+    if ((future = flux_kvs_lookup (f, 0, fullkey))
+        && flux_kvs_lookup_get (future, &json_str) == 0)
         rc = json_object_string_to_lua (L, json_str);
     else if (errno == EISDIR)
         rc = l_kvsdir_kvsdir_new (L);
@@ -309,7 +435,7 @@ static int l_kvsdir_index (lua_State *L)
     }
 out:
     free (fullkey);
-    free (json_str);
+    flux_future_destroy (future);
     return (rc);
 }
 

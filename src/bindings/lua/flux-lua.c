@@ -285,6 +285,7 @@ done:
 static int l_flux_kvs_symlink (lua_State *L)
 {
     flux_t *f;
+    flux_kvs_txn_t *txn;
     const char *key;
     const char *target;
 
@@ -295,7 +296,10 @@ static int l_flux_kvs_symlink (lua_State *L)
     if (!(target = lua_tostring (L, 3)))
         return lua_pusherror (L, "target expected in arg #3");
 
-    if (flux_kvs_symlink (f, key, target) < 0)
+    if (!(txn = lua_kvs_get_default_txn (f)))
+        return lua_pusherror (L, "cannot get default transaction");
+
+    if (flux_kvs_txn_symlink (txn, 0, key, target) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
@@ -304,13 +308,17 @@ static int l_flux_kvs_symlink (lua_State *L)
 static int l_flux_kvs_unlink (lua_State *L)
 {
     flux_t *f;
+    flux_kvs_txn_t *txn;
     const char *key;
     if (!(f = lua_get_flux (L, 1)))
         return lua_pusherror (L, "flux handle expected");
     if (!(key = lua_tostring (L, 2)))
         return lua_pusherror (L, "key expected in arg #2");
 
-    if (flux_kvs_unlink (f, key) < 0)
+    if (!(txn = lua_kvs_get_default_txn (f)))
+        return lua_pusherror (L, "cannot get default transaction");
+
+    if (flux_kvs_txn_unlink (txn, 0, key) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
@@ -363,8 +371,25 @@ static int l_flux_kvs_type (lua_State *L)
 int l_flux_kvs_commit (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
-    if (flux_kvs_commit_anon (f, 0) < 0)
+    flux_future_t *future;
+    flux_kvs_txn_t *txn;
+
+    if (!(txn = lua_kvs_get_default_txn (f)))
+        return lua_pusherror (L, "cannot get default transaction");
+
+    if (!(future = flux_kvs_commit (f, 0, txn)))
          return lua_pusherror (L, (char *)flux_strerror (errno));
+
+    if (flux_future_get (future, NULL) < 0) {
+        int saved_errno = errno;
+        flux_future_destroy (future);
+        lua_kvs_clear_default_txn (f);
+        errno = saved_errno;
+        return lua_pusherror (L, (char *)flux_strerror (errno));
+    }
+
+    flux_future_destroy (future);
+    lua_kvs_clear_default_txn (f);
     lua_pushboolean (L, true);
     return (1);
 }
@@ -374,20 +399,25 @@ int l_flux_kvs_put (lua_State *L)
     int rc;
     flux_t *f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
+    flux_kvs_txn_t *txn;
+
     if (key == NULL)
         return lua_pusherror (L, "key required");
 
+    if (!(txn = lua_kvs_get_default_txn (f)))
+        return lua_pusherror (L, "cannot get default transaction");
+
     if (lua_isnil (L, 3))
-        rc = flux_kvs_put (f, key, NULL);
+        rc = flux_kvs_txn_unlink (txn, 0, key);
     else {
         char *json_str = NULL;
         if (lua_value_to_json_string (L, 3, &json_str) < 0)
             return lua_pusherror (L, "Unable to convert to json");
-        rc = flux_kvs_put (f, key, json_str);
+        rc = flux_kvs_txn_put (txn, 0, key, json_str);
         free (json_str);
     }
     if (rc < 0)
-        return lua_pusherror (L, "flux_kvs_put (%s): %s",
+        return lua_pusherror (L, "flux_kvs_put/unlink (%s): %s",
                                 key, (char *)flux_strerror (errno));
 
     lua_pushboolean (L, true);
