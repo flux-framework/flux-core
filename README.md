@@ -43,6 +43,7 @@ jansson-devel >= 2.6
 lua-devel >= 5.1, < 5.3
 luaposix
 libhwloc-devel >= v1.11.1, < 2.0
+lz4
 yaml-cpp-devel >= 0.5.1
 # for python bindings
 python-devel >= 2.7
