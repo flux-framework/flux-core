@@ -157,6 +157,7 @@ static void batch_destroy (struct batch *batch)
                 job_destroy (job);
             zlist_destroy (&batch->jobs);
             json_decref (batch->idlist);
+            flux_kvs_txn_destroy (batch->txn);
         }
         free (batch);
         errno = saved_errno;
