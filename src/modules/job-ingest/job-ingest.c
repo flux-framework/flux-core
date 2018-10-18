@@ -108,6 +108,9 @@ struct batch {
     json_t *joblist;
 };
 
+static int make_key (char *buf, int bufsz, struct job *job, const char *name);
+
+
 static void job_destroy (struct job *job)
 {
     if (job) {
@@ -213,6 +216,47 @@ static void batch_respond_success (struct batch *batch)
     }
 }
 
+static void batch_cleanup_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (h, "%s: KVS commit failed", __FUNCTION__);
+    flux_future_destroy (f);
+}
+
+/* Remove KVS active job entries previously committed for all jobs in batch.
+ */
+static int batch_cleanup (struct batch *batch)
+{
+    flux_t *h = batch->ctx->h;
+    flux_kvs_txn_t *txn;
+    struct job *job;
+    flux_future_t *f = NULL;
+    char key[64];
+
+    if (!(txn = flux_kvs_txn_create ()))
+        return -1;
+    job = zlist_first (batch->jobs);
+    while (job) {
+        if (make_key (key, sizeof (key), job, NULL) < 0)
+            goto error;
+        if (flux_kvs_txn_unlink (txn, 0, key) < 0)
+            goto error;
+        job = zlist_next (batch->jobs);
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)))
+        goto error;
+    if (flux_future_then (f, -1., batch_cleanup_continuation, NULL) < 0)
+        goto error;
+    flux_kvs_txn_destroy (txn);
+    return 0;
+error:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+    return -1;
+}
+
 /* Get result of announcing job(s) to job manager,
  * and respond to submit request(s).
  */
@@ -224,6 +268,8 @@ static void batch_announce_continuation (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "%s: job-manager request failed", __FUNCTION__);
         batch_respond_error (batch, errno, "job-manager request failed");
+        if (batch_cleanup (batch) < 0)
+            flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
     }
     else
         batch_respond_success (batch);
@@ -249,6 +295,8 @@ static void batch_announce (struct batch *batch)
 error:
     flux_log_error (h, "%s: error sending RPC", __FUNCTION__);
     batch_respond_error (batch, errno, "error sending job-manager.submit RPC");
+    if (batch_cleanup (batch) < 0)
+        flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
     batch_destroy (batch);
     flux_future_destroy (f);
 }
@@ -292,6 +340,8 @@ static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
     if (flux_future_then (f, -1., batch_flush_continuation, batch) < 0) {
         batch_respond_error (batch, errno, "flux_future_then (kvs) failed");
         flux_future_destroy (f);
+        if (batch_cleanup (batch) < 0)
+            flux_log_error (ctx->h, "%s: KVS cleanup failure", __FUNCTION__);
         goto error;
     }
     return;
