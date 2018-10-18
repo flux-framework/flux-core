@@ -1,15 +1,21 @@
 #!/usr/bin/env python
+from __future__ import print_function
+
 import os
 import sys
 import subprocess
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# copied from sharness.d/01-setup.sh
+# ported from sharness.d/01-setup.sh
+srcdir = os.path.abspath(os.path.join(os.environ['srcdir'] if 'srcdir' in os.environ else "", ".."))
 builddir = os.path.abspath(os.path.join(os.environ['builddir'] if 'builddir' in os.environ else "", ".."))
 flux_exe = os.path.join(builddir, "src", "cmd", "flux")
 
-def rerun_under_flux(size=1):
+def is_exe(fpath):
+    return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+def rerun_under_flux(size=1, personality="full"):
     try:
         if os.environ['IN_SUBFLUX'] == "1":
             return True
