@@ -155,6 +155,52 @@ static int errnum_check (kz_t *kz)
     return 0;
 }
 
+/* aukey shared between wreck, lua, and kz */
+static const char *kz_default_txn_auxkey = "flux::kvs_default_txn";
+static flux_kvs_txn_t *kz_kvs_get_default_txn (flux_t *h)
+{
+    flux_kvs_txn_t *txn = NULL;
+
+    assert (h);
+
+    if (!(txn = flux_aux_get (h, kz_default_txn_auxkey))) {
+        if (!(txn = flux_kvs_txn_create ()))
+            goto done;
+        flux_aux_set (h, kz_default_txn_auxkey,
+                      txn, (flux_free_f)flux_kvs_txn_destroy);
+    }
+ done:
+    return txn;
+}
+
+static void kz_kvs_clear_default_txn (flux_t *h)
+{
+    flux_aux_set (h, kz_default_txn_auxkey, NULL, NULL);
+}
+
+static int kz_kvs_commit (flux_t *h)
+{
+    flux_kvs_txn_t *txn;
+    flux_future_t *f = NULL;
+    int rv = -1;
+
+    if (!(txn = kz_kvs_get_default_txn (h)))
+        goto error;
+    if (!(f = flux_kvs_commit (h, 0, txn)))
+        goto error;
+    if (flux_future_get (f, NULL) < 0) {
+        int saved_errno = errno;
+        kz_kvs_clear_default_txn (h);
+        errno = saved_errno;
+        goto error;
+    }
+    kz_kvs_clear_default_txn (h);
+    rv = 0;
+error:
+    flux_future_destroy (f);
+    return rv;
+}
+
 kz_t *kz_open (flux_t *h, const char *name, int flags)
 {
     kz_t *kz;
@@ -172,10 +218,13 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
-        if (flux_kvs_mkdir (h, name) < 0) // overwrites existing
+        flux_kvs_txn_t *txn;
+        if (!(txn = kz_kvs_get_default_txn (h)))
+            goto error;
+        if (flux_kvs_txn_mkdir (txn, 0, name) < 0) // overwrites existing
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
-            if (flux_kvs_commit_anon (h, 0) < 0)
+            if (kz_kvs_commit (h) < 0)
                 goto error;
         }
     }
@@ -192,10 +241,13 @@ static int putnext (kz_t *kz, const char *json_str)
         return -1;
     }
     const char *key = format_key (kz, kz->seq++);
-    if (flux_kvs_put (kz->h, key, json_str) < 0)
+    flux_kvs_txn_t *txn;
+    if (!(txn = kz_kvs_get_default_txn (kz->h)))
+        return -1;
+    if (flux_kvs_txn_put (txn, 0, key, json_str) < 0)
         return -1;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
-        if (flux_kvs_commit_anon (kz->h, 0) < 0)
+        if (kz_kvs_commit (kz->h) < 0)
             return -1;
     }
     return 0;
@@ -354,7 +406,7 @@ int kz_flush (kz_t *kz)
         errno = EINVAL;
         return -1;
     }
-    return flux_kvs_commit_anon (kz->h, 0);
+    return kz_kvs_commit (kz->h);
 }
 
 int kz_close (kz_t *kz)
@@ -368,15 +420,18 @@ int kz_close (kz_t *kz)
     if ((kz->flags & KZ_FLAGS_WRITE)) {
         if (!(kz->flags & KZ_FLAGS_RAW)) {
             const char *key = format_key (kz, kz->seq++);
+            flux_kvs_txn_t *txn;
             if (!(json_str = zio_json_encode (NULL, 0, true))) { /* EOF */
                 errno = EPROTO;
                 goto error;
             }
-            if (flux_kvs_put (kz->h, key, json_str) < 0)
+            if (!(txn = kz_kvs_get_default_txn (kz->h)))
+                goto error;
+            if (flux_kvs_txn_put (txn, 0, key, json_str) < 0)
                 goto error;
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
-            if (flux_kvs_commit_anon (kz->h, 0) < 0)
+            if (kz_kvs_commit (kz->h) < 0)
                 goto error;
         }
     }
