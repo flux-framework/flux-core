@@ -270,12 +270,8 @@ void submitbench_check (flux_reactor_t *r, flux_watcher_t *w,
         if (!(f = flux_job_submit (ctx->h, ctx->J, ctx->priority, ctx->flags)))
             log_err_exit ("flux_job_submit");
 #else
-        char *cpy = strndup (ctx->jobspec, ctx->jobspecsz);
-        if (!cpy)
-            log_err_exit ("strndup");
-        if (!(f = flux_job_submit (ctx->h, cpy, ctx->priority, ctx->flags)))
+        if (!(f = flux_job_submit (ctx->h, ctx->jobspec, ctx->priority, ctx->flags)))
             log_err_exit ("flux_job_submit");
-        free (cpy);
 #endif
         if (flux_future_then (f, -1., submitbench_continuation, ctx) < 0)
             log_err_exit ("flux_future_then");
