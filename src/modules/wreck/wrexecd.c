@@ -1175,10 +1175,12 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
         wlog_err (ctx, "update_job_state: asprintf: %s", strerror (errno));
         return (-1);
     }
-    if (flux_kvsdir_pack (ctx->kvs, key, "s", timestr) < 0)
+    if (flux_kvsdir_pack (ctx->kvs, key, "s", timestr) < 0) {
+        free (key);
         return (-1);
-    free (key);
+    }
 
+    free (key);
     return (0);
 }
 
