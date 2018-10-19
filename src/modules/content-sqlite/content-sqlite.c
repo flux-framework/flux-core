@@ -29,13 +29,13 @@
 #endif
 #include <sqlite3.h>
 #include <czmq.h>
+#include <lz4.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libminilzo/minilzo.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
@@ -65,11 +65,6 @@ typedef struct {
     size_t lzo_bufsize;
     void *lzo_buf;
 } sqlite_ctx_t;
-
-#define HEAP_ALLOC(var,size) \
-        lzo_align_t __LZO_MMODEL var [ ((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t) ]
-
-static HEAP_ALLOC(lzo_wrkmem, LZO1X_1_MEM_COMPRESS);
 
 static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
 {
@@ -301,13 +296,12 @@ void load_cb (flux_t *h, flux_msg_handler_t *mh,
         if (ctx->lzo_bufsize < uncompressed_size
                                 && grow_lzo_buf (ctx, uncompressed_size) < 0)
             goto done;
-        lzo_uint out_len = ctx->lzo_bufsize;
-        int r = lzo1x_decompress (data, size, ctx->lzo_buf, &out_len, NULL);
-        if (r != LZO_E_OK) {
+        int r = LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
+        if (r < 0) {
             errno = EINVAL;
             goto done;
         }
-        if (out_len != uncompressed_size) {
+        if (r != uncompressed_size) {
             flux_log (h, LOG_ERR, "load: blob size mismatch");
             errno = EINVAL;
             goto done;
@@ -358,16 +352,16 @@ void store_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
     if (size >= compression_threshold) {
         int r;
-        lzo_uint out_len = size + size / 16 + 64 + 3;
+        int out_len = LZ4_compressBound(size);
         if (ctx->lzo_bufsize < out_len && grow_lzo_buf (ctx, out_len) < 0)
             goto done;
-        r = lzo1x_1_compress (data, size, ctx->lzo_buf, &out_len, lzo_wrkmem);
-        if (r != LZO_E_OK) {
+        r = LZ4_compress_default (data, ctx->lzo_buf, size, out_len);
+        if (r == 0) {
             errno = EINVAL;
             goto done;
         }
         uncompressed_size = size;
-        size = out_len;
+        size = r;
         data = ctx->lzo_buf;
     }
     if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, hash_len,
@@ -484,13 +478,12 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
             if (ctx->lzo_bufsize < uncompressed_size
                             && grow_lzo_buf (ctx, uncompressed_size) < 0)
                 goto done;
-            lzo_uint out_len = ctx->lzo_bufsize;
-            int r = lzo1x_decompress (data, size, ctx->lzo_buf, &out_len, NULL);
-            if (r != LZO_E_OK) {
+            int r = LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
+            if (r < 0) {
                 errno = EINVAL;
                 goto done;
             }
-            if (out_len != uncompressed_size) {
+            if (r != uncompressed_size) {
                 flux_log (h, LOG_ERR, "shutdown: blob size mismatch");
                 errno = EINVAL;
                 goto done;
@@ -534,14 +527,9 @@ static const struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t *h, int argc, char **argv)
 {
     flux_msg_handler_t **handlers = NULL;
-    int lzo_rc = lzo_init ();
     sqlite_ctx_t *ctx = getctx (h);
     if (!ctx)
         goto done;
-    if (lzo_rc != LZO_E_OK) {
-        flux_log (h, LOG_ERR, "lzo_init failed (rc=%d)", lzo_rc);
-        goto done;
-    }
     if (flux_event_subscribe (h, "shutdown") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         goto done;
