@@ -233,6 +233,7 @@ X_AC_MUNGE
 X_AC_JANSSON
 X_AC_YAMLCPP
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
+PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
@@ -341,7 +342,6 @@ AC_CONFIG_FILES( \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
-  src/common/libminilzo/Makefile \
   src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
   src/common/libkvs/Makefile \
