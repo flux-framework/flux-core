@@ -1,6 +1,5 @@
 SUBDIRS = libtap \
 	  libev \
-	  libminilzo \
 	  libpmi \
 	  liblsd \
 	  libutil \
@@ -32,7 +31,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
-	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libkz/libkz.la \
 	$(builddir)/libzio/libzio.la \
 	$(builddir)/libcompat/libcompat.la \
