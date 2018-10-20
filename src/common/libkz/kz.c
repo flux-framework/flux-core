@@ -156,7 +156,7 @@ static int errnum_check (kz_t *kz)
 }
 
 /* aukey shared between wreck, lua, and kz */
-static const char *kz_default_txn_auxkey = "flux::kvs_default_txn";
+static const char *kz_default_txn_auxkey = "flux::wreck_lua_kz_txn";
 static flux_kvs_txn_t *kz_kvs_get_default_txn (flux_t *h)
 {
     flux_kvs_txn_t *txn = NULL;

@@ -44,7 +44,7 @@
 static int l_kvsdir_commit (lua_State *L);
 
 /* aukey shared between wreck, lua, and kz */
-const char *lua_default_txn_auxkey = "flux::kvs_default_txn";
+const char *lua_default_txn_auxkey = "flux::wreck_lua_kz_txn";
 flux_kvs_txn_t *lua_kvs_get_default_txn (flux_t *h)
 {
     flux_kvs_txn_t *txn = NULL;

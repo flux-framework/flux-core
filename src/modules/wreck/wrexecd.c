@@ -199,7 +199,7 @@ static flux_t *prog_ctx_flux_handle (struct prog_ctx *ctx)
 }
 
 /* aukey shared between wreck, lua, and kz */
-static const char *wreck_default_txn_auxkey = "flux::kvs_default_txn";
+static const char *wreck_default_txn_auxkey = "flux::wreck_lua_kz_txn";
 static flux_kvs_txn_t *wreck_kvs_get_default_txn (struct prog_ctx *ctx)
 {
     flux_kvs_txn_t *txn = NULL;
