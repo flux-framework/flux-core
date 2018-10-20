@@ -301,7 +301,7 @@ int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
     zlist_t *sigwatchers;
-    int sec_typemask = FLUX_SEC_TYPE_CURVE | FLUX_SEC_TYPE_MUNGE;
+    int sec_typemask = FLUX_SEC_TYPE_CURVE;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;

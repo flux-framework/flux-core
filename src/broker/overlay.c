@@ -74,7 +74,6 @@ struct overlay_struct {
     struct endpoint *event;     /* PUB for rank = 0, SUB for rank > 0 */
     overlay_cb_f event_cb;
     void *event_arg;
-    bool event_munge;
 
     struct endpoint *relay;
 
@@ -381,8 +380,6 @@ void overlay_set_event (overlay_t *ov, const char *fmt, ...)
     va_start (ap, fmt);
     ov->event = endpoint_vcreate (fmt, ap);
     va_end (ap);
-
-    ov->event_munge = strstr (ov->event->uri, "pgm://") ? true : false;
 }
 
 const char *overlay_get_event (overlay_t *ov)
@@ -404,13 +401,8 @@ int overlay_sendmsg_event (overlay_t *ov, const flux_msg_t *msg)
 
     if (!ov->event || !ov->event->zs)
         return 0;
-    if (ov->event_munge) {
-        if (flux_msg_sendzsock_munge (ov->event->zs, msg, ov->sec) < 0)
-            goto done;
-    } else {
-        if (flux_msg_sendzsock (ov->event->zs, msg) < 0)
-            goto done;
-    }
+    if (flux_msg_sendzsock (ov->event->zs, msg) < 0)
+        goto done;
     rc = 0;
 done:
     return rc;
@@ -423,13 +415,8 @@ flux_msg_t *overlay_recvmsg_event (overlay_t *ov)
         errno = EINVAL;
         goto done;
     }
-    if (ov->event_munge) {
-        if (!(msg = flux_msg_recvzsock_munge (ov->event->zs, ov->sec)))
-            goto done;
-    } else {
-        if (!(msg = flux_msg_recvzsock (ov->event->zs)))
-            goto done;
-    }
+    if (!(msg = flux_msg_recvzsock (ov->event->zs)))
+        goto done;
 done:
     return msg;
 }
