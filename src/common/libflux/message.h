@@ -117,14 +117,11 @@ flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf);
  * Returns 0 on success, -1 on failure with errno set.
  */
 int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
-int flux_msg_sendzsock_munge (void *sock, const flux_msg_t *msg,
-                              flux_sec_t *sec);
 
 /* Receive a message from zeromq socket.
  * Returns message on success, NULL on failure with errno set.
  */
 flux_msg_t *flux_msg_recvzsock (void *dest);
-flux_msg_t *flux_msg_recvzsock_munge (void *sock, flux_sec_t *sec);
 
 /* Initialize iobuf members.
  */
