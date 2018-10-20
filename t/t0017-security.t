@@ -6,10 +6,6 @@ test_description='Test broker security'
 
 test_under_flux 4 minimal
 
-test_expect_success 'verify fake munge encoding of messages' '
-	${FLUX_BUILD_DIR}/src/test/tmunge --fake
-'
-
 test_expect_success 'simulated local connector auth failure returns EPERM' '
 	flux comms info &&
 	flux module debug --set 1 connector-local &&
