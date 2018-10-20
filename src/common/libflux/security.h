@@ -13,10 +13,8 @@ enum {
     /* enabled security modes */
     FLUX_SEC_TYPE_PLAIN = 1, // cannot be used with CURVE
     FLUX_SEC_TYPE_CURVE = 2, // cannot be used with PLAIN
-    FLUX_SEC_TYPE_MUNGE = 4,
 
     /* flags */
-    FLUX_SEC_FAKEMUNGE = 0x10, // testing only
     FLUX_SEC_VERBOSE = 0x20,
     FLUX_SEC_KEYGEN_FORCE = 0x40,
 };
@@ -53,8 +51,7 @@ const char *flux_sec_get_directory (flux_sec_t *c);
 int flux_sec_keygen (flux_sec_t *c);
 
 /* Initialize the security context for communication.
- * For MUNGE this function creates a munge context and stores it
- * within the security context for later use.  For PLAIN and CURVE, a zauth
+ * For PLAIN and CURVE, a zauth
  * actor for ZAP processing is started.  Since there can be only one registered
  * zauth actor per zeromq process, this function may only be called once
  * per process.  For PLAIN, the actor is configured to allow only connections
@@ -101,18 +98,6 @@ const char *flux_sec_errstr (flux_sec_t *c);
  * The caller should not free this string.
  */
 const char *flux_sec_confstr (flux_sec_t *c);
-
-/* Convert a buffer to/from a Munge credential.
- * Privacy is ensured through the use of MUNGE_OPT_UID_RESTRICTION
- * Caller must free resulting string.
- * If the FLUX_SEC_FAKEMUNGE flag is set, buffers are only base64
- * encoded with no security (for testing only!)
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
-                    char **outbuf, size_t *outsize);
-int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
-                      char **outbuf, size_t *outsize);
 
 #ifdef __cplusplus
 }

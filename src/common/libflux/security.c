@@ -51,7 +51,6 @@ struct flux_sec_struct {
     int typemask;
     zcert_t *srv_cert;
     zcert_t *cli_cert;
-    munge_ctx_t mctx;
     char *conf_dir;
     char *curve_dir;
     char *passwd_file;
@@ -76,8 +75,7 @@ const char *flux_sec_confstr (flux_sec_t *c)
 {
     if (c->confstr)
         free (c->confstr);
-    if (asprintf (&c->confstr, "Security: epgm=%s, tcp/ipc=%s",
-               (c->typemask & FLUX_SEC_TYPE_MUNGE) ? "MUNGE" : "off",
+    if (asprintf (&c->confstr, "Security: epgm=off, tcp/ipc=%s",
                (c->typemask & FLUX_SEC_TYPE_PLAIN) ? "PLAIN"
              : (c->typemask & FLUX_SEC_TYPE_CURVE) ? "CURVE" : "off") < 0)
         oom ();
@@ -104,8 +102,6 @@ void flux_sec_destroy (flux_sec_t *c)
         free (c->passwd_file);
         zcert_destroy (&c->cli_cert);
         zcert_destroy (&c->srv_cert);
-        if (c->mctx)
-            munge_ctx_destroy (c->mctx);
         free (c->errstr);
         free (c->confstr);
         zactor_destroy (&c->auth);
@@ -176,20 +172,6 @@ done:
 
 int flux_sec_comms_init (flux_sec_t *c)
 {
-    if (c->mctx == NULL && (c->typemask & FLUX_SEC_TYPE_MUNGE)
-                        && !(c->typemask & FLUX_SEC_FAKEMUNGE)) {
-        munge_err_t e;
-        if (!(c->mctx = munge_ctx_create ())) {
-            seterrstr (c, "munge_ctx_create: %s", flux_strerror (errno));
-            goto error;
-        }
-        e = munge_ctx_set (c->mctx, MUNGE_OPT_UID_RESTRICTION, c->uid);
-        if (e != EMUNGE_SUCCESS) {
-            seterrstr (c, "munge_ctx_set: %s", munge_strerror (e));
-            errno = EINVAL;
-            goto error;
-        }
-    }
     if (c->auth == NULL && ((c->typemask & FLUX_SEC_TYPE_CURVE)
                         || (c->typemask & FLUX_SEC_TYPE_PLAIN))) {
         if (checksecdirs (c, false) < 0)
@@ -515,78 +497,6 @@ done:
         zhash_destroy (&passwds);
     if (uuid)
         zuuid_destroy (&uuid);
-    return rc;
-}
-
-int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
-                    char **outbuf, size_t *outsize)
-{
-    munge_err_t e;
-    int rc = -1;
-
-    if (!inbuf || !outbuf || !outsize || !c
-                          || !(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
-        errno = EINVAL;
-        return -1;
-    }
-    if ((c->typemask & FLUX_SEC_FAKEMUNGE)) {
-        int dlen = base64_encode_length (insize);
-        void *dst = xzmalloc (dlen);
-        base64_encode_block (dst, &dlen, inbuf, insize);
-        *outbuf = dst;
-        *outsize = dlen;
-    } else {
-        if ((e = munge_encode (outbuf, c->mctx, inbuf,
-                                                insize)) != EMUNGE_SUCCESS) {
-            seterrstr (c, "munge_encode: %s", munge_strerror (e));
-            errno = EKEYREJECTED;
-            goto done;
-        }
-        *outsize = strlen (*outbuf) + 1; /* munge_decode needs null term */
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
-                      char **outbuf, size_t *outsize)
-{
-    munge_err_t e;
-    int rc = -1;
-
-    if (!c || !inbuf || !outbuf || !outsize
-                     || !(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
-        errno = EINVAL;
-        return -1;
-    }
-    if ((c->typemask & FLUX_SEC_FAKEMUNGE)) {
-        int dlen = base64_decode_length (insize);
-        void *dst = xzmalloc (dlen);
-        if (base64_decode_block (dst, &dlen, inbuf, insize) < 0) {
-            seterrstr (c, "munge_decode (fake) failed");
-            free (dst);
-            errno = EKEYREJECTED;
-            goto done;
-        }
-        *outbuf = dst;
-        *outsize = dlen;
-    } else {
-        if (inbuf[insize - 1] != '\0') {
-            seterrstr (c, "munge cred is not null terminated");
-            errno = EKEYREJECTED;
-            goto done;
-        }
-        e = munge_decode (inbuf, c->mctx, (void **)outbuf, (int *)outsize,
-                          NULL, NULL);
-        if (e != EMUNGE_SUCCESS) {
-            seterrstr (c, "munge_decode: %s", munge_strerror (e));
-            errno = EKEYREJECTED;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
     return rc;
 }
 
