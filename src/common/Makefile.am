@@ -35,7 +35,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libzio/libzio.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
-	$(LIBMUNGE) $(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
+	$(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) $(LIBRT) $(FLUX_SECURITY_LIBS)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 

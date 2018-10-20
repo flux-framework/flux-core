@@ -34,7 +34,7 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
         $(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) \
-        $(FLUX_SECURITY_LIBS) $(LIBDL) $(LIBMUNGE)
+        $(FLUX_SECURITY_LIBS) $(LIBDL)
 
 test_cppflags = \
         $(AM_CPPFLAGS) \

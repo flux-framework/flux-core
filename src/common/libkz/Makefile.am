@@ -28,7 +28,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL) $(LIBMUNGE)
+	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL)
 
 test_cppflags = \
 	$(AM_CPPFLAGS) \
