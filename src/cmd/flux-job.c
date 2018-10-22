@@ -51,6 +51,7 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submitbench (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_purge (optparse_t *p, int argc, char **argv);
+int cmd_priority (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -109,6 +110,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_list,
       0,
       list_opts
+    },
+    { "priority",
+      "[OPTIONS] id priority",
+      "Set job priority",
+      cmd_priority,
+      0,
+      NULL,
     },
     { "purge",
       "[OPTIONS] id ...",
@@ -192,6 +200,40 @@ int main (int argc, char *argv[])
     optparse_destroy (p);
     log_fini ();
     return (exitval);
+}
+
+int cmd_priority (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    flux_future_t *f;
+    int priority;
+    flux_jobid_t id;
+    char *endptr;
+
+    if (optindex != argc - 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    errno = 0;
+    id = strtoull (argv[optindex++], &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        log_err_exit ("error parsing jobid");
+    errno = 0;
+    priority = strtol (argv[optindex++], &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        log_err_exit ("error parsing priority");
+
+    if (!(f = flux_job_set_priority (h, id, priority)))
+        log_err_exit ("flux_job_set_priority");
+    if (flux_rpc_get (f, NULL) < 0)
+        log_err_exit ("flux_job_set_priority");
+    flux_future_destroy (f);
+    flux_close (h);
+    return 0;
 }
 
 int cmd_purge (optparse_t *p, int argc, char **argv)
