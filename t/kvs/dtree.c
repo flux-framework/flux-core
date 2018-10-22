@@ -54,6 +54,19 @@ void usage (void)
     exit (1);
 }
 
+void setup_dir (flux_t *h, const char *dir) {
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_mkdir (txn, 0, dir) < 0)
+        log_err_exit ("flux_kvs_txn_mkdir %s", dir);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
+}
+
 int main (int argc, char *argv[])
 {
     int ch;
@@ -95,14 +108,7 @@ int main (int argc, char *argv[])
         flux_kvs_txn_t *txn;
         flux_future_t *f;
 
-        if (!(txn = flux_kvs_txn_create ()))
-            log_err_exit ("flux_kvs_txn_create");
-        if (flux_kvs_txn_mkdir (txn, 0, prefix) < 0)
-            log_err_exit ("flux_kvs_txn_mkdir %s", prefix);
-        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-            log_err_exit ("flux_kvs_commit");
-        flux_future_destroy (f);
-        flux_kvs_txn_destroy (txn);
+        setup_dir (h, prefix);
 
         if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, prefix))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0)
