@@ -121,7 +121,6 @@ typedef struct {
      */
     bool verbose;
     int event_recv_seq;
-    bool event_active;          /* primary event source is active */
     struct service_switch *services;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
@@ -145,7 +144,6 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
                                    request_error_mode_t errmode);
 
-static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
@@ -410,18 +408,12 @@ int main (int argc, char *argv[])
 
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
-    overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
 
     /* Arrange for the publisher to route event messages.
-     * overlay_sendmsg_event - PGM port (or clique relay host)
      * handle_event - local subscribers (ctx.h)
      */
     if (publisher_set_flux (ctx.publisher, ctx.h) < 0)
         log_err_exit ("publisher_set_flux");
-    if (publisher_set_sender (ctx.publisher, "overlay_sendmsg_event",
-                              (publisher_send_f)overlay_sendmsg_event,
-                              ctx.overlay) < 0)
-        log_err_exit ("publisher_set_sender");
     if (publisher_set_sender (ctx.publisher, "handle_event",
                               (publisher_send_f)handle_event, &ctx) < 0)
         log_err_exit ("publisher_set_sender");
@@ -531,12 +523,8 @@ int main (int argc, char *argv[])
     if (ctx.verbose) {
         const char *parent = overlay_get_parent (ctx.overlay);
         const char *child = overlay_get_child (ctx.overlay);
-        const char *event = overlay_get_event (ctx.overlay);
-        const char *relay = overlay_get_relay (ctx.overlay);
         log_msg ("parent: %s", parent ? parent : "none");
         log_msg ("child: %s", child ? child : "none");
-        log_msg ("event: %s", event ? event : "none");
-        log_msg ("relay: %s", relay ? relay : "none");
     }
 
     set_proctitle (rank);
@@ -1261,18 +1249,6 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    char *uuid = NULL;
-
-    if (flux_msg_get_route_last (msg, &uuid) == 0)
-        overlay_mute_child (ctx->overlay, uuid);
-    free (uuid);
-    /* no response */
-}
-
 static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
@@ -1353,7 +1329,6 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
@@ -1458,7 +1433,7 @@ done:
     flux_msg_destroy (msg);
 }
 
-/* helper for event_cb, parent_cb.
+/* Handle events received by parent_cb.
  * On rank 0, publisher is wired to send events here also.
  */
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
@@ -1485,14 +1460,10 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     }
     ctx->event_recv_seq = seq;
 
-    /* Forward to this rank's un-muted TBON children.
+    /* Forward to this rank's children.
      */
     if (overlay_mcast_child (ctx->overlay, msg) < 0)
         flux_log_error (ctx->h, "%s: overlay_mcast_child", __FUNCTION__);
-    /* Forward to other ranks in local clique, if we are the clique relay.
-     */
-    if (overlay_sendmsg_relay (ctx->overlay, msg) < 0)
-        flux_log_error (ctx->h, "%s: overlay_sendmsg_relay", __FUNCTION__);
 
     /* Internal services may install message handlers for events.
      */
@@ -1528,14 +1499,6 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (ctx->event_active) {
-                flux_future_t *f;
-                if (!(f = flux_rpc (ctx->h, "cmb.event-mute", NULL,
-                              FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
-                    flux_log_error (ctx->h, "cmb.event-mute RPC");
-                goto done;
-                flux_future_destroy (f);
-            }
             if (flux_msg_clear_route (msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event");
                 goto done;
@@ -1638,31 +1601,6 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         }
         module_remove (ctx->modhash, p);
     }
-}
-
-static void event_cb (overlay_t *ov, void *sock, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    flux_msg_t *msg = overlay_recvmsg_event (ov);
-    int type;
-
-    if (!msg)
-        goto done;
-    ctx->event_active = true;
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    switch (type) {
-        case FLUX_MSGTYPE_EVENT:
-            if (handle_event (ctx, msg) < 0)
-                goto done;
-            break;
-        default:
-            flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
-                      flux_msg_typestr (type));
-            break;
-    }
-done:
-    flux_msg_destroy (msg);
 }
 
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
