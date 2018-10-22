@@ -138,7 +138,7 @@ static int l_kvsdir_newindex (lua_State *L)
                             lua_typename (L, lua_type (L, 3)));
     }
     if (rc < 0)
-        return lua_pusherror (L, "flux_kvsdir_put (key=%s, type=%s): %s",
+        return lua_pusherror (L, "flux_kvsdir_put/pack (key=%s, type=%s): %s",
                            key, lua_typename (L, lua_type (L, 3)),
                            flux_strerror (errno));
     return (0);
