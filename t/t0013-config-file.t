@@ -78,8 +78,7 @@ test_expect_success 'start size=1 with shared config file, expected attrs set' '
 		--shutdown-grace=0.1 \
 		flux lsattr -v >1s.out &&
 	grep -q "session-id[ ]*test$" 1s.out &&
-	grep -q "tbon.endpoint[ ]*tcp://127.0.0.1:8500$" 1s.out &&
-	grep -q "mcast.endpoint[ ]*tbon$" 1s.out
+	grep -q "tbon.endpoint[ ]*tcp://127.0.0.1:8500$" 1s.out
 '
 
 test_expect_success 'start size=1 with shared config file, ipc endpoint' '
