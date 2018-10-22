@@ -90,6 +90,10 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries,
  */
 flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags);
 
+/* Change job priority.
+ */
+flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority);
+
 #ifdef __cplusplus
 }
 #endif

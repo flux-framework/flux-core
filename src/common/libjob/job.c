@@ -181,6 +181,22 @@ flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags)
     return f;
 }
 
+flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
+{
+    flux_future_t *f;
+
+    if (!h) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(f = flux_rpc_pack (h, "job-manager.priority", FLUX_NODEID_ANY, 0,
+                             "{s:I s:i}",
+                             "id", id,
+                             "priority", priority)))
+        return NULL;
+    return f;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
