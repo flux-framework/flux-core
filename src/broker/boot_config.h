@@ -9,9 +9,6 @@
  *
  *   session-id = "hype"
  *
- *   # if commented out, TBON is used for event distribution
- *   # mcast-endpoint = "epgm://eth0;229.0.0.1:8050
- *
  *   # tbon-endpoints array is ordered by rank (zeromq URI format)
  *   tbon-endpoints = [
  *       "tcp://192.168.1.100:8020",  # rank 0
@@ -34,7 +31,6 @@
  *   boot.config_file (r)
  *   session-id (w)
  *   tbon.endpoint (w)
- *   mcast.endpoint (w)
  */
 
 int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k);

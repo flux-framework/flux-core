@@ -43,7 +43,6 @@
  */
 static const char *badat[] = {
     "tbon.endpoint",
-    "mcast.endpoint",
     "session-id",
     NULL,
 };
@@ -52,7 +51,6 @@ static const char *badat[] = {
  */
 static const struct cf_option opts[] = {
     { "tbon-endpoints", CF_ARRAY, true },
-    { "mcast-endpoint", CF_STRING, false },
     { "session-id", CF_STRING, true },
     { "rank", CF_INT64, false },
     { "size", CF_INT64, false },
@@ -199,7 +197,6 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
     }
 
     /* Initialize overlay network parameters.
-     * N.B. mcast relay for cliques is not supported by this boot method.
      */
     overlay_init (overlay, size, rank, tbon_k);
     overlay_set_child (overlay, get_cf_endpoint (cf, rank));
@@ -207,9 +204,6 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
         int prank = kary_parentof (tbon_k, rank);
         overlay_set_parent (overlay, get_cf_endpoint (cf, prank));
     }
-    if ((tmp = cf_get_in (cf, "mcast-endpoint"))
-                        && strcmp (cf_string (tmp), "tbon") != 0)
-        overlay_set_event (overlay, cf_string (tmp));
 
     /* Update attributes.
      */
@@ -221,12 +215,6 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
     if (attr_add (attrs, "tbon.endpoint", get_cf_endpoint (cf, rank),
                   FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("setattr tbon.endpoint");
-        goto done;
-    }
-    tmp = cf_get_in (cf, "mcast-endpoint");
-    if (attr_add (attrs, "mcast.endpoint", tmp ? cf_string (tmp) : "tbon",
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("setattr mcast.endpoint");
         goto done;
     }
 
