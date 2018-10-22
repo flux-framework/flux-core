@@ -71,22 +71,12 @@ host and is useful when configuring an IP endpoint.  Format specifier
 It is useful when configuring an IPC endpoint.  Defaults to
 "tcp://%h:*".
 
-mcast.endpoint::
-The endpoint for multicast events to be distributed over.  The same
-format specifiers can be used as tbon.endpoint.  Special case string
-"tbon" can be used to specify that events should instead by
-distributed over the tree based overlay network.  Defaults to "tbon".
-
 SOCKET ATTRIBUTES
 -----------------
 
 tbon.parent-endpoint::
 The URI of the ZeroMQ endpoint this rank is connected to in the tree
 based overlay network.  This attribute will not be set on rank zero.
-
-mcast.relay-endpoint::
-The URI of the ZeroMQ endpoint this rank is bound to for relay of
-multicast messages if multiple ranks are spawned per node.
 
 local-uri::
 The Flux URI that should be passed to flux_open(1) to establish
