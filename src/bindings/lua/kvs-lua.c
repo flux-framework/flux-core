@@ -232,6 +232,7 @@ static int l_kvsdir_watch (lua_State *L)
     char *key;
     char *json_str = NULL;
     flux_kvsdir_t *dir;
+    int rv = -1;
 
     dir = lua_get_kvsdir (L, 1);
     h = flux_kvsdir_handle (dir);
@@ -239,20 +240,27 @@ static int l_kvsdir_watch (lua_State *L)
 
     if (lua_isnoneornil (L, 3)) {
         /* Need to fetch initial value */
-        if (((rc = flux_kvs_get (h, key, &json_str)) < 0) && (errno != ENOENT))
+        if (((rc = flux_kvs_get (h, key, &json_str)) < 0)
+            && (errno != ENOENT)) {
+            rv = lua_pusherror (L, "flux_kvs_get: %s",
+                                (char *)flux_strerror (errno));
             goto err;
+        }
     }
     else {
         /*  Otherwise, the value at top of stack is initial json_object */
         lua_value_to_json_string (L, -1, &json_str);
     }
 
-    rc = flux_kvs_watch_once (h, key, &json_str);
+    if ((rc = flux_kvs_watch_once (h, key, &json_str)) < 0) {
+        rv = lua_pusherror (L, "flux_kvs_watch_once: %s",
+                            (char *)flux_strerror (errno));
+        goto err;
+    }
 err:
     free (key);
     if (rc < 0)
-        return lua_pusherror (L, "flux_kvs_watch: %s",
-                              (char *)flux_strerror (errno));
+        return rv;
 
     json_object_string_to_lua (L, json_str);
     free (json_str);
