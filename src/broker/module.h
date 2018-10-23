@@ -31,10 +31,6 @@ void module_add_arg (module_t *p, const char *arg);
  */
 const char *module_get_name (module_t *p);
 
-/* Get optional service name.
- */
-const char *module_get_service (module_t *p);
-
 /* Get module uuid.
  */
 const char *module_get_uuid (module_t *p);

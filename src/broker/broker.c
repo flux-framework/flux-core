@@ -1025,11 +1025,6 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     if (service_add (ctx->services, module_get_name (p),
                                     module_get_uuid (p), mod_svc_cb, p) < 0)
         goto module_remove;
-    if (module_get_service (p)) {
-        if (service_add (ctx->services, module_get_service (p),
-                                        module_get_uuid (p), mod_svc_cb, p) < 0)
-            goto service_remove;
-    }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
         module_add_arg (p, arg);

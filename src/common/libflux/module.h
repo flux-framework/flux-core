@@ -63,7 +63,6 @@ int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
  **/
 
 #define MOD_NAME(x) const char *mod_name = x
-#define MOD_SERVICE(x) const char *mod_service = x
 typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 
