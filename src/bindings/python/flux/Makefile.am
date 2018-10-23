@@ -8,7 +8,8 @@ fluxpy_PYTHON=\
 	      jsc.py\
 	      kz.py\
 	      sec.py \
-	      job.py
+	      job.py \
+	      mrpc.py
 
 if HAVE_FLUX_SECURITY
 fluxpy_PYTHON += security.py
