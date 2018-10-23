@@ -98,7 +98,7 @@ int flux_mrpc_then (flux_mrpc_t *mrpc, flux_mrpc_continuation_f cb, void *arg);
  * This invalidates previous payload returned by flux_mrpc_get().
  * Returns 0 on success, -1 if all responses have been received, e.g.
  *   do {
- *     flux_mrpc_get (rpc, ...);
+ *     flux_mrpc_get (mrpc, ...);
  *   } while (flux_mrpc_next (mrpc) == 0);
  */
 int flux_mrpc_next (flux_mrpc_t *mrpc);
