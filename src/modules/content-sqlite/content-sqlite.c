@@ -422,6 +422,19 @@ done:
     return rc;
 }
 
+int register_content_backing_service (flux_t *h)
+{
+    int rc, saved_errno;
+    flux_future_t *f;
+    if (!(f = flux_service_register (h, "content-backing")))
+        return -1;
+    rc = flux_future_get (f, NULL);
+    saved_errno = errno;
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return rc;
+}
+
 /* Intercept broker shutdown event.  If broker is shutting down,
  * avoid transferring data back to the content cache at unload time.
  */
@@ -542,6 +555,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "registering backing store");
         goto done;
     }
+    if (register_content_backing_service (h) < 0) {
+        flux_log_error (h, "service.add: content-backing");
+        goto done;
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
@@ -552,7 +569,6 @@ done:
 }
 
 MOD_NAME ("content-sqlite");
-MOD_SERVICE ("content-backing");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
