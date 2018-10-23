@@ -77,6 +77,10 @@ void module_set_errnum (module_t *p, int errnum);
  */
 int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg);
 
+/* Find a module matching 'uuid'.
+ */
+module_t *module_lookup (modhash_t *mh, const char *uuid);
+
 /* Find a module matching 'name'.
  * N.B. this is a slow linear search - keep out of crit paths
  */

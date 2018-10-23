@@ -668,6 +668,11 @@ done:
     return mods;
 }
 
+module_t *module_lookup (modhash_t *mh, const char *uuid)
+{
+    return zhash_lookup (mh->zh_byuuid, uuid);
+}
+
 module_t *module_lookup_byname (modhash_t *mh, const char *name)
 {
     zlist_t *uuids;
