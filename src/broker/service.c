@@ -95,6 +95,14 @@ void service_remove (struct service_switch *sw, const char *name)
     zhash_delete (sw->services, name);
 }
 
+const char *service_get_uuid (struct service_switch *sw, const char *name)
+{
+    struct service *svc = zhash_lookup (sw->services, name);
+    if (!svc)
+        return (NULL);
+    return (svc->uuid);
+}
+
 /* Delete all services registered by 'uuid'.
  */
 void service_remove_byuuid (struct service_switch *sw, const char *uuid)
