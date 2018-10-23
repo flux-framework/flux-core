@@ -9,15 +9,24 @@
 extern "C" {
 #endif
 
+enum job_submit_flags {
+    FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
+};
+
+enum job_priority {
+    FLUX_JOB_PRIORITY_MIN = 0,
+    FLUX_JOB_PRIORITY_DEFAULT = 16,
+    FLUX_JOB_PRIORITY_MAX = 31,
+};
+
 typedef uint64_t flux_jobid_t;
 
 /* Submit a job to the system.
- * J should be RFC 14 jobspec signed by flux_sign_wrap(), provided
- * flux was built --with-flux-security.  If not, then J should be bare jobspec.
- * Currently the 'flags' parameter must be set to 0.
+ * 'jobspec' should be RFC 14 jobspec.
  * The system assigns a jobid and returns it in the response.
  */
-flux_future_t *flux_job_submit (flux_t *h, const char *J, int flags);
+flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
+                                int priority, int flags);
 
 /* Parse jobid from response to flux_job_submit() request.
  * Returns 0 on success, -1 on failure with errno set - and an extended

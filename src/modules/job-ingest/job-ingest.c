@@ -33,8 +33,8 @@
 #include <flux/security/sign.h>
 #endif
 
-#include "src/common/libjob/job.h"
 #include "src/common/libutil/fluid.h"
+#include "src/common/libjob/sign_none.h"
 
 #if HAVE_JOBSPEC
 #include "jobspec.h"
@@ -47,17 +47,14 @@
  * 2) verify that enclosed jobspec is valid per RFC 14
  * 3) assign jobid using distributed 64-bit FLUID generator
  * 4) commit job data to KVS per RFC 16 (KVS Job Schema)
- * 5) publish "job-ingest.submit" event announcing new jobid
+ * 5) make "job-manager.submit" request announcing new jobid
  *
  * For performance, the above actions are batched, so that if job requests
  * arrive within the 'batch_timeout' window, they are combined into one
- * KVS transaction and one event message.  The event message payload
- * contains an array of integer jobids, e.g.
- *   {"ids":[I,I,...]}
+ * KVS transaction and one job-manager request.
  *
- * The jobid is returned to the user in response to the "submit" RPC.
- * Responses are sent after the KVS commit for the batch is completed,
- * and concurrent with event publication.
+ * The jobid is returned to the user in response to the job-ingest.submit RPC.
+ * Responses are sent after the job has been successfully ingested.
  *
  * Currently all KVS data is committed under job.active.<fluid-dothex>,
  * where <fluid-dothex> is the jobid converted to 16-bit, 0-padded hex
@@ -108,8 +105,11 @@ struct batch {
     struct job_ingest_ctx *ctx;
     flux_kvs_txn_t *txn;
     zlist_t *jobs;
-    json_t *idlist;
+    json_t *joblist;
 };
+
+static int make_key (char *buf, int bufsz, struct job *job, const char *name);
+
 
 static void job_destroy (struct job *job)
 {
@@ -156,7 +156,8 @@ static void batch_destroy (struct batch *batch)
             while ((job = zlist_pop (batch->jobs)))
                 job_destroy (job);
             zlist_destroy (&batch->jobs);
-            json_decref (batch->idlist);
+            json_decref (batch->joblist);
+            flux_kvs_txn_destroy (batch->txn);
         }
         free (batch);
         errno = saved_errno;
@@ -165,7 +166,7 @@ static void batch_destroy (struct batch *batch)
 
 /* Create a 'struct batch', a container for a group of job submit
  * requests.  Prepare a KVS transaction and a json array of jobid's
- * to be used for event publication.
+ * to be used for job-manager.submit request.
  */
 static struct batch *batch_create (struct job_ingest_ctx *ctx)
 {
@@ -177,7 +178,7 @@ static struct batch *batch_create (struct job_ingest_ctx *ctx)
         goto nomem;
     if (!(batch->txn = flux_kvs_txn_create ()))
         goto error;
-    if (!(batch->idlist = json_array ()))
+    if (!(batch->joblist = json_array ()))
         goto nomem;
     batch->ctx = ctx;
     return batch;
@@ -186,45 +187,6 @@ nomem:
 error:
     batch_destroy (batch);
     return NULL;
-}
-
-/* Get result of publishing event and log any error.
- * Finally destroy the batch.
- *
- * N.B. failure to publish is treated as non-fatal at this point.
- * It seemed unlikely enough to not be worth increasing the response latency,
- * so we merely log it.
- */
-static void batch_event_pub_continuation (flux_future_t *f, void *arg)
-{
-    struct batch *batch = arg;
-    flux_t *h = batch->ctx->h;
-    if (flux_future_get (f, NULL) < 0)
-        flux_log_error (h, "%s: event pub failed", __FUNCTION__);
-    batch_destroy (batch);
-    flux_future_destroy (f);
-}
-
-/* Publish event containing new jobids.
- */
-static void batch_event_pub (struct batch *batch)
-{
-    flux_t *h = batch->ctx->h;
-    flux_future_t *f;
-
-    if (!(f = flux_event_publish_pack (h, "job-ingest.submit", 0, "{s:O}",
-                                       "ids", batch->idlist))) {
-        flux_log_error (h, "%s: flux_event_publish_pack", __FUNCTION__);
-        goto error;
-    }
-    if (flux_future_then (f, -1., batch_event_pub_continuation, batch) < 0) {
-        flux_log_error (h, "%s: flux_future_then", __FUNCTION__);
-        flux_future_destroy (f);
-        goto error;
-    }
-    return;
-error:
-    batch_destroy (batch);
 }
 
 /* Respond to all requestors (for each job) with errnum and errstr (required).
@@ -254,9 +216,93 @@ static void batch_respond_success (struct batch *batch)
     }
 }
 
+static void batch_cleanup_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (h, "%s: KVS commit failed", __FUNCTION__);
+    flux_future_destroy (f);
+}
+
+/* Remove KVS active job entries previously committed for all jobs in batch.
+ */
+static int batch_cleanup (struct batch *batch)
+{
+    flux_t *h = batch->ctx->h;
+    flux_kvs_txn_t *txn;
+    struct job *job;
+    flux_future_t *f = NULL;
+    char key[64];
+
+    if (!(txn = flux_kvs_txn_create ()))
+        return -1;
+    job = zlist_first (batch->jobs);
+    while (job) {
+        if (make_key (key, sizeof (key), job, NULL) < 0)
+            goto error;
+        if (flux_kvs_txn_unlink (txn, 0, key) < 0)
+            goto error;
+        job = zlist_next (batch->jobs);
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)))
+        goto error;
+    if (flux_future_then (f, -1., batch_cleanup_continuation, NULL) < 0)
+        goto error;
+    flux_kvs_txn_destroy (txn);
+    return 0;
+error:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+    return -1;
+}
+
+/* Get result of announcing job(s) to job manager,
+ * and respond to submit request(s).
+ */
+static void batch_announce_continuation (flux_future_t *f, void *arg)
+{
+    struct batch *batch = arg;
+    flux_t *h = batch->ctx->h;
+
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "%s: job-manager request failed", __FUNCTION__);
+        batch_respond_error (batch, errno, "job-manager request failed");
+        if (batch_cleanup (batch) < 0)
+            flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
+    }
+    else
+        batch_respond_success (batch);
+
+    batch_destroy (batch);
+    flux_future_destroy (f);
+}
+
+/* Announce job(s) to job manager.
+ */
+static void batch_announce (struct batch *batch)
+{
+    flux_t *h = batch->ctx->h;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (h, "job-manager.submit", FLUX_NODEID_ANY, 0,
+                             "{s:O}",
+                             "jobs", batch->joblist)))
+        goto error;
+    if (flux_future_then (f, -1., batch_announce_continuation, batch) < 0)
+        goto error;
+    return;
+error:
+    flux_log_error (h, "%s: error sending RPC", __FUNCTION__);
+    batch_respond_error (batch, errno, "error sending job-manager.submit RPC");
+    if (batch_cleanup (batch) < 0)
+        flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
+    batch_destroy (batch);
+    flux_future_destroy (f);
+}
+
 /* Get result of KVS commit.
- * Respond to all requestors with success or failure.
- * If successful, generate event containing new jobid's.
+ * If successful, announce job(s) to job-manager.
  */
 static void batch_flush_continuation (flux_future_t *f, void *arg)
 {
@@ -267,8 +313,7 @@ static void batch_flush_continuation (flux_future_t *f, void *arg)
         batch_destroy (batch);
     }
     else {
-        batch_respond_success (batch);
-        batch_event_pub (batch);
+        batch_announce (batch);
     }
     flux_future_destroy (f);
 }
@@ -276,7 +321,7 @@ static void batch_flush_continuation (flux_future_t *f, void *arg)
 /* batch timer - expires 'batch_timeout' seconds after batch was created.
  * Replace ctx->batch with a NULL, and pass 'batch' off to a chain of
  * continuations that commit its data to the KVS, respond to requestors,
- * and publish an event containing the new jobids.
+ * and announce the new jobids.
  */
 static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
@@ -293,8 +338,10 @@ static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
         goto error;
     }
     if (flux_future_then (f, -1., batch_flush_continuation, batch) < 0) {
-        batch_respond_error (batch, errno, "flux_future_then failed");
+        batch_respond_error (batch, errno, "flux_future_then (kvs) failed");
         flux_future_destroy (f);
+        if (batch_cleanup (batch) < 0)
+            flux_log_error (ctx->h, "%s: KVS cleanup failure", __FUNCTION__);
         goto error;
     }
     return;
@@ -315,27 +362,36 @@ static int make_key (char *buf, int bufsz, struct job *job, const char *name)
     return 0;
 }
 
+static int get_timestamp_now (double *timestamp)
+{
+    struct timespec ts;
+    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
+        return -1;
+    *timestamp = (1E-9 * ts.tv_nsec) + ts.tv_sec;
+    return 0;
+}
+
 /* Add 'job' to 'batch'.
  * On error, ensure that no remnants of job made into KVS transaction.
  */
 static int batch_add_job (struct batch *batch, struct job *job,
-                          const char *J, uint32_t userid,
+                          const char *J, uint32_t userid, int priority,
                           const char *jobspec, int jobspecsz)
 {
     char key[64];
     int saved_errno;
-    json_t *id;
+    json_t *jobentry;
+    char *event = NULL;
+    double t;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
         return -1;
     }
-    if (J != NULL) {
-        if (make_key (key, sizeof (key), job, "J-signed") < 0)
-            goto error;
-        if (flux_kvs_txn_put (batch->txn, 0, key, J) < 0)
-            goto error;
-    }
+    if (make_key (key, sizeof (key), job, "J-signed") < 0)
+        goto error;
+    if (flux_kvs_txn_put (batch->txn, 0, key, J) < 0)
+        goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
     if (flux_kvs_txn_put_raw (batch->txn, 0, key, jobspec, jobspecsz) < 0)
@@ -344,17 +400,34 @@ static int batch_add_job (struct batch *batch, struct job *job,
         goto error;
     if (flux_kvs_txn_pack (batch->txn, 0, key, "i", userid) < 0)
         goto error;
-    if (!(id = json_integer (job->id)))
+    if (make_key (key, sizeof (key), job, "priority") < 0)
+        goto error;
+    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", priority) < 0)
+        goto error;
+    if (get_timestamp_now (&t) < 0)
+        goto error;
+    if (!(event = flux_kvs_event_encode_timestamp (t, "submit", NULL)))
+        goto error;
+    if (make_key (key, sizeof (key), job, "eventlog") < 0)
+        goto error;
+    if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, event) < 0)
+        goto error;
+    if (!(jobentry = json_pack ("{s:I s:i s:i s:f}", "id", job->id,
+                                                     "userid", userid,
+                                                     "priority", priority,
+                                                     "t_submit", t)))
         goto nomem;
-    if (json_array_append_new (batch->idlist, id) < 0) {
-        json_decref (id);
+    if (json_array_append_new (batch->joblist, jobentry) < 0) {
+        json_decref (jobentry);
         goto nomem;
     }
+    free (event);
     return 0;
 nomem:
     errno = ENOMEM;
 error:
     saved_errno = errno;
+    free (event);
     zlist_remove (batch->jobs, job);
     if (make_key (key, sizeof (key), job, NULL) == 0)
         (void)flux_kvs_txn_unlink (batch->txn, 0, key);
@@ -376,15 +449,20 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job *job = NULL;
     const char *J;
     const char *jobspec;
+    char *jobspec_cpy = NULL;
     const char *errmsg = NULL;
     char errbuf[80];
     int jobspecsz;
     int rc;
     uint32_t userid;
     uint32_t rolemask;
+    int priority;
+    int64_t userid_signer;
+    const char *mech_type;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
+    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i}",
                              "J", &J,
+                             "priority", &priority,
                              "flags", &flags) < 0)
         goto error;
     if (flags != 0) {
@@ -395,15 +473,43 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (flux_msg_get_rolemask (msg, &rolemask) < 0)
         goto error;
+    if (priority < FLUX_JOB_PRIORITY_MIN || priority > FLUX_JOB_PRIORITY_MAX) {
+        snprintf (errbuf, sizeof (errbuf), "priority range is [%d:%d]",
+                  FLUX_JOB_PRIORITY_MIN, FLUX_JOB_PRIORITY_MAX);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(rolemask & FLUX_ROLE_OWNER) && priority > FLUX_JOB_PRIORITY_DEFAULT) {
+        snprintf (errbuf, sizeof (errbuf),
+                  "only the instance owner can submit with priority >%d",
+                  FLUX_JOB_PRIORITY_DEFAULT);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
 #if HAVE_FLUX_SECURITY
-    int64_t userid_signer;
-    const char *mech_type;
     if (flux_sign_unwrap_anymech (ctx->sec, J, (const void **)&jobspec,
                                   &jobspecsz, &mech_type, &userid_signer,
                                   FLUX_SIGN_NOVERIFY) < 0) {
         errmsg = flux_security_last_error (ctx->sec);
         goto error;
     }
+#else
+    uint32_t userid_signer_u32;
+    /* Simplified unwrap only understands mech=none.
+     * Unlike flux-security version, returned payload must be freed,
+     * and returned userid is a uint32_t.
+     */
+    if (sign_none_unwrap (J, (void **)&jobspec_cpy, &jobspecsz,
+                          &userid_signer_u32) < 0) {
+        errmsg = "could not unwrap jobspec";
+        goto error;
+    }
+    mech_type = "none";
+    jobspec = jobspec_cpy;
+    userid_signer = userid_signer_u32;
+#endif
     /* If the signature claims to be a user other than the submitting user,
      * do not allow that.
      */
@@ -425,24 +531,6 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
-#else
-    /* Without the IMP or a signing mechanism, users other than
-     * the instance owner can certainly not run.
-     */
-    if (!(rolemask & FLUX_ROLE_OWNER)) {
-        snprintf (errbuf, sizeof (errbuf),
-                  "only the instance owner can submit jobs");
-        errmsg = errbuf;
-        errno = EPERM;
-        goto error;
-    }
-    /* jobspec is passed in plaintext instead of the signed J.
-     * J-signed will not be written to the KVS.
-     */
-    jobspec = J;
-    jobspecsz = strlen (J);
-    J = NULL;
-#endif
 #if HAVE_JOBSPEC
     if (jobspec_validate (jobspec, jobspecsz, errbuf, sizeof (errbuf)) < 0) {
         errmsg = errbuf;
@@ -458,10 +546,12 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (!(job = job_create (&ctx->gen, msg)))
         goto error;
-    if (batch_add_job (ctx->batch, job, J, userid, jobspec, jobspecsz) < 0) {
+    if (batch_add_job (ctx->batch, job, J, userid, priority,
+                       jobspec, jobspecsz) < 0) {
         job_destroy (job);
         goto error;
     }
+    free (jobspec_cpy);
     return;
 error:
     if (errmsg)
@@ -470,6 +560,7 @@ error:
         rc = flux_respond_error (h, msg, errno, NULL);
     if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    free (jobspec_cpy);
 }
 
 static const struct flux_msg_handler_spec htab[] = {

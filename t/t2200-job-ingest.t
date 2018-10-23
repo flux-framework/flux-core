@@ -23,6 +23,8 @@ flux setattr log-stderr-level 1
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 SUBMITBENCH="flux job submitbench $SUBMITBENCH_OPT_NONE"
 
+DUMMY_EVENTLOG=test.ingest.eventlog
+
 test_valid ()
 {
     local rc=0
@@ -41,6 +43,14 @@ test_invalid ()
     return ${rc}
 }
 
+test_expect_success 'job-ingest: submit fails without job-manager' '
+	test_must_fail ${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml 2>nosys.out
+'
+
+test_expect_success 'job-ingest: load job-manager-dummy module' '
+	flux module load ${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
+'
+
 test_expect_success 'job-ingest: can submit jobspec on stdin' '
 	cat ${JOBSPEC}/valid/basic.yaml | ${SUBMITBENCH} -
 '
@@ -58,6 +68,46 @@ test_expect_success 'job-ingest: submitter userid stored in KVS' '
 	kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	jobuserid=$(flux kvs get --json ${kvsdir}.userid) &&
 	test $jobuserid -eq $myuserid
+'
+
+test_expect_success 'job-ingest: job announced to job manager' '
+	jobid=$(${SUBMITBENCH} --priority=10 ${JOBSPEC}/valid/basic.yaml) &&
+	flux kvs eventlog get ${DUMMY_EVENTLOG} \
+		| grep "id=${jobid}" >jobman.out &&
+	grep -q priority=10 jobman.out &&
+	grep -q userid=$(id -u) jobman.out
+'
+
+test_expect_success 'job-ingest: priority stored in KVS' '
+	jobid=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	jobpri=$(flux kvs get --json ${kvsdir}.priority) &&
+	test $jobpri -eq 16
+'
+
+test_expect_success 'job-ingest: eventlog stored in KVS' '
+	jobid=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	flux kvs eventlog get ${kvsdir}.eventlog | grep submit
+'
+
+test_expect_success 'job-ingest: instance owner can submit priority=31' '
+	jobid=$(${SUBMITBENCH} --priority=31 ${JOBSPEC}/valid/basic.yaml) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	jobpri=$(flux kvs get --json ${kvsdir}.priority) &&
+	test $jobpri -eq 31
+'
+
+test_expect_success 'job-ingest: priority range is enforced' '
+	test_must_fail ${SUBMITBENCH} --priority=32 \
+		${JOBSPEC}/valid/basic.yaml &&
+	test_must_fail ${SUBMITBENCH} --priority="-1" \
+		${JOBSPEC}/valid/basic.yaml
+'
+
+test_expect_success 'job-ingest: guest cannot submit priority=17' '
+	! FLUX_HANDLE_ROLEMASK=0x2 \
+	    ${SUBMITBENCH} --priority=17 ${JOBSPEC}/valid/basic.yaml
 '
 
 test_expect_success 'job-ingest: valid jobspecs accepted' '
@@ -88,6 +138,10 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 	! FLUX_HANDLE_ROLEMASK=0x2 ${SUBMITBENCH} \
 	     ${JOBSPEC}/valid/basic.yaml 2>badrole.out &&
 	grep -q "only instance owner" badrole.out
+'
+
+test_expect_success 'job-ingest: unload job-manager-dummy module' '
+	flux module remove job-manager
 '
 
 test_done
