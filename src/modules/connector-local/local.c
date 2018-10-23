@@ -326,6 +326,59 @@ static int client_send (client_t *c, const flux_msg_t *msg)
     return rc;
 }
 
+/*  Send a reponse to `msg` to locally connected client `c`:
+ */
+static int client_respond (client_t *c, const flux_msg_t *msg, int errnum)
+{
+    flux_t *h = c->ctx->h;
+    const char *topic = NULL;
+    flux_msg_t *rmsg = NULL;
+    uint32_t matchtag;
+    int rc = -1;
+
+    /* Get topic/matchtag from original message to craft response
+     */
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (h, "client_respond: flux_msg_get_topic");
+        goto done;
+    }
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0) {
+        flux_log_error (h, "client_respond: flux_msg_get_matchtag");
+        goto done;
+    }
+    /* Encode an error response if errnum != 0,
+     * O/w, empty "Success" response is sent.
+     */
+    if (errnum) {
+        if (!((rmsg = flux_response_encode_error (topic, errnum, NULL)))) {
+            flux_log_error (h, "client_respond: flux_response_encode_error");
+            goto done;
+        }
+    }
+    else {
+        if (!(rmsg = flux_response_encode (topic, NULL))) {
+            flux_log_error (h, "client_respond: flux_response_encode");
+            goto done;
+        }
+    }
+    /* Manually encode necessary rolemask/matchtag for now:
+     */
+    if (flux_msg_set_rolemask (rmsg, FLUX_ROLE_OWNER) < 0) {
+        flux_log_error (h, "client_respond: flux_response_set_rolemask");
+        goto done;
+    }
+    if (flux_msg_set_matchtag (rmsg, matchtag) < 0) {
+        flux_log_error (h, "client_respond: flux_response_set_matchtag");
+        goto done;
+    }
+    if ((rc = client_send_nocopy (c, &rmsg)) < 0)
+        flux_log_error (h, "client_respond: client_send_nocopy");
+
+done:
+    flux_msg_destroy (rmsg);
+    return (rc);
+}
+
 static subscription_t *subscription_create (const char *topic)
 {
     subscription_t *sub = calloc (1, sizeof (*sub));
@@ -614,7 +667,6 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
 {
     const char *topic;
     int rc = -1;
-    flux_msg_t *rmsg = NULL;
     uint32_t matchtag;
 
     if (flux_msg_get_topic (msg, &topic) < 0) {
@@ -637,34 +689,9 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
         return false; // no match - forward to broker
 
 done_respond:
-    if (rc < 0) {
-        if (!(rmsg = flux_response_encode_error (topic, errno, NULL))) {
-            flux_log_error (c->ctx->h, "%s: flux_response_encode_error",
-                            __FUNCTION__);
-            goto done;
-        }
-    }
-    else {
-        if (!(rmsg = flux_response_encode (topic, NULL))) {
-            flux_log_error (c->ctx->h, "%s: flux_response_encode",
-                            __FUNCTION__);
-            goto done;
-        }
-    }
-    if (flux_msg_set_rolemask (rmsg, FLUX_ROLE_OWNER) < 0) {
-        flux_log_error (c->ctx->h, "%s: flux_response_set_rolemask",
-                        __FUNCTION__);
-        goto done;
-    }
-    if (flux_msg_set_matchtag (rmsg, matchtag) < 0) {
-        flux_log_error (c->ctx->h, "%s: flux_response_set_matchtag",
-                        __FUNCTION__);
-        goto done;
-    }
-    if (client_send_nocopy (c, &rmsg) < 0)
-        flux_log_error (c->ctx->h, "%s: client_send_nocopy", __FUNCTION__);
+    if (client_respond (c, msg, rc < 0 ? errno : 0) < 0)
+        flux_log_error (c->ctx->h, "internal_req: %s: client_respond", topic);
 done:
-    flux_msg_destroy (rmsg);
     return true;
 }
 
