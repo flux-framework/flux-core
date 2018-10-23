@@ -64,6 +64,7 @@ typedef struct {
     flux_reactor_t *reactor;
     uid_t instance_owner;
     zhash_t *subscriptions;
+    zhash_t *services;
 } mod_local_ctx_t;
 
 typedef void (*unsubscribe_f)(void *handle, const char *topic);
@@ -97,6 +98,12 @@ struct disconnect_notify {
     client_t *c;
 };
 
+struct local_service {
+    char * name;            /* service name                   */
+    flux_msg_handler_t *mh; /* local msg handler for requests */
+    client_t *client;       /* client which handles requests  */
+};
+
 static void client_destroy (client_t *c);
 static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
@@ -109,6 +116,7 @@ static void freectx (void *arg)
     if (ctx) {
         zlist_destroy (&ctx->clients);
         zhash_destroy (&ctx->subscriptions);
+        zhash_destroy (&ctx->services);
         free (ctx);
     }
 }
@@ -130,6 +138,10 @@ static mod_local_ctx_t *getctx (flux_t *h)
             goto error;
         }
         if (!(ctx->subscriptions = zhash_new ())) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (!(ctx->services = zhash_new ())) {
             errno = ENOMEM;
             goto error;
         }
@@ -527,6 +539,221 @@ static bool client_is_subscribed (client_t *c, const char *topic)
     return false;
 }
 
+static void local_service_destroy (struct local_service *ls)
+{
+    if (ls == NULL)
+        return;
+    if (ls->mh) {
+        flux_msg_handler_stop (ls->mh);
+        flux_msg_handler_destroy (ls->mh);
+        ls->mh = NULL;
+    }
+    ls->client = NULL;
+    free (ls->name);
+    free (ls);
+}
+
+/*  Handle request sent to client-as-a-service
+ */
+static void request_cb (flux_t *h, flux_msg_handler_t *mh,
+                        const flux_msg_t *msg, void *arg)
+{
+    client_t *c = arg;
+    if (client_send (c, msg) < 0)
+        flux_log_error (c->ctx->h, "request_cb: client_send");
+}
+
+/* Create a local service, implemented by API client `c`.
+ *  Registers a message handler for 'service.*' which will simply
+ *  forward all reqeuests to the assigned client.
+ */
+static struct local_service *local_service_create (client_t *c,
+                                                   const char *service)
+{
+    mod_local_ctx_t *ctx = c->ctx;
+    int n;
+    char glob[1024];
+    struct flux_match match = FLUX_MATCH_REQUEST;
+    struct local_service *ls = calloc (1, sizeof (*ls));
+    if (ls == NULL)
+        return (NULL);
+    if (!(ls->name = strdup (service))) {
+        flux_log_error (ctx->h, "local_service_create: strdup");
+        goto error;
+    }
+    if (((n = snprintf (glob, sizeof(glob), "%s.*", service)) < 0)
+       || (n >= sizeof (glob))) {
+        errno = EINVAL;
+        goto error;
+    }
+    match.topic_glob = glob;
+    if (!(ls->mh = flux_msg_handler_create (ctx->h, match, request_cb, c))) {
+        flux_log_error (ctx->h, "local_service_create: %s: msghandler create",
+                        service);
+        goto error;
+    }
+    ls->client = c;
+    return ls;
+error:
+    local_service_destroy (ls);
+    return NULL;
+}
+
+static void local_service_start (struct local_service *ls)
+{
+    flux_msg_handler_start (ls->mh);
+}
+
+static void local_service_remove (struct local_service *ls)
+{
+    /* Remove local_service from global servicves hash, which results
+     *  in destruction of `ls`
+     */
+    zhash_delete (ls->client->ctx->services, ls->name);
+}
+
+static struct local_service *local_service_add (mod_local_ctx_t *ctx,
+                                                client_t *c,
+                                                const char *name)
+{
+    struct local_service *ls = NULL;
+
+    if (zhash_lookup (ctx->services, name)) {
+        errno = EEXIST;
+        return NULL;
+    }
+    if (!(ls = local_service_create (c, name))
+       || (zhash_insert (ctx->services, (char *) name, ls) < 0))
+        return NULL;
+    zhash_freefn (ctx->services, name, (zhash_free_fn *) local_service_destroy);
+    return ls;
+}
+
+static void service_add_continuation (flux_future_t *f, void *arg)
+{
+    struct local_service *ls = arg;
+    client_t *c = ls->client;
+    int rc;
+    int saved_errno;
+    const flux_msg_t *msg = flux_future_aux_get (f, "msg");
+
+    if (((rc = flux_future_get (f, NULL)) < 0)) {
+        saved_errno = errno;
+        local_service_remove (ls);
+    }
+    else
+        local_service_start (ls);
+    if (client_respond (c, msg, rc < 0 ? saved_errno : 0) < 0)
+        flux_log_error (c->ctx->h, "service_add_continuation: client_respond");
+    flux_future_destroy (f);
+}
+
+
+/* Client `c` has sent a service.add request
+ */
+static int service_add_request (client_t *c, const flux_msg_t *msg)
+{
+    mod_local_ctx_t *ctx = c->ctx;
+    flux_t *h = ctx->h;
+    struct local_service *ls;
+    flux_future_t *f = NULL;
+    const char *name = NULL;
+    flux_msg_t *copy = NULL;
+    int saved_errno;
+
+    /* Save a copy of message to stash service "name" for continuation */
+    if (!(copy = flux_msg_copy (msg, true))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (flux_request_unpack (copy, NULL, "{ s:s }", "service", &name) < 0) {
+        saved_errno = EPROTO;
+        goto error;
+    }
+    if (!(ls = local_service_add (ctx, c, name))) {
+        saved_errno = errno;
+        goto error;
+    }
+    if (!(f = flux_rpc_pack (h, "service.add", FLUX_NODEID_ANY, 0,
+                             "{ s:s }", "service", name))) {
+        saved_errno = errno;
+        goto error;
+    }
+    if (flux_future_then (f, -1., service_add_continuation, (void *) ls) < 0) {
+        saved_errno = errno;
+        goto error;
+    }
+    flux_future_aux_set (f, "msg", copy, (flux_free_f) flux_msg_destroy);
+    return 0;
+error:
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return -1;
+}
+
+static void service_rm_continuation (flux_future_t *f, void *arg)
+{
+    struct local_service *ls = arg;
+    client_t *c = ls->client;
+    int rc = -1;
+    int saved_errno;
+    const flux_msg_t *msg = flux_future_aux_get (f, "msg");
+
+    if ((rc = flux_future_get (f, NULL) < 0))
+        saved_errno = errno;
+    else
+        local_service_remove (ls);
+    if (client_respond (c, msg, rc < 0 ? saved_errno : 0) < 0)
+        flux_log_error (c->ctx->h, "service_add_continuation: client_respond");
+    flux_future_destroy (f);
+}
+
+
+static int service_rm_request (client_t *c, const flux_msg_t *msg)
+{
+    mod_local_ctx_t *ctx = c->ctx;
+    flux_t *h = ctx->h;
+    struct local_service *ls;
+    flux_future_t *f = NULL;
+    const char *name = NULL;
+    flux_msg_t *copy = NULL;
+    int saved_errno;
+
+    /* Save a copy of message for the response in service_rm_continuation */
+    if (!(copy = flux_msg_copy (msg, true))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (flux_request_unpack (copy, NULL, "{ s:s }", "service", &name) < 0) {
+        saved_errno = EPROTO;
+        goto error;
+    }
+    if (!(ls = zhash_lookup (ctx->services, name))) {
+        saved_errno = ENOENT;
+        goto error;
+    }
+    if (c != ls->client) {
+        saved_errno = EPERM;
+        goto error;
+    }
+    if (!(f = flux_rpc_pack (h, "service.remove", FLUX_NODEID_ANY, 0,
+                             "{ s:s }", "service", name))) {
+        saved_errno = errno;
+        goto error;
+    }
+    if (flux_future_then (f, -1., service_rm_continuation, (void *) ls) < 0) {
+        saved_errno = errno;
+        goto error;
+    }
+    flux_future_aux_set (f, "msg", copy, (flux_free_f) flux_msg_destroy);
+    return 0;
+error:
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return -1;
+}
+
+
 static int disconnect_sendmsg (struct disconnect_notify *d)
 {
     int rc = -1;
@@ -616,9 +843,73 @@ done:
     return rc;
 }
 
+/*
+ * Get service.remove reply from broker, log any error.
+ *  (XXX: should a retry on failure be added here?)
+ */
+static void dereg_continuation (flux_future_t *f, void *arg)
+{
+    mod_local_ctx_t *ctx = arg;
+    char *name = flux_future_aux_get (f, "service_name");
+
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (ctx->h, "Failed to deregister %s", name);
+    flux_future_destroy (f);
+}
+
+/*
+ * Call service.remove RPC without a reply to a client (used during
+ *  client destruction)
+ */
+static void deregister_service_noreply (mod_local_ctx_t *ctx, const char *name)
+{
+    flux_t *h = ctx->h;
+    flux_future_t *f;
+    char *s;
+
+    if (!(f = flux_rpc_pack (h, "service.remove", FLUX_NODEID_ANY, 0,
+                             "{ s:s }", "service", name))) {
+        flux_log_error (h, "Failed to deregister %s: flux_rpc", name);
+        return;
+    }
+    if (flux_future_then (f, -1., dereg_continuation, (void *) ctx) < 0)
+        flux_log_error (h, "Failed to deregister%s: flux_future_then", name);
+    if ((s = strdup (name)))
+        flux_future_aux_set (f, "service_name", s, (flux_free_f) free);
+}
+
+static void client_deregister_services (client_t *c)
+{
+    mod_local_ctx_t *ctx = c->ctx;
+    zlist_t *toremove = NULL;
+    struct local_service *ls = zhash_first (ctx->services);
+
+    while (ls) {
+        if (ls->client == c) {
+            if (!toremove && !(toremove = zlist_new ())) {
+                flux_log_error (ctx->h, "client_deregister: zlist_new");
+                break;
+            }
+            if (zlist_push (toremove, ls) < 0) {
+                flux_log_error (ctx->h, "client_deregister: zlist_push");
+                break;
+            }
+        }
+        ls = zhash_next (ctx->services);
+    }
+    if (toremove) {
+        while ((ls = zlist_pop (toremove))) {
+            deregister_service_noreply (ctx, ls->name);
+            local_service_remove (ls);
+        }
+        zlist_destroy (&toremove);
+    }
+}
+
 static void client_destroy (client_t *c)
 {
     if (c) {
+        client_deregister_services (c);
         zhash_destroy (&c->disconnect_notify);
         zhash_destroy (&c->subscriptions);
         zuuid_destroy (&c->uuid);
@@ -684,6 +975,16 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
     else if (!strcmp (topic, "local.unsub")) {
         rc = sub_request (c, msg, false);
         goto done_respond;
+    }
+    else if (!strcmp (topic, "service.add")) {
+        if ((rc = service_add_request (c, msg)) < 0)
+            goto done_respond;
+        goto done;
+    }
+    else if (!strcmp (topic, "service.remove")) {
+        if ((rc = service_rm_request (c, msg)) < 0)
+            goto done_respond;
+        goto done;
     }
     else
         return false; // no match - forward to broker
