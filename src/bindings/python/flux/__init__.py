@@ -11,6 +11,7 @@ __all__ = ['core',
            'kvs',
            'jsc',
            'rpc',
+           'mrpc',
            'sec',
            'constants',
            'Flux', ]

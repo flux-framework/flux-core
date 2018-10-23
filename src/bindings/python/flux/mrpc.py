@@ -35,7 +35,7 @@ class MRPC(WrapperPimpl):
             elif isinstance(topic, six.text_type):
                 topic = topic.encode('UTF-8')
             elif not isinstance(topic, six.binary_type):
-                raise TypeError(errno.EINVAL, "Topic must be a string")
+                raise TypeError(errno.EINVAL, "Topic must be a string, not {}".format(type(topic)))
 
             # Convert payload to utf-8 binary string or NULL pointer
             if payload is None or payload == ffi.NULL:
