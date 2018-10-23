@@ -777,6 +777,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
             }
             break;
         case FLUX_MSGTYPE_EVENT:
+        case FLUX_MSGTYPE_RESPONSE:
             if (flux_send (h, msg, 0) < 0) {
                 flux_log_error (h, "%s: flux_send", __FUNCTION__);
                 goto error;
