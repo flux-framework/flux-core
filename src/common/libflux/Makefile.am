@@ -74,7 +74,8 @@ fluxcoreinclude_HEADERS = \
 	content.h \
 	future.h \
 	barrier.h \
-	buffer.h
+	buffer.h \
+	service.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -112,7 +113,8 @@ libflux_la_SOURCES = \
 	composite_future.c \
 	barrier.c \
 	buffer_private.h \
-	buffer.c
+	buffer.c \
+	service.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
