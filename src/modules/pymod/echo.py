@@ -1,25 +1,13 @@
-import os
 import syslog
 import flux
-from flux import core
-from flux.mrpc import MRPC, Jobj
-import sys
 
-def pecho_impl(h, typemask, message, arg):
-    print >>sys.stderr, "got here, I swear...", message.topic, message.payload_str
-    h.log(syslog.LOG_INFO, "in impl, args:{}".format((typemask, message, arg)))
-    rpc = MRPC.from_event(h, message.payload_str)
-    rpc.outarg = rpc.inarg
-    rpc.respond()
+def echo_cb(h, typemask, message, arg):
+    h.log(syslog.LOG_INFO, "in cb, args:{}".format((typemask, message, arg)))
+    h.respond (message, 0, message.payload_str)
     return 0
 
 def mod_main(h, *args):
-    if h.event_subscribe("mrpc.mecho") < 0:
-        h.fatal_error("event subscription failed")
-    with h.msg_watcher_create(pecho_impl,
-                                  type_mask=flux.FLUX_MSGTYPE_EVENT,
-                                  topic_glob="mrpc.mecho") as mw:
-        if h.reactor_start() < 0:
+    with h.msg_watcher_create (echo_cb, topic_glob="echo.*") as mw:
+        if h.reactor_run (h.get_reactor(), 0) < 0:
             h.fatal_error( "reactor start failed!")
-    h.log(syslog.LOG_INFO, "pecho unloading")
-
+        h.log(syslog.LOG_INFO, "echo unloading")
