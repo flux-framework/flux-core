@@ -44,9 +44,15 @@ test_expect_success 'kvs: add other types to 2x4 directory and walk' '
 	test $(flux kvs dir -R $DIR.dtree | wc -l) = 19
 '
 
-test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
+test_expect_success 'kvs: store 3x4 directory tree using kvsdir functions' '
 	flux kvs unlink -Rf $DIR.dtree &&
 	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $DIR.dtree &&
+	test $(flux kvs dir -R $DIR.dtree | wc -l) = 81
+'
+
+test_expect_success 'kvs: store 3x4 directory tree using kvsdir classic functions' '
+	flux kvs unlink -Rf $DIR.dtree &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir-classic -h4 -w3 --prefix $DIR.dtree &&
 	test $(flux kvs dir -R $DIR.dtree | wc -l) = 81
 '
 
