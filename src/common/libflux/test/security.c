@@ -34,8 +34,6 @@ void test_ctor_dtor (void)
             "flux_sec_type_enabled FLUX_SEC_TYPE_PLAIN false");
     ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_CURVE) == false,
             "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_MUNGE) == false,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
     flux_sec_destroy (sec);
 
     ok ((sec = flux_sec_create (0, NULL)) != NULL,
@@ -54,28 +52,6 @@ void test_ctor_dtor (void)
     ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_PLAIN) == true,
             "flux_sec_type_enabled FLUX_SEC_TYPE_PLAIN true");
     ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_CURVE) == false,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_MUNGE) == false,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
-    flux_sec_destroy (sec);
-
-    ok ((sec = flux_sec_create (FLUX_SEC_TYPE_PLAIN | FLUX_SEC_TYPE_MUNGE, NULL)) != NULL,
-            "flux_sec_create PLAIN|MUNGE works");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_PLAIN) == true,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_PLAIN true");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_CURVE) == false,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_MUNGE) == true,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
-    flux_sec_destroy (sec);
-
-    ok ((sec = flux_sec_create (FLUX_SEC_TYPE_CURVE | FLUX_SEC_TYPE_MUNGE, NULL)) != NULL,
-            "flux_sec_create CURVE|MUNGE works");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_PLAIN) == false,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_PLAIN true");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_CURVE) == true,
-            "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
-    ok (flux_sec_type_enabled (sec, FLUX_SEC_TYPE_MUNGE) == true,
             "flux_sec_type_enabled FLUX_SEC_TYPE_CURVE false");
     flux_sec_destroy (sec);
 }
@@ -248,40 +224,6 @@ void test_keygen (void)
             "flux_sec_keygen (force) PLAIN-overwrite works");
     ok (unlink_recursive (path) == 2,
             "unlinked 2 file/dir");
-    flux_sec_destroy (sec);
-}
-
-void test_munge (void)
-{
-    flux_sec_t *sec;
-    char *cred, *buf;
-    size_t credsize, bufsize;
-
-    ok ((sec = flux_sec_create (FLUX_SEC_TYPE_MUNGE, NULL)) != NULL,
-            "flux_sec_create MUNGE-real works");
-    ok (flux_sec_comms_init (sec) == 0,
-            "flux_sec_comms_init MUNGE-real works");
-    /* can't test encryption in case munge isn't configured */
-    flux_sec_destroy (sec);
-
-
-    ok ((sec = flux_sec_create (FLUX_SEC_TYPE_MUNGE | FLUX_SEC_FAKEMUNGE,
-                                                        NULL)) != NULL,
-            "flux_sec_create MUNGE-fake works");
-    ok (flux_sec_comms_init (sec) == 0,
-            "flux_sec_comms_init MUNGE-fake works");
-    ok (flux_sec_csockinit (sec, NULL) == 0,
-            "flux_sec_csockinit MUNGE-fake works (no-op)");
-    ok (flux_sec_ssockinit (sec, NULL) == 0,
-            "flux_sec_ssockinit MUNGE-fake works (no-op)");
-    ok (flux_sec_munge (sec, "Hello world", 12, &cred, &credsize) == 0,
-            "flux_sec_munge (fake) works");
-    ok (flux_sec_unmunge (sec, cred, credsize, &buf, &bufsize) == 0,
-            "flux_sec_unmunge (fake) works");
-    ok (!strcmp (buf, "Hello world"),
-            "unmunge(munge(x))==x");
-    free (cred);
-    free (buf);
     flux_sec_destroy (sec);
 }
 
@@ -487,7 +429,6 @@ int main (int argc, char *argv[])
 
     test_ctor_dtor ();
     test_keygen ();
-    test_munge ();
     test_plain ();
     test_curve ();
 

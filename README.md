@@ -38,7 +38,6 @@ automake
 libtool
 zeromq4-devel >= 4.0.4   # built --with-libsodium
 czmq-devel >= 3.0.1
-munge-devel
 jansson-devel >= 2.6
 lua-devel >= 5.1, < 5.3
 luaposix

@@ -71,19 +71,11 @@ struct overlay_struct {
     overlay_cb_f child_cb;
     void *child_arg;
 
-    struct endpoint *event;     /* PUB for rank = 0, SUB for rank > 0 */
-    overlay_cb_f event_cb;
-    void *event_arg;
-    bool event_munge;
-
-    struct endpoint *relay;
-
     int idle_warning;
 };
 
 typedef struct {
     int lastseen;
-    bool mute;
 } child_t;
 
 static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
@@ -115,8 +107,6 @@ void overlay_destroy (overlay_t *ov)
             (void)flux_event_unsubscribe (ov->h, "hb");
         endpoint_destroy (ov->parent);
         endpoint_destroy (ov->child);
-        endpoint_destroy (ov->event);
-        endpoint_destroy (ov->relay);
         zhash_destroy (&ov->children);
         free (ov);
     }
@@ -221,13 +211,6 @@ void overlay_log_idle_children (overlay_t *ov)
                           uuid, idle);
         }
     }
-}
-
-void overlay_mute_child (overlay_t *ov, const char *uuid)
-{
-    child_t *child = zhash_lookup (ov->children, uuid);
-    if (child)
-        child->mute = true;
 }
 
 void overlay_checkin_child (overlay_t *ov, const char *uuid)
@@ -354,108 +337,21 @@ int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg)
     if (!ov->child || !ov->child->zs || !ov->children)
         return 0;
     FOREACH_ZHASH (ov->children, uuid, child) {
-        if (!child->mute) {
-            if (!(cpy = flux_msg_copy (msg, true)))
-                oom ();
-            if (flux_msg_enable_route (cpy) < 0)
-                goto done;
-            if (flux_msg_push_route (cpy, uuid) < 0)
-                goto done;
-            if (flux_msg_sendzsock (ov->child->zs, cpy) < 0)
-                goto done;
-            flux_msg_destroy (cpy);
-            cpy = NULL;
-        }
+        if (!(cpy = flux_msg_copy (msg, true)))
+            oom ();
+        if (flux_msg_enable_route (cpy) < 0)
+            goto done;
+        if (flux_msg_push_route (cpy, uuid) < 0)
+            goto done;
+        if (flux_msg_sendzsock (ov->child->zs, cpy) < 0)
+            goto done;
+        flux_msg_destroy (cpy);
+        cpy = NULL;
     }
     rc = 0;
 done:
     flux_msg_destroy (cpy);
     return rc;
-}
-
-void overlay_set_event (overlay_t *ov, const char *fmt, ...)
-{
-    if (ov->event)
-        endpoint_destroy (ov->event);
-    va_list ap;
-    va_start (ap, fmt);
-    ov->event = endpoint_vcreate (fmt, ap);
-    va_end (ap);
-
-    ov->event_munge = strstr (ov->event->uri, "pgm://") ? true : false;
-}
-
-const char *overlay_get_event (overlay_t *ov)
-{
-    if (!ov->event)
-        return NULL;
-    return ov->event->uri;
-}
-
-void overlay_set_event_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
-{
-    ov->event_cb = cb;
-    ov->event_arg = arg;
-}
-
-int overlay_sendmsg_event (overlay_t *ov, const flux_msg_t *msg)
-{
-    int rc = -1;
-
-    if (!ov->event || !ov->event->zs)
-        return 0;
-    if (ov->event_munge) {
-        if (flux_msg_sendzsock_munge (ov->event->zs, msg, ov->sec) < 0)
-            goto done;
-    } else {
-        if (flux_msg_sendzsock (ov->event->zs, msg) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-flux_msg_t *overlay_recvmsg_event (overlay_t *ov)
-{
-    flux_msg_t *msg = NULL;
-    if (!ov->event || !ov->event->zs) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (ov->event_munge) {
-        if (!(msg = flux_msg_recvzsock_munge (ov->event->zs, ov->sec)))
-            goto done;
-    } else {
-        if (!(msg = flux_msg_recvzsock (ov->event->zs)))
-            goto done;
-    }
-done:
-    return msg;
-}
-
-void overlay_set_relay (overlay_t *ov, const char *fmt, ...)
-{
-    if (ov->relay)
-        endpoint_destroy (ov->relay);
-    va_list ap;
-    va_start (ap, fmt);
-    ov->relay = endpoint_vcreate (fmt, ap);
-    va_end (ap);
-}
-
-const char *overlay_get_relay (overlay_t *ov)
-{
-    if (!ov->relay)
-        return NULL;
-    return ov->relay->uri;
-}
-
-int overlay_sendmsg_relay (overlay_t *ov, const flux_msg_t *msg)
-{
-    if (!ov->relay)
-        return 0;
-    return flux_msg_sendzsock (ov->relay->zs, msg);
 }
 
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -481,46 +377,6 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
     }
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
                                            ep->zs, FLUX_POLLIN, child_cb, ov)))
-        log_err_exit ("flux_zmq_watcher_create");
-    flux_watcher_start (ep->w);
-    return 0;
-}
-
-static int bind_event_pub (overlay_t *ov, struct endpoint *ep)
-{
-    if (!(ep->zs = zsock_new_pub (NULL)))
-        log_err_exit ("zsock_new_pub");
-    if (flux_sec_ssockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
-        log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
-    if (zsock_bind (ep->zs, "%s", ep->uri) < 0)
-        log_err_exit ("%s: %s", __FUNCTION__, ep->uri);
-    if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
-        free (ep->uri);
-        ep->uri = zsock_last_endpoint (ep->zs);
-    }
-    return 0;
-}
-
-static void event_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
-{
-    void *zsock = flux_zmq_watcher_get_zsock (w);
-    overlay_t *ov = arg;
-    if (ov->event_cb)
-        ov->event_cb (ov, zsock, ov->event_arg);
-}
-
-static int connect_event_sub (overlay_t *ov, struct endpoint *ep)
-{
-    if (!(ep->zs = zsock_new_sub (NULL, NULL)))
-        log_err_exit ("zsock_new_sub");
-    if (flux_sec_csockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
-        log_msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
-    if (zsock_connect (ep->zs, "%s", ep->uri) < 0)
-        log_err_exit ("%s", ep->uri);
-    zsock_set_subscribe (ep->zs, "");
-    if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
-                                           ep->zs, FLUX_POLLIN, event_cb, ov)))
         log_err_exit ("flux_zmq_watcher_create");
     flux_watcher_start (ep->w);
     return 0;
@@ -582,15 +438,12 @@ int overlay_connect (overlay_t *ov)
 {
     int rc = -1;
 
-    if (!ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY
-                 || !ov->parent_cb || !ov->event_cb) {
+    if (!ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY || !ov->parent_cb) {
         errno = EINVAL;
         goto done;
     }
     if (overlay_sec_init (ov) < 0)
         goto done;
-    if (ov->event && !ov->event->zs && ov->rank > 0)
-        connect_event_sub (ov, ov->event);
     if (ov->parent && !ov->parent->zs) {
         if (connect_parent (ov, ov->parent) < 0)
             log_err_exit ("%s", ov->parent->uri);
@@ -610,14 +463,9 @@ int overlay_bind (overlay_t *ov)
     }
     if (overlay_sec_init (ov) < 0)
         goto done;
-    if (ov->event && !ov->event->zs && ov->rank == 0)
-        bind_event_pub (ov, ov->event);
 
     if (ov->child && !ov->child->zs)
         bind_child (ov, ov->child);
-
-    if (ov->relay && !ov->relay->zs)
-        bind_event_pub (ov, ov->relay);
 
     rc = 0;
 done:
@@ -634,8 +482,6 @@ static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
 
     if (!strcmp (name, "tbon.parent-endpoint"))
         *val = overlay_get_parent(overlay);
-    else if (!strcmp (name, "mcast.relay-endpoint"))
-        *val = overlay_get_relay(overlay);
     else {
         errno = ENOENT;
         goto done;
@@ -649,10 +495,6 @@ int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
 {
     if (attr_add_active (attrs, "tbon.parent-endpoint",
                          FLUX_ATTRFLAG_READONLY,
-                         overlay_attr_get_cb, NULL, overlay) < 0)
-        return -1;
-    if (attr_add_active (attrs, "mcast.relay-endpoint",
-                         FLUX_ATTRFLAG_IMMUTABLE,
                          overlay_attr_get_cb, NULL, overlay) < 0)
         return -1;
     if (attr_add_uint32 (attrs, "rank", overlay->rank,

@@ -19,7 +19,7 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(FLUX_SECURITY_LIBS) \
-	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL) $(HWLOC_LIBS)
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL) $(HWLOC_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 

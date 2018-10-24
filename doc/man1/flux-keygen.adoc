@@ -23,9 +23,6 @@ Flux comms sessions implement cryptographic privacy and data integrity
 when data is sent over a network.  Point to point ZeroMQ TCP connections
 are protected with the CURVE security mechanism built into ZeroMQ
 version 4, based on curve25519 and a CurveCP-like protocol.
-//ZeroMQ IPC (UNIX domain socket) traffic is also protected with CURVE.
-Multicast traffic is protected by enclosing messages in a MUNGE
-payload with MUNGE_OPT_UID_RESTRICTION set.  
 
 It is possible to start a Flux comms session with security
 disabled or using the toy PLAIN ZeroMQ security mechanism.
@@ -78,5 +75,3 @@ ZMTP/3.0: <http://rfc.zeromq.org/spec:23>
 Using ZeroMQ Security:
 <http://hintjens.com/blog:48> and
 <http://hintjens.com/blog:49>
-
-MUNGE: <https://code.google.com/p/munge/>
