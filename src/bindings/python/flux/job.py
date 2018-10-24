@@ -1,10 +1,9 @@
-import os
-import six
-import sys
 import errno
 
-from flux.wrapper import Wrapper, FunctionWrapper
-from flux.core.inner import raw as core_raw
+import six
+
+from flux.wrapper import Wrapper
+from flux.util import check_future_error
 from _flux._job import ffi, lib
 
 class JobWrapper(Wrapper):
@@ -27,19 +26,10 @@ def submit_async(flux_handle, jobspec,
     future = RAW.submit(flux_handle, jobspec, priority, flags)
     return future
 
+@check_future_error
 def submit_get_id(future):
     jobid = ffi.new('flux_jobid_t[1]')
-    try:
-        RAW.submit_get_id(future, jobid)
-    except EnvironmentError as error:
-        exception_tuple = sys.exc_info()
-        try:
-            errmsg = core_raw.flux_future_error_string(future)
-        except Exception:
-            six.reraise(*exception_tuple)
-        if errmsg is None:
-            six.reraise(*exception_tuple)
-        raise EnvironmentError(error.errno, errmsg.decode('utf-8'))
+    RAW.submit_get_id(future, jobid)
     return int(jobid[0])
 
 def submit(flux_handle, jobspec,

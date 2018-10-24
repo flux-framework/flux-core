@@ -3,14 +3,43 @@ import errno
 
 import six
 
-import flux.constants
 from flux.core.inner import ffi, lib, raw
 from flux.wrapper import Wrapper, WrapperPimpl
+from flux.util import check_future_error, encode_payload, encode_topic
+
+def encode_rankset(rankset):
+    """
+    Validate and convert rankset to ascii binary str in proper format
+    (e.g., [0,2,3,4,9]).
+    Accepts a list of integers or digit strings (i.e., "5")
+    Also accepts the shorthands supported by the C API
+    (i.e., 'all', 'any', 'upstream')
+    """
+    if isinstance(rankset, six.text_type):
+        rankset = rankset.encode('ascii')
+    shorthands = [b'all', b'any', b'upstream']
+    if isinstance(rankset, six.binary_type):
+        if rankset not in shorthands:
+            errmsg = "Invalid rankset shorthand, must be one of {}"
+            raise EnvironmentError(errno.EINVAL,
+                                   errmsg.format(shorthands))
+    else: # is not shorthand, should be a list of ranks
+        if not rankset:
+            raise EnvironmentError(errno.EINVAL,
+                                   "Must supply at least one rank")
+        elif not all([isinstance(rank, int) or rank.isdigit()
+                      for rank in rankset]):
+            raise TypeError("All ranks must be integers")
+        else:
+            rankcsv = ",".join([str(rank) for rank in rankset])
+            rankset = "[{}]".format(rankcsv).encode('ascii')
+    return rankset
 
 class MRPC(WrapperPimpl):
     """An MRPC state object"""
     class InnerWrapper(Wrapper):
 
+        # pylint: disable=duplicate-code
         def __init__(self,
                      flux_handle,
                      topic,
@@ -26,45 +55,14 @@ class MRPC(WrapperPimpl):
                 match=ffi.typeof(lib.flux_mrpc).result,
                 prefixes=['flux_mrpc_'],
                 destructor=dest)
+
+            # pylint: disable=duplicate-code
             if isinstance(flux_handle, Wrapper):
                 flux_handle = flux_handle.handle
 
-            # Convert topic to utf-8 binary string
-            if topic is None or topic == ffi.NULL:
-                raise EnvironmentError(errno.EINVAL, "Topic must not be None/NULL")
-            elif isinstance(topic, six.text_type):
-                topic = topic.encode('UTF-8')
-            elif not isinstance(topic, six.binary_type):
-                raise TypeError(errno.EINVAL, "Topic must be a string, not {}".format(type(topic)))
-
-            # Convert payload to utf-8 binary string or NULL pointer
-            if payload is None or payload == ffi.NULL:
-                payload = ffi.NULL
-            elif isinstance(payload, six.text_type):
-                payload = payload.encode('UTF-8')
-            elif not isinstance(payload, six.binary_type):
-                payload = json.dumps(payload, ensure_ascii=False).encode('UTF-8')
-
-            # Validate and convert rankset to ascii binary str in proper format
-            # (e.g., [0,2,3,4,9]).
-            # Accepts a list of integers or digit strings (i.e., "5")
-            # Also accepts the shorthands supported by the C API
-            # (i.e., 'all', 'any', 'upstream')
-            if isinstance(rankset, six.text_type):
-                rankset = rankset.encode('ascii')
-            shorthands = [b'all', b'any',  b'upstream']
-            if isinstance(rankset, six.binary_type):
-                if rankset not in shorthands:
-                    errmsg = "Invalid rankset shorthand, must be one of {}".format(
-                        shorthands)
-                    raise EnvironmentError(errno.EINVAL, errmsg)
-            else: # is not shorthand, should be a list of ranks
-                if len(rankset) < 1:
-                    raise EnvironmentError(errno.EINVAL, "Must supply at least one rank")
-                elif not all([isinstance(rank, int) or rank.isdigit() for rank in rankset]):
-                    raise TypeError("All ranks must be integers")
-                else:
-                    rankset = "[{}]".format(",".join([str(rank) for rank in rankset])).encode('ascii')
+            topic = encode_topic(topic)
+            payload = encode_payload(payload)
+            rankset = encode_rankset(rankset)
 
             self.handle = raw.flux_mrpc(
                 flux_handle, topic, payload, rankset, flags)
@@ -102,14 +100,17 @@ class MRPC(WrapperPimpl):
         self.pimpl.get_nodeid(nodeid)
         return int(nodeid[0])
 
+    @check_future_error
     def get_str(self):
-        j_str = ffi.new('char *[1]')
-        self.pimpl.get(j_str)
-        if j_str[0] == ffi.NULL:
+        # pylint: disable=duplicate-code
+        resp_str = ffi.new('char *[1]')
+        self.pimpl.get(resp_str)
+        if resp_str[0] == ffi.NULL:
             return None
-        return ffi.string(j_str[0]).decode('utf-8')
+        return ffi.string(resp_str[0]).decode('utf-8')
 
     def get(self):
+        # pylint: disable=duplicate-code
         resp_str = self.get_str()
         if resp_str is None:
             return None

@@ -1,11 +1,10 @@
 import json
 
-import six
-
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 from flux.core.watchers import Watcher
 import flux.constants
+from flux.util import encode_payload, encode_topic
 
 __all__ = ['Message',
            'MessageWatcher',
@@ -15,7 +14,6 @@ __all__ = ['Message',
 def msg_typestr(msg_type):
     # the returned string is guaranteed to be ascii
     return ffi.string(raw.flux_msg_typestr(msg_type)).decode('ascii')
-
 
 class Message(WrapperPimpl):
     """ Flux message wrapper class. """
@@ -54,11 +52,7 @@ class Message(WrapperPimpl):
 
     @classmethod
     def from_event_encode(cls, topic, payload=None):
-        if payload is None:
-            payload = ffi.NULL
-        elif not isinstance(payload, six.string_types):
-            # Convert dict or list into json string
-            payload = json.dumps(payload)
+        payload = encode_payload(payload)
         handle = raw.flux_event_encode(topic, payload)
         return cls(handle=handle)
 
@@ -70,7 +64,8 @@ class Message(WrapperPimpl):
 
     @topic.setter
     def topic(self, value):
-        self.pimpl.set_topic(value)
+        topic = encode_topic(value)
+        self.pimpl.set_topic(topic)
 
     @property
     def payload_str(self):
@@ -90,7 +85,7 @@ class Message(WrapperPimpl):
 
     @payload.setter
     def payload(self, value):
-        self.payload_str = json.dumps(value)
+        self.payload_str = encode_payload(value)
 
     @property
     def type(self):
