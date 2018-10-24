@@ -26,6 +26,8 @@ class Flux(Wrapper):
         if handle is None:
             self.handle = raw.flux_open(url, flags)
 
+        self.aux_txn = None
+
     def log(self, level, fstring):
         """
         Log to the flux logging facility
