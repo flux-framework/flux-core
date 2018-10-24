@@ -102,7 +102,7 @@ class Flux(Wrapper):
                            topic_glob='*',
                            args=None,
                            match_tag=raw.FLUX_MATCHTAG_NONE):
-        from flux.core.watchers import MessageWatcher
+        from flux.message import MessageWatcher
         return MessageWatcher(self, type_mask, callback, topic_glob,
                               match_tag, args)
 
