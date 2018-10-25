@@ -34,6 +34,7 @@
 #include <string.h>
 #include <wchar.h>
 #include <errno.h>
+#include <dlfcn.h>
 #include <flux/core.h>
 #include <czmq.h>
 
@@ -155,6 +156,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
 
     flux_log(h, LOG_INFO, "loading python module named: %s", module_name);
+    if (!dlopen (PYTHON_LIBRARY, RTLD_LAZY|RTLD_GLOBAL))
+        flux_log_error (h, "Unable to dlopen libpython");
 
     PyObject *module = PyImport_ImportModule("flux.core");
     if(!module){

@@ -7,6 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	-DPYTHON_LIBRARY=\"$(PYTHON_LIBRARY)\" \
 	$(ZMQ_CFLAGS) \
 	$(PYTHON_CPPFLAGS) \
 	"-DFLUX_PYTHON_PATH=\"${pyexecdir}\""
