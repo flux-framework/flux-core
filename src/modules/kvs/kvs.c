@@ -593,18 +593,23 @@ static int content_load_request_send (kvs_ctx_t *ctx, const char *ref)
     char *refcpy;
     int saved_errno;
 
-    if (!(f = flux_content_load (ctx->h, ref, 0)))
+    if (!(f = flux_content_load (ctx->h, ref, 0))) {
+        flux_log_error (ctx->h, "%s: flux_content_load", __FUNCTION__);
         goto error;
+    }
     if (!(refcpy = strdup (ref))) {
         errno = ENOMEM;
         goto error;
     }
     if (flux_future_aux_set (f, "ref", refcpy, free) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         free (refcpy);
         goto error;
     }
-    if (flux_future_then (f, -1., content_load_completion, ctx) < 0)
+    if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
+    }
     return 0;
 error:
     saved_errno = errno;
