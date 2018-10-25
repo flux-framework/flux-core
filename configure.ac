@@ -195,6 +195,8 @@ AC_SUBST(fluxsodir)
 AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
 AC_SUBST(fluxpymoddir)
 
+AC_DEFINE_UNQUOTED([PYTHON_INTERPRETER], ["$PYTHON"], [The python interpreter flux is configured with])
+
 AC_ARG_ENABLE([pylint],
   [AS_HELP_STRING([--enable-pylint],
     [Enable pylint checks of python bindings])],,
