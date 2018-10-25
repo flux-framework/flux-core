@@ -217,6 +217,7 @@ check_SCRIPTS = \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
 	issues/t0704-mpirun-rank.sh \
+	issues/t1760-kvs-use-after-free.sh \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -266,6 +267,7 @@ check_PROGRAMS = \
 	kvs/fence_namespace_remove \
 	kvs/fence_invalid \
 	kvs/commit_order \
+	kvs/issue1760 \
 	module/basic \
 	request/treq \
 	barrier/tbarrier \
@@ -429,6 +431,11 @@ kvs_hashtest_SOURCES = kvs/hashtest.c
 kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
+
+kvs_issue1760_SOURCES = kvs/issue1760.c
+kvs_issue1760_CPPFLAGS = $(test_cppflags)
+kvs_issue1760_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
