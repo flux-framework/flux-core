@@ -647,6 +647,13 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
      * arrange to stall caller.
      */
     if (!cache_entry_get_valid (entry)) {
+        /* Potential future optimization, if this load() is called
+         * multiple times from the same kvstxn and on the same
+         * reference, we're effectively adding identical waiters onto
+         * this cache entry.  This is far better than sending multiple
+         * RPCs (the cache entry chck above protects against this),
+         * but could be improved later.  See Issue #1751.
+         */
         if (cache_entry_wait_valid (entry, wait) < 0) {
             /* no cleanup in this path, if an rpc was sent, it will
              * complete, but not call a waiter on this load.  Return

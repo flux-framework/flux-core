@@ -872,6 +872,10 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
          * dirref objects to dir objects in the copy.  This allows
          * the transaction to be self-contained in the rootcpy
          * until it is unrolled later on.
+         *
+         * Note that it is possible for multiple identical missing
+         * references to be added to the missing_refs_list list.
+         * Callers must deal with this appropriately.
          */
         json_t *op, *dirent;
         const char *missing_ref = NULL;
