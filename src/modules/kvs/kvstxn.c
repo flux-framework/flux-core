@@ -811,6 +811,31 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
     return rc;
 }
 
+static int add_missing_ref (kvstxn_t *kt, const char *ref)
+{
+    char *refcpy = NULL;
+
+    if (!(refcpy = strdup (ref))) {
+        errno = ENOMEM;
+        goto err;
+    }
+
+    if (zlist_push (kt->missing_refs_list, (void *)refcpy) < 0) {
+        errno = ENOMEM;
+        goto err;
+    }
+
+    if (! zlist_freefn (kt->missing_refs_list, (void *)refcpy,
+                        free, false))
+        goto err;
+
+    return 0;
+
+err:
+    free (refcpy);
+    return -1;
+}
+
 kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
                                  const char *rootdir_ref)
@@ -844,9 +869,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                     current_epoch))
             || !cache_entry_get_valid (entry)) {
 
-            if (zlist_push (kt->missing_refs_list,
-                            (void *)rootdir_ref) < 0) {
-                kt->errnum = ENOMEM;
+            if (add_missing_ref (kt, rootdir_ref) < 0) {
+                kt->errnum = errno;
                 return KVSTXN_PROCESS_ERROR;
             }
             goto stall_load;
@@ -906,17 +930,18 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                 break;
             }
             if (missing_ref) {
-                if (zlist_push (kt->missing_refs_list,
-                                (void *)missing_ref) < 0) {
-                    kt->errnum = ENOMEM;
+                if (add_missing_ref (kt, missing_ref) < 0) {
+                    kt->errnum = errno;
                     break;
                 }
             }
         }
 
         if (kt->errnum != 0) {
+            char *ref;
             /* empty missing_refs_list to prevent mistakes later */
-            while ((missing_ref = zlist_pop (kt->missing_refs_list)));
+            while ((ref = zlist_pop (kt->missing_refs_list)))
+                free (ref);
             return KVSTXN_PROCESS_ERROR;
         }
 
@@ -998,7 +1023,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
 
 int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 {
-    const char *ref;
+    char *ref;
     int saved_errno, rc = 0;
 
     if (kt->state != KVSTXN_STATE_LOAD_ROOT
@@ -1009,14 +1034,17 @@ int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 
     while ((ref = zlist_pop (kt->missing_refs_list))) {
         if (cb (kt, ref, data) < 0) {
+            free (ref);
             saved_errno = errno;
             rc = -1;
             break;
         }
+        free (ref);
     }
 
     if (rc < 0) {
-        while ((ref = zlist_pop (kt->missing_refs_list)));
+        while ((ref = zlist_pop (kt->missing_refs_list)))
+            free (ref);
         errno = saved_errno;
     }
 
