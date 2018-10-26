@@ -1,4 +1,1 @@
-SUBDIRS = lua
-if HAVE_PYTHON
-  SUBDIRS+=python
-endif
+SUBDIRS = lua python

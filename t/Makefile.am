@@ -111,15 +111,7 @@ TESTS = \
 	lua/t1002-kvs.t \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t
-
-if ENABLE_JOBSPEC
-TESTS += \
-	t0018-jobspec.t
-endif
-
-if HAVE_PYTHON
-TESTS += \
+	lua/t1005-fdwatcher.t \
 	python/t0001-handle.py \
 	python/t0002-wrapper.py \
 	python/t0003-barrier.py \
@@ -129,10 +121,14 @@ TESTS += \
 	python/t0007-watchers.py \
 	python/t0008-jsc.py
 
-if HAVE_FLUX_SECURITY
-TESTS += python/t0009-security.py
+
+if ENABLE_JOBSPEC
+TESTS += \
+	t0018-jobspec.t
 endif
 
+if HAVE_FLUX_SECURITY
+TESTS += python/t0009-security.py
 endif
 
 EXTRA_DIST= \

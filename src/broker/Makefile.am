@@ -57,14 +57,7 @@ flux_broker_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(LIBPMIX)
 
-broker_ldflags = 
-
-if HAVE_PYTHON
-#allow the broker to find the python library at runtime
-broker_ldflags += -rpath $(PYTHON_PREFIX)/lib
-endif
-
-flux_broker_LDFLAGS = ${broker_ldflags}
+flux_broker_LDFLAGS =
 
 TESTS = test_shutdown.t \
 	test_heartbeat.t \
