@@ -1075,25 +1075,11 @@ void kvstxn_process_root_missing (void)
     cache_destroy (cache);
 }
 
-struct missingref_data {
-    struct cache *cache;
-    const char *dir_ref;
-    json_t *dir;
-};
-
-int missingref_cb (kvstxn_t *kt, const char *ref, void *data)
+int missingref_count_cb (kvstxn_t *kt, const char *ref, void *data)
 {
-    struct missingref_data *md = data;
-    struct cache_entry *entry;
+    int *count = data;
 
-    ok (strcmp (ref, md->dir_ref) == 0,
-        "missing reference is what we expect it to be");
-
-    ok ((entry = create_cache_entry_treeobj (md->dir)) != NULL,
-        "create_cache_entry_treeobj works");
-
-    cache_insert (md->cache, ref, entry);
-
+    (*count)++;
     return 0;
 }
 
@@ -1107,8 +1093,9 @@ void kvstxn_process_missing_ref (void)
     json_t *dir;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
-    struct missingref_data md;
+    struct cache_entry *entry;
     const char *newroot;
+    int count = 0;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1162,12 +1149,18 @@ void kvstxn_process_missing_ref (void)
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS again");
 
-    md.cache = cache;
-    md.dir_ref = dir_ref;
-    md.dir = dir;
-
-    ok (kvstxn_iter_missing_refs (kt, missingref_cb, &md) == 0,
+    ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
         "kvstxn_iter_missing_refs works for dirty cache entries");
+
+    ok (count == 1,
+        "kvstxn_iter_missing_refs called 1 time");
+
+    /* add missing ref into cache */
+
+    ok ((entry = create_cache_entry_treeobj (dir)) != NULL,
+        "create_cache_entry_treeobj works");
+
+    cache_insert (cache, dir_ref, entry);
 
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -1186,6 +1179,380 @@ void kvstxn_process_missing_ref (void)
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
+}
+
+void kvstxn_process_multiple_missing_ref (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    json_t *root;
+    json_t *dir1;
+    json_t *dir2;
+    json_t *dir3;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+    char dir_ref1[BLOBREF_MAX_STRING_SIZE];
+    char dir_ref2[BLOBREF_MAX_STRING_SIZE];
+    char dir_ref3[BLOBREF_MAX_STRING_SIZE];
+    struct cache_entry *entry;
+    const char *newroot;
+    json_t *ops = NULL;
+    int count = 0;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This root is
+     *
+     * root_ref
+     * "dir1" : dirref to dir_ref1
+     * "dir2" : dirref to dir_ref2
+     * "dir3" : dirref to dir_ref3
+     *
+     * dir_ref1
+     * "val" : val w/ "42"
+     *
+     * dir_ref2
+     * "val" : val w/ "43"
+     *
+     * dir_ref3
+     * "val" : val w/ "44"
+     */
+
+    dir1 = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dir1, "val", "42", 2);
+
+    ok (treeobj_hash ("sha1", dir1, dir_ref1, sizeof (dir_ref1)) == 0,
+        "treeobj_hash worked");
+
+    dir2 = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dir2, "val", "43", 2);
+
+    ok (treeobj_hash ("sha1", dir2, dir_ref2, sizeof (dir_ref2)) == 0,
+        "treeobj_hash worked");
+
+    dir3 = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dir3, "val", "44", 2);
+
+    ok (treeobj_hash ("sha1", dir3, dir_ref3, sizeof (dir_ref3)) == 0,
+        "treeobj_hash worked");
+
+    /* don't add dir entry, we want it to miss  */
+
+    root = treeobj_create_dir ();
+    _treeobj_insert_entry_dirref (root, "dir1", dir_ref1);
+    _treeobj_insert_entry_dirref (root, "dir2", dir_ref2);
+    _treeobj_insert_entry_dirref (root, "dir3", dir_ref3);
+
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
+        "treeobj_hash worked");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    ops = json_array ();
+    ops_append (ops, "dir1.a", "52", 0);
+    ops_append (ops, "dir2.b", "62", 0);
+    ops_append (ops, "dir3.c", "72", 0);
+
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "transaction1",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
+
+    json_decref (ops);
+
+    ok (kvstxn_mgr_transaction_ready (ktm) == true,
+        "kvstxn_mgr_transaction_ready says a kvstxn is ready");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
+
+    ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
+        "kvstxn_iter_missing_refs works for dirty cache entries");
+
+    ok (count == 3,
+        "kvstxn_iter_missing_refs called 3 times");
+
+    /* add missing refs into cache */
+
+    ok ((entry = create_cache_entry_treeobj (dir1)) != NULL,
+        "create_cache_entry_treeobj works");
+
+    cache_insert (cache, dir_ref1, entry);
+
+    ok ((entry = create_cache_entry_treeobj (dir2)) != NULL,
+        "create_cache_entry_treeobj works");
+
+    cache_insert (cache, dir_ref2, entry);
+
+    ok ((entry = create_cache_entry_treeobj (dir3)) != NULL,
+        "create_cache_entry_treeobj works");
+
+    cache_insert (cache, dir_ref3, entry);
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir1.a", "52");
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir2.b", "62");
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir3.c", "72");
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+    json_decref (dir1);
+    json_decref (dir2);
+    json_decref (dir3);
+    json_decref (root);
+}
+
+void kvstxn_process_multiple_identical_missing_ref (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    json_t *root;
+    json_t *dir;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+    char dir_ref[BLOBREF_MAX_STRING_SIZE];
+    struct cache_entry *entry;
+    const char *newroot;
+    json_t *ops = NULL;
+    int count = 0;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This root is
+     *
+     * root_ref
+     * "dir" : dirref to dir_ref
+     *
+     * dir_ref
+     * "val" : val w/ "42"
+     *
+     */
+
+    dir = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
+
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
+        "treeobj_hash worked");
+
+    /* don't add dir entry, we want it to miss  */
+
+    root = treeobj_create_dir ();
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
+
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
+        "treeobj_hash worked");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    ops = json_array ();
+    ops_append (ops, "dir.a", "52", 0);
+    ops_append (ops, "dir.b", "62", 0);
+    ops_append (ops, "dir.c", "72", 0);
+
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "transaction1",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
+
+    json_decref (ops);
+
+    ok (kvstxn_mgr_transaction_ready (ktm) == true,
+        "kvstxn_mgr_transaction_ready says a kvstxn is ready");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
+
+    ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
+        "kvstxn_iter_missing_refs works for dirty cache entries");
+
+    ok (count == 3,
+        "kvstxn_iter_missing_refs called 3 times");
+
+    /* add missing ref into cache */
+
+    ok ((entry = create_cache_entry_treeobj (dir)) != NULL,
+        "create_cache_entry_treeobj works");
+
+    cache_insert (cache, dir_ref, entry);
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.a", "52");
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.b", "62");
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.c", "72");
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+    json_decref (dir);
+    json_decref (root);
+}
+
+void kvstxn_process_missing_ref_removed (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    json_t *root;
+    json_t *dir;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+    char dir_ref[BLOBREF_MAX_STRING_SIZE];
+    struct cache_entry *entry;
+    const char *newroot;
+    json_t *ops = NULL;
+    int count = 0;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This root is
+     *
+     * root_ref
+     * "dir" : dirref to dir_ref
+     *
+     * dir_ref
+     * "val" : val w/ "42"
+     *
+     */
+
+    dir = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dir, "val", "42", 2);
+
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
+        "treeobj_hash worked");
+
+    /* don't add dir entry, we want it to miss  */
+
+    root = treeobj_create_dir ();
+    _treeobj_insert_entry_dirref (root, "dir", dir_ref);
+
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
+        "treeobj_hash worked");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /* write to 'dir', then remove 'dir' */
+
+    ops = json_array ();
+    ops_append (ops, "dir.a", "52", 0);
+    ops_append (ops, "dir", NULL, 0);
+
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "transaction1",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
+
+    json_decref (ops);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
+
+    ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
+        "kvstxn_iter_missing_refs works for dirty cache entries");
+
+    ok (count == 1,
+        "kvstxn_iter_missing_refs called 1 time");
+
+    /* add missing ref into cache, even though it should be removed */
+
+    ok ((entry = create_cache_entry_treeobj (dir)) != NULL,
+        "create_cache_entry_treeobj works");
+
+    cache_insert (cache, dir_ref, entry);
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    /* verify dir doesn't exist */
+
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir", NULL);
 
     kvstxn_mgr_destroy (ktm);
     kvsroot_mgr_destroy (krm);
@@ -2884,6 +3251,9 @@ int main (int argc, char *argv[])
     kvstxn_basic_root_not_dir ();
     kvstxn_process_root_missing ();
     kvstxn_process_missing_ref ();
+    kvstxn_process_multiple_missing_ref ();
+    kvstxn_process_multiple_identical_missing_ref ();
+    kvstxn_process_missing_ref_removed ();
     /* no need for dirty_cache_entries() test, as it is the most
      * "normal" situation and is tested throughout
      */

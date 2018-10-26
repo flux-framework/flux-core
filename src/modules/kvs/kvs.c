@@ -593,18 +593,23 @@ static int content_load_request_send (kvs_ctx_t *ctx, const char *ref)
     char *refcpy;
     int saved_errno;
 
-    if (!(f = flux_content_load (ctx->h, ref, 0)))
+    if (!(f = flux_content_load (ctx->h, ref, 0))) {
+        flux_log_error (ctx->h, "%s: flux_content_load", __FUNCTION__);
         goto error;
+    }
     if (!(refcpy = strdup (ref))) {
         errno = ENOMEM;
         goto error;
     }
     if (flux_future_aux_set (f, "ref", refcpy, free) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         free (refcpy);
         goto error;
     }
-    if (flux_future_then (f, -1., content_load_completion, ctx) < 0)
+    if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
+    }
     return 0;
 error:
     saved_errno = errno;
@@ -647,6 +652,13 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
      * arrange to stall caller.
      */
     if (!cache_entry_get_valid (entry)) {
+        /* Potential future optimization, if this load() is called
+         * multiple times from the same kvstxn and on the same
+         * reference, we're effectively adding identical waiters onto
+         * this cache entry.  This is far better than sending multiple
+         * RPCs (the cache entry chck above protects against this),
+         * but could be improved later.  See Issue #1751.
+         */
         if (cache_entry_wait_valid (entry, wait) < 0) {
             /* no cleanup in this path, if an rpc was sent, it will
              * complete, but not call a waiter on this load.  Return
