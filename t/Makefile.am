@@ -120,7 +120,8 @@ TESTS = \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
-	python/t0008-jsc.py
+	python/t0008-jsc.py \
+	python/t1000-service-add-remove.py
 
 
 if ENABLE_JOBSPEC
@@ -240,7 +241,8 @@ check_SCRIPTS = \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
 	python/t0008-jsc.py \
-	python/t0009-security.py
+	python/t0009-security.py \
+	python/t1000-service-add-remove.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
