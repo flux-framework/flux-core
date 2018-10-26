@@ -81,7 +81,7 @@ class Message(WrapperPimpl):
 
     @payload_str.setter
     def payload_str(self, value):
-        self.pimpl.set_json(value)
+        self.pimpl.set_string(value)
 
     @property
     def payload(self):
