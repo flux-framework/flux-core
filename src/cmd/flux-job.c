@@ -50,6 +50,7 @@
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submitbench (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
+int cmd_purge (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -108,6 +109,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_list,
       0,
       list_opts
+    },
+    { "purge",
+      "[OPTIONS] id ...",
+      "Remove job(s)",
+      cmd_purge,
+      0,
+      NULL,
     },
     { "submitbench",
       "[OPTIONS] jobspec",
@@ -184,6 +192,47 @@ int main (int argc, char *argv[])
     optparse_destroy (p);
     log_fini ();
     return (exitval);
+}
+
+int cmd_purge (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    int rc = 0;
+    int flags = 0;
+
+    if (optindex == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    while (optindex < argc) {
+        char *arg = argv[optindex++];
+        char *endptr;
+        flux_jobid_t id;
+        flux_future_t *f;
+
+        errno = 0;
+        id = strtoull (arg, &endptr, 10);
+        if (errno != 0)
+            log_err_exit ("error parsing jobid: %s", arg);
+        if (!(f = flux_job_purge (h, id, flags)))
+            log_err_exit ("flux_job_purge");
+        if (flux_rpc_get (f, NULL) < 0) {
+            const char *errmsg;
+            if ((errmsg = flux_future_error_string (f)))
+                log_msg_exit ("%s: %s", arg, errmsg);
+            else if (errno == ENOENT)
+                log_msg ("%s: no such job", arg);
+            else
+                log_err ("%s", arg);
+            rc = -1;
+        }
+        flux_future_destroy (f);
+    }
+    flux_close (h);
+    return rc;
 }
 
 /* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
