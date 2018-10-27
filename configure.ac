@@ -153,61 +153,47 @@ X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 
-AC_MSG_CHECKING(--enable-python argument)
-AC_ARG_ENABLE(python,
-	[  --enable-python[=OPTS]   Include Python bindings. [default=yes] [OPTS=no/yes]], ,
-	[enable_python="yes"])
+AX_PYTHON_DEVEL([>='2.7'])
+AM_PATH_PYTHON([$ac_python_version])
+if test "X$PYTHON" = "X"; then
+  AC_MSG_ERROR([could not find python])
+fi
+# Flag for PYTHON_LDFLAGS workaround below.
+if test -n "$PYTHON_LDFLAGS"; then
+  ac_python_ldflags_set_by_user=true
+fi
 
-AC_MSG_RESULT($enable_python)
+AM_CHECK_PYMOD(cffi,
+               [cffi.__version_info__ >= (1,1)],
+               ,
+               [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
+               )
+AM_CHECK_PYMOD(six,
+               [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
+               )
 
-if test "$enable_python" = "yes"; then
-  AX_PYTHON_DEVEL([>='2.7'])
-  AM_PATH_PYTHON([$ac_python_version])
-  if test "X$PYTHON" != "X"; then
-    # Flag for PYTHON_LDFLAGS workaround below.
-    if test -n "$PYTHON_LDFLAGS"; then
-      ac_python_ldflags_set_by_user=true
-    fi
-
-    AM_CHECK_PYMOD(cffi,
-                   [cffi.__version_info__ >= (1,1)],
-                   ,
-                   [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
-                   )
-    AM_CHECK_PYMOD(six,
-                   [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
-                   ,
-                   [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
-                 )
-
-    # Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
-    # (e.g. /usr/lib64).  Placing a standard path earlier in the linker
-    # search can lead to linking problems.
-    # 
-    # Logic below assumes only newer Python versions, protected by
-    # above check for atleast Python 2.7.
-    if test "$ac_python_ldflags_set_by_user" != "true"; then
-      AC_CHECK_LIB([$ac_python_library], [PyArg_ParseTuple],
-                   [ac_python_in_ld_path=true])
-      if test "$ac_python_in_ld_path" = "true"; then
-        AC_MSG_NOTICE([Removing -L$ac_python_libdir from PYTHON_LDFLAGS])
-        PYTHON_LDFLAGS="-l$ac_python_library"
-      fi
-    fi
-    python_ok=yes
-  fi
-  AS_VAR_SET(fluxpydir, $pyexecdir/flux)
-  AC_SUBST(fluxpydir)
-  AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
-  AC_SUBST(fluxsodir)
-  AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
-  AC_SUBST(fluxpymoddir)
-
-  if test "$python_ok" != "yes"; then
-    AC_MSG_ERROR([could not configure python])
+# Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
+# (e.g. /usr/lib64).  Placing a standard path earlier in the linker
+# search can lead to linking problems.
+#
+# Logic below assumes only newer Python versions, protected by
+# above check for atleast Python 2.7.
+if test "$ac_python_ldflags_set_by_user" != "true"; then
+  AC_CHECK_LIB([$ac_python_library], [PyArg_ParseTuple],
+               [ac_python_in_ld_path=true])
+  if test "$ac_python_in_ld_path" = "true"; then
+    AC_MSG_NOTICE([Removing -L$ac_python_libdir from PYTHON_LDFLAGS])
+    PYTHON_LDFLAGS="-l$ac_python_library"
   fi
 fi
-AM_CONDITIONAL([HAVE_PYTHON], [test "$enable_python" = yes])
+AS_VAR_SET(fluxpydir, $pyexecdir/flux)
+AC_SUBST(fluxpydir)
+AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
+AC_SUBST(fluxsodir)
+AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
+AC_SUBST(fluxpymoddir)
 
 AC_ARG_ENABLE([pylint],
   [AS_HELP_STRING([--enable-pylint],

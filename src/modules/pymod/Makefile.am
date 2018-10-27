@@ -18,6 +18,10 @@ fluxmod_LTLIBRARIES = pymod.la
 
 pymod_la_SOURCES = py_mod.c
 pymod_la_LDFLAGS = $(fluxmod_ldflags) -module $(PYTHON_LDFLAGS)
+
+# allow pymod to find the configured libpython at runtime
+pymod_la_LDFLAGS += -Wl,-rpath -Wl,$(PYTHON_PREFIX)/lib
+
 pymod_la_LIBADD = $(top_builddir)/src/common/libflux-core.la \
 		  $(top_builddir)/src/common/libflux-internal.la \
 		  $(top_builddir)/src/common/libflux-optparse.la \
