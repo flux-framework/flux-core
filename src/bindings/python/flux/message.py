@@ -32,6 +32,7 @@ class Message(WrapperPimpl):
                 match=ffi.typeof(lib.flux_msg_create).result,
                 prefixes=['flux_msg_', 'FLUX_MSG'],
                 destructor=raw.flux_msg_destroy if destruct else None,)
+            self.destruct = destruct
             if handle is None:
                 self.handle = raw.flux_msg_create(type_id)
 
