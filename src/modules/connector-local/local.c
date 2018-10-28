@@ -1067,6 +1067,10 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                     flux_log_error (h, "disconnect_update");
                     goto error;
                 }
+                if (flux_msg_enable_route (msg) < 0) {
+                    flux_log_error (h, "flux_msg_enable_route");
+                    goto error;
+                }
                 if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0) {
                     flux_log_error (h, "flux_msg_push_route");
                     goto error;
