@@ -31,3 +31,26 @@ job_manager_la_LIBADD = $(fluxmod_libadd) \
 		    $(top_builddir)/src/common/libflux-core.la \
 		    $(top_builddir)/src/common/libflux-optparse.la \
 		    $(ZMQ_LIBS)
+
+TESTS = \
+	test_queue.t
+
+test_ldadd = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD)
+
+test_cppflags = \
+	$(AM_CPPFLAGS)
+
+check_PROGRAMS = $(TESTS)
+
+TEST_EXTENSIONS = .t
+T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+       $(top_srcdir)/config/tap-driver.sh
+
+test_queue_t_SOURCES = test/queue.c
+test_queue_t_CPPFLAGS = $(test_cppflags)
+test_queue_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/queue.o \
+        $(top_builddir)/src/modules/job-manager/job.o \
+        $(test_ldadd)
