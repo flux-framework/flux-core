@@ -10,9 +10,12 @@ fi
 
 if flux job submitbench --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
+    SUBMITBENCH_OPT_R="--reuse-signature"
+    SUBMITBENCH_OPT_NONE="--sign-type=none"
 fi
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
+SUBMITBENCH="flux job submitbench $SUBMITBENCH_OPT_NONE"
 
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
@@ -26,6 +29,11 @@ MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1
+
+test_expect_success 'flux-job: submit one job to get one valid job in queue' '
+	validjob=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	echo Valid job is ${validjob}
+'
 
 test_expect_success 'flux-job: unknown sub-command fails with usage message' '
 	test_must_fail flux job wrongsubcmd 2>usage.out &&
@@ -47,8 +55,7 @@ test_expect_success 'flux-job: submitbench with nonexistent jobpsec fails' '
 '
 
 test_expect_success 'flux-job: submitbench with bad broker connection fails' '
-	FLUX_URI=/wrong \
-	test_must_fail flux job submitbench \
+	! FLUX_URI=/wrong flux job submitbench \
 	    --sign-type=none \
 	    ${JOBSPEC}/valid/basic.yaml
 '
@@ -139,6 +146,49 @@ test_expect_success 'flux-job: id --from=dec fails on bad input' '
 
 test_expect_success 'flux-job: id --from=words fails on bad input' '
 	test_must_fail flux job id --from=words badwords
+'
+
+test_expect_success 'flux-job: priority fails with bad FLUX_URI' '
+	! FLUX_URI=/wrong flux job priority ${validjob} 0
+'
+
+test_expect_success 'flux-job: priority fails with non-numeric jobid' '
+	test_must_fail flux job priority foo 0
+'
+
+test_expect_success 'flux-job: priority fails with wrong number of arguments' '
+	test_must_fail flux job priority ${validjob}
+'
+
+test_expect_success 'flux-job: priority fails with non-numeric priority' '
+	test_must_fail flux job priority ${validjob} foo
+'
+
+test_expect_success 'flux-job: purge fails with bad FLUX_URI' '
+	! FLUX_URI=/wrong flux job purge ${validjob}
+'
+
+test_expect_success 'flux-job: purge fails with no args' '
+	test_must_fail flux job purge
+'
+
+test_expect_success 'flux-job: purge fails with invalid jobid' '
+	test_must_fail flux job purge foo
+'
+
+test_expect_success 'flux-job: list fails with bad FLUX_URI' '
+	! FLUX_URI=/wrong flux job list
+'
+
+test_expect_success 'flux-job: list fails with wrong number of arguments' '
+	test_must_fail flux job list foo
+'
+
+test_expect_success 'flux-job: list -s suppresses header' '
+	flux job list >list.out &&
+	grep -q JOBID list.out &&
+	flux job list -s >list_s.out &&
+	test_must_fail grep -q JOBID list_s.out
 '
 
 test_expect_success 'flux-job: id works with spaces in input' '
