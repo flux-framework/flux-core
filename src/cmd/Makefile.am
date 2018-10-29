@@ -46,6 +46,7 @@ flux_SOURCES = \
 	builtin/nodeset.c \
 	builtin/heaptrace.c \
 	builtin/proxy.c \
+	builtin/python.c \
 	builtin/user.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c

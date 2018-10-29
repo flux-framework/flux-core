@@ -30,6 +30,10 @@ test_expect_success 'flux-keygen works' '
 	rm -rf $tmpkeydir
 '
 
+test_expect_success 'flux-python command runs a python that finds flux' '
+	flux python -c "import flux"
+'
+
 # None of the individual tests should run over 10s
 ARGS="-o -Sinit.rc2_timeout=10"
 
