@@ -149,5 +149,5 @@ class MessageWatcher(Watcher):
 
     def destroy(self):
         if self.handle is not None:
-            raw.flux_handler_destroy(self.handle)
+            raw.flux_msg_handler_destroy(self.handle)
             self.handle = None
