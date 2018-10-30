@@ -84,7 +84,7 @@ travis_fold "docker_build" \
   docker build \
     ${NO_CACHE} \
     ${QUIET} \
-    --build-arg OS=$IMAGE \
+    --build-arg BASE_IMAGE=$IMAGE \
     --build-arg IMAGESRC="fluxrm/testenv:$IMAGE" \
     --build-arg USER=$USER \
     --build-arg UID=$(id -u) \
