@@ -3,10 +3,10 @@
 #endif
 
 #include <flux/core.h>
+#include <sodium.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libjob/sign_none.h"
-#include "src/common/libutil/base64.h"
 
 void simple (void)
 {
@@ -36,12 +36,13 @@ void simple (void)
 
 char *encode_base64 (const void *src, int srclen)
 {
-    int dstlen = base64_encode_length (srclen);
+    int dstlen = sodium_base64_encoded_len (srclen,
+                                            sodium_base64_VARIANT_ORIGINAL);
     char *dst = calloc (1, dstlen);
     if (!dst)
         BAIL_OUT ("calloc failed");
-    (void)base64_encode_block (dst, &dstlen, src, srclen);
-    return dst;
+    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
+                              sodium_base64_VARIANT_ORIGINAL);
 }
 
 char *wrap (const char *header, int headerlen, void *payload, int payloadlen)
