@@ -36,7 +36,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL) $(LIBRT) $(FLUX_SECURITY_LIBS)
+	$(LIBDL) $(LIBRT) $(FLUX_SECURITY_LIBS) $(LIBSODIUM_LIBS)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la libflux-idset.la

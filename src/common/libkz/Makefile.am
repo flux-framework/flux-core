@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS) $(LIBSODIUM_CFLAGS)
 
 noinst_LTLIBRARIES = libkz.la
 
@@ -28,7 +28,8 @@ test_ldadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL)
+	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL) \
+	$(LIBSODIUM_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS) \
