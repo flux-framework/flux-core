@@ -1025,11 +1025,6 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     if (service_add (ctx->services, module_get_name (p),
                                     module_get_uuid (p), mod_svc_cb, p) < 0)
         goto module_remove;
-    if (module_get_service (p)) {
-        if (service_add (ctx->services, module_get_service (p),
-                                        module_get_uuid (p), mod_svc_cb, p) < 0)
-            goto service_remove;
-    }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
         module_add_arg (p, arg);
@@ -1323,6 +1318,72 @@ static int route_to_handle (const flux_msg_t *msg, void *arg)
     return 0;
 }
 
+/* Dynamic service registration.
+ * These handlers need to appear in broker.c so that they have
+ *  access to broker internals like modhash
+ */
+static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
+                            const flux_msg_t *msg, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    int rc = -1;
+    const char *name = NULL;
+    char *sender = NULL;
+    module_t *p;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (flux_msg_get_route_first (msg, &sender) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (!(p = module_lookup (ctx->modhash, sender))) {
+        errno = ENOENT;
+        goto done;
+    }
+    rc = service_add (ctx->services, name, sender, mod_svc_cb, p);
+done:
+    free (sender);
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+        flux_log_error (h, "service_add: flux_respond");
+}
+
+static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    int rc = -1;
+    const char *name;
+    const char *uuid;
+    char *sender = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (flux_msg_get_route_first (msg, &sender) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (!(uuid = service_get_uuid (ctx->services, name))) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (strcmp (uuid, sender) != 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    service_remove (ctx->services, name);
+    rc = 0;
+done:
+    free (sender);
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+        flux_log_error (h, "service_remove: flux_respond");
+}
+
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0 },
@@ -1332,6 +1393,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "service.add",    service_add_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "service.remove", service_remove_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1349,6 +1412,7 @@ static struct internal_service services[] = {
     { "attr",               NULL },
     { "heaptrace",          NULL },
     { "event",              "[0]" },
+    { "service",            NULL },
     { NULL, NULL, },
 };
 

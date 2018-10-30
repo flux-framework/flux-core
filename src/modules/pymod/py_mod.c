@@ -34,6 +34,7 @@
 #include <string.h>
 #include <wchar.h>
 #include <errno.h>
+#include <dlfcn.h>
 #include <flux/core.h>
 #include <czmq.h>
 
@@ -97,6 +98,30 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
+static int register_pymod_service_name (flux_t *h, const char *name)
+{
+    flux_future_t *f;
+    int saved_errno = 0;
+    int rc = -1;
+
+    /* Register a service name based on the name of the loaded script
+     */
+    if (!(f = flux_service_register (h, name))) {
+        saved_errno = errno;
+        flux_log_error (h, "service.add: flux_rpc_pack");
+        goto done;
+    }
+    if ((rc = flux_future_get (f, NULL)) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "service.add: %s", name);
+        goto done;
+    }
+done:
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return rc;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     optparse_t *p = optparse_create ("pymod");
@@ -131,12 +156,16 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
 
     flux_log(h, LOG_INFO, "loading python module named: %s", module_name);
+    if (!dlopen (PYTHON_LIBRARY, RTLD_LAZY|RTLD_GLOBAL))
+        flux_log_error (h, "Unable to dlopen libpython");
 
     PyObject *module = PyImport_ImportModule("flux.core");
     if(!module){
         PyErr_Print();
         return EINVAL;
     }
+    if (register_pymod_service_name (h, module_name) < 0)
+        return -1;
 
     PyObject *mod_main = PyObject_GetAttrString(module, "mod_main_trampoline");
     if(mod_main && PyCallable_Check(mod_main)){

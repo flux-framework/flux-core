@@ -15,6 +15,9 @@ void service_remove_byuuid (struct service_switch *sw, const char *uuid);
 
 int service_send (struct service_switch *sw, const flux_msg_t *msg);
 
+/* Return the UUID currently registered for service `name` */
+const char *service_get_uuid (struct service_switch *sw, const char *name);
+
 #endif /* !_BROKER_SERVICE_H */
 
 /*

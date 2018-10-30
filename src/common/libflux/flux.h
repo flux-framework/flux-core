@@ -26,6 +26,7 @@
 #include "future.h"
 #include "barrier.h"
 #include "buffer.h"
+#include "service.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 

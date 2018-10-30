@@ -21,7 +21,7 @@ AM_TESTS_ENVIRONMENT = \
 	test -n "$$LUA_PATH" && export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";\
 	test -n "$$FLUX_TEST_INSTALLED_PATH" && \
 	export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;"; \
-	export PYTHONPATH="$(top_builddir)/src/bindings/python:$(top_srcdir)/src/bindings/python:$(top_srcdir)/t/python/tap:$(PYTHON_SITE_PKG):$$PYTHONPATH";
+	export PYTHONPATH="$(abs_top_builddir)/src/bindings/python:$(abs_top_srcdir)/src/bindings/python:$(top_srcdir)/t/python/tap:$(PYTHON_SITE_PKG):$$PYTHONPATH";
 
 TEST_EXTENSIONS = .t .py
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -100,6 +100,7 @@ TESTS = \
         t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
+	t9001-pymod.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -119,7 +120,8 @@ TESTS = \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
-	python/t0008-jsc.py
+	python/t0008-jsc.py \
+	python/t1000-service-add-remove.py
 
 
 if ENABLE_JOBSPEC
@@ -209,6 +211,7 @@ check_SCRIPTS = \
         t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
+	t9001-pymod.t \
         issues/t0441-kvs-put-get.sh \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
@@ -238,7 +241,8 @@ check_SCRIPTS = \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
 	python/t0008-jsc.py \
-	python/t0009-security.py
+	python/t0009-security.py \
+	python/t1000-service-add-remove.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

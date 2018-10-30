@@ -32,6 +32,7 @@ class Message(WrapperPimpl):
                 match=ffi.typeof(lib.flux_msg_create).result,
                 prefixes=['flux_msg_', 'FLUX_MSG'],
                 destructor=raw.flux_msg_destroy if destruct else None,)
+            self.destruct = destruct
             if handle is None:
                 self.handle = raw.flux_msg_create(type_id)
 
@@ -81,7 +82,7 @@ class Message(WrapperPimpl):
 
     @payload_str.setter
     def payload_str(self, value):
-        self.pimpl.set_json(value)
+        self.pimpl.set_string(value)
 
     @property
     def payload(self):
@@ -148,5 +149,5 @@ class MessageWatcher(Watcher):
 
     def destroy(self):
         if self.handle is not None:
-            raw.flux_handler_destroy(self.handle)
+            raw.flux_msg_handler_destroy(self.handle)
             self.handle = None

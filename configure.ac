@@ -194,6 +194,7 @@ AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
 AC_SUBST(fluxsodir)
 AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
 AC_SUBST(fluxpymoddir)
+AC_SUBST(PYTHON_LIBRARY, lib${ac_python_library}.so)
 
 AC_DEFINE_UNQUOTED([PYTHON_INTERPRETER], ["$PYTHON"], [The python interpreter flux is configured with])
 

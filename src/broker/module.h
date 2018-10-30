@@ -31,10 +31,6 @@ void module_add_arg (module_t *p, const char *arg);
  */
 const char *module_get_name (module_t *p);
 
-/* Get optional service name.
- */
-const char *module_get_service (module_t *p);
-
 /* Get module uuid.
  */
 const char *module_get_uuid (module_t *p);
@@ -76,6 +72,10 @@ void module_set_errnum (module_t *p, int errnum);
  * next hop in the routing stack.
  */
 int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg);
+
+/* Find a module matching 'uuid'.
+ */
+module_t *module_lookup (modhash_t *mh, const char *uuid);
 
 /* Find a module matching 'name'.
  * N.B. this is a slow linear search - keep out of crit paths
