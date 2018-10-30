@@ -35,8 +35,9 @@
 #include <czmq.h>
 #include <flux/core.h>
 #include <jansson.h>
+#include <sodium.h>
 
-#include "src/common/libutil/base64.h"
+#include "src/common/libutil/macros.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -297,27 +298,23 @@ static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
     int saved_errno, rc;
     const char *xdata;
     char *data = NULL;
-    int xlen, len;
+    size_t xlen, len;
 
     if (is_raw) {
         xdata = json_string_value (o);
         xlen = strlen (xdata);
-        len = base64_decode_length (xlen);
-        if (!(data = malloc (len))) {
-            flux_log_error (kt->ktm->h, "malloc");
-            goto error;
-        }
-        if (base64_decode_block (data, &len, xdata, xlen) < 0) {
-            flux_log_error (kt->ktm->h, "base64_decode_block");
-            errno = EPROTO;
-            goto error;
-        }
-        /* len from base64_decode_length() always > 0 b/c of NUL byte,
-         * but len after base64_decode_block() can be zero.  Adjust if
-         * necessary. */
-        if (!len) {
-            free (data);
-            data = NULL;
+        len = BASE64_DECODE_SIZE (xlen);
+        if (len > 0) {
+            if (!(data = malloc (len))) {
+                flux_log_error (kt->ktm->h, "malloc");
+                goto error;
+            }
+            if (sodium_base642bin ((unsigned char *)data, len, xdata, xlen,
+                                   NULL, &len, NULL,
+                                   sodium_base64_VARIANT_ORIGINAL) < 0) {
+                errno = EPROTO;
+                goto error;
+            }
         }
     }
     else {

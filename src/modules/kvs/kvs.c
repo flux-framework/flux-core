@@ -38,7 +38,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/base64.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
