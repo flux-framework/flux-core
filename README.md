@@ -36,6 +36,7 @@ flux-core requires the following packages to build:
 autoconf
 automake
 libtool
+libsodium-devel >= 1.0.14
 zeromq4-devel >= 4.0.4   # built --with-libsodium
 czmq-devel >= 3.0.1
 jansson-devel >= 2.6
