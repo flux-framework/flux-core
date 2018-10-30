@@ -52,6 +52,11 @@ class TestHandle(unittest.TestCase):
             self.assertEqual(j['seq'], 1)
             self.assertEqual(j['pad'], 'stuff')
 
+    def test_rpc_null_payload(self):
+        """Sending a request that receives a NULL response"""
+        resp = self.f.rpc_send("attr.set", {"name": "attr-that-doesnt-exist", "value": "foo"})
+        self.assertIsNone(resp)
+
     def test_get_rank(self):
         """Get flux rank"""
         rank = self.f.get_rank()

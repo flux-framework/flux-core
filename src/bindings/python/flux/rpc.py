@@ -62,7 +62,9 @@ class RPC(WrapperPimpl):
         j_str = ffi.new('char *[1]')
         try:
             self.pimpl.get(j_str)
-            return ffi.string(j_str[0])
+            if j_str[0] == ffi.NULL:
+                return None
+            return ffi.string(j_str[0]).decode('utf-8')
         except EnvironmentError as error:
             exception_tuple = sys.exc_info()
             try:
@@ -74,4 +76,7 @@ class RPC(WrapperPimpl):
             raise EnvironmentError(error.errno, errmsg.decode('utf-8'))
 
     def get(self):
-        return json.loads(self.get_str().decode('utf-8'))
+        resp_str = self.get_str()
+        if resp_str is None:
+            return None
+        return json.loads(resp_str)

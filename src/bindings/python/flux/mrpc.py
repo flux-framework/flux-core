@@ -105,10 +105,15 @@ class MRPC(WrapperPimpl):
     def get_str(self):
         j_str = ffi.new('char *[1]')
         self.pimpl.get(j_str)
+        if j_str[0] == ffi.NULL:
+            return None
         return ffi.string(j_str[0]).decode('utf-8')
 
     def get(self):
-        return json.loads(self.get_str())
+        resp_str = self.get_str()
+        if resp_str is None:
+            return None
+        return json.loads(resp_str)
 
     # not strictly necessary to define, added for better autocompletion
     def check(self):

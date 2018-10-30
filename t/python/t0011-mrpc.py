@@ -92,6 +92,12 @@ class TestMRPC(unittest.TestCase):
             resp = self.fh.mrpc_create(binary_topic, payload=payload, rankset=[0]).get()
             self.assertEqual(resp['foo'], u'bar')
 
+    def test_06_null_response_payload(self):
+        resp = self.fh.mrpc_create("attr.set",
+                                   {"name" : "attr-that-doesnt-exist", "value": "foo"},
+                                   rankset=[0]).get()
+        self.assertEqual(resp, None)
+
 if __name__ == '__main__':
     from subflux import rerun_under_flux
     if rerun_under_flux(size=_flux_size()):

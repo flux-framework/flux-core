@@ -67,7 +67,7 @@ class Flux(Wrapper):
         return None
 
     def rpc_send(self, topic,
-                 payload=ffi.NULL,
+                 payload=None,
                  nodeid=raw.FLUX_NODEID_ANY,
                  flags=0):
         """ Create and send an RPC in one step """
