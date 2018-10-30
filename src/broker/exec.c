@@ -35,7 +35,6 @@
 #include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libsubprocess/command.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/base64.h"
 
 #include "attr.h"
 #include "exec.h"
