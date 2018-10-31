@@ -3,7 +3,7 @@ import unittest
 import json
 from multiprocessing import Queue
 
-import flux.core as core
+import flux
 import flux.jsc as jsc
 
 def __flux_size():
@@ -23,7 +23,7 @@ def jsc_cb_wait_until_reserved(jcb_str, arg, errnum):
 class TestJSC(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.f = core.Flux()
+        self.f = flux.Flux()
         self.job_spec = json.dumps({
             'nnodes': 1,
             'ntasks': 1,

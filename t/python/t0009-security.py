@@ -3,7 +3,6 @@ import os
 import unittest
 from tempfile import NamedTemporaryFile
 
-import flux.core as core
 from flux.security import SecurityContext
 
 def __flux_size():

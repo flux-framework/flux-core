@@ -5,7 +5,7 @@ import unittest
 import syslog
 import six
 
-import flux.core as core
+import flux
 from subflux import rerun_under_flux
 
 def __flux_size():
@@ -15,7 +15,7 @@ class TestHandle(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         """Create a handle, connect to flux"""
-        self.f = core.Flux()
+        self.f = flux.Flux()
 
     @classmethod
     def tearDownClass(self):

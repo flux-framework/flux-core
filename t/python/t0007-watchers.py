@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import unittest
-import flux.core as core
+
+import flux
 from subflux import rerun_under_flux
 
 def __flux_size():
@@ -9,7 +10,7 @@ def __flux_size():
 class TestTimer(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.f = core.Flux()
+        self.f = flux.Flux()
 
     @classmethod
     def tearDownClass(self):

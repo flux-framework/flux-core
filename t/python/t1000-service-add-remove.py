@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import unittest
 import errno
-import flux.core as core
+
+import flux
 from flux.message import Message
 from flux.core.inner import ffi
 from flux.constants import(FLUX_MSGTYPE_REQUEST,
@@ -23,7 +24,7 @@ def service_remove(f, name):
 class TestServiceAddRemove(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.f = core.Flux()
+        self.f = flux.Flux()
 
     @classmethod
     def tearDownClass(self):
@@ -102,7 +103,7 @@ class TestServiceAddRemove(unittest.TestCase):
         #
         def add_service_and_disconnect():
             import sys
-            h = core.Flux()
+            h = flux.Flux()
             sys.exit(service_add(h, "baz"))
         p = Process(target=add_service_and_disconnect)
         p.start()

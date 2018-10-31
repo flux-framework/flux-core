@@ -5,7 +5,6 @@ import six
 
 import flux
 import flux.kvs
-import flux.core as core
 
 from subflux import rerun_under_flux
 
@@ -15,7 +14,7 @@ def __flux_size():
 class TestKVS(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.f = core.Flux()
+        self.f = flux.Flux()
 
     @classmethod
     def tearDownClass(self):
