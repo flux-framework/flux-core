@@ -34,12 +34,13 @@
 #include <errno.h>
 
 #include <czmq.h>
+#include <sodium.h>
 
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/libutil/base64.h"
+#include "src/common/libutil/macros.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -225,17 +226,15 @@ static int rexec_output_data (flux_subprocess_t *p, const char *stream,
 
     assert (len);
 
-    s_len = base64_encode_length (len);
+    s_len = sodium_base64_encoded_len (len, sodium_base64_VARIANT_ORIGINAL);
 
     if (!(s_data = calloc (1, s_len))) {
         flux_log_error (s->h, "%s: calloc", __FUNCTION__);
         goto error;
     }
 
-    if (base64_encode_block (s_data, &s_len, data, len) < 0) {
-        flux_log_error (s->h, "%s: base64_encode_block", __FUNCTION__);
-        goto error;
-    }
+    sodium_bin2base64 (s_data, s_len, (unsigned char *)data, len,
+                       sodium_base64_VARIANT_ORIGINAL);
 
     if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:s s:s}",
                            "type", "output",
@@ -401,20 +400,23 @@ cleanup:
 static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
                              const char *name, const char *s_data)
 {
-    int save_errno, s_len, len;
+    int save_errno;
+    size_t s_len, len;
     char *data = NULL;
     int tmp, rv = -1;
 
     s_len = strlen (s_data);
-    len = base64_decode_length (s_len);
+    len = BASE64_DECODE_SIZE (s_len);
 
     if (!(data = calloc (1, len))) {
         flux_log_error (s->h, "%s: calloc", __FUNCTION__);
         goto cleanup;
     }
 
-    if (base64_decode_block (data, &len, s_data, s_len) < 0) {
-        flux_log_error (s->h, "%s: base64_decode_block", __FUNCTION__);
+    if (sodium_base642bin ((unsigned char *)data, len, s_data, s_len,
+                           NULL, &len, NULL,
+                           sodium_base64_VARIANT_ORIGINAL) < 0) {
+        flux_log_error (s->h, "%s: sodium_base642bin", __FUNCTION__);
         goto cleanup;
     }
 
@@ -426,7 +428,7 @@ static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     /* add list of msgs if there is overflow? */
 
     if (tmp != len) {
-        flux_log_error (s->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %d",
+        flux_log_error (s->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %zu",
                         s->rank, flux_subprocess_pid (p), name, len);
         errno = EOVERFLOW;
         goto cleanup;

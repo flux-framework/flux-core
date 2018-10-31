@@ -41,7 +41,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/base64.h"
 
 
 #define FLUX_ZAP_DOMAIN "flux"

@@ -30,10 +30,11 @@
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <sodium.h>
 
 #include "treeobj.h"
+#include "src/common/libutil/macros.h"
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/base64.h"
 
 static const int treeobj_version = 1;
 
@@ -199,7 +200,7 @@ int treeobj_decode_val (const json_t *obj, void **dp, int *lp)
 {
     const char *type, *xdatastr;
     const json_t *xdata;
-    int buflen, len, xlen;
+    size_t len, xlen;
     char *data;
 
     if (treeobj_peek (obj, &type, &xdata) < 0
@@ -209,21 +210,22 @@ int treeobj_decode_val (const json_t *obj, void **dp, int *lp)
     }
     xdatastr = json_string_value (xdata);
     xlen = strlen (xdatastr);
-    buflen = base64_decode_length (xlen); // an *estimate*, includes space
-    assert (buflen > 0);                  //  for '\0' term
-    if (!(data = malloc (buflen)))
-        return -1;
-    len = buflen;                         // len is an in/out parameter
-    if (base64_decode_block (data, &len, xdatastr, xlen) < 0) {
-        free (data);
-        errno = EINVAL;
-        return -1;
+    len = BASE64_DECODE_SIZE (xlen) + 1; // includes space for a trailing \0
+
+    if (len > 1) {
+        if (!(data = calloc (1, len)))
+            return -1;
+        if (sodium_base642bin ((unsigned char *)data, len, xdatastr, xlen,
+                               NULL, &len, NULL,
+                               sodium_base64_VARIANT_ORIGINAL) < 0) {
+            free (data);
+            errno = EINVAL;
+            return -1;
+        }
     }
-    assert (len < buflen);                // len does not account
-    assert (data[len] == '\0');           //  for '\0' term
-    if (len == 0) {
-        free (data);
+    else {
         data = NULL;
+        len = 0;
     }
     if (lp)
         *lp = len;
@@ -456,12 +458,13 @@ json_t *treeobj_create_val (const void *data, int len)
     char *xdata;
     json_t *obj = NULL;
 
-    xlen = base64_encode_length (len);
+    xlen = sodium_base64_encoded_len (len, sodium_base64_VARIANT_ORIGINAL);
     if (!(xdata = malloc (xlen))) {
         errno = ENOMEM;
         goto done;
     }
-    base64_encode_block (xdata, &xlen, data, len);
+    sodium_bin2base64 (xdata, xlen, (const unsigned char *)data, len,
+                              sodium_base64_VARIANT_ORIGINAL);
 
     if (!(obj = json_pack ("{s:i s:s s:s}", "ver", treeobj_version,
                                             "type", "val",

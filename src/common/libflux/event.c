@@ -29,8 +29,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <jansson.h>
-
-#include "src/common/libutil/base64.h"
+#include <sodium.h>
 
 #include "event.h"
 #include "rpc.h"
@@ -217,11 +216,13 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
     flux_future_t *f;
 
     if (src) {
-        int dstlen = base64_encode_length (srclen);
+        size_t dstlen = sodium_base64_encoded_len (srclen,
+                                            sodium_base64_VARIANT_ORIGINAL);
         void *dst;
         if (!(dst = malloc (dstlen)))
             return NULL;
-        base64_encode_block (dst, &dstlen, src, srclen);
+        sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
+                           sodium_base64_VARIANT_ORIGINAL);
         if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
                                  "{s:s s:i s:s}", "topic", topic,
                                                   "flags", flags,

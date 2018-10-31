@@ -34,12 +34,13 @@
 #include <errno.h>
 
 #include <czmq.h>
+#include <sodium.h>
 
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/libutil/base64.h"
+#include "src/common/libutil/macros.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -154,17 +155,15 @@ static int remote_write (struct subprocess_channel *c)
         goto error;
     }
 
-    s_len = base64_encode_length (lenp);
+    s_len = sodium_base64_encoded_len (lenp, sodium_base64_VARIANT_ORIGINAL);
 
     if (!(s_data = calloc (1, s_len))) {
         flux_log_error (c->p->h, "calloc");
         goto error;
     }
 
-    if (base64_encode_block (s_data, &s_len, ptr, lenp) < 0) {
-        flux_log_error (c->p->h, "base64_encode_block");
-        goto error;
-    }
+    sodium_bin2base64 (s_data, s_len, ptr, lenp,
+                       sodium_base64_VARIANT_ORIGINAL);
 
     if (!(f = flux_rpc_pack (c->p->h, "cmb.rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
@@ -546,7 +545,7 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
     struct subprocess_channel *c;
     const char *s_data;
     char *data = NULL;
-    int s_len, len, tmp;
+    size_t s_len, len, tmp;
     const char *stream;
     int eof;
     int rv = -1;
@@ -566,15 +565,17 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
     if (!flux_rpc_get_unpack (f, "{ s:s }", "data", &s_data)) {
 
         s_len = strlen (s_data);
-        len = base64_decode_length (s_len);
+        len = BASE64_DECODE_SIZE (s_len);
 
         if (!(data = calloc (1, len))) {
             flux_log_error (p->h, "calloc");
             goto cleanup;
         }
 
-        if (base64_decode_block (data, &len, s_data, s_len) < 0) {
-            flux_log_error (p->h, "base64_decode_block");
+        if (sodium_base642bin ((unsigned char *)data, len, s_data, s_len,
+                               NULL, &len, NULL,
+                               sodium_base64_VARIANT_ORIGINAL) < 0) {
+            flux_log_error (p->h, "sodium_base642bin");
             goto cleanup;
         }
 
@@ -586,7 +587,7 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
         /* add list of msgs if there is overflow? */
 
         if (tmp != len) {
-            flux_log_error (p->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %d",
+            flux_log_error (p->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %zu",
                      rank, pid, stream, len);
             errno = EOVERFLOW;
             goto cleanup;

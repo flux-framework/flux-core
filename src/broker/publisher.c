@@ -30,8 +30,9 @@
 #include <errno.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <sodium.h>
 
-#include "src/common/libutil/base64.h"
+#include "src/common/libutil/macros.h"
 
 #include "publisher.h"
 
@@ -101,11 +102,13 @@ static flux_msg_t *encode_event (const char *topic, int flags,
     }
     if (src) { // optional payload
         int srclen = strlen (src);
-        int dstlen = base64_decode_length (srclen);
+        size_t dstlen = BASE64_DECODE_SIZE (srclen);
 
         if (!(dst = malloc (dstlen)))
             goto error;
-        if (base64_decode_block (dst, &dstlen, src, srclen) < 0) {
+        if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
+                               NULL, &dstlen, NULL,
+                               sodium_base64_VARIANT_ORIGINAL) < 0) {
             errno = EPROTO;
             goto error;
         }
