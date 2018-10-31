@@ -34,8 +34,6 @@ libutil_la_SOURCES = \
 	read_all.h \
 	ev_zmq.c \
 	ev_zmq.h \
-	base64.c \
-	base64.h \
 	msglist.c \
 	msglist.h \
 	cleanup.c \
@@ -88,7 +86,6 @@ EXTRA_DIST = veb_mach.c
 
 TESTS = test_nodeset.t \
 	test_ev.t \
-	test_base64.t \
 	test_msglist.t \
 	test_sha1.t \
 	test_sha256.t \
@@ -134,10 +131,6 @@ test_nodeset_t_LDADD = $(test_ldadd)
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)
 test_ev_t_LDADD = $(test_ldadd)
-
-test_base64_t_SOURCES = test/base64_test.c
-test_base64_t_CPPFLAGS = $(test_cppflags)
-test_base64_t_LDADD = $(test_ldadd)
 
 test_msglist_t_SOURCES = test/msglist.c
 test_msglist_t_CPPFLAGS = $(test_cppflags)
