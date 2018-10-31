@@ -39,7 +39,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
-#include "src/common/libutil/base64.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
