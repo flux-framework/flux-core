@@ -31,10 +31,11 @@
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <sodium.h>
 
 #include "src/common/liblsd/cbuf.h"
+#include "src/common/libutil/macros.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/base64.h"
 
 #include "zio.h"
 
@@ -974,7 +975,7 @@ int zio_json_decode (const char *json_str, void **pp, bool *eofp)
 {
     json_t *o = NULL;
     const char *s_data;
-    int s_len, len = 0;
+    size_t s_len, len = 0;
     void *data = NULL;
     int eof = 0;
 
@@ -986,13 +987,15 @@ int zio_json_decode (const char *json_str, void **pp, bool *eofp)
     }
     if (pp) {
         s_len = strlen (s_data);
-        len = base64_decode_length (s_len);
+        len = BASE64_DECODE_SIZE (s_len);
         data = calloc (1, len);
         if (!data) {
             errno = ENOMEM;
             goto error;
         }
-        if (base64_decode_block (data, &len, s_data, s_len) < 0) {
+        if (sodium_base642bin (data, len, s_data, s_len,
+                               NULL, &len, NULL,
+                               sodium_base64_VARIANT_ORIGINAL) < 0) {
             errno = EPROTO;
             goto error;
         }
@@ -1016,16 +1019,14 @@ char *zio_json_encode (void *data, int len, bool eof)
     json_t *o = NULL;
     int s_len;
 
-    s_len = base64_encode_length (len);
+    s_len = sodium_base64_encoded_len (len, sodium_base64_VARIANT_ORIGINAL);
     s_data = calloc (1, s_len);
     if (!s_data) {
         errno = ENOMEM;
         goto error;
     }
-    if (base64_encode_block (s_data, &s_len, data, len) < 0) {
-        errno = EINVAL;
-        goto error;
-    }
+    sodium_bin2base64 (s_data, s_len, data, len,
+                       sodium_base64_VARIANT_ORIGINAL);
     if (!(o = json_pack ("{s:b s:s}", "eof", eof, "data", s_data))) {
         errno = ENOMEM;
         goto error;
