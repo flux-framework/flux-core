@@ -47,7 +47,7 @@ struct watcher {
     bool mute;                  // true if response should be suppressed
 
     char *key;                  // non-NULL if watching a key with lookup
-    int flags;                  // kvs_lookup flags (not FLUX_KVS_WATCH)
+    int flags;                  // kvs_lookup flags
     zlist_t *lookups;           // list of futures, in commit order
 
     struct namespace *ns;       // back pointer for removal
