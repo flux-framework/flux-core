@@ -84,8 +84,12 @@ nomem:
     return NULL;
 }
 
-static int validate_lookup_flags (int flags)
+static int validate_lookup_flags (int flags, bool watch_ok)
 {
+    if ((flags & FLUX_KVS_WATCH) && !watch_ok)
+        return -1;
+
+    flags &= ~FLUX_KVS_WATCH;
     switch (flags) {
         case 0:
         case FLUX_KVS_TREEOBJ:
@@ -104,20 +108,18 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
     flux_future_t *f;
     const char *namespace;
     const char *topic = "kvs.lookup";
-    int flags_orig = flags;
 
-    if ((flags & FLUX_KVS_WATCH)) {
-        topic = "kvs-watch.lookup"; // redirect to kvs-watch module
-        flags &= ~FLUX_KVS_WATCH;
-    }
-    if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
+    if (!h || !key || strlen (key) == 0
+        || validate_lookup_flags (flags, true) < 0) {
         errno = EINVAL;
         return NULL;
     }
     if (!(namespace = flux_kvs_get_namespace (h)))
         return NULL;
-    if (!(ctx = alloc_ctx (h, flags_orig, key)))
+    if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
+    if (flags & FLUX_KVS_WATCH)
+        topic = "kvs-watch.lookup"; // redirect to kvs-watch module
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:s s:s s:i}",
                              "key", key,
@@ -143,7 +145,8 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
 
     /* N.B. FLUX_KVS_WATCH is not valid for lookupat (r/o snapshot).
      */
-    if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
+    if (!h || !key || strlen (key) == 0
+        || validate_lookup_flags (flags, false) < 0) {
         errno = EINVAL;
         return NULL;
     }
