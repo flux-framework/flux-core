@@ -65,10 +65,14 @@ or `flux_future_continue_error()` to avoid breaking the chain.
 (created by `flux_future_and_then()` or `flux_future_or_then()` with
 the eventual result of the provided future `f`. This allows a future
 that was not created until the context of the callback to continue
-a sequential chain of futures created earlier.
+a sequential chain of futures created earlier. After the call to
+`flux_future_continue(3)` completes, the future `prev` may safely be
+destroyed.
 
 `flux_future_continue_error(3)` is like `flux_future_continue()`
 but immediately fulfills the next future in the chain with an error.
+Once `flux_future_continue_error(3)` completes, the future `prev`
+may safely be destroyed.
 
 RETURN VALUE
 ------------
