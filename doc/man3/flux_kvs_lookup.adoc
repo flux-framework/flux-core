@@ -176,7 +176,7 @@ ENOSYS::
 The KVS module is not loaded.
 
 ENOTSUP::
-An unknown namespace was requested.
+An unknown namespace was requested or namespace was deleted.
 
 ENODATA::
 A stream of responses requested with FLUX_KVS_WATCH was terminated
