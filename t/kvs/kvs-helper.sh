@@ -71,15 +71,3 @@ wait_watch_empty() {
         done
         return $(loophandlereturn $i)
 }
-
-# arg1 - file to watch
-# arg2 - value to wait for
-wait_watch_file() {
-        i=0
-        while [ "$(tail -n 1 $1 2> /dev/null)" != "$2" ] && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        return $(loophandlereturn $i)
-}

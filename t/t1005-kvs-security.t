@@ -20,6 +20,8 @@ echo "# $0: flux session size will be ${SIZE}"
 
 DIR=test.a.b
 
+waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
+
 # Just in case its set in the environment
 unset FLUX_KVS_NAMESPACE
 
@@ -85,7 +87,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         rm -f watch_out
         stdbuf -oL flux kvs --namespace=$NAMESPACETMP-OWNER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-OWNER put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&
@@ -201,7 +203,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (user)'  '
         rm -f watch_out
         stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=1 &&
         wait $watchpid
         unset_userid
@@ -219,7 +221,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         rm -f watch_out
         stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&
