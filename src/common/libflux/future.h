@@ -115,8 +115,8 @@ flux_future_t *flux_future_or_then (flux_future_t *f,
 
 /* Set the next future for the chained future `prev` to `f`.
  *  This function steals a reference to `f` and thus flux_future_destroy()
- *  should not be called on `f`.
- *
+ *  should not be called on `f`. (However, flux_future_destroy() should
+ *  still be called on `prev`)
  */
 int flux_future_continue (flux_future_t *prev, flux_future_t *f);
 

@@ -95,12 +95,28 @@ static void child_cb (flux_future_t *f, void *arg)
         flux_future_fulfill (parent, NULL, NULL);
 }
 
+
+/*  Propagate the current reactor *and* flux_t handle context from
+ *   future `f` to another future `next`.
+ */
+static void future_propagate_context (flux_future_t *f, flux_future_t *next)
+{
+    /*  Note: flux_future_set_flux(3) will *also* reset the reactor
+     *   for the future `next` using `flux_get_reactor (handle)`.
+     *   However, we still have to explicitly call set_reactor() here
+     *   for the case where a flux_t handle is *not* currently set
+     *   in the context of future `f` (e.g. if operating within a
+     *   reactor only with no connection to flux)
+     */
+    flux_future_set_reactor (next, flux_future_get_reactor (f));
+    flux_future_set_flux (next, flux_future_get_flux (f));
+}
+
 /*  Initialization callback for a composite future. Register then
  *   continuations for all child futures on active reactor.
  */
 void composite_future_init (flux_future_t *f, void *arg)
 {
-    flux_reactor_t *r;
     flux_future_t *child;
     struct composite_future *cf = arg;
     if (cf == NULL) {
@@ -108,14 +124,13 @@ void composite_future_init (flux_future_t *f, void *arg)
         goto error;
     }
     /*
-     *  Get the current reactor for the context of this composite future,
-     *   and install it on all child futures so that the composite future's
-     *   'then' *or* 'now' context becomes a 'then' context for all children.
+     *  Propagate current context of this composite future to all children
+     *   so that the composite future's 'then' *or* 'now' context becomes
+     *   a 'then' context for all children.
      */
-    r = flux_future_get_reactor (f);
     child = zhash_first (cf->children);
     while (child) {
-        flux_future_set_reactor (child, r);
+        future_propagate_context (f, child);
         if (flux_future_then (child, -1., child_cb, (void *) f) < 0)
             goto error;
         child = zhash_next (cf->children);
@@ -272,14 +287,27 @@ static void chained_continuation (flux_future_t *prev, void *arg)
  */
 static void chained_future_init (flux_future_t *f, void *arg)
 {
-    flux_reactor_t *r;
     struct chained_future *cf = arg;
     if (cf == NULL || cf->prev == NULL || cf->next == NULL
-        || !(r = flux_future_get_reactor (f))) {
+        || !(flux_future_get_reactor (f))) {
         errno = EINVAL;
         goto error;
     }
-    flux_future_set_reactor (cf->prev, r);
+    /*  Grab the reactor and flux_t handle (if any) for the current
+     *   context of future 'f', and propagate it to the previous future
+     *   in the chain. This ensures that the chain of "then" registrations
+     *   are placed on the correct reactor (our main reactor if in 'then'
+     *   context, or the temporary reactor in 'now' context), and that the
+     *   cloned handle is used on these callbacks if we are in 'now'
+     *   context.
+     */
+    future_propagate_context (f, cf->prev);
+
+    /*  Now call flux_future_then(3) with our chained-future continuation
+     *   function on the previous future in this chain. This allows
+     *   a flux_future_get(3) on 'f' to block, while its antecedent
+     *   futures are fulfilled asynchronously.
+     */
     if (flux_future_then (cf->prev, -1., chained_continuation, cf) < 0)
         goto error;
     return;
@@ -330,6 +358,14 @@ static struct chained_future *chained_future_create (flux_future_t *f)
         }
     }
     cf->prev = f;
+    /*
+     * Ensure the empty "next" future we have just created inherits
+     *  the same reactor (if any) and handle (if any) from the previous
+     *  future in the chain `f`. If this is not done, then there may be
+     *  no default reactor on which `flux_future_then(3)` can operate,
+     *  and no default handle to clone in `flux_future_wait_for(3)`.
+     */
+    future_propagate_context (f, cf->next);
     return (cf);
 }
 
@@ -342,7 +378,7 @@ static struct chained_future *chained_future_get (flux_future_t *f)
  *  future `f` by setting the continuation of `f` to fulfill "next".
  *
  * Steals ownership of `f` so that its destruction can be tied to
- *  next.
+ *  next. (`prev`, however, is free to be destroyed after this call)
  */
 int flux_future_continue (flux_future_t *prev, flux_future_t *f)
 {
@@ -351,13 +387,13 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f)
         errno = EINVAL;
         return -1;
     }
-    /*  Ensure that the reactor for f matches the current reactor context
-     *   for the previous future `prev`:
+    /*  Ensure that the reactor/handle for f matches the current reactor
+     *   context for the previous future `prev`.
      */
-    flux_future_set_reactor (f, flux_future_get_reactor (prev));
+    future_propagate_context (prev, f);
 
     /*  Set the "next" future in the chain (prev->next) to be fulfilled
-     *   by the future `f` once it is fulfilled.
+     *   by the provided future `f` once it is fulfilled.
      */
     return flux_future_then (f, -1.,
                              (flux_continuation_f) fulfill_next,

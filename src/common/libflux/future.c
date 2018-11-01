@@ -409,7 +409,7 @@ void flux_future_set_flux (flux_future_t *f, flux_t *h)
 {
     if (f) {
         f->h = h;
-        if (!f->r)
+        if (h && !f->r)
             f->r = flux_get_reactor (h);
     }
 }
