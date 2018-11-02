@@ -47,6 +47,7 @@ def process_header(f, including_path='.'):
       s = header.read()
       s = re.sub(r'\\\n', '', s)
       s = re.sub(r'\/\*([\s\S]*?)\*\/', '', s)
+      s = re.sub(r',\s*\n', ', ', s, flags=re.MULTILINE)
       s = re.sub(r'__attribute__\s*(([^;]*))', '', s)
 
       for sub in args.add_long_sub:
