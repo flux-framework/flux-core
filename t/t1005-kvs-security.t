@@ -83,7 +83,6 @@ test_expect_success 'kvs: get works on other ranks (owner)' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         flux kvs --namespace=$NAMESPACETMP-OWNER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-OWNER put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-OWNER "$DIR.watch" "0"
         rm -f watch_out
         stdbuf -oL flux kvs --namespace=$NAMESPACETMP-OWNER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
@@ -199,7 +198,6 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (user)'  '
         set_userid 9999 &&
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-USER "$DIR.watch" "0"
         rm -f watch_out
         stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
@@ -217,7 +215,6 @@ EOF
 test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-USER "$DIR.watch" "0"
         rm -f watch_out
         stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
