@@ -66,6 +66,7 @@ static int validate_getroot_flags (int flags)
     switch (flags) {
         case 0:
         case FLUX_KVS_WATCH:
+        case FLUX_KVS_WATCH | FLUX_KVS_WATCH_WAITCREATE:
             return 0;
         default:
             return -1;

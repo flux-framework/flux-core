@@ -45,6 +45,7 @@ struct watcher {
     int rootseq;                // last root sequence number sent
     bool cancelled;             // true if watcher has been cancelled
     bool mute;                  // true if response should be suppressed
+    bool responded;             // true if watcher has responded atleast once
 
     char *key;                  // non-NULL if watching a key with lookup
     int flags;                  // kvs_lookup flags
@@ -245,11 +246,17 @@ static int handle_lookup_response (flux_future_t *f, struct watcher *w)
     const void *data;
     int len;
 
-    if (flux_rpc_get_raw (f, &data, &len) < 0)
+    if (flux_rpc_get_raw (f, &data, &len) < 0) {
+        if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+            && errno == ENOENT
+            && w->responded == false)
+            return 0;
         goto error;
+    }
     if (!w->mute) {
         if (flux_respond_raw (h, w->request, data, len) < 0)
             flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+        w->responded = true;
     }
     return 0;
 error:
@@ -346,6 +353,14 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         goto error_respond;
     }
     if (ns->errnum != 0) {
+        /* if namespace not yet created, don't return error to user if
+         * they want to wait */
+        if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+            && ns->errnum == ENOTSUP
+            && w->responded == false) {
+            ns->errnum = 0;
+            return;
+        }
         errno = ns->errnum;
         goto error_respond;
     }
@@ -368,6 +383,7 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
                 flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
                 goto error;
             }
+            w->responded = true;
         }
         w->rootseq = ns->commit->rootseq;
     }
