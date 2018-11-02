@@ -32,7 +32,7 @@ kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
 		$(top_builddir)/src/common/libflux-internal.la \
 		$(top_builddir)/src/common/libflux-core.la \
-		$(ZMQ_CFLAGS)
+		$(ZMQ_LIBS)
 
 TESTS = \
 	test_waitqueue.t \
