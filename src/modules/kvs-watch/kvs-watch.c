@@ -45,6 +45,7 @@ struct watcher {
     int rootseq;                // last root sequence number sent
     bool cancelled;             // true if watcher has been cancelled
     bool mute;                  // true if response should be suppressed
+    bool responded;             // true if watcher has responded atleast once
 
     char *key;                  // non-NULL if watching a key with lookup
     int flags;                  // kvs_lookup flags
@@ -59,7 +60,10 @@ struct commit {
     char *rootref;              // current root blobref
     int rootseq;                // current root sequence number
     json_t *keys;               // keys changed by commit
-};                              //  (empty if data originates from getroot RPC)
+                                //  empty if data originates from getroot RPC
+                                //  or kvs.namespace-created event
+};
+
 
 /* State for monitoring a KVS namespace.
  */
@@ -72,6 +76,8 @@ struct namespace {
     zlist_t *watchers;          // list of watchers of this namespace
     char *setroot_topic;        // topic string for setroot subscription
     bool setroot_subscribed;    // setroot subscription active
+    char *created_topic;        // topic string for kvs.namespace-created
+    bool created_subscribed;    // kvs.namespace-created subscription active
     char *removed_topic;        // topic string for kvs.namespace-removed
     bool removed_subscribed;    // kvs.namespace-removed subscription active
 };
@@ -150,6 +156,7 @@ static struct commit *commit_create (const char *rootref, int rootseq,
         commit_destroy (commit);
         return NULL;
     }
+    /* keys can be NULL */
     commit->keys = json_incref (keys);
     commit->rootseq = rootseq;
     return commit;
@@ -168,9 +175,12 @@ static void namespace_destroy (struct namespace *ns)
         }
         if (ns->setroot_subscribed)
             (void)flux_event_unsubscribe (ns->ctx->h, ns->setroot_topic);
+        if (ns->created_subscribed)
+            (void)flux_event_unsubscribe (ns->ctx->h, ns->created_topic);
         if (ns->removed_subscribed)
             (void)flux_event_unsubscribe (ns->ctx->h, ns->removed_topic);
         free (ns->setroot_topic);
+        free (ns->created_topic);
         free (ns->removed_topic);
         free (ns->name);
         free (ns);
@@ -190,6 +200,8 @@ static struct namespace *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (asprintf (&ns->setroot_topic, "kvs.setroot-%s", namespace) < 0)
         goto error;
+    if (asprintf (&ns->created_topic, "kvs.namespace-created-%s", namespace) < 0)
+        goto error;
     if (asprintf (&ns->removed_topic, "kvs.namespace-removed-%s", namespace) < 0)
         goto error;
     ns->owner = FLUX_USERID_UNKNOWN;
@@ -197,6 +209,9 @@ static struct namespace *namespace_create (struct watch_ctx *ctx,
     if (flux_event_subscribe (ctx->h, ns->setroot_topic) < 0)
         goto error;
     ns->setroot_subscribed = true;
+    if (flux_event_subscribe (ctx->h, ns->created_topic) < 0)
+        goto error;
+    ns->created_subscribed = true;
     if (flux_event_subscribe (ctx->h, ns->removed_topic) < 0)
         goto error;
     ns->removed_subscribed = true;
@@ -222,6 +237,7 @@ static int check_authorization (struct namespace *ns,
 }
 
 /* Helper for watcher_respond - is key a member of array?
+ * N.B. array 'a' can be NULL
  */
 static bool array_match (json_t *a, const char *key)
 {
@@ -246,11 +262,17 @@ static int handle_lookup_response (flux_future_t *f, struct watcher *w)
     const void *data;
     int len;
 
-    if (flux_rpc_get_raw (f, &data, &len) < 0)
+    if (flux_rpc_get_raw (f, &data, &len) < 0) {
+        if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+            && errno == ENOENT
+            && w->responded == false)
+            return 0;
         goto error;
+    }
     if (!w->mute) {
         if (flux_respond_raw (h, w->request, data, len) < 0)
             flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+        w->responded = true;
     }
     return 0;
 error:
@@ -347,6 +369,14 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         goto error_respond;
     }
     if (ns->errnum != 0) {
+        /* if namespace not yet created, don't return error to user if
+         * they want to wait */
+        if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+            && ns->errnum == ENOTSUP
+            && w->responded == false) {
+            ns->errnum = 0;
+            return;
+        }
         errno = ns->errnum;
         goto error_respond;
     }
@@ -369,6 +399,7 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
                 flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
                 goto error;
             }
+            w->responded = true;
         }
         w->rootseq = ns->commit->rootseq;
     }
@@ -534,6 +565,44 @@ static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
+/* kvs.namespace-created event
+ * Update namespace with new namespace info.
+ * N.B. commit->keys is empty in this case, in contrast setroot_cb().
+ */
+static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg, void *arg)
+{
+    struct watch_ctx *ctx = arg;
+    struct namespace *ns;
+    const char *namespace;
+    int rootseq;
+    const char *rootref;
+    int owner;
+    struct commit *commit;
+
+    if (flux_event_unpack (msg, NULL, "{s:s s:i s:s s:i}",
+                           "namespace", &namespace,
+                           "rootseq", &rootseq,
+                           "rootref", &rootref,
+                           "owner", &owner) < 0) {
+        flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
+        return;
+    }
+    if (!(ns = zhash_lookup (ctx->namespaces, namespace))
+        || ns->commit)
+        return;
+    if (!(commit = commit_create (rootref, rootseq, NULL))) {
+        flux_log_error (h, "%s: error creating commit", __FUNCTION__);
+        ns->errnum = errno;
+        goto done;;
+    }
+    ns->commit = commit;
+    if (ns->owner == FLUX_USERID_UNKNOWN)
+        ns->owner = owner;
+done:
+    watcher_respond_ns (ns);
+}
+
 /* kvs.setroot event
  * Update namespace with new commit info.
  * Subscribe/unsubscribe is tied to 'struct namespace' create/destroy.
@@ -654,8 +723,11 @@ static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *namespace;
     struct watcher *w;
     struct namespace *ns;
+    int flags;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "namespace", &namespace) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
+                             "namespace", &namespace,
+                             "flags", &flags) < 0)
         goto error;
     if (!(ns = namespace_monitor (ctx, namespace)))
         goto error;
@@ -664,7 +736,7 @@ static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
      * otherwise response will be sent upon getroot RPC response
      * or setroot event.
      */
-    if (!(w = watcher_create (msg, NULL, 0)))
+    if (!(w = watcher_create (msg, NULL, flags)))
         goto error;
     w->ns = ns;
     if (zlist_append (ns->watchers, w) < 0) {
@@ -812,6 +884,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_EVENT,
       .topic_glob   = "kvs.namespace-removed-*",
       .cb           = removed_cb,
+      .rolemask     = 0
+    },
+    { .typemask     = FLUX_MSGTYPE_EVENT,
+      .topic_glob   = "kvs.namespace-created-*",
+      .cb           = namespace_created_cb,
       .rolemask     = 0
     },
     { .typemask     = FLUX_MSGTYPE_EVENT,

@@ -66,6 +66,7 @@ static int validate_getroot_flags (int flags)
     switch (flags) {
         case 0:
         case FLUX_KVS_WATCH:
+        case FLUX_KVS_WATCH | FLUX_KVS_WATCH_WAITCREATE:
             return 0;
         default:
             return -1;
@@ -89,8 +90,10 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *namespace, int flags)
         topic = "kvs-watch.getroot";
     if (!namespace && !(namespace = flux_kvs_get_namespace (h)))
         goto error;
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0, "{s:s}",
-                             "namespace", namespace)))
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+                             "{s:s s:i}",
+                             "namespace", namespace,
+                             "flags", flags)))
         goto error;
     if (flux_future_aux_set (f, auxkey, ctx, (flux_free_f)free_ctx) < 0)
         goto error_future;
