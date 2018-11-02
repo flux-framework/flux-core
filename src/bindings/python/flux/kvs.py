@@ -3,7 +3,7 @@ from __future__ import print_function
 import json
 import collections
 import errno
-from _flux._kvs import ffi, lib
+from _flux._core import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 
 

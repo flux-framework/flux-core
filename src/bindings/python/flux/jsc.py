@@ -1,31 +1,19 @@
 import json
+import re
 import six
+import sys
 
 from flux.wrapper import Wrapper
-from _flux._jsc import ffi, lib
+from _flux._core import ffi, lib
 
-# Constants taken from jstatctl.h
-JSC_STATE_PAIR = "state-pair"
-JSC_STATE_PAIR_OSTATE = "ostate"
-JSC_STATE_PAIR_NSTATE = "nstate"
-JSC_RDESC = "rdesc"
-JSC_RDESC_NNODES = "nnodes"
-JSC_RDESC_NTASKS = "ntasks"
-JSC_RDESC_WALLTIME = "walltime"
-JSC_RDL = "rdl"
-JSC_RDL_ALLOC = "rdl_alloc"
-JSC_RDL_ALLOC_CONTAINED = "contained"
-JSC_RDL_ALLOC_CONTAINING_RANK = "cmbdrank"
-JSC_RDL_ALLOC_CONTAINED_NCORES = "cmbdncores"
-JSC_PDESC = "pdesc"
-JSC_PDESC_SIZE = "procsize"
-JSC_PDESC_HOSTNAMES = "hostnames"
-JSC_PDESC_EXECS = "executables"
-JSC_PDESC_PDARRAY = "pdarray"
-JSC_PDESC_RANK_PDARRAY_PID = "pid"
-JSC_PDESC_RANK_PDARRAY_HINDX = "hindx"
-JSC_PDESC_RANK_PDARRAY_EINDX = "eindx"
-
+thismodule = sys.modules[__name__]
+# Inject enum/define names matching ^JSC_[A-Z_]+$ into module
+PATTERN = re.compile("^JSC_[A-Z_]+")
+for k in dir(lib):
+    if PATTERN.match(k):
+        v = ffi.string(getattr(lib, k)).decode("ascii")
+        print("adding", k, v)
+        setattr(thismodule, k, v)
 
 class JSCWrapper(Wrapper):
     """
