@@ -41,6 +41,18 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/lru_cache.h"
 
+const char *const JSC_JOBID = "jobid";
+const char *const JSC_STATE_PAIR = "state-pair";
+const char *const  JSC_STATE_PAIR_OSTATE = "ostate";
+const char *const  JSC_STATE_PAIR_NSTATE = "nstate";
+const char *const JSC_RDESC = "rdesc";
+const char *const  JSC_RDESC_NNODES = "nnodes";
+const char *const  JSC_RDESC_NTASKS = "ntasks";
+const char *const  JSC_RDESC_NCORES = "ncores";
+const char *const  JSC_RDESC_NGPUS = "ngpus";
+const char *const  JSC_RDESC_WALLTIME = "walltime";
+const char *const JSC_RDL = "rdl";
+const char *const JSC_R_LITE = "R_lite";
 
 /*******************************************************************************
  *                                                                             *

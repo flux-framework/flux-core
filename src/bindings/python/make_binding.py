@@ -33,8 +33,11 @@ def find_first(path, name):
       return filename
   raise "Unable to find file", name
 
-def process_header(f):
+def process_header(f, including_path='.'):
   global mega_header
+  if not os.path.isfile(f):
+      f = os.path.join(including_path, f)
+  f = os.path.abspath(f)
   if f not in checked_heads:
     for p in args.ignore_header:
       if re.search(p, f):
@@ -89,7 +92,8 @@ def process_header(f):
 
         m = re.search('#include\s*"([^"]*)"', l)
         if m:
-          process_header(find_first (args.search, m.group(1)))
+          f = find_first (args.search, m.group(1))
+          process_header(f, os.path.dirname(os.path.abspath(f)))
         if not re.match("#\s*(ifdef|ifndef|endif|include|define)", l):
           mega_header += l+'\n'
     checked_heads[f] = 1
