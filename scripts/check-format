@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+if command -v black 2>&1 > /dev/null ; then
+  find src t -name '*.py' -print0 | xargs -0 | black --check
+else
+  echo "black not found, failing"
+  exit 1
+fi

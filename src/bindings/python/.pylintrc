@@ -44,7 +44,7 @@ symbols=no
 # --enable=similarities". If you want to run only the classes checker, but have
 # no Warning level messages displayed, use"--disable=all --enable=classes
 # --disable=W"
-disable=missing-docstring, too-few-public-methods, too-many-arguments, star-args, arguments-differ, no-member, import-error, no-name-in-module, useless-object-inheritance, fixme
+disable=missing-docstring, too-few-public-methods, too-many-arguments, star-args, arguments-differ, no-member, import-error, no-name-in-module, useless-object-inheritance, fixme, bad-continuation
 
 
 [REPORTS]
@@ -175,7 +175,7 @@ docstring-min-length=-1
 [FORMAT]
 
 # Maximum number of characters on a single line.
-max-line-length=80
+max-line-length=88
 
 # Regexp for a line that is allowed to be longer than the limit.
 ignore-long-lines=^\s*(# )?<?https?://\S+>?$
