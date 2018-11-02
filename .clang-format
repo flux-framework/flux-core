@@ -10,13 +10,17 @@ AllowShortLoopsOnASingleLine : false
 BinPackParameters : false
 AllowAllParametersOfDeclarationOnNextLine : false
 AlignTrailingComments : true
-ColumnLimit : 80
-PenaltyBreakBeforeFirstCallParameter : 100
+ColumnLimit : 88
+
+# do not put all arguments on one line unless it's the same line as the call
+PenaltyBreakBeforeFirstCallParameter : 10000000
 PenaltyReturnTypeOnItsOwnLine : 65000
 PenaltyBreakString : 10
 
 # These improve formatting results but require clang 3.6/7 or higher
-# BreakBeforeBinaryOperators : NonAssignment
-# AlignAfterOpenBracket: true
-# BinPackArguments : false
-# AlignOperands : true
+BreakBeforeBinaryOperators : NonAssignment
+AlignAfterOpenBracket: true
+BinPackArguments : false
+AlignOperands : true
+BreakBeforeTernaryOperators : true
+AllowAllParametersOfDeclarationOnNextLine : false
