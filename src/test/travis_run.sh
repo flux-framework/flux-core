@@ -103,6 +103,9 @@ if test "$CPPCHECK" = "t"; then
     sh -x src/test/cppcheck.sh
 fi
 
+echo "Starting MUNGE"
+sudo /sbin/runuser -u munge /usr/sbin/munged
+
 travis_fold "autogen.sh" "./autogen.sh..." ./autogen.sh
 travis_fold "configure"  "./configure ${ARGS}..." ./configure ${ARGS}
 travis_fold "make_clean" "make clean..." make clean

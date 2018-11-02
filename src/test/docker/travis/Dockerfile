@@ -53,6 +53,13 @@ RUN case $BASE_IMAGE in \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
+# Setup MUNGE directories & key
+RUN mkdir -p /var/run/munge \
+ && dd if=/dev/urandom bs=1 count=1024 > /etc/munge/munge.key \
+ && chown -R munge /etc/munge/munge.key /var/run/munge \
+ && chmod 600 /etc/munge/munge.key
+
+
 ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER
 WORKDIR /home/$USER
