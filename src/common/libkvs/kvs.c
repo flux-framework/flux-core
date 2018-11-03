@@ -164,7 +164,12 @@ int flux_kvs_set_namespace (flux_t *h, const char *namespace)
         return -1;
     }
 
-    flux_aux_set (h, FLUX_HANDLE_KVS_NAMESPACE, str, free);
+    if (flux_aux_set (h, FLUX_HANDLE_KVS_NAMESPACE, str, free) < 0) {
+        int saved_errno = errno;
+        free (str);
+        errno = saved_errno;
+        return -1;
+    }
     return 0;
 }
 

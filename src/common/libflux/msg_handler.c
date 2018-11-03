@@ -105,6 +105,7 @@ static void dispatch_requeue (struct dispatch *d)
 static void dispatch_usecount_decr (struct dispatch *d)
 {
     if (d && --d->usecount == 0) {
+        int saved_errno = errno;
         if (flux_flags_get (d->h) & FLUX_O_CLONE) {
             dispatch_requeue (d);
             zlist_destroy (&d->unmatched);
@@ -121,6 +122,7 @@ static void dispatch_usecount_decr (struct dispatch *d)
         fastpath_free (&d->norm);
         fastpath_free (&d->group);
         free (d);
+        errno = saved_errno;
     }
 }
 
@@ -142,7 +144,7 @@ static struct dispatch *dispatch_get (flux_t *h)
     if (!d) {
         flux_reactor_t *r = flux_get_reactor (h);
         if (!(d = malloc (sizeof (*d))))
-            goto nomem;
+            return NULL;
         memset (d, 0, sizeof (*d));
         d->usecount = 1;
         if (!(d->handlers = zlist_new ()))
@@ -152,7 +154,7 @@ static struct dispatch *dispatch_get (flux_t *h)
         d->h = h;
         d->w = flux_handle_watcher_create (r, h, FLUX_POLLIN, handle_cb, d);
         if (!d->w)
-            goto nomem;
+            goto error;
         fastpath_init (&d->norm);
         fastpath_init (&d->group);
 #if HAVE_CALIPER
@@ -166,12 +168,14 @@ static struct dispatch *dispatch_get (flux_t *h)
                                                       CALI_TYPE_BOOL,
                                                       CALI_ATTR_DEFAULT);
 #endif
-        flux_aux_set (h, "flux::dispatch", d, dispatch_destroy);
+        if (flux_aux_set (h, "flux::dispatch", d, dispatch_destroy) < 0)
+            goto error;
     }
     return d;
 nomem:
-    dispatch_destroy (d);
     errno = ENOMEM;
+error:
+    dispatch_destroy (d);
     return NULL;
 }
 

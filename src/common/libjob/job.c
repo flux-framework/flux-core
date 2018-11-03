@@ -67,7 +67,9 @@ static flux_security_t *get_security_ctx (flux_t *h, flux_future_t **f_error)
             goto error;
         if (flux_security_configure (sec, NULL) < 0)
             goto error;
-        flux_aux_set (h, auxkey, sec, (flux_free_f)flux_security_destroy);
+        if (flux_aux_set (h, auxkey, sec,
+                          (flux_free_f)flux_security_destroy) < 0)
+            goto error;
     }
     return sec;
 error:

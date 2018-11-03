@@ -55,7 +55,11 @@ typedef struct {
 static void freectx (void *arg)
 {
     logctx_t *ctx = arg;
-    free (ctx);
+    if (ctx) {
+        int saved_errno = errno;
+        free (ctx);
+        errno = saved_errno;
+    }
 }
 
 static logctx_t *logctx_new (flux_t *h)
@@ -68,8 +72,12 @@ static logctx_t *logctx_new (flux_t *h)
         return NULL;
     snprintf (ctx->procid, sizeof (ctx->procid), "%d", getpid ());
     snprintf (ctx->appname, sizeof (ctx->appname), "%s", __progname);
-    flux_aux_set (h, "flux::log", ctx, freectx);
+    if (flux_aux_set (h, "flux::log", ctx, freectx) < 0)
+        goto error;
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 static logctx_t *getctx (flux_t *h)

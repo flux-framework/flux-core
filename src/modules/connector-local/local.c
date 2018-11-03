@@ -146,7 +146,8 @@ static mod_local_ctx_t *getctx (flux_t *h)
             goto error;
         }
         ctx->instance_owner = geteuid ();
-        flux_aux_set (h, "flux::local_connector", ctx, freectx);
+        if (flux_aux_set (h, "flux::local_connector", ctx, freectx) < 0)
+            goto error;
     }
     return ctx;
 error:

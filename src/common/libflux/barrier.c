@@ -41,8 +41,10 @@ static void freectx (void *arg)
 {
     libbarrier_ctx_t *ctx = arg;
     if (ctx) {
+        int saved_errno = errno;
         free (ctx->name);
         free (ctx);
+        errno = saved_errno;
     }
 }
 
@@ -65,7 +67,8 @@ static libbarrier_ctx_t *getctx (flux_t *h)
             goto error;
         }
         ctx->id = id;
-        flux_aux_set (h, "flux::barrier_client", ctx, freectx);
+        if (flux_aux_set (h, "flux::barrier_client", ctx, freectx) < 0)
+            goto error;
     }
     return ctx;
 error:

@@ -169,7 +169,10 @@ static kvs_ctx_t *getctx (flux_t *h)
             flux_watcher_start (ctx->check_w);
         }
         ctx->transaction_merge = 1;
-        flux_aux_set (h, "kvssrv", ctx, freectx);
+        if (flux_aux_set (h, "kvssrv", ctx, freectx) < 0) {
+            saved_errno = errno;
+            goto error;
+        }
     }
     return ctx;
 error:

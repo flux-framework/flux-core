@@ -149,29 +149,25 @@ const char *flux_get_nodeset (flux_t *h, const char *nodeset,
     nodeset_t *ns = NULL, *mns = NULL, *xns = NULL;
     int saved_errno;
 
-    if (!(ns = ns_special (h, nodeset))) {
-        saved_errno = errno;
+    if (!(ns = ns_special (h, nodeset)))
         goto error;
-    }
-    if (exclude && !(xns = ns_special (h, exclude))) {
-        saved_errno = errno;
+    if (exclude && !(xns = ns_special (h, exclude)))
         goto error;
-    }
     if (mask && !(mns = ns_special (h, mask))) {
-        saved_errno = EINVAL;
+        errno = EINVAL;
         goto error;
     }
-    if (ns_subtract(ns, xns) < 0 || ns_intersection (ns, mns) < 0) {
-        saved_errno = errno;
+    if (ns_subtract(ns, xns) < 0 || ns_intersection (ns, mns) < 0)
         goto error;
-    }
     if (xns)
         nodeset_destroy (xns);
     if (mns)
         nodeset_destroy (mns);
-    flux_aux_set (h, "flux::nodeset", ns, (flux_free_f) nodeset_destroy);
+    if (flux_aux_set (h, "flux::nodeset", ns, (flux_free_f) nodeset_destroy) < 0)
+        goto error;
     return nodeset_string (ns);
 error:
+    saved_errno = errno;
     if (ns)
         nodeset_destroy (ns);
     if (xns)

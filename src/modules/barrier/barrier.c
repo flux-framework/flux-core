@@ -94,7 +94,8 @@ static barrier_ctx_t *getctx (flux_t *h)
             goto error;
         }
         ctx->h = h;
-        flux_aux_set (h, "flux::barrier", ctx, freectx);
+        if (flux_aux_set (h, "flux::barrier", ctx, freectx) < 0)
+            goto error;
     }
     return ctx;
 error:

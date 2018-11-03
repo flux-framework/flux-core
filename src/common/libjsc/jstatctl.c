@@ -139,7 +139,8 @@ static jscctx_t *getctx (flux_t *h)
         if (!(ctx->callbacks = zlist_new ()))
             oom ();
         ctx->h = h;
-        flux_aux_set (h, "jstatctrl", ctx, freectx);
+        if (flux_aux_set (h, "jstatctrl", ctx, freectx) < 0)
+            oom ();
     }
     return ctx;
 }

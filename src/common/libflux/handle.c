@@ -50,6 +50,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/msglist.h"
 #include "src/common/libutil/dirwalk.h"
+#include "src/common/libutil/aux.h"
 
 #if HAVE_CALIPER
 struct profiling_context {
@@ -70,7 +71,7 @@ struct profiling_context {
 
 struct flux_handle_struct {
     flux_t          *parent; // if FLUX_O_CLONE, my parent
-    zhash_t         *aux;
+    struct aux_item *aux;
     int             usecount;
     int             flags;
 
@@ -335,8 +336,6 @@ flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int f
     memset (h, 0, sizeof (*h));
     h->usecount = 1;
     h->flags = flags;
-    if (!(h->aux = zhash_new()))
-        goto nomem;
     h->ops = ops;
     h->impl = impl;
     if (!(h->tagpool = tagpool_create ()))
@@ -364,8 +363,6 @@ flux_t *flux_clone (flux_t *orig)
     h->parent = orig;
     h->usecount = 1;
     h->flags = orig->flags | FLUX_O_CLONE;
-    if (!(h->aux = zhash_new()))
-        goto nomem;
     flux_incref (orig);
     return h;
 nomem:
@@ -377,7 +374,7 @@ nomem:
 void flux_handle_destroy (flux_t *h)
 {
     if (h && --h->usecount == 0) {
-        zhash_destroy (&h->aux);
+        aux_destroy (&h->aux);
         if ((h->flags & FLUX_O_CLONE)) {
             flux_handle_destroy (h->parent); // decr usecount
         }
@@ -437,13 +434,20 @@ int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len)
 
 void *flux_aux_get (flux_t *h, const char *name)
 {
-    return zhash_lookup (h->aux, name);
+    if (!h) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return aux_get (h->aux, name);
 }
 
-void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy)
+int flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy)
 {
-    zhash_update (h->aux, name, aux);
-    zhash_freefn (h->aux, name, destroy);
+    if (!h) {
+        errno = EINVAL;
+        return -1;
+    }
+    return aux_set (&h->aux, name, aux, destroy);
 }
 
 void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg)

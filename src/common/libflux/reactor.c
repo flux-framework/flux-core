@@ -60,6 +60,7 @@ struct flux_watcher {
 static void reactor_usecount_decr (flux_reactor_t *r)
 {
     if (r && --r->usecount == 0) {
+        int saved_errno = errno;
         if (r->loop) {
             if (ev_is_default_loop (r->loop))
                 ev_default_destroy ();
@@ -67,6 +68,7 @@ static void reactor_usecount_decr (flux_reactor_t *r)
                 ev_loop_destroy (r->loop);
         }
         free (r);
+        errno = saved_errno;
     }
 }
 
@@ -105,7 +107,8 @@ int flux_set_reactor (flux_t *h, flux_reactor_t *r)
         errno = EEXIST;
         return -1;
     }
-    flux_aux_set (h, "flux::reactor", r, NULL);
+    if (flux_aux_set (h, "flux::reactor", r, NULL) < 0)
+        return -1;
     return 0;
 }
 
@@ -113,9 +116,13 @@ flux_reactor_t *flux_get_reactor (flux_t *h)
 {
     flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
     if (!r) {
-        if ((r = flux_reactor_create (0)))
-            flux_aux_set (h, "flux::reactor", r,
-                          (flux_free_f)flux_reactor_destroy);
+        if ((r = flux_reactor_create (0))) {
+            if (flux_aux_set (h, "flux::reactor", r,
+                              (flux_free_f)flux_reactor_destroy) < 0) {
+                flux_reactor_destroy (r);
+                r = NULL;
+            }
+        }
     }
     return r;
 }

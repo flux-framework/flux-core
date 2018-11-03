@@ -159,25 +159,27 @@ done:
 const char *default_txn_auxkey = "flux::kvs_default_txn";
 static flux_kvs_txn_t *get_default_txn (flux_t *h)
 {
-    flux_kvs_txn_t *txn = NULL;
+    flux_kvs_txn_t *txn;
 
     if (!h) {
         errno = EINVAL;
-        goto done;
+        return NULL;
     }
     if (!(txn = flux_aux_get (h, default_txn_auxkey))) {
         if (!(txn = flux_kvs_txn_create ()))
-            goto done;
-        flux_aux_set (h, default_txn_auxkey,
-                      txn, (flux_free_f)flux_kvs_txn_destroy);
+            return NULL;
+        if (flux_aux_set (h, default_txn_auxkey,
+                          txn, (flux_free_f)flux_kvs_txn_destroy) < 0) {
+            flux_kvs_txn_destroy (txn);
+            return NULL;
+        }
     }
-done:
     return txn;
 }
 
 static void clear_default_txn (flux_t *h)
 {
-    flux_aux_set (h, default_txn_auxkey, NULL, NULL);
+    (void)flux_aux_set (h, default_txn_auxkey, NULL, NULL);
 }
 
 int flux_kvs_commit_anon (flux_t *h, int flags)

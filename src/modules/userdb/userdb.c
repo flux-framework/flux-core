@@ -138,7 +138,8 @@ static userdb_ctx_t *getctx (flux_t *h, int argc, char **argv)
             errno = ENOMEM;
             goto error;
         }
-        flux_aux_set (h, "flux::userdb", ctx, freectx);
+        if (flux_aux_set (h, "flux::userdb", ctx, freectx) < 0)
+            goto error;
     }
     return ctx;
 error:
