@@ -104,6 +104,9 @@ static struct optparse_option get_opts[] =  {
     { .name = "watch", .key = 'w', .has_arg = 0,
       .usage = "Monitor key changes",
     },
+    { .name = "waitcreate", .key = 'W', .has_arg = 0,
+      .usage = "Wait for creation to occur on watch",
+    },
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
       .usage = "Display at most COUNT changes",
     },
@@ -210,6 +213,9 @@ static struct optparse_option getroot_opts[] =  {
     { .name = "watch", .key = 'w', .has_arg = 0,
       .usage = "Monitor root changes",
     },
+    { .name = "waitcreate", .key = 'W', .has_arg = 0,
+      .usage = "Wait for creation to occur on watch",
+    },
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
       .usage = "Display at most COUNT changes",
     },
@@ -239,7 +245,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "get",
-      "[-j|-r|-t] [-a treeobj] [-l] [-w] [-c COUNT] key [key...]",
+      "[-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -337,7 +343,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "getroot",
-      "[-w] [-c COUNT] [-s|-o|-b]",
+      "[-w] [-W] [-c COUNT] [-s|-o|-b]",
       "Get KVS root treeobj",
       cmd_getroot,
       0,
@@ -677,8 +683,11 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
 
     if (optparse_hasopt (ctx->p, "treeobj"))
         flags |= FLUX_KVS_TREEOBJ;
-    if (optparse_hasopt (ctx->p, "watch"))
+    if (optparse_hasopt (ctx->p, "watch")) {
         flags |= FLUX_KVS_WATCH;
+        if (optparse_hasopt (ctx->p, "waitcreate"))
+            flags |= FLUX_KVS_WATCH_WAITCREATE;
+    }
     if (optparse_hasopt (ctx->p, "at")) {
         const char *reference = optparse_get_str (ctx->p, "at", "");
         if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
@@ -1745,8 +1754,11 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    if (optparse_hasopt (p, "watch"))
+    if (optparse_hasopt (p, "watch")) {
         flags |= FLUX_KVS_WATCH;
+        if (optparse_hasopt (p, "waitcreate"))
+            flags |= FLUX_KVS_WATCH_WAITCREATE;
+    }
     if (!(f = flux_kvs_getroot (h, NULL, flags)))
         log_err_exit ("flux_kvs_getroot");
     if (flux_future_then (f, -1., getroot_continuation, &ctx) < 0)
