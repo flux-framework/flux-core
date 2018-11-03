@@ -109,8 +109,21 @@ When the RPC is complete, the continuation stops its message handler
 for responses.  The flux_mrpc_t should be destroyed.  It is safe to
 call `flux_mrpc_destroy(3)` from within the continuation callback.
 
+`flux_mrpc_aux_set()` attaches application-specific data
+to the parent object _mrpc_.  It stores data _aux_ by key _name_,
+with optional destructor _destroy_.  The destructor, if non-NULL,
+is called when the parent object is destroyed, or when
+_key_ is overwritten by a new value.  If _aux_ is NULL,
+the destructor for a previous value, if any is called,
+ but no new value is stored.  If _name_ is NULL,
+_aux_ is stored anonymously.
 
-include::JSON_PACK.adoc[]
+`flux_mrpc_aux_get()` retrieves application-specific data
+by _name_.  If the data was stored anonymously, it
+cannot be retrieved.
+
+Names beginning with "flux::" are reserved for internal use.
+
 
 
 RETURN VALUE
@@ -131,6 +144,10 @@ and errno is set appropriately.
 
 `flux_mrpc_check()` does not report errors.
 
+`flux_mrpc_aux_set()` returns 0 on success, -1 on failure with errno set.
+
+`flux_mrpc_aux_get()` returns _aux_ on success, NULL on failure with errno set.
+
 
 ERRORS
 ------
@@ -144,6 +161,8 @@ Some arguments were invalid.
 EPROTO::
 A protocol error was encountered.
 
+ENOENT::
+An unknown key was passed to `flux_mrpc_aux_get()`.
 
 CAVEATS
 -------
