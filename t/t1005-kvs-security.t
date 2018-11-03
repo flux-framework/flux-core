@@ -84,7 +84,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         flux kvs --namespace=$NAMESPACETMP-OWNER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-OWNER put --json $DIR.watch=0 &&
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-OWNER watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-OWNER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
         $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-OWNER put --json $DIR.watch=1 &&
@@ -199,7 +199,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (user)'  '
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=0 &&
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
         $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=1 &&
@@ -216,7 +216,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=0 &&
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
         $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=1 &&
