@@ -10,7 +10,7 @@
 
 int aux_destroy_called;
 void *aux_destroy_arg;
-void aux_destroy (void *arg)
+void aux_destroy_fun (void *arg)
 {
     aux_destroy_called++;
     aux_destroy_arg = arg;
@@ -71,12 +71,12 @@ void test_simple (void)
          && errno == EINVAL,
         "flux_future_aux_set anon w/o destructor is EINVAL");
     errno = 0;
-    ok (flux_future_aux_set (NULL, "foo", "bar", aux_destroy) < 0
+    ok (flux_future_aux_set (NULL, "foo", "bar", aux_destroy_fun) < 0
          && errno == EINVAL,
         "flux_future_aux_set w/ NULL future is EINVAL");
     aux_destroy_called = 0;
     aux_destroy_arg = NULL;
-    ok (flux_future_aux_set (f, "foo", "bar", aux_destroy) == 0,
+    ok (flux_future_aux_set (f, "foo", "bar", aux_destroy_fun) == 0,
         "flux_future_aux_set works");
     errno = 0;
     p = flux_future_aux_get (NULL, "baz");
@@ -92,7 +92,7 @@ void test_simple (void)
     ok (p != NULL && !strcmp (p, "bar"),
         "flux_future_aux_get of known returns it");
     // same value as "foo" key to not muck up destructor arg test
-    ok (flux_future_aux_set (f, NULL, "bar", aux_destroy) == 0,
+    ok (flux_future_aux_set (f, NULL, "bar", aux_destroy_fun) == 0,
         "flux_future_aux_set with NULL key works");
 
     /* is_ready/wait_for/get - no future_init; artificially call fulfill */
