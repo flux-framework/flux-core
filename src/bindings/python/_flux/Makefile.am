@@ -35,7 +35,7 @@ _core_build.py: $(MAKE_BINDING)
 
 BUILT_SOURCES= _core.c
 fluxso_LTLIBRARIES = _core.la
-fluxso_PYTHON = __init__.py _kvs.py _kz.py _jsc.py 
+fluxso_PYTHON = __init__.py
 
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
