@@ -1,19 +1,20 @@
 import json
 import re
-import six
 import sys
+
+import six
 
 from flux.wrapper import Wrapper
 from _flux._core import ffi, lib
 
-thismodule = sys.modules[__name__]
+MOD = sys.modules[__name__]
 # Inject enum/define names matching ^JSC_[A-Z_]+$ into module
 PATTERN = re.compile("^JSC_[A-Z_]+")
 for k in dir(lib):
     if PATTERN.match(k):
         v = ffi.string(getattr(lib, k)).decode("ascii")
         print("adding", k, v)
-        setattr(thismodule, k, v)
+        setattr(MOD, k, v)
 
 class JSCWrapper(Wrapper):
     """
