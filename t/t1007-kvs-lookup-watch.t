@@ -2,6 +2,8 @@
 
 test_description='Test KVS get --watch'
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 test_under_flux 4 kvs
@@ -96,6 +98,63 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch sees duplicate commited 
 	done &&
 	$waitfile --count=20 --timeout=10 --pattern="[0-9]+" seq3.out &&
 	wait $pid
+'
+
+# in --watch & --waitcreate tests, call wait_watcherscount_nonzero to
+# ensure background watcher has started, otherwise test can be racy
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --waitcreate on key works' '
+        ! flux kvs get --watch test.create_later &&
+        flux kvs get --watch --waitcreate --count=1 \
+                     test.create_later > waitcreate.out &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.create_later=0 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="0" waitcreate.out >/dev/null &&
+        wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --waitcreate and remove key works' '
+        ! flux kvs get --watch test.create_and_remove &&
+        flux kvs get --watch --waitcreate --count=2 \
+                     test.create_and_remove > waitcreate2.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.create_and_remove=0 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="0" waitcreate2.out >/dev/null &&
+        flux kvs unlink test.create_and_remove &&
+        ! wait $pid &&
+        grep "No such file or directory" waitcreate2.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --waitcreate on namespace works' '
+        ! flux kvs --namespace=ns_create_later get --watch test.ns_create_later &&
+        flux kvs --namespace=ns_create_later get --watch --waitcreate --count=1 \
+                     test.ns_create_later > waitcreate3.out &
+        pid=$! &&
+        wait_watcherscount_nonzero ns_create_later &&
+        flux kvs namespace-create ns_create_later &&
+        flux kvs --namespace=ns_create_later put test.ns_create_later=0 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="0" waitcreate3.out >/dev/null &&
+        wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --waitcreate and remove namespace works' '
+        ! flux kvs --namespace=ns_create_and_remove get --watch test.ns_create_and_remove &&
+        flux kvs --namespace=ns_create_and_remove get --watch --waitcreate --count=2 \
+                     test.ns_create_and_remove > waitcreate4.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero ns_create_and_remove &&
+        flux kvs namespace-create ns_create_and_remove &&
+        flux kvs --namespace=ns_create_and_remove put test.ns_create_and_remove=0 &&
+        $waitfile --count=1 --timeout=10 \
+                  --pattern="0" waitcreate4.out >/dev/null &&
+        flux kvs namespace-remove ns_create_and_remove &&
+        ! wait $pid &&
+        grep "Operation not supported" waitcreate4.out
 '
 
 # Security checks
