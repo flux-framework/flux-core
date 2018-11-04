@@ -3,7 +3,7 @@
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
-shopt -s nullglob 
+shopt -s nullglob
 for rcdir in $all_dirs; do
     for rcfile in $rcdir/rc3.d/*; do
         echo running $rcfile
