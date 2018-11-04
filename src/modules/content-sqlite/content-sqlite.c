@@ -68,16 +68,19 @@ typedef struct {
 
 static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
 {
+    const char *sq_errmsg = sqlite3_errmsg (ctx->db);
+    int sq_errcode = sqlite3_extended_errcode (ctx->db);
+    char buf[64];
     va_list ap;
+
     va_start (ap, fmt);
-    char *s = xvasprintf (fmt, ap);
+    (void)vsnprintf (buf, sizeof (buf), fmt, ap);
     va_end (ap);
 
-    const char *error = sqlite3_errmsg (ctx->db);
-    int xerrcode = sqlite3_extended_errcode (ctx->db);
-    (void)flux_log (ctx->h, LOG_ERR, "%s: %s(%d)",
-                    s, error ? error : "failure", xerrcode);
-    free (s);
+    if (!sq_errmsg)
+        sq_errmsg = "unknown error code";
+
+    flux_log (ctx->h, LOG_ERR, "%s: %s(%d)", buf, sq_errmsg, sq_errcode);
 }
 
 static void set_errno_from_sqlite_error (sqlite_ctx_t *ctx)
