@@ -751,8 +751,17 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         *val++ = '\0';
 
         if (optparse_hasopt (p, "treeobj")) {
+            int len;
+            uint8_t *buf = NULL;
+
+            if (!strcmp (val, "-")) { // special handling for "--treeobj key=-"
+                if ((len = read_all (STDIN_FILENO, (void **)&buf)) < 0)
+                    log_err_exit ("stdin");
+                val = (char *)buf;
+            }
             if (flux_kvs_txn_put_treeobj (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
+            free (buf);
         }
         else if (optparse_hasopt (p, "json")) {
             json_t *obj;
