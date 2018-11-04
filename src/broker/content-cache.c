@@ -70,7 +70,6 @@ struct cache_entry {
 
 struct content_cache {
     flux_t *h;
-    flux_t *enclosing_h;
     flux_msg_handler_t **handlers;
     uint32_t rank;
     zhash_t *entries;
@@ -898,11 +897,6 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
     if (flux_event_subscribe (h, "hb") < 0)
         return -1;
     return 0;
-}
-
-void content_cache_set_enclosing_flux (content_cache_t *cache, flux_t *h)
-{
-    cache->enclosing_h = h;
 }
 
 static int content_cache_setattr (const char *name, const char *val, void *arg)
