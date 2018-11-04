@@ -116,16 +116,11 @@ static void freectx (void *arg)
             sqlite3_finalize (ctx->load_stmt);
         if (ctx->dump_stmt)
             sqlite3_finalize (ctx->dump_stmt);
-        if (ctx->dbdir)
-            free (ctx->dbdir);
-        if (ctx->dbfile) {
-            unlink (ctx->dbfile);
-            free (ctx->dbfile);
-        }
         if (ctx->db)
             sqlite3_close (ctx->db);
-        if (ctx->lzo_buf)
-            free (ctx->lzo_buf);
+        free (ctx->dbfile);
+        free (ctx->dbdir);
+        free (ctx->lzo_buf);
         free (ctx);
     }
 }
