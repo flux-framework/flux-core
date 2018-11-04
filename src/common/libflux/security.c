@@ -32,7 +32,6 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <munge.h>
 #include <czmq.h>
 
 #include "security.h"
