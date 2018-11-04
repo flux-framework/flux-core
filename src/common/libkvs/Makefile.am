@@ -24,7 +24,8 @@ libkvs_la_SOURCES = \
 	kvs_txn_private.h \
 	treeobj.h \
 	treeobj.c \
-	kvs_eventlog.c
+	kvs_eventlog.c \
+	kvs_copy.c
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
@@ -35,7 +36,8 @@ fluxcoreinclude_HEADERS = \
 	kvs_classic.h \
 	kvs_txn.h \
 	kvs_commit.h \
-	kvs_eventlog.h
+	kvs_eventlog.h \
+	kvs_copy.h
 
 TESTS = \
 	test_kvs.t \
