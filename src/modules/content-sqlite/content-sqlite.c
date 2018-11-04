@@ -34,7 +34,6 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
@@ -139,8 +138,10 @@ static sqlite_ctx_t *getctx (flux_t *h)
     int flags;
 
     if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
-        ctx->lzo_buf = xzmalloc (lzo_buf_chunksize);
+        if (!(ctx = calloc (1, sizeof (*ctx))))
+            goto error;
+        if (!(ctx->lzo_buf = calloc (1, lzo_buf_chunksize)))
+            goto error;
         ctx->lzo_bufsize = lzo_buf_chunksize;
         ctx->h = h;
         if (!(ctx->hashfun = flux_attr_get (h, "content.hash", &flags))) {
@@ -160,14 +161,16 @@ static sqlite_ctx_t *getctx (flux_t *h)
             }
             cleanup = true;
         }
-        ctx->dbdir = xasprintf ("%s/content", dir);
+        if (asprintf (&ctx->dbdir, "%s/content", dir) < 0)
+            goto error;
         if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
             flux_log_error (h, "mkdir %s", ctx->dbdir);
             goto error;
         }
         if (cleanup)
             cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
-        ctx->dbfile = xasprintf ("%s/sqlite", ctx->dbdir);
+        if (asprintf (&ctx->dbfile, "%s/sqlite", ctx->dbdir) < 0)
+            goto error;
 
         if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
             flux_log_error (h, "sqlite3_open %s", ctx->dbfile);
