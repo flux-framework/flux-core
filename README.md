@@ -49,6 +49,7 @@ yaml-cpp-devel >= 0.5.1
 python-devel >= 2.7
 python-cffi >= 1.1
 python-six >= 1.9
+python-ruamel-yaml
 libsqlite3-devel
 # for man pages
 asciidoc
