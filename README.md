@@ -52,6 +52,7 @@ lua-posix 	| lua-posix             | 			| *1*
 python-devel	| python-dev		| >= 2.7		|
 python-cffi	| python-cffi		| >= 1.1		|
 python-six	| python-six		| >= 1.9		|
+python-yaml	| python-yaml		| >= 3.10.0		|
 asciidoc	| asciidoc         	| 			| *2*
 asciidoctor	| asciidoctor         	| >= 1.5.7		| *2*
 aspell		| aspell		|			| *3*
