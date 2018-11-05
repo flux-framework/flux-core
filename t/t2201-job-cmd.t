@@ -13,6 +13,7 @@ if flux job submitbench --help 2>&1 | grep -q sign-type; then
 fi
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
+Y2J=${JOBSPEC}/y2j
 
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
@@ -26,6 +27,11 @@ MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1
+
+test_expect_success 'flux-job: convert basic.yaml to JSON' '
+	${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
+'
+
 
 test_expect_success 'flux-job: unknown sub-command fails with usage message' '
 	test_must_fail flux job wrongsubcmd 2>usage.out &&
@@ -49,21 +55,20 @@ test_expect_success 'flux-job: submitbench with nonexistent jobpsec fails' '
 test_expect_success 'flux-job: submitbench with bad broker connection fails' '
 	FLUX_URI=/wrong \
 	test_must_fail flux job submitbench \
-	    --sign-type=none \
-	    ${JOBSPEC}/valid/basic.yaml
+	    --sign-type=none basic.json
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'flux-job: submitbench with bad security config fails' '
 	test_must_fail flux job submitbench \
 	    --sign-type=none \
             --security-config=/nonexist \
-	    ${JOBSPEC}/valid/basic.yaml
+	    basic.json
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'flux-job: submitbench with bad sign type fails' '
 	test_must_fail flux job submitbench \
 	    --sign-type=notvalid \
-	    ${JOBSPEC}/valid/basic.yaml
+	    basic.json
 '
 
 test_expect_success 'flux-job: id without from/to args is dec to dec' '
