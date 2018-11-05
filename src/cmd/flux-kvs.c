@@ -1630,8 +1630,7 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     int optindex;
     flux_future_t *f;
-    const char *srckey, *dstkey, *json_str;
-    flux_kvs_txn_t *txn;
+    const char *srckey, *dstkey;
 
     optindex = optparse_option_index (p);
     if (optindex != (argc - 2))
@@ -1639,19 +1638,11 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get_treeobj (f, &json_str) < 0)
-        log_err_exit ("flux_kvs_lookup %s", srckey);
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put_treeobj (txn, 0, dstkey, json_str) < 0)
-        log_err_exit( "flux_kvs_txn_put_treeobj");
+    if (!(f = flux_kvs_copy (h, srckey, dstkey, 0))
+            || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_copy");
     flux_future_destroy (f);
 
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
     return (0);
 }
 
@@ -1660,8 +1651,7 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int optindex;
     flux_future_t *f;
-    const char *srckey, *dstkey, *json_str;
-    flux_kvs_txn_t *txn;
+    const char *srckey, *dstkey;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
@@ -1671,21 +1661,11 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get_treeobj (f, &json_str) < 0)
-        log_err_exit ("flux_kvs_lookup %s", srckey);
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put_treeobj (txn, 0, dstkey, json_str) < 0)
-        log_err_exit( "flux_kvs_txn_put_treeobj");
-    if (flux_kvs_txn_unlink (txn, 0, srckey) < 0)
-        log_err_exit( "flux_kvs_txn_unlink");
+    if (!(f = flux_kvs_move (h, srckey, dstkey, 0))
+            || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_move");
     flux_future_destroy (f);
 
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
     return (0);
 }
 
