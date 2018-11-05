@@ -43,9 +43,11 @@ RUN yum -y update \
       python-devel \
       python-cffi \
       python-six \
+      python-ruamel-yaml \
       python34-devel \
       python34-cffi \
       python34-six \
+      python34-ruamel-yaml \
       ruby \
       sqlite \
       yaml-cpp-devel \

@@ -48,8 +48,8 @@ RUN case $BASE_IMAGE in \
 
 # Make sure user in appropriate group for sudo on different platorms
 RUN case $BASE_IMAGE in \
-     bionic*) apt-get -qq install -y --no-install-recommends python-six python3-six ;; \
-     centos*) yum -y install python-six python34-devel python34-cffi python34-six ;; \
+     bionic*) apt-get -qq install -y --no-install-recommends python-six python3-six python-ruamel.yaml python3-ruamel.yaml ;; \
+     centos*) yum -y install python-six python34-devel python34-cffi python34-six python-ruamel-yaml python34-ruamel-yaml ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
