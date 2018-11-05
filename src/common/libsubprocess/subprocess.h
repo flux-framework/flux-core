@@ -387,13 +387,13 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
  *
  *  Returns 0 on success
  */
-int flux_subprocess_set_context (flux_subprocess_t *p,
-                                 const char *name, void *ctx);
+int flux_subprocess_aux_set (flux_subprocess_t *p,
+                             const char *name, void *ctx, flux_free_f free);
 
 /*
  *  Return pointer to any context associated with `p` under `name`. If
  *   no such context exists, then NULL is returned.
  */
-void *flux_subprocess_get_context (flux_subprocess_t *p, const char *name);
+void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
 
 #endif /* !_FLUX_CORE_SUBPROCESS_H */

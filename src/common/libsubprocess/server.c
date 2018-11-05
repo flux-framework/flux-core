@@ -108,8 +108,8 @@ cleanup:
 
 static void subprocess_cleanup (flux_subprocess_t *p)
 {
-    flux_subprocess_server_t *s = flux_subprocess_get_context (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_get_context (p, "msg");
+    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
+    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
 
     assert (s && msg);
 
@@ -120,8 +120,8 @@ static void subprocess_cleanup (flux_subprocess_t *p)
 
 static void rexec_completion_cb (flux_subprocess_t *p)
 {
-    flux_subprocess_server_t *s = flux_subprocess_get_context (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_get_context (p, "msg");
+    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
+    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
 
     assert (s && msg);
 
@@ -158,8 +158,8 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
 
 static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
-    flux_subprocess_server_t *s = flux_subprocess_get_context (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_get_context (p, "msg");
+    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
+    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
 
     assert (s && msg);
 
@@ -268,8 +268,8 @@ static int rexec_output_eof (flux_subprocess_t *p, const char *stream,
 
 static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
 {
-    flux_subprocess_server_t *s = flux_subprocess_get_context (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_get_context (p, "msg");
+    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
+    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
     const char *ptr;
     int lenp;
 
@@ -376,9 +376,9 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (!(copy = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_subprocess_set_context (p, "msg", (void *) copy) < 0)
+    if (flux_subprocess_aux_set (p, "msg", copy, NULL) < 0)
         goto error;
-    if (flux_subprocess_set_context (p, "server_ctx", s) < 0)
+    if (flux_subprocess_aux_set (p, "server_ctx", s, NULL) < 0)
         goto error;
 
     flux_cmd_destroy (cmd);
@@ -548,7 +548,7 @@ char *subprocess_sender (flux_subprocess_t *p)
     flux_msg_t *msg;
     char *sender;
 
-    msg = flux_subprocess_get_context (p, "msg");
+    msg = flux_subprocess_aux_get (p, "msg");
     if (!msg || flux_msg_get_route_first (msg, &sender) < 0)
         return NULL;
 
@@ -679,7 +679,7 @@ void terminate_uuid (flux_subprocess_t *p, const char *id)
         flux_future_t *f;
         if (!(f = flux_subprocess_kill (p, SIGKILL))) {
             flux_subprocess_server_t *s;
-            s = flux_subprocess_get_context (p, "server_ctx");
+            s = flux_subprocess_aux_get (p, "server_ctx");
             flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
             return;
         }

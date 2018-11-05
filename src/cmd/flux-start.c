@@ -289,7 +289,7 @@ void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 
 static void completion_cb (flux_subprocess_t *p)
 {
-    struct client *cli = flux_subprocess_get_context (p, "cli");
+    struct client *cli = flux_subprocess_aux_get (p, "cli");
     int rc;
 
     assert (cli);
@@ -313,7 +313,7 @@ static void completion_cb (flux_subprocess_t *p)
 
 static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
-    struct client *cli = flux_subprocess_get_context (p, "cli");
+    struct client *cli = flux_subprocess_aux_get (p, "cli");
 
     assert (cli);
 
@@ -345,7 +345,7 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void channel_cb (flux_subprocess_t *p, const char *stream)
 {
-    struct client *cli = flux_subprocess_get_context (p, "cli");
+    struct client *cli = flux_subprocess_aux_get (p, "cli");
     const char *ptr;
     int rc, lenp;
 
@@ -583,8 +583,8 @@ int client_run (struct client *cli)
                                     cli->cmd,
                                     &ops)))
         log_err_exit ("flux_exec");
-    if (flux_subprocess_set_context (cli->p, "cli", cli) < 0)
-        log_err_exit ("flux_subprocess_set_context");
+    if (flux_subprocess_aux_set (cli->p, "cli", cli, NULL) < 0)
+        log_err_exit ("flux_subprocess_aux_set");
     return 0;
 }
 

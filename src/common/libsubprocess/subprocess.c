@@ -37,6 +37,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/aux.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -130,8 +131,7 @@ static void subprocess_free (flux_subprocess_t *p)
     if (p && p->magic == SUBPROCESS_MAGIC) {
         flux_cmd_destroy (p->cmd);
 
-        if (p->aux)
-            zhash_destroy (&p->aux);
+        aux_destroy (&p->aux);
         if (p->channels)
             zhash_destroy (&p->channels);
 
@@ -181,8 +181,7 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
         goto error;
 
-    if (!(p->aux = zhash_new ())
-        || !(p->channels = zhash_new ()))
+    if (!(p->channels = zhash_new ()))
         goto error;
 
     p->state = FLUX_SUBPROCESS_INIT;
@@ -1071,22 +1070,23 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p)
     return p->reactor;
 }
 
-int flux_subprocess_set_context (flux_subprocess_t *p, const char *name, void *x)
+int flux_subprocess_aux_set (flux_subprocess_t *p,
+                             const char *name, void *x, flux_free_f free_fn)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;
         return -1;
     }
-    return zhash_insert (p->aux, name, x);
+    return aux_set (&p->aux, name, x, free_fn);
 }
 
-void * flux_subprocess_get_context (flux_subprocess_t *p, const char *name)
+void * flux_subprocess_aux_get (flux_subprocess_t *p, const char *name)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;
         return NULL;
     }
-    return zhash_lookup (p->aux, name);
+    return aux_get (p->aux, name);
 }
 
 /*

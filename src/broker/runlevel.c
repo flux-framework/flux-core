@@ -227,7 +227,7 @@ static void runlevel_timeout (flux_reactor_t *reactor, flux_watcher_t *w,
  */
 static void completion_cb (flux_subprocess_t *p)
 {
-    runlevel_t *r = flux_subprocess_get_context (p, "runlevel");
+    runlevel_t *r = flux_subprocess_aux_get (p, "runlevel");
     const char *exit_string = NULL;
     int rc;
 
@@ -263,7 +263,7 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp;
 
-    r = flux_subprocess_get_context (p, "runlevel");
+    r = flux_subprocess_aux_get (p, "runlevel");
 
     assert (r);
     assert (r->level == 1 || r->level == 3);
@@ -315,7 +315,7 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
                              &ops)))
             goto error;
 
-        if (flux_subprocess_set_context (p, "runlevel", r) < 0)
+        if (flux_subprocess_aux_set (p, "runlevel", r, NULL) < 0)
             goto error;
 
         monotime (&r->rc[level].start);
