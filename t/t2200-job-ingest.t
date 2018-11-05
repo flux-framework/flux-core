@@ -64,6 +64,10 @@ test_expect_success 'job-ingest: can submit jobspec on stdin' '
 	cat basic.json | ${SUBMITBENCH} -
 '
 
+test_expect_success 'job-ingest: YAML jobspec is rejected' '
+	test_must_fail ${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml
+'
+
 test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
 	jobid=$(${SUBMITBENCH} basic.json) &&
 	kvsdir=$(flux job id --to=kvs-active $jobid) &&
