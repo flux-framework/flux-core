@@ -5,12 +5,12 @@ import multiprocessing as mp
 
 from six.moves import range as range
 
-import flux.core as core
+import flux
 from subflux import rerun_under_flux
 
 def barr_count(x, name, count):
     print(x, name, count)
-    f = core.Flux()
+    f = flux.Flux()
     f.barrier(name,count)
     f.close()
 
@@ -20,7 +20,7 @@ def __flux_size():
 class TestBarrier(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.f = core.Flux()
+        self.f = flux.Flux()
 
     @classmethod
     def tearDownClass(self):

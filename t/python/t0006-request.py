@@ -2,7 +2,7 @@
 import unittest
 
 import errno
-import flux.core as core
+import flux
 from subflux import rerun_under_flux
 
 def __flux_size():
@@ -13,7 +13,7 @@ class TestRequestMethods(unittest.TestCase):
 
   def test_no_topic_invalid(self):
     """flux_request_encode returns EINVAL with no topic string"""
-    f = core.Flux('loop://')
+    f = flux.Flux('loop://')
     with self.assertRaises(EnvironmentError) as err:
         f.request_encode(None, json_str)
     err = err.exception
@@ -21,7 +21,7 @@ class TestRequestMethods(unittest.TestCase):
 
   def test_null_payload(self):
     """flux_request_encode works with NULL payload"""
-    f = core.Flux('loop://')
+    f = flux.Flux('loop://')
     self.assertTrue(
         f.request_encode("foo.bar", None) is not None
         )

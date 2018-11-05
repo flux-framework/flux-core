@@ -122,6 +122,8 @@ TESTS = \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
 	python/t0008-jsc.py \
+	python/t0010-job.py \
+	python/t0011-mrpc.py \
 	python/t1000-service-add-remove.py
 
 
@@ -243,6 +245,8 @@ check_SCRIPTS = \
 	python/t0007-watchers.py \
 	python/t0008-jsc.py \
 	python/t0009-security.py \
+	python/t0010-job.py \
+	python/t0011-mrpc.py \
 	python/t1000-service-add-remove.py
 
 check_PROGRAMS = \

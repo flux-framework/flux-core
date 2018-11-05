@@ -9,7 +9,7 @@ ARG USER=flux
 ARG UID=1000
 ARG GID=1000
 ARG FLUX_SECURITY_VERSION
-ARG OS
+ARG BASE_IMAGE
 
 # Install flux-security by hand for now:
 #
@@ -40,16 +40,26 @@ RUN set -x && groupadd flux \
  && printf "flux ALL= NOPASSWD: ALL\\n" >> /etc/sudoers
 
 # Make sure user in appropriate group for sudo on different platorms
-RUN case $OS in \
-     ubuntu*) adduser $USER sudo && adduser flux sudo ;; \
+RUN case $BASE_IMAGE in \
+     bionic*) adduser $USER sudo && adduser flux sudo ;; \
      centos*) usermod -G wheel $USER && usermod -G wheel flux ;; \
+     *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
 # Make sure user in appropriate group for sudo on different platorms
-RUN case $OS in \
-     ubuntu*) apt-get -qq install -y --no-install-recommends python-six python3-six ;; \
+RUN case $BASE_IMAGE in \
+     bionic*) apt-get -qq install -y --no-install-recommends python-six python3-six ;; \
      centos*) yum -y install python-six python34-devel python34-cffi python34-six ;; \
+     *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
+# Setup MUNGE directories & key
+RUN mkdir -p /var/run/munge \
+ && dd if=/dev/urandom bs=1 count=1024 > /etc/munge/munge.key \
+ && chown -R munge /etc/munge/munge.key /var/run/munge \
+ && chmod 600 /etc/munge/munge.key
+
+
+ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER
 WORKDIR /home/$USER

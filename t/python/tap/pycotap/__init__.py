@@ -26,7 +26,7 @@ class TAPTestResult(unittest.TestResult):
     self.error_stream = error_stream
     self.orig_stdout = None
     self.orig_stderr = None
-    self.message = None
+    self.message = error_stream
     self.test_output = None
     self.message_log = message_log
     self.test_output_log = test_output_log

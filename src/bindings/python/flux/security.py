@@ -68,6 +68,6 @@ class SecurityContext(WrapperPimpl):
         output_payload_len = output_payload_len[0]
         # deference void** to char* then convert to python binary string
         output_payload = ffi.cast("char *", output_payload[0])
-        output_payload = ffi.unpack(output_payload, output_payload_len)
+        output_payload = ffi.buffer(output_payload, output_payload_len)
 
         return (output_payload, output_userid)

@@ -1,17 +1,14 @@
 #!/usr/bin/env python
-from __future__ import print_function
 import os
-import sys
 import unittest
 from tempfile import NamedTemporaryFile
 
-import flux.core as core
 from flux.security import SecurityContext
 
 def __flux_size():
     return 1
 
-class TestKVS(unittest.TestCase):
+class TestSecurity(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         conf = b"""[sign]
@@ -29,7 +26,7 @@ allowed-types = [ "none" ]
         unsigned_str = u"hello world"
         signed_str = self.context.sign_wrap(unsigned_str, mech_type="none")
         unwrapped_payload, wrapping_user = self.context.sign_unwrap(signed_str)
-        unwrapped_str = unwrapped_payload.decode('utf-8')
+        unwrapped_str = unwrapped_payload[:].decode('utf-8')
 
         self.assertEqual(unsigned_str, unwrapped_str)
         self.assertEqual(wrapping_user, os.getuid())

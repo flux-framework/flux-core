@@ -159,7 +159,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (!dlopen (PYTHON_LIBRARY, RTLD_LAZY|RTLD_GLOBAL))
         flux_log_error (h, "Unable to dlopen libpython");
 
-    PyObject *module = PyImport_ImportModule("flux.core");
+    PyObject *module = PyImport_ImportModule("flux.core.trampoline");
     if(!module){
         PyErr_Print();
         return EINVAL;

@@ -2,6 +2,7 @@ import six
 
 from flux.wrapper import Wrapper
 from flux.rpc import RPC
+from flux.mrpc import MRPC
 from flux.message import Message
 from flux.core.inner import raw
 from _flux._core import ffi, lib
@@ -66,7 +67,7 @@ class Flux(Wrapper):
         return None
 
     def rpc_send(self, topic,
-                 payload=ffi.NULL,
+                 payload=None,
                  nodeid=raw.FLUX_NODEID_ANY,
                  flags=0):
         """ Create and send an RPC in one step """
@@ -79,6 +80,20 @@ class Flux(Wrapper):
                    flags=0):
         """ Create a new RPC object """
         return RPC(self, topic, payload, nodeid, flags)
+
+    def mrpc_create(self, topic,
+                    payload=None,
+                    rankset="any",
+                    flags=0):
+        """
+        Create a new MRPC object. Messages are sent on MRPC creation. Responses
+        are accessible by iterating on the returned MRPC object. For example:
+        '''
+        for (response_nodeid, response_payload) in h.mrpc_create(...):
+            pass
+        '''
+        """
+        return MRPC(self, topic, payload, rankset, flags)
 
     def event_create(self, topic, payload=None):
         """ Create a new event message.

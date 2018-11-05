@@ -1,9 +1,9 @@
 import json
-import six
+
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 import flux.constants
-
+from flux.util import check_future_error, encode_payload, encode_topic
 
 class RPC(WrapperPimpl):
     """An RPC state object"""
@@ -27,13 +27,8 @@ class RPC(WrapperPimpl):
             if isinstance(flux_handle, Wrapper):
                 flux_handle = flux_handle.handle
 
-
-            if payload is None or payload == ffi.NULL:
-                payload = ffi.NULL
-            elif not isinstance(payload, six.string_types):
-                payload = json.dumps(payload)
-            elif isinstance(payload, six.text_type):
-                payload = payload.encode('UTF-8')
+            topic = encode_topic(topic)
+            payload = encode_payload(payload)
 
             self.handle = raw.flux_rpc(
                 flux_handle, topic, payload, nodeid, flags)
@@ -53,12 +48,17 @@ class RPC(WrapperPimpl):
         self.then_args = None
         self.then_cb = None
 
-
-
+    # TODO: replace with first-class future support
+    @check_future_error
     def get_str(self):
         j_str = ffi.new('char *[1]')
         self.pimpl.get(j_str)
-        return ffi.string(j_str[0])
+        if j_str[0] == ffi.NULL:
+            return None
+        return ffi.string(j_str[0]).decode('utf-8')
 
     def get(self):
-        return json.loads(self.get_str().decode('utf-8'))
+        resp_str = self.get_str()
+        if resp_str is None:
+            return None
+        return json.loads(resp_str)
