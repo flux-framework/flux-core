@@ -21,6 +21,8 @@ echo "# $0: flux session size will be ${SIZE}"
 DIR=test.a.b
 KEY=test.a.b.c
 
+waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
+
 # Just in case its set in the environment
 unset FLUX_KVS_NAMESPACE
 
@@ -140,11 +142,10 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait on primary namespace works' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in primary namespace works'  '
         flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR &&
         flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $PRIMARYNAMESPACE "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$PRIMARYNAMESPACE watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$PRIMARYNAMESPACE watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&
@@ -214,11 +215,10 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait in new namespace works' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in new namespace works'  '
         flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETEST "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETEST watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETEST watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&
@@ -514,11 +514,10 @@ test_expect_success 'kvs: namespace prefix works across symlinks' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key with namespace prefix'  '
         flux kvs --namespace=${NAMESPACEPREFIX}-watchprefix unlink -Rf $DIR &&
         flux kvs --namespace=${NAMESPACEPREFIX}-watchprefix put --json $DIR.watch=0 &&
-        wait_watch_put_namespace ${NAMESPACEPREFIX}-watchprefix "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs watch -o -c 1 ns:${NAMESPACEPREFIX}-watchprefix/$DIR.watch >watch_out &
+        flux kvs watch -o -c 1 ns:${NAMESPACEPREFIX}-watchprefix/$DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=${NAMESPACEPREFIX}-watchprefix put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&
@@ -586,17 +585,17 @@ test_expect_success 'kvs: watch fails on invalid namespace on rank 1' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH0 &&
         flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH0 put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-REMOVE-WATCH0 "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH0 watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH0 watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH0 &&
         wait $watchpid &&
         grep "Operation not supported" watch_out
 '
 
 # watch errors are output to stdout, so grep for "Operation not supported"
+# stdbuf -oL necessary to ensure waitfile can succeed
 test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH1 &&
         flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 put --json $DIR.watch=0 &&
@@ -605,7 +604,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namesp
         stdbuf -oL flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 wait ${VERS}; \
                                          flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 watch -o -c 1 $DIR.watch" > watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0" &&
+        $waitfile -q -t 5 -p "0" watch_out &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH1 &&
         wait $watchpid &&
         grep "Operation not supported" watch_out
@@ -618,7 +617,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namesp
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE0 &&
         rm -f fence_out
-        stdbuf -oL ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE0 fence0 > fence_out &
+        ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE0 fence0 > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 0 $NAMESPACETMP-REMOVE-FENCE0 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE0 &&
@@ -634,7 +633,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when names
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE1 &&
         rm -f fence_out
-        stdbuf -oL flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
+        flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE1 &&
@@ -730,19 +729,17 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key in different namespaces work
         flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
         flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $PRIMARYNAMESPACE "$DIR.watch" "0"
         flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=1 &&
-        wait_watch_put_namespace $NAMESPACETEST "$DIR.watch" "1"
         rm -f primary_watch_out
         rm -f test_watch_out
 
-        stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >primary_watch_out &
+        flux kvs watch -o -c 1 $DIR.watch >primary_watch_out &
         primarywatchpid=$! &&
-        wait_watch_file primary_watch_out "0"
+        $waitfile -q -t 5 -p "0" primary_watch_out
 
-        stdbuf -oL flux kvs --namespace=$NAMESPACETEST watch -o -c 1 $DIR.watch >test_watch_out &
+        flux kvs --namespace=$NAMESPACETEST watch -o -c 1 $DIR.watch >test_watch_out &
         testwatchpid=$! &&
-        wait_watch_file test_watch_out "1"
+        $waitfile -q -t 5 -p "1" test_watch_out
 
         flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=1 &&
         flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=2 &&

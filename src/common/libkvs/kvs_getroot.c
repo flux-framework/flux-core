@@ -85,10 +85,8 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *namespace, int flags)
     if (!(ctx = alloc_ctx ()))
         return NULL;
     ctx->flags = flags;
-    if ((flags & FLUX_KVS_WATCH)) {
+    if ((flags & FLUX_KVS_WATCH))
         topic = "kvs-watch.getroot";
-        flags &= ~(FLUX_KVS_WATCH);
-    }
     if (!namespace && !(namespace = flux_kvs_get_namespace (h)))
         goto error;
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0, "{s:s}",

@@ -20,6 +20,8 @@ echo "# $0: flux session size will be ${SIZE}"
 
 DIR=test.a.b
 
+waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
+
 # Just in case its set in the environment
 unset FLUX_KVS_NAMESPACE
 
@@ -81,11 +83,10 @@ test_expect_success 'kvs: get works on other ranks (owner)' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         flux kvs --namespace=$NAMESPACETMP-OWNER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-OWNER put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-OWNER "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-OWNER watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-OWNER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-OWNER put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&
@@ -197,11 +198,10 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch works (user)'  '
         set_userid 9999 &&
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-USER "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=1 &&
         wait $watchpid
         unset_userid
@@ -215,11 +215,10 @@ EOF
 test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=0 &&
-        wait_watch_put_namespace $NAMESPACETMP-USER "$DIR.watch" "0"
         rm -f watch_out
-        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
+        flux kvs --namespace=$NAMESPACETMP-USER watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_file watch_out "0"
+        $waitfile -q -t 5 -p "0" watch_out
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.watch=1 &&
         wait $watchpid
 cat >expected <<-EOF &&

@@ -102,7 +102,7 @@ static struct optparse_option get_opts[] =  {
       .usage = "Print key= before value",
     },
     { .name = "watch", .key = 'w', .has_arg = 0,
-      .usage = "Monitor root changes",
+      .usage = "Monitor key changes",
     },
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
       .usage = "Display at most COUNT changes",
