@@ -506,7 +506,6 @@ int flux_msg_handler_addvec (flux_t *h,
     struct flux_match match = FLUX_MATCH_ANY;
     flux_msg_handler_t **handlers = NULL;
     int count = 0;
-    int saved_errno;
 
     if (!h || !tab || !hp) {
         errno = EINVAL;
@@ -530,20 +529,20 @@ int flux_msg_handler_addvec (flux_t *h,
     *hp = handlers;
     return 0;
 error:
-    saved_errno = errno;
     flux_msg_handler_delvec (handlers);
-    errno = saved_errno;
     return -1;
 }
 
 void flux_msg_handler_delvec (flux_msg_handler_t *handlers[])
 {
     if (handlers) {
+        int saved_errno = errno;
         for (int i = 0; handlers[i] != NULL; i++) {
             flux_msg_handler_destroy (handlers[i]);
             handlers[i] = NULL;
         }
         free (handlers);
+        errno = saved_errno;
     }
 }
 
