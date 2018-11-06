@@ -67,7 +67,7 @@ get_kvs_namespace_fails_all_ranks_loop() {
 
 wait_fencecount_nonzero() {
         i=0
-        while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#transactions kvs" 2> /dev/null)" == "0" ] \
+        while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#transactions kvs" 2> /dev/null)" = "0" ] \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
