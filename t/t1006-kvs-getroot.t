@@ -41,10 +41,17 @@ test_expect_success 'flux kvs getroot --watch and --waitcreate works' '
         flux kvs --namespace=ns_create_later getroot --watch --waitcreate \
                  --count=1 > waitcreate.out &
         pid=$! &&
+        echo "1" &&
         wait_watcherscount_nonzero ns_create_later &&
+        echo "2" &&
         flux kvs namespace-create ns_create_later &&
+        echo "3" &&
         wait $pid &&
+        echo "4" &&
+        cat waitcreate.out &&
         flux kvs --namespace=ns_create_later getroot > waitcreate.exp &&
+        echo "5" &&
+        cat waitcreate.exp &&
         test_cmp waitcreate.exp waitcreate.out
 '
 
