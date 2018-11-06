@@ -172,7 +172,7 @@ EXTRA_DIST = \
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
-TESTS_ENVIRONMENT = \
+AM_TESTS_ENVIRONMENT = \
 	LUA_PATH="$(abs_srcdir)/?.lua;$LUA_PATH" \
 	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;$(abs_builddir)/flux/?.so;$LUA_PATH"
 
