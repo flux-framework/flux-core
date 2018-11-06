@@ -89,7 +89,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
     if (state == FLUX_SUBPROCESS_RUNNING) {
         started++;
         /* see FLUX_SUBPROCESS_FAILED case below */
-        (void)flux_subprocess_set_context (p, "started", p);
+        (void)flux_subprocess_aux_set (p, "started", p, NULL);
     }
     else if (state == FLUX_SUBPROCESS_EXITED)
         exited++;
@@ -103,7 +103,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
          * know if process started or not.  So we cheat with a
          * subprocess context setting.
          */
-        if (flux_subprocess_get_context (p, "started") == NULL)
+        if (flux_subprocess_aux_get (p, "started") == NULL)
             started++;
         exited++;
     }

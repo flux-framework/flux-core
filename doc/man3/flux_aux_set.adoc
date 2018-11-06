@@ -10,32 +10,40 @@ flux_aux_set, flux_aux_get - get/set auxiliary handle data
 
 SYNOPSIS
 --------
-#include <flux/core.h>
+ #include <flux/core.h>
 
-typedef void (*flux_free_f)(void *arg);
+ typedef void (*flux_free_f)(void *arg);
 
-void *flux_aux_get (flux_t *h, const char *name);
+ void *flux_aux_get (flux_t *h, const char *name);
 
-void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy);
+ int flux_aux_set (flux_t *h, const char *name,
+                   void *aux, flux_free_f destroy);
 
 
 DESCRIPTION
 -----------
 
-`flux_aux_set()` stores application-specific data _aux_ in handle
-_h_ under the key _name_ with destructor _destroy_.  If _destroy_
-is non-NULL, the destructor is called at `flux_close()` or when
-_name_ is overwritten by another `flux_aux_set()` call.
+`flux_aux_set()` attaches application-specific data
+to the parent object _h_.  It stores data _aux_ by key _name_,
+with optional destructor _destroy_.  The destructor, if non-NULL,
+is called when the parent object is destroyed, or when
+_key_ is overwritten by a new value.  If _aux_ is NULL,
+the destructor for a previous value, if any is called,
+ but no new value is stored.  If _name_ is NULL,
+_aux_ is stored anonymously.
 
-`flux_aux_get()` can be used to retrieve the data by _name_.
+`flux_aux_get()` retrieves application-specific data
+by _name_.  If the data was stored anonymously, it
+cannot be retrieved.
 
-Names beginning with "flux::" are reserved for internal use by libflux-core.
+Names beginning with "flux::" are reserved for internal use.
 
 RETURN VALUE
 ------------
 
-`flux_aux_get()` returns  data on success, or NULL on failure.
-It does not set errno.
+`flux_aux_get()` returns data on success, or NULL on failure, with errno set.
+
+`flux_aux_set()` returns 0 on success, or -1 on failure, with errno set.
 
 
 ERRORS
@@ -46,6 +54,9 @@ Some arguments were invalid.
 
 ENOMEM::
 Out of memory.
+
+ENOENT::
+`flux_aux_get()` could not find an entry for _key_.
 
 
 AUTHOR

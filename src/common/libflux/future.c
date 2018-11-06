@@ -31,6 +31,8 @@
 #include <errno.h>
 #include <czmq.h>
 
+#include "src/common/libutil/aux.h"
+
 #include "future.h"
 
 struct now_context {
@@ -63,8 +65,7 @@ struct future_result {
 struct flux_future {
     flux_reactor_t *r;
     flux_t *h;
-    zhash_t *aux;
-    int aux_anon_ctr;
+    struct aux_item *aux;
     struct future_result result;
     bool result_valid;
     int fatal_errnum;
@@ -306,7 +307,7 @@ void flux_future_destroy (flux_future_t *f)
 {
     int saved_errno = errno;
     if (f) {
-        zhash_destroy (&f->aux);
+        aux_destroy (&f->aux);
         clear_result (&f->result);
         free (f->fatal_errnum_string);
         now_context_destroy (f->now);
@@ -549,57 +550,27 @@ int flux_future_then (flux_future_t *f, double timeout,
     return 0;
 }
 
-/* Retrieve 'aux' object by name.  Name cannot be NULL.
+/* Retrieve 'aux' object by name.
  */
 void *flux_future_aux_get (flux_future_t *f, const char *name)
 {
-    void *rv;
-
     if (!f) {
         errno = EINVAL;
         return NULL;
     }
-    if (!f->aux) {
-        errno = ENOENT;
-        return NULL;
-    }
-    /* zhash_lookup won't set errno if not found */
-    if (!(rv = zhash_lookup (f->aux, name)))
-        errno = ENOENT;
-    return rv;
+    return aux_get (f->aux, name);
 }
 
-/* Store 'aux' object by name.  Allow "anonymous" (name=NULL) objects to
- * be set - useful for adding destructors for watchers created in init
- * function, which may be called in both "now" and "then" contexts without
- * knowing which it is.
+/* Store 'aux' object by name.
  */
 int flux_future_aux_set (flux_future_t *f, const char *name,
                          void *aux, flux_free_f destroy)
 {
-    char name_buf[32];
-
-    if (!f || (!name && !destroy)) {
+    if (!f) {
         errno = EINVAL;
         return -1;
     }
-    if (!f->aux)
-        f->aux = zhash_new ();
-    if (!f->aux) {
-        errno = ENOMEM;
-        return -1;
-    }
-    if (!name) {
-        snprintf (name_buf, sizeof (name_buf), "anon.%d", f->aux_anon_ctr++);
-        name = name_buf;
-    }
-    zhash_delete (f->aux, name);
-    if (zhash_insert (f->aux, name, aux) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    zhash_freefn (f->aux, name, destroy);
-    return 0;
+    return aux_set (&f->aux, name, aux, destroy);
 }
 
 static void fulfill_internal_error (flux_future_t *f,

@@ -47,23 +47,30 @@ typedef struct {
 static void freectx (void *arg)
 {
     attr_ctx_t *ctx = arg;
-    zhash_destroy (&ctx->hash);
-    zlist_destroy (&ctx->names);
-    free (ctx);
+    if (ctx) {
+        int saved_errno = errno;
+        zhash_destroy (&ctx->hash);
+        zlist_destroy (&ctx->names);
+        free (ctx);
+        errno = saved_errno;
+    }
 }
 
 static attr_ctx_t *attr_ctx_new (flux_t *h)
 {
     attr_ctx_t *ctx = calloc (1, sizeof (*ctx));
     if (!ctx || !(ctx->hash = zhash_new ())) {
-        free (ctx);
         /* Ensure errno set properly, in case zhash_new doesn't do it */
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
     ctx->h = h;
-    flux_aux_set (h, "flux::attr", ctx, freectx);
+    if (flux_aux_set (h, "flux::attr", ctx, freectx) < 0)
+        goto error;
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 static attr_ctx_t *getctx (flux_t *h)

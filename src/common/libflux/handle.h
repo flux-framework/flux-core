@@ -135,7 +135,7 @@ bool flux_fatality (flux_t *h);
  * Key names used internally by flux-core are prefixed with "flux::".
  */
 void *flux_aux_get (flux_t *h, const char *name);
-void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy);
+int flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy);
 
 /* Set/clear FLUX_O_* on a flux_t handle.
  */

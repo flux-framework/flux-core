@@ -543,8 +543,8 @@ static void completion_cb (flux_subprocess_t *p)
     struct wreck_job *job = NULL;
     int tmp;
 
-    h = flux_subprocess_get_context (p, "handle");
-    job = flux_subprocess_get_context (p, "job");
+    h = flux_subprocess_aux_get (p, "handle");
+    job = flux_subprocess_aux_get (p, "job");
 
     assert (h && job);
 
@@ -575,8 +575,8 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
     flux_t *h;
     struct wreck_job *job;
 
-    h = flux_subprocess_get_context (p, "handle");
-    job = flux_subprocess_get_context (p, "job");
+    h = flux_subprocess_aux_get (p, "handle");
+    job = flux_subprocess_aux_get (p, "job");
 
     assert (h && job);
 
@@ -602,8 +602,8 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
         struct wreck_job *job;
         int level = LOG_INFO;
 
-        h = flux_subprocess_get_context (p, "handle");
-        job = flux_subprocess_get_context (p, "job");
+        h = flux_subprocess_aux_get (p, "handle");
+        job = flux_subprocess_aux_get (p, "job");
 
         assert (h && job);
 
@@ -696,13 +696,13 @@ static int spawn_exec_handler (flux_t *h, struct wreck_job *job)
         goto error;
     }
 
-    if (flux_subprocess_set_context (p, "handle", h) < 0) {
-        flux_log_error (h, "flux_subprocess_set_context");
+    if (flux_subprocess_aux_set (p, "handle", h, NULL) < 0) {
+        flux_log_error (h, "flux_subprocess_aux_set");
         goto error;
     }
 
-    if (flux_subprocess_set_context (p, "job", job) < 0) {
-        flux_log_error (h, "flux_subprocess_set_context");
+    if (flux_subprocess_aux_set (p, "job", job, NULL) < 0) {
+        flux_log_error (h, "flux_subprocess_aux_set");
         goto error;
     }
 

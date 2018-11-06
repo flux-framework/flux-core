@@ -205,7 +205,8 @@ static sqlite_ctx_t *getctx (flux_t *h)
             log_sqlite_error (ctx, "preparing dump stmt");
             goto error_sqlite;
         }
-        flux_aux_set (h, "flux::content-sqlite", ctx, freectx);
+        if (flux_aux_set (h, "flux::content-sqlite", ctx, freectx) < 0)
+            goto error;
     }
     return ctx;
 error_sqlite:

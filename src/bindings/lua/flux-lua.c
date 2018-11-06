@@ -1969,11 +1969,13 @@ static int l_flux_reactor_start (lua_State *L)
     }
     h = lua_get_flux (L, 1);
     rc = flux_reactor_run (flux_get_reactor (h), mode);
+    int saved_errno = errno;
     if (rc < 0 && (reason = flux_aux_get (h, "lua::reason"))) {
         lua_pushnil (L);
         lua_pushstring (L, reason);
         return (2);
     }
+    errno = saved_errno;
     return (l_pushresult (L, rc));
 }
 

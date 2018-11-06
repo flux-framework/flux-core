@@ -97,13 +97,22 @@ value and an optional error string.  Unlike
 and takes precedence over all other fulfillments.  It is used for
 catastrophic error paths in future fulfillment.
 
-`flux_future_aux_set()` attaches an object _aux_, with optional destructor
-_destroy_, to the future under an optional _name_.  `flux_future_aux_get()`
-retrieves an object by _name_.  Destructors are called when the future is
-destroyed.  Objects may be stored anonymously under a NULL _name_ to be
-scheduled for destruction without the option of retrieval.
+`flux_future_aux_set()` attaches application-specific data
+to the parent object _f_.  It stores data _aux_ by key _name_,
+with optional destructor _destroy_.  The destructor, if non-NULL,
+is called when the parent object is destroyed, or when
+_key_ is overwritten by a new value.  If _aux_ is NULL,
+the destructor for a previous value, if any is called,
+ but no new value is stored.  If _name_ is NULL,
+_aux_ is stored anonymously.
 
-`flux_future_set_reactor()` may be used to associate a Flux reactor 
+`flux_future_aux_get()` retrieves application-specific data
+by _name_.  If the data was stored anonymously, it
+cannot be retrieved.
+
+Names beginning with "flux::" are reserved for internal use.
+
+`flux_future_set_reactor()` may be used to associate a Flux reactor
 with a future.  The reactor (or a temporary one, depending on the context)
 may be retrieved using `flux_future_get_reactor()`.
 

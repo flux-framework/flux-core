@@ -195,7 +195,7 @@ static void cron_task_handle_finished (flux_subprocess_t *p, cron_task_t *t)
 
 static void completion_cb (flux_subprocess_t *p)
 {
-    cron_task_t *t = flux_subprocess_get_context (p, "task");
+    cron_task_t *t = flux_subprocess_aux_get (p, "task");
 
     assert (t);
 
@@ -205,7 +205,7 @@ static void completion_cb (flux_subprocess_t *p)
 
 static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
-    cron_task_t *t = flux_subprocess_get_context (p, "task");
+    cron_task_t *t = flux_subprocess_aux_get (p, "task");
 
     assert (t);
 
@@ -248,7 +248,7 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
 
 static void io_cb (flux_subprocess_t *p, const char *stream)
 {
-    cron_task_t *t = flux_subprocess_get_context (p, "task");
+    cron_task_t *t = flux_subprocess_aux_get (p, "task");
     const char *ptr = NULL;
     int lenp;
     bool is_stderr = false;
@@ -369,8 +369,8 @@ int cron_task_run (cron_task_t *t,
         goto done;
     }
 
-    if (flux_subprocess_set_context (p, "task", t) < 0) {
-        flux_log_error (h, "flux_subprocess_set_context");
+    if (flux_subprocess_aux_set (p, "task", t, NULL) < 0) {
+        flux_log_error (h, "flux_subprocess_aux_set");
         goto done;
     }
 

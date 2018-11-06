@@ -213,12 +213,12 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_subprocess_get_reactor (NULL) == NULL
         && errno == EINVAL,
         "flux_subprocess_get_reactor fails with NULL pointer inputs");
-    ok (flux_subprocess_set_context (NULL, "foo", "bar") < 0
+    ok (flux_subprocess_aux_set (NULL, "foo", "bar", NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_set_context fails with NULL pointer inputs");
-    ok (flux_subprocess_get_context (NULL, "foo") == NULL
+        "flux_subprocess_aux_set fails with NULL pointer inputs");
+    ok (flux_subprocess_aux_get (NULL, "foo") == NULL
         && errno == EINVAL,
-        "flux_subprocess_get_context fails with NULL pointer inputs");
+        "flux_subprocess_aux_get fails with NULL pointer inputs");
 }
 
 void test_errors (flux_reactor_t *r)
@@ -1245,12 +1245,12 @@ void test_context (flux_reactor_t *r)
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok (flux_subprocess_set_context (p, "extra", extra) == 0,
-        "flux_subprocess_set_context success");
-    ok ((tmp = flux_subprocess_get_context (p, "extra")) != NULL,
-        "flux_subprocess_get_context success");
+    ok (flux_subprocess_aux_set (p, "extra", extra, NULL) == 0,
+        "flux_subprocess_aux_set success");
+    ok ((tmp = flux_subprocess_aux_get (p, "extra")) != NULL,
+        "flux_subprocess_aux_get success");
     ok (tmp == extra,
-        "flux_subprocess_get_context returned correct pointer");
+        "flux_subprocess_aux_get returned correct pointer");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -1278,8 +1278,8 @@ void test_refcount (flux_reactor_t *r)
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok (flux_subprocess_set_context (p, "extra", extra) == 0,
-        "flux_subprocess_set_context success");
+    ok (flux_subprocess_aux_set (p, "extra", extra, NULL) == 0,
+        "flux_subprocess_aux_set success");
     flux_subprocess_ref (p);
 
     int rc = flux_reactor_run (r, 0);
@@ -1289,10 +1289,10 @@ void test_refcount (flux_reactor_t *r)
 
     /* normally this should fail, but we've increased the refcount so
      * subprocess should not be destroyed */
-    ok ((tmp = flux_subprocess_get_context (p, "extra")) != NULL,
-        "flux_subprocess_get_context success");
+    ok ((tmp = flux_subprocess_aux_get (p, "extra")) != NULL,
+        "flux_subprocess_aux_get success");
     ok (tmp == extra,
-        "flux_subprocess_get_context returned correct pointer");
+        "flux_subprocess_aux_get returned correct pointer");
 
     flux_subprocess_unref (p);
     flux_cmd_destroy (cmd);

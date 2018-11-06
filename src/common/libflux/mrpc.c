@@ -45,6 +45,7 @@
 #include "mrpc.h"
 
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/aux.h"
 
 #define MRPC_MAGIC 0x114422ae
 
@@ -60,7 +61,7 @@ struct flux_mrpc_struct {
     int rx_errnum;
     int rx_count;
     int rx_expected;
-    zhash_t *aux;
+    struct aux_item *aux;
     flux_free_f aux_destroy;
     int usecount;
 };
@@ -89,7 +90,7 @@ static void flux_mrpc_usecount_decr (flux_mrpc_t *mrpc)
                 flux_matchtag_free (mrpc->h, mrpc->m.matchtag);
         }
         flux_msg_destroy (mrpc->rx_msg);
-        zhash_destroy (&mrpc->aux);
+        aux_destroy (&mrpc->aux);
         mrpc->magic =~ MRPC_MAGIC;
         free (mrpc);
     }
@@ -526,29 +527,21 @@ done:
 
 void *flux_mrpc_aux_get (flux_mrpc_t *mrpc, const char *name)
 {
-    assert (mrpc->magic == MRPC_MAGIC);
-    if (!mrpc->aux)
+    if (!mrpc) {
+        errno = EINVAL;
         return NULL;
-    return zhash_lookup (mrpc->aux, name);
+    }
+    return aux_get (mrpc->aux, name);
 }
 
 int flux_mrpc_aux_set (flux_mrpc_t *mrpc, const char *name,
                       void *aux, flux_free_f destroy)
 {
-    assert (mrpc->magic == MRPC_MAGIC);
-    if (!mrpc->aux)
-        mrpc->aux = zhash_new ();
-    if (!mrpc->aux) {
-        errno = ENOMEM;
+    if (!mrpc) {
+        errno = EINVAL;
         return -1;
     }
-    zhash_delete (mrpc->aux, name);
-    if (zhash_insert (mrpc->aux, name, aux) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    zhash_freefn (mrpc->aux, name, destroy);
-    return 0;
+    return aux_set (&mrpc->aux, name, aux, destroy);
 }
 
 /*

@@ -605,6 +605,12 @@ void check_aux (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "created test message");
+    errno = 0;
+    ok (flux_msg_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
+        "flux_msg_aux_set msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_aux_get (NULL, "foo") == NULL && errno == EINVAL,
+        "flux_msg_aux_get msg=NULL fails with EINVAL");
     ok (flux_msg_aux_set (msg, "test", test_data, myfree) == 0,
         "hang aux data member on message with destructor");
     ok (flux_msg_aux_get (msg, "incorrect") == NULL,

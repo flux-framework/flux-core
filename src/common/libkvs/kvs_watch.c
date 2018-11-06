@@ -58,9 +58,11 @@ static int decode_val_object (json_t *val, char **json_str);
 static void freectx (kvs_watch_ctx_t *ctx)
 {
     if (ctx) {
+        int saved_errno = errno;
         zhash_destroy (&ctx->watchers);
         flux_msg_handler_destroy (ctx->mh);
         free (ctx);
+        errno = saved_errno;
     }
 }
 
@@ -72,19 +74,21 @@ static kvs_watch_ctx_t *getctx (flux_t *h, bool create)
 
     if (!ctx && create) {
         if (!(ctx = calloc (1, sizeof (*ctx))))
-            goto nomem;
+            return NULL;
         if (!(ctx->watchers = zhash_new ()))
             goto nomem;
         match.topic_glob = "kvs.watch";
         if (!(ctx->mh = flux_msg_handler_create (h, match,
                                                  watch_response_cb, ctx)))
-            goto nomem;
-        flux_aux_set (h, auxkey, ctx, (flux_free_f)freectx);
+            goto error;
+        if (flux_aux_set (h, auxkey, ctx, (flux_free_f)freectx) < 0)
+            goto error;
     }
     return ctx;
 nomem:
-    freectx (ctx);
     errno = ENOMEM;
+error:
+    freectx (ctx);
     return NULL;
 }
 

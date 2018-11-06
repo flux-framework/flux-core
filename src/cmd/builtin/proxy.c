@@ -814,7 +814,7 @@ done:
 
 static void completion_cb (flux_subprocess_t *p)
 {
-    proxy_ctx_t *ctx = flux_subprocess_get_context (p, "ctx");
+    proxy_ctx_t *ctx = flux_subprocess_aux_get (p, "ctx");
 
     assert (ctx);
 
@@ -883,7 +883,7 @@ static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpa
                                &ops)))
         goto error;
 
-    if (flux_subprocess_set_context (p, "ctx", ctx) < 0)
+    if (flux_subprocess_aux_set (p, "ctx", ctx, NULL) < 0)
         goto error;
 
     flux_cmd_destroy (cmd);

@@ -132,7 +132,9 @@ TESTS = test_module.t \
 	test_future.t \
 	test_composite_future.t \
 	test_reactor.t \
-	test_buffer.t
+	test_buffer.t \
+	test_mrpc.t \
+	test_handle.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -200,3 +202,11 @@ test_composite_future_t_LDADD = $(test_ldadd) $(LIBDL)
 test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
 test_buffer_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_mrpc_t_SOURCES = test/mrpc.c
+test_mrpc_t_CPPFLAGS = $(test_cppflags)
+test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_handle_t_SOURCES = test/handle.c
+test_handle_t_CPPFLAGS = $(test_cppflags)
+test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
