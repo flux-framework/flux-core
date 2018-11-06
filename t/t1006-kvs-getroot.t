@@ -53,13 +53,24 @@ test_expect_success 'flux kvs getroot --watch and --waitcreate and remove namesp
         flux kvs --namespace=ns_create_and_remove getroot --watch --waitcreate \
                  --count=2 > waitcreate2.out 2>&1 &
         pid=$! &&
+        echo "1" &&
         wait_watcherscount_nonzero ns_create_and_remove &&
+        echo "2" &&
         flux kvs namespace-create ns_create_and_remove &&
+        echo "3" &&
         flux kvs --namespace=ns_create_and_remove getroot --blobref > waitcreate2.treeobj &&
+        echo "4" &&
+        cat waitcreate2.treeobj &&
         flux kvs namespace-remove ns_create_and_remove &&
+        echo "5" &&
         ! wait $pid &&
+        echo "6" &&
+        cat waitcreate2.out &&
         treeobj=`cat waitcreate2.treeobj` &&
+        echo "7" &&
+        echo $treeobj &&
         grep "$treeobj" waitcreate2.out &&
+        echo "8" &&
         grep "Operation not supported" waitcreate2.out
 '
 
