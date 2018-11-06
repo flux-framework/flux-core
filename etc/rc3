@@ -3,7 +3,7 @@
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
-shopt -s nullglob 
+shopt -s nullglob
 for rcdir in $all_dirs; do
     for rcfile in $rcdir/rc3.d/*; do
         echo running $rcfile
@@ -22,9 +22,14 @@ flux module remove -r 0 cron
 flux module remove -r all job
 flux module remove -r all resource-hwloc
 flux module remove -r all aggregator
-flux module remove -r all kvs-watch
-flux module remove -r all kvs
 flux module remove -r all barrier
 
+flux module remove -r all kvs-watch
+flux module remove -r all -x 0 kvs
+if test -n "$PERSISTDIR"; then
+    flux kvs getroot >${PERSISTDIR}/kvsroot.final
+    flux content flush
+fi
+flux module remove -r 0 kvs
 flux module remove -r 0 content-sqlite
 

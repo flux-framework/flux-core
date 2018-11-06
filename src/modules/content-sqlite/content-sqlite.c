@@ -34,13 +34,12 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
 
-const char *sql_create_table = "CREATE TABLE objects("
+const char *sql_create_table = "CREATE TABLE if not exists objects("
                                "  hash CHAR(20) PRIMARY KEY,"
                                "  size INT,"
                                "  object BLOB"
@@ -68,16 +67,19 @@ typedef struct {
 
 static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
 {
+    const char *sq_errmsg = sqlite3_errmsg (ctx->db);
+    int sq_errcode = sqlite3_extended_errcode (ctx->db);
+    char buf[64];
     va_list ap;
+
     va_start (ap, fmt);
-    char *s = xvasprintf (fmt, ap);
+    (void)vsnprintf (buf, sizeof (buf), fmt, ap);
     va_end (ap);
 
-    const char *error = sqlite3_errmsg (ctx->db);
-    int xerrcode = sqlite3_extended_errcode (ctx->db);
-    (void)flux_log (ctx->h, LOG_ERR, "%s: %s(%d)",
-                    s, error ? error : "failure", xerrcode);
-    free (s);
+    if (!sq_errmsg)
+        sq_errmsg = "unknown error code";
+
+    flux_log (ctx->h, LOG_ERR, "%s: %s(%d)", buf, sq_errmsg, sq_errcode);
 }
 
 static void set_errno_from_sqlite_error (sqlite_ctx_t *ctx)
@@ -110,23 +112,20 @@ static void freectx (void *arg)
 {
     sqlite_ctx_t *ctx = arg;
     if (ctx) {
+        int saved_errno = errno;
         if (ctx->store_stmt)
             sqlite3_finalize (ctx->store_stmt);
         if (ctx->load_stmt)
             sqlite3_finalize (ctx->load_stmt);
         if (ctx->dump_stmt)
             sqlite3_finalize (ctx->dump_stmt);
-        if (ctx->dbdir)
-            free (ctx->dbdir);
-        if (ctx->dbfile) {
-            unlink (ctx->dbfile);
-            free (ctx->dbfile);
-        }
         if (ctx->db)
             sqlite3_close (ctx->db);
-        if (ctx->lzo_buf)
-            free (ctx->lzo_buf);
+        free (ctx->dbfile);
+        free (ctx->dbdir);
+        free (ctx->lzo_buf);
         free (ctx);
+        errno = saved_errno;
     }
 }
 
@@ -136,21 +135,20 @@ static sqlite_ctx_t *getctx (flux_t *h)
     const char *dir;
     const char *tmp;
     bool cleanup = false;
-    int saved_errno;
     int flags;
 
     if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
-        ctx->lzo_buf = xzmalloc (lzo_buf_chunksize);
+        if (!(ctx = calloc (1, sizeof (*ctx))))
+            goto error;
+        if (!(ctx->lzo_buf = calloc (1, lzo_buf_chunksize)))
+            goto error;
         ctx->lzo_bufsize = lzo_buf_chunksize;
         ctx->h = h;
         if (!(ctx->hashfun = flux_attr_get (h, "content.hash", &flags))) {
-            saved_errno = errno;
             flux_log_error (h, "content.hash");
             goto error;
         }
         if (!(tmp = flux_attr_get (h, "content.blob-size-limit", NULL))) {
-            saved_errno = errno;
             flux_log_error (h, "content.blob-size-limit");
             goto error;
         }
@@ -158,24 +156,23 @@ static sqlite_ctx_t *getctx (flux_t *h)
 
         if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
             if (!(dir = flux_attr_get (h, "broker.rundir", NULL))) {
-                saved_errno = errno;
                 flux_log_error (h, "broker.rundir");
                 goto error;
             }
             cleanup = true;
         }
-        ctx->dbdir = xasprintf ("%s/content", dir);
-        if (mkdir (ctx->dbdir, 0755) < 0) {
-            saved_errno = errno;
+        if (asprintf (&ctx->dbdir, "%s/content", dir) < 0)
+            goto error;
+        if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
             flux_log_error (h, "mkdir %s", ctx->dbdir);
             goto error;
         }
         if (cleanup)
             cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
-        ctx->dbfile = xasprintf ("%s/sqlite", ctx->dbdir);
+        if (asprintf (&ctx->dbfile, "%s/sqlite", ctx->dbdir) < 0)
+            goto error;
 
         if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
-            saved_errno = errno;
             flux_log_error (h, "sqlite3_open %s", ctx->dbfile);
             goto error;
         }
@@ -185,40 +182,36 @@ static sqlite_ctx_t *getctx (flux_t *h)
                                             NULL, NULL, NULL) != SQLITE_OK
                 || sqlite3_exec (ctx->db, "PRAGMA locking_mode=EXCLUSIVE",
                                             NULL, NULL, NULL) != SQLITE_OK) {
-            saved_errno = EINVAL;
             log_sqlite_error (ctx, "setting sqlite pragmas");
-            goto error;
+            goto error_sqlite;
         }
         if (sqlite3_exec (ctx->db, sql_create_table,
                                             NULL, NULL, NULL) != SQLITE_OK) {
-            saved_errno = EINVAL;
             log_sqlite_error (ctx, "creating table");
-            goto error;
+            goto error_sqlite;
         }
         if (sqlite3_prepare_v2 (ctx->db, sql_load, -1, &ctx->load_stmt,
                                             NULL) != SQLITE_OK) {
-            saved_errno = EINVAL;
             log_sqlite_error (ctx, "preparing load stmt");
-            goto error;
+            goto error_sqlite;
         }
         if (sqlite3_prepare_v2 (ctx->db, sql_store, -1, &ctx->store_stmt,
                                             NULL) != SQLITE_OK) {
-            saved_errno = EINVAL;
             log_sqlite_error (ctx, "preparing store stmt");
-            goto error;
+            goto error_sqlite;
         }
         if (sqlite3_prepare_v2 (ctx->db, sql_dump, -1, &ctx->dump_stmt,
                                             NULL) != SQLITE_OK) {
-            saved_errno = EINVAL;
             log_sqlite_error (ctx, "preparing dump stmt");
-            goto error;
+            goto error_sqlite;
         }
         flux_aux_set (h, "flux::content-sqlite", ctx, freectx);
     }
     return ctx;
+error_sqlite:
+    set_errno_from_sqlite_error (ctx);
 error:
     freectx (ctx);
-    errno = saved_errno;
     return NULL;
 }
 
