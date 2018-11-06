@@ -454,10 +454,14 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
                                              const struct flux_match match,
                                              flux_msg_handler_f cb, void *arg)
 {
-    struct dispatch *d = dispatch_get (h);
-    flux_msg_handler_t *mh = NULL;
+    struct dispatch *d;
+    flux_msg_handler_t *mh;
 
-    if (!d)
+    if (!h || !cb) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(d = dispatch_get (h)))
         return NULL;
     if (!(mh = calloc (1, sizeof (*mh))))
         return NULL;
