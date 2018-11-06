@@ -554,7 +554,7 @@ int flux_dispatch_requeue (flux_t *h)
 {
     struct dispatch *d;
 
-    if (!(flux_flags_get (h) & FLUX_O_CLONE)) {
+    if (!h || !(flux_flags_get (h) & FLUX_O_CLONE)) {
         errno = EINVAL;
         return -1;
     }
