@@ -434,6 +434,7 @@ static void free_msg_handler (flux_msg_handler_t *mh)
 void flux_msg_handler_destroy (flux_msg_handler_t *mh)
 {
     if (mh) {
+        int saved_errno = errno;
         assert (mh->magic == HANDLER_MAGIC);
         if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
@@ -445,6 +446,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
         flux_msg_handler_stop (mh);
         dispatch_usecount_decr (mh->d);
         free_msg_handler (mh);
+        errno = saved_errno;
     }
 }
 
