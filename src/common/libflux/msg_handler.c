@@ -421,11 +421,13 @@ void flux_msg_handler_deny_rolemask (flux_msg_handler_t *mh, uint32_t rolemask)
 static void free_msg_handler (flux_msg_handler_t *mh)
 {
     if (mh) {
+        int saved_errno = errno;
         assert (mh->magic == HANDLER_MAGIC);
         if (mh->match.topic_glob)
             free (mh->match.topic_glob);
         mh->magic = ~HANDLER_MAGIC;
         free (mh);
+        errno = saved_errno;
     }
 }
 
@@ -452,17 +454,14 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
 {
     struct dispatch *d = dispatch_get (h);
     flux_msg_handler_t *mh = NULL;
-    int saved_errno;
 
-    if (!d) {
-        saved_errno = errno;
-        goto error;
-    }
+    if (!d)
+        return NULL;
     if (!(mh = calloc (1, sizeof (*mh))))
-        goto nomem;
+        return NULL;
     mh->magic = HANDLER_MAGIC;
     if (copy_match (&mh->match, match) < 0)
-        goto nomem;
+        goto error;
     mh->rolemask = FLUX_ROLE_OWNER;
     mh->fn = cb;
     mh->arg = arg;
@@ -470,20 +469,19 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
     if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
         if (zhashx_insert (d->handlers_rpc, &mh->match.matchtag, mh) < 0) {
-            saved_errno = EEXIST;
+            errno = EEXIST;
             goto error;
         }
     } else {
-        if (zlist_append (d->handlers_new, mh) < 0)
-            goto nomem;
+        if (zlist_append (d->handlers_new, mh) < 0) {
+            errno = ENOMEM;
+            goto error;
+        }
     }
     dispatch_usecount_incr (d);
     return mh;
-nomem:
-    saved_errno = ENOMEM;
 error:
     free_msg_handler (mh);
-    errno = saved_errno;
     return NULL;
 }
 
