@@ -132,7 +132,6 @@ typedef struct {
     /* Bootstrap
      */
     hello_t *hello;
-    flux_t *enclosing_h;
     runlevel_t *runlevel;
 
     char *init_shell_cmd;
@@ -341,13 +340,6 @@ int main (int argc, char *argv[])
     ctx.userid = geteuid ();
     ctx.rolemask = FLUX_ROLE_OWNER;
 
-    /* Connect to enclosing instance, if any.
-     */
-    if (getenv ("FLUX_URI")) {
-        if (!(ctx.enclosing_h = flux_open (NULL, 0)))
-            log_err_exit ("flux_open enclosing instance");
-    }
-
     if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
         log_err_exit ("content cache attributes");
 
@@ -485,8 +477,6 @@ int main (int argc, char *argv[])
      */
     if (content_cache_set_flux (ctx.cache, ctx.h) < 0)
         log_err_exit ("content_cache_set_flux");
-
-    content_cache_set_enclosing_flux (ctx.cache, ctx.enclosing_h);
 
     /* Configure attributes.
      */
@@ -671,8 +661,6 @@ int main (int argc, char *argv[])
 
     if (ctx.verbose)
         log_msg ("cleaning up");
-    if (ctx.enclosing_h)
-        flux_close (ctx.enclosing_h);
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
     overlay_destroy (ctx.overlay);
