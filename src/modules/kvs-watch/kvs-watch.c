@@ -80,7 +80,7 @@ struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhash_t *namespaces;        // hash of monitored namespaces
-    int subscriptions;          // count of kvs.setroot-<name> subscriptions
+    int subscriptions;          // count of kvs.namespace-remove subscriptions
 };
 
 
