@@ -435,6 +435,31 @@ error:
     return -1;
 }
 
+/* Simply ensure that jobspec is valid JSON.
+ * For the time being, RFC 14 validation is performed by
+ * the C++ validator.
+ */
+static int jobspec_validate_json (const char *buf, int len,
+                                  char *errbuf, int errbufsz)
+{
+    json_t *o;
+    json_error_t error;
+
+    if (!(o = json_loadb (buf, len, 0, &error))) {
+        (void)snprintf (errbuf, errbufsz,
+                        "jobspec: invalid JSON: %s", error.text);
+        return -1;
+    }
+    if (!json_is_object (o)) {
+        (void)snprintf (errbuf, errbufsz,
+                        "jobspec: not a JSON object");
+        json_decref (o);
+        return 0;
+    }
+    json_decref (o);
+    return 0;
+}
+
 /* Handle "job-ingest.submit" request to add a new job.
  * Unwrap the signed jobspec and compare claimed userid to authenticated
  * userid from request (they must match).  Signature does not need to be
@@ -451,7 +476,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *jobspec;
     char *jobspec_cpy = NULL;
     const char *errmsg = NULL;
-    char errbuf[80];
+    char errbuf[256];
     int jobspecsz;
     int rc;
     uint32_t userid;
@@ -529,6 +554,12 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                   "only instance owner can use sign-type=none");
         errmsg = errbuf;
         errno = EPERM;
+        goto error;
+    }
+    if (jobspec_validate_json (jobspec, jobspecsz,
+                               errbuf, sizeof (errbuf)) < 0) {
+        errmsg = errbuf;
+        errno = EINVAL;
         goto error;
     }
 #if HAVE_JOBSPEC
