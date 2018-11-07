@@ -164,24 +164,24 @@ test_expect_success 'ping output format for all ranks is correct (format 3)' '
 # rank 1 should work
 
 test_expect_success 'ping with "upstream" fails on rank 0' '
-        run_timeout 5 flux exec --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr &&
+        run_timeout 5 flux exec -n --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr &&
 	grep -q "No route to host" stderr
 '
 
 test_expect_success 'ping with "upstream" works (format 1)' '
-        run_timeout 5 flux exec --rank 1 flux ping --count 1 --rank upstream cmb 1>stdout &&
+        run_timeout 5 flux exec -n --rank 1 flux ping --count 1 --rank upstream cmb 1>stdout &&
         grep -q "^upstream!cmb.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 2)' '
-        run_timeout 5 flux exec --rank 1 flux ping --count 1 upstream!cmb 1>stdout &&
+        run_timeout 5 flux exec -n --rank 1 flux ping --count 1 upstream!cmb 1>stdout &&
         grep -q "^upstream!cmb.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 3)' '
-        run_timeout 5 flux exec --rank 1 flux ping --count 1 upstream 1>stdout &&
+        run_timeout 5 flux exec -n --rank 1 flux ping --count 1 upstream 1>stdout &&
         grep -q "^upstream!cmb.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '

@@ -10,7 +10,7 @@ test_under_flux ${SIZE} minimal
 
 test_expect_success 'heartbeat is received on all ranks' '
 	run_timeout 5 \
-          flux exec flux event sub --count=1 hb >output_event_sub &&
+          flux exec -n flux event sub --count=1 hb >output_event_sub &&
 	hb_count=`grep "^hb" output_event_sub | wc -l` &&
         test $hb_count -eq $SIZE
 '

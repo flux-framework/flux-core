@@ -23,7 +23,7 @@ test_expect_success 'barrier: returns when complete' '
 '
 
 test_expect_success 'barrier: returns when complete (all ranks)' '
-	flux exec ${tbarrier} --nprocs ${SIZE} abc
+	flux exec -n ${tbarrier} --nprocs ${SIZE} abc
 '
 
 test_expect_success 'barrier: blocks while incomplete' '
@@ -40,13 +40,13 @@ test_expect_success 'barrier: fails with name=NULL outside of LWJ' '
 test_expect_success 'barrier: succeeds with name=NULL inside LWJ' '
 	unset SLURM_STEPID &&
         FLUX_JOB_ID=1 && export FLUX_JOB_ID &&
-	flux exec ${tbarrier} --nprocs ${SIZE}
+	flux exec -n ${tbarrier} --nprocs ${SIZE}
 '
 
 test_expect_success 'barrier: succeeds with name=NULL inside SLURM step' '
 	unset FLUX_LWJ_ID &&
         SLURM_STEPID=1 && export SLURM_STEPID &&
-	flux exec ${tbarrier} --nprocs ${SIZE}
+	flux exec -n ${tbarrier} --nprocs ${SIZE}
 '
 
 test_expect_success 'barrier: remove barrier module' '

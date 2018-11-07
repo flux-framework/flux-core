@@ -60,19 +60,19 @@ test_expect_success 'kvs: store 3x4 directory tree using kvsdir classic function
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit ${THREADS} 100 \
+	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop, no merging' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit --nomerge 1 ${THREADS} 100 \
+	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit --nomerge 1 ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop, mixed no merging' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit --nomerge 2 ${THREADS} 100 \
+	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit --nomerge 2 ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
@@ -80,21 +80,21 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop, m
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
+	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit \
 		--fence $((${SIZE}*${THREADS})) ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, no merging' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
+	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit \
 		--fence $((${SIZE}*${THREADS})) --nomerge 1 ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mixed no merging' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
+	flux exec -n ${FLUX_BUILD_DIR}/t/kvs/commit \
 		--fence $((${SIZE}*${THREADS})) --nomerge 2 ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '

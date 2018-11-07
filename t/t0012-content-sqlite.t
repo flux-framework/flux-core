@@ -86,24 +86,24 @@ test_expect_success 'load 1m blob bypassing cache' '
 
 test_expect_success 'load and verify 64b blob on all ranks' '
         HASHSTR=`cat 64.0.hash` &&
-        flux exec echo ${HASHSTR} >64.0.all.expect &&
-        flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+        flux exec -n echo ${HASHSTR} >64.0.all.expect &&
+        flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
                                                 >64.0.all.output &&
         test_cmp 64.0.all.expect 64.0.all.output
 '
 
 test_expect_success 'load and verify 4k blob on all ranks' '
         HASHSTR=`cat 4k.0.hash` &&
-        flux exec echo ${HASHSTR} >4k.0.all.expect &&
-        flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+        flux exec -n echo ${HASHSTR} >4k.0.all.expect &&
+        flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
                                                 >4k.0.all.output &&
         test_cmp 4k.0.all.expect 4k.0.all.output
 '
 
 test_expect_success 'load and verify 1m blob on all ranks' '
         HASHSTR=`cat 1m.0.hash` &&
-        flux exec echo ${HASHSTR} >1m.0.all.expect &&
-        flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+        flux exec -n echo ${HASHSTR} >1m.0.all.expect &&
+        flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
                                                 >1m.0.all.output &&
         test_cmp 1m.0.all.expect 1m.0.all.output
 '
