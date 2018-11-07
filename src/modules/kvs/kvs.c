@@ -2570,6 +2570,8 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
     json_t *rootdir = NULL;
     char ref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
+    flux_msg_t *msg = NULL;
+    char *topic = NULL;
     int len;
     int rv = -1;
 
@@ -2613,12 +2615,39 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
         goto cleanup;
     }
 
+    if (asprintf (&topic, "kvs.namespace-created-%s", namespace) < 0) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+
+    if (!(msg = flux_event_pack (topic,
+                                 "{ s:s s:i s:s s:i }",
+                                 "namespace", root->namespace,
+                                 "rootseq", root->seq,
+                                 "rootref", root->ref,
+                                 "owner", root->owner))) {
+        flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
+        goto cleanup;
+    }
+
+    if (flux_msg_set_private (msg) < 0) {
+        flux_log_error (ctx->h, "%s: flux_msg_set_private", __FUNCTION__);
+        goto cleanup;
+    }
+
+    if (flux_send (ctx->h, msg, 0) < 0) {
+        flux_log_error (ctx->h, "%s: flux_send", __FUNCTION__);
+        goto cleanup;
+    }
+
     rv = 0;
 cleanup:
     if (rv < 0)
         kvsroot_mgr_remove_root (ctx->krm, namespace);
     free (data);
     json_decref (rootdir);
+    free (topic);
+    flux_msg_destroy (msg);
     return rv;
 }
 
