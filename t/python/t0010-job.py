@@ -12,6 +12,9 @@
 
 import os
 import errno
+import sys
+import json
+import yaml
 
 import unittest
 
@@ -22,6 +25,11 @@ from flux.job import ffi
 
 def __flux_size():
     return 1
+
+
+def yaml_to_json(s):
+    obj = yaml.load(s)
+    return json.dumps(obj, separators=(",", ":"))
 
 
 class TestJob(unittest.TestCase):
@@ -43,7 +51,8 @@ class TestJob(unittest.TestCase):
         # get a valid jobspec
         basic_jobspec_fname = os.path.join(jobspec_dir, "valid", "basic.yaml")
         with open(basic_jobspec_fname, "rb") as infile:
-            self.jobspec = infile.read()
+            basic_yaml = infile.read()
+        self.jobspec = yaml_to_json(basic_yaml)
 
     def test_00_null_submit(self):
         with self.assertRaises(EnvironmentError) as error:
