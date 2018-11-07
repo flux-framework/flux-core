@@ -72,6 +72,8 @@ struct namespace {
     zlist_t *watchers;          // list of watchers of this namespace
     char *setroot_topic;        // topic string for setroot subscription
     bool setroot_subscribed;    // setroot subscription active
+    char *removed_topic;        // topic string for kvs.namespace-removed
+    bool removed_subscribed;    // kvs.namespace-removed subscription active
 };
 
 /* Module state.
@@ -80,7 +82,6 @@ struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhash_t *namespaces;        // hash of monitored namespaces
-    int subscriptions;          // count of kvs.namespace-remove subscriptions
 };
 
 
@@ -165,13 +166,12 @@ static void namespace_destroy (struct namespace *ns)
                 watcher_destroy (w);
             zlist_destroy (&ns->watchers);
         }
-        if (ns->setroot_subscribed) {
+        if (ns->setroot_subscribed)
             (void)flux_event_unsubscribe (ns->ctx->h, ns->setroot_topic);
-            if (--(ns->ctx->subscriptions) == 0)
-                (void)flux_event_unsubscribe (ns->ctx->h,
-                                              "kvs.namespace-remove");
-        }
+        if (ns->removed_subscribed)
+            (void)flux_event_unsubscribe (ns->ctx->h, ns->removed_topic);
         free (ns->setroot_topic);
+        free (ns->removed_topic);
         free (ns->name);
         free (ns);
         errno = saved_errno;
@@ -190,15 +190,16 @@ static struct namespace *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (asprintf (&ns->setroot_topic, "kvs.setroot-%s", namespace) < 0)
         goto error;
+    if (asprintf (&ns->removed_topic, "kvs.namespace-removed-%s", namespace) < 0)
+        goto error;
     ns->owner = FLUX_USERID_UNKNOWN;
     ns->ctx = ctx;
     if (flux_event_subscribe (ctx->h, ns->setroot_topic) < 0)
         goto error;
     ns->setroot_subscribed = true;
-    if (ctx->subscriptions++ == 0) {
-        if (flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0)
-            goto error;
-    }
+    if (flux_event_subscribe (ctx->h, ns->removed_topic) < 0)
+        goto error;
+    ns->removed_subscribed = true;
     return ns;
 error:
     namespace_destroy (ns);
@@ -513,11 +514,11 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
         flux_log_error (ctx->h, "%s: zhash_keys", __FUNCTION__);
 }
 
-/* kvs.namespace-remove event
+/* kvs.namespace-removed-* event
  * A namespace has been removed.  All watchers should receive ENOTSUP.
  */
-static void remove_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
+                        const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
     const char *namespace;
@@ -809,8 +810,8 @@ nomem:
 
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.namespace-remove",
-      .cb           = remove_cb,
+      .topic_glob   = "kvs.namespace-removed-*",
+      .cb           = removed_cb,
       .rolemask     = 0
     },
     { .typemask     = FLUX_MSGTYPE_EVENT,

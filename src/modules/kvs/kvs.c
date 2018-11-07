@@ -189,6 +189,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
 {
     char *setroot_topic = NULL;
     char *error_topic = NULL;
+    char *removed_topic = NULL;
     int rc = -1;
 
     /* do not want to subscribe to events that are not within our
@@ -211,11 +212,6 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
         }
 
         if (flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -243,10 +239,21 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
         goto cleanup;
     }
 
+    if (asprintf (&removed_topic, "kvs.namespace-removed-%s", namespace) < 0) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+
+    if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+        flux_log_error (ctx->h, "flux_event_subscribe");
+        goto cleanup;
+    }
+
     rc = 0;
 cleanup:
     free (setroot_topic);
     free (error_topic);
+    free (removed_topic);
     return rc;
 }
 
@@ -2709,6 +2716,7 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *namespace)
 {
     flux_msg_t *msg = NULL;
     int saved_errno, rc = -1;
+    char *topic = NULL;
 
     /* Namespace doesn't exist or is already in process of being
      * removed */
@@ -2717,8 +2725,12 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *namespace)
         goto done;
     }
 
-    if (!(msg = flux_event_pack ("kvs.namespace-remove", "{ s:s }",
-                                 "namespace", namespace))) {
+    if (asprintf (&topic, "kvs.namespace-removed-%s", namespace) < 0) {
+        saved_errno = ENOMEM;
+        goto cleanup;
+    }
+
+    if (!(msg = flux_event_pack (topic, "{ s:s }", "namespace", namespace))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto cleanup;
@@ -2737,6 +2749,7 @@ done:
     rc = 0;
 cleanup:
     flux_msg_destroy (msg);
+    free (topic);
     if (rc < 0)
         errno = saved_errno;
     return rc;
@@ -2772,8 +2785,8 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void namespace_remove_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                                       const flux_msg_t *msg, void *arg)
+static void namespace_removed_event_cb (flux_t *h, flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *namespace;
@@ -2874,8 +2887,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             namespace_create_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",
                             namespace_remove_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-remove",
-                            namespace_remove_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-removed-*",
+                            namespace_removed_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
                             namespace_list_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
