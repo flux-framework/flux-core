@@ -343,7 +343,6 @@ AC_CONFIG_FILES( \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libjobspec/Makefile \
-  src/common/libjobspec/flux-jobspec.pc \
   src/common/libtomlc99/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \

@@ -41,7 +41,7 @@ libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la libflux-idset.la
 if ENABLE_JOBSPEC
-lib_LTLIBRARIES += libflux-jobspec.la
+noinst_LTLIBRARIES += libflux-jobspec.la
 endif
 fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
