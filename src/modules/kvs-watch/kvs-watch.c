@@ -70,8 +70,8 @@ struct namespace {
     int errnum;                 // if non-zero, error pending for all watchers
     struct watch_ctx *ctx;      // back-pointer to watch_ctx
     zlist_t *watchers;          // list of watchers of this namespace
-    char *topic;                // topic string for setroot subscription
-    bool subscribed;            // setroot (ns->topic) subscription active
+    char *setroot_topic;        // topic string for setroot subscription
+    bool setroot_subscribed;    // setroot subscription active
 };
 
 /* Module state.
@@ -165,13 +165,13 @@ static void namespace_destroy (struct namespace *ns)
                 watcher_destroy (w);
             zlist_destroy (&ns->watchers);
         }
-        if (ns->subscribed) {
-            (void)flux_event_unsubscribe (ns->ctx->h, ns->topic);
+        if (ns->setroot_subscribed) {
+            (void)flux_event_unsubscribe (ns->ctx->h, ns->setroot_topic);
             if (--(ns->ctx->subscriptions) == 0)
                 (void)flux_event_unsubscribe (ns->ctx->h,
                                               "kvs.namespace-remove");
         }
-        free (ns->topic);
+        free (ns->setroot_topic);
         free (ns->name);
         free (ns);
         errno = saved_errno;
@@ -188,13 +188,13 @@ static struct namespace *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (!(ns->name = strdup (namespace)))
         goto error;
-    if (asprintf (&ns->topic, "kvs.setroot-%s", namespace) < 0)
+    if (asprintf (&ns->setroot_topic, "kvs.setroot-%s", namespace) < 0)
         goto error;
     ns->owner = FLUX_USERID_UNKNOWN;
     ns->ctx = ctx;
-    if (flux_event_subscribe (ctx->h, ns->topic) < 0)
+    if (flux_event_subscribe (ctx->h, ns->setroot_topic) < 0)
         goto error;
-    ns->subscribed = true;
+    ns->setroot_subscribed = true;
     if (ctx->subscriptions++ == 0) {
         if (flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0)
             goto error;
