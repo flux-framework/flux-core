@@ -2,7 +2,7 @@ dist_noinst_SCRIPTS = spellcheck
 
 EXTRA_DIST = spell.en.pws
 
-TESTS_ENVIRONMENT = \
+AM_TESTS_ENVIRONMENT = \
 	ASPELL=$(ASPELL) \
 	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
 	man_base_dir=$(abs_top_srcdir)/doc

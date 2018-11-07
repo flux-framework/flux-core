@@ -134,7 +134,8 @@ TESTS = test_module.t \
 	test_reactor.t \
 	test_buffer.t \
 	test_mrpc.t \
-	test_handle.t
+	test_handle.t \
+	test_msg_handler.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -210,3 +211,7 @@ test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 test_handle_t_SOURCES = test/handle.c
 test_handle_t_CPPFLAGS = $(test_cppflags)
 test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_msg_handler_t_SOURCES = test/msg_handler.c
+test_msg_handler_t_CPPFLAGS = $(test_cppflags)
+test_msg_handler_t_LDADD = $(test_ldadd) $(LIBDL)
