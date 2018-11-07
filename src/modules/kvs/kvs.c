@@ -2564,12 +2564,13 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
     char ref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     int len;
+    int rv = -1;
 
     /* If namespace already exists, return EEXIST.  Doesn't matter if
      * namespace is in process of being removed */
     if (kvsroot_mgr_lookup_root (ctx->krm, namespace)) {
         errno = EEXIST;
-        goto cleanup;
+        return -1;
     }
 
     if (!(root = kvsroot_mgr_create_root (ctx->krm,
@@ -2579,42 +2580,39 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
                                           owner,
                                           flags))) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
-        goto cleanup;
+        return -1;
     }
 
     if (!(rootdir = treeobj_create_dir ())) {
         flux_log_error (ctx->h, "%s: treeobj_create_dir", __FUNCTION__);
-        goto cleanup_remove_root;
+        goto cleanup;
     }
 
     if (!(data = treeobj_encode (rootdir))) {
         flux_log_error (ctx->h, "%s: treeobj_encode", __FUNCTION__);
-        goto cleanup_remove_root;
+        goto cleanup;
     }
     len = strlen (data);
 
     if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (ref)) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
-        goto cleanup_remove_root;
+        goto cleanup;
     }
 
     setroot (ctx, root, ref, 0);
 
     if (event_subscribe (ctx, namespace) < 0) {
         flux_log_error (ctx->h, "%s: event_subscribe", __FUNCTION__);
-        goto cleanup_remove_root;
+        goto cleanup;
     }
 
-    json_decref (rootdir);
-    free (data);
-    return 0;
-
-cleanup_remove_root:
-    kvsroot_mgr_remove_root (ctx->krm, namespace);
+    rv = 0;
 cleanup:
+    if (rv < 0)
+        kvsroot_mgr_remove_root (ctx->krm, namespace);
     free (data);
     json_decref (rootdir);
-    return -1;
+    return rv;
 }
 
 static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
