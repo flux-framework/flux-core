@@ -16,7 +16,7 @@ test_expect_success 'created persist-directory' '
 
 test_expect_success 'run instance with persist-directory set' '
 	rm -f $PERSISTDIR/kvsroot.final &&
-	flux start -o,--setattr=persist-directory=$PERSISTDIR \
+	flux start -o,--shutdown-grace=3 -o,--setattr=persist-directory=$PERSISTDIR \
 	    flux kvs put testkey=42
 '
 
