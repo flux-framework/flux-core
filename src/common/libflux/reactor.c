@@ -42,6 +42,7 @@
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/fdutils.h"
 
 struct flux_reactor {
     struct ev_loop *loop;
@@ -424,7 +425,7 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
         errno = EINVAL;
         return NULL;
     }
-    if ((fd_flags = fcntl (fd, F_GETFL)) < 0)
+    if ((fd_flags = fd_get_flags (fd)) < 0)
         return NULL;
     if (!(fd_flags & O_NONBLOCK)) {
         errno = EINVAL;
@@ -512,7 +513,7 @@ flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
         return NULL;
     }
 
-    if ((fd_flags = fcntl (fd, F_GETFL)) < 0)
+    if ((fd_flags = fd_get_flags (fd)) < 0)
         return NULL;
     if (!(fd_flags & O_NONBLOCK)) {
         errno = EINVAL;
