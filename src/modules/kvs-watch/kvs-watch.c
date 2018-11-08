@@ -555,7 +555,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
                            "rootref", &rootref,
                            "owner", &owner,
                            "keys", &keys) < 0) {
-        flux_log_error (h, "%s: flux_event_decode", __FUNCTION__);
+        flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
     if (!(ns = zhash_lookup (ctx->namespaces, namespace))
