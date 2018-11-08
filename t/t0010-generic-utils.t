@@ -26,8 +26,19 @@ test_expect_success 'event: can subscribe' '
 	grep "^hb" output_event_sub
 '
 
-test_expect_success 'version: reports an expected string' '
-	flux version | grep -Eq "flux-core-[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+(-[a-z0-9]+))?"
+test_expect_success 'version: reports expected values under an instance' '
+	flux version >version.out &&
+	grep -q libflux-core version.out &&
+	grep -q commands     version.out &&
+	grep -q broker       version.out &&
+	grep -q FLUX_URI     version.out
+'
+test_expect_success 'version: reports expected values not under an instance' '
+	(unset FLUX_URI; flux version >version2.out) &&
+	grep -q libflux-core version2.out &&
+	grep -q commands     version2.out &&
+	! grep -q broker     version2.out &&
+	! grep -q FLUX_URI   version2.out
 '
 
 heaptrace_error_check()
