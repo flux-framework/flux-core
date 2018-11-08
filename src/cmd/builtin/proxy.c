@@ -38,7 +38,6 @@
 #include <errno.h>
 #include <libgen.h>
 #include <stdbool.h>
-#include <fcntl.h>
 #include <argz.h>
 #include <glob.h>
 #include <czmq.h>
@@ -47,6 +46,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/fdutils.h"
 #include "src/common/libsubprocess/subprocess.h"
 
 #define LISTEN_BACKLOG      5
@@ -126,20 +126,6 @@ static proxy_ctx_t *ctx_create (flux_t *h)
     return ctx;
 }
 
-static int set_nonblock (int fd, bool nonblock)
-{
-    int flags = fcntl (fd, F_GETFL);
-    if (flags < 0)
-        return -1;
-    if (nonblock)
-        flags |= O_NONBLOCK;
-    else
-        flags &= ~O_NONBLOCK;
-    if (fcntl (fd, F_SETFL, flags) < 0)
-        return -1;
-    return 0;
-}
-
 static client_t * client_create (proxy_ctx_t *ctx, int rfd, int wfd)
 {
     client_t *c;
@@ -168,12 +154,12 @@ static client_t * client_create (proxy_ctx_t *ctx, int rfd, int wfd)
     flux_watcher_start (c->inw);
     flux_msg_iobuf_init (&c->inbuf);
     flux_msg_iobuf_init (&c->outbuf);
-    if (set_nonblock (c->rfd, true) < 0) {
-        flux_log_error (h, "set_nonblock");
+    if (fd_set_nonblocking (c->rfd) < 0) {
+        flux_log_error (h, "fd_set_nonblocking");
         goto error;
     }
-    if (c->wfd != c->rfd && set_nonblock (c->wfd, true) < 0) {
-        flux_log_error (h, "set_nonblock");
+    if (c->wfd != c->rfd && fd_set_nonblocking (c->wfd) < 0) {
+        flux_log_error (h, "fd_set_nonblocking");
         goto error;
     }
 
