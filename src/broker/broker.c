@@ -746,6 +746,9 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     /* Initialize other miscellaneous attrs
      */
     init_attrs_broker_pid (attrs, pid);
+    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
+                                            FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("attr_add version");
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)
