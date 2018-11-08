@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -22,38 +22,28 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-#ifndef _FLUX_CORE_FLUX_H
-#define _FLUX_CORE_FLUX_H
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 
-#include "types.h"
-#include "handle.h"
-#include "reactor.h"
-#include "msg_handler.h"
-#include "connector.h"
-#include "security.h"
-#include "reduce.h"
-#include "message.h"
-#include "request.h"
-#include "response.h"
-#include "keepalive.h"
-#include "rpc.h"
-#include "mrpc.h"
-#include "panic.h"
-#include "event.h"
-#include "module.h"
-#include "info.h"
-#include "attr.h"
-#include "flog.h"
-#include "conf.h"
-#include "heartbeat.h"
-#include "content.h"
-#include "future.h"
-#include "barrier.h"
-#include "buffer.h"
-#include "service.h"
 #include "version.h"
 
-#endif /* !_FLUX_CORE_FLUX_H */
+const char *flux_core_version_string (void)
+{
+    return FLUX_CORE_VERSION_STRING;
+}
+
+int flux_core_version (int *major, int *minor, int *patch)
+{
+    if (major)
+        *major = FLUX_CORE_VERSION_MAJOR;
+    if (minor)
+        *minor = FLUX_CORE_VERSION_MINOR;
+    if (patch)
+        *patch = FLUX_CORE_VERSION_PATCH;
+    return FLUX_CORE_VERSION_HEX;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -342,6 +342,7 @@ AC_CONFIG_FILES( \
   src/common/libev/Makefile \
   src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
+  src/common/libflux/version.h \
   src/common/libkvs/Makefile \
   src/common/libkz/Makefile \
   src/common/libjsc/Makefile \

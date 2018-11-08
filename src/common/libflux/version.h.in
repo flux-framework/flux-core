@@ -1,0 +1,75 @@
+/*****************************************************************************\
+ *  Copyright (c) 2018 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU Lesser General Public License as published
+ *  by the Free Software Foundation; either version 2.1 of the license,
+ *  or (at your option) any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public License
+ *  along with this program; if not, write to the Free Software Foundation,
+ *  Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+\*****************************************************************************/
+
+#ifndef _FLUX_CORE_VERSION_H
+#define _FLUX_CORE_VERSION_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Flux uses semantic versioning: <major>.<minor>.<patch>
+ */
+
+/* The VERSION_STRING may include a "-N-hash" suffix from git describe
+ * if this snapshot is not tagged.  This is not reflected in VERSION_PATCH.
+ */
+#define FLUX_CORE_VERSION_STRING    "@PACKAGE_VERSION@"
+#define FLUX_CORE_VERSION_MAJOR     @AX_MAJOR_VERSION@
+#define FLUX_CORE_VERSION_MINOR     @AX_MINOR_VERSION@
+#define FLUX_CORE_VERSION_PATCH     @AX_POINT_VERSION@
+
+/* The version in 3 bytes, for numeric comparison.
+ */
+#define FLUX_CORE_VERSION_HEX       ((FLUX_CORE_VERSION_MAJOR << 16) | \
+                                     (FLUX_CORE_VERSION_MINOR << 8) | \
+                                     (FLUX_CORE_VERSION_PATCH << 0))
+
+
+/* These functions return the compiled-in versions.
+ * Useful for determining the version of dynamically linked libflux-core.
+ */
+
+/* Returns FLUX_CORE_VERSION_STRING.
+ */
+const char *flux_core_version_string (void);
+
+/* If major is non-NULL set it to FLUX_CORE_VERSION_MAJOR.
+ * If minor is non-NULL set it to FLUX_CORE_VERSION_MINOR.
+ * If patch is non-NULL set it to FLUX_CORE_VERSION_PATCH.
+ * Returns FLUX_CORE_VERSION_HEX.
+ */
+int flux_core_version (int *major, int *minor, int *patch);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* !_FLUX_CORE_VERSION_H */
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
+
