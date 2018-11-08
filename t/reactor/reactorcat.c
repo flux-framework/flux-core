@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include <flux/core.h>
 
@@ -61,11 +62,28 @@ static void read_cb (flux_reactor_t *r, flux_watcher_t *w,
     total_bytes += n;
 }
 
+static int stdin_fdflags;
+static int stdout_fdflags;
+
+static void restore_fdflags (void)
+{
+    (void)fcntl (STDIN_FILENO, F_SETFL, stdin_fdflags);
+    (void)fcntl (STDOUT_FILENO, F_SETFL, stdout_fdflags);
+}
+
 int main (int argc, char *argv[])
 {
     int rc;
     flux_watcher_t *rw, *ww;
     flux_reactor_t *r;
+
+    if ((stdin_fdflags = fcntl (STDIN_FILENO, F_GETFL)) < 0
+            || fcntl (STDIN_FILENO, F_SETFL, stdin_fdflags|O_NONBLOCK) < 0
+            || (stdout_fdflags = fcntl (STDOUT_FILENO, F_GETFL)) < 0
+            || fcntl (STDOUT_FILENO, F_SETFL, stdout_fdflags|O_NONBLOCK) < 0)
+        die ("fcntl");
+    if (atexit (restore_fdflags) != 0)
+        die ("atexit");
 
     if (!(r = flux_reactor_create (0)))
         die ("flux_reactor_create failed\n");
