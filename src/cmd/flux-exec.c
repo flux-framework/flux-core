@@ -68,6 +68,7 @@ zlist_t *subprocesses;
 
 optparse_t *opts = NULL;
 
+int stdin_flags;
 flux_watcher_t *stdin_w;
 
 void completion_cb (flux_subprocess_t *p)
@@ -222,6 +223,15 @@ void subprocess_destroy (void *arg)
     flux_subprocess_destroy (p);
 }
 
+/* atexit handler
+ * This is a good faith attempt to restore stdin flags to what they were
+ * before we set O_NONBLOCK per bug #1803.
+ */
+void restore_stdin_flags (void)
+{
+    (void)fcntl (STDIN_FILENO, F_SETFL, stdin_flags);
+}
+
 int main (int argc, char *argv[])
 {
     const char *optargp;
@@ -327,7 +337,15 @@ int main (int argc, char *argv[])
             p = zlist_next (subprocesses);
         }
     }
+    /* configure stdin watcher
+     */
     else {
+        if ((stdin_flags = fcntl (STDIN_FILENO, F_GETFL)) < 0)
+            log_err_exit ("fcntl F_GETFL stdin");
+        if (atexit (restore_stdin_flags) != 0)
+            log_err_exit ("atexit");
+        if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
+            log_err_exit ("fcntl F_SETFL stdin");
         if (!(stdin_w = flux_buffer_read_watcher_create (r, STDIN_FILENO,
                                                          1 << 20, stdin_cb,
                                                          0, NULL)))
