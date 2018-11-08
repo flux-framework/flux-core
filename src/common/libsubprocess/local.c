@@ -37,6 +37,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/fdutils.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -213,6 +214,11 @@ static int channel_local_setup (flux_subprocess_t *p,
     fds[0] = -1;
     fds[1] = -1;
 
+    if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
+        flux_log_error (p->h, "fd_set_nonblocking");
+        goto error;
+    }
+
     if ((channel_flags & CHANNEL_WRITE) && in_cb) {
         c->buffer_write_w = flux_buffer_write_watcher_create (p->reactor,
                                                               c->parent_fd,
@@ -224,12 +230,6 @@ static int channel_local_setup (flux_subprocess_t *p,
             flux_log_error (p->h, "flux_buffer_write_watcher_create");
             goto error;
         }
-    }
-
-    if ((fd_flags = fcntl (c->parent_fd, F_GETFL)) < 0
-                 || fcntl (c->parent_fd, F_SETFL, fd_flags | O_NONBLOCK) < 0) {
-        flux_log_error (p->h, "fcntl");
-        goto error;
     }
 
     if ((channel_flags & CHANNEL_READ) && out_cb) {
@@ -433,9 +433,7 @@ static void closefd_child (void *arg, int fd)
     c = zhash_first (p->channels);
     while (c) {
         if (c->child_fd == fd) {
-            int flags = fcntl (fd, F_GETFD, 0);
-            if (flags >= 0)
-                (void) fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC);
+            (void) fd_unset_cloexec (fd);
             return;
         }
         c = zhash_next (p->channels);
