@@ -46,7 +46,7 @@ OPTIONS
 Label lines of output with the source RANK.
 
 *-n, --noinput*::
-Redirect `stdin` from `/dev/null`.
+Do not attempt to forward stdin.  Send EOF to remote process stdin.
 
 *-d, --dir*'=DIR'::
 Set the working directory of remote 'COMMANDS' to 'DIR'. The default is to
