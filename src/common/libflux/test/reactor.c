@@ -376,6 +376,8 @@ static void test_buffer (flux_reactor_t *reactor)
 
     ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0,
         "buffer: successfully created socketpair");
+    if (set_nonblock (fd[0]) < 0)
+        BAIL_OUT ("set_nonblock");
 
     /* read buffer test */
 
@@ -813,6 +815,8 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0,
         "buffer corner case: successfully created socketpair");
+    if (set_nonblock (fd[0]) < 0)
+        BAIL_OUT ("set_nonblock");
 
     bfc.count = 0;
     bfc.fd = fd[1];
@@ -850,6 +854,8 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0,
         "buffer corner case: successfully created socketpair");
+    if (set_nonblock (fd[0]) < 0)
+        BAIL_OUT ("set_nonblock");
 
     bfc.count = 0;
     bfc.fd = fd[1];
@@ -887,6 +893,8 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0,
         "buffer corner case: successfully created socketpair");
+    if (set_nonblock (fd[0]) < 0)
+        BAIL_OUT ("set_nonblock");
 
     bfc.count = 0;
     bfc.fd = fd[1];
