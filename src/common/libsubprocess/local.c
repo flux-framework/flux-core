@@ -192,6 +192,7 @@ static int channel_local_setup (flux_subprocess_t *p,
     int fds[2] = { -1, -1 };
     char *e = NULL;
     int save_errno;
+    int fd_flags;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
         flux_log_error (p->h, "calloc");
@@ -223,6 +224,12 @@ static int channel_local_setup (flux_subprocess_t *p,
             flux_log_error (p->h, "flux_buffer_write_watcher_create");
             goto error;
         }
+    }
+
+    if ((fd_flags = fcntl (c->parent_fd, F_GETFL)) < 0
+                 || fcntl (c->parent_fd, F_SETFL, fd_flags | O_NONBLOCK) < 0) {
+        flux_log_error (p->h, "fcntl");
+        goto error;
     }
 
     if ((channel_flags & CHANNEL_READ) && out_cb) {
