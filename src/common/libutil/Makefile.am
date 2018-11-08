@@ -82,7 +82,9 @@ libutil_la_SOURCES = \
 	fluid.c \
 	fluid.h \
 	aux.c \
-	aux.h
+	aux.h \
+	fdutils.c \
+	fdutils.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -107,7 +109,9 @@ TESTS = test_nodeset.t \
 	test_cf.t \
 	test_ipaddr.t \
 	test_fluid.t \
-	test_aux.t
+	test_aux.t \
+	test_fdutils.t
+
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -214,3 +218,7 @@ test_fluid_t_LDADD = $(test_ldadd)
 test_aux_t_SOURCES = test/aux.c
 test_aux_t_CPPFLAGS = $(test_cppflags)
 test_aux_t_LDADD = $(test_ldadd)
+
+test_fdutils_t_SOURCES = test/fdutils.c
+test_fdutils_t_CPPFLAGS = $(test_cppflags)
+test_fdutils_t_LDADD = $(test_ldadd)

@@ -39,13 +39,13 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ctype.h>
-#include <fcntl.h>
 #include <czmq.h>
 #include <inttypes.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/fdutils.h"
 
 enum {
     DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
@@ -153,20 +153,6 @@ static mod_local_ctx_t *getctx (flux_t *h)
 error:
     freectx (ctx);
     return NULL;
-}
-
-static int set_nonblock (int fd, bool nonblock)
-{
-    int flags = fcntl (fd, F_GETFL);
-    if (flags < 0)
-        return -1;
-    if (nonblock)
-        flags |= O_NONBLOCK;
-    else
-        flags &= ~O_NONBLOCK;
-    if (fcntl (fd, F_SETFL, flags) < 0)
-        return -1;
-    return 0;
 }
 
 static int send_auth_response (int fd, unsigned char e)
@@ -285,7 +271,7 @@ static client_t * client_create (mod_local_ctx_t *ctx, int fd)
     flux_msg_iobuf_init (&c->outbuf);
     if (send_auth_response (fd, 0) < 0)
         goto error_noresponse;
-    if (set_nonblock (fd, true) < 0)
+    if (fd_set_nonblocking (fd) < 0)
         goto error_noresponse;
     c->fd = fd;
     return (c);

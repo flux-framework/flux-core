@@ -40,6 +40,7 @@
 
 #include "popen2.h"
 #include "fdwalk.h"
+#include "fdutils.h"
 
 #define PXOPEN_CHILD_MAGIC 0xc00ceeee
 
@@ -101,7 +102,7 @@ error:
 struct popen2_child *popen2 (const char *path, char *const argv[])
 {
     struct popen2_child *p = NULL;
-    int n, saved_errno, flags;
+    int n, saved_errno;
 
     if (!(p = malloc (sizeof (*p)))) {
         saved_errno = ENOMEM;
@@ -117,8 +118,7 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
         saved_errno = errno;
         goto error;
     }
-    if ((flags = fcntl (p->fd[SP_PARENT], F_GETFL)) < 0
-              || fcntl (p->fd[SP_PARENT], F_SETFL, flags | O_CLOEXEC) < 0) {
+    if (fd_set_cloexec (p->fd[SP_PARENT]) < 0) {
         saved_errno = errno;
         goto error;
     }

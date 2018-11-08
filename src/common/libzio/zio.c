@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <fcntl.h>
 #include <string.h>
 #include <jansson.h>
 #include <czmq.h>
@@ -36,6 +35,7 @@
 #include "src/common/liblsd/cbuf.h"
 #include "src/common/libutil/macros.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/fdutils.h"
 
 #include "zio.h"
 
@@ -184,19 +184,6 @@ static inline void zio_handler_end (zio_t *zio)
     zio->flags &= ~ZIO_IN_HANDLER;
     if (zio_is_destroyed (zio))
         zio_destroy (zio);
-}
-
-static int fd_set_nonblocking (int fd)
-{
-    int fval;
-
-    assert (fd >= 0);
-
-    if ((fval = fcntl (fd, F_GETFL, 0)) < 0)
-        return (-1);
-    if (fcntl (fd, F_SETFL, fval | O_NONBLOCK) < 0)
-        return (-1);
-    return (0);
 }
 
 void zio_destroy (zio_t *z)

@@ -45,7 +45,7 @@ namespace_create_loop() {
 
 get_kvs_namespace_all_ranks_loop() {
         i=0
-        while ! flux exec sh -c "flux kvs --namespace=$1 get $2" \
+        while ! flux exec -n sh -c "flux kvs --namespace=$1 get $2" \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
@@ -56,7 +56,7 @@ get_kvs_namespace_all_ranks_loop() {
 
 get_kvs_namespace_fails_all_ranks_loop() {
         i=0
-        while ! flux exec sh -c "! flux kvs --namespace=$1 get $2" \
+        while ! flux exec -n sh -c "! flux kvs --namespace=$1 get $2" \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
@@ -67,7 +67,7 @@ get_kvs_namespace_fails_all_ranks_loop() {
 
 wait_fencecount_nonzero() {
         i=0
-        while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#transactions kvs" 2> /dev/null)" = "0" ] \
+        while [ "$(flux exec -n -r $1 sh -c "flux module stats --parse namespace.$2.#transactions kvs" 2> /dev/null)" = "0" ] \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
@@ -168,7 +168,7 @@ test_expect_success 'kvs: new namespace exists/is listed' '
 '
 
 test_expect_success 'kvs: namespace create on rank 1 works' '
-	flux exec -r 1 sh -c "flux kvs namespace-create $NAMESPACERANK1"
+	flux exec -n -r 1 sh -c "flux kvs namespace-create $NAMESPACERANK1"
 '
 
 test_expect_success 'kvs: new namespace exists/is listed' '
@@ -264,14 +264,14 @@ test_expect_success 'kvs: put value in new namespace, available on other ranks' 
         flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
         flux kvs --namespace=$NAMESPACETEST put --json $DIR.all=1 &&
         VERS=`flux kvs --namespace=$NAMESPACETEST version` &&
-        flux exec sh -c "flux kvs --namespace=$NAMESPACETEST wait ${VERS} && \
+        flux exec -n sh -c "flux kvs --namespace=$NAMESPACETEST wait ${VERS} && \
                          flux kvs --namespace=$NAMESPACETEST get $DIR.all"
 '
 
 test_expect_success 'kvs: unlink value in new namespace, does not exist all ranks' '
         flux kvs --namespace=$NAMESPACETEST unlink $DIR.all &&
         VERS=`flux kvs --namespace=$NAMESPACETEST version` &&
-        flux exec sh -c "flux kvs --namespace=$NAMESPACETEST wait ${VERS} && \
+        flux exec -n sh -c "flux kvs --namespace=$NAMESPACETEST wait ${VERS} && \
                          ! flux kvs --namespace=$NAMESPACETEST get $DIR.all"
 '
 
@@ -281,7 +281,7 @@ test_expect_success 'kvs: namespace remove works, recognized on other ranks' '
 	flux kvs namespace-create $NAMESPACETMP-ALL &&
         flux kvs --namespace=$NAMESPACETMP-ALL put --json $DIR.all=1 &&
         VERS=`flux kvs --namespace=$NAMESPACETMP-ALL version` &&
-        flux exec sh -c "flux kvs --namespace=$NAMESPACETMP-ALL wait ${VERS} && \
+        flux exec -n sh -c "flux kvs --namespace=$NAMESPACETMP-ALL wait ${VERS} && \
                          flux kvs --namespace=$NAMESPACETMP-ALL get $DIR.all" &&
 	flux kvs namespace-remove $NAMESPACETMP-ALL &&
         get_kvs_namespace_fails_all_ranks_loop $NAMESPACETMP-ALL $DIR.all
@@ -538,7 +538,7 @@ test_expect_success 'kvs: namespace create on existing namespace fails' '
 '
 
 test_expect_success 'kvs: namespace create on existing namespace fails on rank 1' '
-	! flux exec -r 1 sh -c "flux kvs namespace-create $NAMESPACETEST"
+	! flux exec -n -r 1 sh -c "flux kvs namespace-create $NAMESPACETEST"
 '
 
 test_expect_success 'kvs: get fails on invalid namespace' '
@@ -546,7 +546,7 @@ test_expect_success 'kvs: get fails on invalid namespace' '
 '
 
 test_expect_success 'kvs: get fails on invalid namespace on rank 1' '
-	! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD get $DIR.test"
+	! flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD get $DIR.test"
 '
 
 test_expect_success 'kvs: put fails on invalid namespace' '
@@ -554,7 +554,7 @@ test_expect_success 'kvs: put fails on invalid namespace' '
 '
 
 test_expect_success 'kvs: put fails on invalid namespace on rank 1' '
-        ! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD put $DIR.test=1"
+        ! flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD put $DIR.test=1"
 '
 
 test_expect_success 'kvs: version fails on invalid namespace' '
@@ -562,7 +562,7 @@ test_expect_success 'kvs: version fails on invalid namespace' '
 '
 
 test_expect_success 'kvs: version fails on invalid namespace on rank 1' '
-	! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD version"
+	! flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD version"
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait fails on invalid namespace' '
@@ -570,7 +570,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait fails on invalid namespace' '
 '
 
 test_expect_success 'kvs: wait fails on invalid namespace on rank 1' '
-        ! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD wait 1"
+        ! flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD wait 1"
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch fails on invalid namespace' '
@@ -578,7 +578,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch fails on invalid namespace' '
 '
 
 test_expect_success 'kvs: watch fails on invalid namespace on rank 1' '
-        ! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD watch -c 1 $DIR.test"
+        ! flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD watch -c 1 $DIR.test"
 '
 
 # watch errors are output to stdout, so grep for "Operation not supported"
@@ -601,7 +601,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namesp
         flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 put --json $DIR.watch=0 &&
         VERS=`flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 version` &&
         rm -f watch_out
-        stdbuf -oL flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 wait ${VERS}; \
+        stdbuf -oL flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 wait ${VERS}; \
                                          flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 watch -o -c 1 $DIR.watch" > watch_out &
         watchpid=$! &&
         $waitfile -q -t 5 -p "0" watch_out &&
@@ -633,7 +633,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when names
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE1 &&
         rm -f fence_out
-        flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE1 &&

@@ -42,6 +42,7 @@
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/fdutils.h"
 
 struct flux_reactor {
     struct ev_loop *loop;
@@ -379,30 +380,6 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w)
 /* buffer
  */
 
-static int fd_set_nonblocking (int fd, int *flags_orig)
-{
-    int fval;
-
-    if ((fval = fcntl (fd, F_GETFL, 0)) < 0)
-        return (-1);
-
-    if (fcntl (fd, F_SETFL, fval | O_NONBLOCK) < 0)
-        return (-1);
-
-    if (flags_orig)
-        (*flags_orig) = fval;
-
-    return (0);
-}
-
-static int fd_set_flags (int fd, int flags)
-{
-    if (fcntl (fd, F_SETFL, flags) < 0)
-        return (-1);
-
-    return (0);
-}
-
 static void buffer_read_start (flux_watcher_t *w)
 {
     struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
@@ -442,15 +419,18 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
 {
     struct ev_buffer_read *ebr;
     flux_watcher_t *w = NULL;
-    int flags_orig;
+    int fd_flags;
 
     if (fd < 0) {
         errno = EINVAL;
         return NULL;
     }
-
-    if (fd_set_nonblocking (fd, &flags_orig) < 0)
+    if ((fd_flags = fd_get_flags (fd)) < 0)
         return NULL;
+    if (!(fd_flags & O_NONBLOCK)) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(w = flux_watcher_create (r,
                                    sizeof (*ebr),
@@ -477,7 +457,6 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
 
 cleanup:
     flux_watcher_destroy (w);
-    fd_set_flags (fd, flags_orig);
     return NULL;
 }
 
@@ -527,15 +506,19 @@ flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
 {
     struct ev_buffer_write *ebw;
     flux_watcher_t *w = NULL;
-    int flags_orig;
+    int fd_flags;
 
     if (fd < 0) {
         errno = EINVAL;
         return NULL;
     }
 
-    if (fd_set_nonblocking (fd, &flags_orig) < 0)
+    if ((fd_flags = fd_get_flags (fd)) < 0)
         return NULL;
+    if (!(fd_flags & O_NONBLOCK)) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(w = flux_watcher_create (r,
                                    sizeof (*ebw),
@@ -559,7 +542,6 @@ flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
 
 cleanup:
     flux_watcher_destroy (w);
-    fd_set_flags (fd, flags_orig);
     return NULL;
 }
 

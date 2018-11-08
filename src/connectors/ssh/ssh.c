@@ -35,12 +35,12 @@
 #include <signal.h>
 #include <poll.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <argz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/popen2.h"
+#include "src/common/libutil/fdutils.h"
 
 static const char *default_ssh_cmd = "/usr/bin/rsh";
 
@@ -64,15 +64,11 @@ static const struct flux_handle_ops handle_ops;
 
 static int set_nonblock (ssh_ctx_t *c, int nonblock)
 {
-    int flags;
-    if (c->fd_nonblock != nonblock) {
-        if ((flags = fcntl (c->fd, F_GETFL)) < 0)
-            return -1;
-        if (fcntl (c->fd, F_SETFL, nonblock ? flags | O_NONBLOCK
-                                            : flags & ~O_NONBLOCK) < 0)
-            return -1;
-        c->fd_nonblock = nonblock;
-    }
+    if (c->fd_nonblock == nonblock)
+        return 0;
+    if ((nonblock ? fd_set_nonblocking (c->fd) : fd_set_blocking (c->fd)) < 0)
+        return -1;
+    c->fd_nonblock = nonblock;
     return 0;
 }
 

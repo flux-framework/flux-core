@@ -258,13 +258,13 @@ test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a tre
 test_expect_success 'kvs: put on rank 0, exists on all ranks' '
 	flux kvs put --json $DIR.xxx=99 &&
 	VERS=$(flux kvs version) &&
-	flux exec sh -c "flux kvs wait ${VERS} && flux kvs get --json $DIR.xxx"
+	flux exec -n sh -c "flux kvs wait ${VERS} && flux kvs get --json $DIR.xxx"
 '
 
 test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 	flux kvs unlink -Rf $DIR.xxx &&
 	VERS=$(flux kvs version) &&
-	flux exec sh -c "flux kvs wait ${VERS} && ! flux kvs get --json $DIR.xxx"
+	flux exec -n sh -c "flux kvs wait ${VERS} && ! flux kvs get --json $DIR.xxx"
 '
 
 #
@@ -288,13 +288,13 @@ test_expect_success 'kvs: clear stats locally' '
 test_expect_success 'kvs: clear stats globally' '
         flux kvs unlink -Rf $DIR &&
         flux module stats -C kvs &&
-        flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
         for i in `seq 0 $((${SIZE} - 1))`; do
-            flux exec -r $i sh -c "flux kvs put --json $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
+            flux exec -n -r $i sh -c "flux kvs put --json $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
         done &&
-        ! flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        ! flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
         flux module stats -C kvs &&
-        flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0"
+        flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0"
 '
 
 #
@@ -307,7 +307,7 @@ test_expect_success 'kvs: test invalid fence arguments on rank 0' '
 '
 
 test_expect_success 'kvs: test invalid fence arguments on rank 1' '
-        flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest2" > invalid_output &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest2" > invalid_output &&
         grep "flux_future_get: Invalid argument" invalid_output
 '
 

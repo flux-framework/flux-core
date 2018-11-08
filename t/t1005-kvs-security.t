@@ -70,13 +70,13 @@ test_expect_success 'kvs: get fails (user)' '
 '
 
 test_expect_success 'kvs: get fails on other ranks (user)' '
-        ! flux exec -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
+        ! flux exec -n -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
                                 FLUX_HANDLE_ROLEMASK=0x2 \
                                 flux kvs --namespace=$NAMESPACETMP-OWNER get $DIR.test"
 '
 
 test_expect_success 'kvs: get works on other ranks (owner)' '
-        flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-OWNER get $DIR.test"
+        flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-OWNER get $DIR.test"
 '
 
 
@@ -109,7 +109,7 @@ test_expect_success 'kvs: version fails (user)' '
 '
 
 test_expect_success 'kvs: version fails on other ranks (user)' '
-        ! flux exec -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
+        ! flux exec -n -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
                                 FLUX_HANDLE_ROLEMASK=0x2 \
                                 flux kvs --namespace=$NAMESPACETMP-OWNER version"
 '
@@ -164,13 +164,13 @@ test_expect_success 'kvs: put fails (wrong user)' '
 '
 
 test_expect_success 'kvs: get works on other ranks (user)' '
-        flux exec -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
+        flux exec -n -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
                               FLUX_HANDLE_ROLEMASK=0x2 \
                               flux kvs --namespace=$NAMESPACETMP-USER get $DIR.test"
 '
 
 test_expect_success 'kvs: get works on other ranks (owner)' '
-        flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-USER get $DIR.test"
+        flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-USER get $DIR.test"
 '
 
 test_expect_success 'kvs: get fails (wrong user)' '
@@ -180,7 +180,7 @@ test_expect_success 'kvs: get fails (wrong user)' '
 '
 
 test_expect_success 'kvs: get fails on other ranks (wrong user)' '
-        ! flux exec -r 1 sh -c "FLUX_HANDLE_USERID=9000 \
+        ! flux exec -n -r 1 sh -c "FLUX_HANDLE_USERID=9000 \
                                 FLUX_HANDLE_ROLEMASK=0x2 \
                                 flux kvs --namespace=$NAMESPACETMP-USER get $DIR.test"
 '
@@ -246,13 +246,13 @@ test_expect_success NO_CHAIN_LINT 'kvs: version & wait works (user)' '
 '
 
 test_expect_success 'kvs: version works on other ranks (user)' '
-        flux exec -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
+        flux exec -n -r 1 sh -c "FLUX_HANDLE_USERID=9999 \
                               FLUX_HANDLE_ROLEMASK=0x2 \
                               flux kvs --namespace=$NAMESPACETMP-USER version"
 '
 
 test_expect_success 'kvs: version works on other ranks (owner)' '
-        flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-USER version"
+        flux exec -n -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-USER version"
 '
 
 test_expect_success 'kvs: version fails (wrong user)' '
@@ -262,7 +262,7 @@ test_expect_success 'kvs: version fails (wrong user)' '
 '
 
 test_expect_success 'kvs: version fails on other ranks (wrong user)' '
-        ! flux exec -r 1 sh -c "FLUX_HANDLE_USERID=9000 \
+        ! flux exec -n -r 1 sh -c "FLUX_HANDLE_USERID=9000 \
                                 FLUX_HANDLE_ROLEMASK=0x2 \
                                 flux kvs --namespace=$NAMESPACETMP-USER version"
 '

@@ -25,8 +25,8 @@ stdout and stderr.
 On receipt of SIGINT and SIGTERM signals, flux-exec(1) shall forward
 the received signal to all currently running remote processes.
 
-flux-exec(1) is meant as an administrative and test utility, and should not
-be used for executing lightweight jobs (LWJs) or user commands.
+flux-exec(1) is meant as an administrative and test utility, and cannot
+be used to launch Flux jobs.
 
 EXIT STATUS
 -----------
@@ -46,7 +46,7 @@ OPTIONS
 Label lines of output with the source RANK.
 
 *-n, --noinput*::
-Redirect `stdin` from `/dev/null`.
+Do not attempt to forward stdin.  Send EOF to remote process stdin.
 
 *-d, --dir*'=DIR'::
 Set the working directory of remote 'COMMANDS' to 'DIR'. The default is to

@@ -37,6 +37,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/fdutils.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -192,6 +193,7 @@ static int channel_local_setup (flux_subprocess_t *p,
     int fds[2] = { -1, -1 };
     char *e = NULL;
     int save_errno;
+    int fd_flags;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
         flux_log_error (p->h, "calloc");
@@ -211,6 +213,11 @@ static int channel_local_setup (flux_subprocess_t *p,
      */
     fds[0] = -1;
     fds[1] = -1;
+
+    if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
+        flux_log_error (p->h, "fd_set_nonblocking");
+        goto error;
+    }
 
     if ((channel_flags & CHANNEL_WRITE) && in_cb) {
         c->buffer_write_w = flux_buffer_write_watcher_create (p->reactor,
@@ -426,9 +433,7 @@ static void closefd_child (void *arg, int fd)
     c = zhash_first (p->channels);
     while (c) {
         if (c->child_fd == fd) {
-            int flags = fcntl (fd, F_GETFD, 0);
-            if (flags >= 0)
-                (void) fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC);
+            (void) fd_unset_cloexec (fd);
             return;
         }
         c = zhash_next (p->channels);

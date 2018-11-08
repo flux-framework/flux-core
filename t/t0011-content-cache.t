@@ -47,32 +47,32 @@ test_expect_success LONGTEST "cannot store blob that exceeds max size of $MAXBLO
 
 test_expect_success 'load and verify 0b blob on all ranks' '
 	HASHSTR=`cat 0.0.hash` &&
-	flux exec echo ${HASHSTR} >0.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >0.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>0.0.all.output &&
 	test_cmp 0.0.all.expect 0.0.all.output
 '
 
 test_expect_success 'load and verify 64b blob on all ranks' '
 	HASHSTR=`cat 64.0.hash` &&
-	flux exec echo ${HASHSTR} >64.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >64.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>64.0.all.output &&
 	test_cmp 64.0.all.expect 64.0.all.output
 '
 
 test_expect_success 'load and verify 4k blob on all ranks' '
 	HASHSTR=`cat 4k.0.hash` &&
-	flux exec echo ${HASHSTR} >4k.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >4k.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>4k.0.all.output &&
 	test_cmp 4k.0.all.expect 4k.0.all.output
 '
 
 test_expect_success 'load and verify 1m blob on all ranks' '
 	HASHSTR=`cat 1m.0.hash` &&
-	flux exec echo ${HASHSTR} >1m.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >1m.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>1m.0.all.output &&
 	test_cmp 1m.0.all.expect 1m.0.all.output
 '
@@ -82,33 +82,33 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 
 test_expect_success 'store blobs on rank 3' '
 	dd if=/dev/urandom count=1 bs=64 >64.3.store 2>/dev/null &&
-	flux exec --rank 3 sh -c "flux content store <64.3.store >64.3.hash" &&
+	flux exec -n --rank 3 sh -c "flux content store <64.3.store >64.3.hash" &&
 	dd if=/dev/urandom count=1 bs=4096 >4k.3.store 2>/dev/null &&
-	flux exec --rank 3 sh -c "flux content store <4k.3.store >4k.3.hash" &&
+	flux exec -n --rank 3 sh -c "flux content store <4k.3.store >4k.3.hash" &&
 	dd if=/dev/urandom count=256 bs=4096 >1m.3.store 2>/dev/null &&
-	flux exec --rank 3 sh -c "flux content store <1m.3.store >1m.3.hash"
+	flux exec -n --rank 3 sh -c "flux content store <1m.3.store >1m.3.hash"
 '
 
 test_expect_success 'load and verify 64b blob on all ranks' '
 	HASHSTR=`cat 64.3.hash` &&
-	flux exec echo ${HASHSTR} >64.3.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >64.3.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>64.3.all.output &&
 	test_cmp 64.3.all.expect 64.3.all.output
 '
 
 test_expect_success 'load and verify 4k blob on all ranks' '
 	HASHSTR=`cat 4k.3.hash` &&
-	flux exec echo ${HASHSTR} >4k.3.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >4k.3.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>4k.3.all.output &&
 	test_cmp 4k.3.all.expect 4k.3.all.output
 '
 
 test_expect_success 'load and verify 1m blob on all ranks' '
 	HASHSTR=`cat 1m.3.hash` &&
-	flux exec echo ${HASHSTR} >1m.3.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
+	flux exec -n echo ${HASHSTR} >1m.3.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>1m.3.all.output &&
 	test_cmp 1m.3.all.expect 1m.3.all.output
 '
@@ -120,9 +120,9 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 test_expect_success 'negative entries are not cached' '
 	VALUESTR=sdflskdjflsdkjfsdjf &&
 	HASHSTR=`echo $VALUESTR | $BLOBREF $HASHFUN` &&
-	test_must_fail flux exec flux content load ${HASHSTR} 2>/dev/null &&
+	test_must_fail flux exec -n flux content load ${HASHSTR} 2>/dev/null &&
 	echo $VALUESTR | flux content store >/dev/null &&
-	flux exec flux content load ${HASHSTR} >/dev/null
+	flux exec -n flux content load ${HASHSTR} >/dev/null
 '
 
 # Store the same content on all ranks
@@ -130,7 +130,7 @@ test_expect_success 'negative entries are not cached' '
 # (Really we want to test whther stores were squashed, fill in later)
 
 test_expect_success 'store on all ranks can be retrieved from rank 0' '
-	flux exec sh -c "echo foof | flux content store" >/dev/null &&
+	flux exec -n sh -c "echo foof | flux content store" >/dev/null &&
 	flux content load `echo foof | $BLOBREF $HASHFUN` >/dev/null
 '
 
@@ -155,7 +155,7 @@ test_expect_success 'store 8K blobs from rank 0 using async RPC' '
 
 # Write 1024 blobs per rank
 test_expect_success 'store 1K blobs from all ranks using async RPC' '
-	flux exec flux content spam 1024 256
+	flux exec -n flux content spam 1024 256
 '
 
 test_done
