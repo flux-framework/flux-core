@@ -69,7 +69,6 @@ zlist_t *subprocesses;
 optparse_t *opts = NULL;
 
 flux_watcher_t *stdin_w;
-int stdin_fd = STDIN_FILENO;
 
 void completion_cb (flux_subprocess_t *p)
 {
@@ -108,10 +107,12 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
         exited++;
     }
 
-    if (started == rank_count)
-        flux_watcher_start (stdin_w);
-    if (exited == rank_count)
-        flux_watcher_stop (stdin_w);
+    if (stdin_w) {
+        if (started == rank_count)
+            flux_watcher_start (stdin_w);
+        if (exited == rank_count)
+            flux_watcher_stop (stdin_w);
+    }
 
     if (state == FLUX_SUBPROCESS_EXEC_FAILED
         || state == FLUX_SUBPROCESS_FAILED) {
@@ -315,16 +316,23 @@ int main (int argc, char *argv[])
     if (optparse_getopt (opts, "verbose", NULL) > 0)
         fprintf (stderr, "%03fms: Sent all requests\n", monotime_since (t0));
 
+    /* -n,--noinput: close subprocess STDIN
+     */
     if (optparse_getopt (opts, "noinput", NULL) > 0) {
-        if ((stdin_fd = open ("/dev/null", O_RDONLY)) < 0)
-            log_err_exit ("open");
+        flux_subprocess_t *p;
+        p = zlist_first (subprocesses);
+        while (p) {
+            if (flux_subprocess_close (p, "STDIN") < 0)
+                log_err_exit ("flux_subprocess_close");
+            p = zlist_next (subprocesses);
+        }
     }
-
-    if (!(stdin_w = flux_buffer_read_watcher_create (r, stdin_fd,
-                                                     1 << 20, stdin_cb,
-                                                     0, NULL)))
-        log_err_exit ("flux_buffer_read_watcher_create");
-
+    else {
+        if (!(stdin_w = flux_buffer_read_watcher_create (r, STDIN_FILENO,
+                                                         1 << 20, stdin_cb,
+                                                         0, NULL)))
+            log_err_exit ("flux_buffer_read_watcher_create");
+    }
     if (signal (SIGINT, signal_cb) == SIG_ERR)
         log_err_exit ("signal");
 
