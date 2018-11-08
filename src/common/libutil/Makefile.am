@@ -82,7 +82,9 @@ libutil_la_SOURCES = \
 	fluid.c \
 	fluid.h \
 	aux.c \
-	aux.h
+	aux.h \
+	fdutils.c \
+	fdutils.h
 
 EXTRA_DIST = veb_mach.c
 
