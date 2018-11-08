@@ -6,6 +6,7 @@
 
 #include "src/common/libflux/reactor.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"
 
 static const size_t zmqwriter_msgcount = 1024;
@@ -589,6 +590,19 @@ static void test_buffer (flux_reactor_t *reactor)
     count = 0;
     ok (pipe (pfds) == 0,
         "buffer: hey I can has a pipe!");
+
+    w = flux_buffer_write_watcher_create (reactor,
+                                          pfds[1],
+                                          1024,
+                                          buffer_write,
+                                          0,
+                                          &count);
+    ok (w == NULL && errno == EINVAL,
+        "buffer: write_watcher_create fails with EINVAL if fd !nonblocking");
+
+    ok (fd_set_nonblocking (pfds[1]) >= 0,
+        "buffer: fd_set_nonblocking");
+
     w = flux_buffer_write_watcher_create (reactor,
                                           pfds[1],
                                           1024,
