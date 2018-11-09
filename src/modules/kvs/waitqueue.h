@@ -64,6 +64,17 @@ int wait_msg_aux_set (wait_t *w, const char *name, void *aux,
                       flux_free_f destroy);
 void *wait_msg_aux_get (wait_t *w, const char *name);
 
+/* Get/set an aux errnum on a wait that can be retrieved later.
+ * In addition, a callback can be set which can be triggered
+ * via wait_set_errnum().  This can be useful for setting
+ * information that an error occurred during asynchronous
+ * communication.
+ */
+int wait_aux_set_errnum (wait_t *w, int errnum);
+int wait_aux_get_errnum (wait_t *w);
+typedef void (*wait_error_f)(wait_t *w, int errnum, void *arg);
+int wait_set_error_cb (wait_t *w, wait_error_f cb, void *arg);
+
 /* Destroy all wait_t's fitting message match critieria, tested with
  * wait_test_msg_f callback.
  * On error, the waitqueue is unaltered.
