@@ -7,6 +7,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
+#include "util.h"
 
 static int send_request (flux_t *h, const char *topic)
 {
@@ -113,7 +114,7 @@ static void leak_msg_handler (void)
     flux_t *h;
     flux_msg_handler_t *mh;
 
-    if (!(h = flux_open ("loop://", 0)))
+    if (!(h = loopback_create (0)))
         exit (1);
     if (!(mh = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy, NULL)))
         exit (1);
@@ -133,11 +134,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
-    if (!h)
+    if (!(h = loopback_create (0)))
         BAIL_OUT ("can't continue without loop handle");
     flux_fatal_set (h, fatal_err, NULL);
     ok ((reactor = flux_get_reactor (h)) != NULL,

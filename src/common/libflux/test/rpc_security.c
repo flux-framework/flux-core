@@ -4,6 +4,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
+#include "util.h"
 
 struct creds {
     uint32_t userid;
@@ -322,12 +323,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
-    if (!h)
-        BAIL_OUT ("flux_open: %s", flux_strerror (errno));
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("cannot continue without loopback handle");
     flux_fatal_set (h, fatal_err, NULL);
 
     check_rpc_oneway (h);

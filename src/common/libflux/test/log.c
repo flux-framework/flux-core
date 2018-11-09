@@ -2,8 +2,8 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
+#include "util.h"
 
 int main (int argc, char *argv[])
 {
@@ -11,12 +11,12 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
-    if (!h)
-        BAIL_OUT ("can't continue without loop handle");
+    test_server_environment_init ("log-test");
+
+    if (!(h = test_server_create (NULL, NULL)))
+        BAIL_OUT ("could not create test server");
+    if (flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        BAIL_OUT ("flux_attr_fake failed");
 
     errno = 1234;
     flux_log_error (h, "hello world");
@@ -28,6 +28,7 @@ int main (int argc, char *argv[])
     ok (errno == 1236,
        "flux_log didn't clobber errno");
 
+    test_server_stop (h);
     flux_close (h);
     done_testing();
     return (0);

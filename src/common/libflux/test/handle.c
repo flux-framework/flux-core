@@ -4,6 +4,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
+#include "util.h"
 
 /* Fake handle flags for testing flux_flags_get/set/unset
  */
@@ -55,12 +56,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
-    if (!h)
-        BAIL_OUT ("can't continue without loop handle");
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("can't continue without loopback handle");
 
     test_handle_invalid_args ();
 
