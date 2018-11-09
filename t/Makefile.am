@@ -44,9 +44,6 @@ TESTS = \
 	loop/reactor.t \
 	loop/reduce.t \
 	loop/log.t \
-	rpc/rpc.t \
-	rpc/mrpc.t \
-	rpc/chained.t \
 	rolemask/loop.t \
 	t0000-sharness.t \
 	t0001-basic.t \
@@ -263,9 +260,6 @@ check_PROGRAMS = \
 	loop/reduce.t \
 	loop/log.t \
 	loop/logstderr \
-	rpc/rpc.t \
-	rpc/mrpc.t \
-	rpc/chained.t \
 	rolemask/loop.t \
 	kz/kzcopy \
 	kvs/torture \
@@ -368,18 +362,6 @@ loop_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_reduce_t_SOURCES = loop/reduce.c
 loop_reduce_t_CPPFLAGS = $(test_cppflags)
 loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rpc_rpc_t_SOURCES = rpc/rpc.c rpc/util.h rpc/util.c
-rpc_rpc_t_CPPFLAGS = $(test_cppflags)
-rpc_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rpc_mrpc_t_SOURCES = rpc/mrpc.c rpc/util.h rpc/util.c
-rpc_mrpc_t_CPPFLAGS = $(test_cppflags)
-rpc_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rpc_chained_t_SOURCES = rpc/chained.c rpc/util.h rpc/util.c
-rpc_chained_t_CPPFLAGS = $(test_cppflags)
-rpc_chained_t_LDADD = $(test_ldadd) $(LIBDL)
 
 rolemask_loop_t_SOURCES = rolemask/loop.c
 rolemask_loop_t_CPPFLAGS = $(test_cppflags)

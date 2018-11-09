@@ -135,7 +135,9 @@ TESTS = test_module.t \
 	test_composite_future.t \
 	test_reactor.t \
 	test_buffer.t \
+	test_rpc.t \
 	test_mrpc.t \
+	test_rpc_chained.t \
 	test_handle.t \
 	test_msg_handler.t \
 	test_version.t
@@ -207,10 +209,6 @@ test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
 test_buffer_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_mrpc_t_SOURCES = test/mrpc.c
-test_mrpc_t_CPPFLAGS = $(test_cppflags)
-test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
 test_handle_t_SOURCES = test/handle.c
 test_handle_t_CPPFLAGS = $(test_cppflags)
 test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
@@ -222,3 +220,15 @@ test_msg_handler_t_LDADD = $(test_ldadd) $(LIBDL)
 test_version_t_SOURCES = test/version.c
 test_version_t_CPPFLAGS = $(test_cppflags)
 test_version_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_rpc_t_SOURCES = test/rpc.c test/util.c test/util.h
+test_rpc_t_CPPFLAGS = $(test_cppflags)
+test_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_mrpc_t_SOURCES = test/mrpc.c test/util.c test/util.h
+test_mrpc_t_CPPFLAGS = $(test_cppflags)
+test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_rpc_chained_t_SOURCES = test/rpc_chained.c test/util.c test/util.h
+test_rpc_chained_t_CPPFLAGS = $(test_cppflags)
+test_rpc_chained_t_LDADD = $(test_ldadd) $(LIBDL)
