@@ -553,6 +553,22 @@ done:
  * load
  */
 
+static void content_load_cache_entry_error (kvs_ctx_t *ctx,
+                                            struct cache_entry *entry,
+                                            int errnum,
+                                            const char *blobref)
+{
+    /* failure on load, inform all waiters, attempt to destroy
+     * entry afterwards, as future loads may believe a load is in
+     * transit.  cache_remove_entry() will not work if a waiter is
+     * still there.  If assert hits, it's because we did not set
+     * up a wait error cb correctly.
+     */
+    (void)cache_entry_set_errnum_on_valid (entry, errnum);
+    if (cache_remove_entry (ctx->cache, blobref) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: cache_remove_entry", __FUNCTION__);
+}
+
 static void content_load_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -561,11 +577,8 @@ static void content_load_completion (flux_future_t *f, void *arg)
     const char *blobref;
     struct cache_entry *entry;
 
-    if (flux_content_load_get (f, &data, &size) < 0) {
-        flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
-        goto done;
-    }
     blobref = flux_future_aux_get (f, "ref");
+
     /* should be impossible for lookup to fail, cache entry created
      * earlier, and cache_expire_entries() could not have removed it
      * b/c it is not yet valid.  But check and log incase there is
@@ -576,17 +589,19 @@ static void content_load_completion (flux_future_t *f, void *arg)
         goto done;
     }
 
+    if (flux_content_load_get (f, &data, &size) < 0) {
+        flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
+        content_load_cache_entry_error (ctx, entry, errno, blobref);
+        goto done;
+    }
+
     /* If cache_entry_set_raw() fails, it's a pretty terrible error
      * case, where we've loaded an object from the content store, but
      * can't put it in the cache.
-     *
-     * If there was a waiter on this cache entry waiting for it to be
-     * valid, the load() will ultimately hang.  The caller will
-     * timeout or eventually give up, so the KVS can continue along
-     * its merry way.  So we just log the error.
      */
     if (cache_entry_set_raw (entry, data, size) < 0) {
         flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
+        content_load_cache_entry_error (ctx, entry, errno, blobref);
         goto done;
     }
 
@@ -930,6 +945,12 @@ done:
     return rc;
 }
 
+static void kvstxn_wait_error_cb (wait_t *w, int errnum, void *arg)
+{
+    kvstxn_t *kt = arg;
+    kvstxn_set_aux_errnum (kt, errnum);
+}
+
 /* Write all the ops for a particular commit/fence request (rank 0
  * only).  The setroot event will cause responses to be sent to the
  * transaction requests and clean up the treq_t state.  This
@@ -983,6 +1004,9 @@ static void kvstxn_apply (kvstxn_t *kt)
             errnum = errno;
             goto done;
         }
+
+        if (wait_set_error_cb (wait, kvstxn_wait_error_cb, kt) < 0)
+            goto done;
 
         cbd.ctx = ctx;
         cbd.wait = wait;
@@ -1279,6 +1303,12 @@ static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
     return 0;
 }
 
+static void lookup_wait_error_cb (wait_t *w, int errnum, void *arg)
+{
+    lookup_t *lh = arg;
+    lookup_set_aux_errnum (lh, errnum);
+}
+
 static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
@@ -1376,6 +1406,9 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
                                               lookup_request_cb)))
+            goto done;
+
+        if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
             goto done;
 
         /* do not destroy lookup_handle on message destruction, we
@@ -1515,6 +1548,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
                                               watch_request_cb)))
+            goto done;
+
+        if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
             goto done;
 
         /* do not destroy lookup_handle on message destruction, we
