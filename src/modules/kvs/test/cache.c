@@ -38,6 +38,26 @@ void wait_cb (void *arg)
     (*count)++;
 }
 
+struct wait_error
+{
+    int count;
+    int errnum;
+};
+
+void wait_error_cb (void *arg)
+{
+    struct wait_error *we = arg;
+    ok (we->errnum == ENOTSUP,
+        "wait error called correctly before callback");
+    we->count++;
+}
+
+void error_cb (wait_t *wf, int errnum, void *arg)
+{
+    int *err = arg;
+    (*err) = errnum;
+}
+
 void cache_tests (void)
 {
     struct cache *cache;
@@ -97,6 +117,22 @@ void cache_entry_basic_tests (void)
         "cache_entry_set_raw fails with EINVAL with bad input");
 
     free (data);
+
+    ok (cache_entry_set_errnum_on_valid (NULL, EPERM) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_valid returns EINVAL with bad input");
+
+    ok (cache_entry_set_errnum_on_valid (e, 0) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_valid returns EINVAL with bad errnum");
+
+    ok (cache_entry_set_errnum_on_notdirty (NULL, EPERM) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_notdirty returns EINVAL with bad input");
+
+    ok (cache_entry_set_errnum_on_notdirty (e, 0) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_notdirty returns EINVAL with bad errnum");
 
     cache_entry_destroy (e);
     e = NULL;
@@ -284,6 +320,7 @@ void waiter_tests (void)
     struct cache_entry *e;
     char *data;
     wait_t *w;
+    struct wait_error we;
     int count;
 
     data = strdup ("abcd");
@@ -310,6 +347,36 @@ void waiter_tests (void)
         "cache entry set valid with one waiter");
     ok (count == 1,
         "waiter callback ran");
+
+    we.count = 0;
+    we.errnum = 0;
+    ok ((w = wait_create (wait_cb, &we)) != NULL,
+        "wait_create works");
+    ok (wait_set_error_cb (w, error_cb, &we.errnum) == 0,
+        "wait_set_error_cb works");
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
+    ok (cache_entry_set_errnum_on_valid (e, ENOTSUP) == 0,
+        "cache_entry_set_errnum_on_valid success");
+    ok (we.count == 1,
+        "waiter callback ran");
+    ok (we.errnum == ENOTSUP,
+        "error callback ran");
+
+    we.count = 0;
+    we.errnum = 0;
+    ok ((w = wait_create (wait_cb, &we)) != NULL,
+        "wait_create works");
+    ok (wait_set_error_cb (w, error_cb, &we.errnum) == 0,
+        "wait_set_error_cb works");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_set_errnum_on_notdirty (e, EPERM) == 0,
+        "cache_entry_set_errnum_on_notdirty success");
+    ok (we.count == 1,
+        "waiter callback ran");
+    ok (we.errnum == EPERM,
+        "error callback ran");
 
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,

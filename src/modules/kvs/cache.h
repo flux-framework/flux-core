@@ -75,6 +75,12 @@ int cache_entry_set_raw (struct cache_entry *entry, const void *data, int len);
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *entry);
 
+/* in the event of a load or store RPC error, inform the cache to set
+ * an error on all waiters of a type on a cache entry.
+ */
+int cache_entry_set_errnum_on_valid (struct cache_entry *entry, int errnum);
+int cache_entry_set_errnum_on_notdirty (struct cache_entry *entry, int errnum);
+
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
  * load or store RPC.

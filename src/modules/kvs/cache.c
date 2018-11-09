@@ -61,6 +61,7 @@ struct cache_entry {
                              * set, don't use data == NULL as test, as
                              * zero length data can be valid */
     bool dirty;
+    int errnum;
 };
 
 struct cache {
@@ -186,6 +187,52 @@ reset_invalid:
     entry->len = 0;
     entry->valid = false;
     return -1;
+}
+
+static void set_wait_errnum (wait_t *w, void *arg)
+{
+    int *errnum = arg;
+    (void)wait_aux_set_errnum (w, *errnum);
+}
+
+int cache_entry_set_errnum_on_valid (struct cache_entry *entry, int errnum)
+{
+    if (!entry || errnum <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    entry->errnum = errnum;
+    if (entry->waitlist_valid) {
+        if (wait_queue_iter (entry->waitlist_valid,
+                             set_wait_errnum,
+                             &entry->errnum) < 0)
+            return -1;
+        if (wait_runqueue (entry->waitlist_valid) < 0)
+            return -1;
+    }
+
+    return 0;
+}
+
+int cache_entry_set_errnum_on_notdirty (struct cache_entry *entry, int errnum)
+{
+    if (!entry || errnum <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    entry->errnum = errnum;
+    if (entry->waitlist_notdirty) {
+        if (wait_queue_iter (entry->waitlist_notdirty,
+                             set_wait_errnum,
+                             &entry->errnum) < 0)
+            return -1;
+        if (wait_runqueue (entry->waitlist_notdirty) < 0)
+            return -1;
+    }
+
+    return 0;
 }
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *entry)
