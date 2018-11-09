@@ -252,6 +252,75 @@ test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a tre
 '
 
 #
+# invalid blobrefs don't hang
+#
+
+# create valref with illegal content store blob
+# call flux kvs get $DIR.bad_X twice, to ensure first time cleaned up properly
+
+badhash="sha1-0123456789012345678901234567890123456789"
+
+test_expect_success 'kvs: invalid valref lookup wont hang' '
+        flux kvs put --treeobj $DIR.bad_valref="{\"data\":[\"${badhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        ! flux kvs get $DIR.bad_valref &&
+        ! flux kvs get $DIR.bad_valref
+'
+
+test_expect_success 'kvs: invalid valref get --watch wont hang' '
+        ! flux kvs get --watch $DIR.bad_valref &&
+        ! flux kvs get --watch $DIR.bad_valref
+'
+
+test_expect_success 'kvs: invalid valref watch returns nil' '
+        flux kvs watch -c 1 $DIR.bad_valref > output &&
+        echo "nil" > expected &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: invalid multi-blobref valref lookup wont hang' '
+        flux kvs put --treeobj $DIR.bad_multi_valref="{\"data\":[\"${badhash}\", \"${badhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        ! flux kvs get $DIR.bad_multi_valref &&
+        ! flux kvs get $DIR.bad_multi_valref
+'
+
+test_expect_success 'kvs: invalid multi-blobref valref get --watch wont hang' '
+        ! flux kvs get --watch $DIR.bad_multi_valref &&
+        ! flux kvs get --watch $DIR.bad_multi_valref
+'
+
+test_expect_success 'kvs: invalid multi-blobref valref watch returns nil' '
+        flux kvs watch -c 1 $DIR.bad_multi_valref > output &&
+        echo "nil" > expected &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: invalid dirref lookup wont hang' '
+        flux kvs put --treeobj $DIR.bad_dirref="{\"data\":[\"${badhash}\"],\"type\":\"dirref\",\"ver\":1}" &&
+        ! flux kvs get $DIR.bad_dirref.a &&
+        ! flux kvs get $DIR.bad_dirref.a
+'
+
+test_expect_success 'kvs: invalid dirref get --watch wont hang' '
+        ! flux kvs get --watch $DIR.bad_dirref.a &&
+        ! flux kvs get --watch $DIR.bad_dirref.a
+'
+
+test_expect_success 'kvs: invalid dirref watch returns nil' '
+        flux kvs watch -c 1 $DIR.bad_dirref > output &&
+	cat >expected <<-EOF &&
+nil
+======================
+	EOF
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: invalid dirref write wont hang' '
+        flux kvs put --treeobj $DIR.bad_dirref="{\"data\":[\"${badhash}\"],\"type\":\"dirref\",\"ver\":1}" &&
+        ! flux kvs put $DIR.bad_dirref.a=1 &&
+        ! flux kvs put $DIR.bad_dirref.b=1
+'
+
+#
 # test synchronization based on commit sequence no.
 #
 
