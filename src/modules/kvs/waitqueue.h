@@ -42,6 +42,9 @@ int wait_queue_length (waitqueue_t *q);
  */
 int wait_addqueue (waitqueue_t *q, wait_t *wait);
 
+typedef void (*wait_iter_cb_f)(wait_t *w, void *arg);
+int wait_queue_iter (waitqueue_t *q, wait_iter_cb_f cb, void *arg);
+
 /* Remove all wait_t's from the specified queue.
  * Note: wait_runqueue() empties the waitqueue_t before invoking wait_t
  * callbacks for waiters that have a usecount of zero, hence it is safe

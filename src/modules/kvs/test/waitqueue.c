@@ -14,6 +14,16 @@ void error_cb (wait_t *w, int errnum, void *arg)
     (*err) = errnum;
 }
 
+void iter_cb (wait_t *w, void *arg)
+{
+    int *count = arg;
+    (*count)++;
+
+    /* what "foobar" is set to not important, just set to count */
+    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0,
+        "wait_msg_aux_set works");
+}
+
 void msghand (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
@@ -42,8 +52,8 @@ int main (int argc, char *argv[])
 {
     waitqueue_t *q;
     waitqueue_t *q2;
-    wait_t *w;
-    flux_msg_t *msg;
+    wait_t *w, *w1, *w2;
+    flux_msg_t *msg, *msg1, *msg2;
     char *str;
     int count;
     int errnum;
@@ -108,6 +118,39 @@ int main (int argc, char *argv[])
     ok (wait_aux_get_errnum (w) == ENOTSUP,
         "wait_aux_get_errnum returns errnum correctly");
     wait_destroy (w);
+
+    /* Create/destroy waitqueue_t with msgs, iterate over them */
+    count = 0;
+    msg1 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    ok (msg1 != NULL,
+        "flux_msg_create works");
+    msg2 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    ok (msg2 != NULL,
+        "flux_msg_create works");
+    w1 = wait_create_msg_handler (NULL, NULL, msg1, NULL, NULL);
+    ok (w1 != NULL,
+        "wait_create_msg_handler works");
+    w2 = wait_create_msg_handler (NULL, NULL, msg1, NULL, NULL);
+    ok (w2 != NULL,
+        "wait_create_msg_handler works");
+    q = wait_queue_create ();
+    ok (q != NULL,
+        "wait_queue_create works");
+    ok (wait_addqueue (q, w1) == 0,
+        "wait_addqueue works");
+    ok (wait_addqueue (q, w2) == 0,
+        "wait_addqueue works");
+    ok (wait_queue_iter (q, iter_cb, &count) == 0,
+        "wait_queue_iter works");
+    ok (count == 2,
+        "wait_queue_iter iterated the correct number of times");
+    ok (wait_msg_aux_get (w1, "foobar") != NULL,
+        "wait_queue_iter callback set aux correctly");
+    ok (wait_msg_aux_get (w2, "foobar") != NULL,
+        "wait_queue_iter callback set aux correctly");
+    wait_queue_destroy (q);
+    flux_msg_destroy (msg1);
+    flux_msg_destroy (msg2);
 
     /* Create wait_t, add to queue, run queue, destroy queue.
      */

@@ -156,6 +156,20 @@ int wait_queue_length (waitqueue_t *q)
     return zlist_size (q->q);
 }
 
+int wait_queue_iter (waitqueue_t *q, wait_iter_cb_f cb, void *arg)
+{
+    wait_t *w;
+
+    assert (q->magic == WAITQUEUE_MAGIC);
+    w = zlist_first (q->q);
+    while (w) {
+        if (cb)
+            cb (w, arg);
+        w = zlist_next (q->q);
+    }
+    return 0;
+}
+
 int wait_addqueue (waitqueue_t *q, wait_t *w)
 {
     assert (q->magic == WAITQUEUE_MAGIC);
