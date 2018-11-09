@@ -68,7 +68,7 @@ Remove a kvs namespace.
 *namespace-list*::
 List all current namespaces and info on each namespace.
 
-*get* [-j|-r|-t] [-a treeobj] [-l] [-w] [-c count] 'key' ['key...']::
+*get* [-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-c count] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.  If no options, value is displayed with
 a newline appended (if value length is nonzero).  If '-l', a 'key=' prefix is
@@ -77,7 +77,9 @@ If '-r', value is displayed without a newline.  If '-t', the RFC 11 object
 is displayed.  '-a treeobj' causes the lookup to be relative to an RFC 11
 snapshot reference.  If '-w', after the initial value, display the
 new value each time the key changes until interrupted, or if '-c count'
-is specified, until 'count' values have been displayed.
+is specified, until 'count' values have been displayed.  If the
+initial value does not yet exist, `-W` can be specified to wait for it
+to be crated.
 
 *put* [-j|-r|-t] [-n] [-A] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
@@ -160,12 +162,14 @@ of synchronization between peers is:  node A puts a value, commits it,
 reads version, sends version to node B.  Node B waits for version, gets
 value.
 
-*getroot* [-w] [-c count] [-s | -o | -b]::
+*getroot* [-w] [-W] [-c count] [-s | -o | -b]::
 Retrieve the current KVS root, displaying it as an RFC 11 dirref object.
 If '-b' is specified, display it as a blobref.  If '-o' is specified,
 display the namespace owner.  If '-s' is specified, display the root
 sequence number.  If '-w' is specified, display the current root,
 then a new value each time it is updated, up to 'count', if specified.
+If the namespace does not yet exist, `-W` can be specified to wait for
+it to be crated.
 
 *eventlog get* [-w] [-c count] [-u] 'key'::
 Display the contents of an RFC 18 KVS eventlog referred to by 'key'.

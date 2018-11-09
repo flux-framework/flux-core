@@ -2,6 +2,8 @@
 
 test_description='Test KVS getroot [--watch]'
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 test_under_flux 4 kvs
@@ -25,6 +27,44 @@ test_expect_success 'flux kvs getroot --blobref returns valid blobref' '
 test_expect_success 'flux kvs getroot --watch --count=1 --blobref also works' '
 	BLOBREF=$(flux kvs getroot --watch --count=1 --blobref) &&
 	flux content load $BLOBREF >/dev/null
+'
+
+test_expect_success 'flux kvs getroot --watch fails on nonexistent namespace' '
+	! flux kvs --namespace=noexist getroot --watch --count=1
+'
+
+# in --watch & --waitcreate tests, call wait_watcherscount_nonzero to
+# ensure background watcher has started, otherwise test can be racy
+
+test_expect_success NO_CHAIN_LINT 'flux kvs getroot, basic --watch and --waitcreate works' '
+	! flux kvs --namespace=ns_create_later getroot --watch --count=1 &&
+        flux kvs --namespace=ns_create_later getroot --watch --waitcreate \
+                 --count=1 > waitcreate.out &
+        pid=$! &&
+        wait_watcherscount_nonzero ns_create_later &&
+        flux kvs namespace-create ns_create_later &&
+        wait $pid &&
+        flux kvs --namespace=ns_create_later getroot > waitcreate.exp &&
+        test_cmp waitcreate.exp waitcreate.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs getroot --watch, --waitcreate, add key, remove namespace works' '
+	! flux kvs --namespace=ns_create_and_remove getroot --watch --count=1 &&
+        flux kvs --namespace=ns_create_and_remove getroot --watch --waitcreate \
+                 --count=3 > waitcreate2.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero ns_create_and_remove &&
+        flux kvs namespace-create ns_create_and_remove &&
+        flux kvs --namespace=ns_create_and_remove getroot --blobref > waitcreate2.treeobj1 &&
+        flux kvs --namespace=ns_create_and_remove put a=1 &&
+        flux kvs --namespace=ns_create_and_remove getroot --blobref > waitcreate2.treeobj2 &&
+        flux kvs namespace-remove ns_create_and_remove &&
+        ! wait $pid &&
+        treeobj=`cat waitcreate2.treeobj1` &&
+        grep "$treeobj" waitcreate2.out &&
+        treeobj=`cat waitcreate2.treeobj2` &&
+        grep "$treeobj" waitcreate2.out &&
+        grep "Operation not supported" waitcreate2.out
 '
 
 test_expect_success 'flux kvs getroot --sequence returns increasing rootseq' '
