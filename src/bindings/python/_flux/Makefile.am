@@ -7,7 +7,7 @@ AM_CPPFLAGS = \
 
 AM_LDFLAGS = \
 	-avoid-version -module $(san_ld_zdef_flag) \
-	$(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib \
+	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
 	$(CODE_COVERAGE_LIBS)
 
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
@@ -15,7 +15,8 @@ SUFFIXES = _build.py
 
 common_libs = $(top_builddir)/src/common/libflux-core.la \
 	      $(top_builddir)/src/common/libflux-internal.la \
-	      $(ZMQ_LIBS)
+	      $(ZMQ_LIBS) \
+	      $(PYTHON_LDFLAGS)
 
 _build.py.c:
 	$(PYTHON) $*_build.py

@@ -15,8 +15,9 @@ ssh_la_SOURCES = ssh.c
 
 ssh_la_LDFLAGS = -module $(san_ld_zdef_flag) \
 	-export-symbols-regex '^connector_init$$' \
-	--disable-static -avoid-version -shared -export-dynamic \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+	--disable-static -avoid-version -shared -export-dynamic
 
-ssh_la_LIBADD = $(ZMQ_LIBS)
+ssh_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(ZMQ_LIBS)
