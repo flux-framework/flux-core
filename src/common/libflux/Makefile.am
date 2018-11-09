@@ -75,7 +75,8 @@ fluxcoreinclude_HEADERS = \
 	future.h \
 	barrier.h \
 	buffer.h \
-	service.h
+	service.h \
+	version.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -114,7 +115,8 @@ libflux_la_SOURCES = \
 	barrier.c \
 	buffer_private.h \
 	buffer.c \
-	service.c
+	service.c \
+	version.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
@@ -135,7 +137,8 @@ TESTS = test_module.t \
 	test_buffer.t \
 	test_mrpc.t \
 	test_handle.t \
-	test_msg_handler.t
+	test_msg_handler.t \
+	test_version.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -215,3 +218,7 @@ test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
 test_msg_handler_t_SOURCES = test/msg_handler.c
 test_msg_handler_t_CPPFLAGS = $(test_cppflags)
 test_msg_handler_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_version_t_SOURCES = test/version.c
+test_version_t_CPPFLAGS = $(test_cppflags)
+test_version_t_LDADD = $(test_ldadd) $(LIBDL)

@@ -23,6 +23,9 @@ libtool
 .libs/
 libltdl/
 
+# generated library version header
+/src/common/libflux/version.h
+
 # libtool pull-ins
 /config/libtool.m4
 /config/ltoptions.m4

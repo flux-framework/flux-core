@@ -28,6 +28,15 @@ AC_DEFINE([_GNU_SOURCE], 1,
           [Define _GNU_SOURCE so that we get all necessary prototypes])
 
 ##
+# Generate project versions from PACKAGE_VERSION (set from git describe above)
+##
+AX_SPLIT_VERSION
+AX_POINT_VERSION=$(echo $AX_POINT_VERSION | $SED 's/-.*$//')
+AC_SUBST([AX_MAJOR_VERSION])
+AC_SUBST([AX_MINOR_VERSION])
+AC_SUBST([AX_POINT_VERSION])
+
+##
 # Initialize pkg-config for PKG_CHECK_MODULES to avoid conditional issues
 ##
 PKG_PROG_PKG_CONFIG
@@ -333,6 +342,7 @@ AC_CONFIG_FILES( \
   src/common/libev/Makefile \
   src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
+  src/common/libflux/version.h \
   src/common/libkvs/Makefile \
   src/common/libkz/Makefile \
   src/common/libjsc/Makefile \

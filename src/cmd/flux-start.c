@@ -331,12 +331,8 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
         if ((status = flux_subprocess_status (p)) >= 0) {
             if (WIFSIGNALED (status))
-                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WSTOPSIG (status)));
-            else if (WIFCONTINUED (status))
-                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
-            else if (WIFSIGNALED (status))
                 log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WTERMSIG (status)));
-            else if (WIFEXITED (status))
+            else if (WIFEXITED (status) && WEXITSTATUS (status) != 0)
                 log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, WEXITSTATUS (status));
         } else
             log_msg ("%d (pid %d) exited, unknown status", cli->rank, pid);

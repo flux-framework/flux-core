@@ -26,9 +26,29 @@
 
 #include "builtin.h"
 
+
+static void print_broker_version (optparse_t *p)
+{
+    const char *uri = getenv ("FLUX_URI");
+    const char *version;
+
+    if (!uri)
+        return;
+    flux_t *h = builtin_get_flux_handle (p);
+    if (!h)
+        log_err_exit ("flux_open %s failed", uri);
+    if (!(version = flux_attr_get (h, "version", NULL)))
+        log_err_exit ("flux_attr_get");
+    printf ("broker:  \t%s\n", version);
+    printf ("FLUX_URI:\t%s\n", uri);
+}
+
 static int cmd_version (optparse_t *p, int ac, char *av[])
 {
-    printf ("%s-%s\n", PACKAGE_NAME, PACKAGE_VERSION);
+    printf ("commands:    \t%s\n", FLUX_CORE_VERSION_STRING);
+    printf ("libflux-core:\t%s\n", flux_core_version_string ());
+    print_broker_version (p);
+
     return (0);
 }
 
