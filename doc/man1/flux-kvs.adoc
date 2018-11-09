@@ -79,7 +79,7 @@ snapshot reference.  If '-w', after the initial value, display the
 new value each time the key changes until interrupted, or if '-c count'
 is specified, until 'count' values have been displayed.  If the
 initial value does not yet exist, `-W` can be specified to wait for it
-to be crated.
+to be created.
 
 *put* [-j|-r|-t] [-n] [-A] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
@@ -169,7 +169,7 @@ display the namespace owner.  If '-s' is specified, display the root
 sequence number.  If '-w' is specified, display the current root,
 then a new value each time it is updated, up to 'count', if specified.
 If the namespace does not yet exist, `-W` can be specified to wait for
-it to be crated.
+it to be created.
 
 *eventlog get* [-w] [-c count] [-u] 'key'::
 Display the contents of an RFC 18 KVS eventlog referred to by 'key'.
