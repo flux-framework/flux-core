@@ -16,7 +16,7 @@ if flux job submitbench --help 2>&1 | grep -q sign-type; then
     SUBMITBENCH_OPT_NONE="--sign-type=none"
 fi
 
-test_under_flux 4 job
+test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
 
@@ -43,12 +43,21 @@ test_invalid ()
     return ${rc}
 }
 
+test_expect_success 'job-ingest: submit fails without job-ingest' '
+	test_must_fail ${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml 2>nosys.out
+'
+
+test_expect_success 'job-ingest: load job-ingest' '
+	flux module load -r all job-ingest
+'
+
 test_expect_success 'job-ingest: submit fails without job-manager' '
 	test_must_fail ${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml 2>nosys.out
 '
 
 test_expect_success 'job-ingest: load job-manager-dummy module' '
-	flux module load ${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
+	flux module load -r 0 \
+		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
 '
 
 test_expect_success 'job-ingest: can submit jobspec on stdin' '
@@ -140,8 +149,9 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 	grep -q "only instance owner" badrole.out
 '
 
-test_expect_success 'job-ingest: unload job-manager-dummy module' '
-	flux module remove job-manager
+test_expect_success 'job-ingest: remove modules' '
+	flux module remove -r 0 job-manager &&
+	flux module remove -r all job-ingest
 '
 
 test_done
