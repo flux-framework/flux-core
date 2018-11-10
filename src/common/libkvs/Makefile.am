@@ -48,7 +48,8 @@ TESTS = \
 	test_kvs_watch.t \
 	test_kvs_getroot.t \
 	test_treeobj.t \
-	test_kvs_eventlog.t
+	test_kvs_eventlog.t \
+	test_kvs_copy.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -106,3 +107,7 @@ test_treeobj_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_eventlog_t_SOURCES = test/kvs_eventlog.c
 test_kvs_eventlog_t_CPPFLAGS = $(test_cppflags)
 test_kvs_eventlog_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_copy_t_SOURCES = test/kvs_copy.c
+test_kvs_copy_t_CPPFLAGS = $(test_cppflags)
+test_kvs_copy_t_LDADD = $(test_ldadd) $(LIBDL)
