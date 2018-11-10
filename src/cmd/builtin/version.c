@@ -25,6 +25,9 @@
 #include <config.h>
 
 #include "builtin.h"
+#if HAVE_FLUX_SECURITY_VERSION_H
+#include <flux/security/version.h>
+#endif
 
 
 static void print_broker_version (optparse_t *p)
@@ -39,14 +42,24 @@ static void print_broker_version (optparse_t *p)
         log_err_exit ("flux_open %s failed", uri);
     if (!(version = flux_attr_get (h, "version", NULL)))
         log_err_exit ("flux_attr_get");
-    printf ("broker:  \t%s\n", version);
-    printf ("FLUX_URI:\t%s\n", uri);
+    printf ("broker:  \t\t%s\n", version);
+    printf ("FLUX_URI:\t\t%s\n", uri);
 }
 
 static int cmd_version (optparse_t *p, int ac, char *av[])
 {
-    printf ("commands:    \t%s\n", FLUX_CORE_VERSION_STRING);
-    printf ("libflux-core:\t%s\n", flux_core_version_string ());
+    printf ("commands:    \t\t%s\n", FLUX_CORE_VERSION_STRING);
+    printf ("libflux-core:\t\t%s\n", flux_core_version_string ());
+#if HAVE_FLUX_SECURITY
+    /* N.B. flux_security_version_string () was added at the same
+     * time as the FLUX_SECURITY_VERSION_STRING macro.
+     * The inner #ifdef may be removed after configure is enforcing a
+     * pkg-config minimum version for flux-security.
+     */
+# ifdef FLUX_SECURITY_VERSION_STRING
+    printf ("libflux-security:\t%s\n", flux_security_version_string ());
+# endif
+#endif
     print_broker_version (p);
 
     return (0);
