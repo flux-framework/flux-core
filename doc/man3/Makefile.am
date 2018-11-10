@@ -54,6 +54,7 @@ MAN3_FILES_PRIMARY = \
 	flux_kvs_getroot.3 \
 	flux_kvs_eventlog_create.3 \
 	flux_kvs_copy.3 \
+	flux_core_version.3 \
 	idset_create.3
 
 # These files are generated as roff .so includes of a primary page.
@@ -188,6 +189,7 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_eventlog_first.3 \
 	flux_kvs_eventlog_next.3 \
 	flux_kvs_move.3 \
+	flux_core_version_string.3 \
 	idset_destroy.3 \
 	idset_encode.3 \
 	idset_decode.3
@@ -332,6 +334,7 @@ flux_kvs_eventlog_append.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_first.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_next.3: flux_kvs_eventlog_create.3
 flux_kvs_move.3: flux_kvs_copy.3
+flux_core_version_string.3: flux_core_version.3
 idset_destroy.3: idset_create.3
 idset_encode.3: idset_create.3
 idset_decode.3: idset_create.3
