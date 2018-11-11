@@ -931,28 +931,6 @@ test_expect_success 'kvs: get --at: fails bad on dirent' '
 '
 
 #
-# copy/move tests
-#
-test_expect_success 'kvs: copy works' '
-        flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.src=\"foo\" &&
-        flux kvs copy $DIR.src $DIR.dest &&
-	OUTPUT1=$(flux kvs get --json $DIR.src) &&
-	OUTPUT2=$(flux kvs get --json $DIR.dest) &&
-	test "$OUTPUT1" = "foo" &&
-	test "$OUTPUT2" = "foo"
-'
-
-test_expect_success 'kvs: move works' '
-        flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.src=\"foo\" &&
-        flux kvs move $DIR.src $DIR.dest &&
-	test_must_fail flux kvs get --json $DIR.src &&
-	OUTPUT=$(flux kvs get --json $DIR.dest) &&
-	test "$OUTPUT" = "foo"
-'
-
-#
 # dropcache tests
 #
 

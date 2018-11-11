@@ -75,6 +75,7 @@ TESTS = \
 	t1006-kvs-getroot.t \
 	t1007-kvs-lookup-watch.t \
 	t1008-kvs-eventlog.t \
+	t1009-kvs-copy.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
@@ -190,6 +191,7 @@ check_SCRIPTS = \
 	t1006-kvs-getroot.t \
 	t1007-kvs-lookup-watch.t \
 	t1008-kvs-eventlog.t \
+	t1009-kvs-copy.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
