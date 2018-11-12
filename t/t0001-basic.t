@@ -173,6 +173,26 @@ test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
        NUM=`flux start --size 4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
        test $NUM -eq 3
 '
+test_expect_success 'flux start --bootstrap=pmi (singlton) cleans up broker.rundir' '
+	flux start ${ARGS} --bootstrap=pmi \
+		flux getattr broker.rundir >rundir_pmi.out &&
+	RUNDIR=$(cat rundir_pmi.out) &&
+	test_must_fail test -d $RUNDIR
+'
+test_expect_success 'flux start --bootstrap=selfpmi --size=1 cleans up broker.rundirs' '
+	flux start ${ARGS} --bootstrap=selfpmi --size=1 \
+		flux getattr broker.rundir >rundir_selfpmi1.out &&
+	RUNDIR=$(cat rundir_selfpmi1.out) &&
+	test -n "$RUNDIR" &&
+	test_must_fail test -d $(dirname $RUNDIR)
+'
+test_expect_success 'flux start --bootstrap=selfpmi --size=2 cleans up broker.rundirs' '
+	flux start ${ARGS} --bootstrap=selfpmi --size=2 \
+		flux getattr broker.rundir >rundir_selfpmi2.out &&
+	RUNDIR=$(cat rundir_selfpmi2.out) &&
+	test -n "$RUNDIR" &&
+	test_must_fail test -d $(dirname $RUNDIR)
+'
 test_expect_success 'broker.rundir override works' '
 	RUNDIR=`mktemp -d` &&
 	DIR=`flux start ${ARGS} -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&
