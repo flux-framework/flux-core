@@ -36,6 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/kary.h"
+#include "src/common/libutil/cleanup.h"
 
 #include "heartbeat.h"
 #include "overlay.h"
@@ -379,6 +380,11 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
                                            ep->zs, FLUX_POLLIN, child_cb, ov)))
         log_err_exit ("flux_zmq_watcher_create");
     flux_watcher_start (ep->w);
+    /* Ensure that ipc files are removed when the broker exits.
+     */
+    char *ipc_path = strstr (ep->uri, "ipc://");
+    if (ipc_path)
+        cleanup_push_string (cleanup_file, ipc_path + 6);
     return 0;
 }
 
