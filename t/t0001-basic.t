@@ -372,4 +372,21 @@ test_expect_success 'reactor: reactorcat example program works' '
 	test -f reactorcat.devnull.out &&
 	test_must_fail test -s reactorcat.devnull.out
 '
+
+test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
+	! flux start --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
+		bash -c "flux comms -r 1 panic fubar; sleep 5" 2>panic.out
+'
+test_expect_success 'flux-start: panic message reached stderr' '
+	grep -q fubar panic.out
+'
+# flux-start: 1 (pid 10023) exited with rc=1
+test_expect_success 'flux-start: rank 1 exited with rc=1' '
+	egrep "flux-start: 1 .* exited with rc=1" panic.out
+'
+# flux-start: 0 (pid 21474) Killed
+test_expect_success 'flux-start: rank 0 Killed' '
+	egrep "flux-start: 0 .* Killed" panic.out
+'
+
 test_done
