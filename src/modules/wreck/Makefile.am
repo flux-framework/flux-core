@@ -30,9 +30,15 @@ fluxlibexec_PROGRAMS = \
 fluxmod_libadd = $(top_builddir)/src/common/libflux-core.la \
 		 $(top_builddir)/src/common/libflux-internal.la
 
-job_la_SOURCES = job.c rcalc.c rcalc.h wreck_job.c wreck_job.h
+noinst_LTLIBRARIES = \
+	librcalc.la
+librcalc_la_SOURCES = \
+	rcalc.c \
+	rcalc.h
+
+job_la_SOURCES = job.c wreck_job.c wreck_job.h
 job_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
-job_la_LIBADD = $(fluxmod_libadd)
+job_la_LIBADD = $(fluxmod_libadd) librcalc.la
 
 wrexecd_SOURCES = \
 	wrexecd.c \
@@ -50,7 +56,7 @@ wrexecd_LDFLAGS = \
 	$(AM_LDFLAGS) -export-dynamic
 
 wrexecd_LDADD = \
-	rcalc.o \
+	librcalc.la \
 	$(wrexecd_libs) \
 	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD) $(HWLOC_LIBS)
 

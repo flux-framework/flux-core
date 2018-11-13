@@ -441,8 +441,8 @@ request_req_la_LIBADD = \
 wreck_rcalc_SOURCES = wreck/rcalc.c
 wreck_rcalc_CPPFLAGS = $(test_cppflags)
 wreck_rcalc_LDADD = \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL) \
-	$(top_builddir)/src/modules/wreck/rcalc.o
+	$(top_builddir)/src/modules/wreck/librcalc.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 wreck_sched_dummy_la_SOURCES = wreck/sched-dummy.c
 wreck_sched_dummy_la_CPPFLAGS = $(test_cppflags)
