@@ -617,6 +617,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
             log_err_exit ("tcgetattr");
         if (atexit (restore_termios) != 0)
             log_err_exit ("atexit");
+        if (signal (SIGTTOU, SIG_IGN) == SIG_ERR)
+            log_err_exit ("signal");
     }
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
