@@ -25,6 +25,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <termios.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -46,6 +49,7 @@
 #define DEFAULT_KILLER_TIMEOUT 2.0
 
 static struct {
+    struct termios saved_termios;
     double killer_timeout;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
@@ -586,6 +590,12 @@ int client_run (struct client *cli)
     return 0;
 }
 
+void restore_termios (void)
+{
+    if (tcsetattr (STDIN_FILENO, TCSAFLUSH, &ctx.saved_termios) < 0)
+        log_err ("tcsetattr");
+}
+
 /* Start an internal PMI server, and then launch "size" number of
  * broker processes that inherit a file desciptor to the internal PMI
  * server.  They will use that to bootstrap.  Since the PMI server is
@@ -602,6 +612,12 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     char *session_id;
     char *scratch_dir;
 
+    if (isatty (STDIN_FILENO)) {
+        if (tcgetattr (STDIN_FILENO, &ctx.saved_termios) < 0)
+            log_err_exit ("tcgetattr");
+        if (atexit (restore_termios) != 0)
+            log_err_exit ("atexit");
+    }
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
