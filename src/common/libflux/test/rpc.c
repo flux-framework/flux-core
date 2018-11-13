@@ -675,11 +675,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    zsys_init ();
-    zsys_set_logstream (stderr);
-    zsys_set_logident ("rpc-test");
-    zsys_handler_set (NULL);
-    zsys_set_linger (5); // msec
+    test_server_environment_init ("rpc-test");
 
     test_fake_server ();
 

@@ -39,15 +39,6 @@ uninstall-local:
 
 TESTS = \
 	shmem/backtoback.t \
-	loop/handle.t \
-	loop/dispatch.t \
-	loop/reactor.t \
-	loop/reduce.t \
-	loop/log.t \
-	rpc/rpc.t \
-	rpc/mrpc.t \
-	rpc/chained.t \
-	rolemask/loop.t \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
@@ -257,16 +248,7 @@ check_SCRIPTS = \
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
-	loop/handle.t \
-	loop/dispatch.t \
-	loop/reactor.t \
-	loop/reduce.t \
-	loop/log.t \
 	loop/logstderr \
-	rpc/rpc.t \
-	rpc/mrpc.t \
-	rpc/chained.t \
-	rolemask/loop.t \
 	kz/kzcopy \
 	kvs/torture \
 	kvs/dtree \
@@ -344,46 +326,10 @@ shmem_backtoback_t_SOURCES = shmem/backtoback.c
 shmem_backtoback_t_CPPFLAGS = $(test_cppflags)
 shmem_backtoback_t_LDADD = $(test_ldadd) $(LIBDL)
 
-loop_handle_t_SOURCES = loop/handle.c
-loop_handle_t_CPPFLAGS = $(test_cppflags)
-loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_dispatch_t_SOURCES = loop/dispatch.c
-loop_dispatch_t_CPPFLAGS = $(test_cppflags)
-loop_dispatch_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_log_t_SOURCES = loop/log.c
-loop_log_t_CPPFLAGS = $(test_cppflags)
-loop_log_t_LDADD = $(test_ldadd) $(LIBDL)
-
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)
 loop_logstderr_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-loop_reactor_t_SOURCES = loop/reactor.c
-loop_reactor_t_CPPFLAGS = $(test_cppflags)
-loop_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_reduce_t_SOURCES = loop/reduce.c
-loop_reduce_t_CPPFLAGS = $(test_cppflags)
-loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rpc_rpc_t_SOURCES = rpc/rpc.c rpc/util.h rpc/util.c
-rpc_rpc_t_CPPFLAGS = $(test_cppflags)
-rpc_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rpc_mrpc_t_SOURCES = rpc/mrpc.c rpc/util.h rpc/util.c
-rpc_mrpc_t_CPPFLAGS = $(test_cppflags)
-rpc_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rpc_chained_t_SOURCES = rpc/chained.c rpc/util.h rpc/util.c
-rpc_chained_t_CPPFLAGS = $(test_cppflags)
-rpc_chained_t_LDADD = $(test_ldadd) $(LIBDL)
-
-rolemask_loop_t_SOURCES = rolemask/loop.c
-rolemask_loop_t_CPPFLAGS = $(test_cppflags)
-rolemask_loop_t_LDADD = $(test_ldadd) $(LIBDL)
 
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)

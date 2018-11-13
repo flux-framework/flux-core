@@ -6,6 +6,8 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libtap/tap.h"
 
+#include "util.h"
+
 int reduce_calls = 0;
 int reduce_items = 0;
 void reduce (flux_reduce_t *r, int batchnum, void *arg)
@@ -344,13 +346,9 @@ int main (int argc, char *argv[])
 {
     flux_t *h;
 
-    plan (1+6+37+18);
+    plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
-    if (!h)
+    if (!(h = loopback_create (0)))
         BAIL_OUT ("can't continue without loop handle");
 
     flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);

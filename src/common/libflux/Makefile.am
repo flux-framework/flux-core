@@ -135,10 +135,18 @@ TESTS = test_module.t \
 	test_composite_future.t \
 	test_reactor.t \
 	test_buffer.t \
+	test_rpc.t \
 	test_mrpc.t \
+	test_rpc_chained.t \
 	test_handle.t \
 	test_msg_handler.t \
-	test_version.t
+	test_version.t \
+	test_dispatch.t \
+	test_handle.t \
+	test_log.t \
+	test_reactor_loop.t \
+	test_reduce.t \
+	test_rpc_security.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -207,11 +215,7 @@ test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
 test_buffer_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_mrpc_t_SOURCES = test/mrpc.c
-test_mrpc_t_CPPFLAGS = $(test_cppflags)
-test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-test_handle_t_SOURCES = test/handle.c
+test_handle_t_SOURCES = test/handle.c test/util.c test/util.h
 test_handle_t_CPPFLAGS = $(test_cppflags)
 test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
 
@@ -222,3 +226,35 @@ test_msg_handler_t_LDADD = $(test_ldadd) $(LIBDL)
 test_version_t_SOURCES = test/version.c
 test_version_t_CPPFLAGS = $(test_cppflags)
 test_version_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_rpc_t_SOURCES = test/rpc.c test/util.c test/util.h
+test_rpc_t_CPPFLAGS = $(test_cppflags)
+test_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_mrpc_t_SOURCES = test/mrpc.c test/util.c test/util.h
+test_mrpc_t_CPPFLAGS = $(test_cppflags)
+test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_rpc_chained_t_SOURCES = test/rpc_chained.c test/util.c test/util.h
+test_rpc_chained_t_CPPFLAGS = $(test_cppflags)
+test_rpc_chained_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_dispatch_t_SOURCES = test/dispatch.c test/util.c test/util.h
+test_dispatch_t_CPPFLAGS = $(test_cppflags)
+test_dispatch_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_log_t_SOURCES = test/log.c test/util.c test/util.h
+test_log_t_CPPFLAGS = $(test_cppflags)
+test_log_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_reactor_loop_t_SOURCES = test/reactor_loop.c test/util.c test/util.h
+test_reactor_loop_t_CPPFLAGS = $(test_cppflags)
+test_reactor_loop_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_reduce_t_SOURCES = test/reduce.c test/util.c test/util.h
+test_reduce_t_CPPFLAGS = $(test_cppflags)
+test_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_rpc_security_t_SOURCES = test/rpc_security.c test/util.c test/util.h
+test_rpc_security_t_CPPFLAGS = $(test_cppflags)
+test_rpc_security_t_LDADD = $(test_ldadd) $(LIBDL)
