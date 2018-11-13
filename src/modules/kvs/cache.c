@@ -62,6 +62,7 @@ struct cache_entry {
                              * zero length data can be valid */
     bool dirty;
     int errnum;
+    char *blobref;
 };
 
 struct cache {
@@ -256,6 +257,7 @@ void cache_entry_destroy (void *arg)
             wait_queue_destroy (entry->waitlist_notdirty);
         if (entry->waitlist_valid)
             wait_queue_destroy (entry->waitlist_valid);
+        free (entry->blobref);
         free (entry);
     }
 }
@@ -295,12 +297,24 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
     return entry;
 }
 
-void cache_insert (struct cache *cache, const char *ref,
-                   struct cache_entry *entry)
+int cache_insert (struct cache *cache, const char *ref,
+                  struct cache_entry *entry)
 {
-    int rc = zhash_insert (cache->zh, ref, entry);
-    assert (rc == 0);
-    zhash_freefn (cache->zh, ref, cache_entry_destroy);
+    int rc;
+
+    if (cache && ref && entry) {
+        /* We should not be inserting the same entry twice */
+        assert (!entry->blobref);
+
+        if (!(entry->blobref = strdup (ref)))
+            return -1;
+
+        rc = zhash_insert (cache->zh, ref, entry);
+        assert (rc == 0);
+
+        zhash_freefn (cache->zh, ref, cache_entry_destroy);
+    }
+    return 0;
 }
 
 int cache_remove_entry (struct cache *cache, const char *ref)
@@ -427,6 +441,11 @@ int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
     rc = count;
 done:
     return rc;
+}
+
+const char *cache_entry_get_blobref (struct cache_entry *entry)
+{
+    return entry ? entry->blobref : NULL;
 }
 
 struct cache *cache_create (void)

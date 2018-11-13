@@ -333,7 +333,11 @@ static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
             flux_log_error (kt->ktm->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        cache_insert (kt->ktm->cache, ref, entry);
+        if (cache_insert (kt->ktm->cache, ref, entry) < 0) {
+            cache_entry_destroy (entry);
+            flux_log_error (kt->ktm->h, "%s: cache_insert", __FUNCTION__);
+            goto error;
+        }
     }
     if (cache_entry_get_valid (entry)) {
         kt->ktm->noop_stores++;

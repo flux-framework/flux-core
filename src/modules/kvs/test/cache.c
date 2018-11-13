@@ -438,6 +438,28 @@ void waiter_tests (void)
     free (data);
 }
 
+void cache_blobref_tests (void)
+{
+    struct cache *cache;
+    struct cache_entry *e;
+    const char *ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_get_blobref (e) == NULL,
+        "cache_entry_get_blobref fails on non inserted entry");
+    ok (cache_insert (cache, "abcd", e) == 0,
+        "cache_insert works");
+    ok ((ref = cache_entry_get_blobref (e)) != NULL,
+        "cache_entry_get_blobref success");
+    ok (!strcmp (ref, "abcd"),
+        "cache_entry_get_blobref returned correct ref");
+
+    cache_destroy (cache);
+}
+
 void cache_remove_entry_tests (void)
 {
     struct cache *cache;
@@ -451,7 +473,8 @@ void cache_remove_entry_tests (void)
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    cache_insert (cache, "remove-ref", e);
+    ok (cache_insert (cache, "remove-ref", e) == 0,
+        "cache_insert works");
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
     ok (cache_remove_entry (cache, "blalalala") == 0,
@@ -466,7 +489,8 @@ void cache_remove_entry_tests (void)
         "wait_create works");
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create created empty object");
-    cache_insert (cache, "remove-ref", e);
+    ok (cache_insert (cache, "remove-ref", e) == 0,
+        "cache_insert works");
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
     ok (cache_entry_get_valid (e) == false,
@@ -497,7 +521,8 @@ void cache_remove_entry_tests (void)
     ok (cache_entry_set_treeobj (e, o) == 0,
         "cache_entry_set_treeobj success");
     json_decref (o);
-    cache_insert (cache, "remove-ref", e);
+    ok (cache_insert (cache, "remove-ref", e) == 0,
+        "cache_insert works");
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
     ok (cache_entry_set_dirty (e, true) == 0,
@@ -540,7 +565,8 @@ void cache_expiration_tests (void)
     /* first test w/ entry w/o treeobj object */
     ok ((e1 = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    cache_insert (cache, "xxx1", e1);
+    ok (cache_insert (cache, "xxx1", e1) == 0,
+        "cache_insert works");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry after insert");
     ok (cache_lookup (cache, "yyy1", 0) == NULL,
@@ -574,7 +600,8 @@ void cache_expiration_tests (void)
     ok (cache_entry_set_treeobj (e3, o1) == 0,
         "cache_entry_set_treeobj success");
     json_decref (o1);
-    cache_insert (cache, "xxx2", e3);
+    ok (cache_insert (cache, "xxx2", e3) == 0,
+        "cache_insert works");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries after insert");
     ok (cache_lookup (cache, "yyy2", 0) == NULL,
@@ -635,6 +662,7 @@ int main (int argc, char *argv[])
     cache_entry_raw_and_treeobj_tests ();
     waiter_tests ();
     cache_expiration_tests ();
+    cache_blobref_tests ();
     cache_remove_entry_tests ();
 
     done_testing ();

@@ -659,7 +659,12 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
                             __FUNCTION__);
             return -1;
         }
-        cache_insert (ctx->cache, ref, entry);
+        if (cache_insert (ctx->cache, ref, entry) < 0) {
+            flux_log_error (ctx->h, "%s: cache_insert",
+                            __FUNCTION__);
+            cache_entry_destroy (entry);
+            return -1;
+        }
         if (content_load_request_send (ctx, ref) < 0) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: content_load_request_send",
@@ -2327,7 +2332,11 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         cache_entry_destroy (entry);
         goto done;
     }
-    cache_insert (ctx->cache, ref, entry);
+    if (cache_insert (ctx->cache, ref, entry) < 0) {
+        flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
+        cache_entry_destroy (entry);
+        goto done;
+    }
 done:
     free (data);
 }
@@ -2987,7 +2996,11 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, char *ref, int ref_len)
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        cache_insert (ctx->cache, ref, entry);
+        if (cache_insert (ctx->cache, ref, entry) < 0) {
+            flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
+            cache_entry_destroy (entry);
+            goto error;
+        }
     }
     if (!cache_entry_get_valid (entry)) {
         if (cache_entry_set_raw (entry, data, len) < 0) { // makes entry valid
