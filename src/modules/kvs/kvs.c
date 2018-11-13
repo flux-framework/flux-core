@@ -690,16 +690,14 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
  * store/write
  */
 
-static int content_store_get (flux_future_t *f, void *arg)
+static void content_store_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct cache_entry *entry;
     const char *blobref;
-    int rc = -1;
-    int saved_errno, ret;
+    int ret;
 
     if (flux_content_store_get (f, &blobref) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_content_store_get", __FUNCTION__);
         goto done;
     }
@@ -710,7 +708,6 @@ static int content_store_get (flux_future_t *f, void *arg)
      * error dealng with error paths using cache_remove_entry().
      */
     if (!(entry = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
-        saved_errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto done;
     }
@@ -732,24 +729,14 @@ static int content_store_get (flux_future_t *f, void *arg)
      * cache_entry_force_clear_dirty().
      */
     if (cache_entry_set_dirty (entry, false) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
                         __FUNCTION__);
         ret = cache_entry_force_clear_dirty (entry);
         assert (ret == 0);
         goto done;
     }
-    rc = 0;
 done:
     flux_future_destroy (f);
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
-}
-
-static void content_store_completion (flux_future_t *f, void *arg)
-{
-    (void)content_store_get (f, arg);
 }
 
 static int content_store_request_send (kvs_ctx_t *ctx, const void *data,
