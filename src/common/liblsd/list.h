@@ -1,29 +1,33 @@
 /*****************************************************************************
- *  $Id: list.h,v 1.14 2002/12/11 19:00:36 dun Exp $
- *****************************************************************************
- *  Copyright (C) 2001-2002 The Regents of the University of California.
- *  Produced at Lawrence Livermore National Laboratory (cf, DISCLAIMER).
  *  Written by Chris Dunlap <cdunlap@llnl.gov>.
+ *  Copyright (C) 2007-2018 Lawrence Livermore National Security, LLC.
+ *  Copyright (C) 2001-2007 The Regents of the University of California.
+ *  UCRL-CODE-2002-009.
  *
- *  This file is part of the Flux resource manager framework.
- *  For details, see https://github.com/flux-framework.
+ *  This file is part of ConMan: The Console Manager.
+ *  For details, see <https://dun.github.io/conman/>.
  *
- *  This program is free software; you can redistribute it and/or modify it
- *  under the terms of the GNU Lesser General Public License as published
- *  by the Free Software Foundation; either version 2.1 of the license,
- *  or (at your option) any later version.
+ *  ConMan is free software: you can redistribute it and/or modify it under
+ *  the terms of the GNU General Public License as published by the Free
+ *  Software Foundation, either version 3 of the License, or (at your option)
+ *  any later version.
  *
- *  Flux is distributed in the hope that it will be useful, but WITHOUT
- *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
- *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
- *  GNU General Public License for more details.
+ *  ConMan is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
  *
- *  You should have received a copy of the GNU Lesser General Public License
- *  along with this program; if not, write to the Free Software Foundation,
- *  Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
- *  See also:  http://www.gnu.org/licenses/
+ *  You should have received a copy of the GNU General Public License along
+ *  with ConMan.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *  Additional permission under GNU GPL version 3 section 7:
+ *
+ *  The licensors of ConMan grant you additional permission to modify or
+ *  combine with this file and convey/distribute the resulting work under
+ *  the terms of the GNU Lesser General Public License as published by the
+ *  Free Software Foundation, either version 2.1 of the License, or
+ *  (at your option) any later version.
  *****************************************************************************/
-
 
 #ifndef LSD_LIST_H
 #define LSD_LIST_H
