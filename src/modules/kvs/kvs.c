@@ -714,13 +714,28 @@ static void content_store_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct cache_entry *entry;
-    const char *blobref;
+    const char *cache_blobref, *blobref;
     int ret;
+
+    cache_blobref = flux_future_aux_get (f, "cache_blobref");
+    assert (cache_blobref);
 
     if (flux_content_store_get (f, &blobref) < 0) {
         flux_log_error (ctx->h, "%s: flux_content_store_get", __FUNCTION__);
         goto done;
     }
+
+    /* Double check that content store stored in the same blobref
+     * location we calculated.
+     * N.B. perhaps this check is excessive and could be removed
+     */
+    if (strcmp (blobref, cache_blobref)) {
+        flux_log (ctx->h, LOG_ERR, "%s: inconsistent blobref returned",
+                  __FUNCTION__);
+        errno = EPROTO;
+        goto done;
+    }
+
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     /* should be impossible for lookup to fail, cache entry created
      * earlier, and cache_expire_entries() could not have removed it
@@ -759,14 +774,20 @@ done:
     flux_future_destroy (f);
 }
 
-static int content_store_request_send (kvs_ctx_t *ctx, const void *data,
-                                       int len)
+static int content_store_request_send (kvs_ctx_t *ctx, const char *blobref,
+                                       const void *data, int len)
 {
     flux_future_t *f;
     int saved_errno, rc = -1;
 
     if (!(f = flux_content_store (ctx->h, data, len, 0)))
         goto error;
+    if (flux_future_aux_set (f, "cache_blobref", (void *)blobref, NULL) < 0) {
+        saved_errno = errno;
+        flux_future_destroy (f);
+        errno = saved_errno;
+        goto error;
+    }
     if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
         saved_errno = errno;
         flux_future_destroy (f);
@@ -801,6 +822,7 @@ static int kvstxn_load_cb (kvstxn_t *kt, const char *ref, void *data)
 static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     struct kvs_cb_data *cbd = data;
+    const char *blobref;
     const void *storedata;
     int storedatalen = 0;
 
@@ -812,7 +834,13 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
         kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
+
+    /* must be true, otherwise we didn't insert entry in cache */
+    blobref = cache_entry_get_blobref (entry);
+    assert (blobref);
+
     if (content_store_request_send (cbd->ctx,
+                                    blobref,
                                     storedata,
                                     storedatalen) < 0) {
         cbd->errnum = errno;
