@@ -320,6 +320,21 @@ test_expect_success 'kvs: invalid dirref write wont hang' '
         ! flux kvs put $DIR.bad_dirref.b=1
 '
 
+test_expect_success "kvs: failure to store blob that exceeds max size does not hang" '
+        dd if=/dev/zero count=$((1048576/4096+1)) bs=4096 \
+                        skip=$((1048576/4096)) >toobig 2>/dev/null &&
+        test_must_fail flux start --size=4 -o,--setattr=content.blob-size-limit=1048576 \
+                       flux kvs put -r $DIR.bad_toobig=- <toobig
+'
+
+MAXBLOB=`flux getattr content.blob-size-limit`
+
+test_expect_success LONGTEST "kvs: failure to store blob that exceeds max size default does not hang" '
+	dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
+			skip=$(($MAXBLOB/4096)) >toobig_long 2>/dev/null &&
+	test_must_fail flux kvs put -r $DIR.bad_toobig_long=- < toobig_long
+'
+
 #
 # test synchronization based on commit sequence no.
 #
