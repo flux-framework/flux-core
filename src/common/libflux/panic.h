@@ -33,10 +33,6 @@ extern "C" {
 
 int flux_panic (flux_t *h, int rank, const char *msg);
 
-void flux_assfail (flux_t *h, char *ass, char *file, int line);
-#define FASSERT(h, exp) if ((exp)); \
-                        else flux_assfail(h, #exp, __FILE__, __LINE__)
-
 #ifdef __cplusplus
 }
 #endif

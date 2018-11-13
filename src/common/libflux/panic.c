@@ -53,15 +53,6 @@ done:
     return rc;
 }
 
-void flux_assfail (flux_t *h, char *ass, char *file, int line)
-{
-    flux_log (h, LOG_CRIT, "assertion failure: %s:%d: %s", file, line, ass);
-    sleep (5);
-    if (raise (SIGABRT) < 0)
-        exit (1);
-}
-
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
