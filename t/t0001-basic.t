@@ -375,18 +375,40 @@ test_expect_success 'reactor: reactorcat example program works' '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
 	! flux start --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
-		bash -c "flux comms -r 1 panic fubar; sleep 5" 2>panic.out
+		bash -c "flux getattr broker.rundir; flux comms -r 1 panic fubar; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '
-	grep -q fubar panic.out
+	grep -q fubar panic.err
 '
 # flux-start: 1 (pid 10023) exited with rc=1
 test_expect_success 'flux-start: rank 1 exited with rc=1' '
-	egrep "flux-start: 1 .* exited with rc=1" panic.out
+	egrep "flux-start: 1 .* exited with rc=1" panic.err
 '
 # flux-start: 0 (pid 21474) Killed
 test_expect_success 'flux-start: rank 0 Killed' '
-	egrep "flux-start: 0 .* Killed" panic.out
+	egrep "flux-start: 0 .* Killed" panic.err
+'
+
+# Usage: cleanup_tmpdir tmpdir size
+# Remove tmpdir and expected contents.
+# Could be replaced with rm -rf $tmpdir
+cleanup_tmpdir () {
+	local topdir=$1
+	local size=$2
+	local rank
+
+	for rank in $(seq 0 $(($size-1))); do
+		rm -f $topdir/${rank}/local
+		rm -f $topdir/${rank}/req
+		rmdir $topdir/${rank} || :
+	done
+	rmdir $topdir || :
+}
+
+test_expect_success 'flux-start: cleanup testdir after panic _exit()' '
+	tmpdir=$(dirname $(cat panic.out)) &&
+	test -n "$tmpdir" &&
+	cleanup_tmpdir ${tmpdir} 2
 '
 
 test_done
