@@ -359,6 +359,8 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     struct cache_entry *entry;
     int count = 0;
 
+    /* Do not use zhash_first()/zhash_next() or FOREACH_ZHASH, as
+     * zhash_delete() call below modifies hash */
     if (!(keys = zhash_keys (cache->zh))) {
         errno = ENOMEM;
         return -1;
@@ -381,21 +383,13 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
 int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
                      int *incompletep, int *dirtyp)
 {
-    zlist_t *keys = NULL;
     struct cache_entry *entry;
-    char *ref;
+    const char *key;
     int size = 0;
     int incomplete = 0;
     int dirty = 0;
-    int saved_errno;
-    int rc = -1;
 
-    if (!(keys = zhash_keys (cache->zh))) {
-        saved_errno = ENOMEM;
-        goto cleanup;
-    }
-    while ((ref = zlist_pop (keys))) {
-        entry = zhash_lookup (cache->zh, ref);
+    FOREACH_ZHASH (cache->zh, key, entry) {
         if (cache_entry_get_valid (entry)) {
             int obj_size = 0;
 
@@ -408,7 +402,6 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
             incomplete++;
         if (cache_entry_get_dirty (entry))
             dirty++;
-        free (ref);
     }
     if (sizep)
         *sizep = size;
@@ -416,12 +409,7 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
         *incompletep = incomplete;
     if (dirtyp)
         *dirtyp = dirty;
-    rc = 0;
-cleanup:
-    zlist_destroy (&keys);
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+    return 0;
 }
 
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
