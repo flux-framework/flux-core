@@ -91,7 +91,8 @@ int main(int argc, char** argv)
     ok (stat (file, &sb) < 0 && errno == ENOENT,
         "cleanup removed file pushed second (1 deep)");
 
-    (void)unlink (dir);
+    if (rmdir (dir) < 0)
+        BAIL_OUT ("rmdir %s failed", dir);
 
     /* Same but recursive removal
      */
