@@ -28,39 +28,27 @@
 #include <syslog.h>
 #include <unistd.h>
 #include <signal.h>
+#include <flux/core.h>
 
 #include "panic.h"
-#include "flog.h"
-#include "rpc.h"
-
-#include "src/common/libutil/log.h"
 
 
-int flux_panic (flux_t *h, int rank, const char *msg)
+int flux_panic (flux_t *h, uint32_t nodeid, int flags, const char *reason)
 {
-    uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
-    flux_future_t *f = NULL;
-    int rc = -1;
+    flux_future_t *f;
 
-    f = flux_rpc_pack (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
-                       "{s:s}", "msg", msg ? msg : "");
-    if (!f)
-        goto done;
-    /* No reply */
-    rc = 0;
-done:
+    if (!h || !reason || flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f = flux_rpc_pack (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
+                             "{s:s s:i}",
+                             "reason", reason,
+                             "flags", flags)))
+        return -1;
     flux_future_destroy (f);
-    return rc;
+    return 0;
 }
-
-void flux_assfail (flux_t *h, char *ass, char *file, int line)
-{
-    flux_log (h, LOG_CRIT, "assertion failure: %s:%d: %s", file, line, ass);
-    sleep (5);
-    if (raise (SIGABRT) < 0)
-        exit (1);
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

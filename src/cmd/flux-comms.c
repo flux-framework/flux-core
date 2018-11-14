@@ -118,16 +118,18 @@ int main (int argc, char *argv[])
         printf ("%s\n", peers);
         free (peers);
     } else if (!strcmp (cmd, "panic")) {
-        char *msg = NULL;
+        char *reason = NULL;
+        int flags = 0;
         size_t len = 0;
         if (optind < argc) {
-            if ((e = argz_create (argv + optind, &msg, &len)) != 0)
+            if ((e = argz_create (argv + optind, &reason, &len)) != 0)
                 log_errn_exit (e, "argz_create");
-            argz_stringify (msg, len, ' ');
+            argz_stringify (reason, len, ' ');
         }
-        flux_panic (h, rank, msg);
-        if (msg)
-            free (msg);
+        if (flux_panic (h, rank, flags,
+                        reason ? reason : "user request") < 0)
+            log_err_exit ("flux_panic");
+        free (reason);
     } else if (!strcmp (cmd, "info")) {
         int arity;
         uint32_t rank, size;

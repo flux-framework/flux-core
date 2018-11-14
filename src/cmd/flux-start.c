@@ -25,6 +25,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <termios.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -46,10 +49,11 @@
 #define DEFAULT_KILLER_TIMEOUT 2.0
 
 static struct {
+    struct termios saved_termios;
     double killer_timeout;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
-    zlist_t *subprocesses;
+    zlist_t *clients;
     optparse_t *opts;
     int size;
     int count;
@@ -276,14 +280,14 @@ char *find_broker (const char *searchpath)
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
-    flux_subprocess_t *p;
+    struct client *cli;
 
-    p = zlist_first (ctx.subprocesses);
-    while (p) {
-        flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
         if (f)
             flux_future_destroy (f);
-        p = zlist_next (ctx.subprocesses);
+        cli = zlist_next (ctx.clients);
     }
 }
 
@@ -308,6 +312,7 @@ static void completion_cb (flux_subprocess_t *p)
     else
         flux_watcher_stop (ctx.timer);
 
+    zlist_remove (ctx.clients, cli);
     client_destroy (cli);
 }
 
@@ -323,6 +328,7 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             flux_watcher_start (ctx.timer);
         else
             flux_watcher_stop (ctx.timer);
+        zlist_remove (ctx.clients, cli);
         client_destroy (cli);
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
@@ -584,6 +590,12 @@ int client_run (struct client *cli)
     return 0;
 }
 
+void restore_termios (void)
+{
+    if (tcsetattr (STDIN_FILENO, TCSAFLUSH, &ctx.saved_termios) < 0)
+        log_err ("tcsetattr");
+}
+
 /* Start an internal PMI server, and then launch "size" number of
  * broker processes that inherit a file desciptor to the internal PMI
  * server.  They will use that to bootstrap.  Since the PMI server is
@@ -600,13 +612,21 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     char *session_id;
     char *scratch_dir;
 
+    if (isatty (STDIN_FILENO)) {
+        if (tcgetattr (STDIN_FILENO, &ctx.saved_termios) < 0)
+            log_err_exit ("tcgetattr");
+        if (atexit (restore_termios) != 0)
+            log_err_exit ("atexit");
+        if (signal (SIGTTOU, SIG_IGN) == SIG_ERR)
+            log_err_exit ("signal");
+    }
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
                                                   ctx.killer_timeout, 0.,
                                                   killer, NULL)))
         log_err_exit ("flux_timer_watcher_create");
-    if (!(ctx.subprocesses = zlist_new ()))
+    if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
     session_id = xasprintf ("%d", getpid ());
 
@@ -632,6 +652,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
         }
         if (client_run (cli) < 0)
             log_err_exit ("client_run");
+        if (zlist_append (ctx.clients, cli) < 0)
+            log_err_exit ("zlist_append");
         ctx.count++;
     }
     if (flux_reactor_run (ctx.reactor, 0) < 0)
@@ -642,7 +664,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     free (session_id);
     free (scratch_dir);
 
-    zlist_destroy (&ctx.subprocesses);
+    zlist_destroy (&ctx.clients);
     flux_watcher_destroy (ctx.timer);
     flux_reactor_destroy (ctx.reactor);
 

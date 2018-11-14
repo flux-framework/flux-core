@@ -1218,21 +1218,28 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
     free (out);
 }
 
+#if CODE_COVERAGE_ENABLED
+void __gcov_flush (void);
+#endif
+
 static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
-    const char *s = NULL;
+    const char *reason;
+    int flags; // reserved
 
-    if (flux_request_unpack (msg, NULL, "{}") < 0)
-        goto error;
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "msg", &s) < 0)
-        s = "no reason";
-    log_msg_exit ("PANIC: %s", s ? s : "no reason");
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
+                             "reason", &reason,
+                             "flags", &flags) < 0) {
+        flux_log_error (h, "malformed cmb.panic request");
+        return;
+    }
+    fprintf (stderr, "PANIC: %s\n", reason);
+#if CODE_COVERAGE_ENABLED
+    __gcov_flush ();
+#endif
+    _exit (1);
     /*NOTREACHED*/
-    return;
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,

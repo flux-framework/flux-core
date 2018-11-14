@@ -124,8 +124,7 @@ libflux_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
-TESTS = test_module.t \
-	test_message.t \
+TESTS = test_message.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
@@ -146,9 +145,11 @@ TESTS = test_module.t \
 	test_log.t \
 	test_reactor_loop.t \
 	test_reduce.t \
-	test_rpc_security.t
+	test_rpc_security.t \
+	test_panic.t
 
 test_ldadd = \
+	$(builddir)/test/libtestutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -160,20 +161,18 @@ test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
 
+check_LTLIBRARIES = \
+	test/libtestutil.la
+
+test_libtestutil_la_SOURCES = \
+	test/util.h \
+	test/util.c
+
 check_PROGRAMS = $(TESTS)
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_module_t_SOURCES = test/module.c
-test_module_t_CPPFLAGS = $(test_cppflags)
-test_module_t_LDADD = $(test_ldadd) $(LIBDL)
-test_module_t_DEPENDENCIES = $(top_builddir)/src/modules/kvs/kvs.la
-
-$(test_module_t_DEPENDENCIES):
-	@cd `dirname $@` && $(MAKE)
-
 
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
@@ -215,7 +214,7 @@ test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
 test_buffer_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_handle_t_SOURCES = test/handle.c test/util.c test/util.h
+test_handle_t_SOURCES = test/handle.c
 test_handle_t_CPPFLAGS = $(test_cppflags)
 test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
 
@@ -227,34 +226,38 @@ test_version_t_SOURCES = test/version.c
 test_version_t_CPPFLAGS = $(test_cppflags)
 test_version_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_rpc_t_SOURCES = test/rpc.c test/util.c test/util.h
+test_rpc_t_SOURCES = test/rpc.c
 test_rpc_t_CPPFLAGS = $(test_cppflags)
 test_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_mrpc_t_SOURCES = test/mrpc.c test/util.c test/util.h
+test_mrpc_t_SOURCES = test/mrpc.c
 test_mrpc_t_CPPFLAGS = $(test_cppflags)
 test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_rpc_chained_t_SOURCES = test/rpc_chained.c test/util.c test/util.h
+test_rpc_chained_t_SOURCES = test/rpc_chained.c
 test_rpc_chained_t_CPPFLAGS = $(test_cppflags)
 test_rpc_chained_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_dispatch_t_SOURCES = test/dispatch.c test/util.c test/util.h
+test_dispatch_t_SOURCES = test/dispatch.c
 test_dispatch_t_CPPFLAGS = $(test_cppflags)
 test_dispatch_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_log_t_SOURCES = test/log.c test/util.c test/util.h
+test_log_t_SOURCES = test/log.c
 test_log_t_CPPFLAGS = $(test_cppflags)
 test_log_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_reactor_loop_t_SOURCES = test/reactor_loop.c test/util.c test/util.h
+test_reactor_loop_t_SOURCES = test/reactor_loop.c
 test_reactor_loop_t_CPPFLAGS = $(test_cppflags)
 test_reactor_loop_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_reduce_t_SOURCES = test/reduce.c test/util.c test/util.h
+test_reduce_t_SOURCES = test/reduce.c
 test_reduce_t_CPPFLAGS = $(test_cppflags)
 test_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_rpc_security_t_SOURCES = test/rpc_security.c test/util.c test/util.h
+test_rpc_security_t_SOURCES = test/rpc_security.c
 test_rpc_security_t_CPPFLAGS = $(test_cppflags)
 test_rpc_security_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_panic_t_SOURCES = test/panic.c
+test_panic_t_CPPFLAGS = $(test_cppflags)
+test_panic_t_LDADD = $(test_ldadd) $(LIBDL)
