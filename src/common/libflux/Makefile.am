@@ -78,7 +78,9 @@ fluxcoreinclude_HEADERS = \
 	future.h \
 	barrier.h \
 	buffer.h \
-	service.h \
+	service.h
+
+nodist_fluxcoreinclude_HEADERS = \
 	version.h
 
 noinst_LTLIBRARIES = \
