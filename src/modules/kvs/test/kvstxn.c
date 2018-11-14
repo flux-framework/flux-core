@@ -73,7 +73,9 @@ static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 }
 
 /* convenience function */
-static struct cache_entry *create_cache_entry_raw (void *data, int len)
+static struct cache_entry *create_cache_entry_raw (const char *ref,
+                                                   void *data,
+                                                   int len)
 {
     struct cache_entry *entry;
     int ret;
@@ -81,7 +83,7 @@ static struct cache_entry *create_cache_entry_raw (void *data, int len)
     assert (data);
     assert (len);
 
-    entry = cache_entry_create ();
+    entry = cache_entry_create (ref);
     assert (entry);
     ret = cache_entry_set_raw (entry, data, len);
     assert (ret == 0);
@@ -89,14 +91,15 @@ static struct cache_entry *create_cache_entry_raw (void *data, int len)
 }
 
 /* convenience function */
-static struct cache_entry *create_cache_entry_treeobj (json_t *o)
+static struct cache_entry *create_cache_entry_treeobj (const char *ref,
+                                                       json_t *o)
 {
     struct cache_entry *entry;
     int ret;
 
     assert (o);
 
-    entry = cache_entry_create ();
+    entry = cache_entry_create (ref);
     assert (entry);
     ret = cache_entry_set_treeobj (entry, o);
     assert (ret == 0);
@@ -136,9 +139,9 @@ struct cache *create_cache_with_empty_rootdir (char *ref, int ref_len)
         "cache_create works");
     ok (treeobj_hash ("sha1", rootdir, ref, ref_len) == 0,
         "treeobj_hash worked");
-    ok ((entry = create_cache_entry_treeobj (rootdir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (ref, rootdir)) != NULL,
         "create_cache_entry_treeobj works");
-    ok (cache_insert (cache, ref, entry) == 0,
+    ok (cache_insert (cache, entry) == 0,
         "cache_insert works");
     json_decref (rootdir);
     return cache;
@@ -946,7 +949,7 @@ void kvstxn_basic_root_not_dir (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -993,10 +996,10 @@ int rootref_cb (kvstxn_t *kt, const char *ref, void *data)
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
-    ok ((entry = create_cache_entry_treeobj (rootdir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (ref, rootdir)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (rd->cache, ref, entry);
+    (void)cache_insert (rd->cache, entry);
 
     json_decref (rootdir);
 
@@ -1127,7 +1130,7 @@ void kvstxn_process_missing_ref (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -1158,10 +1161,10 @@ void kvstxn_process_missing_ref (void)
 
     /* add missing ref into cache */
 
-    ok ((entry = create_cache_entry_treeobj (dir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (dir_ref, dir)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (cache, dir_ref, entry);
+    (void)cache_insert (cache, entry);
 
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -1257,7 +1260,7 @@ void kvstxn_process_multiple_missing_ref (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -1298,20 +1301,20 @@ void kvstxn_process_multiple_missing_ref (void)
 
     /* add missing refs into cache */
 
-    ok ((entry = create_cache_entry_treeobj (dir1)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (dir_ref1, dir1)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (cache, dir_ref1, entry);
+    (void)cache_insert (cache, entry);
 
-    ok ((entry = create_cache_entry_treeobj (dir2)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (dir_ref2, dir2)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (cache, dir_ref2, entry);
+    (void)cache_insert (cache, entry);
 
-    ok ((entry = create_cache_entry_treeobj (dir3)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (dir_ref3, dir3)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (cache, dir_ref3, entry);
+    (void)cache_insert (cache, entry);
 
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -1382,7 +1385,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -1423,10 +1426,10 @@ void kvstxn_process_multiple_identical_missing_ref (void)
 
     /* add missing ref into cache */
 
-    ok ((entry = create_cache_entry_treeobj (dir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (dir_ref, dir)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (cache, dir_ref, entry);
+    (void)cache_insert (cache, entry);
 
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -1495,7 +1498,7 @@ void kvstxn_process_missing_ref_removed (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -1534,10 +1537,10 @@ void kvstxn_process_missing_ref_removed (void)
 
     /* add missing ref into cache, even though it should be removed */
 
-    ok ((entry = create_cache_entry_treeobj (dir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (dir_ref, dir)) != NULL,
         "create_cache_entry_treeobj works");
 
-    (void)cache_insert (cache, dir_ref, entry);
+    (void)cache_insert (cache, entry);
 
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -1618,7 +1621,7 @@ void kvstxn_process_error_callbacks (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -1642,7 +1645,7 @@ void kvstxn_process_error_callbacks (void)
 
     /* insert cache entry now, want don't want missing refs on next
      * kvstxn_process call */
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -1709,7 +1712,7 @@ void kvstxn_process_error_callbacks_partway (void)
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (root, "dir", dir_ref);
@@ -1717,7 +1720,7 @@ void kvstxn_process_error_callbacks_partway (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -1776,7 +1779,7 @@ void kvstxn_process_invalid_operation (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -1874,7 +1877,7 @@ void kvstxn_process_invalid_hash (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -1938,7 +1941,7 @@ void kvstxn_process_follow_link (void)
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (root, "dir", dir_ref);
@@ -1947,7 +1950,7 @@ void kvstxn_process_follow_link (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2016,7 +2019,7 @@ void kvstxn_process_dirval_test (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2086,7 +2089,7 @@ void kvstxn_process_delete_test (void)
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (root, "dir", dir_ref);
@@ -2094,7 +2097,7 @@ void kvstxn_process_delete_test (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2153,7 +2156,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2218,7 +2221,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (root, "dir", dir_ref);
@@ -2226,7 +2229,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2292,7 +2295,7 @@ void kvstxn_process_bad_dirrefs (void)
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     dirref = treeobj_create_dirref (dir_ref);
     treeobj_append_blobref (dirref, dir_ref);
@@ -2303,7 +2306,7 @@ void kvstxn_process_bad_dirrefs (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -2385,7 +2388,7 @@ void kvstxn_process_big_fileval (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2542,7 +2545,7 @@ void kvstxn_process_giant_dir (void)
     ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (dir_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
+    (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (dir, "dir", dir_ref);
@@ -2550,7 +2553,7 @@ void kvstxn_process_giant_dir (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2630,7 +2633,7 @@ void kvstxn_process_append (void)
      */
 
     blobref_hash ("sha1", "ABCD", 4, valref_ref, sizeof (valref_ref));
-    (void)cache_insert (cache, valref_ref, create_cache_entry_raw ("ABCD", 4));
+    (void)cache_insert (cache, create_cache_entry_raw (valref_ref, "ABCD", 4));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_val (root, "val", "abcd", 4);
@@ -2639,7 +2642,7 @@ void kvstxn_process_append (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref);
 
@@ -2778,7 +2781,7 @@ void kvstxn_process_append_errors (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     ok ((ktm = kvstxn_mgr_create (cache,
                                   KVS_PRIMARY_NAMESPACE,
@@ -3150,7 +3153,7 @@ void kvstxn_namespace_prefix_symlink (void)
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
 
-    (void)cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
 
     setup_kvsroot (krm, "A", cache, root_ref);
 

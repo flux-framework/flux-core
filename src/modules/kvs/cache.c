@@ -69,14 +69,26 @@ struct cache {
     zhash_t *zh;
 };
 
-struct cache_entry *cache_entry_create (void)
+struct cache_entry *cache_entry_create (const char *ref)
 {
     struct cache_entry *entry;
+
+    if (!ref) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(entry = calloc (1, sizeof (*entry)))) {
         errno = ENOMEM;
         return NULL;
     }
+
+    if (!(entry->blobref = strdup (ref))) {
+        cache_entry_destroy (entry);
+        errno = ENOMEM;
+        return NULL;
+    }
+
     return entry;
 }
 
@@ -297,22 +309,15 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
     return entry;
 }
 
-int cache_insert (struct cache *cache, const char *ref,
-                  struct cache_entry *entry)
+int cache_insert (struct cache *cache, struct cache_entry *entry)
 {
     int rc;
 
-    if (cache && ref && entry) {
-        /* We should not be inserting the same entry twice */
-        assert (!entry->blobref);
-
-        if (!(entry->blobref = strdup (ref)))
-            return -1;
-
-        rc = zhash_insert (cache->zh, ref, entry);
+    if (cache && entry) {
+        rc = zhash_insert (cache->zh, entry->blobref, entry);
         assert (rc == 0);
 
-        zhash_freefn (cache->zh, ref, cache_entry_destroy);
+        zhash_freefn (cache->zh, entry->blobref, cache_entry_destroy);
     }
     return 0;
 }

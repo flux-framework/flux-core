@@ -654,12 +654,12 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
     /* Create an incomplete hash entry if none found.
      */
     if (!entry) {
-        if (!(entry = cache_entry_create ())) {
+        if (!(entry = cache_entry_create (ref))) {
             flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
             return -1;
         }
-        if (cache_insert (ctx->cache, ref, entry) < 0) {
+        if (cache_insert (ctx->cache, entry) < 0) {
             flux_log_error (ctx->h, "%s: cache_insert",
                             __FUNCTION__);
             cache_entry_destroy (entry);
@@ -2380,7 +2380,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
     }
     if ((entry = cache_lookup (ctx->cache, ref, ctx->epoch)))
         goto done; // already in cache, possibly dirty/invalid - we don't care
-    if (!(entry = cache_entry_create ())) {
+    if (!(entry = cache_entry_create (ref))) {
         flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
         goto done;
     }
@@ -2389,7 +2389,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         cache_entry_destroy (entry);
         goto done;
     }
-    if (cache_insert (ctx->cache, ref, entry) < 0) {
+    if (cache_insert (ctx->cache, entry) < 0) {
         flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
         cache_entry_destroy (entry);
         goto done;
@@ -3049,11 +3049,11 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, char *ref, int ref_len)
         goto error;
     }
     if (!(entry = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(entry = cache_entry_create ())) {
+        if (!(entry = cache_entry_create (ref))) {
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        if (cache_insert (ctx->cache, ref, entry) < 0) {
+        if (cache_insert (ctx->cache, entry) < 0) {
             flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
             cache_entry_destroy (entry);
             goto error;

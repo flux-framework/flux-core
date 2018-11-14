@@ -329,11 +329,11 @@ static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
         goto error;
     }
     if (!(entry = cache_lookup (kt->ktm->cache, ref, current_epoch))) {
-        if (!(entry = cache_entry_create ())) {
+        if (!(entry = cache_entry_create (ref))) {
             flux_log_error (kt->ktm->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        if (cache_insert (kt->ktm->cache, ref, entry) < 0) {
+        if (cache_insert (kt->ktm->cache, entry) < 0) {
             cache_entry_destroy (entry);
             flux_log_error (kt->ktm->h, "%s: cache_insert", __FUNCTION__);
             goto error;
