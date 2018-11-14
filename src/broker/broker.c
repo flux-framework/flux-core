@@ -1218,6 +1218,10 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
     free (out);
 }
 
+#if CODE_COVERAGE_ENABLED
+void __gcov_flush (void);
+#endif
+
 static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
@@ -1231,6 +1235,9 @@ static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     fprintf (stderr, "PANIC: %s\n", reason);
+#if CODE_COVERAGE_ENABLED
+    __gcov_flush ();
+#endif
     _exit (1);
     /*NOTREACHED*/
 }
