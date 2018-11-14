@@ -124,8 +124,7 @@ libflux_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
-TESTS = test_module.t \
-	test_message.t \
+TESTS = test_message.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
@@ -174,16 +173,6 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_module_t_SOURCES = test/module.c
-test_module_t_CPPFLAGS = $(test_cppflags)
-test_module_t_LDADD = $(test_ldadd) $(LIBDL)
-test_module_t_DEPENDENCIES = $(test_ldadd) \
-	$(top_builddir)/src/modules/kvs/kvs.la
-
-$(top_builddir)/src/modules/kvs/kvs.la:
-	@cd `dirname $@` && $(MAKE)
-
 
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
