@@ -6,7 +6,9 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	-I$(top_srcdir) \
+	-I$(top_srcdir)/src/include \
+	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS)
 
 noinst_LTLIBRARIES = libjsc.la

@@ -6,7 +6,9 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	-I$(top_srcdir) \
+	-I$(top_srcdir)/src/include \
+	-I$(top_builddir)/src/common/libflux \
 	-DPYTHON_LIBRARY=\"$(PYTHON_LIBRARY)\" \
 	$(ZMQ_CFLAGS) \
 	$(PYTHON_CPPFLAGS) \

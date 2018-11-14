@@ -2,6 +2,7 @@ AM_CPPFLAGS = \
 	$(WARNING_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
+	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
@@ -24,6 +25,7 @@ _build.py.c:
 
 _core_build.py: $(MAKE_BINDING)
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libflux \
+		--search $(top_builddir)/src/common/libflux \
 		--package _flux \
 		--modname _core \
 		--add_sub '.*va_list.*|||' \

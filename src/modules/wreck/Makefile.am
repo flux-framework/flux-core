@@ -8,11 +8,8 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_srcdir)/src/common/libflux \
+	-I$(top_builddir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/liblsd \
-	-I$(top_srcdir)/src/modules/broker \
-	-I$(top_srcdir)/src/modules/kvs \
-	-I$(top_srcdir)/src/broker \
 	$(LUA_INCLUDE) \
 	$(ZMQ_CFLAGS)
 
