@@ -23,7 +23,7 @@
 # if make is old, and scl is here, and devtoolset is available and not turned
 # on, re-exec ourself with it active to get a newer make
 if make --version | grep 'GNU Make 4' 2>&1 > /dev/null ; then
-  MAKE="make --output-sync=target"
+  MAKE="make --output-sync=target --no-print-directory"
 else
   MAKE="make" #use this if all else fails
   if test "X$X_SCLS" = "X" ; then
