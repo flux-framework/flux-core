@@ -187,6 +187,12 @@ static void then_context_start (struct then_context *then)
     flux_watcher_start (then->check);
 }
 
+static void then_context_stop (struct then_context *then)
+{
+    flux_watcher_stop (then->prepare);
+    flux_watcher_stop (then->check);
+}
+
 static int then_context_set_timeout (struct then_context *then,
                                      double timeout, void *arg)
 {
@@ -342,9 +348,8 @@ static void post_fulfill (flux_future_t *f)
     then_context_clear_timer (f->then);
     if (f->now)
         flux_reactor_stop (f->now->r);
-    /* in "then" context, the main reactor prepare/check/idle watchers
-     * will run continuation in the next reactor loop for fairness.
-     */
+    if (f->then)
+        then_context_start (f->then);
 }
 
 /* Reset (unfulfill) a future.
@@ -355,7 +360,7 @@ void flux_future_reset (flux_future_t *f)
         clear_result (&f->result);
         f->result_valid = false;
         if (f->then)
-            then_context_start (f->then);
+            then_context_stop (f->then);
         if (f->queue && zlist_size (f->queue) > 0) {
             struct future_result *fs = zlist_pop (f->queue);
             move_result (&f->result, fs);
@@ -543,7 +548,8 @@ int flux_future_then (flux_future_t *f, double timeout,
         if (!(f->then = then_context_create (f->r, f)))
             return -1;
     }
-    then_context_start (f->then);
+    if (future_is_ready (f))
+        then_context_start (f->then);
     if (then_context_set_timeout (f->then, timeout, f) < 0)
         return -1;
     f->then->continuation = cb;
