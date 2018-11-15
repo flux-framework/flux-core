@@ -6,7 +6,9 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-        -I$(top_srcdir) -I$(top_srcdir)/src/include \
+        -I$(top_srcdir) \
+	-I$(top_srcdir)/src/include \
+	-I$(top_builddir)/src/common/libflux \
         $(ZMQ_CFLAGS)
 
 #  If LUA_PATH is already set, ensure ./?.lua appears in LUA_PATH so that
@@ -441,8 +443,8 @@ request_req_la_LIBADD = \
 wreck_rcalc_SOURCES = wreck/rcalc.c
 wreck_rcalc_CPPFLAGS = $(test_cppflags)
 wreck_rcalc_LDADD = \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL) \
-	$(top_builddir)/src/modules/wreck/rcalc.o
+	$(top_builddir)/src/modules/wreck/librcalc.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 wreck_sched_dummy_la_SOURCES = wreck/sched-dummy.c
 wreck_sched_dummy_la_CPPFLAGS = $(test_cppflags)

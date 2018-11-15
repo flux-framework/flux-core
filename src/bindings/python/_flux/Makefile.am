@@ -2,12 +2,13 @@ AM_CPPFLAGS = \
 	$(WARNING_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
+	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
 	-avoid-version -module $(san_ld_zdef_flag) \
-	$(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib \
+	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
 	$(CODE_COVERAGE_LIBS)
 
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
@@ -15,7 +16,8 @@ SUFFIXES = _build.py
 
 common_libs = $(top_builddir)/src/common/libflux-core.la \
 	      $(top_builddir)/src/common/libflux-internal.la \
-	      $(ZMQ_LIBS)
+	      $(ZMQ_LIBS) \
+	      $(PYTHON_LDFLAGS)
 
 _build.py.c:
 	$(PYTHON) $*_build.py
@@ -23,6 +25,7 @@ _build.py.c:
 
 _core_build.py: $(MAKE_BINDING)
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libflux \
+		--search $(top_builddir)/src/common/libflux \
 		--package _flux \
 		--modname _core \
 		--add_sub '.*va_list.*|||' \

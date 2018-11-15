@@ -10,6 +10,7 @@ parser.add_argument('--include_header', help='Include base path', type=str, defa
 parser.add_argument('--include_ffi', help='FFI module for inclusion', action='append', default=[]) 
 parser.add_argument('--package', help='Package prefix for module import', default=None)
 parser.add_argument('--path', help='Include base path', default='.')
+parser.add_argument('--search', help='append to header search path', action='append', default=[])
 parser.add_argument('--modname', help='Name for the module to be generated', default='_flux')
 parser.add_argument('--library', help='Library to include in the build', default='flux-core')
 parser.add_argument('--add_long_sub', help='Regex filter to apply whole-file of the form <match>|||<replacement>', action='append', default=[])
@@ -20,6 +21,17 @@ parser.add_argument('--ignore_header', help='Pattern to ignore when searching he
 args = parser.parse_args()
 
 absolute_head = os.path.abspath(os.path.join(args.path, args.header))
+
+# Prepend 'path' option to search list:
+args.search.insert(0, args.path)
+args.search = [os.path.abspath(f) for f in args.search]
+
+def find_first(path, name):
+  for dirname in path:
+    filename = os.path.join(dirname, name)
+    if (os.path.isfile(filename)):
+      return filename
+  raise "Unable to find file", name
 
 def process_header(f):
   global mega_header
@@ -77,7 +89,7 @@ def process_header(f):
 
         m = re.search('#include\s*"([^"]*)"', l)
         if m:
-          process_header(m.group(1))
+          process_header(find_first (args.search, m.group(1)))
         if not re.match("#\s*(ifdef|ifndef|endif|include|define)", l):
           mega_header += l+'\n'
     checked_heads[f] = 1
