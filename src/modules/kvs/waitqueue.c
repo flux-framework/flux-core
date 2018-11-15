@@ -45,6 +45,9 @@ struct wait_struct {
     wait_cb_f cb;
     void *cb_arg;
     struct handler hand; /* optional special case */
+    int errnum;
+    wait_error_f error_cb;
+    void *error_arg;
 };
 
 #define WAITQUEUE_MAGIC 0xafad7778
@@ -153,6 +156,20 @@ int wait_queue_length (waitqueue_t *q)
     return zlist_size (q->q);
 }
 
+int wait_queue_iter (waitqueue_t *q, wait_iter_cb_f cb, void *arg)
+{
+    wait_t *w;
+
+    assert (q->magic == WAITQUEUE_MAGIC);
+    w = zlist_first (q->q);
+    while (w) {
+        if (cb)
+            cb (w, arg);
+        w = zlist_next (q->q);
+    }
+    return 0;
+}
+
 int wait_addqueue (waitqueue_t *q, wait_t *w)
 {
     assert (q->magic == WAITQUEUE_MAGIC);
@@ -201,6 +218,32 @@ int wait_runqueue (waitqueue_t *q)
         while ((w = zlist_pop (cpy)))
             wait_runone (w);
         zlist_destroy (&cpy);
+    }
+    return 0;
+}
+
+int wait_aux_set_errnum (wait_t *w, int errnum)
+{
+    if (w) {
+        w->errnum = errnum;
+        if (w->error_cb)
+            w->error_cb (w, w->errnum, w->error_arg);
+    }
+    return 0;
+}
+
+int wait_aux_get_errnum (wait_t *w)
+{
+    if (w)
+        return w->errnum;
+    return -1;
+}
+
+int wait_set_error_cb (wait_t *w, wait_error_f cb, void *arg)
+{
+    if (w) {
+        w->error_cb = cb;
+        w->error_arg = arg;
     }
     return 0;
 }

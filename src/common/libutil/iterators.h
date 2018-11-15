@@ -13,4 +13,11 @@
         (VALUE) = zhash_next(HASH),     \
         (KEY) = zhash_cursor(HASH))
 
+#define FOREACH_ZHASHX(HASH, KEY, VALUE) \
+    for((VALUE) = zhashx_first(HASH),    \
+        (KEY) = zhashx_cursor(HASH);     \
+        (VALUE) && (KEY);               \
+        (VALUE) = zhashx_next(HASH),     \
+        (KEY) = zhashx_cursor(HASH))
+
 #endif /* FLUX_ITERATORS_H */

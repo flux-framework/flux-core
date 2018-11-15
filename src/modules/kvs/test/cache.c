@@ -38,6 +38,26 @@ void wait_cb (void *arg)
     (*count)++;
 }
 
+struct wait_error
+{
+    int count;
+    int errnum;
+};
+
+void wait_error_cb (void *arg)
+{
+    struct wait_error *we = arg;
+    ok (we->errnum == ENOTSUP,
+        "wait error called correctly before callback");
+    we->count++;
+}
+
+void error_cb (wait_t *wf, int errnum, void *arg)
+{
+    int *err = arg;
+    (*err) = errnum;
+}
+
 void cache_tests (void)
 {
     struct cache *cache;
@@ -69,6 +89,10 @@ void cache_entry_basic_tests (void)
 
     /* corner case tests */
 
+    ok (cache_entry_create (NULL) == NULL
+        && errno == EINVAL,
+        "cache_entry_create fails with EINVAL on bad input");
+
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
 
@@ -76,7 +100,7 @@ void cache_entry_basic_tests (void)
         && errno == EINVAL,
         "cache_entry_set_treeobj fails with EINVAL with bad input");
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create success");
 
     o = json_string ("yabadabadoo");
@@ -98,6 +122,22 @@ void cache_entry_basic_tests (void)
 
     free (data);
 
+    ok (cache_entry_set_errnum_on_valid (NULL, EPERM) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_valid returns EINVAL with bad input");
+
+    ok (cache_entry_set_errnum_on_valid (e, 0) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_valid returns EINVAL with bad errnum");
+
+    ok (cache_entry_set_errnum_on_notdirty (NULL, EPERM) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_notdirty returns EINVAL with bad input");
+
+    ok (cache_entry_set_errnum_on_notdirty (e, 0) < 0
+        && errno == EINVAL,
+        "cache_entry_set_errnum_on_notdirty returns EINVAL with bad errnum");
+
     cache_entry_destroy (e);
     e = NULL;
 }
@@ -116,7 +156,7 @@ void cache_entry_raw_tests (void)
     data = strdup ("abcd");
     data2 = strdup ("abcd");
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_get_valid (e) == false,
         "cache entry initially non-valid");
@@ -174,7 +214,7 @@ void cache_entry_raw_tests (void)
 
     data = strdup ("abcd");
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
@@ -218,7 +258,7 @@ void cache_entry_raw_and_treeobj_tests (void)
 
     data = strdup ("foo");
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
@@ -229,7 +269,7 @@ void cache_entry_raw_and_treeobj_tests (void)
 
     /* test cache entry filled with zero length raw data */
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
@@ -244,7 +284,7 @@ void cache_entry_raw_and_treeobj_tests (void)
     o1 = treeobj_create_val ("foo", 3);
     data = treeobj_encode (o1);
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, data, strlen (data)) == 0,
         "cache_entry_set_raw success");
@@ -264,7 +304,7 @@ void cache_entry_raw_and_treeobj_tests (void)
     o1 = treeobj_create_val ("abcd", 3);
     data = treeobj_encode (o1);
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_treeobj (e, o1) == 0,
         "cache_entry_set_treeobj success");
@@ -284,6 +324,7 @@ void waiter_tests (void)
     struct cache_entry *e;
     char *data;
     wait_t *w;
+    struct wait_error we;
     int count;
 
     data = strdup ("abcd");
@@ -294,7 +335,7 @@ void waiter_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e) == false,
         "cache entry invalid, adding waiter");
@@ -310,6 +351,36 @@ void waiter_tests (void)
         "cache entry set valid with one waiter");
     ok (count == 1,
         "waiter callback ran");
+
+    we.count = 0;
+    we.errnum = 0;
+    ok ((w = wait_create (wait_cb, &we)) != NULL,
+        "wait_create works");
+    ok (wait_set_error_cb (w, error_cb, &we.errnum) == 0,
+        "wait_set_error_cb works");
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
+    ok (cache_entry_set_errnum_on_valid (e, ENOTSUP) == 0,
+        "cache_entry_set_errnum_on_valid success");
+    ok (we.count == 1,
+        "waiter callback ran");
+    ok (we.errnum == ENOTSUP,
+        "error callback ran");
+
+    we.count = 0;
+    we.errnum = 0;
+    ok ((w = wait_create (wait_cb, &we)) != NULL,
+        "wait_create works");
+    ok (wait_set_error_cb (w, error_cb, &we.errnum) == 0,
+        "wait_set_error_cb works");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_set_errnum_on_notdirty (e, EPERM) == 0,
+        "cache_entry_set_errnum_on_notdirty success");
+    ok (we.count == 1,
+        "waiter callback ran");
+    ok (we.errnum == EPERM,
+        "error callback ran");
 
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
@@ -354,7 +425,7 @@ void waiter_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("a-reference")) != NULL,
         "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e) == false,
         "cache entry invalid, adding waiter");
@@ -371,6 +442,26 @@ void waiter_tests (void)
     free (data);
 }
 
+void cache_blobref_tests (void)
+{
+    struct cache *cache;
+    struct cache_entry *e;
+    const char *ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((e = cache_entry_create ("abcd")) != NULL,
+        "cache_entry_create works");
+    ok (cache_insert (cache, e) == 0,
+        "cache_insert works");
+    ok ((ref = cache_entry_get_blobref (e)) != NULL,
+        "cache_entry_get_blobref success");
+    ok (!strcmp (ref, "abcd"),
+        "cache_entry_get_blobref returned correct ref");
+
+    cache_destroy (cache);
+}
+
 void cache_remove_entry_tests (void)
 {
     struct cache *cache;
@@ -382,9 +473,10 @@ void cache_remove_entry_tests (void)
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("remove-ref")) != NULL,
         "cache_entry_create works");
-    cache_insert (cache, "remove-ref", e);
+    ok (cache_insert (cache, e) == 0,
+        "cache_insert works");
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
     ok (cache_remove_entry (cache, "blalalala") == 0,
@@ -397,9 +489,10 @@ void cache_remove_entry_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("remove-ref")) != NULL,
         "cache_entry_create created empty object");
-    cache_insert (cache, "remove-ref", e);
+    ok (cache_insert (cache, e) == 0,
+        "cache_insert works");
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
     ok (cache_entry_get_valid (e) == false,
@@ -424,13 +517,14 @@ void cache_remove_entry_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    ok ((e = cache_entry_create ()) != NULL,
+    ok ((e = cache_entry_create ("remove-ref")) != NULL,
         "cache_entry_create works");
     o = treeobj_create_val ("foobar", 6);
     ok (cache_entry_set_treeobj (e, o) == 0,
         "cache_entry_set_treeobj success");
     json_decref (o);
-    cache_insert (cache, "remove-ref", e);
+    ok (cache_insert (cache, e) == 0,
+        "cache_insert works");
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
     ok (cache_entry_set_dirty (e, true) == 0,
@@ -471,9 +565,10 @@ void cache_expiration_tests (void)
         "cache contains 0 entries");
 
     /* first test w/ entry w/o treeobj object */
-    ok ((e1 = cache_entry_create ()) != NULL,
+    ok ((e1 = cache_entry_create ("xxx1")) != NULL,
         "cache_entry_create works");
-    cache_insert (cache, "xxx1", e1);
+    ok (cache_insert (cache, e1) == 0,
+        "cache_insert works");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry after insert");
     ok (cache_lookup (cache, "yyy1", 0) == NULL,
@@ -502,12 +597,13 @@ void cache_expiration_tests (void)
 
     /* second test w/ entry with treeobj object */
     o1 = treeobj_create_val ("foo", 3);
-    ok ((e3 = cache_entry_create ()) != NULL,
+    ok ((e3 = cache_entry_create ("xxx2")) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_treeobj (e3, o1) == 0,
         "cache_entry_set_treeobj success");
     json_decref (o1);
-    cache_insert (cache, "xxx2", e3);
+    ok (cache_insert (cache, e3) == 0,
+        "cache_insert works");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries after insert");
     ok (cache_lookup (cache, "yyy2", 0) == NULL,
@@ -568,6 +664,7 @@ int main (int argc, char *argv[])
     cache_entry_raw_and_treeobj_tests ();
     waiter_tests ();
     cache_expiration_tests ();
+    cache_blobref_tests ();
     cache_remove_entry_tests ();
 
     done_testing ();

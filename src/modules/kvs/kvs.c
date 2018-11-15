@@ -553,6 +553,22 @@ done:
  * load
  */
 
+static void content_load_cache_entry_error (kvs_ctx_t *ctx,
+                                            struct cache_entry *entry,
+                                            int errnum,
+                                            const char *blobref)
+{
+    /* failure on load, inform all waiters, attempt to destroy
+     * entry afterwards, as future loads may believe a load is in
+     * transit.  cache_remove_entry() will not work if a waiter is
+     * still there.  If assert hits, it's because we did not set
+     * up a wait error cb correctly.
+     */
+    (void)cache_entry_set_errnum_on_valid (entry, errnum);
+    if (cache_remove_entry (ctx->cache, blobref) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: cache_remove_entry", __FUNCTION__);
+}
+
 static void content_load_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -561,11 +577,8 @@ static void content_load_completion (flux_future_t *f, void *arg)
     const char *blobref;
     struct cache_entry *entry;
 
-    if (flux_content_load_get (f, &data, &size) < 0) {
-        flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
-        goto done;
-    }
     blobref = flux_future_aux_get (f, "ref");
+
     /* should be impossible for lookup to fail, cache entry created
      * earlier, and cache_expire_entries() could not have removed it
      * b/c it is not yet valid.  But check and log incase there is
@@ -576,17 +589,19 @@ static void content_load_completion (flux_future_t *f, void *arg)
         goto done;
     }
 
+    if (flux_content_load_get (f, &data, &size) < 0) {
+        flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
+        content_load_cache_entry_error (ctx, entry, errno, blobref);
+        goto done;
+    }
+
     /* If cache_entry_set_raw() fails, it's a pretty terrible error
      * case, where we've loaded an object from the content store, but
      * can't put it in the cache.
-     *
-     * If there was a waiter on this cache entry waiting for it to be
-     * valid, the load() will ultimately hang.  The caller will
-     * timeout or eventually give up, so the KVS can continue along
-     * its merry way.  So we just log the error.
      */
     if (cache_entry_set_raw (entry, data, size) < 0) {
         flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
+        content_load_cache_entry_error (ctx, entry, errno, blobref);
         goto done;
     }
 
@@ -639,12 +654,17 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
     /* Create an incomplete hash entry if none found.
      */
     if (!entry) {
-        if (!(entry = cache_entry_create ())) {
+        if (!(entry = cache_entry_create (ref))) {
             flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
             return -1;
         }
-        cache_insert (ctx->cache, ref, entry);
+        if (cache_insert (ctx->cache, entry) < 0) {
+            flux_log_error (ctx->h, "%s: cache_insert",
+                            __FUNCTION__);
+            cache_entry_destroy (entry);
+            return -1;
+        }
         if (content_load_request_send (ctx, ref) < 0) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: content_load_request_send",
@@ -690,19 +710,32 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
  * store/write
  */
 
-static int content_store_get (flux_future_t *f, void *arg)
+static void content_store_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct cache_entry *entry;
-    const char *blobref;
-    int rc = -1;
-    int saved_errno, ret;
+    const char *cache_blobref, *blobref;
+    int ret;
+
+    cache_blobref = flux_future_aux_get (f, "cache_blobref");
+    assert (cache_blobref);
 
     if (flux_content_store_get (f, &blobref) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_content_store_get", __FUNCTION__);
-        goto done;
+        goto error;
     }
+
+    /* Double check that content store stored in the same blobref
+     * location we calculated.
+     * N.B. perhaps this check is excessive and could be removed
+     */
+    if (strcmp (blobref, cache_blobref)) {
+        flux_log (ctx->h, LOG_ERR, "%s: inconsistent blobref returned",
+                  __FUNCTION__);
+        errno = EPROTO;
+        goto error;
+    }
+
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     /* should be impossible for lookup to fail, cache entry created
      * earlier, and cache_expire_entries() could not have removed it
@@ -710,56 +743,78 @@ static int content_store_get (flux_future_t *f, void *arg)
      * error dealng with error paths using cache_remove_entry().
      */
     if (!(entry = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
-        saved_errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
-        goto done;
+        goto error;
     }
 
     /* This is a pretty terrible error case, where we've received
      * verification that a dirty cache entry has been flushed to the
      * content store, but we can't notify waiters that it has been
-     * flushed.  We also can't notify waiters of an error occurring.
-     *
-     * If a write (commit/fence) has hung, the most likely scenario is
-     * that the writer will timeout or give up at some point.
-     * setroot() will never happen, so the entire transaction has
-     * failed and no consistency issue will occur.
-     *
-     * We'll mark the cache entry not dirty, so that memory can be
-     * reclaimed at a later time.  But we can't do that with
-     * cache_entry_clear_dirty() b/c that will only clear dirty for
-     * entries without waiters.  So in this rare case, we must call
-     * cache_entry_force_clear_dirty().
+     * flushed.  In addition, if we can't notify waiters by clearing
+     * the dirty bit, what are the odds the error handling below would
+     * work as well.
      */
     if (cache_entry_set_dirty (entry, false) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
                         __FUNCTION__);
+        goto error;
+    }
+
+    flux_future_destroy (f);
+    return;
+
+error:
+    flux_future_destroy (f);
+
+    /* failure on store, inform all waiters, must destroy entry
+     * afterwards, as future loads/stores may believe content is ok.
+     * cache_remove_entry() will not work if a waiter is still there.
+     * If assert hits, it's because we did not set up a wait error cb
+     * correctly.
+     */
+
+    /* we can't do anything if this cache_lookup fails */
+    if (!(entry = cache_lookup (ctx->cache, cache_blobref, ctx->epoch))) {
+        flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
+        return;
+    }
+
+    /* In the case this fails, we'll mark the cache entry not dirty,
+     * so that memory can be reclaimed at a later time.  But we can't
+     * do that with cache_entry_clear_dirty() b/c that will only clear
+     * dirty for entries without waiters.  So in this rare case, we
+     * must call cache_entry_force_clear_dirty().  flushed.
+     */
+    if (cache_entry_set_errnum_on_notdirty (entry, errno) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: cache_entry_set_errnum_on_notdirty",
+                  __FUNCTION__);
         ret = cache_entry_force_clear_dirty (entry);
         assert (ret == 0);
-        goto done;
+        return;
     }
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+
+    /* this can't fail, otherwise we shouldn't be in this function */
+    ret = cache_entry_force_clear_dirty (entry);
+    assert (ret == 0);
+
+    if (cache_remove_entry (ctx->cache, cache_blobref) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: cache_remove_entry", __FUNCTION__);
 }
 
-static void content_store_completion (flux_future_t *f, void *arg)
-{
-    (void)content_store_get (f, arg);
-}
-
-static int content_store_request_send (kvs_ctx_t *ctx, const void *data,
-                                       int len)
+static int content_store_request_send (kvs_ctx_t *ctx, const char *blobref,
+                                       const void *data, int len)
 {
     flux_future_t *f;
     int saved_errno, rc = -1;
 
     if (!(f = flux_content_store (ctx->h, data, len, 0)))
         goto error;
+    if (flux_future_aux_set (f, "cache_blobref", (void *)blobref, NULL) < 0) {
+        saved_errno = errno;
+        flux_future_destroy (f);
+        errno = saved_errno;
+        goto error;
+    }
     if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
         saved_errno = errno;
         flux_future_destroy (f);
@@ -788,12 +843,12 @@ static int kvstxn_load_cb (kvstxn_t *kt, const char *ref, void *data)
 }
 
 /* Flush to content cache asynchronously and push wait onto cache
- * object's wait queue.  FIXME: asynchronous errors need to be
- * propagated back to caller.
+ * object's wait queue.
  */
 static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     struct kvs_cb_data *cbd = data;
+    const char *blobref;
     const void *storedata;
     int storedatalen = 0;
 
@@ -805,7 +860,13 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
         kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
+
+    /* must be true, otherwise we didn't insert entry in cache */
+    blobref = cache_entry_get_blobref (entry);
+    assert (blobref);
+
     if (content_store_request_send (cbd->ctx,
+                                    blobref,
                                     storedata,
                                     storedatalen) < 0) {
         cbd->errnum = errno;
@@ -943,6 +1004,12 @@ done:
     return rc;
 }
 
+static void kvstxn_wait_error_cb (wait_t *w, int errnum, void *arg)
+{
+    kvstxn_t *kt = arg;
+    kvstxn_set_aux_errnum (kt, errnum);
+}
+
 /* Write all the ops for a particular commit/fence request (rank 0
  * only).  The setroot event will cause responses to be sent to the
  * transaction requests and clean up the treq_t state.  This
@@ -997,6 +1064,9 @@ static void kvstxn_apply (kvstxn_t *kt)
             goto done;
         }
 
+        if (wait_set_error_cb (wait, kvstxn_wait_error_cb, kt) < 0)
+            goto done;
+
         cbd.ctx = ctx;
         cbd.wait = wait;
         cbd.errnum = 0;
@@ -1023,6 +1093,9 @@ static void kvstxn_apply (kvstxn_t *kt)
             errnum = errno;
             goto done;
         }
+
+        if (wait_set_error_cb (wait, kvstxn_wait_error_cb, kt) < 0)
+            goto done;
 
         cbd.ctx = ctx;
         cbd.wait = wait;
@@ -1292,6 +1365,12 @@ static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
     return 0;
 }
 
+static void lookup_wait_error_cb (wait_t *w, int errnum, void *arg)
+{
+    lookup_t *lh = arg;
+    lookup_set_aux_errnum (lh, errnum);
+}
+
 static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
@@ -1389,6 +1468,9 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
                                               lookup_request_cb)))
+            goto done;
+
+        if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
             goto done;
 
         /* do not destroy lookup_handle on message destruction, we
@@ -1528,6 +1610,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
                                               watch_request_cb)))
+            goto done;
+
+        if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
             goto done;
 
         /* do not destroy lookup_handle on message destruction, we
@@ -2295,7 +2380,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
     }
     if ((entry = cache_lookup (ctx->cache, ref, ctx->epoch)))
         goto done; // already in cache, possibly dirty/invalid - we don't care
-    if (!(entry = cache_entry_create ())) {
+    if (!(entry = cache_entry_create (ref))) {
         flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
         goto done;
     }
@@ -2304,7 +2389,11 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         cache_entry_destroy (entry);
         goto done;
     }
-    cache_insert (ctx->cache, ref, entry);
+    if (cache_insert (ctx->cache, entry) < 0) {
+        flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
+        cache_entry_destroy (entry);
+        goto done;
+    }
 done:
     free (data);
 }
@@ -2960,11 +3049,15 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, char *ref, int ref_len)
         goto error;
     }
     if (!(entry = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(entry = cache_entry_create ())) {
+        if (!(entry = cache_entry_create (ref))) {
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        cache_insert (ctx->cache, ref, entry);
+        if (cache_insert (ctx->cache, entry) < 0) {
+            flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
+            cache_entry_destroy (entry);
+            goto error;
+        }
     }
     if (!cache_entry_get_valid (entry)) {
         if (cache_entry_set_raw (entry, data, len) < 0) { // makes entry valid

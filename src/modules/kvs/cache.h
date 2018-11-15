@@ -15,7 +15,7 @@ struct cache;
  * cache_entry_create() creates an empty cache entry.  Data can be set
  * in an entry via cache_entry_set_raw().
  */
-struct cache_entry *cache_entry_create (void);
+struct cache_entry *cache_entry_create (const char *ref);
 void cache_entry_destroy (void *arg);
 
 /* Return true if cache entry contains valid data.  False would
@@ -75,6 +75,12 @@ int cache_entry_set_raw (struct cache_entry *entry, const void *data, int len);
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *entry);
 
+/* in the event of a load or store RPC error, inform the cache to set
+ * an error on all waiters of a type on a cache entry.
+ */
+int cache_entry_set_errnum_on_valid (struct cache_entry *entry, int errnum);
+int cache_entry_set_errnum_on_notdirty (struct cache_entry *entry, int errnum);
+
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
  * load or store RPC.
@@ -82,6 +88,9 @@ const json_t *cache_entry_get_treeobj (struct cache_entry *entry);
  */
 int cache_entry_wait_notdirty (struct cache_entry *entry, wait_t *wait);
 int cache_entry_wait_valid (struct cache_entry *entry, wait_t *wait);
+
+/* Get the blobref of this entry */
+const char *cache_entry_get_blobref (struct cache_entry *entry);
 
 /* Create/destroy the cache container and its contents.
  */
@@ -95,11 +104,11 @@ void cache_destroy (struct cache *cache);
 struct cache_entry *cache_lookup (struct cache *cache,
                                   const char *ref, int current_epoch);
 
-/* Insert an entry in the cache by blobref 'ref'.
- * Ownership of the cache entry is transferred to the cache.
+/* Insert entry in the cache.  Reference for entry created during
+ * cache_entry_create() time.  Ownership of the cache entry is
+ * transferred to the cache.
  */
-void cache_insert (struct cache *cache, const char *ref,
-                   struct cache_entry *entry);
+int cache_insert (struct cache *cache, struct cache_entry *entry);
 
 /* Remove a cache_entry from the cache.  Will not be removed if dirty
  * or there are any waiters of any sort.

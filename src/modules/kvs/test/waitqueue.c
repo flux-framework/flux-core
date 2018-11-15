@@ -8,6 +8,22 @@ void wait_cb (void *arg)
     (*count)++;
 }
 
+void error_cb (wait_t *w, int errnum, void *arg)
+{
+    int *err = arg;
+    (*err) = errnum;
+}
+
+void iter_cb (wait_t *w, void *arg)
+{
+    int *count = arg;
+    (*count)++;
+
+    /* what "foobar" is set to not important, just set to count */
+    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0,
+        "wait_msg_aux_set works");
+}
+
 void msghand (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
@@ -36,10 +52,11 @@ int main (int argc, char *argv[])
 {
     waitqueue_t *q;
     waitqueue_t *q2;
-    wait_t *w;
-    flux_msg_t *msg;
+    wait_t *w, *w1, *w2;
+    flux_msg_t *msg, *msg1, *msg2;
     char *str;
     int count;
+    int errnum;
     int i;
 
     plan (NO_PLAN);
@@ -52,7 +69,7 @@ int main (int argc, char *argv[])
      */
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
-       "wait_create works");
+        "wait_create works");
     wait_destroy (w);
     ok (count == 0,
         "wait_destroy didn't run callback");
@@ -63,6 +80,8 @@ int main (int argc, char *argv[])
         "wait_msg_aux_set returns -1 on bad input");
     ok (!wait_msg_aux_get (NULL, NULL),
         "wait_msg_aux_set returns NULL on bad input");
+    ok (wait_aux_get_errnum (NULL) < 0,
+        "wait_aux_get_errnum returns -1 on bad input");
 
     /* Create/destroy wait_t with msg handler, and set/get aux data
      */
@@ -83,23 +102,73 @@ int main (int argc, char *argv[])
     ok (count == 0,
         "wait_destroy didn't run callback");
 
+    /* Create/destroy wait_t, and set/run error cb
+     */
+    errnum = 0;
+    ok ((w = wait_create (wait_cb, NULL)) != NULL,
+        "wait_create works");
+    ok (wait_aux_get_errnum (w) == 0,
+        "wait_aux_get_errnum returns 0 initially");
+    ok (wait_set_error_cb (w, error_cb, &errnum) == 0,
+        "wait_set_error_cb works");
+    ok (wait_aux_set_errnum (w, ENOTSUP) == 0,
+        "wait_aux_set_errnum works");
+    ok (errnum == ENOTSUP,
+        "error cb called correctly");
+    ok (wait_aux_get_errnum (w) == ENOTSUP,
+        "wait_aux_get_errnum returns errnum correctly");
+    wait_destroy (w);
+
+    /* Create/destroy waitqueue_t with msgs, iterate over them */
+    count = 0;
+    msg1 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    ok (msg1 != NULL,
+        "flux_msg_create works");
+    msg2 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    ok (msg2 != NULL,
+        "flux_msg_create works");
+    w1 = wait_create_msg_handler (NULL, NULL, msg1, NULL, NULL);
+    ok (w1 != NULL,
+        "wait_create_msg_handler works");
+    w2 = wait_create_msg_handler (NULL, NULL, msg1, NULL, NULL);
+    ok (w2 != NULL,
+        "wait_create_msg_handler works");
+    q = wait_queue_create ();
+    ok (q != NULL,
+        "wait_queue_create works");
+    ok (wait_addqueue (q, w1) == 0,
+        "wait_addqueue works");
+    ok (wait_addqueue (q, w2) == 0,
+        "wait_addqueue works");
+    ok (wait_queue_iter (q, iter_cb, &count) == 0,
+        "wait_queue_iter works");
+    ok (count == 2,
+        "wait_queue_iter iterated the correct number of times");
+    ok (wait_msg_aux_get (w1, "foobar") != NULL,
+        "wait_queue_iter callback set aux correctly");
+    ok (wait_msg_aux_get (w2, "foobar") != NULL,
+        "wait_queue_iter callback set aux correctly");
+    wait_queue_destroy (q);
+    flux_msg_destroy (msg1);
+    flux_msg_destroy (msg2);
+
     /* Create wait_t, add to queue, run queue, destroy queue.
      */
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
-       "wait_create works");
+        "wait_create works");
     ok ((q = wait_queue_create ()) != NULL,
-       "wait_queue_create works");
+        "wait_queue_create works");
     ok (wait_addqueue (q, w) == 0,
         "wait_addqueue works");
     ok (wait_get_usecount (w) == 1,
-       "wait_get_usecount 1 after wait_addqueue");
+        "wait_get_usecount 1 after wait_addqueue");
     ok (count == 0,
-       "wait_t callback not run");
+        "wait_t callback not run");
     ok (wait_runqueue (q) == 0,
         "wait_runqueue success");
     ok (count == 1,
-       "wait_runqueue ran callback");
+        "wait_runqueue ran callback");
     wait_queue_destroy (q);
 
     /**
