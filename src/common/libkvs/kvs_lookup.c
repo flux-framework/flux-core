@@ -91,9 +91,13 @@ static int validate_lookup_flags (int flags, bool watch_ok)
     if (flags & FLUX_KVS_WATCH_WAITCREATE
         && !(flags & FLUX_KVS_WATCH))
         return -1;
+    if (flags & FLUX_KVS_WATCH_FULL
+        && !(flags & FLUX_KVS_WATCH))
+        return -1;
 
     flags &= ~FLUX_KVS_WATCH;
     flags &= ~FLUX_KVS_WATCH_WAITCREATE;
+    flags &= ~FLUX_KVS_WATCH_FULL;
     switch (flags) {
         case 0:
         case FLUX_KVS_TREEOBJ:
