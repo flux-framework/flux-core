@@ -150,6 +150,7 @@ void test_simple (void)
         && !strcmp (result_destroy_arg, "Hello"),
         "flux_future_destroy called result destructor correctly");
 
+    flux_reactor_destroy (r);
     diag ("%s: simple tests completed", __FUNCTION__);
 }
 
