@@ -754,6 +754,60 @@ void test_fatal_error (void)
     flux_future_destroy (f);
 }
 
+void fatal_error_continuation (flux_future_t *f, void *arg)
+{
+    int *fp = arg;
+    int rc = flux_future_get (f, NULL);
+    *fp = errno;
+    cmp_ok (rc, "<", 0,
+           "flux_future_get() returns < 0 in continuation after fatal err ");
+}
+
+void test_fatal_error_async (void)
+{
+    int fatalerr = 0;
+    flux_reactor_t *r;
+    flux_future_t *f;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fatal_error (f, EPERM, NULL);
+
+    ok (flux_future_then (f, -1., fatal_error_continuation, &fatalerr) == 0,
+        "flux_future_then on future with fatal error");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    cmp_ok (fatalerr, "==", EPERM,
+        "continuation runs after fatal error");
+
+    flux_future_destroy (f);
+
+    fatalerr = 0;
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fatal_error (f, EPERM, NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM");
+
+    ok (flux_future_then (f, -1., fatal_error_continuation, &fatalerr) == 0,
+        "flux_future_then on future with fatal error and previous get");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    cmp_ok (fatalerr, "==", EPERM,
+        "continuation runs after fatal error syncrhnously retrieved");
+
+    flux_future_destroy (f);
+    flux_reactor_destroy (r);
+}
+
 void test_error_string (void)
 {
     flux_future_t *f;
@@ -894,6 +948,7 @@ int main (int argc, char *argv[])
     test_reset ();
 
     test_fatal_error ();
+    test_fatal_error_async ();
 
     test_error_string ();
 
