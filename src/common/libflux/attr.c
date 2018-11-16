@@ -131,26 +131,34 @@ static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
     attr_t *attr;
     int rc = -1;
 
-#if JANSSON_VERSION_HEX >= 0x020800
-    /* $? format specifier was introduced in jansson 2.8 */
     f = flux_rpc_pack (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
-                       "{s:s, s:s?}", "name", name, "value", val);
-#else
-    f = flux_rpc_pack (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
-                       val ? "{s:s, s:s}" : "{s:s, s:n}",
-                       "name", name, "value", val);
-#endif
+                       "{s:s, s:s}", "name", name, "value", val);
     if (!f)
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
-    if (val) {
-        if (!(attr = attr_create (val, 0)))
-            goto done;
-        zhash_update (ctx->hash, name, attr);
-        zhash_freefn (ctx->hash, name, attr_destroy);
-    } else
-        zhash_delete (ctx->hash, name);
+    if (!(attr = attr_create (val, 0)))
+        goto done;
+    zhash_update (ctx->hash, name, attr);
+    zhash_freefn (ctx->hash, name, attr_destroy);
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int attr_rm_rpc (attr_ctx_t *ctx, const char *name)
+{
+    flux_future_t *f;
+    int rc = -1;
+
+    f = flux_rpc_pack (ctx->h, "attr.rm", FLUX_NODEID_ANY, 0,
+                       "{s:s}", "name", name);
+    if (!f)
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
+        goto done;
+    zhash_delete (ctx->hash, name);
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -220,10 +228,19 @@ const char *flux_attr_get (flux_t *h, const char *name, int *flags)
 
 int flux_attr_set (flux_t *h, const char *name, const char *val)
 {
-    attr_ctx_t *ctx = getctx (h);
-    if (!ctx || attr_set_rpc (ctx, name, val) < 0)
+    int rc;
+    if (!h || !name) {
+        errno = EINVAL;
         return -1;
-    return 0;
+    }
+    attr_ctx_t *ctx = getctx (h);
+    if (!ctx)
+        return -1;
+    if (val)
+        rc = attr_set_rpc (ctx, name, val);
+    else
+        rc = attr_rm_rpc (ctx, name);
+    return rc;
 }
 
 int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
