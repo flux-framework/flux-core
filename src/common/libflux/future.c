@@ -443,6 +443,11 @@ done:
     return h;
 }
 
+static bool future_is_ready (flux_future_t *f)
+{
+    return (f->result_valid || f->fatal_errnum_valid);
+}
+
 /* Block until future is fulfilled or timeout expires.
  * This function can be called multiple times, with different timeouts.
  * If timeout <= 0., there is no timeout.
@@ -459,7 +464,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         errno = EINVAL;
         return -1;
     }
-    if (!f->result_valid && !f->fatal_errnum_valid) {
+    if (!future_is_ready (f)) {
         if (timeout == 0.) { // don't setup 'now' context in this case
             errno = ETIMEDOUT;
             return -1;
@@ -475,7 +480,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             f->init (f, f->init_arg); // might set error
             f->now->init_called = true;
         }
-        if (!f->result_valid && !f->fatal_errnum_valid) {
+        if (!future_is_ready (f)) {
             if (flux_reactor_run (f->now->r, 0) < 0)
                 return -1; // errno set by now_timer_cb or other watcher
         }
@@ -483,7 +488,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             flux_dispatch_requeue (f->now->h);
         f->now->running = false;
     }
-    if (!f->result_valid && !f->fatal_errnum_valid)
+    if (!future_is_ready (f))
         return -1;
     return 0;
 }
@@ -493,7 +498,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
  */
 bool flux_future_is_ready (flux_future_t *f)
 {
-    if (f && flux_future_wait_for (f, 0.) == 0)
+    if (f && future_is_ready (f))
         return true;
     return false;
 }
@@ -707,7 +712,7 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     assert (f->then != NULL);
 
-    if (f->result_valid || f->fatal_errnum_valid)
+    if (future_is_ready (f))
         flux_watcher_start (f->then->idle); // prevent reactor from blocking
 }
 
@@ -721,7 +726,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     assert (f->then != NULL);
 
     flux_watcher_stop (f->then->idle);
-    if (f->result_valid || f->fatal_errnum_valid) {
+    if (future_is_ready (f)) {
         flux_watcher_stop (f->then->timer);
         flux_watcher_stop (f->then->prepare);
         flux_watcher_stop (f->then->check);
