@@ -37,192 +37,143 @@ enum {
     FLUX_ATTRFLAG_IMMUTABLE = 1,
 };
 
-typedef struct {
-    zhash_t *hash;
-    flux_t *h;
-} attr_ctx_t;
+struct attr_cache {
+    zhashx_t *cache;        // immutable values
+    zhashx_t *temp;         // values that stay valid until next lookup
+};
 
-typedef struct {
-    char *val;
-    int flags;
-} attr_t;
-
-static void freectx (void *arg)
+static void attr_cache_destroy (struct attr_cache *c)
 {
-    attr_ctx_t *ctx = arg;
-    if (ctx) {
+    if (c) {
         int saved_errno = errno;
-        zhash_destroy (&ctx->hash);
-        free (ctx);
+        zhashx_destroy (&c->cache);
+        zhashx_destroy (&c->temp);
+        free (c);
         errno = saved_errno;
     }
 }
 
-static attr_ctx_t *attr_ctx_new (flux_t *h)
+static void valfree (void **item)
 {
-    attr_ctx_t *ctx = calloc (1, sizeof (*ctx));
-    if (!ctx || !(ctx->hash = zhash_new ())) {
-        /* Ensure errno set properly, in case zhash_new doesn't do it */
-        errno = ENOMEM;
-        goto error;
+    if (item) {
+        free (*item);
+        *item = NULL;
     }
-    ctx->h = h;
-    if (flux_aux_set (h, "flux::attr", ctx, freectx) < 0)
-        goto error;
-    return ctx;
-error:
-    freectx (ctx);
+}
+
+static struct attr_cache *attr_cache_create (flux_t *h)
+{
+    struct attr_cache *c = calloc (1, sizeof (*c));
+    if (!c)
+        return NULL;
+    if (!(c->cache = zhashx_new ()))
+        goto nomem;
+    zhashx_set_destructor (c->cache, valfree);
+    if (!(c->temp = zhashx_new ()))
+        goto nomem;
+    zhashx_set_destructor (c->temp, valfree);
+    return c;
+nomem:
+    errno = ENOMEM;
+    attr_cache_destroy (c);
     return NULL;
 }
 
-static attr_ctx_t *getctx (flux_t *h)
+static struct attr_cache *get_attr_cache (flux_t *h)
 {
-    attr_ctx_t *ctx = flux_aux_get (h, "flux::attr");
-    if (!ctx)
-        ctx = attr_ctx_new (h);
-    return ctx;
-}
-
-static void attr_destroy (void *arg)
-{
-    attr_t *attr = arg;
-    free (attr->val);
-    free (attr);
-}
-
-static attr_t *attr_create (const char *val, int flags)
-{
-    attr_t *attr = calloc (1, sizeof (*attr));
-    if (!attr || !(attr->val = strdup (val))) {
-        free (attr);
-        errno = ENOMEM;
-        return NULL;
+    const char *auxkey = "flux::attr_cache";
+    struct attr_cache *c = flux_aux_get (h, auxkey);
+    if (!c) {
+        if (!(c = attr_cache_create (h)))
+            return NULL;
+        if (flux_aux_set (h, auxkey, c, (flux_free_f)attr_cache_destroy) < 0) {
+            attr_cache_destroy (c);
+            return NULL;
+        }
     }
-    attr->flags = flags;
-    return attr;
-}
-
-static int attr_get_rpc (attr_ctx_t *ctx, const char *name, attr_t **attrp)
-{
-    flux_future_t *f;
-    const char *val;
-    int flags;
-    attr_t *attr;
-    int rc = -1;
-
-    if (!(f = flux_rpc_pack (ctx->h, "attr.get", FLUX_NODEID_ANY, 0,
-                             "{s:s}", "name", name)))
-        goto done;
-    if (flux_rpc_get_unpack (f, "{s:s, s:i}",
-                             "value", &val, "flags", &flags) < 0)
-        goto done;
-    if (!(attr = attr_create (val, flags)))
-        goto done;
-    zhash_update (ctx->hash, name, attr);
-    zhash_freefn (ctx->hash, name, attr_destroy);
-    *attrp = attr;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
-{
-    flux_future_t *f;
-    attr_t *attr;
-    int rc = -1;
-
-    f = flux_rpc_pack (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
-                       "{s:s, s:s}", "name", name, "value", val);
-    if (!f)
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    if (!(attr = attr_create (val, 0)))
-        goto done;
-    zhash_update (ctx->hash, name, attr);
-    zhash_freefn (ctx->hash, name, attr_destroy);
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int attr_rm_rpc (attr_ctx_t *ctx, const char *name)
-{
-    flux_future_t *f;
-    int rc = -1;
-
-    f = flux_rpc_pack (ctx->h, "attr.rm", FLUX_NODEID_ANY, 0,
-                       "{s:s}", "name", name);
-    if (!f)
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    zhash_delete (ctx->hash, name);
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
+    return c;
 }
 
 const char *flux_attr_get (flux_t *h, const char *name)
 {
-    attr_ctx_t *ctx;
-    attr_t *attr;
+    struct attr_cache *c;
+    const char *val;
+    int flags;
+    flux_future_t *f;
+    char *cpy = NULL;
 
     if (!h || !name) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(ctx = getctx (h)))
+    if (!(c = get_attr_cache (h)))
         return NULL;
-    if (!(attr = zhash_lookup (ctx->hash, name))
-                        || !(attr->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
-        if (attr_get_rpc (ctx, name, &attr) < 0)
-            return NULL;
-    }
-    return attr->val;
+    if ((val = zhashx_lookup (c->cache, name)))
+        return val;
+    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{s:s}",
+                                                                "name", name)))
+        return NULL;
+    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val,
+                                             "flags", &flags) < 0)
+        goto done;
+    if (!(cpy = strdup (val)))
+        goto done;
+    if ((flags & FLUX_ATTRFLAG_IMMUTABLE))
+        zhashx_update (c->cache, name, cpy);
+    else
+        zhashx_update (c->temp, name, cpy);
+done:
+    flux_future_destroy (f);
+    return cpy;
 }
 
 int flux_attr_set (flux_t *h, const char *name, const char *val)
 {
-    int rc;
+    flux_future_t *f;
+
     if (!h || !name) {
         errno = EINVAL;
         return -1;
     }
-    attr_ctx_t *ctx = getctx (h);
-    if (!ctx)
-        return -1;
     if (val)
-        rc = attr_set_rpc (ctx, name, val);
+        f = flux_rpc_pack (h, "attr.set", FLUX_NODEID_ANY, 0, "{s:s s:s}",
+                                                              "name", name,
+                                                              "value", val);
     else
-        rc = attr_rm_rpc (ctx, name);
-    return rc;
+        f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{s:s}",
+                                                             "name", name);
+    if (!f)
+        return -1;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    /* N.B. No cache update is necessary.
+     * If immutable, the RPC will fail.
+     * If not immutable, we have to look it up on next access anyway.
+     */
+    flux_future_destroy (f);
+    return 0;
 }
 
 int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val)
 {
-    attr_ctx_t *ctx;
-    attr_t *attr;
+    struct attr_cache *c;
 
     if (!h || !name) {
         errno = EINVAL;
         return -1;
     }
-    if (!(ctx = getctx (h)))
+    if (!(c = get_attr_cache (h)))
         return -1;
     if (val) {
-        if (!(attr = attr_create (val, FLUX_ATTRFLAG_IMMUTABLE)))
+        char *cpy;
+        if (!(cpy = strdup (val)))
             return -1;
-        zhash_update (ctx->hash, name, attr);
-        zhash_freefn (ctx->hash, name, attr_destroy);
+        zhashx_update (c->cache, name, cpy);
     }
-    else {
-        zhash_delete (ctx->hash, name);
-    }
+    else
+        zhashx_delete (c->cache, name);
     return 0;
 }
 
