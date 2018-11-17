@@ -130,7 +130,7 @@ static kvs_ctx_t *getctx (flux_t *h)
             saved_errno = errno;
             goto error;
         }
-        if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
+        if (!(ctx->hash_name = flux_attr_get (h, "content.hash"))) {
             saved_errno = errno;
             flux_log_error (h, "content.hash");
             goto error;

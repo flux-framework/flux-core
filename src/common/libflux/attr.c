@@ -163,21 +163,23 @@ done:
     return rc;
 }
 
-const char *flux_attr_get (flux_t *h, const char *name, int *flags)
+const char *flux_attr_get (flux_t *h, const char *name)
 {
-    attr_ctx_t *ctx = getctx (h);
+    attr_ctx_t *ctx;
     attr_t *attr;
 
-    if (!ctx)
+    if (!h || !name) {
+        errno = EINVAL;
         return NULL;
-
+    }
+    if (!(ctx = getctx (h)))
+        return NULL;
     if (!(attr = zhash_lookup (ctx->hash, name))
-                        || !(attr->flags & FLUX_ATTRFLAG_IMMUTABLE))
+                        || !(attr->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
         if (attr_get_rpc (ctx, name, &attr) < 0)
             return NULL;
-    if (flags && attr)
-        *flags = attr->flags;
-    return attr ? attr->val : NULL;
+    }
+    return attr->val;
 }
 
 int flux_attr_set (flux_t *h, const char *name, const char *val)

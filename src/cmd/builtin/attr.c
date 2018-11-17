@@ -136,7 +136,7 @@ static int cmd_lsattr (optparse_t *p, int ac, char *av[])
     name = zlistx_first (list);
     while (name) {
         if (optparse_hasopt (p, "values")) {
-            val = flux_attr_get (h, name, NULL);
+            val = flux_attr_get (h, name);
             printf ("%-40s%s\n", name, val ? val : "-");
         } else {
             printf ("%s\n", name);
@@ -150,19 +150,17 @@ static int cmd_lsattr (optparse_t *p, int ac, char *av[])
 
 static int cmd_getattr (optparse_t *p, int ac, char *av[])
 {
-    flux_t *h = NULL;
-    const char *val;
-    int n, flags;
+    flux_t *h = builtin_get_flux_handle (p);
+    int n = optparse_option_index (p);
+    const char *name, *val;
 
     log_init ("flux-getattr");
 
-    n = optparse_option_index (p);
     if (n != ac - 1)
         optparse_fatal_usage (p, 1, NULL);
-
-    h = builtin_get_flux_handle (p);
-    if (!(val = flux_attr_get (h, av[n], &flags)))
-        log_err_exit ("%s", av[n]);
+    name = av[n];
+    if (!(val = flux_attr_get (h, name)))
+        log_err_exit ("%s", name);
     printf ("%s\n", val);
     flux_close (h);
     return (0);

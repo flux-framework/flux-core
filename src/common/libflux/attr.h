@@ -40,7 +40,7 @@ enum {
     FLUX_ATTRFLAG_ACTIVE = 4,       /* attribute has get and/or set callbacks */
 };
 
-const char *flux_attr_get (flux_t *h, const char *name, int *flags);
+const char *flux_attr_get (flux_t *h, const char *name);
 
 int flux_attr_set (flux_t *h, const char *name, const char *val);
 

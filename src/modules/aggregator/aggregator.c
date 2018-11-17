@@ -515,7 +515,7 @@ static int attr_get_int (flux_t *h, const char *attr)
 {
     unsigned long l;
     char *p;
-    const char *s = flux_attr_get (h, attr, 0);
+    const char *s = flux_attr_get (h, attr);
     if (!s)
         return (-1);
     errno = 0;
