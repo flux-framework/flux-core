@@ -107,6 +107,9 @@ static struct optparse_option get_opts[] =  {
     { .name = "waitcreate", .key = 'W', .has_arg = 0,
       .usage = "Wait for creation to occur on watch",
     },
+    { .name = "full", .key = 'f', .has_arg = 0,
+      .usage = "Monitor key changes with more complete accuracy",
+    },
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
       .usage = "Display at most COUNT changes",
     },
@@ -245,7 +248,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "get",
-      "[-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-c COUNT] key [key...]",
+      "[-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-f] [-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -687,6 +690,8 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
         flags |= FLUX_KVS_WATCH;
         if (optparse_hasopt (ctx->p, "waitcreate"))
             flags |= FLUX_KVS_WATCH_WAITCREATE;
+        if (optparse_hasopt (ctx->p, "full"))
+            flags |= FLUX_KVS_WATCH_FULL;
     }
     if (optparse_hasopt (ctx->p, "at")) {
         const char *reference = optparse_get_str (ctx->p, "at", "");
