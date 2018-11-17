@@ -35,7 +35,6 @@
 
 typedef struct {
     zhash_t *hash;
-    zlist_t *names;
     flux_t *h;
 } attr_ctx_t;
 
@@ -50,7 +49,6 @@ static void freectx (void *arg)
     if (ctx) {
         int saved_errno = errno;
         zhash_destroy (&ctx->hash);
-        zlist_destroy (&ctx->names);
         free (ctx);
         errno = saved_errno;
     }
@@ -165,50 +163,6 @@ done:
     return rc;
 }
 
-#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3,0,1)
-static bool attr_strcmp (const char *s1, const char *s2)
-{
-    return (strcmp (s1, s2) > 0);
-}
-#else
-static int attr_strcmp (const char *s1, const char *s2)
-{
-    return strcmp (s1, s2);
-}
-#endif
-
-static int attr_list_rpc (attr_ctx_t *ctx)
-{
-    flux_future_t *f;
-    json_t *array, *value;
-    size_t index;
-    int rc = -1;
-
-    if (!(f = flux_rpc (ctx->h, "attr.list", NULL, FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get_unpack (f, "{s:o}", "names", &array) < 0)
-        goto done;
-    zlist_destroy (&ctx->names);
-    if (!(ctx->names = zlist_new ()))
-        goto done;
-    json_array_foreach (array, index, value) {
-        const char *name = json_string_value (value);
-        if (!name) {
-            errno = EPROTO;
-            goto done;
-        }
-        if (zlist_append (ctx->names, strdup (name)) < 0) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    zlist_sort (ctx->names, (zlist_compare_fn *)attr_strcmp);
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 const char *flux_attr_get (flux_t *h, const char *name, int *flags)
 {
     attr_ctx_t *ctx = getctx (h);
@@ -254,22 +208,6 @@ int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
     zhash_update (ctx->hash, name, attr);
     zhash_freefn (ctx->hash, name, attr_destroy);
     return 0;
-}
-
-const char *flux_attr_first (flux_t *h)
-{
-    attr_ctx_t *ctx = getctx (h);
-
-    if (!ctx || (attr_list_rpc (ctx) < 0))
-        return NULL;
-    return ctx->names ? zlist_first (ctx->names) : NULL;
-}
-
-const char *flux_attr_next (flux_t *h)
-{
-    attr_ctx_t *ctx = flux_aux_get (h, "flux::attr");
-
-    return ctx->names ? zlist_next (ctx->names) : NULL;
 }
 
 /*
