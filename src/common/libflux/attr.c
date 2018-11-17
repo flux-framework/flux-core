@@ -34,6 +34,10 @@
 #include "attr_private.h"
 #include "rpc.h"
 
+enum {
+    FLUX_ATTRFLAG_IMMUTABLE = 1,
+};
+
 typedef struct {
     zhash_t *hash;
     flux_t *h;
