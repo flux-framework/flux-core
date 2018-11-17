@@ -90,6 +90,7 @@ libflux_la_SOURCES = \
 	flog.c \
 	info.c \
 	attr.c \
+	attr_private.h \
 	handle.c \
 	reactor.c \
 	msg_handler.c \

@@ -54,6 +54,7 @@ flux_broker_SOURCES = \
 	publisher.c
 
 flux_broker_LDADD = \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libpmi/libpmi.la \
@@ -68,9 +69,10 @@ TESTS = test_shutdown.t \
 	test_service.t
 
 test_ldadd = \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libtap/libtap.la 
+	$(top_builddir)/src/common/libtap/libtap.la
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \

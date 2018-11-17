@@ -22,33 +22,15 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-#ifndef _FLUX_CORE_ATTR_H
-#define _FLUX_CORE_ATTR_H
+#ifndef _FLUX_ATTR_PRIVATE_H
+#define _FLUX_ATTR_PRIVATE_H
 
 #include "handle.h"
+#include "attr.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+int attr_set_cacheonly (flux_t *h, const char *name, const char *val);
 
-/* Flags can only be set by the broker.
- */
-enum {
-    FLUX_ATTRFLAG_IMMUTABLE = 1,    /* attribute is cacheable */
-    FLUX_ATTRFLAG_READONLY = 2,     /* attribute cannot be written */
-                                    /*   but may change on broker */
-    FLUX_ATTRFLAG_ACTIVE = 4,       /* attribute has get and/or set callbacks */
-};
-
-const char *flux_attr_get (flux_t *h, const char *name);
-
-int flux_attr_set (flux_t *h, const char *name, const char *val);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* !_FLUX_CORE_ATTR_H */
+#endif /* !_FLUX_ATTR_PRIVATE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
