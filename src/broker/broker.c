@@ -841,12 +841,12 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
 {
     char *s;
     s = xasprintf ("%"PRIu32, rank);
-    if (flux_attr_fake (h, "rank", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (flux_attr_set_cacheonly (h, "rank", s) < 0)
         return -1;
     free (s);
 
     s = xasprintf ("%"PRIu32, size);
-    if (flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (flux_attr_set_cacheonly (h, "size", s) < 0)
         return -1;
     free (s);
 

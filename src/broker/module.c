@@ -135,7 +135,7 @@ static void *module_thread (void *arg)
     if (!(p->h = flux_open (uri, 0)))
         log_err_exit ("flux_open %s", uri);
     rankstr = xasprintf ("%"PRIu32, p->rank);
-    if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
         goto done;
     }

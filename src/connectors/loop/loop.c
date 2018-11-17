@@ -146,11 +146,9 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     /* Fake out size, rank, tbon-arity attributes for testing.
      */
-    if (flux_attr_fake (c->h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0
-                || flux_attr_fake (c->h, "size", "1",
-                                   FLUX_ATTRFLAG_IMMUTABLE) < 0
-                || flux_attr_fake (c->h, "tbon-arity", "2",
-                                   FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (flux_attr_set_cacheonly(c->h, "rank", "0") < 0
+                || flux_attr_set_cacheonly (c->h, "size", "1") < 0
+                || flux_attr_set_cacheonly (c->h, "tbon-arity", "2") < 0)
         goto error;
     c->userid = geteuid ();
     c->rolemask = FLUX_ROLE_OWNER;

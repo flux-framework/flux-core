@@ -44,7 +44,9 @@ const char *flux_attr_get (flux_t *h, const char *name);
 
 int flux_attr_set (flux_t *h, const char *name, const char *val);
 
-int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags);
+
+/* hotwire flux_attr_get()'s cache for testing */
+int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val);
 
 #ifdef __cplusplus
 }

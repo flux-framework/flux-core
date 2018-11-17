@@ -185,7 +185,7 @@ static void rpctest_set_rank (flux_t *h, uint32_t newrank)
     char s[16];
     uint32_t rank = 42;
     snprintf (s, sizeof (s), "%"PRIu32, fake_rank);
-    flux_attr_fake (h, "rank", s, FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_set_cacheonly (h, "rank", s);
     flux_get_rank (h, &rank);
     cmp_ok (rank, "==", fake_rank,
         "successfully faked flux_get_rank() of %d", fake_rank);
@@ -197,7 +197,7 @@ static void rpctest_set_size (flux_t *h, uint32_t newsize)
     char s[16];
     uint32_t size = 0;
     snprintf (s, sizeof (s), "%"PRIu32, fake_size);
-    flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_set_cacheonly (h, "size", s);
     flux_get_size (h, &size);
     cmp_ok (size, "==", fake_size,
         "successfully faked flux_get_size() of %d", fake_size);

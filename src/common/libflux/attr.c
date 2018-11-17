@@ -199,16 +199,26 @@ int flux_attr_set (flux_t *h, const char *name, const char *val)
     return rc;
 }
 
-int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
+int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val)
 {
-    attr_ctx_t *ctx = getctx (h);
-    attr_t *attr = attr_create (val, flags);
+    attr_ctx_t *ctx;
+    attr_t *attr;
 
-    if (!ctx || !attr)
+    if (!h || !name) {
+        errno = EINVAL;
         return -1;
-    
-    zhash_update (ctx->hash, name, attr);
-    zhash_freefn (ctx->hash, name, attr_destroy);
+    }
+    if (!(ctx = getctx (h)))
+        return -1;
+    if (val) {
+        if (!(attr = attr_create (val, FLUX_ATTRFLAG_IMMUTABLE)))
+            return -1;
+        zhash_update (ctx->hash, name, attr);
+        zhash_freefn (ctx->hash, name, attr_destroy);
+    }
+    else {
+        zhash_delete (ctx->hash, name);
+    }
     return 0;
 }
 
