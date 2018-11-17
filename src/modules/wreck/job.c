@@ -524,7 +524,7 @@ static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
     const char *tmp;
     char *p;
 
-    if ((tmp = flux_attr_get (h, attr, 0)) == NULL)
+    if ((tmp = flux_attr_get (h, attr)) == NULL)
         return (-1);
     n = strtoul (tmp, &p, 10);
     if (n == LONG_MAX)
@@ -628,7 +628,7 @@ static flux_cmd_t *wrexecd_cmd_create (flux_t *h, struct wreck_job *job)
         flux_log_error (h, "wrexecd_cmd_create: flux_cmd_create");
         goto error;
     }
-    if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path", NULL))) {
+    if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path"))) {
         flux_log_error (h, "wrexecd_cmd_create: flux_attr_get");
         goto error;
     }
@@ -930,7 +930,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
 
-    if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
+    if (!(local_uri = flux_attr_get (h, "local-uri"))) {
         flux_log_error (h, "flux_attr_get (\"local-uri\")");
         goto done;
     }

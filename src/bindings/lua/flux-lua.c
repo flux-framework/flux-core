@@ -458,7 +458,7 @@ static int l_flux_arity (lua_State *L)
     const char *s;
     int arity;
 
-    if (!(s = flux_attr_get (f, "tbon.arity", NULL)))
+    if (!(s = flux_attr_get (f, "tbon.arity")))
         return lua_pusherror (L, "flux_attr_get tbon.arity error");
     arity = strtoul (s, NULL, 10);
     return (l_pushresult (L, arity));
@@ -643,38 +643,15 @@ done:
     return (rc);
 }
 
-static void push_attr_flags (lua_State *L, int flags)
-{
-    int t;
-    lua_newtable (L);
-    if (flags == 0)
-        return;
-    t = lua_gettop (L);
-    if (flags & FLUX_ATTRFLAG_IMMUTABLE) {
-        lua_pushboolean (L, true);
-        lua_setfield (L, t, "FLUX_ATTRFLAG_IMMUTABLE");
-    }
-    if (flags & FLUX_ATTRFLAG_READONLY) {
-        lua_pushboolean (L, true);
-        lua_setfield (L, t, "FLUX_ATTRFLAG_READONLY");
-    }
-    if (flags & FLUX_ATTRFLAG_ACTIVE) {
-        lua_pushboolean (L, true);
-        lua_setfield (L, t, "FLUX_ATTRFLAG_ACTIVE");
-    }
-}
-
 static int l_flux_getattr (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
-    int flags;
     const char *name = luaL_checkstring (L, 2);
-    const char *val = flux_attr_get (f, name, &flags);
+    const char *val = flux_attr_get (f, name);
     if (val == NULL)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushstring (L, val);
-    push_attr_flags (L, flags);
-    return (2);
+    return (1);
 }
 
 static int l_flux_subscribe (lua_State *L)

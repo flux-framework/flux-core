@@ -135,7 +135,6 @@ static sqlite_ctx_t *getctx (flux_t *h)
     const char *dir;
     const char *tmp;
     bool cleanup = false;
-    int flags;
 
     if (!ctx) {
         if (!(ctx = calloc (1, sizeof (*ctx))))
@@ -144,18 +143,18 @@ static sqlite_ctx_t *getctx (flux_t *h)
             goto error;
         ctx->lzo_bufsize = lzo_buf_chunksize;
         ctx->h = h;
-        if (!(ctx->hashfun = flux_attr_get (h, "content.hash", &flags))) {
+        if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
             flux_log_error (h, "content.hash");
             goto error;
         }
-        if (!(tmp = flux_attr_get (h, "content.blob-size-limit", NULL))) {
+        if (!(tmp = flux_attr_get (h, "content.blob-size-limit"))) {
             flux_log_error (h, "content.blob-size-limit");
             goto error;
         }
         ctx->blob_size_limit = strtoul (tmp, NULL, 10);
 
-        if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
-            if (!(dir = flux_attr_get (h, "broker.rundir", NULL))) {
+        if (!(dir = flux_attr_get (h, "persist-directory"))) {
+            if (!(dir = flux_attr_get (h, "broker.rundir"))) {
                 flux_log_error (h, "broker.rundir");
                 goto error;
             }
