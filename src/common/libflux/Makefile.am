@@ -152,7 +152,8 @@ TESTS = test_message.t \
 	test_reactor_loop.t \
 	test_reduce.t \
 	test_rpc_security.t \
-	test_panic.t
+	test_panic.t \
+	test_attr.t
 
 test_ldadd = \
 	$(builddir)/test/libtestutil.la \
@@ -267,3 +268,7 @@ test_rpc_security_t_LDADD = $(test_ldadd) $(LIBDL)
 test_panic_t_SOURCES = test/panic.c
 test_panic_t_CPPFLAGS = $(test_cppflags)
 test_panic_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_attr_t_SOURCES = test/attr.c
+test_attr_t_CPPFLAGS = $(test_cppflags)
+test_attr_t_LDADD = $(test_ldadd) $(LIBDL)
