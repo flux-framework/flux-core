@@ -25,7 +25,7 @@
 #ifndef _FLUX_CORE_REDUCE_H
 #define _FLUX_CORE_REDUCE_H
 
-#include "handle.h"
+#include <flux/core.h>
 
 #ifdef __cplusplus
 extern "C" {

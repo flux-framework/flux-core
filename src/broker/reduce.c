@@ -27,11 +27,9 @@
 #endif
 #include <stdbool.h>
 #include <czmq.h>
+#include <flux/core.h>
 
 #include "reduce.h"
-#include "reactor.h"
-#include "info.h"
-#include "attr.h"
 
 struct flux_reduce_struct {
     struct flux_reduce_ops ops;

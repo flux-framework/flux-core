@@ -26,6 +26,8 @@ flux_broker_SOURCES = \
 	service.c \
 	hello.h \
 	hello.c \
+	reduce.h \
+	reduce.c \
 	shutdown.h \
 	shutdown.c \
 	attr.h \
@@ -65,7 +67,8 @@ TESTS = test_shutdown.t \
 	test_heartbeat.t \
 	test_hello.t \
 	test_attr.t \
-	test_service.t
+	test_service.t \
+	test_reduce.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -91,7 +94,7 @@ test_heartbeat_t_SOURCES = test/heartbeat.c heartbeat.c attr.c
 test_heartbeat_t_CPPFLAGS = $(test_cppflags)
 test_heartbeat_t_LDADD = $(test_ldadd)
 
-test_hello_t_SOURCES = test/hello.c hello.c attr.c
+test_hello_t_SOURCES = test/hello.c hello.c attr.c reduce.c
 test_hello_t_CPPFLAGS = $(test_cppflags)
 test_hello_t_LDADD = $(test_ldadd)
 
@@ -102,3 +105,7 @@ test_attr_t_LDADD = $(test_ldadd)
 test_service_t_SOURCES = test/service.c service.c
 test_service_t_CPPFLAGS = $(test_cppflags)
 test_service_t_LDADD = $(test_ldadd)
+
+test_reduce_t_SOURCES = test/reduce.c reduce.c
+test_reduce_t_CPPFLAGS = $(test_cppflags)
+test_reduce_t_LDADD = $(test_ldadd)

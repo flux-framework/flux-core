@@ -58,7 +58,6 @@ fluxcoreinclude_HEADERS = \
 	connector.h \
 	reactor.h \
 	msg_handler.h \
-	reduce.h \
 	security.h \
 	message.h \
 	request.h \
@@ -93,7 +92,6 @@ libflux_la_SOURCES = \
 	handle.c \
 	reactor.c \
 	msg_handler.c \
-	reduce.c \
 	security.c \
 	message.c \
 	request.c \
@@ -149,7 +147,6 @@ TESTS = test_message.t \
 	test_handle.t \
 	test_log.t \
 	test_reactor_loop.t \
-	test_reduce.t \
 	test_rpc_security.t \
 	test_panic.t
 
@@ -254,10 +251,6 @@ test_log_t_LDADD = $(test_ldadd) $(LIBDL)
 test_reactor_loop_t_SOURCES = test/reactor_loop.c
 test_reactor_loop_t_CPPFLAGS = $(test_cppflags)
 test_reactor_loop_t_LDADD = $(test_ldadd) $(LIBDL)
-
-test_reduce_t_SOURCES = test/reduce.c
-test_reduce_t_CPPFLAGS = $(test_cppflags)
-test_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_rpc_security_t_SOURCES = test/rpc_security.c
 test_rpc_security_t_CPPFLAGS = $(test_cppflags)

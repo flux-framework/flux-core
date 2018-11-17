@@ -33,6 +33,7 @@
 #include "src/common/libutil/nodeset.h"
 
 #include "hello.h"
+#include "reduce.h"
 
 /* After this many seconds, ignore topo-based hwm.
  * Override by setting hello.timeout broker attribute.

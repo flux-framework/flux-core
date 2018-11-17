@@ -5,8 +5,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libtap/tap.h"
-
-#include "util.h"
+#include "src/broker/reduce.h"
 
 int reduce_calls = 0;
 int reduce_items = 0;
@@ -348,7 +347,11 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!(h = loopback_create (0)))
+    (void)setenv ("FLUX_CONNECTOR_PATH",
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
+    ok ((h = flux_open ("loop://", 0)) != NULL,
+        "opened loop connector");
+    if (!h)
         BAIL_OUT ("can't continue without loop handle");
 
     flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
