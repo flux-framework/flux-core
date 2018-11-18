@@ -85,7 +85,7 @@ endif
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL) $(LIBPMIX)
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
 	-Wl,--defsym=flux_pmi_library=1 \
@@ -95,7 +95,7 @@ libpmi_la_LDFLAGS = \
 libpmi2_la_SOURCES =
 libpmi2_la_LIBADD = \
 	$(builddir)/libpmi/libpmi.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL) $(LIBPMIX)
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi2_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi2.map \
 	-shared -export-dynamic --disable-static \

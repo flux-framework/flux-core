@@ -58,8 +58,7 @@ flux_broker_SOURCES = \
 flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libpmi/libpmi.la \
-	$(LIBPMIX)
+	$(top_builddir)/src/common/libpmi/libpmi.la
 
 flux_broker_LDFLAGS =
 
