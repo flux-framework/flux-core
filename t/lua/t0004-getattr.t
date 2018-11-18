@@ -21,3 +21,5 @@ is (attrval, "1", "correctly got broker size attr")
 local v,err = f:getattr "nosuchthing"
 is (v, nil, "Non-existent attr has error")
 is (err, "No such file or directory", "got expected error string")
+
+done_testing ()
