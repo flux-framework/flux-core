@@ -35,26 +35,6 @@
 
 #include "src/common/libutil/nodeset.h"
 
-int flux_get_size (flux_t *h, uint32_t *size)
-{
-    const char *val;
-
-    if (!(val = flux_attr_get (h, "size")))
-        return -1;
-    *size = strtoul (val, NULL, 10);
-    return 0;
-}
-
-int flux_get_rank (flux_t *h, uint32_t *rank)
-{
-    const char *val;
-
-    if (!(val = flux_attr_get (h, "rank")))
-        return -1;
-    *rank = strtoul (val, NULL, 10);
-    return 0;
-}
-
 /* ns1 = intersection (ns1, ns2)
  */
 static int ns_intersection (nodeset_t *ns1, nodeset_t *ns2)

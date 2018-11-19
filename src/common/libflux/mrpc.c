@@ -39,7 +39,7 @@
 #include "request.h"
 #include "response.h"
 #include "message.h"
-#include "info.h"
+#include "attr.h"
 #include "reactor.h"
 #include "msg_handler.h"
 #include "mrpc.h"

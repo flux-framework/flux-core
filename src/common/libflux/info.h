@@ -27,10 +27,6 @@
 
 #include "handle.h"
 
-int flux_get_rank (flux_t *h, uint32_t *rank);
-
-int flux_get_size (flux_t *h, uint32_t *size);
-
 const char *flux_get_nodeset (flux_t *h, const char *nodeset,
                               const char *exclude);
 

@@ -64,6 +64,17 @@ int flux_attr_set (flux_t *h, const char *name, const char *val);
 /* hotwire flux_attr_get()'s cache for testing */
 int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val);
 
+
+/* Get "rank" attribute, and convert to an unsigned integer.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_get_rank (flux_t *h, uint32_t *rank);
+
+/* Get "size" attribute, and convert to an unsigned integer.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_get_size (flux_t *h, uint32_t *size);
+
 #ifdef __cplusplus
 }
 #endif
