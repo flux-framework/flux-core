@@ -40,7 +40,6 @@
 #include "panic.h"
 #include "event.h"
 #include "module.h"
-#include "info.h"
 #include "attr.h"
 #include "flog.h"
 #include "conf.h"

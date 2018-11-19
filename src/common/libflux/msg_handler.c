@@ -35,7 +35,6 @@
 #include "reactor.h"
 #include "msg_handler.h"
 #include "response.h"
-#include "info.h"
 #include "flog.h"
 
 #include "src/common/libutil/log.h"

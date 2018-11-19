@@ -29,7 +29,6 @@
 #include <stdarg.h>
 #include "request.h"
 #include "message.h"
-#include "info.h"
 
 static int request_decode (const flux_msg_t *msg, const char **topic)
 {
