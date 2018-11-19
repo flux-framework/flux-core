@@ -7,7 +7,6 @@ fluxpy_PYTHON=\
 	      constants.py\
 	      jsc.py\
 	      kz.py\
-	      sec.py \
 	      job.py \
 	      mrpc.py \
 	      util.py
