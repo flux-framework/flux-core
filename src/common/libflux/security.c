@@ -35,7 +35,6 @@
 #include <czmq.h>
 
 #include "security.h"
-#include "flog.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
@@ -175,7 +174,7 @@ int flux_sec_comms_init (flux_sec_t *c)
         if (checksecdirs (c, false) < 0)
             goto error;
         if (!(c->auth = zactor_new (zauth, NULL))) {
-            seterrstr (c, "zactor_new (zauth): %s", flux_strerror (errno));
+            seterrstr (c, "zactor_new (zauth): %s", zmq_strerror (errno));
             goto error;
         }
         if ((c->typemask & FLUX_SEC_VERBOSE)) {
@@ -401,7 +400,7 @@ static int gencurve (flux_sec_t *c, const char *role)
         printf ("Saving %s\n", priv);
     }
     if (zcert_save (cert, path) < 0) {
-        seterrstr (c, "zcert_save %s: %s", path, strerror (errno));
+        seterrstr (c, "zcert_save %s: %s", path, zmq_strerror (errno));
         goto done;
     }
     rc = 0;
@@ -425,7 +424,7 @@ static zcert_t *getcurve (flux_sec_t *c, const char *role)
         goto error;
     }
     if (!(cert = zcert_load (s)))
-        seterrstr (c, "zcert_load %s: %s", s, flux_strerror (errno));
+        seterrstr (c, "zcert_load %s: %s", s, zmq_strerror (errno));
     return cert;
 error:
     return NULL;
@@ -485,7 +484,7 @@ static int genpasswd (flux_sec_t *c, const char *user)
     rc = zhash_save (passwds, c->passwd_file);
     umask (old_mask);
     if (rc < 0) {
-        seterrstr (c, "zhash_save %s: %s", c->passwd_file, flux_strerror (errno));
+        seterrstr (c, "zhash_save %s: %s", c->passwd_file, zmq_strerror (errno));
         goto done;
     }
     /* FIXME: check created file mode */
