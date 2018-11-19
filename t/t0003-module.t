@@ -98,6 +98,11 @@ test_expect_success 'module: insmod returns initialization error' '
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
 '
 
+test_expect_success 'module: list works with exclusion' '
+	flux module list -r all -x [0-1] >listx.out &&
+	grep -q [2-3] listx.out
+'
+
 test_expect_success 'module: list fails on invalid rank' '
 	flux module list -r $(invalid_rank) 2> stderr &&
 	grep "No route to host" stderr
@@ -275,11 +280,9 @@ test_expect_success 'flux module load "noexist" fails' '
 
 test_expect_success 'flux module detects bad nodeset' '
 	! flux module load -r smurf kvs 2>badns-load.out &&
-	grep -q "target nodeset" badns-load.out &&
-	! flux module remove -r smurf kvs 2>badns-remove.out &&
-	grep -q "target nodeset" badns-remove.out &&
-	! flux module list -r smurf 2>badns-list.out &&
-	grep -q "target nodeset" badns-list.out
+	grep -q "could not parse" badns-load.out &&
+	! flux module list -x smurf 2>badns-list.out &&
+	grep -q "could not parse" badns-list.out
 '
 
 

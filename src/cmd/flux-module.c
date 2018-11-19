@@ -268,18 +268,58 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-int parse_nodeset (flux_t *h, optparse_t *p, const char **nsp)
+static nodeset_t *ns_create_special (flux_t *h, const char *arg)
 {
-    const char *ns;
+    nodeset_t *ns = NULL;
 
-    ns = flux_get_nodeset (h, optparse_get_str (p, "rank", "self"),
-                              optparse_get_str (p, "exclude", NULL));
-    if (!ns)
-        log_err_exit ("target nodeset");
-    if (strlen (ns) == 0)
-        return -1;
-    *nsp = ns;
-    return 0;
+    if (!arg) {
+        uint32_t rank;
+        if (flux_get_rank (h, &rank) < 0)
+            log_err_exit ("flux_get_rank");
+        if (!(ns = nodeset_create_rank (rank)))
+            log_msg_exit ("nodeset_create_rank failed");
+    } else if (!strcmp (arg, "all")) {
+        uint32_t size;
+        if (flux_get_size (h, &size) < 0)
+            log_err_exit ("flux_get_size");
+        if (!(ns = nodeset_create_range (0, size - 1)))
+            log_msg_exit ("nodeset_create_range failed");
+    } else {
+        if (!(ns = nodeset_create_string (arg))) {
+            errno = EINVAL;
+            return NULL;
+        }
+    }
+    return ns;
+}
+
+/* Parse --rank and --exclude options, returning a nodeset.
+ * If neither are specified, default to the local rank.
+ * Exit with error if an option argument is malformed (or other error).
+ * Return value will never be NULL, but it may be an empty nodeset.
+ */
+nodeset_t *parse_nodeset_options (optparse_t *p, flux_t *h)
+{
+    const char *nodeset = optparse_get_str (p, "rank", NULL);
+    const char *exclude = optparse_get_str (p, "exclude", NULL);
+    nodeset_t *ns;
+
+    if (!(ns = ns_create_special (h, nodeset)))
+        log_msg_exit ("could not parse --rank option");
+    if (exclude) {
+        nodeset_t *xns;
+        nodeset_iterator_t *itr;
+        uint32_t rank;
+        if (!(xns = ns_create_special (h, exclude)))
+            log_msg_exit ("could not parse --exclude option");
+        if (!(itr = nodeset_iterator_create (xns)))
+            log_msg_exit ("out of memmory");
+        while ((rank = nodeset_next (itr)) != NODESET_EOF)
+            nodeset_delete_rank (ns, rank);
+        nodeset_iterator_destroy (itr);
+        nodeset_destroy (xns);
+    }
+    return ns;
 }
 
 /* Derive name of module loading service from module name.
@@ -303,7 +343,7 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     int errors = 0;
     int n;
     flux_t *h;
-    const char *ns;
+    nodeset_t *ns;
     flux_mrpc_t *r = NULL;
 
     if ((n = optparse_option_index (p)) == argc) {
@@ -319,9 +359,10 @@ int cmd_load (optparse_t *p, int argc, char **argv)
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (parse_nodeset (h, p, &ns) < 0)
+    ns = parse_nodeset_options (p, h);
+    if (nodeset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc (h, topic, json_str, ns, 0)))
+    if (!(r = flux_mrpc (h, topic, json_str, nodeset_string (ns), 0)))
         log_err_exit ("%s", topic);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -341,6 +382,7 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     } while (flux_mrpc_next (r) == 0);
 done:
     flux_mrpc_destroy (r);
+    nodeset_destroy (ns);
     free (topic);
     free (service);
     free (json_str);
@@ -353,7 +395,7 @@ done:
 int cmd_remove (optparse_t *p, int argc, char **argv)
 {
     char *modname;
-    const char *ns;
+    nodeset_t *ns;
     flux_t *h;
     flux_mrpc_t *r = NULL;
     int n;
@@ -371,9 +413,10 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (parse_nodeset (h, p, &ns) < 0)
+    ns = parse_nodeset_options (p, h);
+    if (nodeset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc (h, topic, json_str, ns, 0)))
+    if (!(r = flux_mrpc (h, topic, json_str, nodeset_string (ns), 0)))
         log_err_exit ("%s %s", topic, modname);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -388,6 +431,7 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
     } while (flux_mrpc_next (r) == 0);
 done:
     flux_mrpc_destroy (r);
+    nodeset_destroy (ns);
     free (topic);
     free (service);
     free (json_str);
@@ -529,7 +573,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
 {
     char *service = "cmb";
     char *topic = NULL;
-    const char *ns;
+    nodeset_t *ns;
     flux_mrpc_t *r = NULL;
     flux_t *h;
     int n;
@@ -545,13 +589,14 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         service = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (parse_nodeset (h, p, &ns) < 0)
+    ns = parse_nodeset_options (p, h);
+    if (nodeset_count (ns) == 0)
         goto done;
 
     printf ("%-20s %-7s %-7s %4s  %c  %s\n",
             "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
     topic = xasprintf ("%s.lsmod", service);
-    if (!(r = flux_mrpc (h, topic, NULL, ns, 0)))
+    if (!(r = flux_mrpc (h, topic, NULL, nodeset_string (ns), 0)))
         log_err_exit ("%s", topic);
     do {
         const char *json_str;
@@ -567,6 +612,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     } while (flux_mrpc_next (r) == 0);
 done:
     flux_mrpc_destroy (r);
+    nodeset_destroy (ns);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
     zhash_destroy (&mods);
     free (topic);
