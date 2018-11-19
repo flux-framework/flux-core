@@ -29,6 +29,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/zsecurity.h"
 
 
 #define OPTIONS "hfpd:"

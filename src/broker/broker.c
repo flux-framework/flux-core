@@ -64,6 +64,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/zsecurity.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 

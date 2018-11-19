@@ -37,6 +37,7 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/zsecurity.h"
 
 #include "heartbeat.h"
 #include "overlay.h"

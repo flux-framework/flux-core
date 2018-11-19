@@ -12,7 +12,7 @@
 #include <dirent.h>
 #include <czmq.h>
 
-#include "src/common/libflux/security.h"
+#include "src/common/libutil/zsecurity.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/unlink_recursive.h"
 

@@ -22,7 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* security.c - flux security functions */
+/* zsecurity.c - flux zeromq security functions */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -34,7 +34,7 @@
 #include <libgen.h>
 #include <czmq.h>
 
-#include "security.h"
+#include "zsecurity.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"

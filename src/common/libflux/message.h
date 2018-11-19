@@ -30,7 +30,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "types.h"
-#include "security.h"
 
 #ifdef __cplusplus
 extern "C" {

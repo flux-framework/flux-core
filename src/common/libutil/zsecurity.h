@@ -22,8 +22,8 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-#ifndef _FLUX_CORE_SECURITY_H
-#define _FLUX_CORE_SECURITY_H
+#ifndef _UTIL_ZSECURITY_H
+#define _UTIL_ZSECURITY_H
 
 #include <stdbool.h>
 
@@ -127,7 +127,7 @@ const char *flux_sec_confstr (flux_sec_t *c);
 }
 #endif
 
-#endif /* _FLUX_CORE_SECURITY_H */
+#endif /* !_UTIL_ZSECURITY_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -30,7 +30,6 @@
 #include "reactor.h"
 #include "msg_handler.h"
 #include "connector.h"
-#include "security.h"
 #include "message.h"
 #include "request.h"
 #include "response.h"

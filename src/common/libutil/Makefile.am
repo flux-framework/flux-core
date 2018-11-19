@@ -86,7 +86,9 @@ libutil_la_SOURCES = \
 	aux.c \
 	aux.h \
 	fdutils.c \
-	fdutils.h
+	fdutils.h \
+	zsecurity.c \
+	zsecurity.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -112,7 +114,8 @@ TESTS = test_nodeset.t \
 	test_ipaddr.t \
 	test_fluid.t \
 	test_aux.t \
-	test_fdutils.t
+	test_fdutils.t \
+	test_zsecurity.t
 
 
 test_ldadd = \
@@ -224,3 +227,7 @@ test_aux_t_LDADD = $(test_ldadd)
 test_fdutils_t_SOURCES = test/fdutils.c
 test_fdutils_t_CPPFLAGS = $(test_cppflags)
 test_fdutils_t_LDADD = $(test_ldadd)
+
+test_zsecurity_t_SOURCES = test/zsecurity.c
+test_zsecurity_t_CPPFLAGS = $(test_cppflags)
+test_zsecurity_t_LDADD = $(test_ldadd)
