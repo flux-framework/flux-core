@@ -67,7 +67,7 @@
    fun:calloc
    ...
    fun:zactor_new
-   fun:flux_sec_comms_init
+   fun:zsecurity_comms_init
    fun:overlay_sec_init
    fun:overlay_bind
    fun:boot_pmi

@@ -52,8 +52,8 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    flux_sec_t *sec;
-    int typemask = FLUX_SEC_TYPE_CURVE | FLUX_SEC_VERBOSE;
+    zsecurity_t *sec;
+    int typemask = ZSECURITY_TYPE_CURVE | ZSECURITY_VERBOSE;
     const char *secdir = getenv ("FLUX_SEC_DIRECTORY");
 
     log_init ("flux-keygen");
@@ -64,11 +64,11 @@ int main (int argc, char *argv[])
                 usage ();
                 break;
             case 'f': /* --force */
-                typemask |= FLUX_SEC_KEYGEN_FORCE;
+                typemask |= ZSECURITY_KEYGEN_FORCE;
                 break;
             case 'p': /* --plain */
-                typemask |= FLUX_SEC_TYPE_PLAIN;
-                typemask &= ~FLUX_SEC_TYPE_CURVE;
+                typemask |= ZSECURITY_TYPE_PLAIN;
+                typemask &= ~ZSECURITY_TYPE_CURVE;
                 break;
             case 'd': /* --secdir */
                 secdir = optarg;
@@ -81,11 +81,11 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
-     if (!(sec = flux_sec_create (typemask, secdir)))
-        log_err_exit ("flux_sec_create");
-    if (flux_sec_keygen (sec) < 0)
-        log_msg_exit ("%s", flux_sec_errstr (sec));
-    flux_sec_destroy (sec);
+     if (!(sec = zsecurity_create (typemask, secdir)))
+        log_err_exit ("zsecurity_create");
+    if (zsecurity_keygen (sec) < 0)
+        log_msg_exit ("%s", zsecurity_errstr (sec));
+    zsecurity_destroy (sec);
 
     log_fini ();
 

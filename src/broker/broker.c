@@ -98,7 +98,7 @@ typedef enum {
 typedef struct {
     /* 0MQ
      */
-    flux_sec_t *sec;             /* security context (MT-safe) */
+    zsecurity_t *sec;             /* security context (MT-safe) */
 
     /* Reactor
      */
@@ -222,11 +222,11 @@ void parse_command_line_arguments(int argc, char *argv[],
             if (!strcmp (optarg, "none")) {
                 *sec_typemask = 0;
             } else if (!strcmp (optarg, "plain")) {
-                *sec_typemask |= FLUX_SEC_TYPE_PLAIN;
-                *sec_typemask &= ~FLUX_SEC_TYPE_CURVE;
+                *sec_typemask |= ZSECURITY_TYPE_PLAIN;
+                *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
             } else if (!strcmp (optarg, "curve")) {
-                *sec_typemask |= FLUX_SEC_TYPE_CURVE;
-                *sec_typemask &= ~FLUX_SEC_TYPE_PLAIN;
+                *sec_typemask |= ZSECURITY_TYPE_CURVE;
+                *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
             } else {
                 log_msg_exit ("--security arg must be none|plain|curve");
             }
@@ -299,7 +299,7 @@ int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
     zlist_t *sigwatchers;
-    int sec_typemask = FLUX_SEC_TYPE_CURVE;
+    int sec_typemask = ZSECURITY_TYPE_CURVE;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
@@ -384,17 +384,17 @@ int main (int argc, char *argv[])
     broker_handle_signals (&ctx, sigwatchers);
 
     /* Initialize security context.
-     * Delay calling flux_sec_comms_init() so that we can defer creating
+     * Delay calling zsecurity_comms_init() so that we can defer creating
      * the libzmq work thread until we are ready to communicate.
      */
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
         log_err_exit ("getattr security.keydir");
-    if (!(ctx.sec = flux_sec_create (sec_typemask, keydir)))
-        log_err_exit ("flux_sec_create");
+    if (!(ctx.sec = zsecurity_create (sec_typemask, keydir)))
+        log_err_exit ("zsecurity_create");
 
     /* The first call to overlay_bind() or overlay_connect() calls
-     * flux_sec_comms_init().
+     * zsecurity_comms_init().
      */
     overlay_set_sec (ctx.overlay, ctx.sec);
     overlay_set_flux (ctx.overlay, ctx.h);
@@ -663,7 +663,7 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         log_msg ("cleaning up");
     if (ctx.sec)
-        flux_sec_destroy (ctx.sec);
+        zsecurity_destroy (ctx.sec);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
