@@ -15,7 +15,6 @@ MAN3_FILES_PRIMARY = \
 	flux_msg_sendfd.3 \
 	flux_rpc.3 \
 	flux_mrpc.3 \
-	flux_reduce_create.3 \
 	flux_get_rank.3 \
 	flux_attr_get.3 \
 	flux_get_reactor.3 \
@@ -75,12 +74,6 @@ MAN3_FILES_SECONDARY = \
 	flux_pollfd.3 \
 	flux_msg_decode.3 \
 	flux_msg_recvfd.3 \
-	flux_reduce_destroy.3 \
-	flux_reduce_append.3 \
-	flux_reduce_pop.3 \
-	flux_reduce_push.3 \
-	flux_reduce_opt_set.3 \
-	flux_reduce_opt_get.3 \
 	flux_get_size.3 \
 	flux_attr_set.3 \
 	flux_attr_first.3 \
@@ -230,12 +223,6 @@ flux_event_publish_get_seq.3: flux_event_publish.3
 flux_pollfd.3: flux_pollevents.3
 flux_msg_decode.3: flux_msg_encode.3
 flux_msg_recvfd.3: flux_msg_sendfd.3
-flux_reduce_destroy.3: flux_reduce_create.3
-flux_reduce_append.3: flux_reduce_create.3
-flux_reduce_pop.3: flux_reduce_create.3
-flux_reduce_push.3: flux_reduce_create.3
-flux_reduce_opt_set.3: flux_reduce_create.3
-flux_reduce_opt_get.3: flux_reduce_create.3
 flux_get_size.3: flux_get_rank.3
 flux_attr_set.3: flux_attr_get.3
 flux_attr_first.3: flux_attr_get.3
@@ -346,7 +333,6 @@ flux_event_subscribe.3: tevent.c
 flux_rpc.3: trpc.c
 flux_rpc.3: trpc_then.c
 flux_mrpc.3: tmrpc_then.c
-flux_reduce_create.3: treduce.c
 flux_get_rank.3: tinfo.c
 
 
@@ -382,11 +368,3 @@ check_PROGRAMS = \
 	trpc_then \
 	tmrpc_then \
 	tinfo
-
-check_LTLIBRARIES = \
-	treduce.la
-
-treduce_la_SOURCES = treduce.c
-treduce_la_LDFLAGS = -module -rpath /nowhere \
-        -export-symbols-regex '^mod_(main|name)$$' \
-	-export-sym--disable-static -avoid-version -shared -export-dynamic
