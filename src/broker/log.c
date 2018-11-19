@@ -663,7 +663,7 @@ static int fake_rank (flux_t *h, uint32_t rank)
 {
     char buf[16];
     snprintf (buf, sizeof (buf), "%u", rank);
-    return flux_attr_fake (h, "rank", buf, FLUX_ATTRFLAG_IMMUTABLE);
+    return flux_attr_set_cacheonly (h, "rank", buf);
 }
 
 int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)

@@ -39,8 +39,8 @@ int main (int argc, char **argv)
      * Since broker attrs are not set, hwm defaults to 1 (self).
      * It will immediately complete so no need to start reactor.
      */
-    flux_attr_fake (h, "size", "1", FLUX_ATTRFLAG_IMMUTABLE);
-    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_set_cacheonly (h, "size", "1");
+    flux_attr_set_cacheonly (h, "rank", "0");
     ok (flux_get_size (h, &size) == 0 && size == 1,
         "size == 1");
     ok (flux_get_rank (h, &rank) == 0 && rank == 0,
@@ -67,8 +67,8 @@ int main (int argc, char **argv)
     /* Simulate a 2 node session.
      * Same procedure as above except the session will not complete.
      */
-    flux_attr_fake (h, "size", "3", FLUX_ATTRFLAG_IMMUTABLE);
-    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_set_cacheonly (h, "size", "3");
+    flux_attr_set_cacheonly (h, "rank", "0");
     ok (flux_get_size (h, &size) == 0 && size == 3,
         "size == 1");
     ok (flux_get_rank (h, &rank) == 0 && rank == 0,

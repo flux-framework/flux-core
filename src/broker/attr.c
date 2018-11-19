@@ -350,29 +350,38 @@ void setattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *name;
     const char *val;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:s}",       /* SET */
-                             "name", &name,
-                             "value", &val) == 0) {
-        if (attr_set (attrs, name, val, false) < 0) {
-            if (errno != ENOENT)
-                goto error;
-            if (attr_add (attrs, name, val, 0) < 0)
-                goto error;
-        }
-    }
-    else if (flux_request_unpack (msg, NULL, "{s:s s:n}",  /* DELETE */
-                                  "name", &name,
-                                  "value") == 0) {
-        if (attr_delete (attrs, name, false) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name,
+                                                     "value", &val) < 0)
+        goto error;
+    if (attr_set (attrs, name, val, false) < 0) {
+        if (errno != ENOENT)
+            goto error;
+        if (attr_add (attrs, name, val, 0) < 0)
             goto error;
     }
-    else
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        FLUX_LOG_ERROR (h);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        FLUX_LOG_ERROR (h);
+}
+
+void rmattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                        const flux_msg_t *msg, void *arg)
+{
+    attr_t *attrs = arg;
+    const char *name;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
+        goto error;
+    if (attr_delete (attrs, name, false) < 0)
         goto error;
     if (flux_respond (h, msg, 0, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 
@@ -420,6 +429,7 @@ static const struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb, FLUX_ROLE_ALL },
     { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb, FLUX_ROLE_ALL },
     { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "attr.rm",     rmattr_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

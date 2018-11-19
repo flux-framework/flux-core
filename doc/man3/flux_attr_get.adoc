@@ -5,20 +5,17 @@ flux_attr_get(3)
 
 NAME
 ----
-flux_attr_get, flux_attr_set, flux_attr_first, flux_attr_next - query Flux broker attributes
+flux_attr_get, flux_attr_set - get/set Flux broker attributes
 
 
 SYNOPSIS
 --------
-#include <flux/core.h>
+ #include <flux/core.h>
 
-const char *flux_attr_get (flux_t *h, const char *name, int *flags);
+ const char *flux_attr_get (flux_t *h, const char *name);
 
-int flux_attr_set (flux_t *h, const char *name, const char *val);
+ int flux_attr_set (flux_t *h, const char *name, const char *val);
 
-const char *flux_attr_first (flux_t *h);
-
-const char *flux_attr_next (flux_t *h);
 
 DESCRIPTION
 -----------
@@ -28,33 +25,15 @@ store with scope limited to the local broker rank, and a method for the
 broker to export information needed by Flux comms modules and utilities.
 
 `flux_attr_get()` retrieves the value of the attribute _name_.
-If _flags_ is non-NULL, the flags associated with the attribute are
-stored there.  Flags are a mask of the following bit values:
 
-FLUX_ATTRFLAG_IMMUTABLE::
-The value of this attribute will never change.  It can be cached indefinitely.
-
-FLUX_ATTRFLAG_READONLY::
-The value of this attribute cannot be changed with `flux_attr_set()`,
-however it may change on the broker and should not be cached.
-
-FLUX_ATTRFLAG_ACTIVE::
-Getting or setting this attribute may have side effects in the broker.
-For example, retrieving the "snoop-uri" attribute triggers the creation
-of the snoop socket by the broker on the first call.
-
-Attributes that have the FLUX_ATTRFLAG_IMMUTABLE flag are cached automatically
+Attributes that have the broker tags as _immutable_ are cached automatically
 in the flux_t handle.  For example, the "rank" attribute is a frequently
 accessed attribute whose value never changes.  It will be cached on the first
 access and thereafter does not require an RPC to the broker to access.
 
 `flux_attr_set()` updates the value of attribute _name_ to _val_.
 If _name_ is not currently a valid attribute, it is created.
-Attributes created through this interface will have no flags set.
 If _val_ is NULL, the attribute is unset.
-
-`flux_attr_first()` and `flux_attr_next()` are used to iterate
-through the current set of valid attribute names.
 
 
 RETURN VALUE
@@ -65,9 +44,6 @@ is returned and errno is set appropriately.
 
 `flux_attr_set()` returns zero on success.  On error, -1 is returned
 and errno is set appropriately.
-
-`flux_attr_first()` and `flux_attr_next()` return an attribute name or
-NULL to indicate that iteration is complete.
 
 
 ERRORS
@@ -80,8 +56,8 @@ EINVAL::
 Some arguments were invalid.
 
 EPERM::
-Set was attempted on an attribute with the FLUX_ATTR_IMMUTABLE or
-FLUX_ATTR_READONLY flags.
+Set was attempted on an attribute that is not writable with the
+user's credentials.
 
 
 AUTHOR

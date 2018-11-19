@@ -68,7 +68,6 @@ fluxcoreinclude_HEADERS = \
 	panic.h \
 	event.h \
 	module.h \
-	info.h \
 	attr.h \
 	flog.h \
 	conf.h \
@@ -87,7 +86,6 @@ noinst_LTLIBRARIES = \
 
 libflux_la_SOURCES = \
 	flog.c \
-	info.c \
 	attr.c \
 	handle.c \
 	reactor.c \
@@ -148,7 +146,8 @@ TESTS = test_message.t \
 	test_log.t \
 	test_reactor_loop.t \
 	test_rpc_security.t \
-	test_panic.t
+	test_panic.t \
+	test_attr.t
 
 test_ldadd = \
 	$(builddir)/test/libtestutil.la \
@@ -259,3 +258,7 @@ test_rpc_security_t_LDADD = $(test_ldadd) $(LIBDL)
 test_panic_t_SOURCES = test/panic.c
 test_panic_t_CPPFLAGS = $(test_cppflags)
 test_panic_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_attr_t_SOURCES = test/attr.c
+test_attr_t_CPPFLAGS = $(test_cppflags)
+test_attr_t_LDADD = $(test_ldadd) $(LIBDL)

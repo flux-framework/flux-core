@@ -1031,7 +1031,7 @@ static int flux_heartbeat_epoch (flux_t *h)
 {
     long int epoch;
     char *p;
-    const char *val = flux_attr_get (h, "heartbeat-epoch", NULL);
+    const char *val = flux_attr_get (h, "heartbeat-epoch");
     if (!val)
         return 0;
     epoch = strtol (val, &p, 10);
@@ -1066,7 +1066,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
 
-    if ((lua_pattern = flux_attr_get (ctx->flux, "wrexec.lua_pattern", NULL)))
+    if ((lua_pattern = flux_attr_get (ctx->flux, "wrexec.lua_pattern")))
         ctx->lua_pattern = lua_pattern;
 
     wlog_debug (ctx, "initializing from CMB: rank=%d", ctx->noderank);

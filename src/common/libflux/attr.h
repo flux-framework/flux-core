@@ -25,30 +25,55 @@
 #ifndef _FLUX_CORE_ATTR_H
 #define _FLUX_CORE_ATTR_H
 
+/* broker attributes
+ *
+ * Brokers have configuration attributes.
+ * Values are local to a particular broker rank.
+ * Some may be overridden on the broker command line with -Sattr=val.
+ * The following commands are available for manipulating attributes
+ * on the running system:
+ *   flux lsattr [-v]
+ *   flux setattr name value
+ *   flux getattr name
+ * In additon, the following functions may be used to get/set broker
+ * attributes programmatically.
+ */
+
 #include "handle.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Flags can only be set by the broker.
+/* Get the value for attribute 'name' from the local broker.
+ * Returns value on success, NULL on failure with errno set.
+ * This function performs a synchronous RPC to the broker if the
+ * attribute is not found in cache, thus may block for the round-trip
+ * communication.
  */
-enum {
-    FLUX_ATTRFLAG_IMMUTABLE = 1,    /* attribute is cacheable */
-    FLUX_ATTRFLAG_READONLY = 2,     /* attribute cannot be written */
-                                    /*   but may change on broker */
-    FLUX_ATTRFLAG_ACTIVE = 4,       /* attribute has get and/or set callbacks */
-};
+const char *flux_attr_get (flux_t *h, const char *name);
 
-const char *flux_attr_get (flux_t *h, const char *name, int *flags);
-
+/* Set the value for attribute 'name' from the local broker.
+ * Returns value on success, NULL on failure with errno set.
+ * This function performs a synchronous RPC to the broker,
+ * thus blocks for the round-trip communication.
+ */
 int flux_attr_set (flux_t *h, const char *name, const char *val);
 
-int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags);
 
-const char *flux_attr_first (flux_t *h);
+/* hotwire flux_attr_get()'s cache for testing */
+int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val);
 
-const char *flux_attr_next (flux_t *h);
+
+/* Get "rank" attribute, and convert to an unsigned integer.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_get_rank (flux_t *h, uint32_t *rank);
+
+/* Get "size" attribute, and convert to an unsigned integer.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_get_size (flux_t *h, uint32_t *size);
 
 #ifdef __cplusplus
 }

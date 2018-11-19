@@ -1278,7 +1278,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (!ctx)
         goto done;
-    if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
+    if (!(local_uri = flux_attr_get (h, "local-uri"))) {
         flux_log_error (h, "flux_attr_get local-uri");
         goto done;
     }

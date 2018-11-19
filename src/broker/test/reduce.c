@@ -354,9 +354,9 @@ int main (int argc, char *argv[])
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
 
-    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
-    flux_attr_fake (h, "tbon.level", "0", FLUX_ATTRFLAG_IMMUTABLE);
-    flux_attr_fake (h, "tbon.maxlevel", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_set_cacheonly (h, "rank", "0");
+    flux_attr_set_cacheonly (h, "tbon.level", "0");
+    flux_attr_set_cacheonly (h, "tbon.maxlevel", "0");
 
     test_nopolicy (h); // 6
     test_hwm (h); // 37

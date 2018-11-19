@@ -40,7 +40,7 @@ static void print_broker_version (optparse_t *p)
     flux_t *h = builtin_get_flux_handle (p);
     if (!h)
         log_err_exit ("flux_open %s failed", uri);
-    if (!(version = flux_attr_get (h, "version", NULL)))
+    if (!(version = flux_attr_get (h, "version")))
         log_err_exit ("flux_attr_get");
     printf ("broker:  \t\t%s\n", version);
     printf ("FLUX_URI:\t\t%s\n", uri);

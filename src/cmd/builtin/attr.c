@@ -21,6 +21,8 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
+#include <czmq.h>
+#include <jansson.h>
 #include "builtin.h"
 
 static struct optparse_option setattr_opts[] = {
@@ -32,26 +34,33 @@ static struct optparse_option setattr_opts[] = {
 
 static int cmd_setattr (optparse_t *p, int ac, char *av[])
 {
-    int n;
-    const char *name = NULL, *val = NULL;
-    flux_t *h;
+    int n = optparse_option_index (p);
+    flux_t *h = builtin_get_flux_handle (p);
+    const char *name;
+    const char *val;
 
     log_init ("flux-setattr");
 
-    n = optparse_option_index (p);
-    if (optparse_hasopt (p, "expunge") && n == ac - 1) {
+    if (optparse_hasopt (p, "expunge")) {
+        if (n != ac - 1) {
+            optparse_print_usage (p);
+            exit (1);
+        }
         name = av[n];
-    } else if (!optparse_hasopt (p, "expunge") && n == ac - 2) {
+        if (flux_attr_set (h, name, NULL) < 0)
+            log_err_exit ("flux_attr_set");
+    }
+    else {
+        if (n != ac - 2) {
+            optparse_print_usage (p);
+            exit (1);
+        }
         name = av[n];
         val = av[n + 1];
-    } else {
-        optparse_print_usage (p);
-        exit (1);
+        if (flux_attr_set (h, name, val) < 0)
+            log_err_exit ("flux_attr_set");
     }
 
-    h = builtin_get_flux_handle (p);
-    if (flux_attr_set (h, name, val) < 0)
-        log_err_exit ("%s", av[1]);
     flux_close (h);
     return (0);
 }
@@ -63,45 +72,95 @@ static struct optparse_option lsattr_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+void attrfree (void **item)
+{
+    if (item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+
+void *attrdup (const void *item)
+{
+    return strdup (item);
+}
+
+int attrcmp(const void *item1, const void *item2)
+{
+    return strcmp (item1, item2);
+}
+
+/* Get list of attributes from the broker, then insert
+ * into a sorted list and return it.
+ */
+zlistx_t *get_sorted_attrlist (flux_t *h)
+{
+    flux_future_t *f;
+    zlistx_t *list;
+    json_t *names; // array of attr names
+    size_t index;
+    json_t *value;
+
+    if (!(list = zlistx_new ()))
+        log_err_exit ("zlistx_new");
+    zlistx_set_comparator (list, attrcmp);
+    zlistx_set_duplicator (list, attrdup);
+    zlistx_set_destructor (list, attrfree);
+    if (!(f = flux_rpc (h, "attr.list", NULL, FLUX_NODEID_ANY, 0))
+                || flux_rpc_get_unpack  (f, "{s:o}", "names", &names) < 0)
+        log_err_exit ("attr.list");
+    json_array_foreach (names, index, value) {
+        const char *name = json_string_value (value);
+        if (!name)
+            log_msg_exit ("non-string attr name returned");
+        if (!zlistx_insert (list, (char *)name, false))
+            log_msg_exit ("zlistx_insert failed");
+    }
+    flux_future_destroy (f);
+    return list;
+}
+
 static int cmd_lsattr (optparse_t *p, int ac, char *av[])
 {
+    flux_t *h = builtin_get_flux_handle (p);
+    int n = optparse_option_index (p);
     const char *name, *val;
-    flux_t *h;
+    zlistx_t *list;
 
     log_init ("flux-lsatrr");
 
-    if (optparse_option_index (p) != ac)
+    if (n != ac)
         optparse_fatal_usage (p, 1, NULL);
-    h = builtin_get_flux_handle (p);
-    name = flux_attr_first (h);
+
+    list = get_sorted_attrlist (h);
+    name = zlistx_first (list);
     while (name) {
         if (optparse_hasopt (p, "values")) {
-            val = flux_attr_get (h, name, NULL);
+            val = flux_attr_get (h, name);
             printf ("%-40s%s\n", name, val ? val : "-");
         } else {
             printf ("%s\n", name);
         }
-        name = flux_attr_next (h);
+        name = zlistx_next (list);
     }
+    zlistx_destroy (&list);
     flux_close (h);
     return (0);
 }
 
 static int cmd_getattr (optparse_t *p, int ac, char *av[])
 {
-    flux_t *h = NULL;
-    const char *val;
-    int n, flags;
+    flux_t *h = builtin_get_flux_handle (p);
+    int n = optparse_option_index (p);
+    const char *name, *val;
 
     log_init ("flux-getattr");
 
-    n = optparse_option_index (p);
     if (n != ac - 1)
         optparse_fatal_usage (p, 1, NULL);
-
-    h = builtin_get_flux_handle (p);
-    if (!(val = flux_attr_get (h, av[n], &flags)))
-        log_err_exit ("%s", av[n]);
+    name = av[n];
+    if (!(val = flux_attr_get (h, name)))
+        log_err_exit ("%s", name);
     printf ("%s\n", val);
     flux_close (h);
     return (0);

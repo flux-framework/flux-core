@@ -136,7 +136,7 @@ int main (int argc, char *argv[])
         const char *s;
         if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0)
             log_err_exit ("flux_get_rank/size");
-        if (!(s = flux_attr_get (h, "tbon.arity", NULL)))
+        if (!(s = flux_attr_get (h, "tbon.arity")))
             log_err_exit ("flux_attr_get tbon.arity");
         arity = strtoul (s, NULL, 10);
         printf ("rank=%"PRIu32"\n", rank);

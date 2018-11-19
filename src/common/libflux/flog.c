@@ -37,7 +37,7 @@
 #include <zmq.h>
 
 #include "flog.h"
-#include "info.h"
+#include "attr.h"
 #include "message.h"
 #include "rpc.h"
 

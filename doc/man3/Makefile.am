@@ -76,8 +76,6 @@ MAN3_FILES_SECONDARY = \
 	flux_msg_recvfd.3 \
 	flux_get_size.3 \
 	flux_attr_set.3 \
-	flux_attr_first.3 \
-	flux_attr_next.3 \
 	flux_set_reactor.3 \
 	flux_reactor_destroy.3 \
 	flux_reactor_run.3 \
@@ -225,8 +223,6 @@ flux_msg_decode.3: flux_msg_encode.3
 flux_msg_recvfd.3: flux_msg_sendfd.3
 flux_get_size.3: flux_get_rank.3
 flux_attr_set.3: flux_attr_get.3
-flux_attr_first.3: flux_attr_get.3
-flux_attr_next.3: flux_attr_get.3
 flux_set_reactor.3: flux_get_reactor.3
 flux_reactor_destroy.3: flux_reactor_create.3
 flux_reactor_run.3: flux_reactor_create.3
