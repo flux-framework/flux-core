@@ -53,6 +53,10 @@ struct lookup_ctx {
 
 static const char *auxkey = "flux::lookup_ctx";
 
+#define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WATCH_WAITCREATE \
+                              | FLUX_KVS_WATCH_FULL \
+                              | FLUX_KVS_WATCH_UNIQ)
+
 static void free_ctx (struct lookup_ctx *ctx)
 {
     if (ctx) {
@@ -88,16 +92,14 @@ static int validate_lookup_flags (int flags, bool watch_ok)
 {
     if ((flags & FLUX_KVS_WATCH) && !watch_ok)
         return -1;
-    if (flags & FLUX_KVS_WATCH_WAITCREATE
-        && !(flags & FLUX_KVS_WATCH))
-        return -1;
-    if (flags & FLUX_KVS_WATCH_FULL
+    if (flags & FLUX_KVS_WATCH_FLAGS
         && !(flags & FLUX_KVS_WATCH))
         return -1;
 
     flags &= ~FLUX_KVS_WATCH;
     flags &= ~FLUX_KVS_WATCH_WAITCREATE;
     flags &= ~FLUX_KVS_WATCH_FULL;
+    flags &= ~FLUX_KVS_WATCH_UNIQ;
     switch (flags) {
         case 0:
         case FLUX_KVS_TREEOBJ:
