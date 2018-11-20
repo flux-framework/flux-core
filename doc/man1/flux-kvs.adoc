@@ -68,7 +68,7 @@ Remove a kvs namespace.
 *namespace-list*::
 List all current namespaces and info on each namespace.
 
-*get* [-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-c count] 'key' ['key...']::
+*get* [-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-f] [-c count] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.  If no options, value is displayed with
 a newline appended (if value length is nonzero).  If '-l', a 'key=' prefix is
@@ -76,10 +76,13 @@ added. If '-j', value is interpreted as encoded JSON and formatted accordingly.
 If '-r', value is displayed without a newline.  If '-t', the RFC 11 object
 is displayed.  '-a treeobj' causes the lookup to be relative to an RFC 11
 snapshot reference.  If '-w', after the initial value, display the
-new value each time the key changes until interrupted, or if '-c count'
+new value each time the key is written to until interrupted, or if '-c count'
 is specified, until 'count' values have been displayed.  If the
 initial value does not yet exist, `-W` can be specified to wait for it
-to be created.
+to be created.  By default, only a direct write to a key is monitored,
+which may miss several unique situations, such as the replacement of
+an entire parent directory.  The '-f' option can be specified to
+monitor for many of these unique situations.
 
 *put* [-j|-r|-t] [-n] [-A] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,

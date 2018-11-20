@@ -144,6 +144,158 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, create 
         grep "Operation not supported" waitcreate4.out
 '
 
+# full checks
+
+# in full checks, we create a directory that we will use to
+# get a treeobj.  We then use that treeobj to overwrite another
+# directory.
+
+# to handle racy issues, wait until a value has been seen by a get
+# --watch.  Note that we can't use waitfile or flux kvs get here, b/c
+# we are specifically testing against --watch.
+wait_kvs_value() {
+        key=$1
+        value=$2
+        i=0
+        while [ "$(flux kvs get --watch --count=1 $key 2> /dev/null)" != "$value" ] \
+              && [ $i -lt ${KVS_WAIT_ITERS} ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        return $(loophandlereturn $i)
+}
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect change' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.dir_orig.a="abc" &&
+        flux kvs get --watch --count=2 test.dir_orig.a > full1.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir_new.a="xyz" &&
+        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+        wait_kvs_value test.dir_orig.a xyz &&
+        flux kvs put test.dir_orig.a="def" &&
+        $waitfile --count=1 --timeout=10 \
+                  --pattern="def" full1.out >/dev/null &&
+        wait $pid
+'
+
+# to handle racy issues, wait until ENOENT has been seen by a get
+# --watch.  Note that we can't use waitfile or flux kvs get here, b/c
+# we are specifically testing against --watch
+wait_kvs_enoent() {
+        key=$1
+        i=0
+        while flux kvs get --watch --count=1 $key 2> /dev/null \
+              && [ $i -lt ${KVS_WAIT_ITERS} ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        return $(loophandlereturn $i)
+}
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/o --full doesnt detect ENOENT' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.dir_orig.a="abc" &&
+        flux kvs get --watch --count=2 test.dir_orig.a > full2.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir_new.b="xyz" &&
+        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+        wait_kvs_enoent test.dir_orig.a &&
+        flux kvs put test.dir_orig.a="def" &&
+        $waitfile --count=1 --timeout=10 \
+                  --pattern="def" full2.out >/dev/null &&
+        wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full detects change' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.dir_orig.a="abc" &&
+        flux kvs get --watch --full --count=2 test.dir_orig.a > full3.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir_new.a="xyz" &&
+        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+        $waitfile --count=1 --timeout=10 \
+                  --pattern="xyz" full3.out >/dev/null &&
+        wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full detects ENOENT' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.dir_orig.a="abc" &&
+        flux kvs get --watch --full --count=2 test.dir_orig.a > full4.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir_new.b="xyz" &&
+        DIRREF=$(flux kvs get --treeobj test.dir_new) &&
+        flux kvs put --treeobj test.dir_orig="${DIRREF}" &&
+        ! wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full works with changing data sizes' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.dir.a="abc" &&
+        flux kvs get --watch --full --count=5 test.dir.a > full5.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+        flux kvs put test.dir.a="xyz" &&
+        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+        flux kvs put test.dir.a="abc" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+abcdefghijklmnopqrstuvwxyz
+xyz
+abcdefghijklmnopqrstuvwxyz
+abc
+	EOF
+	test_cmp expected full5.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full doesnt work with non-changing data' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.dir.a="abc" &&
+        flux kvs get --watch --full --count=3 test.dir.a > full6.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir.a="abc" &&
+        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+        flux kvs put test.dir.a="abcdefghijklmnopqrstuvwxyz" &&
+        flux kvs put test.dir.a="xyz" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+abcdefghijklmnopqrstuvwxyz
+xyz
+	EOF
+	test_cmp expected full6.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch w/ --full & --waitcreate works' '
+        flux kvs unlink -Rf test &&
+        flux kvs get --watch --full --waitcreate --count=3 test.dir.a > full7.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.dir.a="abc" &&
+        flux kvs put test.dir.a="def" &&
+        flux kvs put test.dir.a="xyz" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+def
+xyz
+	EOF
+	test_cmp expected full7.out
+'
+
 # Security checks
 
 test_expect_success 'flux kvs get --watch denies guest access to primary namespace' '
