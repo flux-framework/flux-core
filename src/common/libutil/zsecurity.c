@@ -22,7 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* security.c - flux security functions */
+/* zsecurity.c - flux zeromq security functions */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -34,8 +34,7 @@
 #include <libgen.h>
 #include <czmq.h>
 
-#include "security.h"
-#include "flog.h"
+#include "zsecurity.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
@@ -44,7 +43,7 @@
 
 #define FLUX_ZAP_DOMAIN "flux"
 
-struct flux_sec_struct {
+struct zsecurity_struct {
     zactor_t *auth;
     int typemask;
     zcert_t *srv_cert;
@@ -58,29 +57,29 @@ struct flux_sec_struct {
     uid_t gid;
 };
 
-static int checksecdirs (flux_sec_t *c, bool create);
-static zcert_t *getcurve (flux_sec_t *c, const char *role);
-static int gencurve (flux_sec_t *c, const char *role);
-static char *getpasswd (flux_sec_t *c, const char *user);
-static int genpasswd (flux_sec_t *c, const char *user);
+static int checksecdirs (zsecurity_t *c, bool create);
+static zcert_t *getcurve (zsecurity_t *c, const char *role);
+static int gencurve (zsecurity_t *c, const char *role);
+static char *getpasswd (zsecurity_t *c, const char *user);
+static int genpasswd (zsecurity_t *c, const char *user);
 
-const char *flux_sec_errstr (flux_sec_t *c)
+const char *zsecurity_errstr (zsecurity_t *c)
 {
     return (c->errstr ? c->errstr : "Success");
 }
 
-const char *flux_sec_confstr (flux_sec_t *c)
+const char *zsecurity_confstr (zsecurity_t *c)
 {
     if (c->confstr)
         free (c->confstr);
     if (asprintf (&c->confstr, "Security: epgm=off, tcp/ipc=%s",
-               (c->typemask & FLUX_SEC_TYPE_PLAIN) ? "PLAIN"
-             : (c->typemask & FLUX_SEC_TYPE_CURVE) ? "CURVE" : "off") < 0)
+               (c->typemask & ZSECURITY_TYPE_PLAIN) ? "PLAIN"
+             : (c->typemask & ZSECURITY_TYPE_CURVE) ? "CURVE" : "off") < 0)
         oom ();
     return c->confstr;
 }
 
-static void seterrstr (flux_sec_t *c, const char *fmt, ...)
+static void seterrstr (zsecurity_t *c, const char *fmt, ...)
 {
     va_list ap;
 
@@ -92,7 +91,7 @@ static void seterrstr (flux_sec_t *c, const char *fmt, ...)
     va_end (ap);
 }
 
-void flux_sec_destroy (flux_sec_t *c)
+void zsecurity_destroy (zsecurity_t *c)
 {
     if (c) {
         free (c->conf_dir);
@@ -107,11 +106,11 @@ void flux_sec_destroy (flux_sec_t *c)
     }
 }
 
-flux_sec_t *flux_sec_create (int typemask, const char *confdir)
+zsecurity_t *zsecurity_create (int typemask, const char *confdir)
 {
-    flux_sec_t *c = calloc (1, sizeof (*c));
+    zsecurity_t *c = calloc (1, sizeof (*c));
 
-    if ((typemask & FLUX_SEC_TYPE_CURVE) && (typemask & FLUX_SEC_TYPE_PLAIN)) {
+    if ((typemask & ZSECURITY_TYPE_CURVE) && (typemask & ZSECURITY_TYPE_PLAIN)) {
         errno = EINVAL;
         goto error;
     }
@@ -136,30 +135,30 @@ error:
     return NULL;
 }
 
-const char *flux_sec_get_directory (flux_sec_t *c)
+const char *zsecurity_get_directory (zsecurity_t *c)
 {
     return c->conf_dir;
 }
 
-bool flux_sec_type_enabled (flux_sec_t *c, int tm)
+bool zsecurity_type_enabled (zsecurity_t *c, int tm)
 {
     bool ret;
     ret = ((c->typemask & tm) == tm);
     return ret;
 }
 
-int flux_sec_keygen (flux_sec_t *c)
+int zsecurity_keygen (zsecurity_t *c)
 {
     int rc = -1;
     if (checksecdirs (c, true) < 0)
         goto done;
-    if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
+    if ((c->typemask & ZSECURITY_TYPE_CURVE)) {
         if (gencurve (c, "client") < 0)
             goto done;
         if (gencurve (c, "server") < 0)
             goto done;
     }
-    if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
+    if ((c->typemask & ZSECURITY_TYPE_PLAIN)) {
         if (genpasswd (c, "client") < 0)
             goto done;
     }
@@ -168,23 +167,23 @@ done:
     return rc;
 }
 
-int flux_sec_comms_init (flux_sec_t *c)
+int zsecurity_comms_init (zsecurity_t *c)
 {
-    if (c->auth == NULL && ((c->typemask & FLUX_SEC_TYPE_CURVE)
-                        || (c->typemask & FLUX_SEC_TYPE_PLAIN))) {
+    if (c->auth == NULL && ((c->typemask & ZSECURITY_TYPE_CURVE)
+                        || (c->typemask & ZSECURITY_TYPE_PLAIN))) {
         if (checksecdirs (c, false) < 0)
             goto error;
         if (!(c->auth = zactor_new (zauth, NULL))) {
-            seterrstr (c, "zactor_new (zauth): %s", flux_strerror (errno));
+            seterrstr (c, "zactor_new (zauth): %s", zmq_strerror (errno));
             goto error;
         }
-        if ((c->typemask & FLUX_SEC_VERBOSE)) {
+        if ((c->typemask & ZSECURITY_VERBOSE)) {
             if (zstr_sendx (c->auth, "VERBOSE", NULL) < 0)
                 goto error;
             if (zsock_wait (c->auth) < 0)
                 goto error;
         }
-        if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
+        if ((c->typemask & ZSECURITY_TYPE_CURVE)) {
             if (!zsys_has_curve ()) {
                 seterrstr (c, "libczmq was not built with CURVE support!");
                 errno = EINVAL;
@@ -202,7 +201,7 @@ int flux_sec_comms_init (flux_sec_t *c)
             if (zsock_wait (c->auth) < 0)
                 goto error;
         }
-        if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
+        if ((c->typemask & ZSECURITY_TYPE_PLAIN)) {
             if (zstr_sendx (c->auth, "PLAIN", c->passwd_file, NULL) < 0)
                 goto error;
             if (zsock_wait (c->auth) < 0)
@@ -214,15 +213,15 @@ error:
     return -1;
 }
 
-int flux_sec_csockinit (flux_sec_t *c, void *sock)
+int zsecurity_csockinit (zsecurity_t *c, void *sock)
 {
     int rc = -1;
 
-    if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
+    if ((c->typemask & ZSECURITY_TYPE_CURVE)) {
         zsock_set_zap_domain (sock, FLUX_ZAP_DOMAIN);
         zcert_apply (c->cli_cert, sock);
         zsock_set_curve_serverkey (sock, zcert_public_txt (c->srv_cert));
-    } else if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
+    } else if ((c->typemask & ZSECURITY_TYPE_PLAIN)) {
         char *passwd = NULL;
         if (!(passwd = getpasswd (c, "client"))) {
             seterrstr (c, "client not found in %s", c->passwd_file);
@@ -237,19 +236,19 @@ done:
     return rc;
 }
 
-int flux_sec_ssockinit (flux_sec_t *c, void *sock)
+int zsecurity_ssockinit (zsecurity_t *c, void *sock)
 {
-    if ((c->typemask & (FLUX_SEC_TYPE_CURVE))) {
+    if ((c->typemask & (ZSECURITY_TYPE_CURVE))) {
         zsock_set_zap_domain (sock, FLUX_ZAP_DOMAIN);
         zcert_apply (c->srv_cert, sock);
         zsock_set_curve_server (sock, 1);
-    } else if ((c->typemask & (FLUX_SEC_TYPE_PLAIN))) {
+    } else if ((c->typemask & (ZSECURITY_TYPE_PLAIN))) {
         zsock_set_plain_server (sock, 1);
     }
     return 0;
 }
 
-static int checksecdir (flux_sec_t *c, const char *path, bool create)
+static int checksecdir (zsecurity_t *c, const char *path, bool create)
 {
     struct stat sb;
     int rc = -1;
@@ -291,7 +290,7 @@ done:
     return rc;
 }
 
-static int checksecdirs (flux_sec_t *c, bool create)
+static int checksecdirs (zsecurity_t *c, bool create)
 {
     if (!c->conf_dir) {
         seterrstr (c, "config directory is not set");
@@ -300,7 +299,7 @@ static int checksecdirs (flux_sec_t *c, bool create)
     }
     if (checksecdir (c, c->conf_dir, create) < 0)
         return -1;
-    if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
+    if ((c->typemask & ZSECURITY_TYPE_CURVE)) {
         if (!c->curve_dir) {
             if (asprintf (&c->curve_dir, "%s/curve", c->conf_dir) < 0) {
                 errno = ENOMEM;
@@ -310,7 +309,7 @@ static int checksecdirs (flux_sec_t *c, bool create)
         if (checksecdir (c, c->curve_dir, create) < 0)
             return -1;
     }
-    if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
+    if ((c->typemask & ZSECURITY_TYPE_PLAIN)) {
         if (!c->passwd_file) {
             if (asprintf (&c->passwd_file, "%s/passwd", c->conf_dir) < 0) {
                 errno = ENOMEM;
@@ -335,7 +334,7 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
-static zcert_t *zcert_curve_new (flux_sec_t *c)
+static zcert_t *zcert_curve_new (zsecurity_t *c)
 {
     zcert_t *new;
     char sec[41];
@@ -364,7 +363,7 @@ static zcert_t *zcert_curve_new (flux_sec_t *c)
     return new;
 }
 
-static int gencurve (flux_sec_t *c, const char *role)
+static int gencurve (zsecurity_t *c, const char *role)
 {
     char *path = NULL, *priv = NULL;;
     zcert_t *cert = NULL;
@@ -376,7 +375,7 @@ static int gencurve (flux_sec_t *c, const char *role)
         oom ();
     if (asprintf (&priv, "%s/%s_private", c->curve_dir, role) < 0)
         oom ();
-    if ((c->typemask & FLUX_SEC_KEYGEN_FORCE)) {
+    if ((c->typemask & ZSECURITY_KEYGEN_FORCE)) {
         (void)unlink (path);
         (void)unlink (priv);
     }
@@ -396,12 +395,12 @@ static int gencurve (flux_sec_t *c, const char *role)
 
     zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
     zcert_set_meta (cert, "role", "%s", role);
-    if ((c->typemask & FLUX_SEC_VERBOSE)) {
+    if ((c->typemask & ZSECURITY_VERBOSE)) {
         printf ("Saving %s\n", path);
         printf ("Saving %s\n", priv);
     }
     if (zcert_save (cert, path) < 0) {
-        seterrstr (c, "zcert_save %s: %s", path, strerror (errno));
+        seterrstr (c, "zcert_save %s: %s", path, zmq_strerror (errno));
         goto done;
     }
     rc = 0;
@@ -415,7 +414,7 @@ done:
     return rc;
 }
 
-static zcert_t *getcurve (flux_sec_t *c, const char *role)
+static zcert_t *getcurve (zsecurity_t *c, const char *role)
 {
     char s[PATH_MAX];
     zcert_t *cert = NULL;
@@ -425,13 +424,13 @@ static zcert_t *getcurve (flux_sec_t *c, const char *role)
         goto error;
     }
     if (!(cert = zcert_load (s)))
-        seterrstr (c, "zcert_load %s: %s", s, flux_strerror (errno));
+        seterrstr (c, "zcert_load %s: %s", s, zmq_strerror (errno));
     return cert;
 error:
     return NULL;
 }
 
-static char *getpasswd (flux_sec_t *c, const char *user)
+static char *getpasswd (zsecurity_t *c, const char *user)
 {
     zhash_t *passwds = NULL;
     const char *pass;
@@ -459,7 +458,7 @@ error:
     return NULL;
 }
 
-static int genpasswd (flux_sec_t *c, const char *user)
+static int genpasswd (zsecurity_t *c, const char *user)
 {
     struct stat sb;
     zhash_t *passwds = NULL;
@@ -469,7 +468,7 @@ static int genpasswd (flux_sec_t *c, const char *user)
 
     if (!(uuid = zuuid_new ()))
         oom ();
-    if ((c->typemask & FLUX_SEC_KEYGEN_FORCE))
+    if ((c->typemask & ZSECURITY_KEYGEN_FORCE))
         (void)unlink (c->passwd_file);
     if (stat (c->passwd_file, &sb) == 0) {
         seterrstr (c, "%s exists, try --force", c->passwd_file);
@@ -479,13 +478,13 @@ static int genpasswd (flux_sec_t *c, const char *user)
     if (!(passwds = zhash_new ()))
         oom ();
     zhash_update (passwds, user, (char *)zuuid_str (uuid));
-    if ((c->typemask & FLUX_SEC_VERBOSE))
+    if ((c->typemask & ZSECURITY_VERBOSE))
         printf ("Saving %s\n", c->passwd_file);
     old_mask = umask (077);
     rc = zhash_save (passwds, c->passwd_file);
     umask (old_mask);
     if (rc < 0) {
-        seterrstr (c, "zhash_save %s: %s", c->passwd_file, flux_strerror (errno));
+        seterrstr (c, "zhash_save %s: %s", c->passwd_file, zmq_strerror (errno));
         goto done;
     }
     /* FIXME: check created file mode */

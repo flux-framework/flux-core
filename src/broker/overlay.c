@@ -37,6 +37,7 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/zsecurity.h"
 
 #include "heartbeat.h"
 #include "overlay.h"
@@ -49,7 +50,7 @@ struct endpoint {
 };
 
 struct overlay_struct {
-    flux_sec_t *sec;
+    zsecurity_t *sec;
     bool sec_initialized;
     flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
@@ -135,7 +136,7 @@ void overlay_init (overlay_t *overlay,
     overlay->tbon_descendants = kary_sum_descendants (tbon_k, size, rank);
 }
 
-void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
+void overlay_set_sec (overlay_t *ov, zsecurity_t *sec)
 {
     ov->sec = sec;
 }
@@ -368,8 +369,8 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
 {
     if (!(ep->zs = zsock_new_router (NULL)))
         log_err_exit ("zsock_new_router");
-    if (flux_sec_ssockinit (ov->sec, ep->zs) < 0)
-        log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
+    if (zsecurity_ssockinit (ov->sec, ep->zs) < 0)
+        log_msg_exit ("zsecurity_ssockinit: %s", zsecurity_errstr (ov->sec));
     if (zsock_bind (ep->zs, "%s", ep->uri) < 0)
         log_err_exit ("%s", ep->uri);
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
@@ -404,9 +405,9 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
 
     if (!(ep->zs = zsock_new_dealer (NULL)))
         goto error;
-    if (flux_sec_csockinit (ov->sec, ep->zs) < 0) {
+    if (zsecurity_csockinit (ov->sec, ep->zs) < 0) {
         savederr = errno;
-        log_msg ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
+        log_msg ("zsecurity_csockinit: %s", zsecurity_errstr (ov->sec));
         errno = savederr;
         goto error;
     }
@@ -431,8 +432,8 @@ error:
 static int overlay_sec_init (overlay_t *ov)
 {
     if (!ov->sec_initialized) {
-        if (flux_sec_comms_init (ov->sec) < 0) {
-            log_msg ("flux_sec_comms_init: %s", flux_sec_errstr (ov->sec));
+        if (zsecurity_comms_init (ov->sec) < 0) {
+            log_msg ("zsecurity_comms_init: %s", zsecurity_errstr (ov->sec));
             return -1;
         }
         ov->sec_initialized = true;

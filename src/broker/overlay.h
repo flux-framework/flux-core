@@ -2,6 +2,7 @@
 #define _BROKER_OVERLAY_H
 
 #include "attr.h"
+#include "src/common/libutil/zsecurity.h"
 
 typedef struct overlay_struct overlay_t;
 typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
@@ -11,7 +12,7 @@ void overlay_destroy (overlay_t *ov);
 
 /* These need to be called before connect/bind.
  */
-void overlay_set_sec (overlay_t *ov, flux_sec_t *sec);
+void overlay_set_sec (overlay_t *ov, zsecurity_t *sec);
 void overlay_set_flux (overlay_t *ov, flux_t *h);
 void overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
