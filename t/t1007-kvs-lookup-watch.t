@@ -100,6 +100,31 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch sees duplicate commited 
 	wait $pid
 '
 
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --uniq do not see duplicate commited values' '
+	flux kvs put test.f=1 &&
+
+	flux kvs get --count=3 --watch --uniq test.f >seq4.out &
+	pid=$! &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="[0-9]+" seq4.out >/dev/null &&
+	for i in $(seq 2 20); \
+	    do flux kvs put --no-merge test.f=1; \
+	done &&
+	for i in $(seq 2 20); \
+	    do flux kvs put --no-merge test.f=2; \
+	done &&
+	for i in $(seq 2 20); \
+	    do flux kvs put --no-merge test.f=3; \
+	done &&
+	cat >expected <<-EOF &&
+1
+2
+3
+	EOF
+	wait $pid &&
+	test_cmp expected seq4.out
+'
+
 # in --watch & --waitcreate tests, call wait_watcherscount_nonzero to
 # ensure background watcher has started, otherwise test can be racy
 

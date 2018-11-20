@@ -255,10 +255,10 @@ static bool array_match (json_t *a, const char *key)
     return false;
 }
 
-static int handle_full_response (flux_t *h,
-                                 struct watcher *w,
-                                 const void *data,
-                                 int len)
+static int handle_compare_response (flux_t *h,
+                                    struct watcher *w,
+                                    const void *data,
+                                    int len)
 {
     if (!w->responded) {
         /* this is the first response case, simply store the first
@@ -334,8 +334,9 @@ static int handle_lookup_response (flux_future_t *f, struct watcher *w)
         goto error;
     }
     if (!w->mute) {
-        if (w->flags & FLUX_KVS_WATCH_FULL) {
-            if (handle_full_response (h, w, data, len) < 0)
+        if (w->flags & FLUX_KVS_WATCH_FULL
+            || w->flags & FLUX_KVS_WATCH_UNIQ) {
+            if (handle_compare_response (h, w, data, len) < 0)
                 goto error;
         }
         else {
