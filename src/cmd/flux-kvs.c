@@ -102,10 +102,13 @@ static struct optparse_option get_opts[] =  {
       .usage = "Print key= before value",
     },
     { .name = "watch", .key = 'w', .has_arg = 0,
-      .usage = "Monitor key changes",
+      .usage = "Monitor key writes",
     },
     { .name = "waitcreate", .key = 'W', .has_arg = 0,
       .usage = "Wait for creation to occur on watch",
+    },
+    { .name = "uniq", .key = 'u', .has_arg = 0,
+      .usage = "Only monitor key writes if values have changed",
     },
     { .name = "full", .key = 'f', .has_arg = 0,
       .usage = "Monitor key changes with more complete accuracy",
@@ -692,6 +695,8 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
             flags |= FLUX_KVS_WATCH_WAITCREATE;
         if (optparse_hasopt (ctx->p, "full"))
             flags |= FLUX_KVS_WATCH_FULL;
+        if (optparse_hasopt (ctx->p, "uniq"))
+            flags |= FLUX_KVS_WATCH_UNIQ;
     }
     if (optparse_hasopt (ctx->p, "at")) {
         const char *reference = optparse_get_str (ctx->p, "at", "");
