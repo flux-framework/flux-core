@@ -150,6 +150,7 @@ void test_simple (void)
         && !strcmp (result_destroy_arg, "Hello"),
         "flux_future_destroy called result destructor correctly");
 
+    flux_reactor_destroy (r);
     diag ("%s: simple tests completed", __FUNCTION__);
 }
 
@@ -754,6 +755,60 @@ void test_fatal_error (void)
     flux_future_destroy (f);
 }
 
+void fatal_error_continuation (flux_future_t *f, void *arg)
+{
+    int *fp = arg;
+    int rc = flux_future_get (f, NULL);
+    *fp = errno;
+    cmp_ok (rc, "<", 0,
+           "flux_future_get() returns < 0 in continuation after fatal err ");
+}
+
+void test_fatal_error_async (void)
+{
+    int fatalerr = 0;
+    flux_reactor_t *r;
+    flux_future_t *f;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fatal_error (f, EPERM, NULL);
+
+    ok (flux_future_then (f, -1., fatal_error_continuation, &fatalerr) == 0,
+        "flux_future_then on future with fatal error");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    cmp_ok (fatalerr, "==", EPERM,
+        "continuation runs after fatal error");
+
+    flux_future_destroy (f);
+
+    fatalerr = 0;
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fatal_error (f, EPERM, NULL);
+
+    ok (flux_future_get (f, NULL) < 0
+        && errno == EPERM,
+        "flux_future_get returns fatal error EPERM");
+
+    ok (flux_future_then (f, -1., fatal_error_continuation, &fatalerr) == 0,
+        "flux_future_then on future with fatal error and previous get");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    cmp_ok (fatalerr, "==", EPERM,
+        "continuation runs after fatal error syncrhnously retrieved");
+
+    flux_future_destroy (f);
+    flux_reactor_destroy (r);
+}
+
 void test_error_string (void)
 {
     flux_future_t *f;
@@ -876,6 +931,49 @@ void test_multiple_fulfill (void)
     flux_reactor_destroy (r);
 }
 
+void multiple_fulfill_continuation (flux_future_t *f, void *arg)
+{
+    const void **resultp = arg;
+    ok (flux_future_get (f, resultp) == 0,
+        "flux_future_get() in async continuation works");
+    flux_future_reset (f);
+}
+
+void test_multiple_fulfill_asynchronous (void)
+{
+    int rc;
+    flux_reactor_t *r;
+    flux_future_t *f;
+    const void *result;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+
+    flux_future_fulfill (f, "foo", NULL);
+    flux_future_fulfill (f, "bar", NULL);
+
+    /* Call continuation once to get first value and reset future */
+    multiple_fulfill_continuation (f, &result);
+
+    ok (strcmp (result, "foo") == 0,
+        "calling multiple_fulfill_continuation synchronously worked");
+
+    rc = flux_future_then (f, -1., multiple_fulfill_continuation, &result);
+    cmp_ok (rc, "==", 0,
+        "flux_future_then() works for multiple fulfilled future");
+    if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
+        BAIL_OUT ("flux_reactor_run NOWAIT failed");
+    ok (strcmp (result, "bar") == 0,
+        "continuation was called for multiple-fulfilled future");
+
+    flux_future_destroy (f);
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -894,10 +992,12 @@ int main (int argc, char *argv[])
     test_reset ();
 
     test_fatal_error ();
+    test_fatal_error_async ();
 
     test_error_string ();
 
     test_multiple_fulfill ();
+    test_multiple_fulfill_asynchronous ();
 
     done_testing();
     return (0);

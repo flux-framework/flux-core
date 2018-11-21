@@ -46,7 +46,6 @@ struct now_context {
 struct then_context {
     flux_reactor_t *r;      // external reactor for then
     flux_watcher_t *timer;  // timer watcher (if timeout set)
-    flux_watcher_t *prepare;// doorbell for fulfill
     flux_watcher_t *check;
     flux_watcher_t *idle;
     bool init_called;
@@ -78,8 +77,6 @@ struct flux_future {
     zlist_t *queue;
 };
 
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg);
 static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
                       int revents, void *arg);
 static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -154,7 +151,6 @@ static void then_context_destroy (struct then_context *then)
 {
     if (then) {
         flux_watcher_destroy (then->timer);
-        flux_watcher_destroy (then->prepare);
         flux_watcher_destroy (then->check);
         flux_watcher_destroy (then->idle);
         free (then);
@@ -169,8 +165,6 @@ static struct then_context *then_context_create (flux_reactor_t *r, void *arg)
         goto error;
     }
     then->r = r;
-    if (!(then->prepare = flux_prepare_watcher_create (r, prepare_cb, arg)))
-        goto error;
     if (!(then->check = flux_check_watcher_create (r, check_cb, arg)))
         goto error;
     if (!(then->idle = flux_idle_watcher_create (r, NULL, NULL)))
@@ -183,8 +177,14 @@ error:
 
 static void then_context_start (struct then_context *then)
 {
-    flux_watcher_start (then->prepare);
+    flux_watcher_start (then->idle); // prevent reactor from blocking
     flux_watcher_start (then->check);
+}
+
+static void then_context_stop (struct then_context *then)
+{
+    flux_watcher_stop (then->idle);
+    flux_watcher_stop (then->check);
 }
 
 static int then_context_set_timeout (struct then_context *then,
@@ -342,9 +342,8 @@ static void post_fulfill (flux_future_t *f)
     then_context_clear_timer (f->then);
     if (f->now)
         flux_reactor_stop (f->now->r);
-    /* in "then" context, the main reactor prepare/check/idle watchers
-     * will run continuation in the next reactor loop for fairness.
-     */
+    if (f->then)
+        then_context_start (f->then);
 }
 
 /* Reset (unfulfill) a future.
@@ -355,7 +354,7 @@ void flux_future_reset (flux_future_t *f)
         clear_result (&f->result);
         f->result_valid = false;
         if (f->then)
-            then_context_start (f->then);
+            then_context_stop (f->then);
         if (f->queue && zlist_size (f->queue) > 0) {
             struct future_result *fs = zlist_pop (f->queue);
             move_result (&f->result, fs);
@@ -443,6 +442,11 @@ done:
     return h;
 }
 
+static bool future_is_ready (flux_future_t *f)
+{
+    return (f->result_valid || f->fatal_errnum_valid);
+}
+
 /* Block until future is fulfilled or timeout expires.
  * This function can be called multiple times, with different timeouts.
  * If timeout <= 0., there is no timeout.
@@ -459,7 +463,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         errno = EINVAL;
         return -1;
     }
-    if (!f->result_valid && !f->fatal_errnum_valid) {
+    if (!future_is_ready (f)) {
         if (timeout == 0.) { // don't setup 'now' context in this case
             errno = ETIMEDOUT;
             return -1;
@@ -475,7 +479,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             f->init (f, f->init_arg); // might set error
             f->now->init_called = true;
         }
-        if (!f->result_valid && !f->fatal_errnum_valid) {
+        if (!future_is_ready (f)) {
             if (flux_reactor_run (f->now->r, 0) < 0)
                 return -1; // errno set by now_timer_cb or other watcher
         }
@@ -483,7 +487,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             flux_dispatch_requeue (f->now->h);
         f->now->running = false;
     }
-    if (!f->result_valid && !f->fatal_errnum_valid)
+    if (!future_is_ready (f))
         return -1;
     return 0;
 }
@@ -493,7 +497,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
  */
 bool flux_future_is_ready (flux_future_t *f)
 {
-    if (f && flux_future_wait_for (f, 0.) == 0)
+    if (f && future_is_ready (f))
         return true;
     return false;
 }
@@ -538,7 +542,8 @@ int flux_future_then (flux_future_t *f, double timeout,
         if (!(f->then = then_context_create (f->r, f)))
             return -1;
     }
-    then_context_start (f->then);
+    if (future_is_ready (f))
+        then_context_start (f->then);
     if (then_context_set_timeout (f->then, timeout, f) < 0)
         return -1;
     f->then->continuation = cb;
@@ -697,20 +702,6 @@ static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_reactor_stop_error (r);
 }
 
-/* prepare - if results are ready, ensure loop doesn't block
- * so check can call continuation on next loop iteration
- */
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
-{
-    flux_future_t *f = arg;
-
-    assert (f->then != NULL);
-
-    if (f->result_valid || f->fatal_errnum_valid)
-        flux_watcher_start (f->then->idle); // prevent reactor from blocking
-}
-
 /* check - if results are ready, call the continuation
  */
 static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -720,15 +711,11 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     assert (f->then != NULL);
 
-    flux_watcher_stop (f->then->idle);
-    if (f->result_valid || f->fatal_errnum_valid) {
-        flux_watcher_stop (f->then->timer);
-        flux_watcher_stop (f->then->prepare);
-        flux_watcher_stop (f->then->check);
-        if (f->then->continuation)
-            f->then->continuation (f, f->then->continuation_arg);
-        // N.B. callback might destroy future
-    }
+    flux_watcher_stop (f->then->timer);
+    then_context_stop (f->then);
+    if (f->then->continuation)
+        f->then->continuation (f, f->then->continuation_arg);
+    // N.B. callback might destroy future
 }
 
 
