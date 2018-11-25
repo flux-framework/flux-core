@@ -266,7 +266,6 @@ check_PROGRAMS = \
 	kvs/commit_order \
 	kvs/issue1760 \
 	module/codec.t \
-	module/basic \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
@@ -427,11 +426,6 @@ module_codec_t_LDADD = $(test_ldadd) $(LIBDL)
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
 barrier_tbarrier_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-module_basic_SOURCES = module/basic.c
-module_basic_CPPFLAGS = $(test_cppflags)
-module_basic_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_req_la_SOURCES = request/req.c
