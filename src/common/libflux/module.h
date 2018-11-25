@@ -89,13 +89,6 @@ char *flux_lsmod_json_encode (flux_modlist_t *mods);
 flux_modlist_t *flux_lsmod_json_decode (const char *json_str);
 
 
-/* Encode/decode insmod payload.
- * Caller must free the string returned by encode.
- */
-char *flux_insmod_json_encode (const char *path, int argc, char **argv);
-int flux_insmod_json_decode (const char *json_str, char **path,
-                             char **argz, size_t *argz_len);
-
 #ifdef __cplusplus
 }
 #endif

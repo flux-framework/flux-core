@@ -44,6 +44,7 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
@@ -1145,32 +1146,44 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+/* Load a comms module by name, asynchronously.
+ * Message format is defined by RFC 5.
+ * N.B. load_module_bypath() handles response, unless it returns -1.
+ */
 static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *json_str;
-    char *path = NULL;
+    const char *path;
+    json_t *args;
+    size_t index;
+    json_t *value;
     char *argz = NULL;
     size_t argz_len = 0;
+    error_t e;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
+                                                     "args", &args) < 0)
         goto error;
-    if (!json_str) {
-        errno = EPROTO;
-        goto error;
+    if (!json_is_array (args))
+        goto proto;
+    json_array_foreach (args, index, value) {
+        if (!json_is_string (value))
+            goto proto;
+        if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
+            errno = e;
+            goto error;
+        }
     }
-    if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
-        goto error;
     if (load_module_bypath (ctx, path, argz, argz_len, msg) < 0)
         goto error;
-    free (path);
     free (argz);
     return;
+proto:
+    errno = EPROTO;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (path);
     free (argz);
 }
 

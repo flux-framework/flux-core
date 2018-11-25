@@ -359,15 +359,23 @@ int cmd_load (optparse_t *p, int argc, char **argv)
 
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.insmod", service);
-    char *json_str = flux_insmod_json_encode (modpath, argc - n, argv + n);
-    assert (json_str != NULL);
+    json_t *args = json_array ();
+    if (!args)
+        log_msg_exit ("json_array() failed");
+    while (n < argc) {
+        json_t *str = json_string (argv[n]);
+        if (!str || json_array_append_new (args, str) < 0)
+            log_msg_exit ("json_string() or json_array_append_new() failed");
+        n++;
+    }
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
     if (nodeset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc (h, topic, json_str, nodeset_string (ns), 0)))
+    if (!(r = flux_mrpc_pack (h, topic, nodeset_string (ns), 0,
+                              "{s:s s:O}", "path", modpath, "args", args)))
         log_err_exit ("%s", topic);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -390,7 +398,7 @@ done:
     nodeset_destroy (ns);
     free (topic);
     free (service);
-    free (json_str);
+    json_decref (args);
     free (modpath);
     free (modname);
     flux_close (h);

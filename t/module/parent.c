@@ -9,6 +9,7 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -115,38 +116,41 @@ static flux_modlist_t *module_list (void)
 static void insmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    const char *json_str;
-    char *path = NULL;
+    const char *path;
+    json_t *args;
+    size_t index;
+    json_t *value;
     char *argz = NULL;
     size_t argz_len = 0;
     module_t *m = NULL;
-    int rc = -1, saved_errno;
+    error_t e;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
+                                                     "args", &args) < 0)
+        goto error;
+    if (!json_is_array (args))
+        goto proto;
+    json_array_foreach (args, index, value) {
+        if (!json_is_string (value))
+            goto proto;
+        if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
+            errno = e;
+            goto error;
+        }
     }
-    if (!json_str) {
-        saved_errno = EPROTO;
-        goto done;
-    }
-    if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!(m = module_create (path, argz, argz_len))) {
-        saved_errno = errno;
-        goto done;
-    }
+    if (!(m = module_create (path, argz, argz_len)))
+        goto error;
     flux_log (h, LOG_DEBUG, "insmod %s", m->name);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (path)
-        free (path);
-    if (argz)
-        free (argz);
+    free (argz);
+    return;
+proto:
+    errno = EPROTO;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    free (argz);
 }
 
 static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
