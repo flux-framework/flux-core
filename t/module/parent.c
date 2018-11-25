@@ -89,24 +89,29 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     return m;
 }
 
-static flux_modlist_t *module_list (void)
+static json_t *module_list (void)
 {
-    flux_modlist_t *mods = flux_modlist_create ();
-    zlist_t *keys = zhash_keys (modules);
+    json_t *mods;
+    zlist_t *keys;
     module_t *m;
     char *name;
-    int rc;
 
-    assert (mods != NULL);
-    if (!keys)
+    if (!(mods = json_array ()))
+        oom ();
+    if (!(keys = zhash_keys (modules)))
         oom ();
     name = zlist_first (keys);
     while (name) {
+        json_t *o;
         m = zhash_lookup (modules, name);
-        assert (m != NULL);
-        rc = flux_modlist_append (mods, m->name, m->size, m->digest, m->status,
-                                                                     m->idle);
-        assert (rc == 0);
+        if (!(o = json_pack ("{s:s s:i s:s s:i s:i}", "name", m->name,
+                                                      "size", m->size,
+                                                      "digest", m->digest,
+                                                      "idle", m->idle,
+                                                      "status", m->status)))
+            oom ();
+        if (json_array_append_new (mods, o) < 0)
+            oom ();
         name = zlist_next (keys);
     }
     zlist_destroy (&keys);
@@ -177,31 +182,18 @@ error:
 static void lsmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    flux_modlist_t *mods = NULL;
-    char *json_str = NULL;
-    int rc = -1, saved_errno;
+    json_t *mods = NULL;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!(mods = module_list ())) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!(json_str = flux_lsmod_json_encode (mods))) {
-        saved_errno = errno;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              rc < 0 ? NULL : json_str) < 0)
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    mods = module_list ();
+    if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (json_str)
-        free (json_str);
-    if (mods)
-        flux_modlist_destroy (mods);
+    json_decref (mods);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 const struct flux_msg_handler_spec htab[] = {

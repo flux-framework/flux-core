@@ -1187,29 +1187,26 @@ error:
     free (argz);
 }
 
+/* Load a comms module by name.
+ * Message format is defined by RFC 5.
+ */
 static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    flux_modlist_t *mods = NULL;
-    char *json_str = NULL;
+    json_t *mods = NULL;
 
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
     if (!(mods = module_get_modlist (ctx->modhash)))
         goto error;
-    if (!(json_str = flux_lsmod_json_encode (mods)))
-        goto error;
-    if (flux_respond (h, msg, 0, json_str) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (json_str);
-    if (mods)
-        flux_modlist_destroy (mods);
+    if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    json_decref (mods);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (json_str);
-    if (mods)
-        flux_modlist_destroy (mods);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,

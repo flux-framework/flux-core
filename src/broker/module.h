@@ -1,6 +1,8 @@
 #ifndef _BROKER_MODULE_H
 #define _BROKER_MODULE_H
 
+#include <jansson.h>
+
 #include "heartbeat.h"
 
 typedef struct module_struct module_t;
@@ -90,9 +92,9 @@ int module_start (module_t *p);
  */
 int module_stop (module_t *p);
 
-/* Prepare an 'lsmod' response payload.
+/* Prepare RFC 5 'mods' array for lsmod response.
  */
-flux_modlist_t *module_get_modlist (modhash_t *mh);
+json_t *module_get_modlist (modhash_t *mh);
 
 #endif /* !_BROKER_MODULE_H */
 

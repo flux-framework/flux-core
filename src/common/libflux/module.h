@@ -47,17 +47,12 @@ enum {
     FLUX_MODSTATE_EXITED         = 4,
 };
 
-/**
- ** Mandatory symbols for modules
- **/
-
+/*
+ * Mandatory symbols for modules
+ */
 #define MOD_NAME(x) const char *mod_name = x
 typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
 
-
-/**
- ** Convenience functions for services implementing module extensions
- **/
 
 /* Read the value of 'mod_name' from the specified module filename.
  * Caller must free the returned name.  Returns NULL on failure.
@@ -69,25 +64,6 @@ char *flux_modname (const char *filename);
  * Caller must free the returned path.
  */
 char *flux_modfind (const char *searchpath, const char *modname);
-
-/* Encode/decode lsmod payload
- * 'flux_modlist_t' is an intermediate object that can encode/decode
- * to/from a JSON string, and provides accessors for module list entries.
- */
-typedef struct flux_modlist_struct flux_modlist_t;
-
-flux_modlist_t *flux_modlist_create (void);
-void flux_modlist_destroy (flux_modlist_t *mods);
-int flux_modlist_append (flux_modlist_t *mods, const char *name, int size,
-                            const char *digest, int idle, int status);
-int flux_modlist_count (flux_modlist_t *mods);
-int flux_modlist_get (flux_modlist_t *mods, int idx, const char **name,
-                                int *size, const char **digest, int *idle,
-                                int *status);
-
-char *flux_lsmod_json_encode (flux_modlist_t *mods);
-flux_modlist_t *flux_lsmod_json_decode (const char *json_str);
-
 
 #ifdef __cplusplus
 }

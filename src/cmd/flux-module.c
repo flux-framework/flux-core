@@ -539,28 +539,26 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
     }
 }
 
-int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
+/* Merge lsmod results from one rank with hash-by-module-uuid for all ranks.
+ */
+int lsmod_merge_result (uint32_t nodeid, json_t *o, zhash_t *mods)
 {
-    flux_modlist_t *modlist = NULL;
     mod_t *m;
-    int i, len;
+    size_t index;
+    json_t *value;
     const char *name, *digest;
     int size, idle;
     int status;
-    int rc = -1;
 
-    if (!json_str) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(modlist = flux_lsmod_json_decode (json_str)))
-        goto done;
-    if ((len = flux_modlist_count (modlist)) == -1)
-        goto done;
-    for (i = 0; i < len; i++) {
-        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle,
-                                                                 &status) < 0)
-            goto done;
+    if (!json_is_array (o))
+        goto proto;
+    json_array_foreach (o, index, value) {
+        if (json_unpack (value, "{s:s s:i s:s s:i s:i}", "name", &name,
+                                                         "size", &size,
+                                                         "digest", &digest,
+                                                         "idle", &idle,
+                                                         "status", &status) < 0)
+            goto proto;
         if ((m = zhash_lookup (mods, digest))) {
             if (idle < m->idle)
                 m->idle = idle;
@@ -573,11 +571,10 @@ int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
             zhash_freefn (mods, digest, (zhash_free_fn *)mod_destroy);
         }
     }
-    rc = 0;
-done:
-    if (modlist)
-        flux_modlist_destroy (modlist);
-    return rc;
+    return 0;
+proto:
+    errno = EPROTO;
+    return -1;
 }
 
 int cmd_list (optparse_t *p, int argc, char **argv)
@@ -610,11 +607,11 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(r = flux_mrpc (h, topic, NULL, nodeset_string (ns), 0)))
         log_err_exit ("%s", topic);
     do {
-        const char *json_str;
+        json_t *o;
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_mrpc_get_nodeid (r, &nodeid) < 0
-                || flux_mrpc_get (r, &json_str) < 0
-                || lsmod_merge_result (nodeid, json_str, mods) < 0) {
+                || flux_mrpc_get_unpack (r, "{s:o}", "mods", &o) < 0
+                || lsmod_merge_result (nodeid, o, mods) < 0) {
             if (nodeid != FLUX_NODEID_ANY)
                 log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
