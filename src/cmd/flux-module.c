@@ -43,12 +43,17 @@
 
 const int max_idle = 99;
 
+typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
+                           int idle, int status,
+                           const char *nodeset, void *arg);
+
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
+
 
 #define RANK_OPTION { \
     .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET", \

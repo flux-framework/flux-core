@@ -42,21 +42,6 @@ struct flux_modlist_struct {
     json_t *o;
 };
 
-/* Get service name from module name string.
- */
-static char *mod_service (const char *modname)
-{
-    char *service = NULL;
-    if (strchr (modname, '.')) {
-        if ((service = strdup (modname))) {
-            char *p = strrchr (service, '.');
-            *p = '\0';
-        }
-    } else
-        service = strdup ("cmb");
-    return service;
-}
-
 /**
  ** JSON encode/decode functions
  **/
@@ -309,104 +294,6 @@ char *flux_modfind (const char *searchpath, const char *modname)
     if (!result)
         errno = ENOENT;
     return result;
-}
-
-int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
-{
-    flux_future_t *f = NULL;
-    char *service = mod_service (name);
-    char *topic = NULL;
-    char *json_str = NULL;
-    int rc = -1;
-
-    if (!service || asprintf (&topic, "%s.rmmod", service) < 0)
-        goto done;
-    if (!(json_str = flux_rmmod_json_encode (name)))
-        goto done;
-    if (!(f = flux_rpc (h, topic, json_str, nodeid, 0)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    free (service);
-    free (topic);
-    free (json_str);
-    flux_future_destroy (f);
-    return rc;
-}
-
-int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
-                flux_lsmod_f cb, void *arg)
-{
-    flux_future_t *f = NULL;
-    char *topic = NULL;
-    flux_modlist_t *mods = NULL;
-    const char *json_str;
-    int rc = -1;
-    int i, len;
-
-    if (asprintf (&topic, "%s.lsmod", service ? service : "cmb") < 0)
-        goto done;
-    if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
-        goto done;
-    if (flux_rpc_get (f, &json_str) < 0)
-        goto done;
-    if (!json_str) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(mods = flux_lsmod_json_decode (json_str)))
-        goto done;
-    if ((len = flux_modlist_count (mods)) == -1)
-        goto done;
-    for (i = 0; i < len; i++) {
-        const char *name, *digest;
-        int size, idle, status;
-        if (flux_modlist_get (mods, i, &name, &size, &digest, &idle,
-                                                              &status) < 0)
-            goto done;
-        if (cb (name, size, digest, idle, status, NULL, arg) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    free (topic);
-    if (mods)
-        flux_modlist_destroy (mods);
-    flux_future_destroy (f);
-    return rc;
-}
-
-int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
-                 int argc, char **argv)
-{
-    flux_future_t *f = NULL;
-    char *name = NULL;
-    char *service = NULL;
-    char *topic = NULL;
-    char *json_str = NULL;
-    int rc = -1;
-
-    if (!(name = flux_modname (path)) || !(service = mod_service (name)))
-        goto done;
-
-    if (asprintf (&topic, "%s.insmod", service) < 0)
-        goto done;
-
-    json_str = flux_insmod_json_encode (path, argc, argv);
-    if (!(f = flux_rpc (h, topic, json_str, nodeid, 0)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    free (name);
-    free (service);
-    free (topic);
-    free (json_str);
-    flux_future_destroy (f);
-    return rc;
 }
 
 /*
