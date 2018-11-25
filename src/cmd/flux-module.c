@@ -413,15 +413,14 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.rmmod", service);
-    char *json_str = flux_rmmod_json_encode (modname);
-    assert (json_str != NULL);
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
     if (nodeset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc (h, topic, json_str, nodeset_string (ns), 0)))
+    if (!(r = flux_mrpc_pack (h, topic, nodeset_string (ns), 0,
+                             "{s:s}", "name", modname)))
         log_err_exit ("%s %s", topic, modname);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -439,7 +438,6 @@ done:
     nodeset_destroy (ns);
     free (topic);
     free (service);
-    free (json_str);
     flux_close (h);
     return (0);
 }

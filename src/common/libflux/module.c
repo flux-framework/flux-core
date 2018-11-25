@@ -108,41 +108,6 @@ done:
     return json_str;
 }
 
-int flux_rmmod_json_decode (const char *json_str, char **name)
-{
-    json_error_t error;
-    json_t *o = NULL;
-    const char *s;
-    int rc = -1;
-
-    if (!(o = json_loads (json_str, 0, &error))
-            || json_unpack (o, "{s:s}", "name", &s) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (name && !(*name = strdup (s)))
-        goto done;
-    rc = 0;
-done:
-    json_decref (o);
-    return rc;
-}
-
-char *flux_rmmod_json_encode (const char *name)
-{
-    json_t *o;
-    char *json_str = NULL;
-
-    if (!(o = json_pack ("{s:s}", "name", name))) {
-        errno = ENOMEM;
-        goto done;
-    }
-    json_str = json_dumps (o, JSON_COMPACT);
-done:
-    json_decref (o);
-    return json_str;
-}
-
 int flux_modlist_get (flux_modlist_t *mods, int n, const char **name, int *size,
                       const char **digest, int *idle, int *status)
 {

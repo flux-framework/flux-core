@@ -1124,29 +1124,25 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
  ** Built-in services
  **/
 
+/* Unload a comms module by name, asynchronously.
+ * Message format is defined by RFC 5.
+ * N.B. unload_module_byname() handles response, unless it fails early
+ * and returns -1.
+ */
 static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *json_str;
-    char *name = NULL;
+    const char *name;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto error;
-    if (!json_str) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (flux_rmmod_json_decode (json_str, &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
     if (unload_module_byname (ctx, name, msg, true) < 0)
         goto error;
-    free (name);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (name);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,

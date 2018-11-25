@@ -152,34 +152,22 @@ done:
 static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    const char *json_str;
-    char *name = NULL;
-    int rc = -1, saved_errno;
+    const char *name;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!json_str) {
-        saved_errno = EPROTO;
-        goto done;
-    }
-    if (flux_rmmod_json_decode (json_str, &name) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
+        goto error;
     if (!zhash_lookup (modules, name)) {
-        saved_errno = errno = ENOENT;
-        goto done;
+        errno = ENOENT;
+        goto error;
     }
     zhash_delete (modules, name);
     flux_log (h, LOG_DEBUG, "rmmod %s", name);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (name)
-        free (name);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void lsmod_request_cb (flux_t *h, flux_msg_handler_t *mh,

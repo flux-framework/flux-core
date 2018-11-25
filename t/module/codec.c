@@ -101,21 +101,6 @@ void test_lsmod_codec (void)
     free (json_str);
 }
 
-void test_rmmod_codec (void)
-{
-    char *json_str;
-    char *s = NULL;
-
-    json_str = flux_rmmod_json_encode ("xyz");
-    ok (json_str != NULL,
-        "flux_rmmod_json_encode works");
-    ok (flux_rmmod_json_decode (json_str, &s) == 0
-        && s != NULL && !strcmp (s, "xyz"),
-        "flux_rmmod_json_decode works");
-    free (s);
-    free (json_str);
-}
-
 void test_insmod_codec (void)
 {
     int argc = 2;
@@ -145,11 +130,10 @@ void test_insmod_codec (void)
 
 int main (int argc, char *argv[])
 {
-    plan (24);
+    plan (NO_PLAN);
 
     test_helpers (); // 9
     test_lsmod_codec (); // 11
-    test_rmmod_codec (); // 2
     test_insmod_codec (); // 2
 
     done_testing ();
