@@ -1452,16 +1452,18 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
         bool stall = false;
+        struct kvsroot *root;
 
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        if (!getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
-                      &stall)) {
-            if (stall)
-                goto stall;
-            goto done;
-        }
+        root = getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
+                        &stall);
+        assert (!root);
+
+        if (stall)
+            goto stall;
+        goto done;
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
@@ -1594,16 +1596,18 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
         bool stall = false;
+        struct kvsroot *root;
 
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        if (!getroot (ctx, namespace, mh, msg, lh, watch_request_cb,
-                      &stall)) {
-            if (stall)
-                goto stall;
-            goto done;
-        }
+        root = getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
+                        &stall);
+        assert (!root);
+
+        if (stall)
+            goto stall;
+        goto done;
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
