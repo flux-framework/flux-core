@@ -1485,14 +1485,13 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         cbd.errnum = 0;
 
         if (lookup_iter_missing_refs (lh, lookup_load_cb, &cbd) < 0) {
-            errno = cbd.errnum;
-
             /* rpcs already in flight, stall for them to complete */
             if (wait_get_usecount (wait) > 0) {
                 lookup_set_aux_errnum (lh, cbd.errnum);
                 goto stall;
             }
 
+            errno = cbd.errnum;
             goto done;
         }
 
@@ -1629,14 +1628,13 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         cbd.errnum = 0;
 
         if (lookup_iter_missing_refs (lh, lookup_load_cb, &cbd) < 0) {
-            errno = cbd.errnum;
-
             /* rpcs already in flight, stall for them to complete */
             if (wait_get_usecount (wait) > 0) {
                 lookup_set_aux_errnum (lh, cbd.errnum);
                 goto stall;
             }
 
+            errno = cbd.errnum;
             goto done;
         }
 
