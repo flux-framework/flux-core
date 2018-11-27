@@ -628,7 +628,7 @@ void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb)
     mh->heartbeat = hb;
 }
 
-json_t *module_get_modlist (modhash_t *mh)
+json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
 {
     json_t *mods = NULL;
     zlist_t *uuids = NULL;
@@ -642,14 +642,21 @@ json_t *module_get_modlist (modhash_t *mh)
     uuid = zlist_first (uuids);
     while (uuid) {
         if ((p = zhash_lookup (mh->zh_byuuid, uuid))) {
-            json_t *entry = json_pack ("{s:s s:i s:s s:i s:i}",
-                                       "name", module_get_name (p),
-                                       "size", p->size,
-                                       "digest", p->digest,
-                                       "idle", module_get_idle (p),
-                                       "status", p->status);
-            if (!entry)
+            json_t *svcs;
+            json_t *entry;
+
+            if (!(svcs  = service_list_byuuid (sw, uuid)))
                 goto nomem;
+            if (!(entry = json_pack ("{s:s s:i s:s s:i s:i s:o}",
+                                     "name", module_get_name (p),
+                                     "size", p->size,
+                                     "digest", p->digest,
+                                      "idle", module_get_idle (p),
+                                      "status", p->status,
+                                      "services", svcs))) {
+                json_decref (svcs);
+                goto nomem;
+            }
             if (json_array_append_new (mods, entry) < 0) {
                 json_decref (entry);
                 goto nomem;

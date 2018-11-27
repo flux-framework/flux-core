@@ -4,6 +4,7 @@
 #include <jansson.h>
 
 #include "heartbeat.h"
+#include "service.h"
 
 typedef struct module_struct module_t;
 typedef struct modhash_struct modhash_t;
@@ -94,7 +95,7 @@ int module_stop (module_t *p);
 
 /* Prepare RFC 5 'mods' array for lsmod response.
  */
-json_t *module_get_modlist (modhash_t *mh);
+json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw);
 
 #endif /* !_BROKER_MODULE_H */
 

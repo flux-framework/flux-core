@@ -1198,7 +1198,7 @@ static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (!(mods = module_get_modlist (ctx->modhash)))
+    if (!(mods = module_get_modlist (ctx->modhash, ctx->services)))
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
