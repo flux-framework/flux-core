@@ -82,8 +82,13 @@ static int mod_find_f (dirwalk_t *d, void *arg)
 char *flux_modfind (const char *searchpath, const char *modname)
 {
     char *result = NULL;
-    zlist_t *l = dirwalk_find (searchpath, 0, "*.so", 1,
-                               mod_find_f, (void *) modname);
+    zlist_t *l;
+
+    if (!searchpath || !modname) {
+        errno = EINVAL;
+        return NULL;
+    }
+    l = dirwalk_find (searchpath, 0, "*.so", 1, mod_find_f, (void *) modname);
     if (l) {
         result = zlist_pop (l);
         zlist_destroy (&l);
