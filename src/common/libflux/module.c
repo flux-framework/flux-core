@@ -44,6 +44,10 @@ char *flux_modname(const char *path)
     const char **np;
     char *name = NULL;
 
+    if (!path) {
+        errno = EINVAL;
+        return NULL;
+    }
     dlerror ();
     if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
         int errnum = EINVAL;
