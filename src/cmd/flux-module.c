@@ -493,7 +493,11 @@ struct module_record {
     int idle;
     int status_hist[8];
     nodeset_t *nodeset;
+    zhashx_t *services;
 };
+
+char *service_hash_slug = "";
+
 
 /* N.B. this function matches the zhashx destructor prototype.  Avoid casting
  * with zhashx typedefs as they are unavailable in older czmq releases.
@@ -506,6 +510,7 @@ void module_record_destroy (void **item)
         free (m->name);
         free (m->digest);
         nodeset_destroy (m->nodeset);
+        zhashx_destroy (&m->services);
         free (m);
         *item = NULL;
         errno = saved_errno;
@@ -523,6 +528,8 @@ struct module_record *module_record_create (const char *name, int size,
     m->idle = idle;
     m->status_hist[abs (status) % 8]++;
     if (!(m->nodeset = nodeset_create_rank (nodeid)))
+        oom ();
+    if (!(m->services = zhashx_new ()))
         oom ();
     return m;
 }
@@ -549,6 +556,22 @@ void lsmod_map_hash (zhashx_t *mods, flux_lsmod_f cb, void *arg)
     }
 }
 
+/* Iterate over json array 'new', adding each string element to the
+ * 'services' hash.  For multi-rank lsmod output, the set of services
+ * listed will be the union of all services registered.
+ */
+void lsmod_merge_services (zhashx_t *services, json_t *new)
+{
+    size_t index;
+    json_t *value;
+
+    json_array_foreach (new, index, value) {
+        const char *name = json_string_value (value);
+        if (name)
+            zhashx_update (services, name, service_hash_slug);
+    }
+}
+
 /* Merge lsmod results from one rank with hash-by-module-uuid for all ranks.
  */
 int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
@@ -559,15 +582,20 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
     const char *name, *digest;
     int size, idle;
     int status;
+    json_t *services;
 
     if (!json_is_array (o))
         goto proto;
     json_array_foreach (o, index, value) {
-        if (json_unpack (value, "{s:s s:i s:s s:i s:i}", "name", &name,
-                                                         "size", &size,
-                                                         "digest", &digest,
-                                                         "idle", &idle,
-                                                         "status", &status) < 0)
+        if (json_unpack (value, "{s:s s:i s:s s:i s:i s:o}",
+                         "name", &name,
+                         "size", &size,
+                         "digest", &digest,
+                         "idle", &idle,
+                         "status", &status,
+                         "services", &services) < 0)
+            goto proto;
+        if (!json_is_array (services))
             goto proto;
         if ((m = zhashx_lookup (mods, digest))) {
             if (idle < m->idle)
@@ -575,8 +603,10 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
             m->status_hist[abs (status) % 8]++;
             if (!nodeset_add_rank (m->nodeset, nodeid))
                 oom ();
+            lsmod_merge_services (m->services, services);
         } else {
             m = module_record_create (name, size, digest, idle, status, nodeid);
+            lsmod_merge_services (m->services, services);
             zhashx_update (mods, digest, m);
         }
     }
