@@ -7,6 +7,12 @@
 #include "src/common/libflux/module.h"
 #include "src/common/libtap/tap.h"
 
+/* N.B. FAKE1 and FAKE2 are defined with -D on the CC command line.
+ * They are set to the full path of two test modules, module_fake1.so
+ * and module_fake2.so.  module_fake1.so simply defines mod_name to "fake1".
+ * module_fake2.so omits the mod_name symbol to cause an error.
+ */
+
 int errmsg_count;
 void errmsg_cb (const char *msg, void *arg)
 {
