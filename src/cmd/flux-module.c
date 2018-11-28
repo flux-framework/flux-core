@@ -486,27 +486,32 @@ int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
     return 0;
 }
 
-typedef struct {
+struct module_record {
     char *name;
     int size;
     char *digest;
     int idle;
     int status_hist[8];
     nodeset_t *nodeset;
-} mod_t;
+};
 
-void mod_destroy (mod_t *m)
+void module_record_destroy (struct module_record *m)
 {
-    free (m->name);
-    free (m->digest);
-    nodeset_destroy (m->nodeset);
-    free (m);
+    if (m) {
+        int saved_errno = errno;
+        free (m->name);
+        free (m->digest);
+        nodeset_destroy (m->nodeset);
+        free (m);
+        errno = saved_errno;
+    }
 }
 
-mod_t *mod_create (const char *name, int size, const char *digest,
-                   int idle, int status, uint32_t nodeid)
+struct module_record *module_record_create (const char *name, int size,
+                                            const char *digest, int idle,
+                                            int status, uint32_t nodeid)
 {
-    mod_t *m = xzmalloc (sizeof (*m));
+    struct module_record *m = xzmalloc (sizeof (*m));
     m->name = xstrdup (name);
     m->size = size;
     m->digest = xstrdup (digest);
@@ -520,7 +525,7 @@ mod_t *mod_create (const char *name, int size, const char *digest,
 void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
 {
     const char *key;
-    mod_t *m;
+    struct module_record *m;
     int status;
 
     FOREACH_ZHASH(mods, key, m) {
@@ -543,7 +548,7 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
  */
 int lsmod_merge_result (uint32_t nodeid, json_t *o, zhash_t *mods)
 {
-    mod_t *m;
+    struct module_record *m;
     size_t index;
     json_t *value;
     const char *name, *digest;
@@ -566,9 +571,9 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhash_t *mods)
             if (!nodeset_add_rank (m->nodeset, nodeid))
                 oom ();
         } else {
-            m = mod_create (name, size, digest, idle, status, nodeid);
+            m = module_record_create (name, size, digest, idle, status, nodeid);
             zhash_update (mods, digest, m);
-            zhash_freefn (mods, digest, (zhash_free_fn *)mod_destroy);
+            zhash_freefn (mods, digest, (zhash_free_fn *)module_record_destroy);
         }
     }
     return 0;
