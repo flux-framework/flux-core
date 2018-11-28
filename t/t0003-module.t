@@ -79,6 +79,28 @@ test_expect_success 'module: lsmod shows submodule (all ranks)' '
 	flux module list -r all parent | grep parent.child
 '
 
+#
+# Expected 'lsmod -r all parent' output is something like this:
+#  parent.child         1113944 2517539    0  I         3 rank3,test1,test2
+#  parent.child         1113944 2517539    0  I         0 rank0,test1,test2
+#  parent.child         1113944 2517539    0  I         2 rank2,test1,test2
+#  parent.child         1113944 2517539    0  I         1 rank1,test1,test2
+#
+test_expect_success 'module: lsmod -r all parent works' '
+	flux module list -r all parent | grep child >child.lsmod.out
+'
+test_expect_success 'module: hardwired test1,test2 services are listed in sorted order' '
+	grep -q test1,test2 child.lsmod.out
+'
+test_expect_success "module: hardwired rankN services are listed" '
+	for rank in $(seq 0 $(($SIZE-1))); do \
+		grep -q rank${rank} child.lsmod.out; \
+	done
+'
+test_expect_success "module: there are size=$SIZE lines of output due to unique rankN service" '
+	test $(wc -l < child.lsmod.out) -eq $SIZE
+'
+
 test_expect_success 'module: unload submodule (all ranks)' '
 	flux module remove -r all parent.child
 '

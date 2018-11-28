@@ -26,6 +26,7 @@ typedef struct {
 } module_t;
 
 static zhash_t *modules = NULL;
+static uint32_t rank;
 
 /* Calculate file digest using zfile() class from czmq.
  * Caller must free.
@@ -89,28 +90,36 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     return m;
 }
 
+/* N.B. services is hardwired to test1,test2,testN, where N is the local
+ * broker rank.  This is a specific setup for the flux-module test.  This
+ * base component does not perform message routing to its extension modules.
+ */
 static json_t *module_list (void)
 {
     json_t *mods;
     zlist_t *keys;
     module_t *m;
     char *name;
+    char rankstr[16];
+    int n;
 
     if (!(mods = json_array ()))
         oom ();
     if (!(keys = zhash_keys (modules)))
         oom ();
     name = zlist_first (keys);
+    n = snprintf (rankstr, sizeof (rankstr), "rank%d", (int)rank);
+    assert (n < sizeof (rankstr));
     while (name) {
         json_t *o;
         m = zhash_lookup (modules, name);
-        if (!(o = json_pack ("{s:s s:i s:s s:i s:i s:[s,s]}",
+        if (!(o = json_pack ("{s:s s:i s:s s:i s:i s:[s,s,s]}",
                              "name", m->name,
                              "size", m->size,
                              "digest", m->digest,
                              "idle", m->idle,
                              "status", m->status,
-                             "services", "test1", "test2")))
+                             "services", "test1", "test2", rankstr)))
             oom ();
         if (json_array_append_new (mods, o) < 0)
             oom ();
@@ -212,26 +221,25 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (argc == 1 && !strcmp (argv[0], "--init-failure")) {
         flux_log (h, LOG_INFO, "aborting during init per test request");
-        saved_errno = EIO;
+        errno = EIO;
         goto error;
     }
     if (!(modules = zhash_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
-    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
-        saved_errno = errno;
-        flux_log_error (h, "flux_msghandler_addvec");
+    if (flux_get_rank (h, &rank) < 0)
         goto error;
-    }
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0)
+        goto error;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
-        saved_errno = errno;
         flux_log_error (h, "flux_reactor_run");
         goto error;
     }
     zhash_destroy (&modules);
     return 0;
 error:
+    saved_errno = errno;
     flux_msg_handler_delvec (handlers);
     zhash_destroy (&modules);
     errno = saved_errno;
