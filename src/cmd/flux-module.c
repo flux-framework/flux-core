@@ -495,14 +495,19 @@ struct module_record {
     nodeset_t *nodeset;
 };
 
-void module_record_destroy (struct module_record *m)
+/* N.B. this function matches the zhashx destructor prototype.  Avoid casting
+ * with zhashx typedefs as they are unavailable in older czmq releases.
+ */
+void module_record_destroy (void **item)
 {
-    if (m) {
+    if (item && *item != NULL) {
         int saved_errno = errno;
+        struct module_record *m = *item;
         free (m->name);
         free (m->digest);
         nodeset_destroy (m->nodeset);
         free (m);
+        *item = NULL;
         errno = saved_errno;
     }
 }
@@ -522,13 +527,13 @@ struct module_record *module_record_create (const char *name, int size,
     return m;
 }
 
-void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
+void lsmod_map_hash (zhashx_t *mods, flux_lsmod_f cb, void *arg)
 {
     const char *key;
     struct module_record *m;
     int status;
 
-    FOREACH_ZHASH(mods, key, m) {
+    FOREACH_ZHASHX(mods, key, m) {
         if (m->status_hist[FLUX_MODSTATE_INIT] > 0)
             status = FLUX_MODSTATE_INIT;
         else if (m->status_hist[FLUX_MODSTATE_EXITED] > 0) /* unlikely */
@@ -546,7 +551,7 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
 
 /* Merge lsmod results from one rank with hash-by-module-uuid for all ranks.
  */
-int lsmod_merge_result (uint32_t nodeid, json_t *o, zhash_t *mods)
+int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
 {
     struct module_record *m;
     size_t index;
@@ -564,7 +569,7 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhash_t *mods)
                                                          "idle", &idle,
                                                          "status", &status) < 0)
             goto proto;
-        if ((m = zhash_lookup (mods, digest))) {
+        if ((m = zhashx_lookup (mods, digest))) {
             if (idle < m->idle)
                 m->idle = idle;
             m->status_hist[abs (status) % 8]++;
@@ -572,8 +577,7 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhash_t *mods)
                 oom ();
         } else {
             m = module_record_create (name, size, digest, idle, status, nodeid);
-            zhash_update (mods, digest, m);
-            zhash_freefn (mods, digest, (zhash_free_fn *)module_record_destroy);
+            zhashx_update (mods, digest, m);
         }
     }
     return 0;
@@ -590,10 +594,11 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     flux_mrpc_t *r = NULL;
     flux_t *h;
     int n;
-    zhash_t *mods = zhash_new ();
+    zhashx_t *mods; // hash of mod->digest => (struct module_record *)
 
-    if (!mods)
+    if (!(mods = zhashx_new ()))
         oom ();
+    zhashx_set_destructor (mods, module_record_destroy);
     if ((n = optparse_option_index (p)) < argc - 1) {
         optparse_print_usage (p);
         exit (1);
@@ -627,7 +632,7 @@ done:
     flux_mrpc_destroy (r);
     nodeset_destroy (ns);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
-    zhash_destroy (&mods);
+    zhashx_destroy (&mods);
     free (topic);
     flux_close (h);
     return (0);
