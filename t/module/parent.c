@@ -104,11 +104,13 @@ static json_t *module_list (void)
     while (name) {
         json_t *o;
         m = zhash_lookup (modules, name);
-        if (!(o = json_pack ("{s:s s:i s:s s:i s:i}", "name", m->name,
-                                                      "size", m->size,
-                                                      "digest", m->digest,
-                                                      "idle", m->idle,
-                                                      "status", m->status)))
+        if (!(o = json_pack ("{s:s s:i s:s s:i s:i s:[s,s]}",
+                             "name", m->name,
+                             "size", m->size,
+                             "digest", m->digest,
+                             "idle", m->idle,
+                             "status", m->status,
+                             "services", "test1", "test2")))
             oom ();
         if (json_array_append_new (mods, o) < 0)
             oom ();
