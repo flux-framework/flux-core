@@ -38,61 +38,87 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
 
-char *flux_modname(const char *path)
+struct modfind_ctx {
+    const char *modname;
+    flux_moderr_f *cb;
+    void *arg;
+};
+
+char *flux_modname (const char *path, flux_moderr_f *cb, void *arg)
 {
     void *dso;
     const char **np;
-    char *name = NULL;
+    char *cpy = NULL;
+    int saved_errno;
 
     if (!path) {
         errno = EINVAL;
         return NULL;
     }
-    dlerror ();
-    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
-        int errnum = EINVAL;
-        if ((np = dlsym (dso, "mod_name")) && *np)
-            if (!(name = strdup (*np)))
-                errnum = ENOMEM;
-        dlclose (dso);
-        errno = errnum;
-        return name;
+    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
+        if (cb)
+            cb (dlerror (), arg);
+        errno = ENOENT;
+        return NULL;
     }
-    // Another reporting method may be warranted here, but when a dynamic
-    // library dependency doesn't resolve, it really helps to know that's
-    // the error.  Otherwise it prints as "invalid argument" from the
-    // broker.
-    log_msg ("%s", dlerror ());
-    errno = ENOENT;
+    dlerror ();
+    if (!(np = dlsym (dso, "mod_name"))) {
+        char *errmsg;
+        if (cb && (errmsg = dlerror ()))
+            cb (errmsg, arg);
+        errno = EINVAL;
+        goto error;
+    }
+    if (!*np) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(cpy = strdup (*np)))
+        goto error;
+    dlclose (dso);
+    return cpy;
+error:
+    saved_errno = errno;
+    dlclose (dso);
+    errno = saved_errno;
     return NULL;
 }
 
-/* helper for flux_modfind() */
-static int flux_modname_cmp(const char *path, const char *name)
+/* dirwalk_filter_f callback for dirwalk_find()
+ * This function should return 1 on match, 0 on no match.
+ * dirwalk_find() will stop on first match since its count parameter is 1.
+ */
+static int mod_find_f (dirwalk_t *d, void *arg)
 {
-    char * modname = flux_modname(path);
-    int rc = modname ? strcmp(modname, name) : -1;
-    free(modname);
+    struct modfind_ctx *ctx = arg;
+    const char *path = dirwalk_path (d);
+    char *name;
+    int rc = 0;
+
+    if ((name = flux_modname (path, ctx->cb, ctx->arg))) {
+        if (!strcmp (name, ctx->modname))
+            rc = 1;
+        free (name);
+    }
     return rc;
 }
 
-/* helper for flux_modfind() */
-static int mod_find_f (dirwalk_t *d, void *arg)
-{
-    const char *name = arg;
-    return (flux_modname_cmp (dirwalk_path (d), name) == 0);
-}
-
-char *flux_modfind (const char *searchpath, const char *modname)
+char *flux_modfind (const char *searchpath, const char *modname,
+                    flux_moderr_f *cb, void *arg)
 {
     char *result = NULL;
     zlist_t *l;
+    struct modfind_ctx ctx;
 
     if (!searchpath || !modname) {
         errno = EINVAL;
         return NULL;
     }
-    l = dirwalk_find (searchpath, 0, "*.so", 1, mod_find_f, (void *) modname);
+    ctx.modname = modname;
+    ctx.cb = cb;
+    ctx.arg = arg;
+
+    l = dirwalk_find (searchpath, 0, "*.so", 1, mod_find_f, &ctx);
     if (l) {
         result = zlist_pop (l);
         zlist_destroy (&l);

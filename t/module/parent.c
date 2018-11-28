@@ -57,7 +57,7 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     struct stat sb;
     char **av = NULL;
 
-    if (stat (path, &sb) < 0 || !(m->name = flux_modname (path))
+    if (stat (path, &sb) < 0 || !(m->name = flux_modname (path, NULL, NULL))
                              || !(m->digest = digest (path))) {
         module_destroy (m);
         errno = ESRCH;

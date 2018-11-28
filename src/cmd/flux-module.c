@@ -228,6 +228,11 @@ int filesize (const char *path)
     return sb.st_size;
 }
 
+void module_dlerror (const char *errmsg, void *arg)
+{
+    log_msg ("%s", errmsg);
+}
+
 void parse_modarg (const char *arg, char **name, char **path)
 {
     char *modpath = NULL;
@@ -236,14 +241,15 @@ void parse_modarg (const char *arg, char **name, char **path)
     if (strchr (arg, '/')) {
         if (!(modpath = realpath (arg, NULL)))
             log_err_exit ("%s", arg);
-        if (!(modname = flux_modname (modpath)))
-            log_msg_exit ("%s", dlerror ());
+        if (!(modname = flux_modname (modpath, module_dlerror, NULL)))
+            log_msg_exit ("%s", modpath);
     } else {
         char *searchpath = getenv ("FLUX_MODULE_PATH");
         if (!searchpath)
             log_msg_exit ("FLUX_MODULE_PATH is not set");
         modname = xstrdup (arg);
-        if (!(modpath = flux_modfind (searchpath, modname)))
+        if (!(modpath = flux_modfind (searchpath, modname,
+                                      module_dlerror, NULL)))
             log_msg_exit ("%s: not found in module search path", modname);
     }
     *name = modname;

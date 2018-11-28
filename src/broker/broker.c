@@ -1002,6 +1002,17 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
+/* If a dlerror/dlsym error occurs during modfind/modname,
+ * log it here.  Such messages can be helpful in diagnosing
+ * dynamic binding problems for comms modules.
+ */
+static void module_dlerror (const char *errmsg, void *arg)
+{
+    flux_t *h = arg;
+    flux_log (h, LOG_DEBUG, "flux_modname: %s", errmsg);
+}
+
+
 static int load_module_bypath (broker_ctx_t *ctx, const char *path,
                                const char *argz, size_t argz_len,
                                const flux_msg_t *request)
@@ -1009,7 +1020,7 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     module_t *p = NULL;
     char *name, *arg;
 
-    if (!(name = flux_modname (path))) {
+    if (!(name = flux_modname (path, module_dlerror, ctx->h))) {
         errno = ENOENT;
         goto error;
     }
@@ -1052,7 +1063,7 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
         log_msg ("conf.module_path is not set");
         return -1;
     }
-    if (!(path = flux_modfind (modpath, name))) {
+    if (!(path = flux_modfind (modpath, name, module_dlerror, ctx->h))) {
         log_msg ("%s: not found in module search path", name);
         return -1;
     }
