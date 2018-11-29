@@ -370,6 +370,21 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch works w/ alt namespace m
         wait $pid
 '
 
+# make sure keys are normalized
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch, normalized key matching works ' '
+	flux kvs namespace-create testnorm1 &&
+        flux kvs --namespace=testnorm1 put testnormkey1.a=1 &&
+        flux kvs --namespace=testnorm1 get --watch --count=2 \
+                     testnormkey1...a > norm1.out &
+        pid=$! &&
+        wait_watcherscount_nonzero testnorm1 &&
+        flux kvs --namespace=testnorm1 put testnormkey1.....a=2 &&
+	$waitfile --count=2 --timeout=10 \
+		  --pattern="[1-2]" norm1.out >/dev/null &&
+        wait $pid
+'
+
 # Security checks
 
 test_expect_success 'flux kvs get --watch denies guest access to primary namespace' '
