@@ -32,6 +32,7 @@
 #include <flux/core.h>
 
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_util_private.h"
 #include "src/common/libutil/blobref.h"
 
 /* State for one watcher.
@@ -836,20 +837,26 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     int flags;
     struct namespace *ns;
     struct watcher *w;
+    char *ns_prefix = NULL, *key_suffix = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:s s:i}",
                              "namespace", &namespace,
                              "key", &key,
                              "flags", &flags) < 0)
         goto error;
-    if (!(ns = namespace_monitor (ctx, namespace)))
+
+    if (kvs_namespace_prefix (key, &ns_prefix, &key_suffix) < 0)
         goto error;
+
+    if (!(ns = namespace_monitor (ctx, ns_prefix ? ns_prefix : namespace)))
+        goto error;
+
     /* Thread a new watcher 'w' onto ns->watchers.
      * If there is already a commit result available, send first response now,
      * otherwise response will be sent upon getroot RPC response
      * or setroot event.
      */
-    if (!(w = watcher_create (msg, key, flags)))
+    if (!(w = watcher_create (msg, key_suffix ? key_suffix : key, flags)))
         goto error;
     w->ns = ns;
     if (zlist_append (ns->watchers, w) < 0) {
@@ -859,10 +866,14 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (ns->commit)
         watcher_respond (ns, w);
+    free (ns_prefix);
+    free (key_suffix);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    free (ns_prefix);
+    free (key_suffix);
 }
 
 /* kvs-watch.cancel request
