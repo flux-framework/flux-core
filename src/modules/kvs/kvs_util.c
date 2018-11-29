@@ -71,8 +71,8 @@ char *kvs_util_normalize_key (const char *key, bool *want_directory)
 }
 
 int kvs_namespace_prefix (const char *key,
-                           char **namespace_prefix,
-                           char **key_suffix)
+                          char **namespace_prefix,
+                          char **key_suffix)
 {
 
     if (key && !strncmp (key, "ns:", 3)) {
