@@ -6,7 +6,7 @@
 #include <errno.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/modules/kvs/kvs_util.h"
+#include "src/common/libkvs/kvs_util_private.h"
 
 void kvs_util_normalize_key_path_tests (void)
 {

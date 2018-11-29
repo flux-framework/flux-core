@@ -41,9 +41,9 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
+#include "src/common/libkvs/kvs_util_private.h"
 
 #include "kvstxn.h"
-#include "kvs_util.h"
 
 #define KVSTXN_PROCESSING      0x01
 #define KVSTXN_MERGED          0x02 /* kvstxn is a merger of transactions */

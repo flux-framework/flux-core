@@ -45,10 +45,10 @@
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libkvs/kvs_util_private.h"
 
 #include "waitqueue.h"
 #include "cache.h"
-#include "kvs_util.h"
 
 struct cache_entry {
     waitqueue_t *waitlist_notdirty;

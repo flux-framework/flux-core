@@ -10,9 +10,9 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_util_private.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/kvs_util.h"
 #include "src/common/libutil/blobref.h"
 
 struct lookup_ref_data

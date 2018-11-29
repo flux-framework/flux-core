@@ -27,7 +27,9 @@ libkvs_la_SOURCES = \
 	treeobj.h \
 	treeobj.c \
 	kvs_eventlog.c \
-	kvs_copy.c
+	kvs_copy.c \
+	kvs_util.c \
+	kvs_util_private.h
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
@@ -51,7 +53,8 @@ TESTS = \
 	test_kvs_getroot.t \
 	test_treeobj.t \
 	test_kvs_eventlog.t \
-	test_kvs_copy.t
+	test_kvs_copy.t \
+	test_kvs_util.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -113,3 +116,7 @@ test_kvs_eventlog_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_copy_t_SOURCES = test/kvs_copy.c
 test_kvs_copy_t_CPPFLAGS = $(test_cppflags)
 test_kvs_copy_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_util_t_SOURCES = test/kvs_util.c
+test_kvs_util_t_CPPFLAGS = $(test_cppflags)
+test_kvs_util_t_LDADD = $(test_ldadd) $(LIBDL)

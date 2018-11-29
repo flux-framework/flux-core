@@ -10,11 +10,11 @@
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
+#include "src/common/libkvs/kvs_util_private.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/kvstxn.h"
 #include "src/modules/kvs/kvsroot.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/kvs_util.h"
 
 static int test_global = 5;
 
