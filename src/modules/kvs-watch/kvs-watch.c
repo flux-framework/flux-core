@@ -124,7 +124,7 @@ static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
     if (flux_msg_get_rolemask (msg, &w->rolemask) < 0
             || flux_msg_get_userid (msg, &w->userid) < 0)
         goto error;
-    if (key && !(w->key = strdup (key)))
+    if (key && !(w->key = kvs_util_normalize_key (key, NULL)))
         goto error;
     if (!(w->lookups = zlist_new ()))
         goto error_nomem;
