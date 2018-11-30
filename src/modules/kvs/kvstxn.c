@@ -812,6 +812,34 @@ err:
     return -1;
 }
 
+/* remove namespace / normalize key for setroot */
+static json_t *get_key_for_setroot (json_t *o)
+{
+    const char *key = json_string_value (o);
+    char *key_suffix = NULL;
+    char *ncpy = NULL;
+    json_t *rv = NULL;
+
+    /* how did we get to this point if this wasn't a string? */
+    assert (key);
+
+    /* no need to check for namespace crossing, will be done in actual
+     * processing */
+
+    if (kvs_namespace_prefix (key, NULL, &key_suffix) < 0)
+        goto error;
+
+    if ((ncpy = kvs_util_normalize_key (key_suffix ? key_suffix : key,
+                                        NULL)) == NULL)
+        goto error;
+
+    rv = json_string (ncpy);
+error:
+    free (key_suffix);
+    free (ncpy);
+    return rv;
+}
+
 /* Create array of keys (strings) from array of operations ({ "key":s ... })
  * The keys array is for inclusion in the kvs.setroot event, so we can
  * notify watchers of keys that their key may have changed.
@@ -826,7 +854,12 @@ static json_t *keys_from_ops (json_t *ops)
         return NULL;
     json_array_foreach (ops, index, op) {
         json_t *o = json_object_get (op, "key");
-        if (!o || json_array_append (keys, o) < 0)
+        json_t *s;
+        if (!o)
+            goto error;
+        if (!(s = get_key_for_setroot (o)))
+            goto error;
+        if (json_array_append_new (keys, s) < 0)
             goto error;
     }
     return keys;

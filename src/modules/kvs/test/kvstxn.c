@@ -719,6 +719,71 @@ void kvstxn_basic_kvstxn_process_test (void)
     cache_destroy (cache);
 }
 
+void kvstxn_basic_kvstxn_process_test_normalization (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    int count = 0;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    char rootref[BLOBREF_MAX_STRING_SIZE];
+    const char *newroot;
+    json_t *keys;
+
+    cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
+
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, ref_dummy);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", "key1....a", "1", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (count == 2,
+        "correct number of cache entries were dirty");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    /* can't use verify_keys_and_ops_standard here */
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+
+    ok (is_key (keys, "key1.a") == true,
+        "key has been normalized properly");
+
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1.a", "1");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+}
+
 void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
 {
     struct cache *cache;
@@ -3054,6 +3119,7 @@ void kvstxn_namespace_prefix (void)
     char rootref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
     json_t *ops = NULL;
+    json_t *keys;
 
     cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
 
@@ -3092,7 +3158,13 @@ void kvstxn_namespace_prefix (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
-    verify_keys_and_ops_standard (kt);
+    /* can't use verify_keys_and_ops_standard here, namespace prefix will be stripped */
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+
+    ok (is_key (keys, "key1") == true,
+        "key has been stripped of ns prefix properly");
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
 
@@ -3147,7 +3219,16 @@ void kvstxn_namespace_prefix (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
-    verify_keys_and_ops_standard (kt);
+    /* can't use verify_keys_and_ops_standard here, namespace prefix will be stripped */
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+
+    ok (is_key (keys, "key3") == true,
+        "key has been stripped of ns prefix properly");
+
+    ok (is_key (keys, "key4") == true,
+        "key has been stripped of ns prefix properly");
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key3", "3");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key4", "4");
@@ -3313,6 +3394,7 @@ int main (int argc, char *argv[])
     kvstxn_mgr_merge_tests ();
     kvstxn_basic_tests ();
     kvstxn_basic_kvstxn_process_test ();
+    kvstxn_basic_kvstxn_process_test_normalization ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions_merge ();
     kvstxn_basic_kvstxn_process_test_invalid_transaction ();
