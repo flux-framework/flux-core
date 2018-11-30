@@ -47,7 +47,6 @@ int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum);
 bool kvstxn_fallback_mergeable (kvstxn_t *kt);
 
 json_t *kvstxn_get_ops (kvstxn_t *kt);
-json_t *kvstxn_get_keys (kvstxn_t *kt);
 json_t *kvstxn_get_names (kvstxn_t *kt);
 int kvstxn_get_flags (kvstxn_t *kt);
 
@@ -60,6 +59,10 @@ void *kvstxn_get_aux (kvstxn_t *kt);
 /* returns non-NULL only if process state complete
  * (i.e. kvstxn_process() returns KVSTXN_PROCESS_FINISHED) */
 const char *kvstxn_get_newroot_ref (kvstxn_t *kt);
+
+/* returns non-NULL only if process state complete
+ * (i.e. kvstxn_process() returns KVSTXN_PROCESS_FINISHED) */
+json_t *kvstxn_get_keys (kvstxn_t *kt);
 
 /* Primary transaction processing function.
  *

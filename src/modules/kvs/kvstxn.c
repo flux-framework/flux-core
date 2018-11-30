@@ -98,29 +98,6 @@ static void kvstxn_destroy (kvstxn_t *kt)
     }
 }
 
-/* Create array of keys (strings) from array of operations ({ "key":s ... })
- * The keys array is for inclusion in the kvs.setroot event, so we can
- * notify watchers of keys that their key may have changed.
- */
-static json_t *keys_from_ops (json_t *ops)
-{
-    json_t *keys;
-    size_t index;
-    json_t *op;
-
-    if (!(keys = json_array ()))
-        return NULL;
-    json_array_foreach (ops, index, op) {
-        json_t *o = json_object_get (op, "key");
-        if (!o || json_array_append (keys, o) < 0)
-            goto error;
-    }
-    return keys;
-error:
-    json_decref (keys);
-    return NULL;
-}
-
 static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
@@ -134,10 +111,6 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         goto error;
     }
     if (!(kt->ops = json_copy (ops))) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
-    if (!(kt->keys = keys_from_ops (kt->ops))) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -203,11 +176,6 @@ json_t *kvstxn_get_ops (kvstxn_t *kt)
     return kt->ops;
 }
 
-json_t *kvstxn_get_keys (kvstxn_t *kt)
-{
-    return kt->keys;
-}
-
 json_t *kvstxn_get_names (kvstxn_t *kt)
 {
     return kt->names;
@@ -232,6 +200,13 @@ const char *kvstxn_get_newroot_ref (kvstxn_t *kt)
 {
     if (kt->state == KVSTXN_STATE_FINISHED)
         return kt->newroot;
+    return NULL;
+}
+
+json_t *kvstxn_get_keys (kvstxn_t *kt)
+{
+    if (kt->state == KVSTXN_STATE_FINISHED)
+        return kt->keys;
     return NULL;
 }
 
@@ -837,6 +812,29 @@ err:
     return -1;
 }
 
+/* Create array of keys (strings) from array of operations ({ "key":s ... })
+ * The keys array is for inclusion in the kvs.setroot event, so we can
+ * notify watchers of keys that their key may have changed.
+ */
+static json_t *keys_from_ops (json_t *ops)
+{
+    json_t *keys;
+    size_t index;
+    json_t *op;
+
+    if (!(keys = json_array ()))
+        return NULL;
+    json_array_foreach (ops, index, op) {
+        json_t *o = json_object_get (op, "key");
+        if (!o || json_array_append (keys, o) < 0)
+            goto error;
+    }
+    return keys;
+error:
+    json_decref (keys);
+    return NULL;
+}
+
 kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
                                  const char *rootdir_ref)
@@ -1000,6 +998,12 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
          */
         if (zlist_first (kt->dirty_cache_entries_list))
             goto stall_store;
+
+        /* now generate keys for setroot */
+        if (!(kt->keys = keys_from_ops (kt->ops))) {
+            kt->errnum = ENOMEM;
+            return KVSTXN_PROCESS_ERROR;
+        }
 
         kt->state = KVSTXN_STATE_FINISHED;
         /* fallthrough */
