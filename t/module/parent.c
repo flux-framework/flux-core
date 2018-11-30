@@ -9,6 +9,7 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -25,6 +26,7 @@ typedef struct {
 } module_t;
 
 static zhash_t *modules = NULL;
+static uint32_t rank;
 
 /* Calculate file digest using zfile() class from czmq.
  * Caller must free.
@@ -56,7 +58,7 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     struct stat sb;
     char **av = NULL;
 
-    if (stat (path, &sb) < 0 || !(m->name = flux_modname (path))
+    if (stat (path, &sb) < 0 || !(m->name = flux_modname (path, NULL, NULL))
                              || !(m->digest = digest (path))) {
         module_destroy (m);
         errno = ESRCH;
@@ -88,24 +90,39 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     return m;
 }
 
-static flux_modlist_t *module_list (void)
+/* N.B. services is hardwired to test1,test2,testN, where N is the local
+ * broker rank.  This is a specific setup for the flux-module test.  This
+ * base component does not perform message routing to its extension modules.
+ */
+static json_t *module_list (void)
 {
-    flux_modlist_t *mods = flux_modlist_create ();
-    zlist_t *keys = zhash_keys (modules);
+    json_t *mods;
+    zlist_t *keys;
     module_t *m;
     char *name;
-    int rc;
+    char rankstr[16];
+    int n;
 
-    assert (mods != NULL);
-    if (!keys)
+    if (!(mods = json_array ()))
+        oom ();
+    if (!(keys = zhash_keys (modules)))
         oom ();
     name = zlist_first (keys);
+    n = snprintf (rankstr, sizeof (rankstr), "rank%d", (int)rank);
+    assert (n < sizeof (rankstr));
     while (name) {
+        json_t *o;
         m = zhash_lookup (modules, name);
-        assert (m != NULL);
-        rc = flux_modlist_append (mods, m->name, m->size, m->digest, m->status,
-                                                                     m->idle);
-        assert (rc == 0);
+        if (!(o = json_pack ("{s:s s:i s:s s:i s:i s:[s,s,s]}",
+                             "name", m->name,
+                             "size", m->size,
+                             "digest", m->digest,
+                             "idle", m->idle,
+                             "status", m->status,
+                             "services", "test1", "test2", rankstr)))
+            oom ();
+        if (json_array_append_new (mods, o) < 0)
+            oom ();
         name = zlist_next (keys);
     }
     zlist_destroy (&keys);
@@ -115,101 +132,79 @@ static flux_modlist_t *module_list (void)
 static void insmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    const char *json_str;
-    char *path = NULL;
+    const char *path;
+    json_t *args;
+    size_t index;
+    json_t *value;
     char *argz = NULL;
     size_t argz_len = 0;
     module_t *m = NULL;
-    int rc = -1, saved_errno;
+    error_t e;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
+                                                     "args", &args) < 0)
+        goto error;
+    if (!json_is_array (args))
+        goto proto;
+    json_array_foreach (args, index, value) {
+        if (!json_is_string (value))
+            goto proto;
+        if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
+            errno = e;
+            goto error;
+        }
     }
-    if (!json_str) {
-        saved_errno = EPROTO;
-        goto done;
-    }
-    if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!(m = module_create (path, argz, argz_len))) {
-        saved_errno = errno;
-        goto done;
-    }
+    if (!(m = module_create (path, argz, argz_len)))
+        goto error;
     flux_log (h, LOG_DEBUG, "insmod %s", m->name);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (path)
-        free (path);
-    if (argz)
-        free (argz);
+    free (argz);
+    return;
+proto:
+    errno = EPROTO;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    free (argz);
 }
 
 static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    const char *json_str;
-    char *name = NULL;
-    int rc = -1, saved_errno;
+    const char *name;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!json_str) {
-        saved_errno = EPROTO;
-        goto done;
-    }
-    if (flux_rmmod_json_decode (json_str, &name) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
+        goto error;
     if (!zhash_lookup (modules, name)) {
-        saved_errno = errno = ENOENT;
-        goto done;
+        errno = ENOENT;
+        goto error;
     }
     zhash_delete (modules, name);
     flux_log (h, LOG_DEBUG, "rmmod %s", name);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (name)
-        free (name);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void lsmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    flux_modlist_t *mods = NULL;
-    char *json_str = NULL;
-    int rc = -1, saved_errno;
+    json_t *mods = NULL;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!(mods = module_list ())) {
-        saved_errno = errno;
-        goto done;
-    }
-    if (!(json_str = flux_lsmod_json_encode (mods))) {
-        saved_errno = errno;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              rc < 0 ? NULL : json_str) < 0)
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    mods = module_list ();
+    if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (json_str)
-        free (json_str);
-    if (mods)
-        flux_modlist_destroy (mods);
+    json_decref (mods);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 const struct flux_msg_handler_spec htab[] = {
@@ -226,26 +221,25 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (argc == 1 && !strcmp (argv[0], "--init-failure")) {
         flux_log (h, LOG_INFO, "aborting during init per test request");
-        saved_errno = EIO;
+        errno = EIO;
         goto error;
     }
     if (!(modules = zhash_new ())) {
-        saved_errno = ENOMEM;
+        errno = ENOMEM;
         goto error;
     }
-    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
-        saved_errno = errno;
-        flux_log_error (h, "flux_msghandler_addvec");
+    if (flux_get_rank (h, &rank) < 0)
         goto error;
-    }
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0)
+        goto error;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
-        saved_errno = errno;
         flux_log_error (h, "flux_reactor_run");
         goto error;
     }
     zhash_destroy (&modules);
     return 0;
 error:
+    saved_errno = errno;
     flux_msg_handler_delvec (handlers);
     zhash_destroy (&modules);
     errno = saved_errno;

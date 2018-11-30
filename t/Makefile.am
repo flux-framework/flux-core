@@ -45,7 +45,6 @@ TESTS = \
 	t0001-basic.t \
 	t0002-request.t \
 	t0003-module.t \
-	module/codec.t \
 	t0004-event.t \
 	t0005-exec.t \
 	t0005-rexec.t \
@@ -265,8 +264,6 @@ check_PROGRAMS = \
 	kvs/fence_invalid \
 	kvs/commit_order \
 	kvs/issue1760 \
-	module/codec.t \
-	module/basic \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
@@ -420,18 +417,9 @@ module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_child_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
-module_codec_t_SOURCES = module/codec.c
-module_codec_t_CPPFLAGS = $(test_cppflags)
-module_codec_t_LDADD = $(test_ldadd) $(LIBDL)
-
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
 barrier_tbarrier_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-module_basic_SOURCES = module/basic.c
-module_basic_CPPFLAGS = $(test_cppflags)
-module_basic_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_req_la_SOURCES = request/req.c

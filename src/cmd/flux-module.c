@@ -32,6 +32,7 @@
 #include <flux/optparse.h>
 #include <jansson.h>
 #include <czmq.h>
+#include <argz.h>
 #include <assert.h>
 
 #include "src/common/libutil/xzmalloc.h"
@@ -43,12 +44,17 @@
 
 const int max_idle = 99;
 
+typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
+                           int idle, int status, const char *nodeset,
+                           const char *services, void *arg);
+
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
+
 
 #define RANK_OPTION { \
     .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET", \
@@ -222,6 +228,11 @@ int filesize (const char *path)
     return sb.st_size;
 }
 
+void module_dlerror (const char *errmsg, void *arg)
+{
+    log_msg ("%s", errmsg);
+}
+
 void parse_modarg (const char *arg, char **name, char **path)
 {
     char *modpath = NULL;
@@ -230,14 +241,15 @@ void parse_modarg (const char *arg, char **name, char **path)
     if (strchr (arg, '/')) {
         if (!(modpath = realpath (arg, NULL)))
             log_err_exit ("%s", arg);
-        if (!(modname = flux_modname (modpath)))
-            log_msg_exit ("%s", dlerror ());
+        if (!(modname = flux_modname (modpath, module_dlerror, NULL)))
+            log_msg_exit ("%s", modpath);
     } else {
         char *searchpath = getenv ("FLUX_MODULE_PATH");
         if (!searchpath)
             log_msg_exit ("FLUX_MODULE_PATH is not set");
         modname = xstrdup (arg);
-        if (!(modpath = flux_modfind (searchpath, modname)))
+        if (!(modpath = flux_modfind (searchpath, modname,
+                                      module_dlerror, NULL)))
             log_msg_exit ("%s: not found in module search path", modname);
     }
     *name = modname;
@@ -354,15 +366,23 @@ int cmd_load (optparse_t *p, int argc, char **argv)
 
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.insmod", service);
-    char *json_str = flux_insmod_json_encode (modpath, argc - n, argv + n);
-    assert (json_str != NULL);
+    json_t *args = json_array ();
+    if (!args)
+        log_msg_exit ("json_array() failed");
+    while (n < argc) {
+        json_t *str = json_string (argv[n]);
+        if (!str || json_array_append_new (args, str) < 0)
+            log_msg_exit ("json_string() or json_array_append_new() failed");
+        n++;
+    }
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
     if (nodeset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc (h, topic, json_str, nodeset_string (ns), 0)))
+    if (!(r = flux_mrpc_pack (h, topic, nodeset_string (ns), 0,
+                              "{s:s s:O}", "path", modpath, "args", args)))
         log_err_exit ("%s", topic);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -385,7 +405,7 @@ done:
     nodeset_destroy (ns);
     free (topic);
     free (service);
-    free (json_str);
+    json_decref (args);
     free (modpath);
     free (modname);
     flux_close (h);
@@ -408,15 +428,14 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.rmmod", service);
-    char *json_str = flux_rmmod_json_encode (modname);
-    assert (json_str != NULL);
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
     if (nodeset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc (h, topic, json_str, nodeset_string (ns), 0)))
+    if (!(r = flux_mrpc_pack (h, topic, nodeset_string (ns), 0,
+                             "{s:s}", "name", modname)))
         log_err_exit ("%s %s", topic, modname);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -434,13 +453,13 @@ done:
     nodeset_destroy (ns);
     free (topic);
     free (service);
-    free (json_str);
     flux_close (h);
     return (0);
 }
 
 int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
-                    int status, const char *nodeset, void *arg)
+                    int status, const char *nodeset, const char *services,
+                    void *arg)
 {
     int digest_len = strlen (digest);
     char idle_str[16];
@@ -469,50 +488,136 @@ int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
             S = '?';
             break;
     }
-    printf ("%-20.20s %7d %7s %4s  %c  %s\n", name, size,
+    printf ("%-20.20s %7d %7s %4s  %c  %8s %s\n",
+            name,
+            size,
             digest_len > 7 ? digest + digest_len - 7 : digest,
-            idle_str, S, nodeset ? nodeset : "");
+            idle_str,
+            S,
+            nodeset ? nodeset : "",
+            services ? services : "");
     return 0;
 }
 
-typedef struct {
+struct module_record {
     char *name;
     int size;
     char *digest;
     int idle;
     int status_hist[8];
     nodeset_t *nodeset;
-} mod_t;
+    char *services;
+};
 
-void mod_destroy (mod_t *m)
+
+/* N.B. this function matches the zhashx destructor prototype.  Avoid casting
+ * with zhashx typedefs as they are unavailable in older czmq releases.
+ */
+void module_record_destroy (void **item)
 {
-    free (m->name);
-    free (m->digest);
-    nodeset_destroy (m->nodeset);
-    free (m);
+    if (item && *item != NULL) {
+        int saved_errno = errno;
+        struct module_record *m = *item;
+        free (m->name);
+        free (m->digest);
+        nodeset_destroy (m->nodeset);
+        free (m->services);
+        free (m);
+        *item = NULL;
+        errno = saved_errno;
+    }
 }
 
-mod_t *mod_create (const char *name, int size, const char *digest,
-                   int idle, int status, uint32_t nodeid)
+struct module_record *module_record_create (const char *name, int size,
+                                            const char *digest, int idle,
+                                            int status, uint32_t nodeid,
+                                            const char *services)
 {
-    mod_t *m = xzmalloc (sizeof (*m));
+    struct module_record *m = xzmalloc (sizeof (*m));
     m->name = xstrdup (name);
     m->size = size;
     m->digest = xstrdup (digest);
     m->idle = idle;
+    m->services = services ? xstrdup (services) : NULL;
     m->status_hist[abs (status) % 8]++;
     if (!(m->nodeset = nodeset_create_rank (nodeid)))
         oom ();
     return m;
 }
 
-void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
+/* insert_service_list() creates a sorted zlistx_t on demand and inserts
+ * 'name' into it.  The zlistx_t is only used as an intermediate sorting
+ * step during conversion of json array to argz.  The list must be sorted
+ * because it is combined with the module digest to make a hash key, and
+ * we need exactly one hash entry (line of lsmod output) for each unique
+ * module hash + service set.
+ */
+int service_cmp (const void *item1, const void *item2)
+{
+    return strcmp (item1, item2);
+}
+void *service_dup (const void *item)
+{
+    return strdup (item);
+}
+void service_destroy (void **item)
+{
+    if (item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+void insert_service_list (zlistx_t **l, const char *name)
+{
+    if (!*l) {
+        if (!(*l = zlistx_new ()))
+            oom ();
+        zlistx_set_comparator (*l, service_cmp);
+        zlistx_set_duplicator (*l, service_dup);
+        zlistx_set_destructor (*l, service_destroy);
+    }
+    if (!zlistx_insert (*l, (void *)name, true))
+        oom ();
+}
+
+/* Translate an array of service names to a sorted, concatenated,
+ * comma-delimited string.  If list is empty, NULL is returned.
+ * If skip != NULL, skip over that name in the list (intended to be
+ * the module name, implicitly registered as a service).
+ * Caller must free result.
+ */
+char *lsmod_services_string (json_t *services, const char *skip)
+{
+    size_t index;
+    json_t *value;
+    zlistx_t *l = NULL;
+    char *argz = NULL;
+    size_t argz_len = 0;
+
+    json_array_foreach (services, index, value) {
+        const char *name = json_string_value (value);
+        if (name && (!skip || strcmp (name, skip) != 0))
+            insert_service_list (&l, name);
+    }
+    if (l) {
+        char *name;
+        FOREACH_ZLISTX (l, name) {
+            if (argz_add (&argz, &argz_len, name) != 0)
+                oom ();
+        }
+        zlistx_destroy (&l);
+        argz_stringify (argz, argz_len, ',');
+    }
+    return argz;
+}
+
+void lsmod_map_hash (zhashx_t *mods, flux_lsmod_f cb, void *arg)
 {
     const char *key;
-    mod_t *m;
+    struct module_record *m;
     int status;
 
-    FOREACH_ZHASH(mods, key, m) {
+    FOREACH_ZHASHX(mods, key, m) {
         if (m->status_hist[FLUX_MODSTATE_INIT] > 0)
             status = FLUX_MODSTATE_INIT;
         else if (m->status_hist[FLUX_MODSTATE_EXITED] > 0) /* unlikely */
@@ -524,51 +629,61 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
         else
             status = FLUX_MODSTATE_SLEEPING;
         cb (m->name, m->size, m->digest, m->idle, status,
-                                        nodeset_string (m->nodeset), arg);
+            nodeset_string (m->nodeset), m->services, arg);
     }
 }
 
-int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
+int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
 {
-    flux_modlist_t *modlist = NULL;
-    mod_t *m;
-    int i, len;
+    struct module_record *m;
+    size_t index;
+    json_t *value;
     const char *name, *digest;
     int size, idle;
     int status;
-    int rc = -1;
+    json_t *services;
 
-    if (!json_str) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(modlist = flux_lsmod_json_decode (json_str)))
-        goto done;
-    if ((len = flux_modlist_count (modlist)) == -1)
-        goto done;
-    for (i = 0; i < len; i++) {
-        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle,
-                                                                 &status) < 0)
-            goto done;
-        if ((m = zhash_lookup (mods, digest))) {
+    if (!json_is_array (o))
+        goto proto;
+    json_array_foreach (o, index, value) {
+        if (json_unpack (value, "{s:s s:i s:s s:i s:i s:o}",
+                         "name", &name,
+                         "size", &size,
+                         "digest", &digest,
+                         "idle", &idle,
+                         "status", &status,
+                         "services", &services) < 0)
+            goto proto;
+        if (!json_is_array (services))
+            goto proto;
+
+        char *svcstr = lsmod_services_string (services, name);
+        char *hash_key = xasprintf ("%s:%s", digest, svcstr ? svcstr : "");
+        if ((m = zhashx_lookup (mods, hash_key))) {
             if (idle < m->idle)
                 m->idle = idle;
             m->status_hist[abs (status) % 8]++;
             if (!nodeset_add_rank (m->nodeset, nodeid))
                 oom ();
         } else {
-            m = mod_create (name, size, digest, idle, status, nodeid);
-            zhash_update (mods, digest, m);
-            zhash_freefn (mods, digest, (zhash_free_fn *)mod_destroy);
+            m = module_record_create (name, size, digest, idle, status,
+                                      nodeid, svcstr);
+            zhashx_update (mods, hash_key, m);
         }
+        free (hash_key);
+        free (svcstr);
     }
-    rc = 0;
-done:
-    if (modlist)
-        flux_modlist_destroy (modlist);
-    return rc;
+    return 0;
+proto:
+    errno = EPROTO;
+    return -1;
 }
 
+/* Fetch lsmod data from one or more ranks.  Each lsmod response returns
+ * an array of module records.  The records are merged to produce a hash
+ * by module SHA1 digest (computed over module file) + services list.
+ * Each hash entry is then displayed as a line of output.
+ */
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     char *service = "cmb";
@@ -577,10 +692,11 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     flux_mrpc_t *r = NULL;
     flux_t *h;
     int n;
-    zhash_t *mods = zhash_new ();
+    zhashx_t *mods;
 
-    if (!mods)
+    if (!(mods = zhashx_new ()))
         oom ();
+    zhashx_set_destructor (mods, module_record_destroy);
     if ((n = optparse_option_index (p)) < argc - 1) {
         optparse_print_usage (p);
         exit (1);
@@ -593,17 +709,17 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (nodeset_count (ns) == 0)
         goto done;
 
-    printf ("%-20s %-7s %-7s %4s  %c  %s\n",
-            "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
+    printf ("%-20s %-7s %-7s %4s  %c  %8s %s\n",
+            "Module", "Size", "Digest", "Idle", 'S', "Nodeset", "Service");
     topic = xasprintf ("%s.lsmod", service);
     if (!(r = flux_mrpc (h, topic, NULL, nodeset_string (ns), 0)))
         log_err_exit ("%s", topic);
     do {
-        const char *json_str;
+        json_t *o;
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_mrpc_get_nodeid (r, &nodeid) < 0
-                || flux_mrpc_get (r, &json_str) < 0
-                || lsmod_merge_result (nodeid, json_str, mods) < 0) {
+                || flux_mrpc_get_unpack (r, "{s:o}", "mods", &o) < 0
+                || lsmod_merge_result (nodeid, o, mods) < 0) {
             if (nodeid != FLUX_NODEID_ANY)
                 log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
@@ -614,7 +730,7 @@ done:
     flux_mrpc_destroy (r);
     nodeset_destroy (ns);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
-    zhash_destroy (&mods);
+    zhashx_destroy (&mods);
     free (topic);
     flux_close (h);
     return (0);

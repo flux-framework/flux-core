@@ -144,7 +144,8 @@ TESTS = test_message.t \
 	test_reactor_loop.t \
 	test_rpc_security.t \
 	test_panic.t \
-	test_attr.t
+	test_attr.t \
+	test_module.t
 
 test_ldadd = \
 	$(builddir)/test/libtestutil.la \
@@ -160,7 +161,10 @@ test_cppflags = \
         $(AM_CPPFLAGS)
 
 check_LTLIBRARIES = \
-	test/libtestutil.la
+	test/libtestutil.la \
+	test/module_fake1.la \
+	test/module_fake2.la
+
 
 test_libtestutil_la_SOURCES = \
 	test/util.h \
@@ -255,3 +259,17 @@ test_panic_t_LDADD = $(test_ldadd) $(LIBDL)
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
 test_attr_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_module_t_SOURCES = test/module.c
+test_module_t_CPPFLAGS = $(test_cppflags) \
+	-DFAKE1=\"$(abs_builddir)/test/.libs/module_fake1.so\" \
+	-DFAKE2=\"$(abs_builddir)/test/.libs/module_fake2.so\"
+test_module_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_module_fake1_la_SOURCES = test/module_fake1.c
+test_module_fake1_la_CPPFLAGS = $(test_cppflags)
+test_module_fake1_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+
+test_module_fake2_la_SOURCES = test/module_fake2.c
+test_module_fake2_la_CPPFLAGS = $(test_cppflags)
+test_module_fake2_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere

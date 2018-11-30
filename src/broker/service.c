@@ -103,6 +103,32 @@ const char *service_get_uuid (struct service_switch *sw, const char *name)
     return (svc->uuid);
 }
 
+json_t *service_list_byuuid (struct service_switch *sw, const char *uuid)
+{
+    json_t *svcs;
+    struct service *svc;
+
+    if (!(svcs = json_array ()))
+        return NULL;
+    svc = zhash_first (sw->services);
+    while (svc) {
+        if (uuid && svc->uuid && !strcmp (uuid, svc->uuid)) {
+            json_t *name = json_string  (zhash_cursor (sw->services));
+            if (!name)
+                goto error;
+            if (json_array_append_new (svcs, name) < 0) {
+                json_decref (name);
+                goto error;
+            }
+        }
+        svc = zhash_next (sw->services);
+    }
+    return svcs;
+error:
+    json_decref (svcs);
+    return NULL;
+}
+
 /* Delete all services registered by 'uuid'.
  */
 void service_remove_byuuid (struct service_switch *sw, const char *uuid)

@@ -44,6 +44,7 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
@@ -1001,6 +1002,17 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
+/* If a dlerror/dlsym error occurs during modfind/modname,
+ * log it here.  Such messages can be helpful in diagnosing
+ * dynamic binding problems for comms modules.
+ */
+static void module_dlerror (const char *errmsg, void *arg)
+{
+    flux_t *h = arg;
+    flux_log (h, LOG_DEBUG, "flux_modname: %s", errmsg);
+}
+
+
 static int load_module_bypath (broker_ctx_t *ctx, const char *path,
                                const char *argz, size_t argz_len,
                                const flux_msg_t *request)
@@ -1008,7 +1020,7 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     module_t *p = NULL;
     char *name, *arg;
 
-    if (!(name = flux_modname (path))) {
+    if (!(name = flux_modname (path, module_dlerror, ctx->h))) {
         errno = ENOENT;
         goto error;
     }
@@ -1051,7 +1063,7 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
         log_msg ("conf.module_path is not set");
         return -1;
     }
-    if (!(path = flux_modfind (modpath, name))) {
+    if (!(path = flux_modfind (modpath, name, module_dlerror, ctx->h))) {
         log_msg ("%s: not found in module search path", name);
         return -1;
     }
@@ -1124,83 +1136,88 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
  ** Built-in services
  **/
 
+/* Unload a comms module by name, asynchronously.
+ * Message format is defined by RFC 5.
+ * N.B. unload_module_byname() handles response, unless it fails early
+ * and returns -1.
+ */
 static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *json_str;
-    char *name = NULL;
+    const char *name;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto error;
-    if (!json_str) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (flux_rmmod_json_decode (json_str, &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
     if (unload_module_byname (ctx, name, msg, true) < 0)
         goto error;
-    free (name);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (name);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+/* Load a comms module by name, asynchronously.
+ * Message format is defined by RFC 5.
+ * N.B. load_module_bypath() handles response, unless it returns -1.
+ */
 static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *json_str;
-    char *path = NULL;
+    const char *path;
+    json_t *args;
+    size_t index;
+    json_t *value;
     char *argz = NULL;
     size_t argz_len = 0;
+    error_t e;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
+                                                     "args", &args) < 0)
         goto error;
-    if (!json_str) {
-        errno = EPROTO;
-        goto error;
+    if (!json_is_array (args))
+        goto proto;
+    json_array_foreach (args, index, value) {
+        if (!json_is_string (value))
+            goto proto;
+        if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
+            errno = e;
+            goto error;
+        }
     }
-    if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
-        goto error;
     if (load_module_bypath (ctx, path, argz, argz_len, msg) < 0)
         goto error;
-    free (path);
     free (argz);
     return;
+proto:
+    errno = EPROTO;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (path);
     free (argz);
 }
 
+/* Load a comms module by name.
+ * Message format is defined by RFC 5.
+ */
 static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    flux_modlist_t *mods = NULL;
-    char *json_str = NULL;
+    json_t *mods = NULL;
 
-    if (!(mods = module_get_modlist (ctx->modhash)))
+    if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (!(json_str = flux_lsmod_json_encode (mods)))
+    if (!(mods = module_get_modlist (ctx->modhash, ctx->services)))
         goto error;
-    if (flux_respond (h, msg, 0, json_str) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (json_str);
-    if (mods)
-        flux_modlist_destroy (mods);
+    if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    json_decref (mods);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (json_str);
-    if (mods)
-        flux_modlist_destroy (mods);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,

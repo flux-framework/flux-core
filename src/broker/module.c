@@ -42,6 +42,7 @@
 #include <argz.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
@@ -627,33 +628,49 @@ void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb)
     mh->heartbeat = hb;
 }
 
-flux_modlist_t *module_get_modlist (modhash_t *mh)
+json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
 {
-    flux_modlist_t *mods;
-    zlist_t *uuids;
+    json_t *mods = NULL;
+    zlist_t *uuids = NULL;
     char *uuid;
     module_t *p;
 
-    if (!(mods = flux_modlist_create ()))
-        goto done;
+    if (!(mods = json_array()))
+        goto nomem;
     if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
+        goto nomem;
     uuid = zlist_first (uuids);
     while (uuid) {
-        p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (flux_modlist_append (mods, module_get_name (p), p->size,
-                                 p->digest, module_get_idle (p),
-                                                        p->status) < 0) {
-            flux_modlist_destroy (mods);
-            mods = NULL;
-            goto done;
+        if ((p = zhash_lookup (mh->zh_byuuid, uuid))) {
+            json_t *svcs;
+            json_t *entry;
+
+            if (!(svcs  = service_list_byuuid (sw, uuid)))
+                goto nomem;
+            if (!(entry = json_pack ("{s:s s:i s:s s:i s:i s:o}",
+                                     "name", module_get_name (p),
+                                     "size", p->size,
+                                     "digest", p->digest,
+                                      "idle", module_get_idle (p),
+                                      "status", p->status,
+                                      "services", svcs))) {
+                json_decref (svcs);
+                goto nomem;
+            }
+            if (json_array_append_new (mods, entry) < 0) {
+                json_decref (entry);
+                goto nomem;
+            }
         }
         uuid = zlist_next (uuids);
     }
-done:
     zlist_destroy (&uuids);
     return mods;
+nomem:
+    zlist_destroy (&uuids);
+    json_decref (mods);
+    errno = ENOMEM;
+    return NULL;
 }
 
 module_t *module_lookup (modhash_t *mh, const char *uuid)

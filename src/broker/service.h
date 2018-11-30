@@ -1,6 +1,8 @@
 #ifndef _BROKER_SERVICE_H
 #define _BROKER_SERVICE_H
 
+#include <jansson.h>
+
 typedef int (*service_send_f)(const flux_msg_t *msg, void *arg);
 
 struct service_switch *service_switch_create (void);
@@ -17,6 +19,8 @@ int service_send (struct service_switch *sw, const flux_msg_t *msg);
 
 /* Return the UUID currently registered for service `name` */
 const char *service_get_uuid (struct service_switch *sw, const char *name);
+
+json_t *service_list_byuuid (struct service_switch *sw, const char *uuid);
 
 #endif /* !_BROKER_SERVICE_H */
 
