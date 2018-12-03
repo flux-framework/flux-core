@@ -180,6 +180,43 @@ local function check_job_completed ()
     end
 end
 
+---
+--- Attach stdio kz streams and start all watchers
+---
+local function wreck_attach_stdio (wreck)
+  --
+  --  Open output to all tasks:
+  --
+  taskio, err = ioattach {
+     flux = f,
+     jobid = jobid,
+     ntasks = wreck.ntasks,
+     labelio = wreck.opts.l,
+     on_completion = check_job_completed
+  }
+  if not taskio then wreck:die ("error opening task io: %s\n", err) end
+
+  --
+  --  Open stdin
+  --
+  local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
+  if not kz then wreck:die (err) end
+
+  --
+  --  Add a file descriptor iowatcher for this script's stdin:
+  --
+  local iow, err = f:iowatcher {
+    fd = posix.fileno (io.input()),
+    handler = function (iow, data)
+        if data.data then kz:write (data.data) end
+        if data.eof  then kz:close ()          end
+    end
+  }
+  if not iow then wreck:die ("error opening stdin: %s\n", err) end
+
+  return taskio
+end
+
 
 --
 --  Install watcher for this job's state before issuing any run request,
@@ -250,35 +287,7 @@ end
 
 -- Only process stdio if no --wait-until option used
 if not wreck.opts.w then
-  --
-  --  Open output to all tasks:
-  --
-  taskio, err = ioattach {
-     flux = f,
-     jobid = jobid,
-     ntasks = wreck.ntasks,
-     labelio = wreck.opts.l,
-     on_completion = check_job_completed
-  }
-  if not taskio then wreck:die ("error opening task io: %s\n", err) end
-
-  --
-  --  Open stdin
-  --
-  local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
-  if not kz then wreck:die (err) end
-
-  --
-  --  Add a file descriptor iowatcher for this script's stdin:
-  --
-  local iow, err = f:iowatcher {
-    fd = posix.fileno (io.input()),
-    handler = function (iow, data)
-        if data.data then kz:write (data.data) end
-        if data.eof  then kz:close ()          end
-    end
-  }
-  if not iow then wreck:die ("error opening stdin: %s\n", err) end
+    taskio = wreck_attach_stdio (wreck)
 end
 
 log, err = logstream {
