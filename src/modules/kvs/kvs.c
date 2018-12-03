@@ -1411,8 +1411,8 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         (void)flux_request_unpack (msg, NULL, "{ s:i }",
                                    "rootseq", &root_seq);
 
-        /* If root dirent was specified, lookup corresponding 'root' directory.
-         * Otherwise, use the current root.
+        /* If root dirent was specified, lookup corresponding
+         * 'root' directory.  Otherwise, use the current root.
          */
         if (root_dirent) {
             if (treeobj_validate (root_dirent) < 0
@@ -1559,6 +1559,71 @@ done:
 stall:
     json_decref (val);
 }
+
+/* similar to kvs.lookup, but root_ref / root_seq returned to caller.
+ * Also, ENOENT handle special case, returned as error number to
+ * caller.  This request is a special rpc predominantly used by the
+ * kvs-watch module.  The kvs-watch module requires root information
+ * on lookups (including ENOENT failed lookups) to determine what
+ * lookups can be considered to be read-your-writes consistency safe.
+ */
+static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg, void *arg)
+{
+    lookup_t *lh = NULL;
+    json_t *val = NULL;
+    const char *root_ref = NULL;
+    int root_seq = 0;
+    bool stall = false;
+    int rc = -1;
+
+    if (!(lh = lookup_common (h, mh, msg, arg, lookup_plus_request_cb,
+                              &stall))) {
+        if (stall)
+            goto stall;
+        goto done;
+    }
+
+    root_ref = lookup_get_root_ref (lh);
+    assert (root_ref);
+    root_seq = lookup_get_root_seq (lh);
+    assert (root_seq >= 0);
+
+    if (!(val = lookup_get_value (lh))) {
+        errno = ENOENT;
+        goto done;
+    }
+
+    if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
+                           "val", val,
+                           "rootseq", root_seq,
+                           "rootref", root_ref) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto done;
+    }
+
+    rc = 0;
+done:
+    if (rc < 0) {
+        if (errno == ENOENT) {
+            if (flux_respond_pack (h, msg, "{ s:i s:i s:s }",
+                                   "errno", errno,
+                                   "rootseq", root_seq,
+                                   "rootref", root_ref) < 0) {
+                flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+                goto done;
+            }
+        }
+        else {
+            if (flux_respond (h, msg, errno, NULL) < 0)
+                flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        }
+    }
+    lookup_destroy (lh);
+stall:
+    json_decref (val);
+}
+
 
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
@@ -3031,6 +3096,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             sync_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.lookup",
                             lookup_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.lookup-plus",
+                            lookup_plus_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",
                             watch_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",
