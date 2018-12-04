@@ -969,20 +969,28 @@ static int prog_ctx_read_R_lite (struct prog_ctx *ctx)
     return (0);
 }
 
+static int kvs_lookup_int (flux_t *h, flux_kvsdir_t *kvs,
+                           const char *entry, int *resultp)
+{
+    int rc = 0;
+    flux_future_t *f = NULL;
+    char *key = flux_kvsdir_key_at (kvs, entry);
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || (flux_kvs_lookup_get_unpack (f, "i", resultp) < 0))
+        rc = -1;
+    flux_future_destroy (f);
+    free (key);
+    return (rc);
+}
+
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 {
     int i;
     char *json_str;
     json_t *v;
-    flux_future_t *f = NULL;
-    char *key;
 
-    key = flux_kvsdir_key_at (ctx->kvs, "ntasks");
-    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "i", &ctx->total_ntasks) < 0)
+    if (kvs_lookup_int (ctx->flux, ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
         wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
-    flux_future_destroy (f);
-    free (key);
 
     if (prog_ctx_read_R_lite (ctx) < 0)
         wlog_fatal (ctx, 1, "Failed to read resource info from kvs");
