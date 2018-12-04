@@ -768,26 +768,24 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
 
     if (!(ns = zhash_lookup (ctx->namespaces, namespace))) {
         if (!(ns = namespace_create (ctx, namespace)))
-            goto error;
+            return NULL;
         if (zhash_insert (ctx->namespaces, namespace, ns) < 0) {
             namespace_destroy (ns);
-            goto error;
+            return NULL;
         }
         zhash_freefn (ctx->namespaces, namespace,
                       (zhash_free_fn *)namespace_destroy);
         if (!(f = flux_kvs_getroot (ctx->h, namespace, 0))) {
             zhash_delete (ctx->namespaces, namespace);
-            goto error;
+            return NULL;
         }
         if (flux_future_then (f, -1., getroot_continuation, ns) < 0) {
             zhash_delete (ctx->namespaces, namespace);
             flux_future_destroy (f);
-            goto error;
+            return NULL;
         }
     }
     return ns;
-error:
-    return NULL;
 }
 
 /* kvs-watch.getroot request
