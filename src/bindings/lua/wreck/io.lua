@@ -157,6 +157,32 @@ local function ioplex_create_stream (self, path)
     return files[path]
 end
 
+function ioplex:close_output (of)
+    of:close ()
+    if not of.fp then
+        self:log ("closed path %s", of.filename)
+    end
+    if self:complete() and self.on_completion then
+        self.on_completion()
+    end
+end
+
+function ioplex:output_handler (arg)
+    local taskid = arg.taskid or 0
+    local stream = arg.stream or "stdout"
+    local data   = arg.data
+    local of     = arg.output or self.output[taskid][stream]
+
+    if not data then
+        self:close_output (of)
+        return
+    end
+    if self.labelio then
+        of:write (taskid..": ")
+    end
+    of:write (data)
+end
+
 local function ioplex_taskid_start (self, flux, taskid, stream)
     local of = self.output[taskid][stream]
     if not of then return nil, "No stream "..stream.." for task " .. taskid  end
@@ -170,26 +196,10 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
         key = key,
         kz_flags = flags,
         handler =  function (iow, data, err)
-            if err or not data then
-                -- protect against multiple close callback calls
-                if self.removed [key] then return end
-                if err then
-                    self:err ("Read error: task%d %s: %s", taskid, stream, err)
-                end
-                of:close()
-                if not of.fp then
-                    self:log ("closed path %s", of.filename)
-                end
-                self.removed [key] = true
-                if self:complete() and self.on_completion then
-                    self.on_completion()
-                end
-                return
-            end
-            if self.labelio then
-                of:write (taskid..": ")
-            end
-            of:write (data)
+            self:output_handler { taskid = taskid,
+                                  stream = stream,
+                                  output = of,
+                                  data   = data }
         end
     }
     if not iow then
