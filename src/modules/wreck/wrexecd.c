@@ -445,7 +445,7 @@ static int wreck_pmi_cb (zio_t *z, const char *s, int len, void *arg)
     return (0);
 }
 
-int io_cb (zio_t *z, const char *s, int len, void *arg)
+int io_cb_kz (zio_t *z, const char *s, int len, void *arg)
 {
     struct task_info *t = arg;
     int type = z == t->zio [OUT] ? OUT : ERR;
@@ -525,10 +525,16 @@ static void task_pmi_setup (struct task_info *t)
         wlog_fatal (t->ctx, 1, "zio_writer_create: %s", strerror (errno));
 }
 
+static void task_kz_output_open (struct prog_ctx *ctx, struct task_info *t)
+{
+    if (!(t->kz [OUT] = task_kz_open (t, OUT))
+        || !(t->kz [ERR] = task_kz_open (t, ERR)))
+        wlog_fatal (ctx, 1, "task%d: kz_open: %s\n", t->id, strerror (errno));
+}
+
 
 struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 {
-    int i;
     struct task_info *t = xzmalloc (sizeof (*t));
 
     t->ctx = ctx;
@@ -543,25 +549,30 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     if (!(t->zio [OUT] = zio_pipe_reader_create ("stdout", (void *) t)))
         wlog_fatal (ctx, 1, "task%d: zio_pipe_reader_create: %s",
                     id, strerror (errno));
-    zio_set_send_cb (t->zio [OUT], io_cb);
     zio_set_raw_output (t->zio [OUT]);
     prog_ctx_add_completion_ref (ctx, "task.%d.stdout", id);
 
     if (!(t->zio [ERR] = zio_pipe_reader_create ("stderr", (void *) t)))
         wlog_fatal (ctx, 1, "task%d: zio_pipe_reader_create: %s",
                     id, strerror (errno));
-    zio_set_send_cb (t->zio [ERR], io_cb);
     zio_set_raw_output (t->zio [ERR]);
     prog_ctx_add_completion_ref (ctx, "task.%d.stderr", id);
 
+    /*  Setup stdin zio writer, and stdin kz reader:
+     */
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
-
-    for (i = 0; i < NR_IO; i++) {
-        if (!(t->kz [i] = task_kz_open (t, i)))
-            wlog_fatal (ctx, 1, "task%d: task_kz_open: %s",
-                        id, strerror (errno));
-    }
+    if (!(t->kz [IN] = task_kz_open (t, IN)))
+        wlog_fatal (ctx, 1, "task%d: kz_open (IN): %s", id, strerror (errno));
     kz_set_ready_cb (t->kz [IN], (kz_ready_f) kz_stdin, t);
+
+    /*  Open stdout/err kz streams:
+     */
+    task_kz_output_open (ctx, t);
+
+    /*  Redirect output from stdout/err to kz streams:
+     */
+    zio_set_send_cb (t->zio [OUT], io_cb_kz);
+    zio_set_send_cb (t->zio [ERR], io_cb_kz);
 
     if (!prog_ctx_getopt (ctx, "no-pmi-server"))
         task_pmi_setup (t);
