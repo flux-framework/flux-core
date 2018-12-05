@@ -112,6 +112,7 @@ struct prog_ctx {
     int nnodes;
     int exited;
 
+    rcalc_t              *rcalc;     /* R_lite representation          */
     struct rcalc_rankinfo rankinfo;  /* Rank information from `R_lite` */
 
     int errnum;
@@ -711,6 +712,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         zhash_destroy (&ctx->completion_refs);
 
     flux_kvs_txn_destroy (ctx->barrier_txn);
+    rcalc_destroy (ctx->rcalc);
     free (ctx);
 }
 
@@ -964,7 +966,7 @@ static int prog_ctx_read_R_lite (struct prog_ctx *ctx)
         wlog_fatal (ctx, 1, "failed to load R_lite");
     if (prog_ctx_process_rcalc (ctx, r) < 0)
         wlog_fatal (ctx, 1, "Failed to process resource information");
-    rcalc_destroy (r);
+    ctx->rcalc = r;
     free (json_str);
     return (0);
 }
