@@ -1498,12 +1498,11 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else { /* lret == LOOKUP_PROCESS_FINISHED */
-        if ((val = lookup_get_value (lh)) == NULL) {
-            errno = ENOENT;
-            goto done;
-        }
-        /* fallthrough */
+    /* else lret == LOOKUP_PROCESS_FINISHED, fallthrough */
+
+    if ((val = lookup_get_value (lh)) == NULL) {
+        errno = ENOENT;
+        goto done;
     }
 
     if (flux_respond_pack (h, msg, "{ s:O }",
@@ -1641,10 +1640,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else { /* lret == LOOKUP_PROCESS_FINISHED */
-        val = lookup_get_value (lh);
-        /* fallthrough */
-    }
+    /* else lret == LOOKUP_PROCESS_FINISHED, fallthrough */
+
+    val = lookup_get_value (lh);
 
     /* if no value, create json null object for remainder of code */
     if (!val) {
