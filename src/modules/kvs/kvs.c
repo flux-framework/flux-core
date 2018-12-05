@@ -43,10 +43,10 @@
 #include "src/common/libutil/tstat.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
+#include "src/common/libkvs/kvs_util_private.h"
 
 #include "waitqueue.h"
 #include "cache.h"
-#include "kvs_util.h"
 
 #include "lookup.h"
 #include "treq.h"

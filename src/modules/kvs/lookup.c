@@ -38,10 +38,10 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_util_private.h"
 
 #include "cache.h"
 #include "kvsroot.h"
-#include "kvs_util.h"
 
 #include "lookup.h"
 

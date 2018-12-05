@@ -10,11 +10,11 @@
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
+#include "src/common/libkvs/kvs_util_private.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/kvstxn.h"
 #include "src/modules/kvs/kvsroot.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/kvs_util.h"
 
 static int test_global = 5;
 
@@ -344,6 +344,20 @@ bool ops_match_keys (json_t *keys, json_t *ops)
     return true;
 }
 
+void verify_keys_and_ops_standard (kvstxn_t *kt)
+{
+    json_t *ops, *keys;
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+    ok ((ops = kvstxn_get_ops (kt)) != NULL,
+        "kvstxn_get_ops works");
+    ok (keys_match_ops (ops, keys) == true,
+        "all keys match ops");
+    ok (ops_match_keys (keys, ops) == true,
+        "all ops match keys");
+}
+
 void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
                           json_t *names,
                           json_t *ops,
@@ -351,7 +365,6 @@ void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
                           const char *extramsg)
 {
     json_t *o;
-    json_t *keys;
     kvstxn_t *kt;
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
@@ -372,12 +385,11 @@ void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
     ok (kvstxn_get_flags (kt) == flags,
         "flags do not match");
 
-    ok ((keys = kvstxn_get_keys (kt)) != NULL,
-        "kvstxn_get_keys works");
-    ok (keys_match_ops (ops, keys) == true,
-        "all keys match ops");
-    ok (ops_match_keys (keys, ops) == true,
-        "all ops match keys");
+    ok (kvstxn_get_newroot_ref (kt) == NULL,
+        "kvstxn_get_newroot returns NULL on non-processed transaction");
+
+    ok (kvstxn_get_keys (kt) == NULL,
+        "kvstxn_get_keys returns NULL on non-processed transaction");
 }
 
 void clear_ready_kvstxns (kvstxn_mgr_t *ktm)
@@ -693,7 +705,74 @@ void kvstxn_basic_kvstxn_process_test (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+}
+
+void kvstxn_basic_kvstxn_process_test_normalization (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    int count = 0;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    char rootref[BLOBREF_MAX_STRING_SIZE];
+    const char *newroot;
+    json_t *keys;
+
+    cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
+
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, ref_dummy);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", "key1....a", "1", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (count == 2,
+        "correct number of cache entries were dirty");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    /* can't use verify_keys_and_ops_standard here */
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+
+    ok (is_key (keys, "key1.a") == true,
+        "key has been normalized properly");
+
+    verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1.a", "1");
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
@@ -750,6 +829,8 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     strcpy (rootref, newroot);
 
     /* get rid of the this kvstxn, we're done */
@@ -775,6 +856,8 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.key2", "2");
@@ -852,6 +935,8 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "foo.key1", "1");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "bar.key2", "2");
 
@@ -875,6 +960,8 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "baz.key3", "3");
 
@@ -1072,6 +1159,8 @@ void kvstxn_process_root_missing (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
 
     kvstxn_mgr_destroy (ktm);
@@ -1181,6 +1270,8 @@ void kvstxn_process_missing_ref (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
 
@@ -1328,6 +1419,8 @@ void kvstxn_process_multiple_missing_ref (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir1.a", "52");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir2.b", "62");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir3.c", "72");
@@ -1443,6 +1536,8 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.a", "52");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.b", "62");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.c", "72");
@@ -1553,6 +1648,8 @@ void kvstxn_process_missing_ref_removed (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     /* verify dir doesn't exist */
 
@@ -1978,6 +2075,8 @@ void kvstxn_process_follow_link (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "symlink.val", "52");
 
     kvstxn_mgr_destroy (ktm);
@@ -2046,6 +2145,8 @@ void kvstxn_process_dirval_test (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
 
@@ -2126,6 +2227,8 @@ void kvstxn_process_delete_test (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", NULL);
 
     kvstxn_mgr_destroy (ktm);
@@ -2179,6 +2282,8 @@ void kvstxn_process_delete_nosubdir_test (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "noexistdir.val", NULL);
 
@@ -2252,6 +2357,8 @@ void kvstxn_process_delete_filevalinpath_test (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val.valbaz", NULL);
 
@@ -2428,6 +2535,8 @@ void kvstxn_process_big_fileval (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "val", "smallstr");
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
@@ -2467,6 +2576,8 @@ void kvstxn_process_big_fileval (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "val", bigstr);
 
@@ -2589,6 +2700,8 @@ void kvstxn_process_giant_dir (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val0200", "foo");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val0090", "bar");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val00D0", NULL);
@@ -2680,6 +2793,8 @@ void kvstxn_process_append (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "val", "abcdefgh");
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
@@ -2711,6 +2826,8 @@ void kvstxn_process_append (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "valref", "ABCDEFGH");
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
@@ -2740,6 +2857,8 @@ void kvstxn_process_append (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "newval", "foobar");
 
@@ -2892,6 +3011,8 @@ void kvstxn_process_fallback_merge (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "42");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key2", "43");
 
@@ -2954,6 +3075,8 @@ void kvstxn_process_fallback_merge (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key3", "44");
 
     memcpy (rootref, newroot, sizeof (rootref));
@@ -2996,6 +3119,7 @@ void kvstxn_namespace_prefix (void)
     char rootref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
     json_t *ops = NULL;
+    json_t *keys;
 
     cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
 
@@ -3033,6 +3157,14 @@ void kvstxn_namespace_prefix (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    /* can't use verify_keys_and_ops_standard here, namespace prefix will be stripped */
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+
+    ok (is_key (keys, "key1") == true,
+        "key has been stripped of ns prefix properly");
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
 
@@ -3086,6 +3218,17 @@ void kvstxn_namespace_prefix (void)
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    /* can't use verify_keys_and_ops_standard here, namespace prefix will be stripped */
+
+    ok ((keys = kvstxn_get_keys (kt)) != NULL,
+        "kvstxn_get_keys works");
+
+    ok (is_key (keys, "key3") == true,
+        "key has been stripped of ns prefix properly");
+
+    ok (is_key (keys, "key4") == true,
+        "key has been stripped of ns prefix properly");
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key3", "3");
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key4", "4");
@@ -3183,6 +3326,8 @@ void kvstxn_namespace_prefix_symlink (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    verify_keys_and_ops_standard (kt);
+
     verify_value (cache, krm, "A", newroot, "val", "100");
 
     memcpy (root_ref, newroot, sizeof (root_ref));
@@ -3249,6 +3394,7 @@ int main (int argc, char *argv[])
     kvstxn_mgr_merge_tests ();
     kvstxn_basic_tests ();
     kvstxn_basic_kvstxn_process_test ();
+    kvstxn_basic_kvstxn_process_test_normalization ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions_merge ();
     kvstxn_basic_kvstxn_process_test_invalid_transaction ();

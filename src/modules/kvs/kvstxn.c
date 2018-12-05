@@ -41,9 +41,9 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
+#include "src/common/libkvs/kvs_util_private.h"
 
 #include "kvstxn.h"
-#include "kvs_util.h"
 
 #define KVSTXN_PROCESSING      0x01
 #define KVSTXN_MERGED          0x02 /* kvstxn is a merger of transactions */
@@ -98,29 +98,6 @@ static void kvstxn_destroy (kvstxn_t *kt)
     }
 }
 
-/* Create array of keys (strings) from array of operations ({ "key":s ... })
- * The keys array is for inclusion in the kvs.setroot event, so we can
- * notify watchers of keys that their key may have changed.
- */
-static json_t *keys_from_ops (json_t *ops)
-{
-    json_t *keys;
-    size_t index;
-    json_t *op;
-
-    if (!(keys = json_array ()))
-        return NULL;
-    json_array_foreach (ops, index, op) {
-        json_t *o = json_object_get (op, "key");
-        if (!o || json_array_append (keys, o) < 0)
-            goto error;
-    }
-    return keys;
-error:
-    json_decref (keys);
-    return NULL;
-}
-
 static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
@@ -134,10 +111,6 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         goto error;
     }
     if (!(kt->ops = json_copy (ops))) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
-    if (!(kt->keys = keys_from_ops (kt->ops))) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -203,11 +176,6 @@ json_t *kvstxn_get_ops (kvstxn_t *kt)
     return kt->ops;
 }
 
-json_t *kvstxn_get_keys (kvstxn_t *kt)
-{
-    return kt->keys;
-}
-
 json_t *kvstxn_get_names (kvstxn_t *kt)
 {
     return kt->names;
@@ -232,6 +200,13 @@ const char *kvstxn_get_newroot_ref (kvstxn_t *kt)
 {
     if (kt->state == KVSTXN_STATE_FINISHED)
         return kt->newroot;
+    return NULL;
+}
+
+json_t *kvstxn_get_keys (kvstxn_t *kt)
+{
+    if (kt->state == KVSTXN_STATE_FINISHED)
+        return kt->keys;
     return NULL;
 }
 
@@ -837,6 +812,62 @@ err:
     return -1;
 }
 
+/* remove namespace / normalize key for setroot */
+static json_t *get_key_for_setroot (json_t *o)
+{
+    const char *key = json_string_value (o);
+    char *key_suffix = NULL;
+    char *ncpy = NULL;
+    json_t *rv = NULL;
+
+    /* how did we get to this point if this wasn't a string? */
+    assert (key);
+
+    /* no need to check for namespace crossing, will be done in actual
+     * processing */
+
+    if (kvs_namespace_prefix (key, NULL, &key_suffix) < 0)
+        goto error;
+
+    if ((ncpy = kvs_util_normalize_key (key_suffix ? key_suffix : key,
+                                        NULL)) == NULL)
+        goto error;
+
+    rv = json_string (ncpy);
+error:
+    free (key_suffix);
+    free (ncpy);
+    return rv;
+}
+
+/* Create array of keys (strings) from array of operations ({ "key":s ... })
+ * The keys array is for inclusion in the kvs.setroot event, so we can
+ * notify watchers of keys that their key may have changed.
+ */
+static json_t *keys_from_ops (json_t *ops)
+{
+    json_t *keys;
+    size_t index;
+    json_t *op;
+
+    if (!(keys = json_array ()))
+        return NULL;
+    json_array_foreach (ops, index, op) {
+        json_t *o = json_object_get (op, "key");
+        json_t *s;
+        if (!o)
+            goto error;
+        if (!(s = get_key_for_setroot (o)))
+            goto error;
+        if (json_array_append_new (keys, s) < 0)
+            goto error;
+    }
+    return keys;
+error:
+    json_decref (keys);
+    return NULL;
+}
+
 kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
                                  const char *rootdir_ref)
@@ -1000,6 +1031,12 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
          */
         if (zlist_first (kt->dirty_cache_entries_list))
             goto stall_store;
+
+        /* now generate keys for setroot */
+        if (!(kt->keys = keys_from_ops (kt->ops))) {
+            kt->errnum = ENOMEM;
+            return KVSTXN_PROCESS_ERROR;
+        }
 
         kt->state = KVSTXN_STATE_FINISHED;
         /* fallthrough */
