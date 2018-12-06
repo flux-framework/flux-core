@@ -86,6 +86,12 @@ struct task_info {
     zio_t *pmi_client;        /* zio writer for pmi-simple client */
 };
 
+/* stdio message rank and name container */
+struct stdio_service {
+    int rank;
+    char name [256];
+};
+
 struct prog_ctx {
     flux_t   *flux;
 
@@ -104,6 +110,9 @@ struct prog_ctx {
     flux_kvs_txn_t *barrier_txn;
 
     uint32_t noderank;
+
+    struct stdio_service outsvc;
+    struct stdio_service errsvc;
 
     int epoch;              /* current heartbeat epoch */
 
@@ -463,6 +472,40 @@ int io_cb_kz (zio_t *z, const char *s, int len, void *arg)
     return (0);
 }
 
+int io_cb_msg (zio_t *z, const char *s, int len, void *arg)
+{
+    flux_future_t *f = NULL;
+    struct task_info *t = arg;
+
+    const char *stream;
+    struct stdio_service *iosvc;
+
+    if (z == t->zio [OUT]) {
+        stream = "stdout";
+        iosvc = &t->ctx->outsvc;
+    }
+    else {
+        stream = "stderr";
+        iosvc = &t->ctx->errsvc;
+    }
+
+    if (!(f = flux_rpc_pack (t->ctx->flux,
+               iosvc->name, iosvc->rank,
+               FLUX_RPC_NORESPONSE,
+               "{s:i, s:s#, s:b}",
+               "taskid", t->globalid,
+               "data", s?s:"", len,
+               "eof", len == 0)))
+        wlog_err (t->ctx, "io_cb_msg: flux_rpc_pack: %s", strerror (errno));
+    flux_future_destroy (f);
+
+    if (len == 0) // EOF
+        prog_ctx_remove_completion_ref (t->ctx, "task.%d.%s", t->id, stream);
+
+    return (0);
+
+}
+
 void kz_stdin (kz_t *kz, struct task_info *t)
 {
     char *json_str;
@@ -566,14 +609,20 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
         wlog_fatal (ctx, 1, "task%d: kz_open (IN): %s", id, strerror (errno));
     kz_set_ready_cb (t->kz [IN], (kz_ready_f) kz_stdin, t);
 
-    /*  Open stdout/err kz streams:
-     */
-    task_kz_output_open (ctx, t);
+    if (prog_ctx_getopt (ctx, "nokz")) {
+        zio_set_send_cb (t->zio [OUT], io_cb_msg);
+        zio_set_send_cb (t->zio [ERR], io_cb_msg);
+    }
+    else {
+        /*  Open stdout/err kz streams:
+         */
+        task_kz_output_open (ctx, t);
 
-    /*  Redirect output from stdout/err to kz streams:
-     */
-    zio_set_send_cb (t->zio [OUT], io_cb_kz);
-    zio_set_send_cb (t->zio [ERR], io_cb_kz);
+        /*  Redirect output from stdout/err to kz streams:
+         */
+        zio_set_send_cb (t->zio [OUT], io_cb_kz);
+        zio_set_send_cb (t->zio [ERR], io_cb_kz);
+    }
 
     if (!prog_ctx_getopt (ctx, "no-pmi-server"))
         task_pmi_setup (t);
@@ -985,6 +1034,68 @@ static int kvs_lookup_int (flux_t *h, flux_kvsdir_t *kvs,
     return (rc);
 }
 
+static int decode_stdio_service (json_t *o, struct stdio_service *s)
+{
+    const char *name;
+    int maxlen = sizeof (s->name) - 7; /* space to append .write */
+    if ((json_unpack (o, "{ s:s, s:i }", "name", &name, "rank", &s->rank) < 0)
+        || (strlen (name) > maxlen)
+        || (sprintf (s->name, "%s.write", name) < 0))
+        return (-1);
+    return (0);
+}
+
+static int kvs_lookup_ioservices (flux_t *h, flux_kvsdir_t *kvs,
+                                  struct stdio_service *outsvc,
+                                  struct stdio_service *errsvc)
+{
+    int rc = -1;
+    flux_future_t *f = NULL;
+    json_t *out, *err;
+
+    char *key = flux_kvsdir_key_at (kvs, "ioservice");
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key)))
+        return (-1);
+
+    if (flux_kvs_lookup_get_unpack (f, "{ s:o, s:o }",
+                                       "stdout", &out,
+                                       "stderr", &err) < 0)
+            goto out;
+
+    if (decode_stdio_service (out, outsvc) < 0
+        || decode_stdio_service (err, errsvc) < 0)
+        return (-1);
+
+    rc = 0;
+out:
+    free (key);
+    flux_future_destroy (f);
+    return (rc);
+}
+
+static void io_service_initialize (struct prog_ctx *ctx)
+{
+    struct rcalc_rankinfo ri;
+
+    if (kvs_lookup_ioservices (ctx->flux, ctx->kvs,
+                               &ctx->outsvc, &ctx->errsvc) < 0)
+        wlog_fatal (ctx, 1, "io_service_initialize: failed to read kvs: %s",
+                            strerror (errno));
+
+    if (rcalc_get_nth (ctx->rcalc, 0, &ri) < 0)
+        wlog_fatal (ctx, 1, "io_service_initialize: rcalc_get_nth: %s",
+                            strerror (errno));
+
+    /*  If ioservice rank is FLUX_NODEID_ANY, then replace with the rank
+     *   of nodeid 0 in this job:
+     */
+    if (ctx->outsvc.rank == FLUX_NODEID_ANY)
+        ctx->outsvc.rank = ri.rank;
+    if (ctx->errsvc.rank == FLUX_NODEID_ANY)
+        ctx->errsvc.rank = ri.rank;
+}
+
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 {
     int i;
@@ -1013,6 +1124,13 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     if (prog_ctx_options_init (ctx, flux_kvsdir_key (ctx->kvs)) < 0)
         wlog_fatal (ctx, 1, "failed to read %s.options",
                     flux_kvsdir_key (ctx->kvs));
+
+    /*  If the "nokz" option is set for this job, then read the
+     *   ioservice_rank from kvs, and construct io service name
+     *   from this job's id.
+     */
+    if (prog_ctx_getopt (ctx, "nokz"))
+        io_service_initialize (ctx);
 
     if (flux_kvsdir_get (ctx->kvs, "cmdline", &json_str) < 0)
         wlog_fatal (ctx, 1, "kvs_get: cmdline");
