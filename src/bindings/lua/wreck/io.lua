@@ -102,6 +102,7 @@ function ioplex.create (arg)
         on_completion = arg.on_completion,
         log_err       = arg.log_err,
         nofollow      = arg.nofollow,
+        nokz          = arg.nokz,
         removed = {},
         output = {},
         files = {}
@@ -111,6 +112,15 @@ function ioplex.create (arg)
         local r, err = wreck.id_to_path { flux = io.flux, jobid = io.id }
         if not r then error (err) end
         io.kvspath = r
+    end
+    if io.nokz then
+        if not arg.ioservices then return nil, "required arg ioservices" end
+        io.ioservices = {}
+        for s,v in pairs (arg.ioservices) do
+            if v and v.rank == io.flux.rank then
+                io.ioservices[s] = v.name
+            end
+        end
     end
     setmetatable (io, ioplex)
     return io
@@ -183,6 +193,45 @@ function ioplex:output_handler (arg)
     of:write (data)
 end
 
+function ioplex:register_services ()
+    local f = self.flux
+    if not self.ioservices then return nil, "IO Service not started yet!" end
+
+    for _,service in pairs (self.ioservices) do
+        local rc, err = f:rpc ("service.add", { service = service })
+        if not rc then
+            return nil, err
+        end
+    end
+    return true
+end
+
+function ioplex:msg_handler (stream, zmsg)
+    local data = nil
+    local msg = zmsg.data
+    if not msg then return end
+
+    if not msg.eof then
+        data = msg.data
+    end
+    self:output_handler { taskid = msg.taskid,
+                          data = data,
+                          stream = stream }
+end
+
+function ioplex:ioservice_start ()
+    -- I/O services for stdout/err for this job:
+    for stream,service in pairs (self.ioservices) do
+        local mh, err = self.flux:msghandler {
+            pattern = service..".write",
+            handler = function (f, zmsg, mh)
+                self:msg_handler (stream, zmsg)
+            end
+        }
+        if not mh then self:err ("ioservice_start: %s", err) end
+    end
+end
+
 local function ioplex_taskid_start (self, flux, taskid, stream)
     local of = self.output[taskid][stream]
     if not of then return nil, "No stream "..stream.." for task " .. taskid  end
@@ -209,11 +258,33 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     end
 end
 
+function ioplex:closeall (stream)
+    for taskid, t in pairs (self.output) do
+        if t[stream] then t[stream]:close () end
+    end
+end
+
+function ioplex:close_unwatched_streams ()
+    for _,stream in pairs { "stdout", "stderr" } do
+        if not self.ioservices [stream] then self:closeall (stream) end
+    end
+end
+
 --- "start" all ioplex iowatchers on reactor.
 -- @param h flux handle of reactor to use (optional)
 function ioplex:start (h)
     local flux = h or self.flux
     if not flux then return nil, "Error: no flux handle!" end
+
+    if self.nokz then
+        self:ioservice_start ()
+        local rc, err = self:register_services ()
+        if not rc then
+            self:err ("Unable to start I/O service: %s", err)
+        end
+        self:close_unwatched_streams ()
+        return
+    end
 
     for taskid, t in pairs (self.output) do
         for stream, f in pairs (t) do
