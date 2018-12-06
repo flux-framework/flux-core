@@ -1371,8 +1371,10 @@ static void lookup_wait_error_cb (wait_t *w, int errnum, void *arg)
     lookup_set_aux_errnum (lh, errnum);
 }
 
-static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
+                                const flux_msg_t *msg, void *arg,
+                                flux_msg_handler_f replay_cb,
+                                bool *stall)
 {
     kvs_ctx_t *ctx = arg;
     int flags;
@@ -1463,7 +1465,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        root = getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
+        root = getroot (ctx, namespace, mh, msg, lh, replay_cb,
                         &stall);
         assert (!root);
 
@@ -1475,7 +1477,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
-                                              lookup_request_cb)))
+                                              replay_cb)))
             goto done;
 
         if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
@@ -1506,7 +1508,37 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     /* else lret == LOOKUP_PROCESS_FINISHED, fallthrough */
 
-    if ((val = lookup_get_value (lh)) == NULL) {
+    rc = 0;
+done:
+    wait_destroy (wait);
+    if (rc < 0) {
+        lookup_destroy (lh);
+        json_decref (val);
+    }
+    (*stall) = false;
+    return (rc == 0) ? lh : NULL;
+
+stall:
+    (*stall) = true;
+    return NULL;
+}
+
+static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
+{
+    lookup_t *lh = NULL;
+    json_t *val = NULL;
+    bool stall = false;
+    int rc = -1;
+
+    if (!(lh = lookup_common (h, mh, msg, arg, lookup_request_cb,
+                              &stall))) {
+        if (stall)
+            goto stall;
+        goto done;
+    }
+
+    if (!(val = lookup_get_value (lh))) {
         errno = ENOENT;
         goto done;
     }
@@ -1523,7 +1555,6 @@ done:
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
-    wait_destroy (wait);
     lookup_destroy (lh);
 stall:
     json_decref (val);
