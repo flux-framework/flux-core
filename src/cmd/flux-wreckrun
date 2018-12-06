@@ -195,6 +195,8 @@ local function wreck_attach_stdio (wreck)
      jobid = jobid,
      ntasks = wreck.ntasks,
      labelio = wreck.opts.l,
+     nokz = wreck.job_options.nokz,
+     ioservices = wreck.ioservices,
      on_completion = check_job_completed
   }
   if not taskio then wreck:die ("error opening task io: %s\n", err) end
