@@ -321,6 +321,29 @@ function wreck:parse_cmdline (arg)
         table.insert (self.cmdline, arg[i])
     end
 
+    self.job_options = {}
+    if self.opts.o then
+        for entry in self.opts.o:gmatch ('[^,]+') do
+            local opt, val = entry, 1
+            if entry:match ("=") then
+                opt, val = entry:match ("(.+)=(.+)")
+                if tonumber(val) == 0 or val == "false" or val == "no" then
+                    val = false
+                end
+            end
+            self.job_options[opt] = val
+        end
+    end
+
+    if self.opts.O or self.opts.E then
+        self.output = {
+            files = {
+              stdout = self.opts.O,
+              stderr = self.opts.E,
+            },
+            labelio = self.opts.l,
+        }
+    end
     return true
 end
 
@@ -390,28 +413,8 @@ function wreck:jobreq ()
         ["epilog.pre"] = self.opts.x,
         ["epilog.post"] = self.opts.p,
     }
-    if self.opts.o then
-        jobreq.options = {}
-        for entry in self.opts.o:gmatch ('[^,]+') do
-            local opt, val = entry, 1
-            if entry:match ("=") then
-                opt, val = entry:match ("(.+)=(.+)")
-                if tonumber(val) == 0 or val == "false" or val == "no" then
-                    val = false
-                end
-            end
-            jobreq.options[opt] = val
-        end
-    end
-    if self.opts.O or self.opts.E then
-        jobreq.output = {
-            files = {
-              stdout = self.opts.O,
-              stderr = self.opts.E,
-            },
-            labelio = self.opts.l,
-        }
-    end
+    jobreq.options = self.job_options
+    jobreq.output = self.output
     jobreq ["input.config"] = inputs_table_from_args (self, self.opts.i)
     return jobreq
 end
