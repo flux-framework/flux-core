@@ -83,6 +83,15 @@ int lookup_get_current_epoch (lookup_t *lh);
  */
 const char *lookup_get_namespace (lookup_t *lh);
 
+/* Convenience functions to get root ref & seq used in lookup.
+ * root_ref will be the root_ref passed in via lookup_create() or the
+ * root_ref used from the namespace.  The root_seq is only if the
+ * root_ref was from a namespace.  Note that the values are not valid
+ * unless the lookup completes (LOOKUP_PROCESS_FINISED).
+ */
+const char *lookup_get_root_ref (lookup_t *lh);
+int lookup_get_root_seq (lookup_t *lh);
+
 /* Set a new current epoch.  Convenience on RPC replays and epoch may
  * be new */
 int lookup_set_current_epoch (lookup_t *lh, int epoch);

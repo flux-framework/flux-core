@@ -67,6 +67,7 @@ struct lookup {
 
     char *namespace;
     char *root_ref;
+    int root_seq;
     bool root_ref_set_by_user;  /* if root_ref passed in by user */
 
     char *path;
@@ -606,6 +607,7 @@ lookup_t *lookup_create (struct cache *cache,
             saved_errno = ENOMEM;
             goto cleanup;
         }
+        lh->root_seq = -1;      /* -1 if user set root_ref */
         lh->root_ref_set_by_user = true;
     }
 
@@ -757,6 +759,20 @@ const char *lookup_get_namespace (lookup_t *lh)
     if (lh)
         return lh->namespace;
     return NULL;
+}
+
+const char *lookup_get_root_ref (lookup_t *lh)
+{
+    if (lh && lh->state == LOOKUP_STATE_FINISHED)
+        return lh->root_ref;
+    return NULL;
+}
+
+int lookup_get_root_seq (lookup_t *lh)
+{
+    if (lh && lh->state == LOOKUP_STATE_FINISHED)
+        return lh->root_seq;
+    return -1;
 }
 
 int lookup_set_current_epoch (lookup_t *lh, int epoch)
@@ -996,6 +1012,7 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = ENOMEM;
                     goto error;
                 }
+                lh->root_seq = root->seq;
             }
 
             lh->state = LOOKUP_STATE_CHECK_ROOT;

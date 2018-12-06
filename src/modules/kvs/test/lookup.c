@@ -232,6 +232,10 @@ void basic_api (void)
         "lookup_set_aux_errnum works");
     ok (lookup_get_aux_errnum (lh) == EINVAL,
         "lookup_get_aux_errnum gets EINVAL");
+    ok (lookup_get_root_ref (lh) == NULL,
+        "lookup_get_root_ref fails on not-completed lookup");
+    ok (lookup_get_root_seq (lh) < 0,
+        "lookup_get_root_seq fails on not-completed lookup");
 
     lookup_destroy (lh);
 
@@ -296,6 +300,10 @@ void basic_api_errors (void)
         "lookup_get_current_epoch fails on NULL pointer");
     ok (lookup_get_namespace (NULL) == NULL,
         "lookup_get_namespace fails on NULL pointer");
+    ok (lookup_get_root_ref (NULL) == NULL,
+        "lookup_get_root_ref fails on NULL pointer");
+    ok (lookup_get_root_seq (NULL) < 0,
+        "lookup_get_root_seq fails on NULL pointer");
     ok (lookup_set_current_epoch (NULL, 42) < 0,
         "lookup_set_current_epoch fails on NULL pointer");
     /* lookup_destroy ok on NULL pointer */
@@ -305,6 +313,82 @@ void basic_api_errors (void)
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
+}
+
+/* basic lookup to test a few situations that we don't want to
+ * replicate in all the main tests below
+ */
+void basic_lookup (void) {
+    json_t *root;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+    const char *tmp;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root_ref
+     * "val" : val to "foo"
+     */
+
+    root = treeobj_create_dir ();
+    _treeobj_insert_entry_val (root, "val", "foo", 3);
+
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create basic works - no root_ref set");
+    ok (lookup (lh) == LOOKUP_PROCESS_FINISHED,
+        "lookup process finished");
+    ok ((tmp = lookup_get_root_ref (lh)) != NULL,
+        "lookup_get_root_ref returns non-NULL");
+    ok (!strcmp (tmp, root_ref),
+        "lookup_get_root_ref returned correct root_ref");
+    ok (lookup_get_root_seq (lh) >= 0,
+        "lookup_get_root_seq returned valid root_seq");
+
+    lookup_destroy (lh);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create basic works - root_ref set");
+    ok (lookup (lh) == LOOKUP_PROCESS_FINISHED,
+        "lookup process finished");
+    ok ((tmp = lookup_get_root_ref (lh)) != NULL,
+        "lookup_get_root_ref returns non-NULL");
+    ok (!strcmp (tmp, root_ref),
+        "lookup_get_root_ref returned correct root_ref");
+    ok (lookup_get_root_seq (lh) < 0,
+        "lookup_get_root_seq returned -1, root_seq not valid when root_ref passed in");
+
+    lookup_destroy (lh);
 }
 
 void check_common (lookup_t *lh,
@@ -3337,6 +3421,7 @@ int main (int argc, char *argv[])
 
     basic_api ();
     basic_api_errors ();
+    basic_lookup ();
 
     lookup_root ();
     lookup_basic ();
