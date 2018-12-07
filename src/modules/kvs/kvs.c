@@ -1391,6 +1391,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     lh = flux_msg_aux_get (msg, "lookup_handle");
     if (!lh) {
         uint32_t rolemask, userid;
+        int root_seq = -1;
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:s s:i }",
                                  "key", &key,
@@ -1403,6 +1404,10 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         /* rootdir is optional */
         (void)flux_request_unpack (msg, NULL, "{ s:o }",
                                    "rootdir", &root_dirent);
+
+        /* rootseq is optional */
+        (void)flux_request_unpack (msg, NULL, "{ s:i }",
+                                   "rootseq", &root_seq);
 
         /* If root dirent was specified, lookup corresponding 'root' directory.
          * Otherwise, use the current root.
@@ -1424,7 +1429,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   ctx->epoch,
                                   namespace,
                                   root_ref ? root_ref : NULL,
-                                  0,
+                                  root_seq,
                                   key,
                                   rolemask,
                                   userid,
