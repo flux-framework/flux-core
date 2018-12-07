@@ -679,7 +679,7 @@ static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(commit = commit_create (rootref, rootseq, NULL))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
         ns->errnum = errno;
-        goto done;;
+        goto done;
     }
     ns->commit = commit;
     if (ns->owner == FLUX_USERID_UNKNOWN)
@@ -719,7 +719,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(commit = commit_create (rootref, rootseq, keys))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
         ns->errnum = errno;
-        goto done;;
+        goto done;
     }
     commit_destroy (ns->commit);
     ns->commit = commit;
