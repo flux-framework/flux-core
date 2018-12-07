@@ -166,7 +166,12 @@ test_kary_t_LDADD = $(test_ldadd)
 
 test_cronodate_t_SOURCES = test/cronodate.c
 test_cronodate_t_CPPFLAGS = $(test_cppflags)
-test_cronodate_t_LDADD = $(test_ldadd)
+test_cronodate_t_LDADD = \
+	$(builddir)/cronodate.lo \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(builddir)/veb.lo \
+	$(builddir)/xzmalloc.lo \
+	$(top_builddir)/src/common/libtap/libtap.la
 
 test_wallclock_t_SOURCES = test/wallclock.c
 test_wallclock_t_CPPFLAGS = $(test_cppflags)
