@@ -53,8 +53,8 @@ struct watcher {
     zlist_t *lookups;           // list of futures, in commit order
 
     struct namespace *ns;       // back pointer for removal
-    void *prev;                 // previous watch for KVS_WATCH_FULL
-    int prev_len;               // previous watch len for KVS_WATCH_FULL
+    json_t *prev;               // previous watch value for KVS_WATCH_FULL
+    bool namespace_created;     // flag indicating if 
 };
 
 /* Current KVS root.
@@ -108,7 +108,7 @@ static void watcher_destroy (struct watcher *w)
                 flux_future_destroy (f);
             zlist_destroy (&w->lookups);
         }
-        free (w->prev);
+        json_decref (w->prev);
         free (w);
         errno = saved_errno;
     }
@@ -293,40 +293,29 @@ static int process_getroot_response (struct namespace *ns, struct watcher *w)
 
 static int handle_compare_response (flux_t *h,
                                     struct watcher *w,
-                                    const void *data,
-                                    int len)
+                                    json_t *val)
 {
     if (!w->responded) {
-        /* this is the first response case, simply store the first
-         * data */
-        if (!(w->prev = malloc (len))) {
-            errno = ENOMEM;
-            return -1;
-        }
-        memcpy (w->prev, data, len);
-        w->prev_len = len;
+        /* this is the first response case, store the first response
+         * val */
+        w->prev = json_incref (val);
 
-        if (flux_respond_raw (h, w->request, data, len) < 0) {
-            flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             return -1;
         }
      }
     else {
         /* not first response case, compare to previous to see if
-         * respond should be done, update data if necessary */
-        if (w->prev_len == len
-            && !memcmp (w->prev, data, len))
+         * respond should be done, update if necessary */
+        if (json_equal (w->prev, val))
             return 0;
 
-        if (len > w->prev_len) {
-            if (!(w->prev = realloc (w->prev, len)))
-                return -1;
-        }
-        memcpy (w->prev, data, len);
-        w->prev_len = len;
+        json_decref (w->prev);
+        w->prev = json_incref (val);
 
-        if (flux_respond_raw (h, w->request, data, len) < 0) {
-            flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             return -1;
         }
     }
@@ -337,11 +326,10 @@ static int handle_compare_response (flux_t *h,
 
 static int handle_normal_response (flux_t *h,
                                    struct watcher *w,
-                                   const void *data,
-                                   int len)
+                                   json_t *val)
 {
-    if (flux_respond_raw (h, w->request, data, len) < 0) {
-        flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+    if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         return -1;
     }
 
@@ -359,10 +347,9 @@ static int handle_normal_response (flux_t *h,
 static int handle_lookup_response (flux_future_t *f, struct watcher *w)
 {
     flux_t *h = flux_future_get_flux (f);
-    const void *data;
-    int len;
+    json_t *val;
 
-    if (flux_rpc_get_raw (f, &data, &len) < 0) {
+    if (flux_rpc_get_unpack (f, "{ s:o }", "val", &val) < 0) {
         if (w->flags & FLUX_KVS_WATCH_WAITCREATE
             && errno == ENOENT
             && w->responded == false)
@@ -372,11 +359,11 @@ static int handle_lookup_response (flux_future_t *f, struct watcher *w)
     if (!w->mute) {
         if (w->flags & FLUX_KVS_WATCH_FULL
             || w->flags & FLUX_KVS_WATCH_UNIQ) {
-            if (handle_compare_response (h, w, data, len) < 0)
+            if (handle_compare_response (h, w, val) < 0)
                 goto error;
         }
         else {
-            if (handle_normal_response (h, w, data, len) < 0)
+            if (handle_normal_response (h, w, val) < 0)
                 goto error;
         }
     }
