@@ -539,6 +539,7 @@ lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
                          const char *namespace,
                          const char *root_ref,
+                         int root_seq,
                          const char *path,
                          uint32_t rolemask,
                          uint32_t userid,
@@ -607,7 +608,7 @@ lookup_t *lookup_create (struct cache *cache,
             saved_errno = ENOMEM;
             goto cleanup;
         }
-        lh->root_seq = -1;      /* -1 if user set root_ref */
+        lh->root_seq = root_seq;
         lh->root_ref_set_by_user = true;
     }
 
