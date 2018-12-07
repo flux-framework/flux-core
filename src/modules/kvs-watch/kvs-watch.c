@@ -257,6 +257,23 @@ static bool array_match (json_t *a, const char *key)
     return false;
 }
 
+static int process_getroot_response (struct namespace *ns, struct watcher *w)
+{
+    if (!w->mute) {
+        if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
+                               "rootref", ns->commit->rootref,
+                               "rootseq", ns->commit->rootseq,
+                               "owner", ns->owner,
+                               "flags", 0) < 0) {
+            flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
+            return -1;
+        }
+        w->responded = true;
+    }
+    w->rootseq = ns->commit->rootseq;
+    return 0;
+}
+
 static int handle_compare_response (flux_t *h,
                                     struct watcher *w,
                                     const void *data,
@@ -430,6 +447,32 @@ error:
     return NULL;
 }
 
+static int process_lookup_response (struct namespace *ns, struct watcher *w)
+{
+    flux_future_t *f;
+    if (!(f = lookupat (ns->ctx->h,
+                        w->flags,
+                        w->key,
+                        ns->commit->rootref,
+                        ns->name,
+                        w->userid,
+                        w->rolemask))) {
+        flux_log_error (ns->ctx->h, "%s: lookupat", __FUNCTION__);
+        return -1;
+    }
+    if (zlist_append (w->lookups, f) < 0) {
+        flux_future_destroy (f);
+        errno = ENOMEM;
+        return -1;
+    }
+    if (flux_future_then (f, -1., lookup_continuation, w) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    w->rootseq = ns->commit->rootseq;
+    return 0;
+}
+
 /* Respond to watcher request, if appropriate.
  * De-list and destroy watcher from namespace on error.
  * De-hash and destroy namespace if watchers list becomes empty.
@@ -470,18 +513,8 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
     /* flux_kvs_getroot (FLUX_KVS_WATCH)
      */
     if (w->key == NULL) {
-        if (!w->mute) {
-            if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
-                                   "rootref", ns->commit->rootref,
-                                   "rootseq", ns->commit->rootseq,
-                                   "owner", ns->owner,
-                                   "flags", 0) < 0) {
-                flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
-                goto error;
-            }
-            w->responded = true;
-        }
-        w->rootseq = ns->commit->rootseq;
+        if (process_getroot_response (ns, w) < 0)
+            goto error;
     }
     /* flux_kvs_lookup (FLUX_KVS_WATCH)
      *
@@ -503,27 +536,8 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
     else if (w->rootseq == -1
              || (w->flags & FLUX_KVS_WATCH_FULL)
              || array_match (ns->commit->keys, w->key)) {
-        flux_future_t *f;
-        if (!(f = lookupat (ns->ctx->h,
-                            w->flags,
-                            w->key,
-                            ns->commit->rootref,
-                            ns->name,
-                            w->userid,
-                            w->rolemask))) {
-            flux_log_error (ns->ctx->h, "%s: lookupat", __FUNCTION__);
+        if (process_lookup_response (ns, w) < 0)
             goto error_respond;
-        }
-        if (zlist_append (w->lookups, f) < 0) {
-            flux_future_destroy (f);
-            errno = ENOMEM;
-            goto error_respond;
-        }
-        if (flux_future_then (f, -1., lookup_continuation, w) < 0) {
-            flux_future_destroy (f);
-            goto error_respond;
-        }
-        w->rootseq = ns->commit->rootseq;
     }
     return;
 error_respond:
