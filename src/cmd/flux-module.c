@@ -39,7 +39,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/read_all.h"
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/iterators.h"
 
 const int max_idle = 99;
@@ -280,27 +280,29 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static nodeset_t *ns_create_special (flux_t *h, const char *arg)
+static struct idset *ns_create_special (flux_t *h, const char *arg)
 {
-    nodeset_t *ns = NULL;
+    struct idset *ns = NULL;
 
     if (!arg) {
         uint32_t rank;
         if (flux_get_rank (h, &rank) < 0)
             log_err_exit ("flux_get_rank");
-        if (!(ns = nodeset_create_rank (rank)))
-            log_msg_exit ("nodeset_create_rank failed");
+        if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
+            log_err_exit ("idset_create");
+        if (idset_set (ns, rank) < 0)
+            log_err_exit ("idset_set");
     } else if (!strcmp (arg, "all")) {
         uint32_t size;
         if (flux_get_size (h, &size) < 0)
             log_err_exit ("flux_get_size");
-        if (!(ns = nodeset_create_range (0, size - 1)))
-            log_msg_exit ("nodeset_create_range failed");
+        if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
+            log_err_exit ("idset_create");
+        if (idset_range_set (ns, 0, size - 1) < 0)
+            log_err_exit ("idset_range_set");
     } else {
-        if (!(ns = nodeset_create_string (arg))) {
-            errno = EINVAL;
+        if (!(ns = idset_decode (arg)))
             return NULL;
-        }
     }
     return ns;
 }
@@ -310,26 +312,26 @@ static nodeset_t *ns_create_special (flux_t *h, const char *arg)
  * Exit with error if an option argument is malformed (or other error).
  * Return value will never be NULL, but it may be an empty nodeset.
  */
-nodeset_t *parse_nodeset_options (optparse_t *p, flux_t *h)
+struct idset *parse_nodeset_options (optparse_t *p, flux_t *h)
 {
     const char *nodeset = optparse_get_str (p, "rank", NULL);
     const char *exclude = optparse_get_str (p, "exclude", NULL);
-    nodeset_t *ns;
+    struct idset *ns;
 
     if (!(ns = ns_create_special (h, nodeset)))
         log_msg_exit ("could not parse --rank option");
     if (exclude) {
-        nodeset_t *xns;
-        nodeset_iterator_t *itr;
+        struct idset *xns;
         uint32_t rank;
         if (!(xns = ns_create_special (h, exclude)))
             log_msg_exit ("could not parse --exclude option");
-        if (!(itr = nodeset_iterator_create (xns)))
-            log_msg_exit ("out of memmory");
-        while ((rank = nodeset_next (itr)) != NODESET_EOF)
-            nodeset_delete_rank (ns, rank);
-        nodeset_iterator_destroy (itr);
-        nodeset_destroy (xns);
+        rank = idset_first (xns);
+        while (rank != IDSET_INVALID_ID) {
+            if (idset_clear (ns, rank) < 0)
+                log_err_exit ("idset_clear");
+            rank = idset_next (xns, rank);
+        }
+        idset_destroy (xns);
     }
     return ns;
 }
@@ -355,8 +357,9 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     int errors = 0;
     int n;
     flux_t *h;
-    nodeset_t *ns;
+    struct idset *ns;
     flux_mrpc_t *r = NULL;
+    char *nodeset = NULL;
 
     if ((n = optparse_option_index (p)) == argc) {
         optparse_print_usage (p);
@@ -379,9 +382,11 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
-    if (nodeset_count (ns) == 0)
+    if (idset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc_pack (h, topic, nodeset_string (ns), 0,
+    if (!(nodeset = idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        log_err_exit ("idset_encode");
+    if (!(r = flux_mrpc_pack (h, topic, nodeset, 0,
                               "{s:s s:O}", "path", modpath, "args", args)))
         log_err_exit ("%s", topic);
     do {
@@ -402,7 +407,8 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     } while (flux_mrpc_next (r) == 0);
 done:
     flux_mrpc_destroy (r);
-    nodeset_destroy (ns);
+    free (nodeset);
+    idset_destroy (ns);
     free (topic);
     free (service);
     json_decref (args);
@@ -415,10 +421,11 @@ done:
 int cmd_remove (optparse_t *p, int argc, char **argv)
 {
     char *modname;
-    nodeset_t *ns;
+    struct idset *ns;
     flux_t *h;
     flux_mrpc_t *r = NULL;
     int n;
+    char *nodeset = NULL;
 
     if ((n = optparse_option_index (p)) != argc - 1) {
         optparse_print_usage (p);
@@ -432,10 +439,11 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
-    if (nodeset_count (ns) == 0)
+    if (idset_count (ns) == 0)
         goto done;
-    if (!(r = flux_mrpc_pack (h, topic, nodeset_string (ns), 0,
-                             "{s:s}", "name", modname)))
+    if (!(nodeset = idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        log_err_exit ("idset_encode");
+    if (!(r = flux_mrpc_pack (h, topic, nodeset, 0, "{s:s}", "name", modname)))
         log_err_exit ("%s %s", topic, modname);
     do {
         if (flux_mrpc_get (r, NULL) < 0) {
@@ -450,7 +458,8 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
     } while (flux_mrpc_next (r) == 0);
 done:
     flux_mrpc_destroy (r);
-    nodeset_destroy (ns);
+    free (nodeset);
+    idset_destroy (ns);
     free (topic);
     free (service);
     flux_close (h);
@@ -505,7 +514,7 @@ struct module_record {
     char *digest;
     int idle;
     int status_hist[8];
-    nodeset_t *nodeset;
+    struct idset *nodeset;
     char *services;
 };
 
@@ -520,7 +529,7 @@ void module_record_destroy (void **item)
         struct module_record *m = *item;
         free (m->name);
         free (m->digest);
-        nodeset_destroy (m->nodeset);
+        idset_destroy (m->nodeset);
         free (m->services);
         free (m);
         *item = NULL;
@@ -540,8 +549,10 @@ struct module_record *module_record_create (const char *name, int size,
     m->idle = idle;
     m->services = services ? xstrdup (services) : NULL;
     m->status_hist[abs (status) % 8]++;
-    if (!(m->nodeset = nodeset_create_rank (nodeid)))
-        oom ();
+    if (!(m->nodeset = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        log_err_exit ("idset_create");
+    if (idset_set (m->nodeset, nodeid) < 0)
+        log_err_exit ("idset_set");
     return m;
 }
 
@@ -616,6 +627,7 @@ void lsmod_map_hash (zhashx_t *mods, flux_lsmod_f cb, void *arg)
     const char *key;
     struct module_record *m;
     int status;
+    char *nodeset;
 
     FOREACH_ZHASHX(mods, key, m) {
         if (m->status_hist[FLUX_MODSTATE_INIT] > 0)
@@ -628,8 +640,12 @@ void lsmod_map_hash (zhashx_t *mods, flux_lsmod_f cb, void *arg)
             status = FLUX_MODSTATE_RUNNING;
         else
             status = FLUX_MODSTATE_SLEEPING;
+        if (!(nodeset = idset_encode (m->nodeset, IDSET_FLAG_RANGE
+                                                | IDSET_FLAG_BRACKETS)))
+            log_err_exit ("idset_encode");
         cb (m->name, m->size, m->digest, m->idle, status,
-            nodeset_string (m->nodeset), m->services, arg);
+            nodeset, m->services, arg);
+        free (nodeset);
     }
 }
 
@@ -663,8 +679,8 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
             if (idle < m->idle)
                 m->idle = idle;
             m->status_hist[abs (status) % 8]++;
-            if (!nodeset_add_rank (m->nodeset, nodeid))
-                oom ();
+            if (idset_set (m->nodeset, nodeid) < 0)
+                log_err_exit ("idset_set");
         } else {
             m = module_record_create (name, size, digest, idle, status,
                                       nodeid, svcstr);
@@ -688,11 +704,12 @@ int cmd_list (optparse_t *p, int argc, char **argv)
 {
     char *service = "cmb";
     char *topic = NULL;
-    nodeset_t *ns;
+    struct idset *ns;
     flux_mrpc_t *r = NULL;
     flux_t *h;
     int n;
     zhashx_t *mods;
+    char *nodeset = NULL;
 
     if (!(mods = zhashx_new ()))
         oom ();
@@ -706,13 +723,15 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     ns = parse_nodeset_options (p, h);
-    if (nodeset_count (ns) == 0)
+    if (idset_count (ns) == 0)
         goto done;
+    if (!(nodeset = idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        log_err_exit ("idset_encode");
 
     printf ("%-20s %-7s %-7s %4s  %c  %8s %s\n",
             "Module", "Size", "Digest", "Idle", 'S', "Nodeset", "Service");
     topic = xasprintf ("%s.lsmod", service);
-    if (!(r = flux_mrpc (h, topic, NULL, nodeset_string (ns), 0)))
+    if (!(r = flux_mrpc (h, topic, NULL, nodeset, 0)))
         log_err_exit ("%s", topic);
     do {
         json_t *o;
@@ -728,7 +747,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     } while (flux_mrpc_next (r) == 0);
 done:
     flux_mrpc_destroy (r);
-    nodeset_destroy (ns);
+    free (nodeset);
+    idset_destroy (ns);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
     zhashx_destroy (&mods);
     free (topic);
