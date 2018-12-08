@@ -39,7 +39,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libsubprocess/subprocess.h"
 
@@ -238,8 +238,7 @@ int main (int argc, char *argv[])
     int optindex;
     flux_t *h;
     flux_reactor_t *r;
-    nodeset_t *ns;
-    nodeset_iterator_t *nsitr;
+    struct idset *ns;
     uint32_t rank;
     flux_cmd_t *cmd;
     char *cwd = NULL;
@@ -288,32 +287,37 @@ int main (int argc, char *argv[])
 
     if (optparse_getopt (opts, "rank", &optargp) > 0
         && strcmp (optargp, "all")) {
-        if (!(ns = nodeset_create_string (optargp)))
-            log_err_exit ("nodeset_create_string");
+        if (!(ns = idset_decode (optargp)))
+            log_err_exit ("idset_decode");
         if (flux_get_size (h, &rank_count) < 0)
             log_err_exit ("flux_get_size");
     }
     else {
         if (flux_get_size (h, &rank_count) < 0)
             log_err_exit ("flux_get_size");
-        if (!(ns = nodeset_create_range (0, rank_count - 1)))
-            log_err_exit ("nodeset_create_range");
+        if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
+            log_err_exit ("idset_create");
+        if (idset_range_set (ns, 0, rank_count - 1) < 0)
+            log_err_exit ("idset_range_set");
     }
 
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
+        char *nodeset = idset_encode (ns, IDSET_FLAG_RANGE
+                                        | IDSET_FLAG_BRACKETS);
+        if (!nodeset)
+            log_err_exit ("idset_encode");
         fprintf (stderr, "%03fms: Starting %s on %s\n",
-                 monotime_since (t0), argv0, nodeset_string (ns));
+                 monotime_since (t0), argv0, nodeset);
+        free (nodeset);
     }
 
     if (!(subprocesses = zlist_new ()))
         log_err_exit ("zlist_new");
 
-    if (!(nsitr = nodeset_iterator_create (ns)))
-        log_err_exit ("nodeset_iterator_create");
-
-    while ((rank = nodeset_next (nsitr)) != NODESET_EOF) {
+    rank = idset_first (ns);
+    while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
         if (!(p = flux_rexec (h, rank, 0, cmd, &ops)))
             log_err_exit ("flux_rexec");
@@ -321,6 +325,7 @@ int main (int argc, char *argv[])
             log_err_exit ("zlist_append");
         if (!zlist_freefn (subprocesses, p, subprocess_destroy, true))
             log_err_exit ("zlist_freefn");
+        rank = idset_next (ns, rank);
     }
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
@@ -366,6 +371,7 @@ int main (int argc, char *argv[])
 
     /* Clean up.
      */
+    idset_destroy (ns);
     free (cwd);
     flux_close (h);
     optparse_destroy (opts);
