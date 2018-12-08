@@ -56,6 +56,7 @@ static bool cronodate_check_next (struct cronodate *d,
     struct tm tm;
     int rc;
 
+    memset (&tm, 0, sizeof (tm));
     ok (string_to_tm (expected, &tm),
         "string_to_tm (expected=%s)", expected);
     if ((t_exp = mktime (&tm)) < (time_t) 0)
@@ -260,6 +261,7 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_YEAR, "*") >= 0, "date glob set, year = *");
 
     // Impossible date returns error
+    memset (&tm, 0, sizeof (tm));
     ok (string_to_tm ("2016-06-06 08:00:00", &tm), "string_to_tm");
     rc = cronodate_next (d, &tm);
     ok (rc < 0, "cronodate_next() fails when now is >= matching date");
