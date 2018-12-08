@@ -30,8 +30,6 @@ libutil_la_SOURCES = \
 	tstat.h \
 	veb.c \
 	veb.h \
-	nodeset.c \
-	nodeset.h \
 	read_all.c \
 	read_all.h \
 	ev_zmq.c \
@@ -92,8 +90,7 @@ libutil_la_SOURCES = \
 
 EXTRA_DIST = veb_mach.c
 
-TESTS = test_nodeset.t \
-	test_ev.t \
+TESTS = test_ev.t \
 	test_msglist.t \
 	test_sha1.t \
 	test_sha256.t \
@@ -135,10 +132,6 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_nodeset_t_SOURCES = test/nodeset.c
-test_nodeset_t_CPPFLAGS = $(test_cppflags)
-test_nodeset_t_LDADD = $(test_ldadd)
 
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)
