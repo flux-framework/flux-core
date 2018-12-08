@@ -74,6 +74,7 @@ struct namespace {
     char *name;                 // namespace name, hash key for ctx->namespaces
     uint32_t owner;             // namespace owner (userid)
     struct commit *commit;      // current commit data
+    int fatal_errnum;           // non-skippable error pending for all watchers
     int errnum;                 // if non-zero, error pending for all watchers
     struct watch_ctx *ctx;      // back-pointer to watch_ctx
     zlist_t *watchers;          // list of watchers of this namespace
@@ -439,6 +440,10 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         errno = ENODATA;
         goto error_respond;
     }
+    if (ns->fatal_errnum != 0) {
+        errno = ns->fatal_errnum;
+        goto error_respond;
+    }
     if (ns->errnum != 0) {
         /* if namespace not yet created, don't return error to user if
          * they want to wait */
@@ -451,6 +456,10 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         errno = ns->errnum;
         goto error_respond;
     }
+    /* This assert is safe, only potential case is if namespace
+     * removed before initial getroot or a setroot received.  But that
+     * case is handled by error handling above.
+     */
     assert (ns->commit != NULL);
     if (ns->commit->rootseq <= w->rootseq)
         return;
@@ -636,7 +645,7 @@ static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     if ((ns = zhash_lookup (ctx->namespaces, namespace))) {
-        ns->errnum = ENOTSUP;
+        ns->fatal_errnum = ENOTSUP;
         watcher_respond_ns (ns);
     }
 }
@@ -670,7 +679,7 @@ static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(commit = commit_create (rootref, rootseq, NULL))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
         ns->errnum = errno;
-        goto done;;
+        goto done;
     }
     ns->commit = commit;
     if (ns->owner == FLUX_USERID_UNKNOWN)
@@ -710,7 +719,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(commit = commit_create (rootref, rootseq, keys))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
         ns->errnum = errno;
-        goto done;;
+        goto done;
     }
     commit_destroy (ns->commit);
     ns->commit = commit;
@@ -768,26 +777,24 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
 
     if (!(ns = zhash_lookup (ctx->namespaces, namespace))) {
         if (!(ns = namespace_create (ctx, namespace)))
-            goto error;
+            return NULL;
         if (zhash_insert (ctx->namespaces, namespace, ns) < 0) {
             namespace_destroy (ns);
-            goto error;
+            return NULL;
         }
         zhash_freefn (ctx->namespaces, namespace,
                       (zhash_free_fn *)namespace_destroy);
         if (!(f = flux_kvs_getroot (ctx->h, namespace, 0))) {
             zhash_delete (ctx->namespaces, namespace);
-            goto error;
+            return NULL;
         }
         if (flux_future_then (f, -1., getroot_continuation, ns) < 0) {
             zhash_delete (ctx->namespaces, namespace);
             flux_future_destroy (f);
-            goto error;
+            return NULL;
         }
     }
     return ns;
-error:
-    return NULL;
 }
 
 /* kvs-watch.getroot request

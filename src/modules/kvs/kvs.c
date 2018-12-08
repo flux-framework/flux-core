@@ -1452,16 +1452,18 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
         bool stall = false;
+        struct kvsroot *root;
 
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        if (!getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
-                      &stall)) {
-            if (stall)
-                goto stall;
-            goto done;
-        }
+        root = getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
+                        &stall);
+        assert (!root);
+
+        if (stall)
+            goto stall;
+        goto done;
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
@@ -1483,26 +1485,24 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         cbd.errnum = 0;
 
         if (lookup_iter_missing_refs (lh, lookup_load_cb, &cbd) < 0) {
-            errno = cbd.errnum;
-
             /* rpcs already in flight, stall for them to complete */
             if (wait_get_usecount (wait) > 0) {
                 lookup_set_aux_errnum (lh, cbd.errnum);
                 goto stall;
             }
 
+            errno = cbd.errnum;
             goto done;
         }
 
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else { /* lret == LOOKUP_PROCESS_FINISHED */
-        if ((val = lookup_get_value (lh)) == NULL) {
-            errno = ENOENT;
-            goto done;
-        }
-        /* fallthrough */
+    /* else lret == LOOKUP_PROCESS_FINISHED, fallthrough */
+
+    if ((val = lookup_get_value (lh)) == NULL) {
+        errno = ENOENT;
+        goto done;
     }
 
     if (flux_respond_pack (h, msg, "{ s:O }",
@@ -1594,16 +1594,18 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
         bool stall = false;
+        struct kvsroot *root;
 
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        if (!getroot (ctx, namespace, mh, msg, lh, watch_request_cb,
-                      &stall)) {
-            if (stall)
-                goto stall;
-            goto done;
-        }
+        root = getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
+                        &stall);
+        assert (!root);
+
+        if (stall)
+            goto stall;
+        goto done;
     }
     else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
@@ -1625,24 +1627,22 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         cbd.errnum = 0;
 
         if (lookup_iter_missing_refs (lh, lookup_load_cb, &cbd) < 0) {
-            errno = cbd.errnum;
-
             /* rpcs already in flight, stall for them to complete */
             if (wait_get_usecount (wait) > 0) {
                 lookup_set_aux_errnum (lh, cbd.errnum);
                 goto stall;
             }
 
+            errno = cbd.errnum;
             goto done;
         }
 
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else { /* lret == LOOKUP_PROCESS_FINISHED */
-        val = lookup_get_value (lh);
-        /* fallthrough */
-    }
+    /* else lret == LOOKUP_PROCESS_FINISHED, fallthrough */
+
+    val = lookup_get_value (lh);
 
     /* if no value, create json null object for remainder of code */
     if (!val) {

@@ -169,6 +169,18 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, create 
         grep "Operation not supported" waitcreate4.out
 '
 
+test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt work on removed namespace' '
+        flux kvs namespace-create ns_remove &&
+        ! flux kvs --namespace=ns_remove get --watch test.ns_remove &&
+        flux kvs --namespace=ns_remove get --watch --waitcreate --count=1 \
+                     test.ns_remove > waitcreate5.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero ns_remove &&
+        flux kvs namespace-remove ns_remove &&
+        ! wait $pid &&
+        grep "Operation not supported" waitcreate5.out
+'
+
 # full checks
 
 # in full checks, we create a directory that we will use to

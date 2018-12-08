@@ -40,8 +40,8 @@ lookup_t *lookup_create (struct cache *cache,
 /* Destroy a lookup handle */
 void lookup_destroy (lookup_t *lh);
 
-/* Get errnum, should be checked after lookup() returns true to see if
- * an error occurred or not */
+/* Get errnum, should be checked after lookup() returns
+ * LOOKUP_PROCESS_ERROR */
 int lookup_get_errnum (lookup_t *lh);
 
 /* if user wishes to stall, but needs future knowledge to fail and
@@ -50,9 +50,10 @@ int lookup_get_errnum (lookup_t *lh);
 int lookup_get_aux_errnum (lookup_t *lh);
 int lookup_set_aux_errnum (lookup_t *lh, int errnum);
 
-/* Get resulting value of lookup() after lookup() returns true.  The
- * json object returned gives a reference to the caller and must be
- * json_decref()'ed to free memory. */
+/* Get resulting value of lookup() after lookup() returns
+ * LOOKUP_PROCESS_FINISHED.  The json object returned gives a
+ * reference to the caller and must be json_decref()'ed to free
+ * memory. */
 json_t *lookup_get_value (lookup_t *lh);
 
 /* On lookup stall b/c of missing reference(s), get missing reference
@@ -76,7 +77,9 @@ const char *lookup_missing_namespace (lookup_t *lh);
 int lookup_get_current_epoch (lookup_t *lh);
 
 /* Convenience function to get namespace from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
+ * Convenient if replaying RPC and don't have it presently.  May not
+ * necessarily return namespace passed in via 'namespace' in
+ * lookup_create().  Could have been namespace via a namespace prefix.
  */
 const char *lookup_get_namespace (lookup_t *lh);
 
