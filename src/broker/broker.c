@@ -61,7 +61,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
@@ -982,16 +982,15 @@ done:
 
 static bool nodeset_member (const char *s, uint32_t rank)
 {
-    nodeset_t *ns = NULL;
+    struct idset *ns = NULL;
     bool member = true;
 
     if (s) {
-        if (!(ns = nodeset_create_string (s)))
+        if (!(ns = idset_decode (s)))
             log_msg_exit ("malformed nodeset: %s", s);
-        member = nodeset_test_rank (ns, rank);
+        member = idset_test (ns, rank);
+        idset_destroy (ns);
     }
-    if (ns)
-        nodeset_destroy (ns);
     return member;
 }
 
