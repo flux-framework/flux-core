@@ -56,9 +56,9 @@ void test_basic (void)
 {
     struct idset *idset;
 
-    idset = idset_create (100, 0);
+    idset = idset_create (0, 0);
     ok (idset != NULL,
-        "idset_create works");
+        "idset_create size=0 works");
 
     idset_destroy (idset);
 }
@@ -126,12 +126,8 @@ void test_badparam (void)
         BAIL_OUT ("idset_create failed");
 
     errno = 0;
-    ok (idset_create (0, 0) == NULL && errno == EINVAL,
-        "idset_create(slots=0) fails with EINVAL");
-    errno = 0;
     ok (idset_create (1000, IDSET_FLAG_BRACKETS) == NULL && errno == EINVAL,
         "idset_create(flags=wrong) fails with EINVAL");
-
 
     errno = 0;
     ok (idset_encode (NULL, 0) == NULL && errno == EINVAL,
