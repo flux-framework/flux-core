@@ -4,7 +4,7 @@ import six
 
 from flux.wrapper import Wrapper
 from flux.util import check_future_error
-from _flux._job import ffi, lib
+from _flux._core import ffi, lib
 
 class JobWrapper(Wrapper):
     def __init__(self):
