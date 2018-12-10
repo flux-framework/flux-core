@@ -65,6 +65,7 @@ struct commit {
     json_t *keys;               // keys changed by commit
                                 //  empty if data originates from getroot RPC
                                 //  or kvs.namespace-created event
+    int refcount;               // refcount for destruction
 };
 
 
@@ -151,6 +152,21 @@ static void commit_destroy (struct commit *commit)
     }
 }
 
+static void commit_incref (struct commit *commit)
+{
+    if (commit)
+        commit->refcount++;
+}
+
+static void commit_decref (struct commit *commit)
+{
+    if (commit) {
+        commit->refcount--;
+        if (commit->refcount == 0)
+            commit_destroy (commit);
+    }
+}
+
 static struct commit *commit_create (const char *rootref, int rootseq,
                                      json_t *keys)
 {
@@ -164,6 +180,7 @@ static struct commit *commit_create (const char *rootref, int rootseq,
     /* keys can be NULL */
     commit->keys = json_incref (keys);
     commit->rootseq = rootseq;
+    commit->refcount = 1;
     return commit;
 }
 
@@ -171,7 +188,7 @@ static void namespace_destroy (struct namespace *ns)
 {
     if (ns) {
         int saved_errno = errno;
-        commit_destroy (ns->commit);
+        commit_decref (ns->commit);
         if (ns->watchers) {
             struct watcher *w;
             while ((w = zlist_pop (ns->watchers)))
@@ -735,7 +752,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
         ns->errnum = errno;
         goto done;
     }
-    commit_destroy (ns->commit);
+    commit_decref (ns->commit);
     ns->commit = commit;
     if (ns->owner == FLUX_USERID_UNKNOWN)
         ns->owner = owner;
