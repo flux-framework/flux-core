@@ -45,9 +45,14 @@ def process_header(f, including_path='.'):
         return
     with open(f, 'r') as header:
       s = header.read()
+      # turn lin-continuations into single lines, any line ending in backslash
+      # newline has the backslash and newline removed
       s = re.sub(r'\\\n', '', s)
+      # remove C-style comments, especially inside function declarations
       s = re.sub(r'\/\*([\s\S]*?)\*\/', '', s)
+      # attempt to make argument lists single-line
       s = re.sub(r',\s*\n', ', ', s, flags=re.MULTILINE)
+      # remove gcc-style attributes
       s = re.sub(r'__attribute__\s*(([^;]*))', '', s)
 
       for sub in args.add_long_sub:

@@ -13,7 +13,6 @@ PATTERN = re.compile("^JSC_[A-Z_]+")
 for k in dir(lib):
     if PATTERN.match(k):
         v = ffi.string(getattr(lib, k)).decode("ascii")
-        print("adding", k, v)
         setattr(MOD, k, v)
 
 class JSCWrapper(Wrapper):

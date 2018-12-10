@@ -6,8 +6,9 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
+AM_LIBADD = \
+	$(PYTHON_LDFLAGS) 
 AM_LDFLAGS = \
-        -L$(libdir) \
 	-avoid-version -module $(san_ld_zdef_flag) \
 	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
 	$(CODE_COVERAGE_LIBS)
