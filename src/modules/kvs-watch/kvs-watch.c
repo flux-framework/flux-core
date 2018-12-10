@@ -760,11 +760,11 @@ done:
     watcher_respond_ns (ns);
 }
 
-/* kvs.getroot response
+/* kvs.getroot response for initial namespace creation
  * Discard result if namespace has already begun receiving setroot events.
  * N.B. commit->keys is empty in this case, in contrast setroot_cb().
  */
-static void getroot_continuation (flux_future_t *f, void *arg)
+static void namespace_getroot_continuation (flux_future_t *f, void *arg)
 {
     struct namespace *ns = arg;
     const char *rootref;
@@ -819,7 +819,7 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
             zhash_delete (ctx->namespaces, namespace);
             return NULL;
         }
-        if (flux_future_then (f, -1., getroot_continuation, ns) < 0) {
+        if (flux_future_then (f, -1., namespace_getroot_continuation, ns) < 0) {
             zhash_delete (ctx->namespaces, namespace);
             flux_future_destroy (f);
             return NULL;
