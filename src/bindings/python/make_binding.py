@@ -7,7 +7,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('header', help='C header file to parse', type=str)
 parser.add_argument('--include_header', help='Include base path', type=str, default='')
-parser.add_argument('--include_ffi', help='FFI module for inclusion', action='append', default=[]) 
+parser.add_argument('--include_ffi', help='FFI module for inclusion', action='append', default=[])
 parser.add_argument('--package', help='Package prefix for module import', default=None)
 parser.add_argument('--path', help='Include base path', default='.')
 parser.add_argument('--search', help='append to header search path', action='append', default=[])
@@ -26,12 +26,16 @@ absolute_head = os.path.abspath(os.path.join(args.path, args.header))
 args.search.insert(0, args.path)
 args.search = [os.path.abspath(f) for f in args.search]
 
-def find_first(path, name):
+def find_first(path, name, extra=None):
   for dirname in path:
     filename = os.path.join(dirname, name)
     if (os.path.isfile(filename)):
       return filename
-  raise "Unable to find file", name
+  if extra is not None:
+    filename = os.path.join(extra, name)
+    if (os.path.isfile(filename)):
+      return filename
+  raise IOError(name)
 
 def process_header(f, including_path='.'):
   global mega_header
@@ -98,8 +102,8 @@ def process_header(f, including_path='.'):
 
         m = re.search('#include\s*"([^"]*)"', l)
         if m:
-          f = find_first (args.search, m.group(1))
-          process_header(f, os.path.dirname(os.path.abspath(f)))
+          nf = find_first (args.search, m.group(1), including_path)
+          process_header(nf, os.path.dirname(os.path.abspath(nf)))
         if not re.match("#\s*(ifdef|ifndef|endif|include|define)", l):
           mega_header += l+'\n'
     checked_heads[f] = 1
