@@ -2,8 +2,8 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/nodeset.h"
 #include "src/common/libtap/tap.h"
+#include "src/common/libidset/idset.h"
 
 #include "util.h"
 
@@ -141,7 +141,7 @@ int test_server (flux_t *h, void *arg)
 }
 
 /* then test - add nodeid to 'then_ns' */
-static nodeset_t *then_ns = NULL;
+static struct idset *then_ns = NULL;
 static int then_count = 0;
 static flux_mrpc_t *then_r;
 static void then_cb (flux_mrpc_t *r, void *arg)
@@ -151,7 +151,7 @@ static void then_cb (flux_mrpc_t *r, void *arg)
 
     if (flux_mrpc_get_nodeid (r, &nodeid) < 0
             || flux_mrpc_get (r, NULL) < 0
-            || !nodeset_add_rank (then_ns, nodeid)
+            || idset_set (then_ns, nodeid) < 0
             || ++then_count == 128) {
         flux_reactor_stop (flux_get_reactor (h));
     }
@@ -164,7 +164,7 @@ static void thenf_cb (flux_mrpc_t *r, void *arg)
 
     if (flux_mrpc_get_nodeid (r, &nodeid) < 0
             || flux_mrpc_get_unpack (r, "{}") < 0
-            || !nodeset_add_rank (then_ns, nodeid)
+            || idset_set (then_ns, nodeid) < 0
             || ++then_count == 128) {
         flux_reactor_stop (flux_get_reactor (h));
     }
@@ -385,7 +385,7 @@ void test_mrpc_then (flux_t *h)
 {
     rpctest_set_size (h, 128);
 
-    ok ((then_ns = nodeset_create ()) != NULL,
+    ok ((then_ns = idset_create (0, IDSET_FLAG_AUTOGROW)) != NULL,
         "nodeset created ok");
     then_count = 0;
     ok ((then_r = flux_mrpc (h, "rpctest.hello", NULL, "[0-127]", 0)) != NULL,
@@ -394,9 +394,9 @@ void test_mrpc_then (flux_t *h)
         "flux_mrpc_then works");
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "flux_reactor_run worked");
-    ok (nodeset_count (then_ns) == 128,
+    ok (idset_count (then_ns) == 128,
         "then callback worked with correct nodemap");
-    nodeset_destroy (then_ns);
+    idset_destroy (then_ns);
     flux_mrpc_destroy (then_r);
 
     diag ("completed asynchronous mrpc test");
@@ -593,7 +593,7 @@ void test_mrpcf_then (flux_t *h)
 {
     rpctest_set_size (h, 128);
 
-    ok ((then_ns = nodeset_create ()) != NULL,
+    ok ((then_ns = idset_create (0, IDSET_FLAG_AUTOGROW)) != NULL,
         "nodeset created ok");
     then_count = 0;
     ok ((then_r = flux_mrpc_pack (h, "rpcftest.hello", "[0-127]", 0, "{}")) != NULL,
@@ -602,9 +602,9 @@ void test_mrpcf_then (flux_t *h)
         "flux_mrpc_then works");
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "flux_reactor_run worked");
-    ok (nodeset_count (then_ns) == 128,
+    ok (idset_count (then_ns) == 128,
         "then callback worked with correct nodemap");
-    nodeset_destroy (then_ns);
+    idset_destroy (then_ns);
     flux_mrpc_destroy (then_r);
 
     diag ("completed asynchronous mrpcf test");
