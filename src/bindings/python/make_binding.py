@@ -7,7 +7,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('header', help='C header file to parse', type=str)
 parser.add_argument('--include_header', help='Include base path', type=str, default='')
-parser.add_argument('--include_ffi', help='FFI module for inclusion', action='append', default=[]) 
+parser.add_argument('--include_ffi', help='FFI module for inclusion', action='append', default=[])
 parser.add_argument('--package', help='Package prefix for module import', default=None)
 parser.add_argument('--path', help='Include base path', default='.')
 parser.add_argument('--search', help='append to header search path', action='append', default=[])
@@ -26,15 +26,22 @@ absolute_head = os.path.abspath(os.path.join(args.path, args.header))
 args.search.insert(0, args.path)
 args.search = [os.path.abspath(f) for f in args.search]
 
-def find_first(path, name):
+def find_first(path, name, extra=None):
   for dirname in path:
     filename = os.path.join(dirname, name)
     if (os.path.isfile(filename)):
       return filename
-  raise "Unable to find file", name
+  if extra is not None:
+    filename = os.path.join(extra, name)
+    if (os.path.isfile(filename)):
+      return filename
+  raise IOError(name)
 
-def process_header(f):
+def process_header(f, including_path='.'):
   global mega_header
+  if not os.path.isfile(f):
+      f = os.path.join(including_path, f)
+  f = os.path.abspath(f)
   if f not in checked_heads:
     for p in args.ignore_header:
       if re.search(p, f):
@@ -42,8 +49,14 @@ def process_header(f):
         return
     with open(f, 'r') as header:
       s = header.read()
+      # turn lin-continuations into single lines, any line ending in backslash
+      # newline has the backslash and newline removed
       s = re.sub(r'\\\n', '', s)
+      # remove C-style comments, especially inside function declarations
       s = re.sub(r'\/\*([\s\S]*?)\*\/', '', s)
+      # attempt to make argument lists single-line
+      s = re.sub(r',\s*\n', ', ', s, flags=re.MULTILINE)
+      # remove gcc-style attributes
       s = re.sub(r'__attribute__\s*(([^;]*))', '', s)
 
       for sub in args.add_long_sub:
@@ -89,7 +102,8 @@ def process_header(f):
 
         m = re.search('#include\s*"([^"]*)"', l)
         if m:
-          process_header(find_first (args.search, m.group(1)))
+          nf = find_first (args.search, m.group(1), including_path)
+          process_header(nf, os.path.dirname(os.path.abspath(nf)))
         if not re.match("#\s*(ifdef|ifndef|endif|include|define)", l):
           mega_header += l+'\n'
     checked_heads[f] = 1

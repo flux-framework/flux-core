@@ -78,18 +78,19 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 /* TODO: find a better way to manage this hierarchical
  * JCB attributes space
  */
-#define JSC_JOBID "jobid"
-#define JSC_STATE_PAIR "state-pair"
-# define JSC_STATE_PAIR_OSTATE "ostate"
-# define JSC_STATE_PAIR_NSTATE "nstate"
-#define JSC_RDESC "rdesc"
-# define JSC_RDESC_NNODES "nnodes"
-# define JSC_RDESC_NTASKS "ntasks"
-# define JSC_RDESC_NCORES "ncores"
-# define JSC_RDESC_NGPUS "ngpus"
-# define JSC_RDESC_WALLTIME "walltime"
-#define JSC_RDL "rdl"
-#define JSC_R_LITE "R_lite"
+
+extern const char *const JSC_JOBID;
+extern const char *const JSC_STATE_PAIR;
+extern const char *const  JSC_STATE_PAIR_OSTATE;
+extern const char *const  JSC_STATE_PAIR_NSTATE;
+extern const char *const JSC_RDESC;
+extern const char *const  JSC_RDESC_NNODES;
+extern const char *const  JSC_RDESC_NTASKS;
+extern const char *const  JSC_RDESC_NCORES;
+extern const char *const  JSC_RDESC_NGPUS;
+extern const char *const  JSC_RDESC_WALLTIME;
+extern const char *const JSC_RDL;
+extern const char *const JSC_R_LITE;
 
 /**
  * Register a callback to the asynchronous status change notification service.
