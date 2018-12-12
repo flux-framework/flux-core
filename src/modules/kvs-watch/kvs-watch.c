@@ -47,14 +47,19 @@ struct watcher {
     bool cancelled;             // true if watcher has been cancelled
     bool mute;                  // true if response should be suppressed
     bool responded;             // true if watcher has responded atleast once
-
+    bool initial_rpc_sent;      // flag is initial watch rpc sent
+    bool initial_rpc_received;  // flag is initial watch rpc received
+    int initial_rootseq;        // initial rootseq returned by initial rpc
     char *key;                  // non-NULL if watching a key with lookup
     int flags;                  // kvs_lookup flags
+    flux_future_t *getrootf;    // flux_future_t for initial getroot rpc
+    zlist_t *getroots;          // list of commits, in order
     zlist_t *lookups;           // list of futures, in commit order
 
     struct namespace *ns;       // back pointer for removal
-    void *prev;                 // previous watch for KVS_WATCH_FULL
-    int prev_len;               // previous watch len for KVS_WATCH_FULL
+    json_t *prev;               // previous watch value for KVS_WATCH_FULL
+    bool namespace_created;     // flag indicating if namespace created
+                                // during watch
 };
 
 /* Current KVS root.
@@ -65,6 +70,7 @@ struct commit {
     json_t *keys;               // keys changed by commit
                                 //  empty if data originates from getroot RPC
                                 //  or kvs.namespace-created event
+    int refcount;               // refcount for destruction
 };
 
 
@@ -94,6 +100,7 @@ struct watch_ctx {
     zhash_t *namespaces;        // hash of monitored namespaces
 };
 
+static void commit_decref (struct commit *commit);
 
 static void watcher_destroy (struct watcher *w)
 {
@@ -101,13 +108,20 @@ static void watcher_destroy (struct watcher *w)
         int saved_errno = errno;
         flux_msg_destroy (w->request);
         free (w->key);
+        flux_future_destroy (w->getrootf);
+        if (w->getroots) {
+            struct commit *commit;
+            while ((commit = zlist_pop (w->getroots)))
+                commit_decref (commit);
+            zlist_destroy (&w->getroots);
+        }
         if (w->lookups) {
             flux_future_t *f;
             while ((f = zlist_pop (w->lookups)))
                 flux_future_destroy (f);
             zlist_destroy (&w->lookups);
         }
-        free (w->prev);
+        json_decref (w->prev);
         free (w);
         errno = saved_errno;
     }
@@ -127,8 +141,14 @@ static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
         goto error;
     if (key && !(w->key = kvs_util_normalize_key (key, NULL)))
         goto error;
-    if (!(w->lookups = zlist_new ()))
-        goto error_nomem;
+    if (!key) {
+        if (!(w->getroots = zlist_new ()))
+            goto error_nomem;
+    }
+    else {
+        if (!(w->lookups = zlist_new ()))
+            goto error_nomem;
+    }
     w->flags = flags;
     w->rootseq = -1;
     return w;
@@ -151,6 +171,21 @@ static void commit_destroy (struct commit *commit)
     }
 }
 
+static void commit_incref (struct commit *commit)
+{
+    if (commit)
+        commit->refcount++;
+}
+
+static void commit_decref (struct commit *commit)
+{
+    if (commit) {
+        commit->refcount--;
+        if (commit->refcount == 0)
+            commit_destroy (commit);
+    }
+}
+
 static struct commit *commit_create (const char *rootref, int rootseq,
                                      json_t *keys)
 {
@@ -164,6 +199,7 @@ static struct commit *commit_create (const char *rootref, int rootseq,
     /* keys can be NULL */
     commit->keys = json_incref (keys);
     commit->rootseq = rootseq;
+    commit->refcount = 1;
     return commit;
 }
 
@@ -171,7 +207,7 @@ static void namespace_destroy (struct namespace *ns)
 {
     if (ns) {
         int saved_errno = errno;
-        commit_destroy (ns->commit);
+        commit_decref (ns->commit);
         if (ns->watchers) {
             struct watcher *w;
             while ((w = zlist_pop (ns->watchers)))
@@ -257,42 +293,163 @@ static bool array_match (json_t *a, const char *key)
     return false;
 }
 
-static int handle_compare_response (flux_t *h,
-                                    struct watcher *w,
-                                    const void *data,
-                                    int len)
+/* kvs.getroot response for initial watcher getroot */
+static void watcher_getroot_continuation (flux_future_t *f, void *arg)
 {
-    if (!w->responded) {
-        /* this is the first response case, simply store the first
-         * data */
-        if (!(w->prev = malloc (len))) {
+    struct watcher *w = arg;
+    struct namespace *ns = w->ns;
+    const char *rootref;
+    int rootseq;
+    struct commit *commit;
+
+    w->initial_rpc_received = true;
+
+    if (flux_kvs_getroot_get_sequence (f, &rootseq) < 0
+            || flux_kvs_getroot_get_blobref (f, &rootref) < 0) {
+        if (errno != ENOTSUP && errno != EPERM)
+            flux_log_error (ns->ctx->h, "%s: kvs_getroot", __FUNCTION__);
+        goto error;
+    }
+    w->initial_rootseq = rootseq;
+
+    /* respond with this root ref & seq */
+
+    if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
+                           "rootref", rootref,
+                           "rootseq", rootseq,
+                           "owner", ns->owner,
+                           "flags", 0) < 0) {
+        flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
+        goto error;
+    }
+    w->responded = true;
+    w->rootseq = rootseq;
+
+    /* now respond with anything on the getroots list, if they are
+     * newer that the rootseq in this initial rpc
+     */
+
+    while ((commit = zlist_pop (w->getroots))) {
+        if (commit->rootseq > w->initial_rootseq) {
+            if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
+                                   "rootref", commit->rootref,
+                                   "rootseq", commit->rootseq,
+                                   "owner", ns->owner,
+                                   "flags", 0) < 0) {
+                flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
+                goto error;
+            }
+            w->rootseq = commit->rootseq;
+        }
+        commit_decref (commit);
+    }
+
+    flux_future_destroy (f);
+    w->getrootf = NULL;
+    return;
+
+error:
+    /* f / w->getrootf destroyed in watcher_destroy() */
+    if (!w->mute) {
+        if (flux_respond_error (ns->ctx->h, w->request, errno, NULL) < 0)
+            flux_log_error (ns->ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    }
+    zlist_remove (ns->watchers, w);
+    watcher_destroy (w);
+    if (zlist_size (ns->watchers) == 0)
+        zhash_delete (ns->ctx->namespaces, ns->name);
+}
+
+static int process_getroot_response (struct namespace *ns, struct watcher *w)
+{
+    if (!w->initial_rpc_sent) {
+        /* must send initial getroot to preserve read your writes consistency */
+        if (!(w->getrootf = flux_kvs_getroot (ns->ctx->h, ns->name, 0)))
+            return -1;
+        if (flux_future_then (w->getrootf, -1., watcher_getroot_continuation, w) < 0)
+            return -1;
+        /* note that we don't need to save ns->commit on the
+         * w->getroots list. The result of the initial rpc above is
+         * guaranteed to be >= to this rootseq */
+        w->initial_rpc_sent = true;
+    }
+    else if (!w->initial_rpc_received) {
+        /* If we have not yet received the response from the initial
+         * rpc, we don't know if this is an old setroot event or not.
+         * Save it, and it'll be responded to in
+         * watcher_getroot_continuation() if necessary */
+        if (zlist_append (w->getroots, ns->commit) < 0) {
             errno = ENOMEM;
             return -1;
         }
-        memcpy (w->prev, data, len);
-        w->prev_len = len;
+        commit_incref (ns->commit);
+    }
+    else {
+        /* every setroot event from here on out is legit to return to
+         * the user */
+        if (!w->mute) {
+            if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
+                                   "rootref", ns->commit->rootref,
+                                   "rootseq", ns->commit->rootseq,
+                                   "owner", ns->owner,
+                                   "flags", 0) < 0) {
+                flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
+                return -1;
+            }
+            w->responded = true;
+        }
+        w->rootseq = ns->commit->rootseq;
+    }
+    return 0;
+}
 
-        if (flux_respond_raw (h, w->request, data, len) < 0) {
-            flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+static int handle_initial_response (flux_t *h,
+                                    struct watcher *w,
+                                    json_t *val,
+                                    int root_seq)
+{
+    /* this is the first response case, store the first response
+     * val */
+    if (w->flags & FLUX_KVS_WATCH_FULL
+        || w->flags & FLUX_KVS_WATCH_UNIQ)
+        w->prev = json_incref (val);
+
+    if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        return -1;
+    }
+
+    w->initial_rootseq = root_seq;
+    w->responded = true;
+    return 0;
+}
+
+static int handle_compare_response (flux_t *h,
+                                    struct watcher *w,
+                                    json_t *val)
+{
+    if (!w->responded) {
+        /* this is the first response case, store the first response
+         * val.  This is here b/c initial response could have been
+         * ENOENT case */
+        w->prev = json_incref (val);
+
+        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             return -1;
         }
      }
     else {
         /* not first response case, compare to previous to see if
-         * respond should be done, update data if necessary */
-        if (w->prev_len == len
-            && !memcmp (w->prev, data, len))
+         * respond should be done, update if necessary */
+        if (json_equal (w->prev, val))
             return 0;
 
-        if (len > w->prev_len) {
-            if (!(w->prev = realloc (w->prev, len)))
-                return -1;
-        }
-        memcpy (w->prev, data, len);
-        w->prev_len = len;
+        json_decref (w->prev);
+        w->prev = json_incref (val);
 
-        if (flux_respond_raw (h, w->request, data, len) < 0) {
-            flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             return -1;
         }
     }
@@ -303,11 +460,10 @@ static int handle_compare_response (flux_t *h,
 
 static int handle_normal_response (flux_t *h,
                                    struct watcher *w,
-                                   const void *data,
-                                   int len)
+                                   json_t *val)
 {
-    if (flux_respond_raw (h, w->request, data, len) < 0) {
-        flux_log_error (h, "%s: flux_respond_raw", __FUNCTION__);
+    if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         return -1;
     }
 
@@ -322,30 +478,118 @@ static int handle_normal_response (flux_t *h,
  * Exception for FLUX_KVS_WATCH_FULL, must check if value is
  * different than old value.
  */
-static int handle_lookup_response (flux_future_t *f, struct watcher *w)
+static int handle_lookup_response (flux_future_t *f,
+                                   struct watcher *w,
+                                   bool *cleanup_lookups)
 {
     flux_t *h = flux_future_get_flux (f);
-    const void *data;
-    int len;
+    int errnum;
+    int root_seq;
+    json_t *val;
 
-    if (flux_rpc_get_raw (f, &data, &len) < 0) {
-        if (w->flags & FLUX_KVS_WATCH_WAITCREATE
-            && errno == ENOENT
-            && w->responded == false)
-            return 0;
-        goto error;
-    }
-    if (!w->mute) {
-        if (w->flags & FLUX_KVS_WATCH_FULL
-            || w->flags & FLUX_KVS_WATCH_UNIQ) {
-            if (handle_compare_response (h, w, data, len) < 0)
-                goto error;
+    if (flux_future_aux_get (f, "initial")) {
+
+        w->initial_rpc_received = true;
+
+        /* First check for ENOENT */
+        if (!flux_rpc_get_unpack (f, "{ s:i s:i }",
+                                  "errno", &errnum,
+                                  "rootseq", &root_seq)) {
+            assert (errnum == ENOENT);
+            if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+                && w->responded == false) {
+                w->initial_rootseq = root_seq;
+                return 0;
+            }
+            errno = errnum;
+            goto error;
         }
-        else {
-            if (handle_normal_response (h, w, data, len) < 0)
-                goto error;
+
+        if (flux_rpc_get_unpack (f, "{ s:o s:i }",
+                                 "val", &val,
+                                 "rootseq", &root_seq) < 0) {
+            if (errno == ENOTSUP) {
+                /* Here are the racy conditions to consider for ENOTSUP.
+                 *
+                 * if namespace not yet created on this lookup
+                 *
+                 * - if received kvs.namespace-created event, then
+                 *   all setroot received thus far are legit [1].
+                 *
+                 * - if haven't received kvs.namespace-created event,
+                 *   then there should be no setroot lookups yet.  It
+                 *   shouldn't be possible.
+                 *
+                 * if namespace has been removed
+                 *
+                 * - if received kvs.namespace-removed event, that
+                 *   would lead to fatal error and we wouldn't be here
+                 *   b/c the namespace would have been destroyed (see
+                 *   fatal_errnum).
+                 *
+                 * - we detected ENOTSUP before kvs.namespace-removed
+                 *   received.  In this this case, any lookups based
+                 *   on setroot lookups should be tossed, b/c they
+                 *   were clearly before the namespace was removed
+                 *   [2].
+                 *
+                 * The difficulty is to detect [1] vs [2], what are
+                 * acceptable vs unacceptable setroot lookups on the
+                 * lookups list.  The key is if the
+                 * "kvs.namespace-created" event has ocurred.  We can
+                 * use the flag w->namespace_created for that purpose.
+                 *
+                 * See how the cleanup_lookups flag is used below in
+                 * lookup_continuation().
+                 */
+
+                (*cleanup_lookups) = true;
+
+                /* if WAITCREATE, then any setroot for this namespace
+                 * in the future is valid (i.e. all future rootseq >
+                 * 0)
+                 */
+                w->initial_rootseq = 0;
+            }
+            goto error;
+        }
+
+        if (handle_initial_response (h, w, val, root_seq) < 0)
+            goto error;
+    }
+    else {
+        /* First check for ENOENT */
+        if (!flux_rpc_get_unpack (f, "{ s:i s:i }",
+                                  "errno", &errnum,
+                                  "rootseq", &root_seq)) {
+            assert (errnum == ENOENT);
+            errno = errnum;
+            goto error;
+        }
+
+        if (flux_rpc_get_unpack (f, "{ s:o s:i }",
+                                 "val", &val,
+                                 "rootseq", &root_seq) < 0)
+            goto error;
+
+        /* if we got some setroots before the initial rpc returned,
+         * toss them */
+        if (root_seq < w->initial_rootseq)
+            goto out;
+
+        if (!w->mute) {
+            if (w->flags & FLUX_KVS_WATCH_FULL
+                || w->flags & FLUX_KVS_WATCH_UNIQ) {
+                if (handle_compare_response (h, w, val) < 0)
+                    goto error;
+            }
+            else {
+                if (handle_normal_response (h, w, val) < 0)
+                    goto error;
+            }
         }
     }
+out:
     return 0;
 error:
     if (!w->mute) {
@@ -363,10 +607,13 @@ static void lookup_continuation (flux_future_t *f, void *arg)
 {
     struct watcher *w = arg;
     struct namespace *ns = w->ns;
+    bool cleanup_lookups = false;
 
     while ((f = zlist_first (w->lookups)) && flux_future_is_ready (f)) {
+        int rc = 0;
         f = zlist_pop (w->lookups);
-        int rc = handle_lookup_response (f, w);
+        if (!cleanup_lookups || w->namespace_created)
+            rc = handle_lookup_response (f, w, &cleanup_lookups);
         flux_future_destroy (f);
         if (rc < 0)
             goto destroy_watcher;
@@ -380,45 +627,64 @@ destroy_watcher:
 }
 
 /* Like flux_kvs_lookupat() except:
+ * - targets kvs.lookup-plus, so root_ref & root_seq are available in
+ *   response
  * - blobref param replaces treeobj
  * - namespace param (ignores namespace associated with flux_t handle)
  * - userid, rolemask params (see N.B. below)
  * Use flux_rpc_get() not flux_kvs_lookup_get() to access the response.
  */
 static flux_future_t *lookupat (flux_t *h,
-                                int flags,
-                                const char *key,
+                                struct watcher *w,
                                 const char *blobref,
-                                const char *namespace,
-                                uint32_t userid,
-                                uint32_t rolemask)
+                                int root_seq,
+                                const char *namespace)
 {
     flux_msg_t *msg;
     json_t *o = NULL;
     flux_future_t *f;
     int saved_errno;
 
-    if (!(msg = flux_request_encode ("kvs.lookup", NULL)))
+    if (!(msg = flux_request_encode ("kvs.lookup-plus", NULL)))
         return NULL;
-    if (!(o = treeobj_create_dirref (blobref)))
-        goto error;
-    if (flux_msg_pack (msg, "{s:s s:s s:i s:O}",
-                       "key", key,
-                       "namespace", namespace,
-                       "flags", flags,
-                       "rootdir", o) < 0)
-        goto error;
+    if (!w->initial_rpc_sent) {
+        if (flux_msg_pack (msg, "{s:s s:s s:i}",
+                           "key", w->key,
+                           "namespace", namespace,
+                           "flags", w->flags) < 0)
+            goto error;
+    }
+    else {
+        if (!(o = treeobj_create_dirref (blobref)))
+            goto error;
+        if (flux_msg_pack (msg, "{s:s s:s s:i s:i s:O}",
+                           "key", w->key,
+                           "namespace", namespace,
+                           "flags", w->flags,
+                           "rootseq", root_seq,
+                           "rootdir", o) < 0)
+            goto error;
+    }
     /* N.B. Since this module is authenticated to the shmem:// connector
      * with FLUX_ROLE_OWNER, we are allowed to switch the message credentials
      * in this request message, and not be overridden at the connector,
      * as would be the case if we were not sufficiently privileged.
      */
-    if (flux_msg_set_userid (msg, userid) < 0)
+    if (flux_msg_set_userid (msg, w->userid) < 0)
         goto error;
-    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+    if (flux_msg_set_rolemask (msg, w->rolemask) < 0)
         goto error;
     if (!(f = flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0)))
         goto error;
+    if (!w->initial_rpc_sent) {
+        /* just need to set an aux as a flag, pointer to 'f' as aux
+         * data is random pointer choice */
+        if (flux_future_aux_set (f, "initial", f, NULL) < 0) {
+            flux_future_destroy (f);
+            goto error;
+        }
+    }
+    w->initial_rpc_sent = true;
     flux_msg_destroy (msg);
     json_decref (o);
     return f;
@@ -428,6 +694,30 @@ error:
     flux_msg_destroy (msg);
     errno = saved_errno;
     return NULL;
+}
+
+static int process_lookup_response (struct namespace *ns, struct watcher *w)
+{
+    flux_future_t *f;
+    if (!(f = lookupat (ns->ctx->h,
+                        w,
+                        ns->commit->rootref,
+                        ns->commit->rootseq,
+                        ns->name))) {
+        flux_log_error (ns->ctx->h, "%s: lookupat", __FUNCTION__);
+        return -1;
+    }
+    if (zlist_append (w->lookups, f) < 0) {
+        flux_future_destroy (f);
+        errno = ENOMEM;
+        return -1;
+    }
+    if (flux_future_then (f, -1., lookup_continuation, w) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    w->rootseq = ns->commit->rootseq;
+    return 0;
 }
 
 /* Respond to watcher request, if appropriate.
@@ -470,18 +760,8 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
     /* flux_kvs_getroot (FLUX_KVS_WATCH)
      */
     if (w->key == NULL) {
-        if (!w->mute) {
-            if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
-                                   "rootref", ns->commit->rootref,
-                                   "rootseq", ns->commit->rootseq,
-                                   "owner", ns->owner,
-                                   "flags", 0) < 0) {
-                flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
-                goto error;
-            }
-            w->responded = true;
-        }
-        w->rootseq = ns->commit->rootseq;
+        if (process_getroot_response (ns, w) < 0)
+            goto error;
     }
     /* flux_kvs_lookup (FLUX_KVS_WATCH)
      *
@@ -503,27 +783,8 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
     else if (w->rootseq == -1
              || (w->flags & FLUX_KVS_WATCH_FULL)
              || array_match (ns->commit->keys, w->key)) {
-        flux_future_t *f;
-        if (!(f = lookupat (ns->ctx->h,
-                            w->flags,
-                            w->key,
-                            ns->commit->rootref,
-                            ns->name,
-                            w->userid,
-                            w->rolemask))) {
-            flux_log_error (ns->ctx->h, "%s: lookupat", __FUNCTION__);
+        if (process_lookup_response (ns, w) < 0)
             goto error_respond;
-        }
-        if (zlist_append (w->lookups, f) < 0) {
-            flux_future_destroy (f);
-            errno = ENOMEM;
-            goto error_respond;
-        }
-        if (flux_future_then (f, -1., lookup_continuation, w) < 0) {
-            flux_future_destroy (f);
-            goto error_respond;
-        }
-        w->rootseq = ns->commit->rootseq;
     }
     return;
 error_respond:
@@ -543,7 +804,7 @@ error:
  * Since zlist_t is not deletion-safe for traversal, a temporary duplicate
  * must be created here.
  */
-static void watcher_respond_ns (struct namespace *ns)
+static void watcher_respond_ns (struct namespace *ns, bool ns_created)
 {
     zlist_t *l;
     struct watcher *w;
@@ -551,6 +812,8 @@ static void watcher_respond_ns (struct namespace *ns)
     if ((l = zlist_dup (ns->watchers))) {
         w = zlist_first (l);
         while (w) {
+            if (ns_created)
+                w->namespace_created = true;
             watcher_respond (ns, w);
             w = zlist_next (l);
         }
@@ -646,7 +909,7 @@ static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if ((ns = zhash_lookup (ctx->namespaces, namespace))) {
         ns->fatal_errnum = ENOTSUP;
-        watcher_respond_ns (ns);
+        watcher_respond_ns (ns, false);
     }
 }
 
@@ -685,7 +948,7 @@ static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
     if (ns->owner == FLUX_USERID_UNKNOWN)
         ns->owner = owner;
 done:
-    watcher_respond_ns (ns);
+    watcher_respond_ns (ns, true);
 }
 
 /* kvs.setroot event
@@ -721,19 +984,19 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
         ns->errnum = errno;
         goto done;
     }
-    commit_destroy (ns->commit);
+    commit_decref (ns->commit);
     ns->commit = commit;
     if (ns->owner == FLUX_USERID_UNKNOWN)
         ns->owner = owner;
 done:
-    watcher_respond_ns (ns);
+    watcher_respond_ns (ns, false);
 }
 
-/* kvs.getroot response
+/* kvs.getroot response for initial namespace creation
  * Discard result if namespace has already begun receiving setroot events.
  * N.B. commit->keys is empty in this case, in contrast setroot_cb().
  */
-static void getroot_continuation (flux_future_t *f, void *arg)
+static void namespace_getroot_continuation (flux_future_t *f, void *arg)
 {
     struct namespace *ns = arg;
     const char *rootref;
@@ -761,7 +1024,7 @@ static void getroot_continuation (flux_future_t *f, void *arg)
     ns->commit = commit;
     ns->owner = owner;
 done:
-    watcher_respond_ns (ns);
+    watcher_respond_ns (ns, false);
     flux_future_destroy (f);
 }
 
@@ -788,7 +1051,7 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
             zhash_delete (ctx->namespaces, namespace);
             return NULL;
         }
-        if (flux_future_then (f, -1., getroot_continuation, ns) < 0) {
+        if (flux_future_then (f, -1., namespace_getroot_continuation, ns) < 0) {
             zhash_delete (ctx->namespaces, namespace);
             flux_future_destroy (f);
             return NULL;

@@ -25,12 +25,16 @@ typedef int (*lookup_ref_f)(lookup_t *c,
  *
  * - root_ref is optional.  If not specified, will use root ref
  *   specified in namespace.
+ * - root_seq is not used and is solely used for convenience being
+ *   passed alongside root_ref.  Can be retrieved later with
+ *   lookup_get_root_seq().  Will not be stored if root_ref is NULL.
  */
 lookup_t *lookup_create (struct cache *cache,
                          kvsroot_mgr_t *krm,
                          int current_epoch,
                          const char *namespace,
                          const char *root_ref,
+                         int root_seq,
                          const char *path,
                          uint32_t rolemask,
                          uint32_t userid,
@@ -82,6 +86,15 @@ int lookup_get_current_epoch (lookup_t *lh);
  * lookup_create().  Could have been namespace via a namespace prefix.
  */
 const char *lookup_get_namespace (lookup_t *lh);
+
+/* Convenience functions to get root ref & seq used in lookup.
+ * root_ref will be the root_ref passed in via lookup_create() or the
+ * root_ref used from the namespace.  The root_seq is only if the
+ * root_ref was from a namespace.  Note that the values are not valid
+ * unless the lookup completes (LOOKUP_PROCESS_FINISED).
+ */
+const char *lookup_get_root_ref (lookup_t *lh);
+int lookup_get_root_seq (lookup_t *lh);
 
 /* Set a new current epoch.  Convenience on RPC replays and epoch may
  * be new */

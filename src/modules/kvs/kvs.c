@@ -1371,8 +1371,10 @@ static void lookup_wait_error_cb (wait_t *w, int errnum, void *arg)
     lookup_set_aux_errnum (lh, errnum);
 }
 
-static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
+                                const flux_msg_t *msg, void *arg,
+                                flux_msg_handler_f replay_cb,
+                                bool *stall)
 {
     kvs_ctx_t *ctx = arg;
     int flags;
@@ -1391,6 +1393,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     lh = flux_msg_aux_get (msg, "lookup_handle");
     if (!lh) {
         uint32_t rolemask, userid;
+        int root_seq = -1;
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:s s:i }",
                                  "key", &key,
@@ -1404,8 +1407,12 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         (void)flux_request_unpack (msg, NULL, "{ s:o }",
                                    "rootdir", &root_dirent);
 
-        /* If root dirent was specified, lookup corresponding 'root' directory.
-         * Otherwise, use the current root.
+        /* rootseq is optional */
+        (void)flux_request_unpack (msg, NULL, "{ s:i }",
+                                   "rootseq", &root_seq);
+
+        /* If root dirent was specified, lookup corresponding
+         * 'root' directory.  Otherwise, use the current root.
          */
         if (root_dirent) {
             if (treeobj_validate (root_dirent) < 0
@@ -1424,6 +1431,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   ctx->epoch,
                                   namespace,
                                   root_ref ? root_ref : NULL,
+                                  root_seq,
                                   key,
                                   rolemask,
                                   userid,
@@ -1457,7 +1465,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         namespace = lookup_missing_namespace (lh);
         assert (namespace);
 
-        root = getroot (ctx, namespace, mh, msg, lh, lookup_request_cb,
+        root = getroot (ctx, namespace, mh, msg, lh, replay_cb,
                         &stall);
         assert (!root);
 
@@ -1469,7 +1477,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
-                                              lookup_request_cb)))
+                                              replay_cb)))
             goto done;
 
         if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
@@ -1500,7 +1508,37 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     /* else lret == LOOKUP_PROCESS_FINISHED, fallthrough */
 
-    if ((val = lookup_get_value (lh)) == NULL) {
+    rc = 0;
+done:
+    wait_destroy (wait);
+    if (rc < 0) {
+        lookup_destroy (lh);
+        json_decref (val);
+    }
+    (*stall) = false;
+    return (rc == 0) ? lh : NULL;
+
+stall:
+    (*stall) = true;
+    return NULL;
+}
+
+static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
+{
+    lookup_t *lh = NULL;
+    json_t *val = NULL;
+    bool stall = false;
+    int rc = -1;
+
+    if (!(lh = lookup_common (h, mh, msg, arg, lookup_request_cb,
+                              &stall))) {
+        if (stall)
+            goto stall;
+        goto done;
+    }
+
+    if (!(val = lookup_get_value (lh))) {
         errno = ENOENT;
         goto done;
     }
@@ -1517,11 +1555,75 @@ done:
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
-    wait_destroy (wait);
     lookup_destroy (lh);
 stall:
     json_decref (val);
 }
+
+/* similar to kvs.lookup, but root_ref / root_seq returned to caller.
+ * Also, ENOENT handle special case, returned as error number to
+ * caller.  This request is a special rpc predominantly used by the
+ * kvs-watch module.  The kvs-watch module requires root information
+ * on lookups (including ENOENT failed lookups) to determine what
+ * lookups can be considered to be read-your-writes consistency safe.
+ */
+static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg, void *arg)
+{
+    lookup_t *lh = NULL;
+    json_t *val = NULL;
+    const char *root_ref = NULL;
+    int root_seq = 0;
+    bool stall = false;
+    int rc = -1;
+
+    if (!(lh = lookup_common (h, mh, msg, arg, lookup_plus_request_cb,
+                              &stall))) {
+        if (stall)
+            goto stall;
+        goto done;
+    }
+
+    root_ref = lookup_get_root_ref (lh);
+    assert (root_ref);
+    root_seq = lookup_get_root_seq (lh);
+    assert (root_seq >= 0);
+
+    if (!(val = lookup_get_value (lh))) {
+        errno = ENOENT;
+        goto done;
+    }
+
+    if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
+                           "val", val,
+                           "rootseq", root_seq,
+                           "rootref", root_ref) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto done;
+    }
+
+    rc = 0;
+done:
+    if (rc < 0) {
+        if (errno == ENOENT) {
+            if (flux_respond_pack (h, msg, "{ s:i s:i s:s }",
+                                   "errno", errno,
+                                   "rootseq", root_seq,
+                                   "rootref", root_ref) < 0) {
+                flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+                goto done;
+            }
+        }
+        else {
+            if (flux_respond (h, msg, errno, NULL) < 0)
+                flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        }
+    }
+    lookup_destroy (lh);
+stall:
+    json_decref (val);
+}
+
 
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
@@ -1565,6 +1667,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   ctx->epoch,
                                   namespace,
                                   NULL,
+                                  0,
                                   key,
                                   rolemask,
                                   userid,
@@ -2993,6 +3096,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             sync_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.lookup",
                             lookup_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.lookup-plus",
+                            lookup_plus_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",
                             watch_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",
