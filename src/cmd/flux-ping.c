@@ -34,7 +34,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 
@@ -210,7 +210,7 @@ int main (int argc, char *argv[])
     int pad_bytes;
     char *target;
     flux_watcher_t *tw = NULL;
-    nodeset_t *ns = NULL;
+    struct idset *ns = NULL;
     optparse_t *opts;
     struct ping_ctx ctx;
     int optindex;
@@ -268,10 +268,10 @@ int main (int argc, char *argv[])
             *p++ = '\0';
             ctx.rank = target;
             target = p;
-        } else if ((ns = nodeset_create_string (target)) != NULL) {
+        } else if ((ns = idset_decode (target)) != NULL) {
             ctx.rank = target;
             target = "cmb";
-            nodeset_destroy (ns);
+            idset_destroy (ns);
         } else if (!strcmp (target, "all")
                    || !strcmp (target, "any")
                    || !strcmp (target, "upstream")) {
@@ -291,9 +291,9 @@ int main (int argc, char *argv[])
 
     /* Determine number of ranks for output logic
      */
-    if ((ns = nodeset_create_string (ctx.rank))) {
-        ctx.rank_count = nodeset_count (ns);
-        nodeset_destroy (ns);
+    if ((ns = idset_decode (ctx.rank))) {
+        ctx.rank_count = idset_count (ns);
+        idset_destroy (ns);
     }
     else {
         if (!strcmp (ctx.rank, "all")) {

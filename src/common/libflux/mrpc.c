@@ -44,7 +44,7 @@
 #include "msg_handler.h"
 #include "mrpc.h"
 
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/aux.h"
 
 #define MRPC_MAGIC 0x114422ae
@@ -409,10 +409,10 @@ static flux_mrpc_t *mrpc (flux_t *h,
                           int flags,
                           flux_msg_t *msg)
 {
-    nodeset_t *ns = NULL;
-    nodeset_iterator_t *itr = NULL;
+    struct idset *ns = NULL;
     flux_mrpc_t *mrpc = NULL;
-    int i, rv = 0;
+    int rv = 0;
+    uint32_t nodeid;
     uint32_t count;
     int rx_expected;
 
@@ -433,30 +433,27 @@ static flux_mrpc_t *mrpc (flux_t *h,
     if (!strcmp (nodeset, "all")) {
         if (flux_get_size (h, &count) < 0)
             goto error;
-        ns = nodeset_create_range (0, count - 1);
+        if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
+            goto error;
+        if (idset_range_set (ns, 0, count - 1) < 0)
+            goto error;
     } else {
-        if ((ns = nodeset_create_string (nodeset)))
-            count = nodeset_count (ns);
-    }
-    if (!ns) {
-        errno = EINVAL;
-        goto error;
+        if (!(ns = idset_decode (nodeset)))
+            goto error;
+        count = idset_count (ns);
     }
     rx_expected = count;
     if ((flags & FLUX_RPC_NORESPONSE))
         rx_expected = 0;
     if (!(mrpc = mrpc_create (h, rx_expected)))
         goto error;
-    if (!(itr = nodeset_iterator_create (ns)))
-        goto error;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "multi");
     cali_begin_int_byname ("flux.message.response_expected",
                            !(flags & FLUX_RPC_NORESPONSE));
 #endif
-    for (i = 0; i < count; i++) {
-        uint32_t nodeid = nodeset_next (itr);
-        assert (nodeid != NODESET_EOF);
+    nodeid = idset_first (ns);
+    while (nodeid != IDSET_INVALID_ID) {
 #if HAVE_CALIPER
         cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
 #endif
@@ -466,6 +463,7 @@ static flux_mrpc_t *mrpc (flux_t *h,
 #endif
         if (rv < 0)
             break;
+        nodeid = idset_next (ns, nodeid);
     }
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
@@ -473,15 +471,11 @@ static flux_mrpc_t *mrpc (flux_t *h,
 #endif
     if (rv < 0)
         goto error;
-    nodeset_iterator_destroy (itr);
-    nodeset_destroy (ns);
+    idset_destroy (ns);
     return mrpc;
 error:
     flux_mrpc_destroy (mrpc);
-    if (itr)
-        nodeset_iterator_destroy (itr);
-    if (ns)
-        nodeset_destroy (ns);
+    idset_destroy (ns);
     return NULL;
 }
 

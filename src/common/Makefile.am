@@ -30,6 +30,7 @@ libflux_internal_la_SOURCES =
 libflux_internal_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/libutil.la \
+	$(builddir)/libidset/libidset.la \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libkz/libkz.la \
 	$(builddir)/libzio/libzio.la \

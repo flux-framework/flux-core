@@ -30,13 +30,18 @@
 #include <ctype.h>
 #include <czmq.h>
 
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libutil/xzmalloc.h"
 
 #include "cronodate.h"
 
+struct cronodate_item {
+    struct idset *set;
+    char *encoding;
+};
+
 struct cronodate {
-    nodeset_t * item [TM_MAX_ITEM];
+    struct cronodate_item item [TM_MAX_ITEM];
 };
 
 static char * weekdays [] = {
@@ -173,8 +178,10 @@ const char *tm_month_string (int m)
 void cronodate_destroy (cronodate_t *d)
 {
     int i;
-    for (i = 0; i < TM_MAX_ITEM; i++)
-        nodeset_destroy (d->item [i]);
+    for (i = 0; i < TM_MAX_ITEM; i++) {
+        idset_destroy (d->item [i].set);
+        free (d->item [i].encoding);
+    }
     free (d);
 }
 
@@ -185,13 +192,13 @@ cronodate_t * cronodate_create ()
 
     memset (d, 0, sizeof (*d));
     for (i = 0; i < TM_MAX_ITEM; i++) {
-        nodeset_t *n = nodeset_create_size (tm_unit_max (i) + 1);
+        struct idset *n = idset_create (tm_unit_max (i) + 1,
+                                        IDSET_FLAG_AUTOGROW);
         if (n == NULL) {
-            nodeset_destroy (n);
+            cronodate_destroy (d);
             return (NULL);
         }
-        nodeset_config_brackets (n, false);
-        d->item [i] = n;
+        d->item [i].set = n;
     }
     return (d);
 }
@@ -244,7 +251,7 @@ static int get_range (const char *r, tm_unit_t u, int *lo, int *hi)
     return (0);
 }
 
-static int range_parse (nodeset_t *n, tm_unit_t u, const char *range)
+static int range_parse (struct idset *n, tm_unit_t u, const char *range)
 {
     char *cpy, *a1, *q, *s, *saveptr;
     int hi, lo;
@@ -267,13 +274,18 @@ static int range_parse (nodeset_t *n, tm_unit_t u, const char *range)
         if (get_range (s, u, &lo, &hi) < 0)
             goto out;
 
-        if (lo == hi)
-            nodeset_add_rank (n, lo);
-        else if (stride == 1)
-            nodeset_add_range (n, lo, hi);
+        if (lo == hi) {
+            if (idset_set (n, lo) < 0)
+                goto out;
+        }
+        else if (stride == 1) {
+            if (idset_range_set (n, lo, hi) < 0)
+                goto out;
+        }
         else {
             while (lo <= hi) {
-                nodeset_add_rank (n, lo);
+                if (idset_set (n, lo) < 0)
+                    goto out;
                 lo += stride;
             }
         }
@@ -287,46 +299,53 @@ out:
 
 int cronodate_set (cronodate_t *d, tm_unit_t item, const char *range)
 {
-    nodeset_t *n = d->item [item];
+    struct idset *n = d->item [item].set;
     assert (n != NULL);
-    /* 
+    /*
      *  Delete all existing nodeset members before setting the new range.
      */
-    nodeset_delete_range (n, tm_unit_min (item), tm_unit_max (item));
+    if (idset_range_clear (n, tm_unit_min (item), tm_unit_max (item)) < 0)
+        return -1;
     return range_parse (n, item, range);
 }
 
 int cronodate_set_integer (cronodate_t *d, tm_unit_t item, int value)
 {
-    nodeset_t *n = d->item [item];
+    struct idset *n = d->item [item].set;
     assert (n != NULL);
     if (value > tm_unit_max (item) || value < tm_unit_min (item)) {
         errno = ERANGE;
         return -1;
     }
     /*  Clear all members before setting the new value */
-    nodeset_delete_range (n, tm_unit_min (item), tm_unit_max (item));
-    nodeset_add_rank (n, value);
+    if (idset_range_clear (n, tm_unit_min (item), tm_unit_max (item)) < 0)
+        return -1;
+    if (idset_set (n, value) < 0)
+        return -1;
     return 0;
 }
 
 const char *cronodate_get (cronodate_t *d, tm_unit_t u)
 {
-    return (nodeset_string (d->item [u]));
+    free (d->item[u].encoding);
+    d->item[u].encoding = idset_encode (d->item[u].set, IDSET_FLAG_RANGE);
+    return d->item[u].encoding;
 }
 
 void cronodate_fillset (cronodate_t *d)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++)
-        nodeset_add_range (d->item [i], tm_unit_min (i), tm_unit_max (i));
+        (void)idset_range_set (d->item [i].set, tm_unit_min (i),
+                                                tm_unit_max (i));
 }
 
 void cronodate_emptyset (cronodate_t *d)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++)
-        nodeset_delete_range (d->item [i], tm_unit_min (i), tm_unit_max (i));
+        (void)idset_range_clear (d->item [i].set, tm_unit_min (i),
+                                                  tm_unit_max (i));
 }
 
 /* Return pointer to item in struct tm that corresponds to tm_unit_t type.
@@ -428,9 +447,9 @@ bool cronodate_match (cronodate_t *d, struct tm *tm)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++) {
-        nodeset_t *n = d->item [i];
+        struct idset *n = d->item [i].set;
         int *ti = tm_item (tm, i);
-        if (!nodeset_test_rank (n, *ti)) {
+        if (!idset_test (n, *ti)) {
             return false;
         }
     }
@@ -463,13 +482,13 @@ again:
      *  later, but for now is sufficient.
      */
     for (i = TM_SEC; i < TM_MAX_ITEM; i++) {
-        nodeset_t *n = d->item [i];
+        struct idset *n = d->item [i].set;
         int *ti = tm_item (tm, i);
 
-        if (!nodeset_test_rank (n, *ti)) {
-            uint32_t next;
-            if ((next = nodeset_next_rank (n, *ti)) == NODESET_EOF)
-                next = nodeset_min (n);
+        if (!idset_test (n, *ti)) {
+            unsigned int next;
+            if ((next = idset_next (n, *ti)) == IDSET_INVALID_ID)
+                next = idset_first (n);
             tm_advance (tm, i, next);
             // Call mktime to fix up any overflow, and check that
             //  don't iterate more than 2 years in the future

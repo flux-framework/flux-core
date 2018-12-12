@@ -30,8 +30,6 @@ libutil_la_SOURCES = \
 	tstat.h \
 	veb.c \
 	veb.h \
-	nodeset.c \
-	nodeset.h \
 	read_all.c \
 	read_all.h \
 	ev_zmq.c \
@@ -92,8 +90,7 @@ libutil_la_SOURCES = \
 
 EXTRA_DIST = veb_mach.c
 
-TESTS = test_nodeset.t \
-	test_ev.t \
+TESTS = test_ev.t \
 	test_msglist.t \
 	test_sha1.t \
 	test_sha256.t \
@@ -136,10 +133,6 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
-test_nodeset_t_SOURCES = test/nodeset.c
-test_nodeset_t_CPPFLAGS = $(test_cppflags)
-test_nodeset_t_LDADD = $(test_ldadd)
-
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)
 test_ev_t_LDADD = $(test_ldadd)
@@ -166,7 +159,12 @@ test_kary_t_LDADD = $(test_ldadd)
 
 test_cronodate_t_SOURCES = test/cronodate.c
 test_cronodate_t_CPPFLAGS = $(test_cppflags)
-test_cronodate_t_LDADD = $(test_ldadd)
+test_cronodate_t_LDADD = \
+	$(builddir)/cronodate.lo \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(builddir)/veb.lo \
+	$(builddir)/xzmalloc.lo \
+	$(top_builddir)/src/common/libtap/libtap.la
 
 test_wallclock_t_SOURCES = test/wallclock.c
 test_wallclock_t_CPPFLAGS = $(test_cppflags)

@@ -32,7 +32,7 @@
 #include <czmq.h>
 #include <jansson.h>
 
-#include "src/common/libutil/nodeset.h"
+#include "src/common/libidset/idset.h"
 
 struct aggregator {
     flux_t *h;
@@ -46,7 +46,7 @@ struct aggregator {
  *  Single entry in an aggregate: a list of ids with a common value.
  */
 struct aggregate_entry {
-    nodeset_t *ids;
+    struct idset *ids;
     json_t *value;
 };
 
@@ -72,16 +72,22 @@ struct aggregate {
 static void aggregate_entry_destroy (struct aggregate_entry *ae)
 {
     if (ae) {
-        nodeset_destroy (ae->ids);
+        int saved_errno = errno;
+        idset_destroy (ae->ids);
         free (ae);
+        errno = saved_errno;
     }
 }
 
 static struct aggregate_entry * aggregate_entry_create (void)
 {
     struct aggregate_entry *ae = calloc (1, sizeof (*ae));
-    if (ae != NULL)
-        ae->ids = nodeset_create ();
+    if (!ae)
+        return (NULL);
+    if (!(ae->ids = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        aggregate_entry_destroy (ae);
+        return (NULL);
+    }
     return (ae);
 }
 
@@ -179,6 +185,26 @@ static struct aggregate_entry *
     return (ae);
 }
 
+int add_string_to_idset (struct idset *idset, const char *s)
+{
+    struct idset *nids;
+    unsigned int id;
+    int rc = -1;
+
+    if (!(nids = idset_decode (s)))
+        return (-1);
+    id = idset_first (nids);
+    while (id != IDSET_INVALID_ID) {
+        if (idset_set (idset, id) < 0)
+            goto done;
+        id = idset_next (nids, id);
+    }
+    rc = 0;
+done:
+    idset_destroy (nids);
+    return rc;
+}
+
 /*  Push a new (ids, value) pair onto aggregate `ag`.
  *   If an existing matching entry is found, add ids to its nodeset.
  *   o/w, add a new entry. In either case update current count with
@@ -191,12 +217,12 @@ static int aggregate_push (struct aggregate *ag, json_t *value, const char *ids)
     if ((ae == NULL) && !(ae = aggregate_entry_add (ag, value)))
         return (-1);
 
-    count = nodeset_count (ae->ids);
-    if (!nodeset_add_string (ae->ids, ids))
+    count = idset_count (ae->ids);
+    if (add_string_to_idset (ae->ids, ids) < 0)
         return (-1);
 
     /* Update count */
-    ag->count += (nodeset_count (ae->ids) - count);
+    ag->count += (idset_count (ae->ids) - count);
 
     return (0);
 }
@@ -218,6 +244,19 @@ static int aggregate_push_json (struct aggregate *ag,
     return (0);
 }
 
+static int set_json_object_new_idset_key (json_t *o, struct idset *key,
+                                          json_t *value)
+{
+    char *s;
+    int rc;
+
+    if (!(s = idset_encode (key, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        return (-1);
+    rc = json_object_set_new (o, s, value);
+    free (s);
+    return (rc);
+}
+
 /*  Return json object containing all "entries" from the current
  *   aggregate object `ag`
  */
@@ -231,9 +270,7 @@ static json_t *aggregate_entries_tojson (struct aggregate *ag)
 
     ae = zlist_first (ag->entries);
     while (ae) {
-        if (json_object_set_new (entries,
-                                 nodeset_string (ae->ids),
-                                 ae->value) < 0)
+        if (set_json_object_new_idset_key (entries, ae->ids, ae->value) < 0)
             goto error;
         ae = zlist_next (ag->entries);
     }

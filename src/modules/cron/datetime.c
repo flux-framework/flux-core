@@ -31,7 +31,6 @@
 #include <flux/core.h>
 #include <czmq.h>
 
-#include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/cronodate.h"
 
 #include "entry.h"

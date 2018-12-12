@@ -30,7 +30,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/nodeset.h"
 
 #include "hello.h"
 #include "reduce.h"

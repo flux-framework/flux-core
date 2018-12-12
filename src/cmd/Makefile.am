@@ -45,7 +45,6 @@ flux_SOURCES = \
 	builtin/content.c \
 	builtin/version.c \
 	builtin/hwloc.c \
-	builtin/nodeset.c \
 	builtin/heaptrace.c \
 	builtin/proxy.c \
 	builtin/python.c \
