@@ -470,6 +470,14 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         flux_future_destroy (f);
         if (rc < 0)
             goto destroy_watcher;
+        /* if WAITCREATE and !WATCH, then we only care about sending
+         * one response and breaking out.  We can use the responded
+         * flag to indicate that break out condition.
+         */
+        if (w->responded
+            && (w->flags & FLUX_KVS_WAITCREATE)
+            && !(w->flags & FLUX_KVS_WATCH))
+            goto destroy_watcher;
     }
     return;
 destroy_watcher:

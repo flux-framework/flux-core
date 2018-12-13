@@ -53,8 +53,7 @@ struct lookup_ctx {
 
 static const char *auxkey = "flux::lookup_ctx";
 
-#define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WAITCREATE \
-                              | FLUX_KVS_WATCH_FULL \
+#define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WATCH_FULL \
                               | FLUX_KVS_WATCH_UNIQ)
 
 static void free_ctx (struct lookup_ctx *ctx)
@@ -95,9 +94,18 @@ static int validate_lookup_flags (int flags, bool watch_ok)
     if ((flags & FLUX_KVS_WATCH_FLAGS)
         && !(flags & FLUX_KVS_WATCH))
         return -1;
+    /* FLUX_KVS_WAITCREATE does not require FLUX_KVS_WATCH to be set,
+     * but it requires that we be able to communicate with the
+     * kvs-watch module, so we use the watch_ok bool here.
+     */
+    if ((flags & FLUX_KVS_WAITCREATE) && !watch_ok)
+        return -1;
 
     flags &= ~FLUX_KVS_WATCH;
     flags &= ~(FLUX_KVS_WATCH_FLAGS);
+
+    flags &= ~FLUX_KVS_WAITCREATE;
+
     switch (flags) {
         case 0:
         case FLUX_KVS_TREEOBJ:
@@ -126,7 +134,8 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
         return NULL;
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
-    if (flags & FLUX_KVS_WATCH)
+    if ((flags & FLUX_KVS_WATCH)
+        || (flags & FLUX_KVS_WAITCREATE))
         topic = "kvs-watch.lookup"; // redirect to kvs-watch module
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:s s:s s:i}",
