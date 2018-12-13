@@ -65,7 +65,6 @@ TESTS = \
 	t1003-kvs-stress.t \
 	t1004-kvs-namespace.t \
 	t1005-kvs-security.t \
-	t1006-kvs-getroot.t \
 	t1007-kvs-lookup-watch.t \
 	t1008-kvs-eventlog.t \
 	t1009-kvs-copy.t \
@@ -181,7 +180,6 @@ check_SCRIPTS = \
 	t1003-kvs-stress.t \
 	t1004-kvs-namespace.t \
 	t1005-kvs-security.t \
-	t1006-kvs-getroot.t \
 	t1007-kvs-lookup-watch.t \
 	t1008-kvs-eventlog.t \
 	t1009-kvs-copy.t \

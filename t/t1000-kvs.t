@@ -954,6 +954,46 @@ test_expect_success NO_CHAIN_LINT 'kvs: version and wait' '
         test_expect_code 0 wait $kvswaitpid
 '
 
+test_expect_success 'flux kvs getroot returns valid dirref object' '
+	flux kvs put test.a=42 &&
+	DIRREF=$(flux kvs getroot) &&
+	flux kvs put test.a=43 &&
+	flux kvs get --at "$DIRREF" test.a >get.out &&
+	echo 42 >get.exp &&
+	test_cmp get.exp get.out
+'
+
+#
+# getroot tests
+#
+
+test_expect_success 'flux kvs getroot --blobref returns valid blobref' '
+	BLOBREF=$(flux kvs getroot --blobref) &&
+	flux content load $BLOBREF >/dev/null
+'
+
+test_expect_success 'flux kvs getroot --sequence returns increasing rootseq' '
+	SEQ=$(flux kvs getroot --sequence) &&
+	flux kvs put test.b=hello &&
+	SEQ2=$(flux kvs getroot --sequence) &&
+	test $SEQ -lt $SEQ2
+'
+
+test_expect_success 'flux kvs getroot --owner returns instance owner' '
+	OWNER=$(flux kvs getroot --owner) &&
+	test $OWNER -eq $(id -u)
+'
+
+test_expect_success 'flux kvs getroot works on alt namespace' '
+	flux kvs namespace-create testns1 &&
+	SEQ=$(flux kvs --namespace=testns1 getroot --sequence) &&
+	test $SEQ -eq 0 &&
+	flux kvs --namespace=testns1 put test.c=moop &&
+	SEQ2=$(flux kvs --namespace=testns1 getroot --sequence) &&
+	test $SEQ -lt $SEQ2 &&
+	flux kvs namespace-remove testns1
+'
+
 #
 # Other get options
 #
