@@ -38,9 +38,7 @@
 static const char *auxkey = "flux::getroot_ctx";
 
 struct getroot_ctx {
-    int rootseq;        /* seq no of cached treeobj */
     char *treeobj;      /* cached treeobj */
-    int flags;          /* original flux_kvs_getroot() flags */
 };
 
 static void free_ctx (struct getroot_ctx *ctx)
@@ -61,33 +59,18 @@ static struct getroot_ctx *alloc_ctx (void)
     return ctx;
 }
 
-static int validate_getroot_flags (int flags)
-{
-    switch (flags) {
-        case 0:
-        case FLUX_KVS_WATCH:
-        case FLUX_KVS_WATCH | FLUX_KVS_WATCH_WAITCREATE:
-            return 0;
-        default:
-            return -1;
-    }
-}
-
 flux_future_t *flux_kvs_getroot (flux_t *h, const char *namespace, int flags)
 {
     flux_future_t *f;
     const char *topic = "kvs.getroot";
     struct getroot_ctx *ctx;
 
-    if (!h || validate_getroot_flags (flags) < 0) {
+    if (!h || flags) {
         errno = EINVAL;
         return NULL;
     }
     if (!(ctx = alloc_ctx ()))
         return NULL;
-    ctx->flags = flags;
-    if ((flags & FLUX_KVS_WATCH))
-        topic = "kvs-watch.getroot";
     if (!namespace && !(namespace = flux_kvs_get_namespace (h)))
         goto error;
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
@@ -156,13 +139,10 @@ int flux_kvs_getroot_get_owner (flux_future_t *f, uint32_t *owner)
     return decode_response (f, NULL, NULL, owner);
 }
 
-/* Use cached value of ctx->treeobj, unless stored response no longer
- * contains ctx->rootseq.
- */
+/* Use cached value of ctx->treeobj */
 int flux_kvs_getroot_get_treeobj (flux_future_t *f, const char **treeobj)
 {
     struct getroot_ctx *ctx;
-    int rootseq;
     const char *rootref;
 
     if (!f || !treeobj) {
@@ -173,46 +153,20 @@ int flux_kvs_getroot_get_treeobj (flux_future_t *f, const char **treeobj)
         errno = EINVAL;
         return -1;
     }
-    if (decode_response (f, &rootref, &rootseq, NULL) < 0)
+    if (decode_response (f, &rootref, NULL, NULL) < 0)
         return -1;
-    if (!ctx->treeobj || ctx->rootseq != rootseq) {
+    if (!ctx->treeobj) {
         json_t *o;
         if (!(o = treeobj_create_dirref (rootref)))
             return -1;
-        free (ctx->treeobj);
         if (!(ctx->treeobj = treeobj_encode (o))) {
             json_decref (o);
             errno = ENOMEM;
             return -1;
         }
         json_decref (o);
-        ctx->rootseq = rootseq;
     }
     *treeobj = ctx->treeobj;
-    return 0;
-}
-
-/* This only applies with FLUX_KVS_WATCH.
- * Causes a stream of getroot responses to end with an ENODATA response.
- */
-int flux_kvs_getroot_cancel (flux_future_t *f)
-{
-    struct getroot_ctx *ctx;
-    flux_future_t *f2;
-
-    if (!f || !(ctx = flux_future_aux_get (f, auxkey))
-           || !(ctx->flags & FLUX_KVS_WATCH)) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(f2 = flux_rpc_pack (flux_future_get_flux (f),
-                              "kvs-watch.cancel",
-                              FLUX_NODEID_ANY,
-                              FLUX_RPC_NORESPONSE,
-                              "{s:i}",
-                              "matchtag", (int)flux_rpc_get_matchtag (f))))
-        return -1;
-    flux_future_destroy (f2);
     return 0;
 }
 
