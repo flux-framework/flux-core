@@ -35,12 +35,9 @@
 #include "src/common/libkvs/kvs_util_private.h"
 #include "src/common/libutil/blobref.h"
 
-/* State for one watcher.
- * If w->key is NULL, watcher tracks root updates for flux_kvs_getroot().
- * If w->key is non-NULL, watcher tracks key key updates for flux_kvs_lookup().
- */
+/* State for one watcher */
 struct watcher {
-    flux_msg_t *request;        // getroot request message
+    flux_msg_t *request;        // request message
     uint32_t rolemask;          // request cred
     uint32_t userid;            // request cred
     int rootseq;                // last root sequence number sent
@@ -50,10 +47,8 @@ struct watcher {
     bool initial_rpc_sent;      // flag is initial watch rpc sent
     bool initial_rpc_received;  // flag is initial watch rpc received
     int initial_rootseq;        // initial rootseq returned by initial rpc
-    char *key;                  // non-NULL if watching a key with lookup
+    char *key;                  // lookup key
     int flags;                  // kvs_lookup flags
-    flux_future_t *getrootf;    // flux_future_t for initial getroot rpc
-    zlist_t *getroots;          // list of commits, in order
     zlist_t *lookups;           // list of futures, in commit order
 
     struct namespace *ns;       // back pointer for removal
@@ -70,7 +65,6 @@ struct commit {
     json_t *keys;               // keys changed by commit
                                 //  empty if data originates from getroot RPC
                                 //  or kvs.namespace-created event
-    int refcount;               // refcount for destruction
 };
 
 
@@ -100,21 +94,12 @@ struct watch_ctx {
     zhash_t *namespaces;        // hash of monitored namespaces
 };
 
-static void commit_decref (struct commit *commit);
-
 static void watcher_destroy (struct watcher *w)
 {
     if (w) {
         int saved_errno = errno;
         flux_msg_destroy (w->request);
         free (w->key);
-        flux_future_destroy (w->getrootf);
-        if (w->getroots) {
-            struct commit *commit;
-            while ((commit = zlist_pop (w->getroots)))
-                commit_decref (commit);
-            zlist_destroy (&w->getroots);
-        }
         if (w->lookups) {
             flux_future_t *f;
             while ((f = zlist_pop (w->lookups)))
@@ -139,16 +124,10 @@ static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
     if (flux_msg_get_rolemask (msg, &w->rolemask) < 0
             || flux_msg_get_userid (msg, &w->userid) < 0)
         goto error;
-    if (key && !(w->key = kvs_util_normalize_key (key, NULL)))
+    if (!(w->key = kvs_util_normalize_key (key, NULL)))
         goto error;
-    if (!key) {
-        if (!(w->getroots = zlist_new ()))
-            goto error_nomem;
-    }
-    else {
-        if (!(w->lookups = zlist_new ()))
-            goto error_nomem;
-    }
+    if (!(w->lookups = zlist_new ()))
+        goto error_nomem;
     w->flags = flags;
     w->rootseq = -1;
     return w;
@@ -171,21 +150,6 @@ static void commit_destroy (struct commit *commit)
     }
 }
 
-static void commit_incref (struct commit *commit)
-{
-    if (commit)
-        commit->refcount++;
-}
-
-static void commit_decref (struct commit *commit)
-{
-    if (commit) {
-        commit->refcount--;
-        if (commit->refcount == 0)
-            commit_destroy (commit);
-    }
-}
-
 static struct commit *commit_create (const char *rootref, int rootseq,
                                      json_t *keys)
 {
@@ -199,7 +163,6 @@ static struct commit *commit_create (const char *rootref, int rootseq,
     /* keys can be NULL */
     commit->keys = json_incref (keys);
     commit->rootseq = rootseq;
-    commit->refcount = 1;
     return commit;
 }
 
@@ -207,7 +170,7 @@ static void namespace_destroy (struct namespace *ns)
 {
     if (ns) {
         int saved_errno = errno;
-        commit_decref (ns->commit);
+        commit_destroy (ns->commit);
         if (ns->watchers) {
             struct watcher *w;
             while ((w = zlist_pop (ns->watchers)))
@@ -291,116 +254,6 @@ static bool array_match (json_t *a, const char *key)
             return true;
     }
     return false;
-}
-
-/* kvs.getroot response for initial watcher getroot */
-static void watcher_getroot_continuation (flux_future_t *f, void *arg)
-{
-    struct watcher *w = arg;
-    struct namespace *ns = w->ns;
-    const char *rootref;
-    int rootseq;
-    struct commit *commit;
-
-    w->initial_rpc_received = true;
-
-    if (flux_kvs_getroot_get_sequence (f, &rootseq) < 0
-            || flux_kvs_getroot_get_blobref (f, &rootref) < 0) {
-        if (errno != ENOTSUP && errno != EPERM)
-            flux_log_error (ns->ctx->h, "%s: kvs_getroot", __FUNCTION__);
-        goto error;
-    }
-    w->initial_rootseq = rootseq;
-
-    /* respond with this root ref & seq */
-
-    if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
-                           "rootref", rootref,
-                           "rootseq", rootseq,
-                           "owner", ns->owner,
-                           "flags", 0) < 0) {
-        flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
-        goto error;
-    }
-    w->responded = true;
-    w->rootseq = rootseq;
-
-    /* now respond with anything on the getroots list, if they are
-     * newer that the rootseq in this initial rpc
-     */
-
-    while ((commit = zlist_pop (w->getroots))) {
-        if (commit->rootseq > w->initial_rootseq) {
-            if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
-                                   "rootref", commit->rootref,
-                                   "rootseq", commit->rootseq,
-                                   "owner", ns->owner,
-                                   "flags", 0) < 0) {
-                flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
-                goto error;
-            }
-            w->rootseq = commit->rootseq;
-        }
-        commit_decref (commit);
-    }
-
-    flux_future_destroy (f);
-    w->getrootf = NULL;
-    return;
-
-error:
-    /* f / w->getrootf destroyed in watcher_destroy() */
-    if (!w->mute) {
-        if (flux_respond_error (ns->ctx->h, w->request, errno, NULL) < 0)
-            flux_log_error (ns->ctx->h, "%s: flux_respond_error", __FUNCTION__);
-    }
-    zlist_remove (ns->watchers, w);
-    watcher_destroy (w);
-    if (zlist_size (ns->watchers) == 0)
-        zhash_delete (ns->ctx->namespaces, ns->name);
-}
-
-static int process_getroot_response (struct namespace *ns, struct watcher *w)
-{
-    if (!w->initial_rpc_sent) {
-        /* must send initial getroot to preserve read your writes consistency */
-        if (!(w->getrootf = flux_kvs_getroot (ns->ctx->h, ns->name, 0)))
-            return -1;
-        if (flux_future_then (w->getrootf, -1., watcher_getroot_continuation, w) < 0)
-            return -1;
-        /* note that we don't need to save ns->commit on the
-         * w->getroots list. The result of the initial rpc above is
-         * guaranteed to be >= to this rootseq */
-        w->initial_rpc_sent = true;
-    }
-    else if (!w->initial_rpc_received) {
-        /* If we have not yet received the response from the initial
-         * rpc, we don't know if this is an old setroot event or not.
-         * Save it, and it'll be responded to in
-         * watcher_getroot_continuation() if necessary */
-        if (zlist_append (w->getroots, ns->commit) < 0) {
-            errno = ENOMEM;
-            return -1;
-        }
-        commit_incref (ns->commit);
-    }
-    else {
-        /* every setroot event from here on out is legit to return to
-         * the user */
-        if (!w->mute) {
-            if (flux_respond_pack (ns->ctx->h, w->request, "{s:s s:i s:i s:i}",
-                                   "rootref", ns->commit->rootref,
-                                   "rootseq", ns->commit->rootseq,
-                                   "owner", ns->owner,
-                                   "flags", 0) < 0) {
-                flux_log_error (ns->ctx->h, "%s: flux_respond", __FUNCTION__);
-                return -1;
-            }
-            w->responded = true;
-        }
-        w->rootseq = ns->commit->rootseq;
-    }
-    return 0;
 }
 
 static int handle_initial_response (flux_t *h,
@@ -757,12 +610,6 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         flux_log (ns->ctx->h, LOG_DEBUG, "%s: auth failure", __FUNCTION__);
         goto error_respond;
     }
-    /* flux_kvs_getroot (FLUX_KVS_WATCH)
-     */
-    if (w->key == NULL) {
-        if (process_getroot_response (ns, w) < 0)
-            goto error;
-    }
     /* flux_kvs_lookup (FLUX_KVS_WATCH)
      *
      * Ordering note: KVS lookups can be returned out of order.  KVS lookup
@@ -780,9 +627,9 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
      * Note on FLUX_KVS_WATCH_FULL: A lookup / comparison is done on every
      * change.
      */
-    else if (w->rootseq == -1
-             || (w->flags & FLUX_KVS_WATCH_FULL)
-             || array_match (ns->commit->keys, w->key)) {
+    if (w->rootseq == -1
+        || (w->flags & FLUX_KVS_WATCH_FULL)
+        || array_match (ns->commit->keys, w->key)) {
         if (process_lookup_response (ns, w) < 0)
             goto error_respond;
     }
@@ -792,7 +639,6 @@ error_respond:
         if (flux_respond_error (ns->ctx->h, w->request, errno, NULL) < 0)
             flux_log_error (ns->ctx->h, "%s: flux_respond_error", __FUNCTION__);
     }
-error:
     zlist_remove (ns->watchers, w);
     watcher_destroy (w);
     if (zlist_size (ns->watchers) == 0)
@@ -984,7 +830,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
         ns->errnum = errno;
         goto done;
     }
-    commit_decref (ns->commit);
+    commit_destroy (ns->commit);
     ns->commit = commit;
     if (ns->owner == FLUX_USERID_UNKNOWN)
         ns->owner = owner;
@@ -1060,44 +906,6 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
     return ns;
 }
 
-/* kvs-watch.getroot request
- */
-static void getroot_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
-{
-    struct watch_ctx *ctx = arg;
-    const char *namespace;
-    struct watcher *w;
-    struct namespace *ns;
-    int flags;
-
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
-                             "namespace", &namespace,
-                             "flags", &flags) < 0)
-        goto error;
-    if (!(ns = namespace_monitor (ctx, namespace)))
-        goto error;
-    /* Thread a new watcher 'w' onto ns->watchers.
-     * If there is already a commit result available, send first response now,
-     * otherwise response will be sent upon getroot RPC response
-     * or setroot event.
-     */
-    if (!(w = watcher_create (msg, NULL, flags)))
-        goto error;
-    w->ns = ns;
-    if (zlist_append (ns->watchers, w) < 0) {
-        watcher_destroy (w);
-        errno = ENOMEM;
-        goto error;
-    }
-    if (ns->commit)
-        watcher_respond (ns, w);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
@@ -1122,8 +930,8 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     /* Thread a new watcher 'w' onto ns->watchers.
-     * If there is already a commit result available, send first response now,
-     * otherwise response will be sent upon getroot RPC response
+     * If there is already a commit result available, send initial rpc,
+     * otherwise initial rpc will be sent upon getroot RPC response
      * or setroot event.
      */
     if (!(w = watcher_create (msg, key_suffix ? key_suffix : key, flags)))
@@ -1147,7 +955,7 @@ error:
 }
 
 /* kvs-watch.cancel request
- * The user called flux_kvs_getroot_cancel() which expects no response.
+ * The user called flux_kvs_lookup_cancel() which expects no response.
  * The enclosed matchtag and the cancel sender are used to find the
  * watcher that is to be cancelled.  The watcher will receive an ENODATA
  * response message.
@@ -1256,11 +1064,6 @@ static const struct flux_msg_handler_spec htab[] = {
       .topic_glob   = "kvs-watch.stats.get",
       .cb           = stats_cb,
       .rolemask     = 0
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "kvs-watch.getroot",
-      .cb           = getroot_cb,
-      .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "kvs-watch.lookup",

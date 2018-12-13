@@ -55,12 +55,6 @@ void errors (void)
     errno = 0;
     ok (flux_kvs_getroot_get_treeobj (f, &s) < 0 && errno == EINVAL,
         "flux_kvs_getroot_get_treeobj f=(non-getroot) fails with EINVAL");
-    errno = 0;
-    ok (flux_kvs_getroot_cancel (NULL) < 0 && errno == EINVAL,
-        "flux_kvs_getroot_cancel f=NULL fails with EINVAL");
-    errno = 0;
-    ok (flux_kvs_getroot_cancel (f) < 0 && errno == EINVAL,
-        "flux_kvs_getroot_cancel f=(non-getroot) fails with EINVAL");
 
     flux_future_destroy (f);
 }

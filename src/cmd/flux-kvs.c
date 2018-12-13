@@ -216,15 +216,6 @@ static struct optparse_option getroot_opts[] =  {
     { .name = "owner", .key = 'o', .has_arg = 0,
       .usage = "Show owner",
     },
-    { .name = "watch", .key = 'w', .has_arg = 0,
-      .usage = "Monitor root changes",
-    },
-    { .name = "waitcreate", .key = 'W', .has_arg = 0,
-      .usage = "Wait for creation to occur on watch",
-    },
-    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
-      .usage = "Display at most COUNT changes",
-    },
     OPTPARSE_TABLE_END
 };
 
@@ -349,7 +340,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "getroot",
-      "[-w] [-W] [-c COUNT] [-s|-o|-b]",
+      "[-s|-o|-b]",
       "Get KVS root treeobj",
       cmd_getroot,
       0,
@@ -1679,61 +1670,40 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-struct getroot_ctx {
-    optparse_t *p;
-    int count;
-    int maxcount;
-};
-
 void getroot_continuation (flux_future_t *f, void *arg)
 {
-    struct getroot_ctx *ctx = arg;
+    optparse_t *p = arg;
 
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
-        flux_future_destroy (f);
-        return; // EOF
+    if (optparse_hasopt (p, "owner")) {
+        uint32_t owner;
+
+        if (flux_kvs_getroot_get_owner (f, &owner) < 0)
+            log_err_exit ("flux_kvs_getroot_get_owner");
+        printf ("%lu\n", (unsigned long)owner);
     }
-    if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
-        if (optparse_hasopt (ctx->p, "owner")) {
-            uint32_t owner;
+    else if (optparse_hasopt (p, "sequence")) {
+        int sequence;
 
-            if (flux_kvs_getroot_get_owner (f, &owner) < 0)
-                log_err_exit ("flux_kvs_getroot_get_owner");
-            printf ("%lu\n", (unsigned long)owner);
-        }
-        else if (optparse_hasopt (ctx->p, "sequence")) {
-            int sequence;
+        if (flux_kvs_getroot_get_sequence (f, &sequence) < 0)
+            log_err_exit ("flux_kvs_getroot_get_sequence");
+        printf ("%d\n", sequence);
+    }
+    else if (optparse_hasopt (p, "blobref")) {
+        const char *blobref;
 
-            if (flux_kvs_getroot_get_sequence (f, &sequence) < 0)
-                log_err_exit ("flux_kvs_getroot_get_sequence");
-            printf ("%d\n", sequence);
-        }
-        else if (optparse_hasopt (ctx->p, "blobref")) {
-            const char *blobref;
+        if (flux_kvs_getroot_get_blobref (f, &blobref) < 0)
+            log_err_exit ("flux_kvs_getroot_get_blobref");
+        printf ("%s\n", blobref);
+    }
+    else {
+        const char *treeobj;
 
-            if (flux_kvs_getroot_get_blobref (f, &blobref) < 0)
-                log_err_exit ("flux_kvs_getroot_get_blobref");
-            printf ("%s\n", blobref);
-        }
-        else {
-            const char *treeobj;
-
-            if (flux_kvs_getroot_get_treeobj (f, &treeobj) < 0)
-                log_err_exit ("flux_kvs_getroot_get_treeobj");
-            printf ("%s\n", treeobj);
-        }
+        if (flux_kvs_getroot_get_treeobj (f, &treeobj) < 0)
+            log_err_exit ("flux_kvs_getroot_get_treeobj");
+        printf ("%s\n", treeobj);
     }
     fflush (stdout);
-    if (optparse_hasopt (ctx->p, "watch")) {
-        flux_future_reset (f);
-        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount) {
-            if (flux_kvs_getroot_cancel (f) < 0)
-                log_err_exit ("flux_kvs_getroot_cancel");
-        }
-    }
-    else
-        flux_future_destroy (f);
+    flux_future_destroy (f);
 }
 
 int cmd_getroot (optparse_t *p, int argc, char **argv)
@@ -1742,25 +1712,14 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_future_t *f;
     int flags = 0;
-    struct getroot_ctx ctx;
 
-    ctx.p = p;
-    ctx.count = 0;
-    ctx.maxcount = optparse_get_int (p, "count", 0);
-    if (ctx.maxcount < 0)
-        log_msg_exit ("count value must be >= 0");
     if (optindex != argc) {
         optparse_print_usage (p);
         exit (1);
     }
-    if (optparse_hasopt (p, "watch")) {
-        flags |= FLUX_KVS_WATCH;
-        if (optparse_hasopt (p, "waitcreate"))
-            flags |= FLUX_KVS_WATCH_WAITCREATE;
-    }
     if (!(f = flux_kvs_getroot (h, NULL, flags)))
         log_err_exit ("flux_kvs_getroot");
-    if (flux_future_then (f, -1., getroot_continuation, &ctx) < 0)
+    if (flux_future_then (f, -1., getroot_continuation, p) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
