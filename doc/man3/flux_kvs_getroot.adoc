@@ -97,6 +97,9 @@ A request was malformed.
 ENOSYS::
 The kvs or kvs-watch module is not loaded.
 
+ENOTSUP::
+An unknown namespace was requested or namespace was deleted.
+
 EPERM::
 The requesting user is not permitted to access the requested namespace.
 
