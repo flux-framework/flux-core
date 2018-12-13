@@ -293,7 +293,14 @@ static bool array_match (json_t *a, const char *key)
     return false;
 }
 
-/* kvs.getroot response for initial watcher getroot */
+/* kvs.getroot response for initial watcher getroot
+ *
+ * It is worth mentioning how WAITCREATE is handled for getroot here.
+ * The ENOTSUP that is caught for a WAITCREATE situation will occur
+ * during the initial namespace getroot (i.e. in namespace_monitor()).
+ * If we get a ENOTSUP in this continuation, the namespace must have
+ * been removed, and we can return an error to the caller.
+ */
 static void watcher_getroot_continuation (flux_future_t *f, void *arg)
 {
     struct watcher *w = arg;
@@ -1122,8 +1129,8 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     /* Thread a new watcher 'w' onto ns->watchers.
-     * If there is already a commit result available, send first response now,
-     * otherwise response will be sent upon getroot RPC response
+     * If there is already a commit result available, send initial rpc,
+     * otherwise initial rpc will be sent upon getroot RPC response
      * or setroot event.
      */
     if (!(w = watcher_create (msg, key_suffix ? key_suffix : key, flags)))
