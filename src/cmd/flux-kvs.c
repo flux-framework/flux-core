@@ -683,7 +683,7 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
     if (optparse_hasopt (ctx->p, "watch")) {
         flags |= FLUX_KVS_WATCH;
         if (optparse_hasopt (ctx->p, "waitcreate"))
-            flags |= FLUX_KVS_WATCH_WAITCREATE;
+            flags |= FLUX_KVS_WAITCREATE;
         if (optparse_hasopt (ctx->p, "full"))
             flags |= FLUX_KVS_WATCH_FULL;
         if (optparse_hasopt (ctx->p, "uniq"))
