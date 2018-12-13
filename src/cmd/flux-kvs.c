@@ -101,11 +101,11 @@ static struct optparse_option get_opts[] =  {
     { .name = "label", .key = 'l', .has_arg = 0,
       .usage = "Print key= before value",
     },
-    { .name = "watch", .key = 'w', .has_arg = 0,
-      .usage = "Monitor key writes",
-    },
     { .name = "waitcreate", .key = 'W', .has_arg = 0,
       .usage = "Wait for creation to occur on watch",
+    },
+    { .name = "watch", .key = 'w', .has_arg = 0,
+      .usage = "Monitor key writes",
     },
     { .name = "uniq", .key = 'u', .has_arg = 0,
       .usage = "Only monitor key writes if values have changed",
@@ -242,7 +242,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "get",
-      "[-j|-r|-t] [-a treeobj] [-l] [-w] [-W] [-f] [-c COUNT] key [key...]",
+      "[-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-f] [-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -682,13 +682,13 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
         flags |= FLUX_KVS_TREEOBJ;
     if (optparse_hasopt (ctx->p, "watch")) {
         flags |= FLUX_KVS_WATCH;
-        if (optparse_hasopt (ctx->p, "waitcreate"))
-            flags |= FLUX_KVS_WAITCREATE;
         if (optparse_hasopt (ctx->p, "full"))
             flags |= FLUX_KVS_WATCH_FULL;
         if (optparse_hasopt (ctx->p, "uniq"))
             flags |= FLUX_KVS_WATCH_UNIQ;
     }
+    if (optparse_hasopt (ctx->p, "waitcreate"))
+        flags |= FLUX_KVS_WAITCREATE;
     if (optparse_hasopt (ctx->p, "at")) {
         const char *reference = optparse_get_str (ctx->p, "at", "");
         if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
