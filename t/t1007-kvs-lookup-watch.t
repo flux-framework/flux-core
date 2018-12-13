@@ -26,6 +26,24 @@ test_expect_success 'flux kvs get --watch works on alt namespace' '
 	flux kvs namespace-remove testns1
 '
 
+test_expect_success 'kvs-watch stats reports no namespaces when there are no watchers' '
+	count=$(flux module stats --parse=namespace-count kvs-watch) &&
+	test $count -eq 0
+'
+
+test_expect_success NO_CHAIN_LINT 'kvs-watch stats reports active watcher' '
+       flux kvs put test.stats=0 &&
+       flux kvs get --watch --count=2 test.stats >activewatchers.out &
+       pid=$! &&
+       $waitfile --count=1 --timeout=10 --pattern="[0-9]+" activewatchers.out &&
+       count=$(flux module stats --parse=watchers kvs-watch) &&
+       test $count -eq 1 &&
+       count=$(flux module stats --parse=namespace-count kvs-watch) &&
+       test $count -eq 1 &&
+       flux kvs put --no-merge test.stats=1 &&
+       wait $pid
+'
+
 # Check that stdin contains an integer on each line that
 # is one more than the integer on the previous line.
 test_monotonicity() {
