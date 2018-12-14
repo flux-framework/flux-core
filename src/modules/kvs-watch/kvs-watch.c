@@ -53,8 +53,6 @@ struct watcher {
 
     struct namespace *ns;       // back pointer for removal
     json_t *prev;               // previous watch value for KVS_WATCH_FULL
-    bool namespace_created;     // flag indicating if namespace created
-                                // during watch
 };
 
 /* Current KVS root.
@@ -332,8 +330,7 @@ static int handle_normal_response (flux_t *h,
  * different than old value.
  */
 static int handle_lookup_response (flux_future_t *f,
-                                   struct watcher *w,
-                                   bool *cleanup_lookups)
+                                   struct watcher *w)
 {
     flux_t *h = flux_future_get_flux (f);
     int errnum;
@@ -361,49 +358,23 @@ static int handle_lookup_response (flux_future_t *f,
         if (flux_rpc_get_unpack (f, "{ s:o s:i }",
                                  "val", &val,
                                  "rootseq", &root_seq) < 0) {
-            if (errno == ENOTSUP) {
-                /* Here are the racy conditions to consider for ENOTSUP.
-                 *
-                 * if namespace not yet created on this lookup
-                 *
-                 * - if received kvs.namespace-created event, then
-                 *   all setroot received thus far are legit [1].
-                 *
-                 * - if haven't received kvs.namespace-created event,
-                 *   then there should be no setroot lookups yet.  It
-                 *   shouldn't be possible.
-                 *
-                 * if namespace has been removed
-                 *
-                 * - if received kvs.namespace-removed event, that
-                 *   would lead to fatal error and we wouldn't be here
-                 *   b/c the namespace would have been destroyed (see
-                 *   fatal_errnum).
-                 *
-                 * - we detected ENOTSUP before kvs.namespace-removed
-                 *   received.  In this this case, any lookups based
-                 *   on setroot lookups should be tossed, b/c they
-                 *   were clearly before the namespace was removed
-                 *   [2].
-                 *
-                 * The difficulty is to detect [1] vs [2], what are
-                 * acceptable vs unacceptable setroot lookups on the
-                 * lookups list.  The key is if the
-                 * "kvs.namespace-created" event has ocurred.  We can
-                 * use the flag w->namespace_created for that purpose.
-                 *
-                 * See how the cleanup_lookups flag is used below in
-                 * lookup_continuation().
-                 */
-
-                (*cleanup_lookups) = true;
-
-                /* if WAITCREATE, then any setroot for this namespace
-                 * in the future is valid (i.e. all future rootseq >
-                 * 0)
-                 */
-                w->initial_rootseq = 0;
-            }
+            /* It is worth mentioning ENOTSUP error conditions here.
+             *
+             * Recall that in namespace_monitor(), an initial getroot
+             * call is done.  If an ENOTSUP occurs on that getroot
+             * call, in watcher_respond(), WAITCREATE will be handled.
+             *
+             * We cannot reach this function / point in the code if
+             * the namespace has not been created.  So an ENOTSUP here
+             * must mean that the namespace has been removed, but we
+             * did not yet receive the kvs.namespace-removed event.
+             * We can safely return ENOTSUP to the user.
+             *
+             * Note that kvs-watch does not handle monitoring of
+             * namespaces being removed and re-created.  On a
+             * kvs.namespace-removed event, monitoring in a namespace
+             * is torn down.  See fatal_errnum var.
+             */
             goto error;
         }
 
@@ -460,13 +431,11 @@ static void lookup_continuation (flux_future_t *f, void *arg)
 {
     struct watcher *w = arg;
     struct namespace *ns = w->ns;
-    bool cleanup_lookups = false;
 
     while ((f = zlist_first (w->lookups)) && flux_future_is_ready (f)) {
         int rc = 0;
         f = zlist_pop (w->lookups);
-        if (!cleanup_lookups || w->namespace_created)
-            rc = handle_lookup_response (f, w, &cleanup_lookups);
+        rc = handle_lookup_response (f, w);
         flux_future_destroy (f);
         if (rc < 0)
             goto destroy_watcher;
@@ -658,7 +627,7 @@ error_respond:
  * Since zlist_t is not deletion-safe for traversal, a temporary duplicate
  * must be created here.
  */
-static void watcher_respond_ns (struct namespace *ns, bool ns_created)
+static void watcher_respond_ns (struct namespace *ns)
 {
     zlist_t *l;
     struct watcher *w;
@@ -666,8 +635,6 @@ static void watcher_respond_ns (struct namespace *ns, bool ns_created)
     if ((l = zlist_dup (ns->watchers))) {
         w = zlist_first (l);
         while (w) {
-            if (ns_created)
-                w->namespace_created = true;
             watcher_respond (ns, w);
             w = zlist_next (l);
         }
@@ -763,7 +730,7 @@ static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if ((ns = zhash_lookup (ctx->namespaces, namespace))) {
         ns->fatal_errnum = ENOTSUP;
-        watcher_respond_ns (ns, false);
+        watcher_respond_ns (ns);
     }
 }
 
@@ -802,7 +769,7 @@ static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
     if (ns->owner == FLUX_USERID_UNKNOWN)
         ns->owner = owner;
 done:
-    watcher_respond_ns (ns, true);
+    watcher_respond_ns (ns);
 }
 
 /* kvs.setroot event
@@ -843,7 +810,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
     if (ns->owner == FLUX_USERID_UNKNOWN)
         ns->owner = owner;
 done:
-    watcher_respond_ns (ns, false);
+    watcher_respond_ns (ns);
 }
 
 /* kvs.getroot response for initial namespace creation
@@ -878,7 +845,7 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     ns->commit = commit;
     ns->owner = owner;
 done:
-    watcher_respond_ns (ns, false);
+    watcher_respond_ns (ns);
     flux_future_destroy (f);
 }
 
