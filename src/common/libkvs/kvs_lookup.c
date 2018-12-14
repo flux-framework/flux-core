@@ -92,7 +92,7 @@ static int validate_lookup_flags (int flags, bool watch_ok)
 {
     if ((flags & FLUX_KVS_WATCH) && !watch_ok)
         return -1;
-    if (flags & FLUX_KVS_WATCH_FLAGS
+    if ((flags & FLUX_KVS_WATCH_FLAGS)
         && !(flags & FLUX_KVS_WATCH))
         return -1;
 
