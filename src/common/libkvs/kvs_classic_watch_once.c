@@ -28,7 +28,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "kvs_watch.h"
+#include "kvs_classic.h"
 
 #define CLASSIC_WATCH_FLAGS \
     (FLUX_KVS_WATCH \
