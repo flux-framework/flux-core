@@ -263,8 +263,8 @@ static int handle_initial_response (flux_t *h,
 {
     /* this is the first response case, store the first response
      * val */
-    if (w->flags & FLUX_KVS_WATCH_FULL
-        || w->flags & FLUX_KVS_WATCH_UNIQ)
+    if ((w->flags & FLUX_KVS_WATCH_FULL)
+        || (w->flags & FLUX_KVS_WATCH_UNIQ))
         w->prev = json_incref (val);
 
     if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
@@ -349,7 +349,7 @@ static int handle_lookup_response (flux_future_t *f,
                                   "errno", &errnum,
                                   "rootseq", &root_seq)) {
             assert (errnum == ENOENT);
-            if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+            if ((w->flags & FLUX_KVS_WATCH_WAITCREATE)
                 && w->responded == false) {
                 w->initial_rootseq = root_seq;
                 return 0;
@@ -431,8 +431,8 @@ static int handle_lookup_response (flux_future_t *f,
             goto out;
 
         if (!w->mute) {
-            if (w->flags & FLUX_KVS_WATCH_FULL
-                || w->flags & FLUX_KVS_WATCH_UNIQ) {
+            if ((w->flags & FLUX_KVS_WATCH_FULL)
+                || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
                 if (handle_compare_response (h, w, val) < 0)
                     goto error;
             }
@@ -590,7 +590,7 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
     if (ns->errnum != 0) {
         /* if namespace not yet created, don't return error to user if
          * they want to wait */
-        if (w->flags & FLUX_KVS_WATCH_WAITCREATE
+        if ((w->flags & FLUX_KVS_WATCH_WAITCREATE)
             && ns->errnum == ENOTSUP
             && w->responded == false) {
             ns->errnum = 0;
