@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test KVS get --watch'
+test_description='Test KVS get --watch && --waitcreate'
 
 . `dirname $0`/kvs/kvs-helper.sh
 
@@ -141,6 +141,41 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --uniq do not see du
 	EOF
 	wait $pid &&
 	test_cmp expected seq4.out
+'
+
+#
+# waitcreate tests
+#
+
+test_expect_success 'flux kvs get --waitcreate works on existing key' '
+	flux kvs put test.waitcreate1=1 &&
+	run_timeout 2 flux kvs get --waitcreate test.waitcreate1 >waitcreate1.out &&
+	echo 1 >waitcreate1.exp &&
+	test_cmp waitcreate1.exp waitcreate1.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existent key' '
+        ! flux kvs get test.waitcreate2 &&
+        flux kvs get --waitcreate test.waitcreate2 > waitcreate2.out &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.waitcreate2=2 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="2" waitcreate2.out >/dev/null &&
+        wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existent namespace' '
+        ! flux kvs --namespace=ns_waitcreate get test.waitcreate3 &&
+        flux kvs --namespace=ns_waitcreate get --waitcreate \
+                     test.waitcreate3 > waitcreate3.out &
+        pid=$! &&
+        wait_watcherscount_nonzero ns_waitcreate &&
+        flux kvs namespace-create ns_waitcreate &&
+        flux kvs --namespace=ns_waitcreate put test.waitcreate3=3 &&
+	$waitfile --count=1 --timeout=10 \
+		  --pattern="3" waitcreate3.out >/dev/null &&
+        wait $pid
 '
 
 # in --watch & --waitcreate tests, call wait_watcherscount_nonzero to
