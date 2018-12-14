@@ -646,13 +646,13 @@ prog:SubCommand {
     local options = f:kvs_get ("lwj.options") or {}
     if #arg == 0 then
         for k,v in pairs (options) do
-            print (k.."="..v)
+            print (k.."="..tostring (v))
         end
     else
         for _,k in pairs (arg) do
             v = options[k]
             if v then
-                print (k.."="..v)
+                print (k.."="..tostring (v))
             else
                 print (k.."=false")
             end
