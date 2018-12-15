@@ -53,6 +53,7 @@ libflux_core_la_LIBADD = \
 	libflux-internal.la
 libflux_core_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-core.map \
+	-version-info @LIBFLUX_CORE_VERSION_INFO@ \
         -shared -export-dynamic --disable-static \
         $(san_ld_zdef_flag)
 
@@ -63,6 +64,7 @@ libflux_optparse_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-optparse.map \
+	-version-info @LIBFLUX_OPTPARSE_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
@@ -72,6 +74,7 @@ libflux_idset_la_LIBADD = \
 	$(builddir)/libutil/veb.lo
 libflux_idset_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-idset.map \
+	-version-info @LIBFLUX_IDSET_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
@@ -81,6 +84,7 @@ libpmi_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
+	-version-info @LIBPMI_VERSION_INFO@ \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
@@ -91,6 +95,7 @@ libpmi2_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi2_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi2.map \
+	-version-info @LIBPMI2_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
