@@ -112,9 +112,17 @@ end
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
+--  Open connection to flux broker:
+
+local f, err = flux.new ()
+if not f then
+    io.stderr:write ("Unable to connect to flux broker: "..err)
+    os.exit (1)
+end
+
 --  Parse cmdline args:
 --
-local wreck = require 'wreck' .new (shortprog)
+local wreck = require 'wreck' .new { prog = shortprog, flux = f }
 local ioattach = require 'wreck'.ioattach
 local logstream = require 'wreck'.logstream
 local taskio
@@ -141,11 +149,6 @@ wreckrun_hooks_compile (wreck)
 
 -- Start in-program timer:
 local tt = timer.new()
-
---  Create new connection to local cmbd:
---
-local f, err = flux.new()
-if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
 --
 --  Create a new job in kvs
