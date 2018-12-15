@@ -259,6 +259,17 @@ local function parse_walltime (s)
     return math.ceil (n)
 end
 
+function wreck:initial_job_options ()
+    if not self.flux then
+        local err
+        self.flux, err = require 'flux'.new ()
+        if not self.flux then
+            self:die ("Unable to open connection to flux broker: %s", err)
+        end
+    end
+    return self.flux:kvs_get ("lwj.options") or {}
+end
+
 function wreck:parse_cmdline (arg)
     local getopt = require 'flux.alt_getopt' .get_opts
     local s = short_opts (self)
@@ -321,7 +332,11 @@ function wreck:parse_cmdline (arg)
         table.insert (self.cmdline, arg[i])
     end
 
-    self.job_options = {}
+    if not self.flux then
+        self.flux = require 'flux'.new()
+    end
+
+    self.job_options = self:initial_job_options ()
     if self.opts.o then
         for entry in self.opts.o:gmatch ('[^,]+') do
             local opt, val = entry, 1
