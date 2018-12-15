@@ -53,6 +53,11 @@
 #include "kvstxn.h"
 #include "kvsroot.h"
 
+enum kvs_watch_flags {
+    KVS_WATCH_ONCE = 4,
+    KVS_WATCH_FIRST = 8,
+};
+
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
 const int max_lastuse_age = 5;

@@ -6,7 +6,7 @@
 #include <errno.h>
 
 #include "src/common/libflux/flux.h"
-#include "kvs_watch.h"
+#include "kvs_classic.h"
 #include "src/common/libtap/tap.h"
 
 void errors (void)

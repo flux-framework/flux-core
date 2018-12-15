@@ -142,6 +142,46 @@ int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
                              const char *fmt, ...)
                              __attribute__ ((format (printf, 3, 4), deprecated));
 
+/* User callbacks for flux_kvs_watch() and flux_kvs_watch_dir() respectively.
+ * The value passed to these functions is only valid for the duration of the
+ * call.  'arg' and 'key' are the same as the arguments passed to the watch
+ * functions.  If 'errnum' is non-zero, then the value is invalid; for example,
+ * ENOENT - key no longer exists
+ * ENOTDIR - key is not a directory (kvs_set_dir_f)
+ * EISDIR - key is a directory (kvs_set_f)
+ * These functions should normally return 0.  flux_reactor_stop_error() is
+ * called internally if -1 is returned (errno must be set).
+ */
+
+typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
+                         int errnum);
+typedef int (*kvs_set_dir_f)(const char *key, flux_kvsdir_t *dir,
+                             void *arg, int errnum);
+
+/* Register 'set' callback on non-directory 'key'.
+ * Callback is triggered once during registration to get the initial value.
+ * Once the reactor is (re-)entered, it will then be called each time the
+ * key changes.
+ */
+int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
+                    __attribute__ ((deprecated));
+
+/* Register 'set' callback on directory 'key'.
+ * Callback is triggered once during registration to get the initial value,
+ * and thereafter, each time the directory changes. Note that due to the
+ * KVS's hash tree namespace organization, this function will be called
+ * whenever any key under this directory changes, since that forces the
+ * hash references to change on parents, all the way to the root.
+ */
+int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
+                        const char *fmt, ...)
+                        __attribute__ ((format (printf, 4, 5), deprecated));
+
+/* Cancel a flux_kvs_watch(), freeing server-side state, and unregistering
+ * any callback.  Returns 0 on success, or -1 with errno set on error.
+ */
+int flux_kvs_unwatch (flux_t *h, const char *key)
+                      __attribute__ ((deprecated));
 
 #ifdef __cplusplus
 }
