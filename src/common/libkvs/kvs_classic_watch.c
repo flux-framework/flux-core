@@ -30,16 +30,7 @@
 #include <czmq.h>
 
 #include "kvs_classic.h"
-
-#define CLASSIC_WATCH_FLAGS \
-    (FLUX_KVS_WATCH \
-   | FLUX_KVS_WAITCREATE \
-   | FLUX_KVS_WATCH_FULL \
-   | FLUX_KVS_WATCH_UNIQ)
-
-#define CLASSIC_DIR_WATCH_FLAGS \
-    (CLASSIC_WATCH_FLAGS \
-   | FLUX_KVS_READDIR)
+#include "kvs_classic_watch_private.h"
 
 struct kvs_watcher {
     kvs_set_f val_cb;       // either val_cb or dir_cb is valid, not both
@@ -105,32 +96,34 @@ static struct kvs_watcher *kvs_watcher_create (flux_future_t *f)
     return w;
 }
 
-static int val_continuation (flux_future_t *f, struct kvs_watcher *w)
+static void val_continuation (flux_future_t *f, struct kvs_watcher *w)
 {
     const char *key = flux_kvs_lookup_get_key (f);
     flux_reactor_t *r = flux_future_get_reactor (f);
-    const char *value;
+    const char *value = NULL;
+    int errnum = 0;
 
     if (flux_kvs_lookup_get (f, &value) < 0)
-        return -1;
-    if (w->val_cb (key, (char *)value, w->arg, value ? ENOENT : 0) < 0)
+        errnum = errno;
+    else if (value == NULL)
+        errnum = ENOENT;
+    if (w->val_cb (key, (char *)value, w->arg, errnum) < 0)
         flux_reactor_stop_error (r);
     flux_future_reset (f);
-    return 0;
 }
 
-static int dir_continuation (flux_future_t *f, struct kvs_watcher *w)
+static void dir_continuation (flux_future_t *f, struct kvs_watcher *w)
 {
     const char *key = flux_kvs_lookup_get_key (f);
     flux_reactor_t *r = flux_future_get_reactor (f);
-    const flux_kvsdir_t *dir;
+    const flux_kvsdir_t *dir = NULL;
+    int errnum = 0;
 
     if (flux_kvs_lookup_get_dir (f, &dir) < 0)
-        return -1;
-    if (w->dir_cb (key, (flux_kvsdir_t *)dir, w->arg, 0) < 0)
+        errnum = errno;
+    if (w->dir_cb (key, (flux_kvsdir_t *)dir, w->arg, errnum) < 0)
         flux_reactor_stop_error (r);
     flux_future_reset (f);
-    return 0;
 }
 
 int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
@@ -157,9 +150,8 @@ int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
     }
     w->val_cb = set;
     w->arg = arg;
+    val_continuation (f, w);
     if (flux_future_then (f, -1., (flux_continuation_f)val_continuation, w) < 0)
-        goto error;
-    if (val_continuation (f, w) < 0)
         goto error;
     zhashx_update (watchers, key, w);
     return 0;
@@ -188,9 +180,8 @@ static int watch_dir (flux_t *h, const char *key, kvs_set_dir_f set, void *arg)
     }
     w->dir_cb = set;
     w->arg = arg;
+    dir_continuation (f, w);
     if (flux_future_then (f, -1., (flux_continuation_f)dir_continuation, w) < 0)
-        goto error;
-    if (dir_continuation (f, w) < 0)
         goto error;
     zhashx_update (watchers, key, w);
     return 0;
@@ -222,23 +213,6 @@ int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
     return rc;
 }
 
-/* Synchronously cancel the stream of lookup responses.
- * Per RFC 6, once any error is returned, stream has ended.
- * This function destroys any value currently in future container.
- * If stream terminates with ENODATA, return 0, otherwise -1 with errno set.
- */
-static int cancel_streaming_lookup (flux_future_t *f)
-{
-    flux_future_reset (f);
-    if (flux_kvs_lookup_cancel (f) < 0)
-        return -1; // N.B. future is unfulfilled - matchtag will not be released
-    while (flux_kvs_lookup_get (f, NULL) == 0)
-        flux_future_reset (f);
-    if (errno != ENODATA)
-        return -1;
-    return 0;
-}
-
 int flux_kvs_unwatch (flux_t *h, const char *key)
 {
     zhashx_t *watchers;
@@ -251,7 +225,7 @@ int flux_kvs_unwatch (flux_t *h, const char *key)
     if (!(watchers = watchers_get (h)))
         return -1;
     if ((w = zhashx_lookup (watchers, key))) {
-        (void)cancel_streaming_lookup (w->f);
+        (void)kvs_cancel_streaming_lookup (w->f);
         zhashx_delete (watchers, key);
     }
     return 0;

@@ -29,23 +29,9 @@
 #include <jansson.h>
 
 #include "kvs_classic.h"
+#include "kvs_classic_watch_private.h"
 
-#define CLASSIC_WATCH_FLAGS \
-    (FLUX_KVS_WATCH \
-   | FLUX_KVS_WAITCREATE \
-   | FLUX_KVS_WATCH_FULL \
-   | FLUX_KVS_WATCH_UNIQ)
-
-#define CLASSIC_DIR_WATCH_FLAGS \
-    (CLASSIC_WATCH_FLAGS \
-   | FLUX_KVS_READDIR)
-
-/* Synchronously cancel the stream of lookup responses.
- * Per RFC 6, once any error is returned, stream has ended.
- * This function destroys any value currently in future container.
- * If stream terminates with ENODATA, return 0, otherwise -1 with errno set.
- */
-static int cancel_streaming_lookup (flux_future_t *f)
+int kvs_cancel_streaming_lookup (flux_future_t *f)
 {
     flux_future_reset (f);
     if (flux_kvs_lookup_cancel (f) < 0)
@@ -137,7 +123,7 @@ int flux_kvs_watch_once (flux_t *h, const char *key, char **valp)
         goto error;
     if (newval)
         newval_cpy = strdup (newval);
-    if (cancel_streaming_lookup (f) < 0)
+    if (kvs_cancel_streaming_lookup (f) < 0)
         goto error;
     if (newval && !newval_cpy) { // strdup failed
         errno = ENOMEM;
@@ -163,7 +149,7 @@ static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
     if (lookup_get_dir_until_new (f, *dirp, &newdir) < 0)
         goto error;
     newdir_cpy = flux_kvsdir_copy (newdir);
-    if (cancel_streaming_lookup (f) < 0)
+    if (kvs_cancel_streaming_lookup (f) < 0)
         goto error;
     if (!newdir_cpy) { // flux_kvsdir_copy failed
         errno = ENOMEM;
