@@ -126,11 +126,34 @@ static void dir_continuation (flux_future_t *f, struct kvs_watcher *w)
     flux_future_reset (f);
 }
 
+/* Legacy watch calls the callback once with ENOENT if the key initially
+ * doesn't exist, then continues to watch for an initial value.  This is not
+ * supported by lookup with WAITCREATE, so simulate that here with a
+ * synchronous lookup.  If the lookup fails with ENOENT, call the callback;
+ * otherwise, do nothing.  Returns the number of times the callback was
+ * called (0 or 1).
+ */
+static int sim_noent (flux_t *h, const char *key, kvs_set_f set, void *arg)
+{
+    flux_future_t *f;
+    int count = 0;
+
+    if ((f = flux_kvs_lookup (h, 0, key)) && flux_kvs_lookup_get (f, NULL) < 0
+                                          && errno == ENOENT) {
+        if (set (key, NULL, arg, ENOENT) < 0)
+            flux_reactor_stop_error (flux_get_reactor (h));
+        count++;
+    }
+    flux_future_destroy (f);
+    return count;
+}
+
 int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
 {
     zhashx_t *watchers;
     struct kvs_watcher *w;
     flux_future_t *f;
+    int count;
 
     if (!h || !key || !set) {
         errno = EINVAL;
@@ -142,6 +165,7 @@ int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
         errno = EEXIST;
         return -1;
     }
+    count = sim_noent (h, key, set, arg);
     if (!(f = flux_kvs_lookup (h, CLASSIC_WATCH_FLAGS, key)))
         goto error;
     if (!(w = kvs_watcher_create (f))) {
@@ -150,7 +174,8 @@ int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
     }
     w->val_cb = set;
     w->arg = arg;
-    val_continuation (f, w);
+    if (count == 0)
+        val_continuation (f, w);
     if (flux_future_then (f, -1., (flux_continuation_f)val_continuation, w) < 0)
         goto error;
     zhashx_update (watchers, key, w);
