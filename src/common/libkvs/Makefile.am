@@ -20,6 +20,7 @@ libkvs_la_SOURCES = \
 	kvs_dir.c \
 	kvs_dir_private.h \
 	kvs_classic.c \
+	kvs_classic_watch_once.c \
 	kvs_watch.c \
 	kvs_commit.c \
 	kvs_txn.c \
