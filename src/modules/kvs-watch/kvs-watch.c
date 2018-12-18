@@ -46,6 +46,7 @@ struct watcher {
     bool responded;             // true if watcher has responded atleast once
     bool initial_rpc_sent;      // flag is initial watch rpc sent
     bool initial_rpc_received;  // flag is initial watch rpc received
+    bool finished;              // flag indicates if watcher is finished
     int initial_rootseq;        // initial rootseq returned by initial rpc
     char *key;                  // lookup key
     int flags;                  // kvs_lookup flags
@@ -422,6 +423,7 @@ error:
         if (flux_respond_error (h, w->request, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
+    w->finished = true;
     return -1;
 }
 
@@ -435,29 +437,30 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     struct namespace *ns = w->ns;
 
     while ((f = zlist_first (w->lookups)) && flux_future_is_ready (f)) {
-        int rc = 0;
         f = zlist_pop (w->lookups);
-        rc = handle_lookup_response (f, w);
+        if (!w->finished)
+            handle_lookup_response (f, w);
         flux_future_destroy (f);
-        if (rc < 0)
-            goto destroy_watcher;
         /* if WAITCREATE and !WATCH, then we only care about sending
-         * one response and breaking out.  We can use the responded
-         * flag to indicate that break out condition.
+         * one response and being done.  We can use the responded flag
+         * to indicate that condition.
          */
         if (w->responded
             && (w->flags & FLUX_KVS_WAITCREATE)
             && !(w->flags & FLUX_KVS_WATCH))
-            goto destroy_watcher;
+            w->finished = true;
     }
-    return;
-destroy_watcher:
-    zlist_remove (ns->watchers, w);
-    watcher_destroy (w);
-    /* if ns->getrootf, destroy when getroot_continuation completes */
-    if (zlist_size (ns->watchers) == 0
-        && !ns->getrootf)
-        zhash_delete (ns->ctx->namespaces, ns->name);
+    if (w->finished) {
+        /* wait for all in flight lookups to complete before destroying watcher */
+        if (zlist_size (w->lookups) == 0) {
+            zlist_remove (ns->watchers, w);
+            watcher_destroy (w);
+        }
+        /* if ns->getrootf, destroy when getroot_continuation completes */
+        if (zlist_size (ns->watchers) == 0
+            && !ns->getrootf)
+            zhash_delete (ns->ctx->namespaces, ns->name);
+    }
 }
 
 /* Like flux_kvs_lookupat() except:
@@ -560,6 +563,12 @@ static int process_lookup_response (struct namespace *ns, struct watcher *w)
  */
 static void watcher_respond (struct namespace *ns, struct watcher *w)
 {
+    /* If this watcher is already done, we should ignore namespace
+     * remove, setroot, cancel, etc.  that leads us here.  Just goto
+     * 'finished'.
+     */
+    if (w->finished)
+        goto finished;
     if (w->cancelled) {
         errno = ENODATA;
         goto error_respond;
@@ -620,8 +629,13 @@ error_respond:
         if (flux_respond_error (ns->ctx->h, w->request, errno, NULL) < 0)
             flux_log_error (ns->ctx->h, "%s: flux_respond_error", __FUNCTION__);
     }
-    zlist_remove (ns->watchers, w);
-    watcher_destroy (w);
+    w->finished = true;
+finished:
+    /* wait for all in flight lookups to complete before destroying watcher */
+    if (zlist_size (w->lookups) == 0) {
+        zlist_remove (ns->watchers, w);
+        watcher_destroy (w);
+    }
     /* if ns->getrootf, destroy when getroot_continuation completes */
     if (zlist_size (ns->watchers) == 0
         && !ns->getrootf)
