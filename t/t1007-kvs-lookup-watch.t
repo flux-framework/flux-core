@@ -178,6 +178,10 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existe
         wait $pid
 '
 
+test_expect_success 'flux_kvs_lookup with waitcreate can be canceled' '
+        $FLUX_BUILD_DIR/t/kvs/waitcreate_cancel test.not_a_key
+'
+
 # in --watch & --waitcreate tests, call wait_watcherscount_nonzero to
 # ensure background watcher has started, otherwise test can be racy
 

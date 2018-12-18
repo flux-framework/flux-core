@@ -262,6 +262,7 @@ check_PROGRAMS = \
 	kvs/fence_invalid \
 	kvs/commit_order \
 	kvs/issue1760 \
+	kvs/waitcreate_cancel \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
@@ -396,6 +397,11 @@ kvs_hashtest_LDADD = \
 kvs_issue1760_SOURCES = kvs/issue1760.c
 kvs_issue1760_CPPFLAGS = $(test_cppflags)
 kvs_issue1760_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_waitcreate_cancel_SOURCES = kvs/waitcreate_cancel.c
+kvs_waitcreate_cancel_CPPFLAGS = $(test_cppflags)
+kvs_waitcreate_cancel_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_treq_SOURCES = request/treq.c

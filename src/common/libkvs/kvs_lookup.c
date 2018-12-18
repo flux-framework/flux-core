@@ -416,8 +416,10 @@ int flux_kvs_lookup_cancel (flux_future_t *f)
     struct lookup_ctx *ctx;
     flux_future_t *f2;
 
-    if (!f || !(ctx = flux_future_aux_get (f, auxkey))
-           || !(ctx->flags & FLUX_KVS_WATCH)) {
+    if (!f
+        || !(ctx = flux_future_aux_get (f, auxkey))
+        || (!(ctx->flags & FLUX_KVS_WATCH)
+            && !(ctx->flags & FLUX_KVS_WAITCREATE))) {
         errno = EINVAL;
         return -1;
     }
