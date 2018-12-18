@@ -82,6 +82,7 @@ struct namespace {
     bool created_subscribed;    // kvs.namespace-created subscription active
     char *removed_topic;        // topic string for kvs.namespace-removed
     bool removed_subscribed;    // kvs.namespace-removed subscription active
+    flux_future_t *getrootf;    // initial getroot future
 };
 
 /* Module state.
@@ -185,6 +186,7 @@ static void namespace_destroy (struct namespace *ns)
         free (ns->created_topic);
         free (ns->removed_topic);
         free (ns->name);
+        flux_future_destroy (ns->getrootf);
         free (ns);
         errno = saved_errno;
     }
@@ -452,7 +454,9 @@ static void lookup_continuation (flux_future_t *f, void *arg)
 destroy_watcher:
     zlist_remove (ns->watchers, w);
     watcher_destroy (w);
-    if (zlist_size (ns->watchers) == 0)
+    /* if ns->getrootf, destroy when getroot_continuation completes */
+    if (zlist_size (ns->watchers) == 0
+        && !ns->getrootf)
         zhash_delete (ns->ctx->namespaces, ns->name);
 }
 
@@ -618,8 +622,10 @@ error_respond:
     }
     zlist_remove (ns->watchers, w);
     watcher_destroy (w);
-    if (zlist_size (ns->watchers) == 0)
-        zhash_delete (ns->ctx->namespaces, ns->name);
+    /* if ns->getrootf, destroy when getroot_continuation completes */
+    if (zlist_size (ns->watchers) == 0
+        && !ns->getrootf)
+         zhash_delete (ns->ctx->namespaces, ns->name);
 }
 
 /* Respond to all ready watchers.
@@ -825,8 +831,14 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     uint32_t owner;
     struct commit *commit;
 
+    /* small racy chance watcher cancelled before getroot completes */
+    if (zlist_size (ns->watchers) == 0) {
+        zhash_delete (ns->ctx->namespaces, ns->name);
+        return;
+    }
     if (ns->commit) {
         flux_future_destroy (f);
+        ns->getrootf = NULL;
         return;
     }
     if (flux_kvs_getroot_get_sequence (f, &rootseq) < 0
@@ -845,8 +857,12 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     ns->commit = commit;
     ns->owner = owner;
 done:
-    watcher_respond_ns (ns);
+    /* chance watch_respond_ns() will destroy namespace, so should
+     * destroy future first
+     */
     flux_future_destroy (f);
+    ns->getrootf = NULL;
+    watcher_respond_ns (ns);
 }
 
 /* Create 'ns' if not already monitoring this namespace, and
@@ -857,7 +873,6 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
                                      const char *namespace)
 {
     struct namespace *ns;
-    flux_future_t *f;
 
     if (!(ns = zhash_lookup (ctx->namespaces, namespace))) {
         if (!(ns = namespace_create (ctx, namespace)))
@@ -868,13 +883,15 @@ struct namespace *namespace_monitor (struct watch_ctx *ctx,
         }
         zhash_freefn (ctx->namespaces, namespace,
                       (zhash_free_fn *)namespace_destroy);
-        if (!(f = flux_kvs_getroot (ctx->h, namespace, 0))) {
+        /* store future in namespace, so namespace can be destroyed
+         * appropriately to avoid matchtag leak */
+        if (!(ns->getrootf = flux_kvs_getroot (ctx->h, namespace, 0))) {
             zhash_delete (ctx->namespaces, namespace);
             return NULL;
         }
-        if (flux_future_then (f, -1., namespace_getroot_continuation, ns) < 0) {
+        if (flux_future_then (ns->getrootf, -1.,
+                              namespace_getroot_continuation, ns) < 0) {
             zhash_delete (ctx->namespaces, namespace);
-            flux_future_destroy (f);
             return NULL;
         }
     }
