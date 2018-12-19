@@ -257,6 +257,19 @@ static bool array_match (json_t *a, const char *key)
     return false;
 }
 
+static void watcher_cleanup (struct namespace *ns, struct watcher *w)
+{
+    /* wait for all in flight lookups to complete before destroying watcher */
+    if (zlist_size (w->lookups) == 0) {
+        zlist_remove (ns->watchers, w);
+        watcher_destroy (w);
+    }
+    /* if ns->getrootf, destroy when getroot_continuation completes */
+    if (zlist_size (ns->watchers) == 0
+        && !ns->getrootf)
+        zhash_delete (ns->ctx->namespaces, ns->name);
+}
+
 static int handle_initial_response (flux_t *h,
                                     struct watcher *w,
                                     json_t *val,
@@ -450,17 +463,8 @@ static void lookup_continuation (flux_future_t *f, void *arg)
             && !(w->flags & FLUX_KVS_WATCH))
             w->finished = true;
     }
-    if (w->finished) {
-        /* wait for all in flight lookups to complete before destroying watcher */
-        if (zlist_size (w->lookups) == 0) {
-            zlist_remove (ns->watchers, w);
-            watcher_destroy (w);
-        }
-        /* if ns->getrootf, destroy when getroot_continuation completes */
-        if (zlist_size (ns->watchers) == 0
-            && !ns->getrootf)
-            zhash_delete (ns->ctx->namespaces, ns->name);
-    }
+    if (w->finished)
+        watcher_cleanup (ns, w);
 }
 
 /* Like flux_kvs_lookupat() except:
@@ -631,15 +635,7 @@ error_respond:
     }
     w->finished = true;
 finished:
-    /* wait for all in flight lookups to complete before destroying watcher */
-    if (zlist_size (w->lookups) == 0) {
-        zlist_remove (ns->watchers, w);
-        watcher_destroy (w);
-    }
-    /* if ns->getrootf, destroy when getroot_continuation completes */
-    if (zlist_size (ns->watchers) == 0
-        && !ns->getrootf)
-         zhash_delete (ns->ctx->namespaces, ns->name);
+    watcher_cleanup (ns, w);
 }
 
 /* Respond to all ready watchers.
