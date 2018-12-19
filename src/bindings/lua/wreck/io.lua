@@ -70,6 +70,37 @@ function ostream:write (data)
 end
 
 
+local kvsfile = {}
+kvsfile.__index = kvsfile
+
+function kvsfile.create (arg)
+    local s = { count = 0, key = arg.key, flux = arg.flux, data = "" }
+    setmetatable (s, kvsfile)
+    return s
+end
+
+function kvsfile:open ()
+    self.count = self.count + 1
+    return true
+end
+
+function kvsfile:close ()
+    self.count = self.count - 1
+    if self.count == 0 then
+        local rc, err = self.flux:kvs_put (self.key, self.data)
+        if not rc then io.stderr:write (err) end
+        self.flux:kvs_commit ()
+    end
+end
+
+function kvsfile:closed ()
+    return self.count == 0
+end
+
+function kvsfile:write (data)
+    self.data = self.data .. data
+end
+
 --
 --  wreck job io tracking object.
 --  Direct all task io to a named set of ostream objects
@@ -156,11 +187,22 @@ local function ioplex_set_stream (self, taskid, name, f)
     self.output[taskid][name] = f
 end
 
+local function ioplex_open_path (self, path)
+    local f, err
+    local key = path:match ("^kvs://(.+)$")
+    if not key then
+        self:log ("creating path %s", path)
+        return ostream.create (path)
+    else
+        self:log ("opening kvs key %s", key)
+        return kvsfile.create { flux = self.flux, key = key }
+    end
+end
+
 local function ioplex_create_stream (self, path)
     local files = self.files
     if not files[path] then
-        self:log ("creating path %s", path)
-        local f, err = ostream.create (path)
+        local f, err = ioplex_open_path (self, path)
         if not f then return nil, err end
         files[path] = f
     end
@@ -169,7 +211,7 @@ end
 
 function ioplex:close_output (of)
     of:close ()
-    if not of.fp then
+    if of:closed () then
         self:log ("closed path %s", of.filename)
     end
     if self:complete() and self.on_completion then
