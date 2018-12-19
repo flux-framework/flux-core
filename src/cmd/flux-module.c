@@ -497,7 +497,7 @@ int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
             S = '?';
             break;
     }
-    printf ("%-20.20s %7d %7s %4s  %c  %8s %s\n",
+    printf ("%-20.20s %8d %7s %4s  %c  %8s %s\n",
             name,
             size,
             digest_len > 7 ? digest + digest_len - 7 : digest,
@@ -728,7 +728,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(nodeset = idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
         log_err_exit ("idset_encode");
 
-    printf ("%-20s %-7s %-7s %4s  %c  %8s %s\n",
+    printf ("%-20s %8s %-7s %4s  %c  %8s %s\n",
             "Module", "Size", "Digest", "Idle", 'S', "Nodeset", "Service");
     topic = xasprintf ("%s.lsmod", service);
     if (!(r = flux_mrpc (h, topic, NULL, nodeset, 0)))
