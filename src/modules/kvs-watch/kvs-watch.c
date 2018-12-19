@@ -345,8 +345,8 @@ static int handle_normal_response (flux_t *h,
  * Exception for FLUX_KVS_WATCH_FULL, must check if value is
  * different than old value.
  */
-static int handle_lookup_response (flux_future_t *f,
-                                   struct watcher *w)
+static void handle_lookup_response (flux_future_t *f,
+                                    struct watcher *w)
 {
     flux_t *h = flux_future_get_flux (f);
     int errnum;
@@ -365,7 +365,7 @@ static int handle_lookup_response (flux_future_t *f,
             if ((w->flags & FLUX_KVS_WAITCREATE)
                 && w->responded == false) {
                 w->initial_rootseq = root_seq;
-                return 0;
+                return;
             }
             errno = errnum;
             goto error;
@@ -415,7 +415,7 @@ static int handle_lookup_response (flux_future_t *f,
         /* if we got some setroots before the initial rpc returned,
          * toss them */
         if (root_seq < w->initial_rootseq)
-            goto out;
+            return;
 
         if (!w->mute) {
             if ((w->flags & FLUX_KVS_WATCH_FULL)
@@ -429,15 +429,13 @@ static int handle_lookup_response (flux_future_t *f,
             }
         }
     }
-out:
-    return 0;
+    return;
 error:
     if (!w->mute) {
         if (flux_respond_error (h, w->request, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
     w->finished = true;
-    return -1;
 }
 
 /* One lookup has completed.
