@@ -32,6 +32,11 @@ local function openstream (wreck, taskio, taskid, stream, template)
         wreck:die ("output: Failed to render template '"..template.."'")
         return
     end
+    -- Make any kvs:// output relative to the current kvsdir
+    local key = path:match ("kvs://(.*)$")
+    if key then
+        path = "kvs://"..tostring (wreck.kvsdir) .."."..key
+    end
     taskio:redirect (taskid, stream, path)
     return path
 end
