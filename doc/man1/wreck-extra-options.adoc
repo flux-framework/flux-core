@@ -23,6 +23,12 @@ via commas. Currently available options include:
 	are not enabled by default, and this option may be used to
 	enable them, e.g. '-o mpi=spectrum'.
 
+'nokz'::
+	Do not use KVS based "kz" streams for stdout and stderr streams
+        of this job. This option will bypass the KVS for job output by
+        using messages directly sent to a per-job service registered by
+        either wreckrun or the first wrexecd of the job.
+
 'stdio-commit-on-open'::
 	Commit to kvs on stdio open in each task. The default is to
 	delay commit. Without this option, stdio files for jobs will
