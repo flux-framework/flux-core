@@ -6,8 +6,6 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
-AM_LIBADD = \
-	$(PYTHON_LDFLAGS) 
 AM_LDFLAGS = \
 	-avoid-version -module $(san_ld_zdef_flag) \
 	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
@@ -41,20 +39,6 @@ fluxso_PYTHON = __init__.py
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
 _core_la_DEPENDENCIES = _core_build.py
-
-
-_job_build.py: $(top_srcdir)/src/common/libjob/job.h $(MAKE_BINDING) _core_build.py
-	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libjob \
-		--package _flux \
-		--modname _job \
-		--add_sub '.*va_list.*|||' \
-		--include_ffi _core_build \
-		job.h
-
-nodist__job_la_SOURCES = _job.c $(top_srcdir)/src/common/libjob/job.h
-_job_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libjob
-_job_la_LIBADD = $(common_libs)
-_job_la_DEPENDENCIES = _job_build.py
 
 if HAVE_FLUX_SECURITY
 BUILT_SOURCES += _security.c
