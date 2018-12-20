@@ -870,6 +870,12 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
     return 0;
 }
 
+static void flux_msg_destroy_wrapper (void *arg)
+{
+    flux_msg_t *msg = arg;
+    flux_msg_destroy (msg);
+}
+
 static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
                                json_t *names, json_t *keys)
 {
@@ -2489,6 +2495,33 @@ done:
 
 /* Alter the (rootref, rootseq) in response to a setroot event.
  */
+static void setroot_event_process (kvs_ctx_t *ctx, struct kvsroot *root,
+                                   json_t *names, json_t *rootdir,
+                                   const char *rootref, int rootseq)
+{
+    int errnum = 0;
+
+    /* in rare chance we receive setroot on removed namespace, return
+     * ENOTSUP to client callers */
+    if (root->remove)
+        errnum = ENOTSUP;
+
+    finalize_transaction_bynames (ctx, root, names, errnum);
+
+    /* if error, not need to complete setroot */
+    if (errnum)
+        return;
+
+    /* Optimization: prime local cache with directory object, if provided
+     * in event message.  Ignore failure here - object will be fetched on
+     * demand from content cache if not in local cache.
+     */
+    if (!json_is_null (rootdir))
+        prime_cache_with_rootdir (ctx, rootdir);
+
+    setroot (ctx, root, rootref, rootseq);
+}
+
 static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
@@ -2499,7 +2532,6 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *rootref;
     json_t *rootdir = NULL;
     json_t *names = NULL;
-    int errnum = 0;
 
     if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
                            "namespace", &namespace,
@@ -2523,25 +2555,29 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    /* in rare chance we receive setroot on removed namespace, return
-     * ENOTSUP to client callers */
-    if (root->remove)
-        errnum = ENOTSUP;
+    if (root->setroot_pause) {
+        flux_msg_t *msgcpy;
 
-    finalize_transaction_bynames (ctx, root, names, errnum);
+        assert (root->setroot_queue);
 
-    /* if error, not need to complete setroot */
-    if (errnum)
+        if (!(msgcpy = flux_msg_copy (msg, true))) {
+            flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
+            return;
+        }
+
+        if (zlist_append (root->setroot_queue, msgcpy) < 0) {
+            flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+            return;
+        }
+
+        zlist_freefn (root->setroot_queue,
+                      msgcpy,
+                      flux_msg_destroy_wrapper,
+                      true);
         return;
+    }
 
-    /* Optimization: prime local cache with directory object, if provided
-     * in event message.  Ignore failure here - object will be fetched on
-     * demand from content cache if not in local cache.
-     */
-    if (!json_is_null (rootdir))
-        prime_cache_with_rootdir (ctx, rootdir);
-
-    setroot (ctx, root, rootref, rootseq);
+    setroot_event_process (ctx, root, names, rootdir, rootref, rootseq);
 }
 
 static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
@@ -3064,6 +3100,129 @@ done:
     json_decref (namespaces);
 }
 
+/* This RPC request is specifically used as a test hook.  It pauses
+ * the processing of setroot events.  Any setroot events that are
+ * received, are put onto a queue to be processed after an unpause. By
+ * doing so, a particular rank will not be kept up to date on changes
+ * to the KVS.  This can be used for testing purposes, such as testing
+ * if read-your-writes consistency is working.
+ */
+static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                      const flux_msg_t *msg, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+    const char *namespace = NULL;
+    struct kvsroot *root;
+    bool stall = false;
+    int rc = -1;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }",
+                             "namespace", &namespace) < 0) {
+        flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
+        goto done;
+    }
+
+    if (!(root = getroot (ctx,
+                          namespace,
+                          mh,
+                          msg,
+                          NULL,
+                          setroot_pause_request_cb,
+                          &stall))) {
+        if (stall)
+            return;
+        goto done;
+    }
+
+    root->setroot_pause = true;
+
+    if (!root->setroot_queue) {
+        if (!(root->setroot_queue = zlist_new ())) {
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+}
+
+static void setroot_unpause_process_msg (kvs_ctx_t *ctx, struct kvsroot *root,
+                                         flux_msg_t *msg)
+{
+    const char *namespace;
+    int rootseq;
+    const char *rootref;
+    json_t *rootdir = NULL;
+    json_t *names = NULL;
+
+    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
+                           "namespace", &namespace,
+                           "rootseq", &rootseq,
+                           "rootref", &rootref,
+                           "names", &names,
+                           "rootdir", &rootdir) < 0) {
+        flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
+        return;
+    }
+
+    setroot_event_process (ctx, root, names, rootdir, rootref, rootseq);
+    return;
+}
+
+/* This RPC request is specifically used as a test hook.  It
+ * unpauses/allows the processing of setroot events.  Any setroot
+ * events that were received during a pause will be processed in the
+ * order they were received.
+ */
+static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+    const char *namespace = NULL;
+    struct kvsroot *root;
+    flux_msg_t *m;
+    bool stall = false;
+    int rc = -1;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }",
+                             "namespace", &namespace) < 0) {
+        flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
+        goto done;
+    }
+
+    if (!(root = getroot (ctx,
+                          namespace,
+                          mh,
+                          msg,
+                          NULL,
+                          setroot_unpause_request_cb,
+                          &stall))) {
+        if (stall)
+            return;
+        goto done;
+    }
+
+    root->setroot_pause = false;
+
+    /* user never called pause */
+    if (!root->setroot_queue)
+        goto out;
+
+    while ((m = zlist_pop (root->setroot_queue))) {
+        setroot_unpause_process_msg (ctx, root, m);
+        flux_msg_destroy (m);
+    }
+
+out:
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
@@ -3100,6 +3259,10 @@ static const struct flux_msg_handler_spec htab[] = {
                             namespace_removed_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
                             namespace_list_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.setroot-pause",
+                            setroot_pause_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.setroot-unpause",
+                            setroot_unpause_request_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

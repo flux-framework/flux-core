@@ -88,6 +88,8 @@ static void kvsroot_destroy (void *data)
             treq_mgr_destroy (root->trm);
         if (root->watchlist)
             wait_queue_destroy (root->watchlist);
+        if (root->setroot_queue)
+            zlist_destroy (&root->setroot_queue);
         free (data);
     }
 }
