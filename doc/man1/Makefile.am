@@ -57,6 +57,11 @@ stderr_devnull_0 = 2>/dev/null
 	--destination-dir $(builddir) \
 	--doctype manpage $(ADOC_FORMAT_OPT) manpage $< $(STDERR_DEVNULL)
 
-EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc NODESET.adoc
+EXTRA_DIST = \
+	$(ADOC_FILES) \
+	COPYRIGHT.adoc \
+	NODESET.adoc \
+	wreck-options.adoc \
+	wreck-extra-options.adoc
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
