@@ -42,6 +42,56 @@ AC_SUBST([AX_POINT_VERSION])
 PKG_PROG_PKG_CONFIG
 
 ##
+# Library versions
+##
+
+# Revision rules
+# https://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+
+# 1) Start with version information 0:0:0 for each libtool library.
+# 2) Update the version information only immediately before a public
+#    release of your software. More frequent updates are unnecessary, and
+#    only guarantee that the current interface number gets larger faster.
+# 3) If the library source code has changed at all since the last
+#    update, then increment revision ('c:r:a' becomes 'c:r+1:a').
+# 4) If any interfaces have been added, removed, or changed since the
+#    last update, increment current, and set revision to 0.
+# 5) If any interfaces have been added since the last public release,
+#    then increment age.
+# 6) If any interfaces have been removed or changed since the last
+#    public release, then set age to 0.
+
+LIBFLUX_CORE_CURRENT=1
+LIBFLUX_CORE_REVISION=0
+LIBFLUX_CORE_AGE=0
+LIBFLUX_CORE_VERSION_INFO=$LIBFLUX_CORE_CURRENT:$LIBFLUX_CORE_REVISION:$LIBFLUX_CORE_AGE
+AC_SUBST([LIBFLUX_CORE_VERSION_INFO])
+
+LIBFLUX_IDSET_CURRENT=1
+LIBFLUX_IDSET_REVISION=0
+LIBFLUX_IDSET_AGE=0
+LIBFLUX_IDSET_VERSION_INFO=$LIBFLUX_IDSET_CURRENT:$LIBFLUX_IDSET_REVISION:$LIBFLUX_IDSET_AGE
+AC_SUBST([LIBFLUX_IDSET_VERSION_INFO])
+
+LIBFLUX_OPTPARSE_CURRENT=1
+LIBFLUX_OPTPARSE_REVISION=0
+LIBFLUX_OPTPARSE_AGE=0
+LIBFLUX_OPTPARSE_VERSION_INFO=$LIBFLUX_OPTPARSE_CURRENT:$LIBFLUX_OPTPARSE_REVISION:$LIBFLUX_OPTPARSE_AGE
+AC_SUBST([LIBFLUX_OPTPARSE_VERSION_INFO])
+
+LIBPMI_CURRENT=1
+LIBPMI_REVISION=0
+LIBPMI_AGE=0
+LIBPMI_VERSION_INFO=$LIBPMI_CURRENT:$LIBPMI_REVISION:$LIBPMI_AGE
+AC_SUBST([LIBPMI_VERSION_INFO])
+
+LIBPMI2_CURRENT=1
+LIBPMI2_REVISION=0
+LIBPMI2_AGE=0
+LIBPMI2_VERSION_INFO=$LIBPMI2_CURRENT:$LIBPMI2_REVISION:$LIBPMI2_AGE
+AC_SUBST([LIBPMI2_VERSION_INFO])
+
+##
 # Checks for programs
 ##
 AC_PROG_CC_C99
