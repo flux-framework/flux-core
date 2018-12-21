@@ -79,4 +79,18 @@ test_expect_success 'wreckrun nokz: error and output on different ranks' '
         $WAITFILE -v --timeout=1 -p "this is stderr" test4.err &&
         $WAITFILE -v --timeout=1 -p "this is stdout" test4.out
 '
+
+KVSWAIT="$SHARNESS_TEST_SRCDIR/scripts/kvs-watch-until.lua"
+
+test_expect_success 'wreckrun nokz: --output=kvs://key works' '
+	flux wreckrun -n 4 --output=kvs://test-output echo hello &&
+	$KVSWAIT -t 1 $(flux wreck last-jobid -p).test-output \
+		"v  == \"hello\nhello\nhello\nhello\n\""
+'
+test_expect_success 'wreckrun nokz: --error=kvs://key works' '
+	flux wreckrun -n 4 --error=kvs://test-stderr \
+			sh -c "echo >&2 an error"  &&
+	$KVSWAIT -t 1 $(flux wreck last-jobid -p).test-stderr \
+		"v  == \"an error\nan error\nan error\nan error\n\""
+'
 test_done
