@@ -270,6 +270,18 @@ function wreck:initial_job_options ()
     return self.flux:kvs_get ("lwj.options") or {}
 end
 
+-- Create output configuration table from wreck object state,
+function wreck:output_file_config ()
+    if not self.opts.O and not self.opts.E then return nil end
+    return {
+        files = {
+            stdout = self.opts.O,
+            stderr = self.opts.E,
+        },
+        labelio = self.opts.l,
+    }
+end
+
 function wreck:parse_cmdline (arg)
     local getopt = require 'flux.alt_getopt' .get_opts
     local s = short_opts (self)
@@ -350,15 +362,7 @@ function wreck:parse_cmdline (arg)
         end
     end
 
-    if self.opts.O or self.opts.E then
-        self.output = {
-            files = {
-              stdout = self.opts.O,
-              stderr = self.opts.E,
-            },
-            labelio = self.opts.l,
-        }
-    end
+    self.output = self:output_file_config ()
     return true
 end
 
