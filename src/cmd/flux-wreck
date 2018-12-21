@@ -61,6 +61,13 @@ local function kvs_path (id, fmt, ...)
     return p
 end
 
+local function dump_nokz_output (id)
+    local files = kvs_path (id, "files")
+    local stdout = f:kvs_get (files .. ".stdout")
+    local stderr = f:kvs_get (files .. ".stderr")
+    if stdout then io.stdout:write (stdout) end
+    if stderr then io.stderr:write (stderr) end
+end
 
 prog:SubCommand {
  name = "attach",
@@ -77,17 +84,27 @@ prog:SubCommand {
  handler = function (self, arg)
     local id = check_jobid_arg (self, arg[1])
     local state = f:kvs_get (kvs_path (id, "state"))
-    local taskio, err = wreck.ioattach {
-        flux = f,
-        jobid = id,
-        labelio = self.opt.l,
-        nofollow = self.opt.n,
-        on_completion = function ()
-            f:reactor_stop()
+    local options = f:kvs_get (kvs_path (id, "options"))
+    local taskio
+
+    if options.nokz and self.opt.l then
+        self:die ("--label-io not possible for jobs with 'nokz' option")
+    end
+
+    if not options.nokz then
+        local err
+        taskio, err = wreck.ioattach {
+            flux = f,
+            jobid = id,
+            labelio = self.opt.l,
+            nofollow = self.opt.n,
+            on_completion = function ()
+                f:reactor_stop()
+            end
+        }
+        if not taskio then
+            self:die ("Failed to connect to job %d: %s\n", id, err)
         end
-    }
-    if not taskio then
-        self:die ("Failed to connect to job %d: %s\n", id, err)
     end
 
     local log, err = wreck.logstream { flux = f, jobid = id }
@@ -108,7 +125,8 @@ prog:SubCommand {
             if not iow then self:die ("error opening stdin: %s\n", err) end
         end
     end
-    if not taskio:complete() then f:reactor () end
+    if taskio and not taskio:complete() then f:reactor () end
+    if options.nokz then dump_nokz_output (id) end
     log:dump()
     if self.opt.s then
         self.parent:run {"status", id}
