@@ -45,6 +45,7 @@ local lwj_options = {
 
 local default_opts = {
     ['help']    = { char = 'h'  },
+    ['name']    = { char = 'J', arg = "NAME" },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
     ['gpus-per-task']  = { char = 'g', arg = "g" },
@@ -106,6 +107,7 @@ function wreck:usage()
     io.stderr:write ([[
   -h, --help                 Display this message
   -v, --verbose              Be verbose
+  -N, --name=NAME            Set an optional name for job to NAME
   -n, --ntasks=N             Request to run a total of N tasks
   -c, --cores-per-task=N     Request N cores per task
   -g, --gpus-per-task=N      Request N GPUs per task
@@ -462,6 +464,7 @@ function wreck:jobreq ()
         fixup_nnodes (self)
     end
     local jobreq = {
+        name   =  self.opts.J,
         nnodes =  self.nnodes or 0,
         ntasks =  self.ntasks,
         ncores =  self.ncores,

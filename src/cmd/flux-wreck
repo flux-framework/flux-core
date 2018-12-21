@@ -404,6 +404,8 @@ LWJ.__index = function (self, key)
         return os.date ("%FT%T", self.lwj["create-time"])
     elseif key == "command" then
         return self.lwj.cmdline[1]
+    elseif key == "name" then
+        return self.lwj.name
     end
     return LWJ [key]
 end
@@ -465,7 +467,8 @@ prog:SubCommand {
     if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
-    printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
+    printf (fmt, "ID", "NTASKS", "STATE", "START",
+                 "RUNTIME", "RANKS", "COMMAND/NAME")
     for _,dir in pairs (dirs) do
         local id = dir:match ("(%d+)$")
         if tonumber (id) then
@@ -474,7 +477,7 @@ prog:SubCommand {
                 printf (fmt, id, j.ntasks, j:state_string(), j.start,
                     seconds_to_string (j.runtime),
                     tostring (j:ranks()),
-                    j.command:match ("([^/]+)$"))
+                    j.name or j.command:match ("([^/]+)$"))
             end
         end
     end
