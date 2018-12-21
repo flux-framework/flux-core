@@ -4,15 +4,14 @@
 from setuptools import setup, find_packages
 
 setup(
-  name = "pycotap",
-  version = "1.0.0",
-  packages = find_packages(),
-
-  # Metadata
-  author = "Remko Tronçon",
-  author_email = "dev@el-tramo.be",
-  description = """A tiny test runner that outputs TAP results to standard output.""",
-  long_description = """
+    name="pycotap",
+    version="1.0.0",
+    packages=find_packages(),
+    # Metadata
+    author="Remko Tronçon",
+    author_email="dev@el-tramo.be",
+    description="""A tiny test runner that outputs TAP results to standard output.""",
+    long_description="""
 `pycotap` is a simple Python test runner for ``unittest`` that outputs
 `Test Anything Protocol <http://testanything.org>`_ results directly to standard output.
 
@@ -37,15 +36,15 @@ Contrary to other TAP runners for Python, ``pycotap`` ...
 Documentation and examples can be found on `the pycotap page
 <https://el-tramo.be/pycotap>`_.
 """,
-  license = "MIT",
-  keywords = "tap unittest testing",
-  url = "https://el-tramo.be/pycotap",
-  classifiers = [
-    "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Developers",
-    "Topic :: Utilities",
-    "License :: OSI Approved :: MIT License",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Testing"
-  ],
+    license="MIT",
+    keywords="tap unittest testing",
+    url="https://el-tramo.be/pycotap",
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Topic :: Utilities",
+        "License :: OSI Approved :: MIT License",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: Software Development :: Testing",
+    ],
 )

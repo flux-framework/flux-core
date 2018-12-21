@@ -5,21 +5,24 @@ import errno
 import flux
 from flux.message import Message
 from flux.core.inner import ffi
-from flux.constants import(FLUX_MSGTYPE_REQUEST,
-                           FLUX_MSGTYPE_RESPONSE)
+from flux.constants import FLUX_MSGTYPE_REQUEST, FLUX_MSGTYPE_RESPONSE
 
 from subflux import rerun_under_flux
 
+
 def __flux_size():
     return 2
+
 
 def service_add(f, name):
     future = f.service_register(name)
     return f.future_get(future, ffi.NULL)
 
+
 def service_remove(f, name):
     future = f.service_unregister(name)
     return f.future_get(future, ffi.NULL)
+
 
 class TestServiceAddRemove(unittest.TestCase):
     @classmethod
@@ -44,14 +47,14 @@ class TestServiceAddRemove(unittest.TestCase):
             rc = f.respond(msg, 0, msg.payload_str)
             self.assertEqual(rc, 0)
 
-        self.f.watcher = self.f.msg_watcher_create(service_cb,
-                                                 FLUX_MSGTYPE_REQUEST,
-                                                 "foo.*")
+        self.f.watcher = self.f.msg_watcher_create(
+            service_cb, FLUX_MSGTYPE_REQUEST, "foo.*"
+        )
         self.assertIsNotNone(self.f.watcher)
         self.f.watcher.start()
 
     def test_004_service_rpc(self):
-        cb_called = [False] # So that cb_called[0] is mutable in inner function
+        cb_called = [False]  # So that cb_called[0] is mutable in inner function
         p = {"test": "foo"}
 
         def cb(f, t, msg, arg):
@@ -59,8 +62,7 @@ class TestServiceAddRemove(unittest.TestCase):
             self.assertEqual(msg.payload, p)
             f.reactor_stop(f.get_reactor())
 
-        w2 = self.f.msg_watcher_create(cb, FLUX_MSGTYPE_RESPONSE,
-                                       "foo.echo")
+        w2 = self.f.msg_watcher_create(cb, FLUX_MSGTYPE_RESPONSE, "foo.echo")
         w2.start()
         self.assertIsNotNone(w2, msg="msg_watcher_create response handler")
 
@@ -97,14 +99,17 @@ class TestServiceAddRemove(unittest.TestCase):
 
     def test_008_service_remove_on_disconnect(self):
         from multiprocessing import Process
+
         #  Add "baz" service in a different process and let the
         #   process exit to cause a disconnect.
         #   then, ensure "baz" service was removed.
         #
         def add_service_and_disconnect():
             import sys
+
             h = flux.Flux()
             sys.exit(service_add(h, "baz"))
+
         p = Process(target=add_service_and_disconnect)
         p.start()
         p.join()
@@ -126,7 +131,9 @@ class TestServiceAddRemove(unittest.TestCase):
             fut.get()
         self.assertEqual(e.exception.errno, errno.EPROTO)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
         from pycotap import TAPTestRunner
+
         unittest.main(testRunner=TAPTestRunner())

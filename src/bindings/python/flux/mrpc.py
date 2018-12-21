@@ -7,6 +7,7 @@ from flux.core.inner import ffi, lib, raw
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.util import check_future_error, encode_payload, encode_topic
 
+
 def encode_rankset(rankset):
     """
     Validate and convert rankset to ascii binary str in proper format
@@ -16,45 +17,41 @@ def encode_rankset(rankset):
     (i.e., 'all', 'any', 'upstream')
     """
     if isinstance(rankset, six.text_type):
-        rankset = rankset.encode('ascii')
-    shorthands = [b'all', b'any', b'upstream']
+        rankset = rankset.encode("ascii")
+    shorthands = [b"all", b"any", b"upstream"]
     if isinstance(rankset, six.binary_type):
         if rankset not in shorthands:
             errmsg = "Invalid rankset shorthand, must be one of {}"
-            raise EnvironmentError(errno.EINVAL,
-                                   errmsg.format(shorthands))
-    else: # is not shorthand, should be a list of ranks
+            raise EnvironmentError(errno.EINVAL, errmsg.format(shorthands))
+    else:  # is not shorthand, should be a list of ranks
         if not rankset:
-            raise EnvironmentError(errno.EINVAL,
-                                   "Must supply at least one rank")
-        elif not all([isinstance(rank, int) or rank.isdigit()
-                      for rank in rankset]):
+            raise EnvironmentError(errno.EINVAL, "Must supply at least one rank")
+        elif not all([isinstance(rank, int) or rank.isdigit() for rank in rankset]):
             raise TypeError("All ranks must be integers")
         else:
             rankcsv = ",".join([str(rank) for rank in rankset])
-            rankset = "[{}]".format(rankcsv).encode('ascii')
+            rankset = "[{}]".format(rankcsv).encode("ascii")
     return rankset
+
 
 class MRPC(WrapperPimpl):
     """An MRPC state object"""
+
     class InnerWrapper(Wrapper):
 
         # pylint: disable=duplicate-code
-        def __init__(self,
-                     flux_handle,
-                     topic,
-                     payload=None,
-                     rankset="all",
-                     flags=0):
+        def __init__(self, flux_handle, topic, payload=None, rankset="all", flags=0):
             # hold a reference for destructor ordering
             self._handle = flux_handle
             dest = raw.flux_mrpc_destroy
             super(MRPC.InnerWrapper, self).__init__(
-                ffi, lib,
+                ffi,
+                lib,
                 handle=None,
                 match=ffi.typeof(lib.flux_mrpc).result,
-                prefixes=['flux_mrpc_'],
-                destructor=dest)
+                prefixes=["flux_mrpc_"],
+                destructor=dest,
+            )
 
             # pylint: disable=duplicate-code
             if isinstance(flux_handle, Wrapper):
@@ -64,21 +61,11 @@ class MRPC(WrapperPimpl):
             payload = encode_payload(payload)
             rankset = encode_rankset(rankset)
 
-            self.handle = raw.flux_mrpc(
-                flux_handle, topic, payload, rankset, flags)
+            self.handle = raw.flux_mrpc(flux_handle, topic, payload, rankset, flags)
 
-    def __init__(self,
-                 flux_handle,
-                 topic,
-                 payload=None,
-                 rankset="all",
-                 flags=0):
+    def __init__(self, flux_handle, topic, payload=None, rankset="all", flags=0):
         super(MRPC, self).__init__()
-        self.pimpl = self.InnerWrapper(flux_handle,
-                                       topic,
-                                       payload,
-                                       rankset,
-                                       flags)
+        self.pimpl = self.InnerWrapper(flux_handle, topic, payload, rankset, flags)
         self.then_args = None
         self.then_cb = None
 
@@ -96,18 +83,18 @@ class MRPC(WrapperPimpl):
         return (self.get_nodeid(), self.get())
 
     def get_nodeid(self):
-        nodeid = ffi.new('uint32_t [1]')
+        nodeid = ffi.new("uint32_t [1]")
         self.pimpl.get_nodeid(nodeid)
         return int(nodeid[0])
 
     @check_future_error
     def get_str(self):
         # pylint: disable=duplicate-code
-        resp_str = ffi.new('char *[1]')
+        resp_str = ffi.new("char *[1]")
         self.pimpl.get(resp_str)
         if resp_str[0] == ffi.NULL:
             return None
-        return ffi.string(resp_str[0]).decode('utf-8')
+        return ffi.string(resp_str[0]).decode("utf-8")
 
     def get(self):
         # pylint: disable=duplicate-code
