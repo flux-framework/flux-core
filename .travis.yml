@@ -57,6 +57,18 @@ matrix:
        - IMG=centos7-base
        - PYTHON_VERSION=3.4
 
+jobs:
+  include:
+    - stage: 'style checks'
+      language: 'python'
+      python: '3.6'
+      install: pip install --upgrade black
+      script: ./scripts/check-format
+
+stages:
+  - 'style checks'
+  - test
+
 env:
   global:
    - TAP_DRIVER_QUIET=1
@@ -87,7 +99,7 @@ before_install:
      export TAGNAME="${DOCKERREPO}:${IMG}-${TRAVIS_TAG:-latest}"
      echo "Tagging new image $TAGNAME"
   fi
- 
+
 script:
  - |
   src/test/docker/docker-run-checks.sh -j2 \
