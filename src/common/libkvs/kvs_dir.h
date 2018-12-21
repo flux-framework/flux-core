@@ -98,10 +98,6 @@ const char *flux_kvsdir_rootref (const flux_kvsdir_t *dir);
  */
 char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *key);
 
-/* Compare the content of two directories.  If both are non-NULL, and
- * they contain the same directory entries, return true, else false.
- */
-bool flux_kvsdir_equal (const flux_kvsdir_t *dir1, const flux_kvsdir_t *dir2);
 
 #ifdef __cplusplus
 }

@@ -207,8 +207,6 @@ void test_full (void)
         "flux_kvsdir_copy was successful");
     ok (flux_kvsdir_get_size (cpy) == 3,
         "flux_kvsdir_get_size on copy returns 3");
-    ok (flux_kvsdir_equal (dir, cpy),
-        "flux_kvsdir_equal returns true on copy and original");
 
     flux_kvsdir_destroy (dir);
 
@@ -218,18 +216,11 @@ void test_full (void)
     flux_kvsdir_destroy (cpy);
 }
 
-void test_badinput (void)
-{
-    ok (flux_kvsdir_equal (NULL, NULL) == false,
-        "flux_kvsdir_equal returns false on NULL directory objects");
-}
-
 int main (int argc, char *argv[])
 {
 
     plan (NO_PLAN);
 
-    test_badinput ();
     test_empty ();
     test_full ();
 
