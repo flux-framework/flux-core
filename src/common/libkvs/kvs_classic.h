@@ -121,28 +121,6 @@ int flux_kvsdir_unlink (const flux_kvsdir_t *dir, const char *key)
 int flux_kvsdir_mkdir (const flux_kvsdir_t *dir, const char *key)
                     __attribute__ ((deprecated));
 
-/* Block until 'key' changes from value represented by '*json_str'.
- * 'json_str' is an IN/OUT parameter;  that is, it used to construct
- * the watch RPC, then upon receipt of a watch response, it is freed
- * and set to the new value.  Upon return, the caller should free
- * the new value.
- *
- * 'json_str' may initially point to a NULL value.  The function will
- * wait until 'key' exists then return its new value.
- *
- * If 'key' initially exists, then is removed, the function fails with
- * ENOENT and the initial value is not freed.
- */
-int flux_kvs_watch_once (flux_t *h, const char *key, char **json_str)
-                         __attribute__ ((deprecated));
-
-/* Same as above except value is a directory pointed to by 'dirp'.
- */
-int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
-                             const char *fmt, ...)
-                             __attribute__ ((format (printf, 3, 4), deprecated));
-
-
 #ifdef __cplusplus
 }
 #endif

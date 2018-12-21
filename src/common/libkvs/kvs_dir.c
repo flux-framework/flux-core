@@ -284,13 +284,6 @@ json_t *kvsdir_get_obj (flux_kvsdir_t *dir)
     return dir->dirobj;
 }
 
-bool flux_kvsdir_equal (const flux_kvsdir_t *dir1, const flux_kvsdir_t *dir2)
-{
-    if (dir1 && dir2 && json_equal (dir1->dirobj, dir2->dirobj))
-        return true;
-    return false;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
