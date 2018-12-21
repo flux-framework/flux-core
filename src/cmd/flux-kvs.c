@@ -322,7 +322,7 @@ static struct optparse_subcommand subcommands[] = {
       "[-R] [-d] [-o] [-c count] key",
       "Watch key and output changes",
       cmd_watch,
-      0,
+      OPTPARSE_OPT_HIDDEN,
       watch_opts
     },
     { "version",
@@ -364,7 +364,8 @@ int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
     fprintf (stderr, "Common commands from flux-kvs:\n");
     s = subcommands;
     while (s->name) {
-        fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
+        if (!(s->flags & OPTPARSE_OPT_HIDDEN))
+            fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
         s++;
     }
     exit (1);
