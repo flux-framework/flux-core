@@ -69,6 +69,15 @@ local function dump_nokz_output (id)
     if stderr then io.stderr:write (stderr) end
 end
 
+local function attach_job_complete (state, taskio)
+    if not state then return false end
+    if state == "complete" or state == "reaped" then
+        if not taskio then return true end
+        return taskio:complete()
+    end
+    return false
+end
+
 prog:SubCommand {
  name = "attach",
  description = "Attach to running or completed job output",
@@ -99,7 +108,9 @@ prog:SubCommand {
             labelio = self.opt.l,
             nofollow = self.opt.n,
             on_completion = function ()
-                f:reactor_stop()
+                if self.opt.n or attach_job_complete (state, taskio) then
+                    f:reactor_stop()
+                end
             end
         }
         if not taskio then
@@ -124,8 +135,20 @@ prog:SubCommand {
             }
             if not iow then self:die ("error opening stdin: %s\n", err) end
         end
+        -- Watch state
+        local kw, err = f:kvswatcher {
+            key = kvs_path (id, "state"),
+            handler = function (kw, result)
+                if result then state = result end
+                if attach_job_complete (result, taskio) then
+                    f:reactor_stop ()
+                end
+            end
+        }
     end
-    if taskio and not taskio:complete() then f:reactor () end
+
+    f:reactor ()
+
     if options.nokz then dump_nokz_output (id) end
     log:dump()
     if self.opt.s then
