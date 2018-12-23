@@ -11,6 +11,8 @@ ok (flux.MSGTYPE_RESPONSE, "have MSGTYPE_RESPONSE")
 ok (flux.MSGTYPE_REQUEST,  "have MSGTYPE_REQUEST")
 ok (flux.MSGTYPE_EVENT,    "have MSGTYPE_EVENT")
 ok (flux.MSGTYPE_ANY,      "have MSGTYPE_ANY")
+ok (flux.NODEID_UPSTREAM,  "have NODEID_ANY")
+ok (flux.NODEID_ANY,       "have NODEID_UPSTREAM")
 
 local f, err = flux.new()
 type_ok (f, 'userdata', "create new flux handle")

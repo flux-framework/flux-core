@@ -29,6 +29,17 @@ local wreck = require 'wreck' .new ()
 if not wreck:parse_cmdline (arg) then
     wreck:die ("Failed to process cmdline args\n")
 end
+
+-- If 'nokz' is used without --output, then store stdout and err in
+-- well-known kvs keys by default:
+if wreck.job_options.nokz and not wreck:getopt('O') then
+    wreck.opts.O = "kvs://files.stdout"
+    if not wreck:getopt ('E') then wreck.opts.E = "kvs://files.stderr" end
+
+    -- Regenerate wreck.output output file configuration:
+    wreck.output = wreck:output_file_config ()
+end
+
 local id, err = wreck:submit ()
 if not id then wreck:die ("%s\n", err) end
 wreck:say ("Submitted jobid %d\n", id)

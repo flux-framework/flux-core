@@ -70,6 +70,37 @@ function ostream:write (data)
 end
 
 
+local kvsfile = {}
+kvsfile.__index = kvsfile
+
+function kvsfile.create (arg)
+    local s = { count = 0, key = arg.key, flux = arg.flux, data = "" }
+    setmetatable (s, kvsfile)
+    return s
+end
+
+function kvsfile:open ()
+    self.count = self.count + 1
+    return true
+end
+
+function kvsfile:close ()
+    self.count = self.count - 1
+    if self.count == 0 then
+        local rc, err = self.flux:kvs_put (self.key, self.data)
+        if not rc then io.stderr:write (err) end
+        self.flux:kvs_commit ()
+    end
+end
+
+function kvsfile:closed ()
+    return self.count == 0
+end
+
+function kvsfile:write (data)
+    self.data = self.data .. data
+end
+
 --
 --  wreck job io tracking object.
 --  Direct all task io to a named set of ostream objects
@@ -102,6 +133,7 @@ function ioplex.create (arg)
         on_completion = arg.on_completion,
         log_err       = arg.log_err,
         nofollow      = arg.nofollow,
+        nokz          = arg.nokz,
         removed = {},
         output = {},
         files = {}
@@ -111,6 +143,15 @@ function ioplex.create (arg)
         local r, err = wreck.id_to_path { flux = io.flux, jobid = io.id }
         if not r then error (err) end
         io.kvspath = r
+    end
+    if io.nokz then
+        if not arg.ioservices then return nil, "required arg ioservices" end
+        io.ioservices = {}
+        for s,v in pairs (arg.ioservices) do
+            if v and v.rank == io.flux.rank then
+                io.ioservices[s] = v.name
+            end
+        end
     end
     setmetatable (io, ioplex)
     return io
@@ -146,15 +187,91 @@ local function ioplex_set_stream (self, taskid, name, f)
     self.output[taskid][name] = f
 end
 
+local function ioplex_open_path (self, path)
+    local f, err
+    local key = path:match ("^kvs://(.+)$")
+    if not key then
+        self:log ("creating path %s", path)
+        return ostream.create (path)
+    else
+        self:log ("opening kvs key %s", key)
+        return kvsfile.create { flux = self.flux, key = key }
+    end
+end
+
 local function ioplex_create_stream (self, path)
     local files = self.files
     if not files[path] then
-        self:log ("creating path %s", path)
-        local f, err = ostream.create (path)
+        local f, err = ioplex_open_path (self, path)
         if not f then return nil, err end
         files[path] = f
     end
     return files[path]
+end
+
+function ioplex:close_output (of)
+    of:close ()
+    if of:closed () then
+        self:log ("closed path %s", of.filename)
+    end
+    if self:complete() and self.on_completion then
+        self.on_completion()
+    end
+end
+
+function ioplex:output_handler (arg)
+    local taskid = arg.taskid or 0
+    local stream = arg.stream or "stdout"
+    local data   = arg.data
+    local of     = arg.output or self.output[taskid][stream]
+
+    if not data then
+        self:close_output (of)
+        return
+    end
+    if self.labelio then
+        of:write (taskid..": ")
+    end
+    of:write (data)
+end
+
+function ioplex:register_services ()
+    local f = self.flux
+    if not self.ioservices then return nil, "IO Service not started yet!" end
+
+    for _,service in pairs (self.ioservices) do
+        local rc, err = f:rpc ("service.add", { service = service })
+        if not rc then
+            return nil, err
+        end
+    end
+    return true
+end
+
+function ioplex:msg_handler (stream, zmsg)
+    local data = nil
+    local msg = zmsg.data
+    if not msg then return end
+
+    if not msg.eof then
+        data = msg.data
+    end
+    self:output_handler { taskid = msg.taskid,
+                          data = data,
+                          stream = stream }
+end
+
+function ioplex:ioservice_start ()
+    -- I/O services for stdout/err for this job:
+    for stream,service in pairs (self.ioservices) do
+        local mh, err = self.flux:msghandler {
+            pattern = service..".write",
+            handler = function (f, zmsg, mh)
+                self:msg_handler (stream, zmsg)
+            end
+        }
+        if not mh then self:err ("ioservice_start: %s", err) end
+    end
 end
 
 local function ioplex_taskid_start (self, flux, taskid, stream)
@@ -170,26 +287,10 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
         key = key,
         kz_flags = flags,
         handler =  function (iow, data, err)
-            if err or not data then
-                -- protect against multiple close callback calls
-                if self.removed [key] then return end
-                if err then
-                    self:err ("Read error: task%d %s: %s", taskid, stream, err)
-                end
-                of:close()
-                if not of.fp then
-                    self:log ("closed path %s", of.filename)
-                end
-                self.removed [key] = true
-                if self:complete() and self.on_completion then
-                    self.on_completion()
-                end
-                return
-            end
-            if self.labelio then
-                of:write (taskid..": ")
-            end
-            of:write (data)
+            self:output_handler { taskid = taskid,
+                                  stream = stream,
+                                  output = of,
+                                  data   = data }
         end
     }
     if not iow then
@@ -199,11 +300,33 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     end
 end
 
+function ioplex:closeall (stream)
+    for taskid, t in pairs (self.output) do
+        if t[stream] then t[stream]:close () end
+    end
+end
+
+function ioplex:close_unwatched_streams ()
+    for _,stream in pairs { "stdout", "stderr" } do
+        if not self.ioservices [stream] then self:closeall (stream) end
+    end
+end
+
 --- "start" all ioplex iowatchers on reactor.
 -- @param h flux handle of reactor to use (optional)
 function ioplex:start (h)
     local flux = h or self.flux
     if not flux then return nil, "Error: no flux handle!" end
+
+    if self.nokz then
+        self:ioservice_start ()
+        local rc, err = self:register_services ()
+        if not rc then
+            self:err ("Unable to start I/O service: %s", err)
+        end
+        self:close_unwatched_streams ()
+        return
+    end
 
     for taskid, t in pairs (self.output) do
         for stream, f in pairs (t) do

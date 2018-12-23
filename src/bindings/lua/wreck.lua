@@ -34,6 +34,7 @@ local lwj_options = {
     ['stdio-delay-commit'] =    "Don't call kvs_commit for each line of output",
     ['stdio-commit-on-open'] =  "Commit to kvs on stdio open in each task",
     ['stdio-commit-on-close'] = "Commit to kvs on stdio close in each task",
+    ['nokz'] =                  "Do not store job output in kvs",
     ['stop-children-in-exec'] = "Start tasks in STOPPED state for debugger",
     ['no-pmi-server'] =         "Do not start simple-pmi server",
     ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
@@ -259,6 +260,29 @@ local function parse_walltime (s)
     return math.ceil (n)
 end
 
+function wreck:initial_job_options ()
+    if not self.flux then
+        local err
+        self.flux, err = require 'flux'.new ()
+        if not self.flux then
+            self:die ("Unable to open connection to flux broker: %s", err)
+        end
+    end
+    return self.flux:kvs_get ("lwj.options") or {}
+end
+
+-- Create output configuration table from wreck object state,
+function wreck:output_file_config ()
+    if not self.opts.O and not self.opts.E then return nil end
+    return {
+        files = {
+            stdout = self.opts.O,
+            stderr = self.opts.E,
+        },
+        labelio = self.opts.l,
+    }
+end
+
 function wreck:parse_cmdline (arg)
     local getopt = require 'flux.alt_getopt' .get_opts
     local s = short_opts (self)
@@ -321,6 +345,25 @@ function wreck:parse_cmdline (arg)
         table.insert (self.cmdline, arg[i])
     end
 
+    if not self.flux then
+        self.flux = require 'flux'.new()
+    end
+
+    self.job_options = self:initial_job_options ()
+    if self.opts.o then
+        for entry in self.opts.o:gmatch ('[^,]+') do
+            local opt, val = entry, 1
+            if entry:match ("=") then
+                opt, val = entry:match ("(.+)=(.+)")
+                if tonumber(val) == 0 or val == "false" or val == "no" then
+                    val = false
+                end
+            end
+            self.job_options[opt] = val
+        end
+    end
+
+    self.output = self:output_file_config ()
     return true
 end
 
@@ -367,6 +410,52 @@ local function fixup_nnodes (wreck)
     end
 end
 
+local function random_string ()
+    local f = assert (io.open ("/dev/urandom", "rb"))
+    local d = f:read(8)
+    f:close()
+    local s = ""
+    for i = 1, d:len() do
+        s = s..string.format ("%02x", d:byte(i))
+    end
+    return (s)
+end
+
+function wreck:setup_ioservices ()
+    -- Setup stderr/stdout ioservice ranks. Either flux-wreckrun
+    --  or nodeid 0 of the job will offer one or both of these services:
+    self.ioservices = {}
+    if self.job_options.nokz then
+        -- Default: register stdout and stderr service on this rank
+        local name = random_string ()
+        self.ioservices = {
+            stdout = {
+                name = name..":out",
+                rank = self.flux.rank
+            },
+            stderr = {
+                name = name..":err",
+                rank = self.flux.rank
+            }
+        }
+        if self.output then
+            -- Shunt stdio to nodeid 0 of the job if any output is being
+            -- redirected to files via the output.lua plugin:
+            local FLUX_NODEID_ANY = require 'flux'.NODEID_ANY
+            local outfile = self.output.files.stdout
+            local errfile = self.output.files.stderr
+            if outfile then
+                self.ioservices.stdout.rank = FLUX_NODEID_ANY
+            end
+            if errfile or outfile then
+                self.ioservices.stderr.rank = FLUX_NODEID_ANY
+            end
+        end
+    end
+    return self.ioservices
+end
+
+
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
     if self.fixup_nnodes then
@@ -390,29 +479,12 @@ function wreck:jobreq ()
         ["epilog.pre"] = self.opts.x,
         ["epilog.post"] = self.opts.p,
     }
-    if self.opts.o then
-        jobreq.options = {}
-        for entry in self.opts.o:gmatch ('[^,]+') do
-            local opt, val = entry, 1
-            if entry:match ("=") then
-                opt, val = entry:match ("(.+)=(.+)")
-                if tonumber(val) == 0 or val == "false" or val == "no" then
-                    val = false
-                end
-            end
-            jobreq.options[opt] = val
-        end
-    end
-    if self.opts.O or self.opts.E then
-        jobreq.output = {
-            files = {
-              stdout = self.opts.O,
-              stderr = self.opts.E,
-            },
-            labelio = self.opts.l,
-        }
-    end
+    jobreq.options = self.job_options
+    jobreq.output = self.output
     jobreq ["input.config"] = inputs_table_from_args (self, self.opts.i)
+
+    jobreq.ioservice = self:setup_ioservices ()
+
     return jobreq
 end
 

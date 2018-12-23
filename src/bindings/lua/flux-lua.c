@@ -2189,7 +2189,7 @@ static const struct luaL_Reg signal_handler_methods [] = {
 };
 
 
-#define MSGTYPE_SET(L, name) do { \
+#define FLUX_CONSTANT_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
   lua_pushnumber(L, FLUX_ ## name); \
   lua_settable(L, -3); \
@@ -2223,10 +2223,12 @@ int luaopen_flux (lua_State *L)
     lua_newtable (L);
     luaL_setfuncs (L, flux_functions, 0);
 
-    MSGTYPE_SET (L, MSGTYPE_REQUEST);
-    MSGTYPE_SET (L, MSGTYPE_RESPONSE);
-    MSGTYPE_SET (L, MSGTYPE_EVENT);
-    MSGTYPE_SET (L, MSGTYPE_ANY);
+    FLUX_CONSTANT_SET (L, MSGTYPE_REQUEST);
+    FLUX_CONSTANT_SET (L, MSGTYPE_RESPONSE);
+    FLUX_CONSTANT_SET (L, MSGTYPE_EVENT);
+    FLUX_CONSTANT_SET (L, MSGTYPE_ANY);
+    FLUX_CONSTANT_SET (L, NODEID_ANY);
+    FLUX_CONSTANT_SET (L, NODEID_UPSTREAM);
 
     lua_push_json_null (L);
     lua_pushliteral (L, "NULL");

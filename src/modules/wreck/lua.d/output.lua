@@ -6,6 +6,7 @@
 --
 --
 local ioplex = require 'wreck.io'
+local flux = require 'flux'
 
 local function kvs_output_config (wreck)
     local o = wreck.kvsdir ["output"]
@@ -31,6 +32,11 @@ local function openstream (wreck, taskio, taskid, stream, template)
         wreck:die ("output: Failed to render template '"..template.."'")
         return
     end
+    -- Make any kvs:// output relative to the current kvsdir
+    local key = path:match ("kvs://(.*)$")
+    if key then
+        path = "kvs://"..tostring (wreck.kvsdir) .."."..key
+    end
     taskio:redirect (taskid, stream, path)
     return path
 end
@@ -43,26 +49,54 @@ local function log_err (fmt, ...)
     wreck:log_error (fmt, ...)
 end
 
+-- Read `ioservice` entry for this job, and map any stream  with
+--  rank == FLUX_NODEID_RANK to this rank.
+--
+local function fetch_ioservices (wreck)
+    local ioservice,err = wreck.kvsdir.ioservice
+    if not ioservice then return nil end
+    local rank = wreck.flux.rank
+
+    -- Only streams with rank == FLUX_NODEID_ANY are handled by
+    -- this plugin. Delete other entries and remap FLUX_NODEID_ANY
+    -- to this rank:
+    for s,v in pairs (ioservice) do
+        if v and v.rank == flux.NODEID_ANY then
+            ioservice[s].rank = rank
+        else
+            ioservice[s] = nil
+        end
+    end
+    return ioservice
+end
+
 function rexecd_init ()
     if wreck.nodeid ~= 0 then return end
 
     local output = kvs_output_config (wreck)
     if not output or not output.files then return end
 
+    local template = output.files.stdout
+    local stderr_template = output.files.stderr
+    if not template and not stderr_template then return end
+
     local ntasks = wreck.kvsdir.ntasks
+    local ioservices = fetch_ioservices (wreck)
+
     taskio, err = ioplex.create {
         flux = wreck.flux,
         jobid = wreck.id,
         labelio = output.labelio and output.labelio ~= false,
-        log_err = log_err
+        log_err = log_err,
+        nokz = wreck.kvsdir.options.nokz,
+        ioservices = ioservices
     }
-    if not taskio then wreck:log_msg ("Error: %s", err) end
+    if not taskio then
+        wreck:log_error ("Error: %s", err)
+        return
+    end
 
     ioplex:enable_debug (log)
-
-    local template = output.files.stdout
-    local stderr_template = output.files.stderr
-    if not template and not stderr_template then return end
 
     for i = 0, ntasks - 1 do
        if template then

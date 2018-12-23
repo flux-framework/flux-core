@@ -112,9 +112,17 @@ end
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
+--  Open connection to flux broker:
+
+local f, err = flux.new ()
+if not f then
+    io.stderr:write ("Unable to connect to flux broker: "..err)
+    os.exit (1)
+end
+
 --  Parse cmdline args:
 --
-local wreck = require 'wreck' .new (shortprog)
+local wreck = require 'wreck' .new { prog = shortprog, flux = f }
 local ioattach = require 'wreck'.ioattach
 local logstream = require 'wreck'.logstream
 local taskio
@@ -141,11 +149,6 @@ wreckrun_hooks_compile (wreck)
 
 -- Start in-program timer:
 local tt = timer.new()
-
---  Create new connection to local cmbd:
---
-local f, err = flux.new()
-if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
 --
 --  Create a new job in kvs
@@ -178,6 +181,45 @@ local function check_job_completed ()
         end
         os.exit (rc)
     end
+end
+
+---
+--- Attach stdio kz streams and start all watchers
+---
+local function wreck_attach_stdio (wreck)
+  --
+  --  Open output to all tasks:
+  --
+  taskio, err = ioattach {
+     flux = f,
+     jobid = jobid,
+     ntasks = wreck.ntasks,
+     labelio = wreck.opts.l,
+     nokz = wreck.job_options.nokz,
+     ioservices = wreck.ioservices,
+     on_completion = check_job_completed
+  }
+  if not taskio then wreck:die ("error opening task io: %s\n", err) end
+
+  --
+  --  Open stdin
+  --
+  local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
+  if not kz then wreck:die (err) end
+
+  --
+  --  Add a file descriptor iowatcher for this script's stdin:
+  --
+  local iow, err = f:iowatcher {
+    fd = posix.fileno (io.input()),
+    handler = function (iow, data)
+        if data.data then kz:write (data.data) end
+        if data.eof  then kz:close ()          end
+    end
+  }
+  if not iow then wreck:die ("error opening stdin: %s\n", err) end
+
+  return taskio
 end
 
 
@@ -250,35 +292,7 @@ end
 
 -- Only process stdio if no --wait-until option used
 if not wreck.opts.w then
-  --
-  --  Open output to all tasks:
-  --
-  taskio, err = ioattach {
-     flux = f,
-     jobid = jobid,
-     ntasks = wreck.ntasks,
-     labelio = wreck.opts.l,
-     on_completion = check_job_completed
-  }
-  if not taskio then wreck:die ("error opening task io: %s\n", err) end
-
-  --
-  --  Open stdin
-  --
-  local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
-  if not kz then wreck:die (err) end
-
-  --
-  --  Add a file descriptor iowatcher for this script's stdin:
-  --
-  local iow, err = f:iowatcher {
-    fd = posix.fileno (io.input()),
-    handler = function (iow, data)
-        if data.data then kz:write (data.data) end
-        if data.eof  then kz:close ()          end
-    end
-  }
-  if not iow then wreck:die ("error opening stdin: %s\n", err) end
+    taskio = wreck_attach_stdio (wreck)
 end
 
 log, err = logstream {

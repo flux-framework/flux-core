@@ -1,0 +1,80 @@
+
+--ntasks='ntasks'::
+-n 'ntasks'::
+	Request to run a total of 'ntasks' tasks. If '--ntasks' is used alone,
+	i.e. without '--nnodes', then 'flux wreckrun' will attempt to
+	distribute the 'ntasks' tasks across all nodes of the Flux comms
+	session.
+
+--cores-per-task='N'::
+-c 'N'::
+	Request N cores be allocated to each task.
+
+--gpus-per-task='N'::
+-g 'N'::
+	Request N GPUs be allocated to each task.
+
+--nnodes='nnodes'::
+-N 'nnodes'::
+	Request to run across 'nnodes' nodes in the current comms session.
+	
+--tasks-per-node='tpn'::
+-t 'tpn'::
+	Set the number of tasks to run per node to 'tpn'. The default is
+	--tasks-per-node=1. This value is overridden by '--ntasks' if used.
+
+--label-io::
+-l::
+	Prepend stdout and stderr output lines with the task id to which
+	the output belongs.
+
+--output='FILENAME'::
+-O 'FILENAME'::
+	Duplicate stdout and stderr from tasks to a file or files. 'FILENAME'
+	is optionally a mustache template which expands the keys 'id', 'cmd'
+	and 'taskid'. (e.g. '--output=flux-{{id}}.out')
+
+--error='FILENAME'::
+-E 'FILENAME'::
+	Send stderr to a different location than stdout.
+
+--input='HOW'::
+-i 'HOW'::
+	Indicate how to deal with stdin for tasks. 'HOW' is a list of 'src:dst'
+	pairs where 'src' is a source 'FILENAME' which may optionally be a
+	mustache template as in `--output`, or the special term `stdin` to
+	indicate the stdin from a front end program, and 'dst' is a list of
+	taskids or `*` or `all` to indicate all tasks. The default is `stdin:*`.
+	If only one of 'src' or 'dst' is specified, a heuristic is used to
+	determine whether a list of tasks or an input file was meant. (e.g
+	`--input=file.in` will use `file.in` as input for all tasks, and
+	`--input=0` will send stdin to task 0 only.
+
+--walltime='N[SUFFIX]'::
+-T 'N[SUFFIX]'::
+        Set max job walltime to N seconds. Optional suffix may be 's'
+        for seconds (default), 'm' for minutes, 'h' for hours or 'd'
+        for days.  N may be an arbitrary floating point number, but
+        will be rounded up to nearest second.
+
+--skip-env::
+-S::
+	Skip the export of the local environment to the job.
+
+--epilog='PATH'::
+-x 'PATH'::
+	Execute a script at 'PATH' after all tasks exit but before the
+	job state is set to to 'complete' (So the job will not complete
+	and the resources will not be released until the script ends)
+
+--postscript='PATH'::
+-p 'PATH'::
+	Similar to '--epilog', but execute 'PATH' after job state is
+	complete.
+
+--options='options,...'::
+-o 'options,...'::
+	Apply extended job options to the current execution. Examples of
+	these options are described in the xref:extra-options[].
+
+
