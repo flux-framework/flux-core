@@ -376,24 +376,24 @@ test_expect_success 'kvs: cover pause / unpause namespace invalid' '
 test_expect_success 'kvs: clear stats locally' '
         flux kvs unlink -Rf $DIR &&
         flux module stats -c kvs &&
-        flux module stats kvs | grep no-op | grep -q 0 &&
+        flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
         flux kvs put --json $DIR.largeval1=$largeval &&
         flux kvs put --json $DIR.largeval2=$largeval &&
-        ! flux module stats kvs | grep no-op | grep -q 0 &&
+        ! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
         flux module stats -c kvs &&
-        flux module stats kvs | grep no-op | grep -q 0
+        flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
 '
 
 test_expect_success 'kvs: clear stats globally' '
         flux kvs unlink -Rf $DIR &&
         flux module stats -C kvs &&
-        flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
         for i in `seq 0 $((${SIZE} - 1))`; do
             flux exec -n -r $i sh -c "flux kvs put --json $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
         done &&
-        ! flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        ! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
         flux module stats -C kvs &&
-        flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0"
+        flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0"
 '
 
 #
