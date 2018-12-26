@@ -352,6 +352,21 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 '
 
 #
+# test pause / unpause
+#
+
+test_expect_success 'kvs: pause / unpause works' '
+        ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause &&
+        ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause
+'
+
+# cover invalid namespace cases
+test_expect_success 'kvs: cover pause / unpause namespace invalid' '
+        ! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=illegalnamespace &&
+        ! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=illegalnamespace
+'
+
+#
 # test clear of stats
 #
 
