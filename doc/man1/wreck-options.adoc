@@ -77,4 +77,9 @@
 	Apply extended job options to the current execution. Examples of
 	these options are described in the xref:extra-options[].
 
+--name='JOBNAME'::
+-J 'JOBNAME'::
+	Set an optional name to 'JOBNAME' for the submitted job. This name
+	will be saved in the KVS record for the job and displayed in place
+	of command name in `flux wreck ls` output.
 

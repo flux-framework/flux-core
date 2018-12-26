@@ -457,6 +457,11 @@ test_expect_success 'flux-wreck: ls works' '
 	flux wreck ls | sort -n >ls.out &&
 	tail -1 ls.out | grep "hostname$"
 '
+test_expect_success 'flux-wreck: --name option works' '
+	flux wreckrun -n2 -N2 --name=testname hostname &&
+	flux wreck ls | sort -n >ls-name.out &&
+	tail -q ls-name.out | grep "testname$"
+'
 test_expect_success 'flux-wreck: ls -n, --max works' '
         test $(flux wreck ls --max=1 | wc -l) = 2
 '
