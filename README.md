@@ -32,33 +32,42 @@ Protocols and API's used in Flux will be documented as Flux RFC's.
 #### Build Requirements
 
 flux-core requires the following packages to build:
+
+**redhat**	| **ubuntu** 		| **version**		| **note**
+---------- 	| ---------- 		| -----------		| --------
+autoconf	| autoconf		|			|
+automake	| automake		|			|
+libtool		| libtool		|			|
+libsodium-devel	| libsodium-dev		| >= 1.0.14		|
+zeromq4-devel	| libzmq3-dev		| >= 4.0.4		|
+czmq-devel	| libczmq-dev		| >= 3.0.1		|
+jansson-devel	| libjansson-dev	| >= 2.6		|
+lz4-devel	| liblz4-dev		|			|
+hwloc-devel	| libhwloc-dev		| >= v1.11.1, < 2.0	|
+sqlite-devel	| libsqlite3-dev	| >= 3.0.0		|
+yaml-cpp-devel	| libyaml-cpp-dev	| >= 0.5.1		|
+lua		| lua5.1		| >= 5.1, < 5.3		|
+lua-devel	| liblua5.1-dev		| >= 5.1, < 5.3		|
+lua-posix 	| lua-posix             | 			| *1*
+python-devel	| python-dev		| >= 2.7		|
+python-cffi	| python-cffi		| >= 1.1		|
+python-six	| python-six		| >= 1.9		|
+asciidoc	| asciidoc         	| 			| *2*
+asciidoctor	| asciidoctor         	| >= 1.5.7		| *2*
+aspell		| aspell		|			| *3*
+valgrind	| valgrind		|			| *3*
+mpich		| mpich			|			| *3*
+
+*Note 1 - Due to a packaging issue, Ubuntu lua-posix may need the
+following symlink (true for version 33.4.0-2):*
 ```
-autoconf
-automake
-libtool
-libsodium-devel >= 1.0.14
-zeromq4-devel >= 4.0.4   # built --with-libsodium
-czmq-devel >= 3.0.1
-jansson-devel >= 2.6
-lua-devel >= 5.1, < 5.3
-luaposix
-libhwloc-devel >= v1.11.1, < 2.0
-lz4
-yaml-cpp-devel >= 0.5.1
-# for python bindings
-python-devel >= 2.7
-python-cffi >= 1.1
-python-six >= 1.9
-libsqlite3-devel
-# for man pages
-asciidoc
-# or
-asciidoctor >= 1.5.7
+$ sudo ln -s posix_c.so /usr/lib/x86_64-linux-gnu/lua/5.1/posix.so
 ```
 
-If you want to build the MPI-based test programs, make sure that
-`mpicc` is in your PATH before you run configure.  These programs are
-not built if configure does not find MPI.
+*Note 2 - only needed if optional man pages are to be created.  Only one
+of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
+
+*Note 3 - optional, for enabling additional tests*.
 
 ```
 ./autogen.sh   # skip if building from a release tarball
