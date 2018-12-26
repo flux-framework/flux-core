@@ -120,6 +120,18 @@ test_expect_success 'kvs: wait fails (user)' '
         unset_userid
 '
 
+test_expect_success 'kvs: setroot pause / unpause works (owner)' '
+      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=$NAMESPACETMP-OWNER &&
+      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-OWNER
+'
+
+test_expect_success 'kvs: setroot pause / unpause fails (user)' '
+        set_userid 9999 &&
+      	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause &&
+      	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause &&
+        unset_userid
+'
+
 test_expect_success 'kvs: namespace remove fails (user)' '
         set_userid 9999 &&
 	! flux kvs namespace-remove $NAMESPACETMP-OWNER &&
@@ -270,6 +282,25 @@ test_expect_success 'kvs: version fails on other ranks (wrong user)' '
 test_expect_success 'kvs: wait fails (wrong user)' '
         set_userid 9000 &&
         ! flux kvs --namespace=$NAMESPACETMP-USER wait $DIR.test &&
+        unset_userid
+'
+
+test_expect_success 'kvs: setroot pause / unpause works (owner)' '
+      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=$NAMESPACETMP-USER &&
+      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-USER
+'
+
+test_expect_success 'kvs: setroot pause / unpause works (user)' '
+        set_userid 9999 &&
+      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=$NAMESPACETMP-USER &&
+      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-USER &&
+        unset_userid
+'
+
+test_expect_success 'kvs: setroot pause / unpause fails (wrong user)' '
+        set_userid 9000 &&
+      	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=$NAMESPACETMP-USER &&
+      	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-USER &&
         unset_userid
 '
 
