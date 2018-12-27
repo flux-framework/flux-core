@@ -57,11 +57,11 @@ local function fetch_ioservices (wreck)
     if not ioservice then return nil end
     local rank = wreck.flux.rank
 
-    -- Only streams with rank == FLUX_NODEID_ANY are handled by
+    -- Only streams with rank == -1 are handled by
     -- this plugin. Delete other entries and remap FLUX_NODEID_ANY
     -- to this rank:
     for s,v in pairs (ioservice) do
-        if v and v.rank == flux.NODEID_ANY then
+        if v and v.rank == -1 then
             ioservice[s].rank = rank
         else
             ioservice[s] = nil

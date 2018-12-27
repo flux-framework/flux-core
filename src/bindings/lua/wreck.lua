@@ -451,14 +451,13 @@ function wreck:setup_ioservices ()
         if self.output then
             -- Shunt stdio to nodeid 0 of the job if any output is being
             -- redirected to files via the output.lua plugin:
-            local FLUX_NODEID_ANY = require 'flux'.NODEID_ANY
             local outfile = self.output.files.stdout
             local errfile = self.output.files.stderr
             if outfile then
-                self.ioservices.stdout.rank = FLUX_NODEID_ANY
+                self.ioservices.stdout.rank = -1
             end
             if errfile or outfile then
-                self.ioservices.stderr.rank = FLUX_NODEID_ANY
+                self.ioservices.stderr.rank = -1
             end
         end
     end
