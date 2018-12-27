@@ -80,9 +80,10 @@ consists of the following steps:
   to 'starting'.
 . After starting tasks, all 'wrexecd' daemons synchronize on a
   barrier, and the job state is updated to 'running'.
-. As the tasks run, stdio is stored in the KVS and is (optionally)
-  available immediately for 'flux wreckrun' to display on the
-  user's console.
+. As the tasks run, stdio is either stored in the KVS or sent directly
+  to a per-job service as messages (when '-o nokz' job option is set),
+  and output is optionally displayed to user or redirected as requested
+  by command line options.
 . As tasks exit, their exit status is recorded in the kvs.
 . After all tasks have exited, 'wrexecd' daemons synchronize again
   and rank 0 updates the job state to 'completed'.
