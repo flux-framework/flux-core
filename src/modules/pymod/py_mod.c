@@ -30,7 +30,6 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <wchar.h>
 #include <errno.h>
@@ -122,6 +121,18 @@ done:
     return rc;
 }
 
+// Based on code from https://bugs.python.org/issue17870
+PyObject* PyLong_FromUintptr_t(uintptr_t value)
+{
+    if (sizeof(uintptr_t) == sizeof(long)) {
+        return PyLong_FromLong(value);
+    } else if (sizeof(uintptr_t) <= sizeof(PY_LONG_LONG)) {
+        return PyLong_FromLongLong((PY_LONG_LONG)value);
+    } else {
+        return NULL;
+    }
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     optparse_t *p = optparse_create ("pymod");
@@ -173,7 +184,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         PyObject *py_args = PyTuple_New(3);
         PyObject *pystr_mod_name = py_unicode_or_string(module_name);
         PyTuple_SetItem(py_args, 0, pystr_mod_name);
-        PyTuple_SetItem(py_args, 1, PyLong_FromVoidPtr(h));
+        PyObject *py_flux_handle = PyLong_FromUintptr_t((uintptr_t)h);
+        if (py_flux_handle == NULL)
+          return -1;
+        PyTuple_SetItem(py_args, 1, py_flux_handle);
 
         //Convert zhash to native python dict, should preserve mods
         //through switch to argc-style arguments
