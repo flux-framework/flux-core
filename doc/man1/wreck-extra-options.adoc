@@ -29,6 +29,12 @@ via commas. Currently available options include:
         using messages directly sent to a per-job service registered by
         either wreckrun or the first wrexecd of the job.
 
+'kz'::
+	Force use of KVS based "kz" streams for stdout and stderr streams
+	for this job. This option may be used in place of '-o nokz=false'
+	when 'nokz' has been set as the default for all jobs via global
+	wreck options (i.e. if  'flux wreck getopt nokz' reports true)
+
 'stdio-commit-on-open'::
 	Commit to kvs on stdio open in each task. The default is to
 	delay commit. Without this option, stdio files for jobs will
