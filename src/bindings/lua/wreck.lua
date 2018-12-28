@@ -35,6 +35,7 @@ local lwj_options = {
     ['stdio-commit-on-open'] =  "Commit to kvs on stdio open in each task",
     ['stdio-commit-on-close'] = "Commit to kvs on stdio close in each task",
     ['nokz'] =                  "Do not store job output in kvs",
+    ['kz'] =                    "Force job output to kvs",
     ['stop-children-in-exec'] = "Start tasks in STOPPED state for debugger",
     ['no-pmi-server'] =         "Do not start simple-pmi server",
     ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
@@ -361,6 +362,13 @@ function wreck:parse_cmdline (arg)
                     val = false
                 end
             end
+            -- kz/nokz override global value of eachother
+            if opt == "kz" and self.job_options.nokz then
+                self.job_options.nokz = false
+            end
+            if opt == "nokz" and self.job_options.kz then
+                self.job_options.kz = false
+            end
             self.job_options[opt] = val
         end
     end
@@ -443,14 +451,13 @@ function wreck:setup_ioservices ()
         if self.output then
             -- Shunt stdio to nodeid 0 of the job if any output is being
             -- redirected to files via the output.lua plugin:
-            local FLUX_NODEID_ANY = require 'flux'.NODEID_ANY
             local outfile = self.output.files.stdout
             local errfile = self.output.files.stderr
             if outfile then
-                self.ioservices.stdout.rank = FLUX_NODEID_ANY
+                self.ioservices.stdout.rank = -1
             end
             if errfile or outfile then
-                self.ioservices.stderr.rank = FLUX_NODEID_ANY
+                self.ioservices.stderr.rank = -1
             end
         end
     end

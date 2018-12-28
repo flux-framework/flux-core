@@ -28,7 +28,17 @@ test_expect_success 'wreckrun nokz: -o nokz=false disables nokz' '
 	hostname=$(hostname) &&
 	run_timeout 5 flux wreckrun -n${SIZE} -o nokz=false hostname  >output &&
 	for i in $(seq 1 ${SIZE}); do echo $hostname; done >expected &&
-	test_cmp expected output
+	test_cmp expected output &&
+	flux kvs dir $(flux wreck last-jobid -p).0.stdout &&
+	flux kvs dir $(flux wreck last-jobid -p).0.stderr
+'
+test_expect_success 'wreckrun nokz: -o kz disables nokz' '
+	hostname=$(hostname) &&
+	run_timeout 5 flux wreckrun -n${SIZE} -o kz hostname >output.kz &&
+	for i in $(seq 1 ${SIZE}); do echo $hostname; done   >expected.kz &&
+	test_cmp expected.kz output.kz &&
+	flux kvs dir $(flux wreck last-jobid -p).0.stdout &&
+	flux kvs dir $(flux wreck last-jobid -p).0.stderr
 '
 test_expect_success 'wreckrun nokz: kz streams in kvs' '
 	flux kvs dir $(flux wreck last-jobid -p).0.stdout &&

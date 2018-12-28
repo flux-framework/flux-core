@@ -15,6 +15,9 @@ flux module load -r 0 cron sync=hb
 
 flux module load -r 0 userdb ${FLUX_USERDB_OPTIONS}
 
+# make flux wreckrun/submit -onokz the default (override w/ -o kz):
+flux wreck setopt nokz
+
 wait $pids
 
 core_dir=$(cd ${0%/*} && pwd -P)

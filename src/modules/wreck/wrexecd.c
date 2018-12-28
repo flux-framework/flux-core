@@ -1090,9 +1090,9 @@ static void io_service_initialize (struct prog_ctx *ctx)
     /*  If ioservice rank is FLUX_NODEID_ANY, then replace with the rank
      *   of nodeid 0 in this job:
      */
-    if (ctx->outsvc.rank == FLUX_NODEID_ANY)
+    if (ctx->outsvc.rank == -1)
         ctx->outsvc.rank = ri.rank;
-    if (ctx->errsvc.rank == FLUX_NODEID_ANY)
+    if (ctx->errsvc.rank == -1)
         ctx->errsvc.rank = ri.rank;
 }
 
