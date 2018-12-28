@@ -12,21 +12,23 @@ class KVSWrapper(Wrapper):
     # across wrappers
     pass
 
-RAW = KVSWrapper(ffi, lib, prefixes=['flux_kvs', 'flux_kvs_'])
+
+RAW = KVSWrapper(ffi, lib, prefixes=["flux_kvs", "flux_kvs_"])
 # override error check behavior for flux_kvsitr_next
 RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 
 def get_key_direct(flux_handle, key):
-    valp = ffi.new('char *[1]')
+    valp = ffi.new("char *[1]")
     future = RAW.flux_kvs_lookup(flux_handle, 0, key)
     RAW.flux_kvs_lookup_get(future, valp)
     if valp[0] == ffi.NULL:
         return None
 
-    ret = json.loads(ffi.string(valp[0]).decode('utf-8'))
+    ret = json.loads(ffi.string(valp[0]).decode("utf-8"))
     RAW.flux_future_destroy(future)
     return ret
+
 
 def exists(flux_handle, key):
     try:
@@ -50,7 +52,7 @@ def isdir(flux_handle, key):
     return False
 
 
-def get_dir(flux_handle, key=''):
+def get_dir(flux_handle, key=""):
     return KVSDir(path=key, flux_handle=flux_handle)
 
 
@@ -64,26 +66,31 @@ def get(flux_handle, key):
             raise err
     return get_dir(flux_handle, key)
 
+
 def put(flux_handle, key, value):
     json_str = json.dumps(value)
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     return RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
 
+
 def put_mkdir(flux_handle, key):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     return RAW.flux_kvs_txn_mkdir(flux_handle.aux_txn, 0, key)
+
 
 def put_unlink(flux_handle, key):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     return RAW.flux_kvs_txn_unlink(flux_handle.aux_txn, 0, key)
 
+
 def put_symlink(flux_handle, key):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     return RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key)
+
 
 def commit(flux_handle, flags=0):
     if flux_handle.aux_txn is None:
@@ -110,11 +117,11 @@ def watch_once(flux_handle, key):
         RAW.flux_kvs_watch_once_dir(flux_handle, directory)
         return directory
 
-    out_json_str = ffi.new('char *[1]')
+    out_json_str = ffi.new("char *[1]")
     RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
     if out_json_str[0] == ffi.NULL:
         return None
-    return json.loads(ffi.string(out_json_str[0]).decode('utf-8'))
+    return json.loads(ffi.string(out_json_str[0]).decode("utf-8"))
 
 
 class KVSDir(WrapperPimpl, collections.MutableMapping):
@@ -123,18 +130,22 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     class InnerWrapper(Wrapper):
 
         # pylint: disable=no-value-for-parameter
-        def __init__(self, flux_handle=None, path='.', handle=None):
+        def __init__(self, flux_handle=None, path=".", handle=None):
             dest = RAW.flux_kvsdir_destroy
             super(KVSDir.InnerWrapper, self).__init__(
-                ffi, lib,
+                ffi,
+                lib,
                 handle=handle,
-                match=ffi.typeof('flux_kvsdir_t *'),
-                prefixes=['flux_kvsdir_',],
-                destructor=dest)
+                match=ffi.typeof("flux_kvsdir_t *"),
+                prefixes=["flux_kvsdir_"],
+                destructor=dest,
+            )
 
             if flux_handle is None and handle is None:  # pragma: no cover
-                raise ValueError("flux_handle must be a valid Flux object or "
-                                 "handle must be a valid kvsdir cdata pointer")
+                raise ValueError(
+                    "flux_handle must be a valid Flux object or "
+                    "handle must be a valid kvsdir cdata pointer"
+                )
             if handle is None:
                 directory = ffi.new("flux_kvsdir_t *[1]")
                 RAW.flux_kvs_get_dir(flux_handle, directory, path)
@@ -142,13 +153,15 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                 if self.handle is None or self.handle == ffi.NULL:
                     raise EnvironmentError("No such file or directory")
 
-    def __init__(self, flux_handle=None, path='.', handle=None):
+    def __init__(self, flux_handle=None, path=".", handle=None):
         super(KVSDir, self).__init__()
         self.fhdl = flux_handle
         self.path = path
         if flux_handle is None and handle is None:
-            raise ValueError("flux_handle must be a valid Flux object or"
-                             "handle must be a valid kvsdir cdata pointer")
+            raise ValueError(
+                "flux_handle must be a valid Flux object or"
+                "handle must be a valid kvsdir cdata pointer"
+            )
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
     def commit(self, flags=0):
@@ -156,7 +169,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
     def key_at(self, key):
         p_str = self.pimpl.key_at(key)
-        return p_str.decode('utf-8')
+        return p_str.decode("utf-8")
 
     def exists(self, name):
         return exists(self.fhdl, name)
@@ -166,7 +179,8 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             return get(self.fhdl, self.key_at(key))
         except EnvironmentError:
             raise KeyError(
-                '{} not found under directory {}'.format(key, self.key_at('')))
+                "{} not found under directory {}".format(key, self.key_at(""))
+            )
 
     def __setitem__(self, key, value):
         if put(self.fhdl, key, value) < 0:
@@ -176,7 +190,6 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         put_unlink(self.fhdl, key)
 
     class KVSDirIterator(collections.Iterator):
-
         def __init__(self, kvsdir):
             super(KVSDir.KVSDirIterator, self).__init__()
             self.kvsdir = kvsdir
@@ -193,7 +206,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             ret = RAW.flux_kvsitr_next(self.itr)
             if ret is None or ret == ffi.NULL:
                 raise StopIteration()
-            return ret.decode('utf-8')
+            return ret.decode("utf-8")
 
         def next(self):
             return self.__next__()
@@ -302,19 +315,18 @@ def walk(directory, topdown=False, flux_handle=None):
     """ Walk a directory in the style of os.walk() """
     if not isinstance(directory, KVSDir):
         if flux_handle is None:
-            raise ValueError(
-                "If directory is a key, flux_handle must be specified")
+            raise ValueError("If directory is a key, flux_handle must be specified")
         directory = KVSDir(flux_handle, directory)
-    return inner_walk(directory, '', topdown)
+    return inner_walk(directory, "", topdown)
 
 
-@ffi.callback('kvs_set_f')
+@ffi.callback("kvs_set_f")
 def kvs_watch_wrapper(key, value, arg, errnum):
     (callback, real_arg) = ffi.from_handle(arg)
     if errnum == errno.ENOENT:
         value = None
     else:
-        value = json.loads(ffi.string(value).decode('utf-8'))
+        value = json.loads(ffi.string(value).decode("utf-8"))
     key = ffi.string(key)
     ret = callback(key, value, real_arg, errnum)
     return ret if ret is not None else 0
@@ -326,8 +338,7 @@ KVSWATCHES = {}
 def watch(flux_handle, key, fun, arg):
     warg = (fun, arg)
     KVSWATCHES[key] = warg
-    return RAW.flux_kvs_watch(flux_handle, key, kvs_watch_wrapper,
-                              ffi.new_handle(warg))
+    return RAW.flux_kvs_watch(flux_handle, key, kvs_watch_wrapper, ffi.new_handle(warg))
 
 
 def unwatch(flux_handle, key):

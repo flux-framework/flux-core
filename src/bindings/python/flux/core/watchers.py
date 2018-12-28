@@ -1,7 +1,7 @@
 import abc
 from flux.core.inner import raw, ffi
 
-__all__ = ['TimerWatcher', 'FDWatcher']
+__all__ = ["TimerWatcher", "FDWatcher"]
 
 
 class Watcher(object):
@@ -35,7 +35,8 @@ class Watcher(object):
             raw.flux_watcher_destroy(self.handle)
             self.handle = None
 
-@ffi.callback('flux_watcher_f')
+
+@ffi.callback("flux_watcher_f")
 def timeout_handler_wrapper(unused1, unused2, revents, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
@@ -43,8 +44,7 @@ def timeout_handler_wrapper(unused1, unused2, revents, opaque_handle):
 
 
 class TimerWatcher(Watcher):
-
-    def __init__(self, flux_handle, after, callback, repeat=0, args=None, ):
+    def __init__(self, flux_handle, after, callback, repeat=0, args=None):
         self.flux_handle = flux_handle
         self.after = after
         self.repeat = repeat
@@ -58,20 +58,20 @@ class TimerWatcher(Watcher):
                 float(after),
                 float(repeat),
                 timeout_handler_wrapper,
-                self.wargs))
+                self.wargs,
+            )
+        )
 
 
-@ffi.callback('flux_watcher_f')
+@ffi.callback("flux_watcher_f")
 def fd_handler_wrapper(unused1, unused2, revents, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
     fd_int = raw.fd_watcher_get_fd(watcher.handle)
-    watcher.callback(watcher.flux_handle, watcher,
-                     fd_int, revents, watcher.args)
+    watcher.callback(watcher.flux_handle, watcher, fd_int, revents, watcher.args)
 
 
 class FDWatcher(Watcher):
-
     def __init__(self, flux_handle, fd_int, events, callback, args=None):
         self.flux_handle = flux_handle
         self.fd_int = fd_int
@@ -86,4 +86,6 @@ class FDWatcher(Watcher):
                 self.fd_int,
                 self.events,
                 fd_handler_wrapper,
-                self.wargs))
+                self.wargs,
+            )
+        )

@@ -3,39 +3,45 @@ import six
 from _flux._security import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl, FunctionWrapper
 
+
 class SecurityFunctionWrapper(FunctionWrapper):
     def __init__(self, *args, **kwargs):
         super(SecurityFunctionWrapper, self).__init__(*args, **kwargs)
 
     def __call__(self, calling_object, *args_in):
         try:
-            return super(SecurityFunctionWrapper,
-                         self).__call__(calling_object, *args_in)
+            return super(SecurityFunctionWrapper, self).__call__(
+                calling_object, *args_in
+            )
         except EnvironmentError:
             errstr = calling_object.last_error()
             errnum = calling_object.last_errnum()
             raise EnvironmentError(errnum, errstr)
 
+
 class SecurityContext(WrapperPimpl):
-    '''A Flux Security Context object'''
+    """A Flux Security Context object"""
 
     class InnerWrapper(Wrapper):
         # pylint: disable=no-value-for-parameter
         def __init__(self, flags=0):
             super(SecurityContext.InnerWrapper, self).__init__(
-                ffi, lib,
-                match=ffi.typeof('flux_security_t *'),
-                prefixes=['flux_security_', 'flux_sign_'],
+                ffi,
+                lib,
+                match=ffi.typeof("flux_security_t *"),
+                prefixes=["flux_security_", "flux_sign_"],
                 destructor=lib.flux_security_destroy,
-                handle=None)
+                handle=None,
+            )
 
             self.handle = lib.flux_security_create(flags)
 
         def check_wrap(self, fun, name):
             fun_type = self.ffi.typeof(fun)
             add_handle = self.check_handle(name, fun_type)
-            return SecurityFunctionWrapper(fun, name, fun_type, self.ffi,
-                                           add_handle=add_handle)
+            return SecurityFunctionWrapper(
+                fun, name, fun_type, self.ffi, add_handle=add_handle
+            )
 
     def __init__(self, config_pattern, flags=0):
         super(SecurityContext, self).__init__()
@@ -44,7 +50,7 @@ class SecurityContext(WrapperPimpl):
 
     def sign_wrap(self, payload, mech_type=ffi.NULL, flags=0):
         if isinstance(payload, six.text_type):
-            payload = payload.encode('utf-8')
+            payload = payload.encode("utf-8")
         elif not isinstance(payload, six.binary_type):
             errstr = "payload must be a text or binary type, not {}"
             raise TypeError(errstr.format(type(payload)))
@@ -55,11 +61,12 @@ class SecurityContext(WrapperPimpl):
             errstr = "signed_payload must be a binary type, not {}"
             raise TypeError(errstr.format(type(signed_payload)))
 
-        output_payload = ffi.new('void *[1]') # char**
-        output_payload_len = ffi.new('int [1]') # int*
-        output_userid = ffi.new('int64_t [1]') # int64_t*
-        self.pimpl.unwrap(signed_payload, output_payload, output_payload_len,
-                          output_userid, flags)
+        output_payload = ffi.new("void *[1]")  # char**
+        output_payload_len = ffi.new("int [1]")  # int*
+        output_userid = ffi.new("int64_t [1]")  # int64_t*
+        self.pimpl.unwrap(
+            signed_payload, output_payload, output_payload_len, output_userid, flags
+        )
 
         # deference int* to int then copy into python int
         output_userid = int(output_userid[0])

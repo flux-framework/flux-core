@@ -9,12 +9,8 @@ class Core(Wrapper):
 
     def __init__(self):
         """Set up the wrapper interface for functions prefixed with flux_"""
-        super(Core, self).__init__(ffi,
-                                   lib,
-                                   prefixes=[
-                                       'flux_',
-                                       'FLUX_',
-                                   ])
+        super(Core, self).__init__(ffi, lib, prefixes=["flux_", "FLUX_"])
+
 
 # keeping this for compatibility
 # pylint: disable=invalid-name

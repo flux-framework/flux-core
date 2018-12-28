@@ -3,18 +3,33 @@ services: docker
 dist: trusty
 language: c
 
-matrix:
+jobs:
   include:
+    - stage: 'style checks'
+      name: 'python format'
+      language: 'python'
+      python: '3.6'
+      install: pip install --upgrade black
+      script: ./scripts/check-format
+    - stage: 'style checks'
+      name: 'python lint'
+      language: 'python'
+      python: '3.6'
+      install: pip install --upgrade pylint
+      script: pylint --rcfile=src/bindings/python/.pylintrc src/bindings/python/flux
     - name: "Ubuntu: no configure flags"
+      stage: test
       compiler: gcc
       env:
        - PYTHON_VERSION=2.7
     - name: "Ubuntu: py3.6 distcheck"
+      stage: test
       compiler: gcc
       env:
        - DISTCHECK=t
        - PYTHON_VERSION=3.6
     - name: "Ubuntu: gcc-8 --with-flux-security/caliper, distcheck"
+      stage: test
       compiler: gcc-8
       env:
        - CC=gcc-8
@@ -22,21 +37,24 @@ matrix:
        - ARGS="--with-flux-security --enable-caliper"
        - DISTCHECK=t
        - PYTHON_VERSION=2.7
-    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security --enable-pylint"
+    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security"
+      stage: test
       compiler: clang-6.0
       env:
        - CC=clang-6.0
        - CXX=clang++-6.0
        - chain_lint=t
-       - ARGS="--with-flux-security --enable-pylint"
+       - ARGS="--with-flux-security"
        - PYTHON_VERSION=2.7
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
+      stage: test
       compiler: gcc
       env:
        - COVERAGE=t
        - ARGS="--with-flux-security --enable-caliper"
        - PYTHON_VERSION=2.7
     - name: "Ubuntu: TEST_INSTALL docker-deploy"
+      stage: test
       compiler: gcc
       env:
        - ARGS="--with-flux-security --enable-caliper"
@@ -44,6 +62,7 @@ matrix:
        - DOCKER_TAG=t
        - PYTHON_VERSION=2.7
     - name: "Centos 7: --with-flux-security --enable-caliper docker-deploy"
+      stage: test
       compiler: gcc
       env:
        - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
@@ -51,11 +70,16 @@ matrix:
        - DOCKER_TAG=t
        - PYTHON_VERSION=2.7
     - name: "Centos 7: py3.4 --with-flux-security"
+      stage: test
       compiler: gcc
       env:
        - ARGS="--with-flux-security --prefix=/usr"
        - IMG=centos7-base
        - PYTHON_VERSION=3.4
+
+stages:
+  - 'style checks'
+  - test
 
 env:
   global:
@@ -87,7 +111,7 @@ before_install:
      export TAGNAME="${DOCKERREPO}:${IMG}-${TRAVIS_TAG:-latest}"
      echo "Tagging new image $TAGNAME"
   fi
- 
+
 script:
  - |
   src/test/docker/docker-run-checks.sh -j2 \

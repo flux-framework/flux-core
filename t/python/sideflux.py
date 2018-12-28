@@ -16,12 +16,13 @@ from six.moves import queue as Queue
 import pycotap
 
 # pprint.pprint(os.environ)
-flux_exe = ''
-if os.environ.get('CHECK_BUILDDIR', None) is not None:
-    flux_exe = os.path.abspath(os.environ['CHECK_BUILDDIR'] + '/src/cmd/flux')
+flux_exe = ""
+if os.environ.get("CHECK_BUILDDIR", None) is not None:
+    flux_exe = os.path.abspath(os.environ["CHECK_BUILDDIR"] + "/src/cmd/flux")
 else:
     flux_exe = os.path.abspath(
-        os.path.dirname(os.path.abspath(__file__)) + '/../../../cmd/flux')
+        os.path.dirname(os.path.abspath(__file__)) + "/../../../cmd/flux"
+    )
 
 
 @contextlib.contextmanager
@@ -45,22 +46,26 @@ class SideFlux(object):
     def __init__(self, size=1):
         global flux_exe
         self.size = size
-        self.tmpdir = tempfile.mkdtemp(prefix='flux-sandbox-')
-        self.flux_uri = 'local://' + self.tmpdir + '/0'
+        self.tmpdir = tempfile.mkdtemp(prefix="flux-sandbox-")
+        self.flux_uri = "local://" + self.tmpdir + "/0"
         self.cleaned = False
 
     def start(self):
-        flux_command = [flux_exe, 'start',
-                        '--bootstrap=selfpmi',
-                        '--size={}'.format(self.size),
-                        '-o',
-                        '-Slog-forward-level=7',
-                        '--scratchdir=' + self.tmpdir, 'bash']
+        flux_command = [
+            flux_exe,
+            "start",
+            "--bootstrap=selfpmi",
+            "--size={}".format(self.size),
+            "-o",
+            "-Slog-forward-level=7",
+            "--scratchdir=" + self.tmpdir,
+            "bash",
+        ]
         # print ' '.join(flux_command)
-        FNULL = open(os.devnull, 'w+')
+        FNULL = open(os.devnull, "w+")
         self.subenv = os.environ.copy()
-        self.subenv.pop('FLUX_URI', None)
-        self.subenv['TMPDIR'] = self.tmpdir
+        self.subenv.pop("FLUX_URI", None)
+        self.subenv["TMPDIR"] = self.tmpdir
         self.sub = subprocess.Popen(
             flux_command,
             stdin=subprocess.PIPE,
@@ -72,34 +77,31 @@ class SideFlux(object):
         )
         self.sub_in = io.TextIOWrapper(
             self.sub.stdin,
-            encoding='utf-8',
+            encoding="utf-8",
             line_buffering=True,  # send data on newline
         )
-        self.sub_out = io.TextIOWrapper(
-            self.sub.stdout,
-            encoding='utf-8',
-        )
-        self.p = mp.Process(target=consume, args=(self.sub_out, ))
+        self.sub_out = io.TextIOWrapper(self.sub.stdout, encoding="utf-8")
+        self.p = mp.Process(target=consume, args=(self.sub_out,))
 
-        print('echo READY', file=self.sub_in)
+        print("echo READY", file=self.sub_in)
 
         self.env_items = {}
-        self.env_items['FLUX_URI'] = self.flux_uri
+        self.env_items["FLUX_URI"] = self.flux_uri
 
         while True:
             line = self.sub_out.readline()
-            if os.environ.get('SIDEFLUX_DEBUG', False):
+            if os.environ.get("SIDEFLUX_DEBUG", False):
                 print(line)
-            if line != '':
+            if line != "":
                 m = re.match(r"\s*(?P<var>[^= ]+)=(?P<val>.*)", line.rstrip())
                 if m:
-                    if os.environ.get('SIDEFLUX_DEBUG', False):
-                        print("setting", m.group('var'), "to", m.group('val'))
-                    v = m.group('val')
-                    if re.search(r'/\.\./', v):
+                    if os.environ.get("SIDEFLUX_DEBUG", False):
+                        print("setting", m.group("var"), "to", m.group("val"))
+                    v = m.group("val")
+                    if re.search(r"/\.\./", v):
                         v = os.path.abspath(v)
-                    self.env_items[m.group('var')] = v
-                if re.search('READY', line):
+                    self.env_items[m.group("var")] = v
+                if re.search("READY", line):
                     break
                 else:
                     if self.sub.poll() is not None:
@@ -129,11 +131,11 @@ class SideFlux(object):
             self.p.terminate()
             self.p.join()
 
-    def run_flux_cmd(self, command=''):
+    def run_flux_cmd(self, command=""):
         global flux_exe
         print("{} {}".format(flux_exe, command), file=self.sub_in)
 
-    def run_cmd(self, command=''):
+    def run_cmd(self, command=""):
         global flux_exe
         print(command, file=self.sub_in)
 
@@ -176,7 +178,7 @@ class SimpleAsyncRunner(object):
                 q.put(None)
 
         self.q = mp.Queue()
-        self.p = mp.Process(target=q_wrapper, args=(self.q, ))
+        self.p = mp.Process(target=q_wrapper, args=(self.q,))
         self.p.start()
         self.done = False
         self.res = None
@@ -188,8 +190,7 @@ class SimpleAsyncRunner(object):
             try:
                 self.res = self.q.get(True, timeout)
             except Queue.Empty:
-                raise AsyncTimeout(
-                    'The result is not ready, has a test run too long?')
+                raise AsyncTimeout("The result is not ready, has a test run too long?")
             self.done = True
         return self.res
 
@@ -215,7 +216,7 @@ def apply_under_flux(size, fun, args=tuple(), kwargs=dict()):
     return apply_under_flux_async(size, fun, args, kwargs).get()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     with run_beside_flux(1) as fp:
         while True:
             pass

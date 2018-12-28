@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if command -v black 2>&1 > /dev/null ; then
+  find src t -name '*.py' -print0 | xargs -0 black
+else
+  echo "black not found, python left unformatted"
+fi

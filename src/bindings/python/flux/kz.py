@@ -11,7 +11,8 @@ class KZWrapper(Wrapper):
     # across wrappers
     pass
 
-RAW = KZWrapper(ffi, lib, prefixes=['kz_', ])
+
+RAW = KZWrapper(ffi, lib, prefixes=["kz_"])
 # override error check behavior for kz_get, necessary due to errno EAGAIN
 RAW.kz_get.set_error_check(lambda x: False)
 
@@ -23,11 +24,11 @@ def generic_write(stream, string):
         os.write(stream, string)
 
 
-@ffi.callback('kz_ready_f')
+@ffi.callback("kz_ready_f")
 def kz_stream_handler(kz_handle, arg):
     del kz_handle  # unused
     (stream, prefix, handle) = ffi.from_handle(arg)
-    buf = ffi.new('char *[1]')
+    buf = ffi.new("char *[1]")
     while True:
         try:
             count = RAW.get(handle, buf)
@@ -50,12 +51,13 @@ def kz_stream_handler(kz_handle, arg):
 KZWATCHES = {}
 
 
-def attach(flux_handle,
-           key,
-           stream,
-           prefix=None,
-           flags=(RAW.KZ_FLAGS_READ
-                  | RAW.KZ_FLAGS_NONBLOCK)):
+def attach(
+    flux_handle,
+    key,
+    stream,
+    prefix=None,
+    flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
+):
     handle = RAW.kz_open(flux_handle, key, flags)
     warg = (stream, prefix, handle)
     ffi_handle = ffi.new_handle(warg)
@@ -70,29 +72,28 @@ def detach(flux_handle, key):
 
 
 class KZStream(WrapperPimpl):
-
     class InnerWrapper(Wrapper):
-
-        def __init__(self,
-                     flux_handle,
-                     name,
-                     flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
-                     handle=None,
-                     prefix=False):
+        def __init__(
+            self,
+            flux_handle,
+            name,
+            flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
+            handle=None,
+            prefix=False,
+        ):
             self.destroyer = RAW.kz_close
             self.prefix = prefix
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError(
                     "flux_handle must be a valid Flux object or handle must "
-                    "be a valid kvsdir cdata pointer")
+                    "be a valid kvsdir cdata pointer"
+                )
             if handle is None:
                 handle = RAW.kz_open(flux_handle, name, flags)
 
             super(KZStream.InnerWrapper, self).__init__(
-                ffi, lib,
-                handle=handle,
-                match=ffi.typeof('kz_t *'),
-                prefixes=['kz_'])
+                ffi, lib, handle=handle, match=ffi.typeof("kz_t *"), prefixes=["kz_"]
+            )
 
         def __del__(self):
             if self.handle is not None:
@@ -107,12 +108,14 @@ class KZStream(WrapperPimpl):
         KZWATCHES[self.name] = ffi_handle
         self.pimpl.set_ready_cb(kz_stream_handler, ffi_handle)
 
-    def __init__(self,
-                 flux_handle,
-                 name,
-                 flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
-                 handle=None,
-                 prefix=None):
+    def __init__(
+        self,
+        flux_handle,
+        name,
+        flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
+        handle=None,
+        prefix=None,
+    ):
         super(KZStream, self).__init__()
         self.flux_handle = flux_handle
         self.prefix = prefix
@@ -120,9 +123,9 @@ class KZStream(WrapperPimpl):
         if flux_handle is None and handle is None:
             raise ValueError(
                 "flux_handle must be a valid Flux object or handle must be a "
-                "valid kvsdir cdata pointer")
-        self.pimpl = self.InnerWrapper(
-            flux_handle, name, flags, handle, prefix)
+                "valid kvsdir cdata pointer"
+            )
+        self.pimpl = self.InnerWrapper(flux_handle, name, flags, handle, prefix)
 
     def __enter__(self):
         """Allow this to be used as a context manager"""

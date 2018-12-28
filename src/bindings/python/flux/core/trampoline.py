@@ -8,8 +8,7 @@ def mod_main_trampoline(name, int_handle, args):
     flux_instance = Flux(handle=lib.unpack_long(int_handle))
     user_mod = None
     try:
-        user_mod = importlib.import_module(
-            'flux.modules.' + name, 'flux.modules')
+        user_mod = importlib.import_module("flux.modules." + name, "flux.modules")
     except ImportError:  # check user paths for the module
         user_mod = importlib.import_module(name)
 
