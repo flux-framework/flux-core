@@ -31,7 +31,7 @@ VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh
 BROKER=${FLUX_BUILD_DIR}/src/broker/flux-broker
 
 # broker run under valgrind may need extra retries in flux_open():
-FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
+export FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
 
 test_expect_success 'valgrind reports no new errors on single broker run' '
 	run_timeout 120 \
@@ -45,6 +45,6 @@ test_expect_success 'valgrind reports no new errors on single broker run' '
 		--leak-resolution=med \
 		--error-exitcode=1 \
 		--suppressions=$VALGRIND_SUPPRESSIONS \
-		${BROKER} --shutdown-grace=4 ${VALGRIND_WORKLOAD} 10
+		${BROKER} --shutdown-grace=16 ${VALGRIND_WORKLOAD} 10
 '
 test_done

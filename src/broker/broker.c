@@ -1689,7 +1689,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     int signum = flux_signal_watcher_get_signum (w);
 
     shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
-                  "signal %d (%s) %d", signum, strsignal (signum));
+                  "signal %d (%s)", signum, strsignal (signum));
 }
 
 /* TRICKY:  Fix up ROUTER socket used in reverse direction.
