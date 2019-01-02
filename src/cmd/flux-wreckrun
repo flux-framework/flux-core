@@ -145,6 +145,18 @@ if not wreck:parse_cmdline (arg) then
     wreck:die ("Failed to process cmdline args\n")
 end
 
+-- if nokz is in effect and the --output option is not used, AND
+--  either --detach or --wait-until are active, then store output by
+--  default in the kvs; o/w it is just dropped:
+if (wreck.job_options.nokz and not wreck:getopt ('O')) and
+   (wreck:getopt ('d') or wreck:getopt ('w')) then
+    wreck.opts.O = "kvs://files.stdout"
+    if not wreck:getopt ('E') then wreck.opts.E = "kvs://files.stderr" end
+
+    -- Regenerate wreck.output output file configuration:
+    wreck.output = wreck:output_file_config ()
+end
+
 wreckrun_hooks_compile (wreck)
 
 -- Start in-program timer:
