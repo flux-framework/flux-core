@@ -582,14 +582,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
     json_t *dir = rootdir;
     json_t *subdir = NULL, *dir_entry;
     int saved_errno, rc = -1;
-    char *key_suffix = NULL;
 
-    if (check_cross_namespace (kt, key, &key_suffix) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
-
-    if (!(cpy = kvs_util_normalize_key (key_suffix ? key_suffix : key, NULL))) {
+    if (!(cpy = kvs_util_normalize_key (key, NULL))) {
         saved_errno = errno;
         goto done;
     }
@@ -766,7 +760,6 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
  success:
     rc = 0;
  done:
-    free (key_suffix);
     free (cpy);
     if (rc < 0)
         errno = saved_errno;
