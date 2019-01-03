@@ -147,7 +147,7 @@ prog:SubCommand {
         }
     end
 
-    f:reactor ()
+    if not attach_job_complete (state, taskio) then f:reactor () end
 
     if options.nokz then dump_nokz_output (id) end
     log:dump()
