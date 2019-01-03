@@ -1,3 +1,69 @@
+flux-core version 0.11.0 - 2019-01-03
+-------------------------------------
+
+### Fixes
+ * flux-module: increase width of size field in list output (#1883)
+ * kvs: return errors to callers on asynchronous load/store failures (#1836)
+ * flux-start: dispatch orphan brokers, fully clean up temp directories (#1835)
+ * flux-exec: ensure stdin is restored to blocking mode on exit (#1814)
+ * broker: don't connect to enclosing instance (#1798)
+ * flux (command): handle inaccessible build directory, fix PATH issue (#1683)
+ * wreck: fix incorrect error handling in job module (#1617)
+ * libflux: improve efficiency of asynchronous futures (#1840)
+ * libflux: fix composite future implementation (#1791)
+ * libflux: improve lookup efficiency of RPC message handlers (#1807)
+ * libflux: give all aux set/get interfaces uniform semantics (#1797)
+ * update to libev 4.25, ensure valgrind runs clean on i686 (#1898)
+
+### New Features
+ * license: re-publish project under LGPLv3 (#1829, #1788, #1901)
+ * wreck: use direct stdio transport, unless -okz option (#1875, #1896, #1900)
+ * wreck: add new -J, --name=JOBNAME option to flux-wreckrun and submit (#1893)
+ * libflux: support queue of future fulfillments (#1610)
+ * libflux: support dynamic service registration (#1753, #1856)
+ * kvs: replace inefficient KVS watch implementation and outdated API (#1891,
+   #1890, #1882, #1878, #1879, #1873, #1870, #1868, #1863,
+   #1861, #1859, #1850, #1848, #1820, #1643, #1622)
+ * job: add job-ingest, job-manager modules, and API (experimental)
+   (#1867, #1774, #1734, #1626)
+ * libidset: expand API to replace internal nodeset class (#1862)
+ * libflux: add KVS copy and move composite functions (#1828)
+ * libflux: access broker, library, command versions (#1817)
+ * kvs: restart with existing content sqlite, root reference (#1800, #1812)
+ * python: add job & mrpc bindings (#1757, #1892)
+ * python: add flux python command to run configured python (#1766)
+ * python: add flux-security bindings (#1716)
+ * python: Python3 compatibility (#1673)
+ * kvs: add RFC 18 eventlog support (#1671)
+ * libsubprocess: cleanup and redesign
+   (#1713, #1664, #1659, #1658, #1654, #1645, #1636, #1629)
+ * libflux/buffer: Add trimmed peek/read line variants (#1639)
+ * build: add library versioning support (#1874)
+ * build: add support for asciidoctor as manpage generator (#1650, #1676)
+ * travis-ci: run tests under docker (#1688, #1684, #1670)
+
+### Cleanup
+ * libflux: drop broker zeromq security functions from public API (#1846)
+ * libflux: clean up interface for broker attributes (#1845)
+ * libflux: drop reduction code from public API (#1844)
+ * libutil: switch from munge to libsodium base64 implementation (#1786)
+ * python: python binding is no longer optional (#1772)
+ * python: add "black" format check, and reformat existing code (#1802)
+ * python/lua: avoid deprecated kvs functions (#1748)
+ * kvs: misc cleanup, refactoring, and fixes
+   (#1805, #1813, #1773, #1764, #1712, #1696, #1694)
+ * broker: drop epgm event distribution (and munge dependency) (#1746)
+ * content-sqlite: switch from lzo to lz4 (#1740)
+ * libpmi: drop PMIx client support (#1663)
+ * libpmi: avoid synchronous RPCs in simple-server kvs (#1615)
+ * modules/cron: misc cleanup (#1657)
+ * RFC 7: fix various style violations (#1705, #1717, #1706, #1611)
+ * gcc8: fix output truncation (#1642)
+ * sanitizer: fix memory leaks (#1737, #1736, #1739, #1737, #1735, #1733)
+ * build: misc. cleanup and fixes (#1886, #1795, #1824, #1827, #1701, #1678)
+ * test: misc. cleanup and fixes (#1644, #1704, #1691, 1640)
+
+
 flux-core version 0.10.0 - 2018-07-26
 -------------------------------------
 
