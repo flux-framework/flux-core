@@ -5,7 +5,7 @@ SUBDIRS = . src doc etc t
 EXTRA_DIST = \
 	config/tap-driver.sh \
 	config/tap-driver.py \
-	DISCLAIMER.LLNS \
+	NOTICE.LLNS \
 	README.md
 
 ACLOCAL_AMFLAGS = -I config
