@@ -362,48 +362,10 @@ test_expect_success 'kvs: get fails with specified namespace good, namespace pre
         unset_userid
 '
 
-test_expect_success 'kvs: put works with namespace prefix (owner)' '
-        flux kvs put ns:${NAMESPACETMP}-PREFIX1/$DIR.puttest=1 &&
-        flux kvs put ns:${NAMESPACETMP}-PREFIX2/$DIR.puttest=2 &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX1 $DIR.puttest 1 &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX2 $DIR.puttest 2
-'
-
-test_expect_success 'kvs: put works with namespace prefix (user)' '
-        set_userid 9000 &&
-        flux kvs put ns:${NAMESPACETMP}-PREFIX1/$DIR.puttest=3 &&
-        unset_userid &&
-        set_userid 9001 &&
-        flux kvs put ns:${NAMESPACETMP}-PREFIX2/$DIR.puttest=4 &&
-        unset_userid &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX1 $DIR.puttest 3 &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX2 $DIR.puttest 4
-'
-
-test_expect_success 'kvs: put fails with namespace prefix (wrong user)' '
-        set_userid 9999 &&
-        ! flux kvs put --json ns:${NAMESPACETMP}-PREFIX1/$DIR.puttest=5 &&
-        ! flux kvs put --json ns:${NAMESPACETMP}-PREFIX2/$DIR.puttest=6 &&
-        unset_userid
-'
-
-test_expect_success 'kvs: put works with specified namespace bad, namespace prefix good (user)' '
-        set_userid 9001 &&
-        flux kvs --namespace=${NAMESPACETMP}-PREFIX1 put --json ns:$NAMESPACETMP-PREFIX2/$DIR.puttest=7 &&
-        unset_userid &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX2 $DIR.puttest 7
-'
-
-test_expect_success 'kvs: put fails with specified namespace good, namespace prefix bad (user)' '
-        set_userid 9001 &&
-        ! flux kvs --namespace=${NAMESPACETMP}-PREFIX2 put --json ns:$NAMESPACETMP-PREFIX1/$DIR.puttest &&
-        unset_userid
-'
-
 test_expect_success 'kvs: namespace prefix works across symlinks (owner)' '
-        flux kvs put ns:${NAMESPACETMP}-PREFIX1/$DIR.linktest=1 &&
-        flux kvs put ns:${NAMESPACETMP}-PREFIX2/$DIR.linktest=2 &&
-        flux kvs link ns:${NAMESPACETMP}-PREFIX2/$DIR.linktest ns:${NAMESPACETMP}-PREFIX1/$DIR.link &&
+        flux kvs --namespace=${NAMESPACETMP}-PREFIX1 put $DIR.linktest=1 &&
+        flux kvs --namespace=${NAMESPACETMP}-PREFIX2 put $DIR.linktest=2 &&
+        flux kvs --namespace=${NAMESPACETMP}-PREFIX1 link ns:${NAMESPACETMP}-PREFIX2/$DIR.linktest $DIR.link &&
         test_kvs_key_namespace ${NAMESPACETMP}-PREFIX1 $DIR.link 2
 '
 
@@ -415,8 +377,8 @@ test_expect_success 'kvs: namespace prefix fails across symlinks (wrong user)' '
 
 test_expect_success 'kvs: namespace prefix works across symlinks (user)' '
         set_userid 9001 &&
-        flux kvs put ns:${NAMESPACETMP}-PREFIX3/$DIR.linktest=3 &&
-        flux kvs link ns:${NAMESPACETMP}-PREFIX3/$DIR.linktest ns:${NAMESPACETMP}-PREFIX2/$DIR.link &&
+        flux kvs --namespace=${NAMESPACETMP}-PREFIX3 put $DIR.linktest=3 &&
+        flux kvs --namespace=${NAMESPACETMP}-PREFIX2 link ns:${NAMESPACETMP}-PREFIX3/$DIR.linktest $DIR.link &&
         test_kvs_key_namespace ${NAMESPACETMP}-PREFIX2 $DIR.link 3 &&
         unset_userid
 '

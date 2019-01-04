@@ -371,15 +371,6 @@ test_expect_success 'kvs: put - namespace specified in command line overrides en
         test_kvs_key_namespace $NAMESPACEORDER-2 $DIR.puttest 5
 '
 
-test_expect_success 'kvs: put - namespace specified in key overrides command line & environment variable' '
-        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-BAD &&
-        flux kvs --namespace=$NAMESPACEORDER-BAD put ns:${NAMESPACEORDER}-1/$DIR.puttest=6 &&
-        flux kvs --namespace=$NAMESPACEORDER-BAD put ns:${NAMESPACEORDER}-2/$DIR.puttest=7 &&
-        unset FLUX_KVS_NAMESPACE &&
-        test_kvs_key_namespace ${NAMESPACEORDER}-1 $DIR.puttest 6 &&
-        test_kvs_key_namespace ${NAMESPACEORDER}-2 $DIR.puttest 7
-'
-
 #
 # Namespace prefix tests
 #
@@ -396,14 +387,6 @@ test_expect_success 'kvs: namespace prefix setup' '
 
 test_expect_success 'kvs: lookup - namespace chain fails' '
         ! flux kvs get ns:${NAMESPACEPREFIX}-1/ns:${NAMESPACEPREFIX}-2/$DIR.prefixtest
-'
-
-test_expect_success 'kvs: put - fails across multiple namespaces' '
-        ! flux kvs put ns:${NAMESPACEPREFIX}-1/$DIR.puttest.a=1 ns:${NAMESPACEPREFIX}-2/$DIR.puttest.b=2
-'
-
-test_expect_success 'kvs: put - success multiple namespace prefixes identical' '
-        flux kvs put ns:${NAMESPACEPREFIX}-2/$DIR.puttest.a=1 ns:${NAMESPACEPREFIX}-2/$DIR.puttest.b=2
 '
 
 test_expect_success 'kvs: namespace prefix works with dir' '
@@ -505,9 +488,9 @@ test_expect_success 'kvs: namespace prefix with key suffix fails' '
 '
 
 test_expect_success 'kvs: namespace prefix works across symlinks' '
-        flux kvs put ns:${NAMESPACEPREFIX}-1/$DIR.linktest=1 &&
-        flux kvs put ns:${NAMESPACEPREFIX}-2/$DIR.linktest=2 &&
-        flux kvs link ns:${NAMESPACEPREFIX}-2/$DIR.linktest ns:${NAMESPACEPREFIX}-1/$DIR.link &&
+        flux kvs --namespace=${NAMESPACEPREFIX}-1 put $DIR.linktest=1 &&
+        flux kvs --namespace=${NAMESPACEPREFIX}-2 put $DIR.linktest=2 &&
+        flux kvs --namespace=${NAMESPACEPREFIX}-1 link ns:${NAMESPACEPREFIX}-2/$DIR.linktest $DIR.link &&
         test_kvs_key_namespace ${NAMESPACEPREFIX}-1 $DIR.link 2
 '
 
