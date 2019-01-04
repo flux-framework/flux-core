@@ -30,6 +30,7 @@ jobs:
       compiler: gcc
       env:
        - PYTHON_VERSION=2.7
+       - GITHUB_RELEASES_DEPLOY=t
     - name: "Ubuntu: py3.6 distcheck"
       stage: test
       compiler: gcc
@@ -173,7 +174,7 @@ deploy:
   api_key:
     secure: I7ckZ7Ei9oLIe8WZ8OH3EgZz81IFCIekx+v/+g3sJa6q15URlfZhVVFtiUpsJRktHcb39AflWZiEIX+HdUZyXtuTt9IES1XBIKH7x/zUL0x6f1DZKAhBx9ktYzdO/M+SpmDUg6RYxcdjVmSHZ9u935TDo104U+dY0990ZSFrpco=
   on:
-    # Only deploy from first job in build matrix
-    condition: $TRAVIS_JOB_NUMBER = $TRAVIS_BUILD_NUMBER.1
+    # Only deploy from travis builder with GITHUB_RELEASES_DEPLOY set
+    condition: $GITHUB_RELEASES_DEPLOY = "t"
     tags: true
     repo: flux-framework/flux-core
