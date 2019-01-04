@@ -1456,64 +1456,64 @@ void lookup_security (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "altnamespace",
                              NULL,
                              0,
-                             "ns:altnamespace/val",
+                             "val",
                              FLUX_ROLE_OWNER,
                              6,
                              0,
                              NULL)) != NULL,
-        "lookup_create on ns:altnamespace/val with rolemask owner and valid owner");
+        "lookup_create on val on namespace altnamespace with rolemask owner and valid owner");
     test = treeobj_create_val ("foo", 3);
-    check_value (lh, test, "lookup ns:altnamespace/val with rolemask owner and valid owner");
+    check_value (lh, test, "lookup val on namespace altnamespace with rolemask owner and valid owner");
     json_decref (test);
 
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "altnamespace",
                              NULL,
                              0,
-                             "ns:altnamespace/val",
+                             "val",
                              FLUX_ROLE_OWNER,
                              7,
                              0,
                              NULL)) != NULL,
-        "lookup_create on ns:altnamespace/val with rolemask owner and invalid owner");
+        "lookup_create on val on namespace altnamespace with rolemask owner and invalid owner");
     test = treeobj_create_val ("foo", 3);
-    check_value (lh, test, "lookup ns:altnamespace/val with rolemask owner and invalid owner");
+    check_value (lh, test, "lookup val on namespace altnamespace with rolemask owner and invalid owner");
     json_decref (test);
 
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "altnamespace",
                              NULL,
                              0,
-                             "ns:altnamespace/val",
+                             "val",
                              FLUX_ROLE_USER,
                              6,
                              0,
                              NULL)) != NULL,
-        "lookup_create on ns:altnamespace/val with rolemask user and valid owner");
+        "lookup_create on val on namespace altnamespace with rolemask user and valid owner");
     test = treeobj_create_val ("foo", 3);
-    check_value (lh, test, "lookup ns:altnamespace/val with rolemask user and valid owner");
+    check_value (lh, test, "lookup val on namespace altnamespace with rolemask user and valid owner");
     json_decref (test);
 
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "altnamespace",
                              NULL,
                              0,
-                             "ns:altnamespace/val",
+                             "val",
                              FLUX_ROLE_USER,
                              7,
                              0,
                              NULL)) != NULL,
-        "lookup_create on ns:altnamespace/val with rolemask user and invalid owner");
-    check_error (lh, EPERM, "lookup_create on ns:altnamespace/val with rolemask user and invalid owner");
+        "lookup_create on val on namespace altnamespace with rolemask user and invalid owner");
+    check_error (lh, EPERM, "lookup_create on val on namespace altnamespace with rolemask user and invalid owner");
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
@@ -2047,173 +2047,6 @@ void lookup_root_symlink (void) {
     json_decref (root);
 }
 
-/* lookup namespace prefix tests */
-void lookup_namespace_prefix (void) {
-    json_t *root1;
-    json_t *root2;
-    json_t *test;
-    struct cache *cache;
-    kvsroot_mgr_t *krm;
-    lookup_t *lh;
-    char root_ref1[BLOBREF_MAX_STRING_SIZE];
-    char root_ref2[BLOBREF_MAX_STRING_SIZE];
-
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
-
-    /* This cache is
-     *
-     * root-ref1
-     * "val" : val to "foo"
-     *
-     * root-ref2
-     * "val" : val to "bar"
-     */
-
-    root1 = treeobj_create_dir ();
-    _treeobj_insert_entry_val (root1, "val", "foo", 3);
-    treeobj_hash ("sha1", root1, root_ref1, sizeof (root_ref1));
-
-    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref1, root1));
-
-    root2 = treeobj_create_dir ();
-    _treeobj_insert_entry_val (root2, "val", "bar", 3);
-    treeobj_hash ("sha1", root2, root_ref2, sizeof (root_ref2));
-
-    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref2, root2));
-
-    setup_kvsroot (krm, "foo", cache, root_ref1, 0);
-    setup_kvsroot (krm, "bar", cache, root_ref2, 0);
-
-    ok (lookup_create (cache,
-                       krm,
-                       1,
-                       KVS_PRIMARY_NAMESPACE,
-                       NULL,
-                       0,
-                       "ns:namespace/",
-                       FLUX_ROLE_OWNER,
-                       0,
-                       0,
-                       NULL) == NULL
-        && errno == EINVAL,
-        "lookup_create fails with EINVAL on namespace prefix and no key suffix");
-
-    ok (lookup_create (cache,
-                       krm,
-                       1,
-                       KVS_PRIMARY_NAMESPACE,
-                       NULL,
-                       0,
-                       "ns:/val",
-                       FLUX_ROLE_OWNER,
-                       0,
-                       0,
-                       NULL) == NULL
-        && errno == EINVAL,
-        "lookup_create fails with EINVAL on bad namespace prefix");
-
-    ok (lookup_create (cache,
-                       krm,
-                       1,
-                       KVS_PRIMARY_NAMESPACE,
-                       NULL,
-                       0,
-                       "ns:foo/ns:bar/val",
-                       FLUX_ROLE_OWNER,
-                       0,
-                       0,
-                       NULL) == NULL
-        && errno == EINVAL,
-        "lookup_create fails with EINVAL on namespace chains");
-
-    ok ((lh = lookup_create (cache,
-                             krm,
-                             1,
-                             KVS_PRIMARY_NAMESPACE,
-                             NULL,
-                             0,
-                             "ns:foo/val",
-                             FLUX_ROLE_OWNER,
-                             0,
-                             0,
-                             NULL)) != NULL,
-        "lookup_create val on namespace foo");
-    test = treeobj_create_val ("foo", 3);
-    check_value (lh, test, "val on namespace foo");
-    json_decref (test);
-
-    ok ((lh = lookup_create (cache,
-                             krm,
-                             1,
-                             KVS_PRIMARY_NAMESPACE,
-                             NULL,
-                             0,
-                             "ns:bar/val",
-                             FLUX_ROLE_OWNER,
-                             0,
-                             0,
-                             NULL)) != NULL,
-        "lookup_create val on namespace bar");
-    test = treeobj_create_val ("bar", 3);
-    check_value (lh, test, "val on namespace bar");
-    json_decref (test);
-
-    ok ((lh = lookup_create (cache,
-                             krm,
-                             1,
-                             KVS_PRIMARY_NAMESPACE,
-                             NULL,
-                             0,
-                             "ns:foo/.",
-                             FLUX_ROLE_OWNER,
-                             0,
-                             FLUX_KVS_TREEOBJ,
-                             NULL)) != NULL,
-        "lookup_create . on namespace foo");
-    test = treeobj_create_dirref (root_ref1);
-    check_value (lh, test, ". on namespace foo");
-    json_decref (test);
-
-    ok (lookup_create (cache,
-                       krm,
-                       1,
-                       "foo",
-                       root_ref1,
-                       0,
-                       "ns:bar/val",
-                       FLUX_ROLE_OWNER,
-                       0,
-                       0,
-                       NULL) == NULL
-        && errno == EINVAL,
-        "lookup_create fails with EINVAL on namespace prefix and root_ref");
-
-    /* Unlike above test, one exception, if namespace & prefix identical */
-    ok ((lh = lookup_create (cache,
-                             krm,
-                             1,
-                             "foo",
-                             root_ref1,
-                             0,
-                             "ns:foo/val",
-                             FLUX_ROLE_OWNER,
-                             0,
-                             0,
-                             NULL)) != NULL,
-        "lookup_create val on namespace foo with root_ref");
-    test = treeobj_create_val ("foo", 3);
-    check_value (lh, test, "val on namespace foo with root_ref");
-    json_decref (test);
-
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
-    json_decref (root1);
-    json_decref (root2);
-}
-
 /* lookup namespace prefix symlink tests */
 void lookup_namespace_prefix_symlink (void) {
     json_t *rootA;
@@ -2600,15 +2433,15 @@ void lookup_stall_namespace (void) {
     check_value (lh, test, "val #2");
     json_decref (test);
 
-    /* Second test for stall on namespace prefix input */
+    /* Second test for stall on namespace input */
 
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "foo",
                              NULL,
                              0,
-                             "ns:foo/val",
+                             "val",
                              FLUX_ROLE_OWNER,
                              0,
                              0,
@@ -2628,14 +2461,14 @@ void lookup_stall_namespace (void) {
     check_value (lh, test, "val");
     json_decref (test);
 
-    /* lookup "ns:foo/val" should succeed cleanly */
+    /* lookup val on namespace foo should succeed cleanly */
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "foo",
                              NULL,
                              0,
-                             "ns:foo/val",
+                             "val",
                              FLUX_ROLE_OWNER,
                              0,
                              0,
@@ -2650,10 +2483,10 @@ void lookup_stall_namespace (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             "roottest",
                              NULL,
                              0,
-                             "ns:roottest/.",
+                             ".",
                              FLUX_ROLE_OWNER,
                              0,
                              FLUX_KVS_TREEOBJ,
@@ -3559,7 +3392,6 @@ int main (int argc, char *argv[])
     lookup_symlinks ();
     lookup_alt_root ();
     lookup_root_symlink ();
-    lookup_namespace_prefix ();
     lookup_namespace_prefix_symlink ();
     lookup_namespace_prefix_symlink_security ();
     lookup_stall_namespace ();
@@ -3567,6 +3399,7 @@ int main (int argc, char *argv[])
     lookup_stall_ref ();
     lookup_stall_namespace_removed ();
     lookup_stall_namespace_prefix_in_symlink ();
+
     done_testing ();
     return (0);
 }
