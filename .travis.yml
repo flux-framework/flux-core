@@ -30,13 +30,13 @@ jobs:
       compiler: gcc
       env:
        - PYTHON_VERSION=2.7
-       - GITHUB_RELEASES_DEPLOY=t
     - name: "Ubuntu: py3.6 distcheck"
       stage: test
       compiler: gcc
       env:
        - DISTCHECK=t
        - PYTHON_VERSION=3.6
+       - GITHUB_RELEASES_DEPLOY=t
     - name: "Ubuntu: gcc-8 --with-flux-security/caliper, distcheck"
       stage: test
       compiler: gcc-8
