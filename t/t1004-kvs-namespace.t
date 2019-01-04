@@ -338,14 +338,6 @@ test_expect_success 'kvs: lookup - namespace specified in command line overrides
         unset FLUX_KVS_NAMESPACE
 '
 
-test_expect_success 'kvs: lookup - namespace specified in key overrides command line & environment variable' '
-        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-BAD &&
-        test_kvs_key_namespace $NAMESPACEORDER-BAD ns:primary/$DIR.ordertest 1 &&
-        test_kvs_key_namespace $NAMESPACEORDER-BAD ns:${NAMESPACEORDER}-1/$DIR.ordertest 2 &&
-        test_kvs_key_namespace $NAMESPACEORDER-BAD ns:${NAMESPACEORDER}-2/$DIR.ordertest 3 &&
-        unset FLUX_KVS_NAMESPACE
-'
-
 test_expect_success 'kvs: no namespace specified, put defaults to primary namespace' '
         flux kvs put $DIR.puttest=1 &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.puttest 1
@@ -377,114 +369,7 @@ test_expect_success 'kvs: put - namespace specified in command line overrides en
 
 test_expect_success 'kvs: namespace prefix setup' '
 	flux kvs namespace-create $NAMESPACEPREFIX-1 &&
-	flux kvs namespace-create $NAMESPACEPREFIX-2 &&
-	flux kvs namespace-create $NAMESPACEPREFIX-watchprefix &&
-        flux kvs --namespace=$NAMESPACEPREFIX-1 put $DIR.prefixtest=1 &&
-        flux kvs --namespace=$NAMESPACEPREFIX-2 put $DIR.prefixtest=2 &&
-        test_kvs_key_namespace $NAMESPACEPREFIX-1 $DIR.prefixtest 1 &&
-        test_kvs_key_namespace $NAMESPACEPREFIX-2 $DIR.prefixtest 2
-'
-
-test_expect_success 'kvs: lookup - namespace chain fails' '
-        ! flux kvs get ns:${NAMESPACEPREFIX}-1/ns:${NAMESPACEPREFIX}-2/$DIR.prefixtest
-'
-
-test_expect_success 'kvs: namespace prefix works with dir' '
-        flux kvs dir ns:${NAMESPACEPREFIX}-1/. | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/test.
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with ls' '
-        flux kvs ls ns:${NAMESPACEPREFIX}-1/. | sort >output &&
-        cat >expected <<EOF &&
-test
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with dir, no key specified' '
-        flux kvs dir ns:${NAMESPACEPREFIX}-1/ | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/test.
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with ls, no key specified' '
-        flux kvs ls ns:${NAMESPACEPREFIX}-1/ | sort >output &&
-        cat >expected <<EOF &&
-test
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with dir -R' '
-        flux kvs dir -R ns:${NAMESPACEPREFIX}-1/. | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/$DIR.prefixtest = 1
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with ls -R' '
-        flux kvs ls -R ns:${NAMESPACEPREFIX}-1/. >output &&
-        cat >expected <<EOF &&
-ns:namespaceprefix-1/.:
-test
-
-ns:namespaceprefix-1/test:
-a
-
-ns:namespaceprefix-1/test.a:
-b
-
-ns:namespaceprefix-1/test.a.b:
-prefixtest
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with dir -R DIR' '
-        flux kvs dir -R ns:${NAMESPACEPREFIX}-1/$DIR | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/$DIR.prefixtest = 1
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with ls -R DIR' '
-        flux kvs ls -R ns:${NAMESPACEPREFIX}-1/$DIR | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/$DIR:
-prefixtest
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with dir -R DIR.' '
-        flux kvs dir -R ns:${NAMESPACEPREFIX}-1/$DIR. | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/$DIR.prefixtest = 1
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix works with ls -R DIR.' '
-        flux kvs ls -R ns:${NAMESPACEPREFIX}-1/$DIR | sort >output &&
-        cat >expected <<EOF &&
-ns:${NAMESPACEPREFIX}-1/$DIR:
-prefixtest
-EOF
-        test_cmp expected output
-'
-
-test_expect_success 'kvs: namespace prefix with key suffix fails' '
-        ! flux kvs get ns:${NAMESPACEPREFIX}-1/ &&
-        ! flux kvs put ns:${NAMESPACEPREFIX}-1/ &&
-        ! flux kvs watch ns:${NAMESPACEPREFIX}-1/
+	flux kvs namespace-create $NAMESPACEPREFIX-2
 '
 
 test_expect_success 'kvs: namespace prefix works across symlinks' '
@@ -492,22 +377,6 @@ test_expect_success 'kvs: namespace prefix works across symlinks' '
         flux kvs --namespace=${NAMESPACEPREFIX}-2 put $DIR.linktest=2 &&
         flux kvs --namespace=${NAMESPACEPREFIX}-1 link ns:${NAMESPACEPREFIX}-2/$DIR.linktest $DIR.link &&
         test_kvs_key_namespace ${NAMESPACEPREFIX}-1 $DIR.link 2
-'
-
-test_expect_success NO_CHAIN_LINT 'kvs: watch a key with namespace prefix'  '
-        flux kvs --namespace=${NAMESPACEPREFIX}-watchprefix unlink -Rf $DIR &&
-        flux kvs --namespace=${NAMESPACEPREFIX}-watchprefix put --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch -o -c 1 ns:${NAMESPACEPREFIX}-watchprefix/$DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs --namespace=${NAMESPACEPREFIX}-watchprefix put --json $DIR.watch=1 &&
-        wait $watchpid
-cat >expected <<-EOF &&
-0
-1
-EOF
-        test_cmp watch_out expected
 '
 
 #
