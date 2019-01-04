@@ -791,30 +791,21 @@ err:
     return -1;
 }
 
-/* remove namespace / normalize key for setroot */
+/* normalize key for setroot */
 static json_t *get_key_for_setroot (json_t *o)
 {
     const char *key = json_string_value (o);
-    char *key_suffix = NULL;
     char *ncpy = NULL;
     json_t *rv = NULL;
 
     /* how did we get to this point if this wasn't a string? */
     assert (key);
 
-    /* no need to check for namespace crossing, will be done in actual
-     * processing */
-
-    if (kvs_namespace_prefix (key, NULL, &key_suffix) < 0)
-        goto error;
-
-    if ((ncpy = kvs_util_normalize_key (key_suffix ? key_suffix : key,
-                                        NULL)) == NULL)
+    if ((ncpy = kvs_util_normalize_key (key, NULL)) == NULL)
         goto error;
 
     rv = json_string (ncpy);
 error:
-    free (key_suffix);
     free (ncpy);
     return rv;
 }
