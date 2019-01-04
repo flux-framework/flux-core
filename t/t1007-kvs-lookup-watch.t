@@ -390,29 +390,6 @@ xyz
 	test_cmp expected full7.out
 '
 
-# using ns prefix
-
-test_expect_success 'flux kvs get --watch works on alt namespace via ns prefix' '
-	flux kvs namespace-create testnsprefix1 &&
-	flux kvs --namespace=testnsprefix1 put testnskey1.a=foo &&
-	run_timeout 2 flux kvs get --watch --count=1 ns:testnsprefix1/testnskey1.a >nsprefix1.out &&
-	echo foo >getnsprefix.exp &&
-	test_cmp getnsprefix.exp nsprefix1.out
-'
-
-test_expect_success NO_CHAIN_LINT 'flux kvs get --watch works w/ alt namespace via ns prefix' '
-	flux kvs namespace-create testnsprefix2 &&
-        flux kvs --namespace=testnsprefix2 put testnskey2.a=1 &&
-        flux kvs get --watch --count=2 \
-                     ns:testnsprefix2/testnskey2.a > nsprefix2.out &
-        pid=$! &&
-        wait_watcherscount_nonzero testnsprefix2 &&
-        flux kvs --namespace=testnsprefix2 put testnskey2.a=2 &&
-	$waitfile --count=2 --timeout=10 \
-		  --pattern="[1-2]" nsprefix2.out >/dev/null &&
-        wait $pid
-'
-
 # make sure keys are normalized
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch, normalized key matching works ' '
