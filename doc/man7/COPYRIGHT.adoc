@@ -1,6 +1,4 @@
-Copyright \(C) 2014 Lawrence Livermore National Security, LLC.
+Copyright 2014 Lawrence Livermore National Security, LLC
+and Flux developers.
 
-Flux is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2 of the license, or (at your option)
-any later version.
+SPDX-License-Identifier: LGPL-3.0
