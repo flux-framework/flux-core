@@ -232,6 +232,11 @@ AM_CHECK_PYMOD(six,
                ,
                [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
                )
+AM_CHECK_PYMOD(yaml,
+               [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
+               )
 
 # Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
 # (e.g. /usr/lib64).  Placing a standard path earlier in the linker
