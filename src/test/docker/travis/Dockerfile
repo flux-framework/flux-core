@@ -46,10 +46,10 @@ RUN case $BASE_IMAGE in \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
-# Make sure user in appropriate group for sudo on different platorms
+# Add some packages for testing
 RUN case $BASE_IMAGE in \
-     bionic*) apt-get -qq install -y --no-install-recommends python-six python3-six ;; \
-     centos*) yum -y install python-six python34-devel python34-cffi python34-six ;; \
+     bionic*) apt update && apt-get -qq install -y --no-install-recommends python-yaml python3-yaml ;; \
+     centos*) yum -y update && yum -y install python-yaml python34-yaml ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
