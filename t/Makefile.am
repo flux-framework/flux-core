@@ -266,6 +266,7 @@ check_PROGRAMS = \
 	kvs/issue1760 \
 	kvs/issue1876 \
 	kvs/waitcreate_cancel \
+	kvs/setrootevents \
 	request/treq \
 	barrier/tbarrier \
 	wreck/rcalc \
@@ -410,6 +411,11 @@ kvs_issue1876_LDADD = \
 kvs_waitcreate_cancel_SOURCES = kvs/waitcreate_cancel.c
 kvs_waitcreate_cancel_CPPFLAGS = $(test_cppflags)
 kvs_waitcreate_cancel_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_setrootevents_SOURCES = kvs/setrootevents.c
+kvs_setrootevents_CPPFLAGS = $(test_cppflags)
+kvs_setrootevents_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_treq_SOURCES = request/treq.c

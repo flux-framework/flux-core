@@ -352,6 +352,76 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 '
 
 #
+# test pause / unpause
+#
+
+test_expect_success 'kvs: pause / unpause works' '
+        ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause &&
+        ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause
+'
+
+# cover invalid namespace cases
+test_expect_success 'kvs: cover pause / unpause namespace invalid' '
+        ! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=illegalnamespace &&
+        ! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=illegalnamespace
+'
+
+#
+# test read-your-writes consistency
+#
+
+# test strategy is as follows
+# - write an original value
+# - pause setroot event processing on some rank X
+# - write to a specific rank Y (Y != X)
+# - change should be visible on rank Y, but not rank X
+# - unpause setroot events on rank X
+# - change should be visible on X & Y
+
+test_expect_success 'kvs: read-your-writes consistency on primary namespace' '
+        flux kvs unlink -Rf $DIR &&
+        flux kvs put $DIR.test=1 &&
+        VERS=$(flux kvs version) &&
+        flux exec -n sh -c "flux kvs wait ${VERS}" &&
+        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+        flux exec -n -r 1 sh -c "flux kvs put $DIR.test=2" &&
+        flux exec -n -r 1 sh -c "flux kvs get $DIR.test" > rank1-a.out &&
+        flux exec -n -r 2 sh -c "flux kvs get $DIR.test" > rank2-a.out &&
+        echo "1" > old.out &&
+        echo "2" > new.out &&
+        test_cmp rank1-a.out new.out &&
+        test_cmp rank2-a.out old.out &&
+        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+        flux exec -n sh -c "flux kvs wait ${VERS}" &&
+        flux exec -n -r 1 sh -c "flux kvs get $DIR.test" > rank1-b.out &&
+        flux exec -n -r 2 sh -c "flux kvs get $DIR.test" > rank2-b.out &&
+        test_cmp rank1-b.out new.out &&
+        test_cmp rank2-b.out new.out
+'
+
+test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
+        flux kvs namespace-create rywtestns &&
+        flux kvs --namespace=rywtestns put $DIR.test=1 &&
+        VERS=$(flux kvs --namespace=rywtestns version) &&
+        flux exec -n sh -c "flux kvs --namespace=rywtestns wait ${VERS}" &&
+        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=rywtestns" &&
+        flux exec -n -r 1 sh -c "flux kvs --namespace=rywtestns put $DIR.test=2" &&
+        flux exec -n -r 1 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank1-a.out &&
+        flux exec -n -r 2 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank2-a.out &&
+        echo "1" > old.out &&
+        echo "2" > new.out &&
+        test_cmp rank1-a.out new.out &&
+        test_cmp rank2-a.out old.out &&
+        flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=rywtestns" &&
+        flux exec -n sh -c "flux kvs --namespace=rywtestns wait ${VERS}" &&
+        flux exec -n -r 1 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank1-b.out &&
+        flux exec -n -r 2 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank2-b.out &&
+        test_cmp rank1-b.out new.out &&
+        test_cmp rank2-b.out new.out &&
+        flux kvs namespace-remove rywtestns
+'
+
+#
 # test clear of stats
 #
 
@@ -361,24 +431,24 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 test_expect_success 'kvs: clear stats locally' '
         flux kvs unlink -Rf $DIR &&
         flux module stats -c kvs &&
-        flux module stats kvs | grep no-op | grep -q 0 &&
+        flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
         flux kvs put --json $DIR.largeval1=$largeval &&
         flux kvs put --json $DIR.largeval2=$largeval &&
-        ! flux module stats kvs | grep no-op | grep -q 0 &&
+        ! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
         flux module stats -c kvs &&
-        flux module stats kvs | grep no-op | grep -q 0
+        flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
 '
 
 test_expect_success 'kvs: clear stats globally' '
         flux kvs unlink -Rf $DIR &&
         flux module stats -C kvs &&
-        flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
         for i in `seq 0 $((${SIZE} - 1))`; do
             flux exec -n -r $i sh -c "flux kvs put --json $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
         done &&
-        ! flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        ! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
         flux module stats -C kvs &&
-        flux exec -n sh -c "flux module stats kvs | grep no-op | grep -q 0"
+        flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0"
 '
 
 #

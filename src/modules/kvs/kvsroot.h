@@ -33,6 +33,8 @@ struct kvsroot {
     int watchlist_lastrun_epoch;
     int flags;
     bool remove;
+    bool setroot_pause;
+    zlist_t *setroot_queue;
 };
 
 /* return -1 on error, 0 on success, 1 on success & to stop iterating */
