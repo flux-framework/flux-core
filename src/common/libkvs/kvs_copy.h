@@ -15,26 +15,39 @@
 extern "C" {
 #endif
 
-/* Create a copy of 'srckey' at 'dstkey'.
+/* Create a copy of 'srckey' at 'dstkey'.  Read from / write to the
+ * specified namespaces.  If a namespace is not specified (i.e. NULL),
+ * the namespace from flux_kvs_get_namespace() will be used.
+ *
  * Due to the hash-tree design of the KVS, dstkey is by definition a
  * "deep copy" (or writable snapshot) of all content below srckey.
  * The copy operation has a low overhead since it only copies a single
- * directory entry.  'srckey' and 'dstkey' may be in different namespaces.
+ * directory entry.
+ *
  * Returns future on success, NULL on failure with errno set.
  */
-flux_future_t *flux_kvs_copy (flux_t *h, const char *srckey,
-                                         const char *dstkey,
-                                         int commit_flags);
+flux_future_t *flux_kvs_copy (flux_t *h,
+                              const char *srcns,
+                              const char *srckey,
+                              const char *dstns,
+                              const char *dstkey,
+                              int commit_flags);
 
-/* Move 'srckey' to 'dstkey'.
- * This is a copy followed by an unlink on 'srckey'.
- * 'srckey' and 'dstkey' may be in different namespaces.
- * The copy and unlink are not atomic.
+/* Move 'srckey' to 'dstkey'.  Read from / write to the
+ * specified namespaces.  If a namespace is not specified (i.e. NULL),
+ * the namespace from flux_kvs_get_namespace() will be used.
+ *
+ * This is a copy followed by an unlink on 'srckey'.  The copy and
+ * unlink are not atomic.
+ *
  * Returns future on success, NULL on failure with errno set.
  */
-flux_future_t *flux_kvs_move (flux_t *h, const char *srckey,
-                                         const char *dstkey,
-                                         int commit_flags);
+flux_future_t *flux_kvs_move (flux_t *h,
+                              const char *srcns,
+                              const char *srckey,
+                              const char *dstns,
+                              const char *dstkey,
+                              int commit_flags);
 
 #ifdef __cplusplus
 }
