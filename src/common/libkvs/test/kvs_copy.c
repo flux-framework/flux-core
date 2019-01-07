@@ -25,23 +25,29 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     errno = 0;
-    ok (flux_kvs_copy (NULL, "a", "b", 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_copy (NULL, "a", NULL, "b", NULL, 0) == NULL
+        && errno == EINVAL,
         "flux_kvs_copy h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_copy (h, NULL, "b", 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_copy (h, NULL, NULL, "b", NULL, 0) == NULL
+        && errno == EINVAL,
         "flux_kvs_copy srckey=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_copy (h, "a", NULL, 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_copy (h, "a", NULL, NULL, NULL, 0) == NULL
+        && errno == EINVAL,
         "flux_kvs_copy srckey=NULL fails with EINVAL");
 
     errno = 0;
-    ok (flux_kvs_move (NULL, "a", "b", 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_move (NULL, "a", NULL, "b", NULL, 0) == NULL
+        && errno == EINVAL,
         "flux_kvs_move h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_move (h, NULL, "b", 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_move (h, NULL, NULL, "b", NULL, 0) == NULL
+        && errno == EINVAL,
         "flux_kvs_move srckey=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_move (h, "a", NULL, 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_move (h, "a", NULL, NULL, NULL, 0) == NULL
+        && errno == EINVAL,
         "flux_kvs_move srckey=NULL fails with EINVAL");
 
     done_testing();
