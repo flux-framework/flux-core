@@ -1626,7 +1626,7 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
-    if (!(f = flux_kvs_copy (h, srckey, dstkey, 0))
+    if (!(f = flux_kvs_copy (h, NULL, srckey, NULL, dstkey, 0))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_copy");
     flux_future_destroy (f);
@@ -1649,7 +1649,7 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
-    if (!(f = flux_kvs_move (h, srckey, dstkey, 0))
+    if (!(f = flux_kvs_move (h, NULL, srckey, NULL, dstkey, 0))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_move");
     flux_future_destroy (f);
