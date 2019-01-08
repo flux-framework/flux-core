@@ -44,9 +44,11 @@ RUN apt-get -qq install -y --no-install-recommends \
         python-dev \
         python-cffi \
         python-six \
+	python-yaml \
         python3-dev \
         python3-cffi \
-        python3-six
+        python3-six \
+	python3-yaml
 
 # Other deps
 RUN apt-get -qq install -y --no-install-recommends \
