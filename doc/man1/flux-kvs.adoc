@@ -132,11 +132,13 @@ an RFC 11 snapshot reference.
 Create an empty directory and commit the change.  If 'key' exists,
 it is overwritten.
 
-*copy* 'source' 'destination'::
-Copy 'source' key to 'destination' key.  If a directory is copied, a new
-reference is created; it is unnecessary for *copy* to recurse into 'source'.
+*copy* [-S src-ns] [-D dst-ns] 'source' 'destination'::
+Copy 'source' key to 'destination' key.  Optionally, specify a source
+and/or destination namespace to override the one specified via 'N'.
+If a directory is copied, a new reference is created; it is
+unnecessary for *copy* to recurse into 'source'.
 
-*move* 'source' 'destination'::
+*move* [-S src-ns] [-D dst-ns] 'source' 'destination'::
 Like *copy*, but 'source' is unlinked after the copy.
 
 *dropcache* [--all]::
