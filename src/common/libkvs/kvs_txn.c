@@ -309,6 +309,32 @@ error:
     return -1;
 }
 
+int flux_kvs_txn_nslink (flux_kvs_txn_t *txn, int flags,
+                         const char *key, const char *namespace,
+                         const char *target)
+{
+    json_t *dirent = NULL;
+    int saved_errno;
+
+    if (!txn || !key || !namespace || !target) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (validate_flags (flags, 0) < 0)
+        goto error;
+    if (!(dirent = treeobj_create_nslink (namespace, target)))
+        goto error;
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
+        goto error;
+    json_decref (dirent);
+    return 0;
+error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
+    return -1;
+}
+
 /* kvs_txn_private.h */
 
 int txn_get_op_count (flux_kvs_txn_t *txn)
