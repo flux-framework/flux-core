@@ -173,7 +173,7 @@ void _treeobj_insert_entry_val (json_t *obj, const char *name,
 void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
                                     const char *target)
 {
-    json_t *symlink = treeobj_create_symlink (target);
+    json_t *symlink = treeobj_create_symlink (NULL, target);
     treeobj_insert_entry (obj, name, symlink);
     json_decref (symlink);
 }
@@ -874,7 +874,7 @@ void lookup_basic (void) {
                              FLUX_KVS_READLINK,
                              NULL)) != NULL,
         "lookup_create on path dirref.symlink");
-    test = treeobj_create_symlink ("baz");
+    test = treeobj_create_symlink (NULL, "baz");
     check_value (lh, test, "lookup dirref.symlink");
     json_decref (test);
 
@@ -957,7 +957,7 @@ void lookup_basic (void) {
                              FLUX_KVS_TREEOBJ,
                              NULL)) != NULL,
         "lookup_create on path dirref.symlink (treeobj)");
-    test = treeobj_create_symlink ("baz");
+    test = treeobj_create_symlink (NULL, "baz");
     check_value (lh, test, "lookup dirref.symlink treeobj");
     json_decref (test);
 
@@ -1700,7 +1700,7 @@ void lookup_links (void) {
                              FLUX_KVS_READLINK,
                              NULL)) != NULL,
         "lookup_create link to symlink");
-    test = treeobj_create_symlink ("dirref2.val");
+    test = treeobj_create_symlink (NULL, "dirref2.val");
     check_value (lh, test, "dirref1.link2dirref.symlink");
     json_decref (test);
 
@@ -1781,7 +1781,7 @@ void lookup_links (void) {
                              FLUX_KVS_READLINK,
                              NULL)) != NULL,
         "lookup_create link to symlink (last part path)");
-    test = treeobj_create_symlink ("dirref2.symlink");
+    test = treeobj_create_symlink (NULL, "dirref2.symlink");
     check_value (lh, test, "dirref1.link2symlink");
     json_decref (test);
 
@@ -1991,7 +1991,7 @@ void lookup_root_symlink (void) {
                              FLUX_KVS_TREEOBJ,
                              NULL)) != NULL,
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_TREEOBJ, works");
-    test = treeobj_create_symlink (".");
+    test = treeobj_create_symlink (NULL, ".");
     check_value (lh, test, "symlinkroot w/ FLUX_KVS_TREEOBJ");
     json_decref (test);
 

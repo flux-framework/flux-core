@@ -218,7 +218,9 @@ void basic (void)
     ok (!strcmp (key, "c.c.c")
         && flags == 0
         && treeobj_is_symlink (dirent)
-        && !strcmp (json_string_value (treeobj_get_data (dirent)), "b.b.b"),
+        && !strcmp (json_string_value (json_object_get (treeobj_get_data (dirent),
+                                                        "target")),
+                    "b.b.b"),
         "5: symlink c.c.c b.b.b");
 
     ok (txn_get_op (txn, 5, &entry) == 0 && entry != NULL,

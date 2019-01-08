@@ -226,12 +226,13 @@ static lookup_process_t walk_symlink (lookup_t *lh,
 {
     lookup_process_t ret = LOOKUP_PROCESS_ERROR;
     walk_level_t *wltmp;
-    const char *linkstr;
+    const char *target = NULL;
 
-    if (!(linkstr = treeobj_get_symlink (dirent_tmp))) {
+    if (treeobj_get_symlink (dirent_tmp, NULL, &target) < 0) {
         lh->errnum = errno;
         goto cleanup;
     }
+    assert (target);
 
     /* Follow link if in middle of path or if end of path,
      * flags say we can follow it
@@ -246,20 +247,20 @@ static lookup_process_t walk_symlink (lookup_t *lh,
         }
 
         /* Set wl->dirent, now that we've resolved any
-         * namespaces in the linkstr.
+         * namespaces in the target.
          */
         wl->dirent = dirent_tmp;
 
         /* if symlink is root, no need to recurse, just get
          * root_dirent and continue on.
          */
-        if (!strcmp (linkstr, "."))
+        if (!strcmp (target, "."))
             wl->dirent = wl->root_dirent;
         else {
             /* "recursively" determine link dirent */
             if (!(wltmp = walk_levels_push (lh,
                                             wl->root_ref,
-                                            linkstr,
+                                            target,
                                             wl->depth + 1))) {
                 lh->errnum = errno;
                 goto cleanup;

@@ -28,7 +28,7 @@ json_t *create_large_dir (void)
         return NULL;
     for (i = 0; i < large_dir_entries; i++) {
         snprintf (name, sizeof (name), "entry-%.10d", i);
-        if (!(ent = treeobj_create_symlink ("a.b.c.d"))
+        if (!(ent = treeobj_create_symlink (NULL, "a.b.c.d"))
                         || treeobj_insert_entry (dir, name, ent) < 0) {
             json_decref (dir);
             return NULL;
@@ -421,9 +421,24 @@ void test_copy (void)
     json_decref (val);
     json_decref (valcpy);
 
-    /* Test symlink copy */
+    /* Test symlink copy (no namespace) */
 
-    symlink = treeobj_create_symlink ("abcdefgh");
+    symlink = treeobj_create_symlink (NULL, "abcdefgh");
+    if (!symlink)
+        BAIL_OUT ("can't continue without test symlink");
+
+    ok ((symlinkcpy = treeobj_copy (symlink)) != NULL,
+        "treeobj_copy worked on symlink");
+
+    ok (symlink != symlinkcpy && json_equal (symlink, symlinkcpy) == 1,
+        "treeobj_copy returned duplicate symlink copy");
+
+    json_decref (symlink);
+    json_decref (symlinkcpy);
+
+    /* Test symlink copy (with namespace) */
+
+    symlink = treeobj_create_symlink ("foo-namespace", "abcdefgh");
     if (!symlink)
         BAIL_OUT ("can't continue without test symlink");
 
@@ -636,27 +651,45 @@ void test_deep_copy (void)
 void test_symlink (void)
 {
     json_t *o, *data;
-    const char *str;
+    const char *ns_str, *target_str;
 
-    ok (treeobj_create_symlink (NULL) == NULL
+    ok (treeobj_create_symlink (NULL, NULL) == NULL
         && errno == EINVAL,
         "treeobj_create_symlink fails on bad input with EINVAL");
-    o = treeobj_create_symlink ("a.b.c");
+    o = treeobj_create_symlink (NULL, "a.b.c");
     ok (o != NULL,
         "treeobj_create_symlink works");
     diag_json (o);
     ok (treeobj_is_symlink (o),
         "treeobj_is_symlink returns true");
-    ok ((data = treeobj_get_data (o)) != NULL && json_is_string (data),
+    ok ((data = treeobj_get_data (o)) != NULL && json_is_object (data),
         "treeobj_get_data returned string");
-    ok (!strcmp (json_string_value (data), "a.b.c"),
-        "and string has right content");
-    ok (treeobj_get_symlink (NULL) == NULL,
+    ok (treeobj_get_symlink (NULL, NULL, NULL) < 0,
         "treeobj_get_symlink fails on bad input");
-    ok ((str = treeobj_get_symlink (o)) != NULL,
-        "treeobj_get_symlink works");
-    ok (!strcmp (str, "a.b.c"),
-        "treeobj_get_symlink returns correct string");
+    ok (treeobj_get_symlink (o, &ns_str, &target_str) == 0,
+        "treeobj_get_symlink works on symlink without namespace");
+    ok (ns_str == NULL,
+        "treeobj_get_symlink returns NULL for namespace");
+    ok (!strcmp (target_str, "a.b.c"),
+        "treeobj_get_symlink returns correct string for target");
+
+    json_decref (o);
+
+    o = treeobj_create_symlink ("ns", "d.e.f");
+    ok (o != NULL,
+        "treeobj_create_symlink works");
+    diag_json (o);
+    ok (treeobj_is_symlink (o),
+        "treeobj_is_symlink returns true");
+    ok ((data = treeobj_get_data (o)) != NULL && json_is_object (data),
+        "treeobj_get_data returned string");
+    ok (treeobj_get_symlink (o, &ns_str, &target_str) == 0,
+        "treeobj_get_symlink works on symlink with namespace");
+    ok (!strcmp (ns_str, "ns"),
+        "treeobj_get_symlink returns correct string for namespace");
+    ok (!strcmp (target_str, "d.e.f"),
+        "treeobj_get_symlink returns correct string for target");
+
     json_decref (o);
 }
 
@@ -739,7 +772,7 @@ void test_corner_cases (void)
 
     json_decref (dir);
 
-    symlink = treeobj_create_symlink ("some-string");
+    symlink = treeobj_create_symlink (NULL, "some-string");
     if (!symlink)
         BAIL_OUT ("can't continue without test value");
 

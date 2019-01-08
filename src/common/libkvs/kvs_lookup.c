@@ -375,8 +375,7 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
 int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
 {
     struct lookup_ctx *ctx;
-    json_t *str;
-    const char *s;
+    const char *t = NULL;
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
@@ -386,13 +385,10 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
         errno = EINVAL;
         return -1;
     }
-    if (!(str = treeobj_get_data (ctx->treeobj))
-                                || !(s = json_string_value (str))) {
-        errno = EINVAL;
+    if (treeobj_get_symlink (ctx->treeobj, NULL, &t) < 0)
         return -1;
-    }
     if (target)
-        *target = s;
+        *target = t;
     return 0;
 }
 

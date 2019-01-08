@@ -135,7 +135,7 @@ void test_full (void)
 
     if (!(o = treeobj_create_dir ()))
         BAIL_OUT ("treeobj_create_dir failed");
-    if (!(dirent = treeobj_create_symlink ("a.b.c")))
+    if (!(dirent = treeobj_create_symlink (NULL, "a.b.c")))
         BAIL_OUT ("treeobj_create_symlink failed");
     if (treeobj_insert_entry (o, "foo", dirent) < 0)
         BAIL_OUT ("treeobj_insert_entry failed");

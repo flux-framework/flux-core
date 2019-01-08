@@ -296,7 +296,7 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(dirent = treeobj_create_symlink (target)))
+    if (!(dirent = treeobj_create_symlink (NULL, target)))
         goto error;
     if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;

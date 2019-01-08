@@ -174,7 +174,7 @@ void _treeobj_insert_entry_val (json_t *obj, const char *name,
 void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
                                     const char *target)
 {
-    json_t *symlink = treeobj_create_symlink (target);
+    json_t *symlink = treeobj_create_symlink (NULL, target);
     treeobj_insert_entry (obj, name, symlink);
     json_decref (symlink);
 }
