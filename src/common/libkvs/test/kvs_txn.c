@@ -153,6 +153,9 @@ void basic (void)
     rc = flux_kvs_txn_put (txn, 0, "nerrrrb", NULL);
     ok (rc == 0,
         "8: flux_kvs_txn_put(NULL) works");
+    rc = flux_kvs_txn_nslink (txn, 0, "f.f.f", "g.g.g", "h.h.h");
+    ok (rc == 0,
+        "9: flux_kvs_txn_nslink works");
     errno = 0;
     rc = flux_kvs_txn_pack (txn, 0xFFFF, "foo.bar.blorp",  "s", "foo");
     ok (rc < 0 && errno == EINVAL,
@@ -168,8 +171,8 @@ void basic (void)
 
     /* Verify transaction contents
      */
-    ok (txn_get_op_count (txn) == 8,
-        "txn contains 8 ops");
+    ok (txn_get_op_count (txn) == 9,
+        "txn contains 9 ops");
     ok (txn_get_op (txn, 0, &entry) == 0
         && entry != NULL,
         "1: retrieved");
@@ -251,9 +254,24 @@ void basic (void)
         && check_null_value (dirent) == 0,
         "8: put nerrrrb = NULL");
 
+    ok (txn_get_op (txn, 8, &entry) == 0 && entry != NULL,
+        "9: retrieved");
+    jdiag (entry);
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "9: txn_decode_op works");
+    ok (!strcmp (key, "f.f.f")
+        && flags == 0
+        && !strcmp (json_string_value (json_object_get (treeobj_get_data (dirent),
+                                                        "namespace")),
+                    "g.g.g")
+        && !strcmp (json_string_value (json_object_get (treeobj_get_data (dirent),
+                                                        "target")),
+                    "h.h.h"),
+        "9: nslink f.f.f g.g.g h.h.h");
+
     errno = 0;
-    ok (txn_get_op (txn, 8, &entry) < 0 && errno == EINVAL,
-        "9: invalid (end of transaction)");
+    ok (txn_get_op (txn, 9, &entry) < 0 && errno == EINVAL,
+        "10: invalid (end of transaction)");
 
     flux_kvs_txn_destroy (txn);
 }
