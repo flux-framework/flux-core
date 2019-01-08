@@ -522,7 +522,8 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
 
         json_decref (ktmp);
     }
-    else if (treeobj_is_symlink (entry)) {
+    else if (treeobj_is_symlink (entry)
+             || treeobj_is_nslink (entry)) {
         /* Could use EPERM - operation not permitted, but want to
          * avoid confusion with "common" errnos, we'll use this one
          * instead. */
@@ -711,6 +712,40 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                 goto done;
             }
             free (sym_suffix);
+            free (nkey);
+            goto success;
+        } else if (treeobj_is_nslink (dir_entry)) {
+            const char *namespace = treeobj_get_nslink_namespace (dir_entry);
+            const char *target = treeobj_get_nslink_target (dir_entry);
+            char *nkey;
+
+            if (!namespace || !target) {
+                saved_errno = errno;
+                goto done;
+            }
+
+            /* can't cross into a new namespace */
+            if (strcmp (namespace, kt->ktm->namespace)) {
+                saved_errno = EINVAL;
+                goto done;
+            }
+
+            if (asprintf (&nkey, "%s.%s", target, next) < 0) {
+                saved_errno = ENOMEM;
+                goto done;
+            }
+
+            if (kvstxn_link_dirent (kt,
+                                    current_epoch,
+                                    rootdir,
+                                    nkey,
+                                    dirent,
+                                    flags,
+                                    missing_ref) < 0) {
+                saved_errno = errno;
+                free (nkey);
+                goto done;
+            }
             free (nkey);
             goto success;
         } else {
