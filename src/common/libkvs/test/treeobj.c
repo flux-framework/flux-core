@@ -397,8 +397,8 @@ void test_dir_peek (void)
 
 void test_copy (void)
 {
-    json_t *val, *symlink, *dirref, *valref, *dir;
-    json_t *valcpy, *symlinkcpy, *dirrefcpy, *valrefcpy, *dircpy;
+    json_t *val, *symlink, *dirref, *valref, *dir, *nslink;
+    json_t *valcpy, *symlinkcpy, *dirrefcpy, *valrefcpy, *dircpy, *nslinkcpy;
     json_t *val1, *val2;
 
     /* First, some corner case tests */
@@ -435,6 +435,21 @@ void test_copy (void)
 
     json_decref (symlink);
     json_decref (symlinkcpy);
+
+    /* Test nslink copy */
+
+    nslink = treeobj_create_nslink ("foobar", "abcdefgh");
+    if (!nslink)
+        BAIL_OUT ("can't continue without test nslink");
+
+    ok ((nslinkcpy = treeobj_copy (nslink)) != NULL,
+        "treeobj_copy worked on nslink");
+
+    ok (nslink != nslinkcpy && json_equal (nslink, nslinkcpy) == 1,
+        "treeobj_copy returned duplicate nslink copy");
+
+    json_decref (nslink);
+    json_decref (nslinkcpy);
 
     /* Test dirref copy */
 
@@ -660,9 +675,40 @@ void test_symlink (void)
     json_decref (o);
 }
 
+void test_nslink (void)
+{
+    json_t *o, *data;
+    const char *str;
+
+    ok (treeobj_create_nslink (NULL, NULL) == NULL
+        && errno == EINVAL,
+        "treeobj_create_nslink fails on bad input with EINVAL");
+    o = treeobj_create_nslink ("ns", "a.b.c");
+    ok (o != NULL,
+        "treeobj_create_nslink works");
+    diag_json (o);
+    ok (treeobj_is_nslink (o),
+        "treeobj_is_nslink returns true");
+    ok ((data = treeobj_get_data (o)) != NULL && json_is_object (data),
+        "treeobj_get_data returned object");
+    ok (treeobj_get_nslink_namespace (NULL) == NULL,
+        "treeobj_get_nslink_namespace fails on bad input");
+    ok (treeobj_get_nslink_target (NULL) == NULL,
+        "treeobj_get_nslink_target fails on bad input");
+    ok ((str = treeobj_get_nslink_namespace (o)) != NULL,
+        "treeobj_get_nslink_namespace works");
+    ok (!strcmp (str, "ns"),
+        "treeobj_get_nslink_namespace returns correct string");
+    ok ((str = treeobj_get_nslink_target (o)) != NULL,
+        "treeobj_get_nslink_target works");
+    ok (!strcmp (str, "a.b.c"),
+        "treeobj_get_nslink_target returns correct string");
+    json_decref (o);
+}
+
 void test_corner_cases (void)
 {
-    json_t *val, *valref, *dir, *symlink;
+    json_t *val, *valref, *dir, *symlink, *nslink;
     json_t *array, *object;
     char *outbuf;
     int outlen;
@@ -750,6 +796,18 @@ void test_corner_cases (void)
         "treeobj_validate detects bad data in symlink");
 
     json_decref (symlink);
+
+    nslink = treeobj_create_nslink ("some-namespace", "some-string");
+    if (!nslink)
+        BAIL_OUT ("can't continue without test value");
+
+    /* Modify nslink to have bad data */
+    json_object_set_new (nslink, "data", json_integer (42));
+
+    ok (treeobj_validate (nslink) < 0 && errno == EINVAL,
+        "treeobj_validate detects bad data in nslink");
+
+    json_decref (nslink);
 }
 
 int main(int argc, char** argv)
