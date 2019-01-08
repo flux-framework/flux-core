@@ -205,6 +205,16 @@ static struct optparse_option getroot_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option copy_opts[] =  {
+    { .name = "src-namespace", .key = 'S', .has_arg = 1,
+      .usage = "Specify source key's namespace",
+    },
+    { .name = "dst-namespace", .key = 'D', .has_arg = 1,
+      .usage = "Specify destination key's namespace",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "namespace-create",
       "name [name...]",
@@ -288,14 +298,14 @@ static struct optparse_subcommand subcommands[] = {
       "Copy source key to destination key",
       cmd_copy,
       0,
-      NULL
+      copy_opts
     },
     { "move",
       "source destination",
       "Move source key to destination key",
       cmd_move,
       0,
-      NULL
+      copy_opts
     },
     { "dropcache",
       "[--all]",
@@ -1619,14 +1629,19 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     int optindex;
     flux_future_t *f;
     const char *srckey, *dstkey;
+    const char *srcns, *dstns;
 
     optindex = optparse_option_index (p);
     if (optindex != (argc - 2))
         log_msg_exit ("copy: specify srckey dstkey");
+
+    srcns = optparse_get_str (p, "src-namespace", NULL);
+    dstns = optparse_get_str (p, "dst-namespace", NULL);
+
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
-    if (!(f = flux_kvs_copy (h, NULL, srckey, NULL, dstkey, 0))
+    if (!(f = flux_kvs_copy (h, srcns, srckey, dstns, dstkey, 0))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_copy");
     flux_future_destroy (f);
@@ -1640,16 +1655,21 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     int optindex;
     flux_future_t *f;
     const char *srckey, *dstkey;
+    const char *srcns, *dstns;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
     optindex = optparse_option_index (p);
     if (optindex != (argc - 2))
         log_msg_exit ("move: specify srckey dstkey");
+
+    srcns = optparse_get_str (p, "src-namespace", NULL);
+    dstns = optparse_get_str (p, "dst-namespace", NULL);
+
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
-    if (!(f = flux_kvs_move (h, NULL, srckey, NULL, dstkey, 0))
+    if (!(f = flux_kvs_move (h, srcns, srckey, dstns, dstkey, 0))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_move");
     flux_future_destroy (f);
