@@ -20,9 +20,10 @@
  * valref, dirref: if blobref is NULL, treeobj_append_blobref()
  * must be called before object is valid.
  * val: copies argument (caller retains ownership)
+ * symlink: ns argument is optional
  * Return JSON object on success, NULL on failure with errno set.
  */
-json_t *treeobj_create_symlink (const char *target);
+json_t *treeobj_create_symlink (const char *ns, const char *target);
 json_t *treeobj_create_val (const void *data, int len);
 json_t *treeobj_create_valref (const char *blobref);
 json_t *treeobj_create_dir (void);
@@ -48,7 +49,7 @@ bool treeobj_is_dirref (const json_t *obj);
 /* get type-specific value.
  * For dirref/valref, this is an array of blobrefs.
  * For directory, this is dictionary of treeobjs
- * For symlink, this is a string.
+ * For symlink, this is an object with namespace and target.
  * For val this is string containing base64-encoded data.
  * Return JSON object on success, NULL on error with errno = EINVAL.
  * The returned object is owned by 'obj' and must not be destroyed.
@@ -56,8 +57,10 @@ bool treeobj_is_dirref (const json_t *obj);
 json_t *treeobj_get_data (json_t *obj);
 
 /* get convenience functions, operate on type specific objects
+ * - returns NULL & ENODATA if data not available
  */
-const char *treeobj_get_symlink (const json_t *obj);
+const char *treeobj_get_symlink_namespace (const json_t *obj);
+const char *treeobj_get_symlink_target (const json_t *obj);
 
 /* get decoded val data.
  * If len == 0, data will be NULL.

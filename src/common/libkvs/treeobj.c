@@ -102,8 +102,14 @@ int treeobj_validate (const json_t *obj)
         }
     }
     else if (!strcmp (type, "symlink")) {
-        if (!json_is_string (data))
+        json_t *o;
+        if (!json_is_object (data))
             goto inval;
+        if (!(o = json_object_get (data, "target")))
+            goto inval;
+        if (!json_is_string (o))
+            goto inval;
+        /* namespace is optional, need not check */
     }
     else if (!strcmp (type, "val")) {
         /* is base64, should always be a string */
@@ -164,10 +170,11 @@ json_t *treeobj_get_data (json_t *obj)
     return data;
 }
 
-const char *treeobj_get_symlink (const json_t *obj)
+const char *treeobj_get_symlink_namespace (const json_t *obj)
 {
     const char *type;
     const json_t *data;
+    const json_t *ns;
     const char *str;
 
     if (treeobj_peek (obj, &type, &data) < 0
@@ -175,7 +182,34 @@ const char *treeobj_get_symlink (const json_t *obj)
         errno = EINVAL;
         return NULL;
     }
-    if (!(str = json_string_value (data))) {
+    if (!(ns = json_object_get (data, "namespace"))) {
+        errno = ENODATA;
+        return NULL;
+    }
+    if (!(str = json_string_value (ns))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return str;
+}
+
+const char *treeobj_get_symlink_target (const json_t *obj)
+{
+    const char *type;
+    const json_t *data;
+    const json_t *target;
+    const char *str;
+
+    if (treeobj_peek (obj, &type, &data) < 0
+            || strcmp (type, "symlink") != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(target = json_object_get (data, "target"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(str = json_string_value (target))) {
         errno = EINVAL;
         return NULL;
     }
@@ -420,21 +454,38 @@ json_t *treeobj_create_dir (void)
     return obj;
 }
 
-json_t *treeobj_create_symlink (const char *target)
+json_t *treeobj_create_symlink (const char *namespace, const char *target)
 {
-    json_t *obj;
+    json_t *data, *obj;
 
     if (!target) {
         errno = EINVAL;
         return NULL;
     }
 
-    if (!(obj = json_pack ("{s:i s:s s:s}", "ver", treeobj_version,
+    if (!namespace) {
+        if (!(data = json_pack ("{s:s}", "target", target))) {
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+    else {
+        if (!(data = json_pack ("{s:s s:s}", "namespace", namespace,
+                                "target", target))) {
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+
+    /* obj takes reference to "data" */
+    if (!(obj = json_pack ("{s:i s:s s:o}", "ver", treeobj_version,
                                             "type", "symlink",
-                                            "data", target))) {
+                                            "data", data))) {
+        json_decref (data);
         errno = ENOMEM;
         return NULL;
     }
+
     return obj;
 }
 
