@@ -670,30 +670,26 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                 goto done;
             }
             json_decref (subdir);
-        } else if (treeobj_is_symlink (dir_entry)) {
-            json_t *symlink = treeobj_get_data (dir_entry);
-            const char *symlinkstr;
+        } else if (treeobj_is_symlink (dir_entry)
+                   && !treeobj_get_symlink_namespace (dir_entry)) {
+            const char *symlinktarget = treeobj_get_symlink_target (dir_entry);
             char *nkey = NULL;
             char *sym_suffix = NULL;
 
-            if (!symlink) {
+            if (!symlinktarget) {
                 saved_errno = errno;
                 goto done;
             }
 
-            assert (json_is_string (symlink));
-
-            symlinkstr = json_string_value (symlink);
-
-            if (check_cross_namespace (kt, symlinkstr, &sym_suffix) < 0) {
+            if (check_cross_namespace (kt, symlinktarget, &sym_suffix) < 0) {
                 saved_errno = errno;
                 goto done;
             }
 
             if (sym_suffix)
-                symlinkstr = sym_suffix;
+                symlinktarget = sym_suffix;
 
-            if (asprintf (&nkey, "%s.%s", symlinkstr, next) < 0) {
+            if (asprintf (&nkey, "%s.%s", symlinktarget, next) < 0) {
                 saved_errno = ENOMEM;
                 free (sym_suffix);
                 goto done;
@@ -711,6 +707,41 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                 goto done;
             }
             free (sym_suffix);
+            free (nkey);
+            goto success;
+        } else if (treeobj_is_symlink (dir_entry)
+                   && treeobj_get_symlink_namespace (dir_entry)) {
+            const char *namespace = treeobj_get_symlink_namespace (dir_entry);
+            const char *target = treeobj_get_symlink_target (dir_entry);
+            char *nkey;
+
+            if (!namespace || !target) {
+                saved_errno = EINVAL;
+                goto done;
+            }
+
+            /* can't cross into a new namespace */
+            if (strcmp (namespace, kt->ktm->namespace)) {
+                saved_errno = EINVAL;
+                goto done;
+            }
+
+            if (asprintf (&nkey, "%s.%s", target, next) < 0) {
+                saved_errno = ENOMEM;
+                goto done;
+            }
+
+            if (kvstxn_link_dirent (kt,
+                                    current_epoch,
+                                    rootdir,
+                                    nkey,
+                                    dirent,
+                                    flags,
+                                    missing_ref) < 0) {
+                saved_errno = errno;
+                free (nkey);
+                goto done;
+            }
             free (nkey);
             goto success;
         } else {
