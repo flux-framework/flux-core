@@ -1103,7 +1103,7 @@ void lookup_errors (void) {
         "lookup_create on dir in path");
     check_error (lh, ENOTRECOVERABLE, "lookup dir in path");
 
-    /* Lookup path w/ infinite link loop, should get ELOOP */
+    /* Lookup path w/ infinite symlink loop, should get ELOOP */
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
@@ -1115,8 +1115,8 @@ void lookup_errors (void) {
                              0,
                              0,
                              NULL)) != NULL,
-        "lookup_create on link loop");
-    check_error (lh, ELOOP, "lookup infinite links");
+        "lookup_create on symlink loop");
+    check_error (lh, ELOOP, "lookup infinite symlink loop");
 
     /* Lookup a dirref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
@@ -1520,8 +1520,8 @@ void lookup_security (void) {
     json_decref (root);
 }
 
-/* lookup link tests */
-void lookup_links (void) {
+/* lookup symlink tests */
+void lookup_symlinks (void) {
     json_t *root;
     json_t *dirref1;
     json_t *dirref2;
@@ -3556,7 +3556,7 @@ int main (int argc, char *argv[])
     lookup_basic ();
     lookup_errors ();
     lookup_security ();
-    lookup_links ();
+    lookup_symlinks ();
     lookup_alt_root ();
     lookup_root_symlink ();
     lookup_namespace_prefix ();

@@ -2015,7 +2015,7 @@ void kvstxn_process_invalid_hash (void)
     json_decref (root);
 }
 
-void kvstxn_process_follow_link (void)
+void kvstxn_process_follow_symlink (void)
 {
     struct cache *cache;
     kvsroot_mgr_t *krm;
@@ -3423,7 +3423,7 @@ int main (int argc, char *argv[])
     kvstxn_process_invalid_operation ();
     kvstxn_process_malformed_operation ();
     kvstxn_process_invalid_hash ();
-    kvstxn_process_follow_link ();
+    kvstxn_process_follow_symlink ();
     kvstxn_process_dirval_test ();
     kvstxn_process_delete_test ();
     kvstxn_process_delete_nosubdir_test ();
