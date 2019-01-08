@@ -31,9 +31,9 @@
 
 #include "lookup.h"
 
-/* Break cycles in symlink references.
+/* Break cycles in link references.
  */
-#define SYMLINK_CYCLE_LIMIT 10
+#define LINK_CYCLE_LIMIT 10
 
 typedef struct {
     int depth;
@@ -299,7 +299,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
             && !(lh->flags & FLUX_KVS_TREEOBJ))) {
         lookup_process_t sret;
 
-        if (wl->depth == SYMLINK_CYCLE_LIMIT) {
+        if (wl->depth == LINK_CYCLE_LIMIT) {
             lh->errnum = ELOOP;
             goto cleanup;
         }
