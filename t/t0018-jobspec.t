@@ -4,7 +4,7 @@ test_description='Test the jobspec parsing library'
 
 . `dirname $0`/sharness.sh
 
-validate="${FLUX_BUILD_DIR}/src/cmd/flux-jobspec-validate"
+validate="${FLUX_BUILD_DIR}/src/common/libjobspec/test_validate"
 
 # Check that the valid jobspecs all pass
 for jobspec in ${FLUX_SOURCE_DIR}/t/jobspec/valid/*.yaml; do
