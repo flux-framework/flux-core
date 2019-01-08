@@ -237,6 +237,11 @@ AM_CHECK_PYMOD(yaml,
                ,
                [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
                )
+AM_CHECK_PYMOD(jsonschema,
+               [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
+               )
 
 # Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
 # (e.g. /usr/lib64).  Placing a standard path earlier in the linker
