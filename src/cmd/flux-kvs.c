@@ -925,7 +925,7 @@ int cmd_link (optparse_t *p, int argc, char **argv)
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_symlink (txn, 0, argv[optindex + 1], argv[optindex]) < 0)
+    if (flux_kvs_txn_symlink (txn, 0, argv[optindex + 1], NULL, argv[optindex]) < 0)
         log_err_exit ("%s", argv[optindex + 1]);
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");

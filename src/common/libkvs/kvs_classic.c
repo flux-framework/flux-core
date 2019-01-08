@@ -244,7 +244,7 @@ int flux_kvs_symlink (flux_t *h, const char *key, const char *target)
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
         return -1;
-    return flux_kvs_txn_symlink (txn, 0, key, target);
+    return flux_kvs_txn_symlink (txn, 0, key, NULL, target);
 }
 
 int flux_kvs_mkdir (flux_t *h, const char *key)

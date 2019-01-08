@@ -285,7 +285,8 @@ error:
 }
 
 int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
-                          const char *key, const char *target)
+                          const char *key, const char *ns,
+                          const char *target)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -296,7 +297,7 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(dirent = treeobj_create_symlink (NULL, target)))
+    if (!(dirent = treeobj_create_symlink (ns, target)))
         goto error;
     if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;

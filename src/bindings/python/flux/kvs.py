@@ -99,7 +99,7 @@ def put_unlink(flux_handle, key):
 def put_symlink(flux_handle, key, target):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    return RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, target)
+    return RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
 
 
 def commit(flux_handle, flags=0):
