@@ -44,7 +44,8 @@ int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
                          const char *key);
 
 int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
-                          const char *key, const char *target);
+                          const char *key, const char *namespace,
+                          const char *target);
 
 #ifdef __cplusplus
 }
