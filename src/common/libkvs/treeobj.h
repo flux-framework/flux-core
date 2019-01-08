@@ -27,6 +27,7 @@ json_t *treeobj_create_val (const void *data, int len);
 json_t *treeobj_create_valref (const char *blobref);
 json_t *treeobj_create_dir (void);
 json_t *treeobj_create_dirref (const char *blobref);
+json_t *treeobj_create_nslink (const char *ns, const char *target);
 
 /* Validate treeobj, recursively.
  * Return 0 if valid, -1 with errno = EINVAL if invalid.
@@ -44,12 +45,14 @@ bool treeobj_is_val (const json_t *obj);
 bool treeobj_is_valref (const json_t *obj);
 bool treeobj_is_dir (const json_t *obj);
 bool treeobj_is_dirref (const json_t *obj);
+bool treeobj_is_nslink (const json_t *obj);
 
 /* get type-specific value.
  * For dirref/valref, this is an array of blobrefs.
  * For directory, this is dictionary of treeobjs
  * For symlink, this is a string.
  * For val this is string containing base64-encoded data.
+ * For nslink this is a object containing a namespace and target.
  * Return JSON object on success, NULL on error with errno = EINVAL.
  * The returned object is owned by 'obj' and must not be destroyed.
  */
@@ -58,6 +61,8 @@ json_t *treeobj_get_data (json_t *obj);
 /* get convenience functions, operate on type specific objects
  */
 const char *treeobj_get_symlink (const json_t *obj);
+const char *treeobj_get_nslink_namespace (const json_t *obj);
+const char *treeobj_get_nslink_target (const json_t *obj);
 
 /* get decoded val data.
  * If len == 0, data will be NULL.

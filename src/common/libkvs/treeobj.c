@@ -105,6 +105,19 @@ int treeobj_validate (const json_t *obj)
         if (!json_is_string (data))
             goto inval;
     }
+    else if (!strcmp (type, "nslink")) {
+        json_t *o;
+        if (!json_is_object (data))
+            goto inval;
+        if (!(o = json_object_get (data, "namespace")))
+            goto inval;
+        if (!json_is_string (o))
+            goto inval;
+        if (!(o = json_object_get (data, "target")))
+            goto inval;
+        if (!json_is_string (o))
+            goto inval;
+    }
     else if (!strcmp (type, "val")) {
         /* is base64, should always be a string */
         if (!json_is_string (data))
@@ -156,6 +169,12 @@ bool treeobj_is_dirref (const json_t *obj)
     return type && !strcmp (type, "dirref");
 }
 
+bool treeobj_is_nslink (const json_t *obj)
+{
+    const char *type = treeobj_get_type (obj);
+    return type && !strcmp (type, "nslink");
+}
+
 json_t *treeobj_get_data (json_t *obj)
 {
     json_t *data;
@@ -176,6 +195,52 @@ const char *treeobj_get_symlink (const json_t *obj)
         return NULL;
     }
     if (!(str = json_string_value (data))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return str;
+}
+
+const char *treeobj_get_nslink_namespace (const json_t *obj)
+{
+    const char *type;
+    const json_t *data;
+    const json_t *ns;
+    const char *str;
+
+    if (treeobj_peek (obj, &type, &data) < 0
+            || strcmp (type, "nslink") != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(ns = json_object_get (data, "namespace"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(str = json_string_value (ns))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return str;
+}
+
+const char *treeobj_get_nslink_target (const json_t *obj)
+{
+    const char *type;
+    const json_t *data;
+    const json_t *target;
+    const char *str;
+
+    if (treeobj_peek (obj, &type, &data) < 0
+            || strcmp (type, "nslink") != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(target = json_object_get (data, "target"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(str = json_string_value (target))) {
         errno = EINVAL;
         return NULL;
     }
@@ -498,6 +563,33 @@ json_t *treeobj_create_dirref (const char *blobref)
         errno = ENOMEM;
         return NULL;
     }
+    return obj;
+}
+
+json_t *treeobj_create_nslink (const char *ns, const char *target)
+{
+    json_t *data, *obj;
+
+    if (!ns || !target) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!(data = json_pack ("{s:s s:s}", "namespace", ns,
+                                         "target", target))) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    /* obj takes reference to "data" */
+    if (!(obj = json_pack ("{s:i s:s s:o}", "ver", treeobj_version,
+                                            "type", "nslink",
+                                            "data", data))) {
+        json_decref (data);
+        errno = ENOMEM;
+        return NULL;
+    }
+
     return obj;
 }
 
