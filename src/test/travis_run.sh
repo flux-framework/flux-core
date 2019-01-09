@@ -93,6 +93,10 @@ fi
 export FLUX_TEST_SIZE_MAX=5
 
 # Invoke MPI tests
+# CentOS 7: mpich only available via environment-module:
+if test -f /usr/share/Modules/init/bash; then
+    . /usr/share/Modules/init/bash && module load mpi
+fi
 export TEST_MPI=t
 
 # Generate logfiles from sharness tests for extra information:

@@ -46,10 +46,15 @@ RUN case $BASE_IMAGE in \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
-# Add some packages for testing
+# Install extra dependencies if necessary here.
+#
+# Do not forget to run `apt update` on Ubuntu/bionic.
+# Do NOT run `yum upgrade` on CentOS (this will unnecessarily upgrade
+#  existing packages)
+#
 RUN case $BASE_IMAGE in \
-     bionic*) apt update && apt-get -qq install -y --no-install-recommends python-yaml python3-yaml python-jsonschema python3-jsonschema ;; \
-     centos*) yum -y update && yum -y install python-yaml python34-yaml python-jsonschema python34-jsonschema;; \
+     bionic*) ;; \
+     centos*) ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
