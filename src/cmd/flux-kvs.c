@@ -957,7 +957,7 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
             if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
                 log_err_exit ("%s", argv[i]);
         }
-        if (flux_kvs_lookup_get_symlink (f, &target) < 0)
+        if (flux_kvs_lookup_get_symlink (f, NULL, &target) < 0)
             log_err_exit ("%s", argv[i]);
         printf ("%s\n", target);
         flux_future_destroy (f);
@@ -1243,7 +1243,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
         if (flux_kvsdir_issymlink (dir, name)) {
             const char *link;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get_symlink (f, &link) < 0)
+                    || flux_kvs_lookup_get_symlink (f, NULL, &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
             flux_future_destroy (f);
