@@ -124,10 +124,13 @@ it is overwritten.  Optionally, specify a namespace the target is in.
 This namespace can be different that the one the linkname is being
 written to.
 
-*readlink* [-a treeobj] 'key' ['key...']::
+*readlink* [-a treeobj] [ -o | -k ] 'key' ['key...']::
 Retrieve the key a link refers to rather than its value, as would be
 returned by *get*.  '-a treeobj' causes the lookup to be relative to
-an RFC 11 snapshot reference.
+an RFC 11 snapshot reference.  If the link points to a namespace, the
+namespace and key will be output in the format '<namespace>::<key>'.
+The '-o' can be used to only output namespaces and the '-k' can be
+used to only output keys.
 
 *mkdir* 'key' ['key...']::
 Create an empty directory and commit the change.  If 'key' exists,

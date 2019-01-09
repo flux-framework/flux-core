@@ -68,6 +68,12 @@ static struct optparse_option readlink_opts[] =  {
     { .name = "at", .key = 'a', .has_arg = 1,
       .usage = "Lookup relative to RFC 11 snapshot reference",
     },
+    { .name = "namespace-only", .key = 'o', .has_arg = 0,
+      .usage = "Output only namespace if link points to a namespace",
+    },
+    { .name = "key-only", .key = 'k', .has_arg = 0,
+      .usage = "Output only key if link points to a namespace",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -287,7 +293,7 @@ static struct optparse_subcommand subcommands[] = {
       link_opts
     },
     { "readlink",
-      "[-a treeobj] key [key...]",
+      "[-a treeobj] [ -o | -k ] key [key...]",
       "Retrieve the key a link refers to",
       cmd_readlink,
       0,
@@ -951,16 +957,21 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     int optindex, i;
-    const char *target;
     flux_future_t *f;
+    bool ns_only;
+    bool key_only;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
+    ns_only = optparse_hasopt (p, "namespace-only");
+    key_only = optparse_hasopt (p, "key-only");
 
     for (i = optindex; i < argc; i++) {
+        const char *ns = NULL;
+        const char *target = NULL;
         if (optparse_hasopt (p, "at")) {
             const char *ref = optparse_get_str (p, "at", "");
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[i], ref)))
@@ -970,9 +981,18 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
             if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
                 log_err_exit ("%s", argv[i]);
         }
-        if (flux_kvs_lookup_get_symlink (f, NULL, &target) < 0)
+        if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
             log_err_exit ("%s", argv[i]);
-        printf ("%s\n", target);
+        if (ns_only && ns)
+            printf ("%s\n", ns);
+        else if (key_only)
+            printf ("%s\n", target);
+        else {
+            if (ns)
+                printf ("%s::%s\n", ns, target);
+            else
+                printf ("%s\n", target);
+        }
         flux_future_destroy (f);
     }
     return (0);
