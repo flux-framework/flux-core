@@ -369,11 +369,12 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     return 0;
 }
 
-int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
+int flux_kvs_lookup_get_symlink (flux_future_t *f,
+                                 const char **namespace,
+                                 const char **target)
 {
     struct lookup_ctx *ctx;
-    json_t *str;
-    const char *s;
+    const char *n, *t;
 
     if (!(ctx = get_lookup_ctx (f)))
         return -1;
@@ -383,13 +384,19 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
         errno = EINVAL;
         return -1;
     }
-    if (!(str = treeobj_get_data (ctx->treeobj))
-                                || !(s = json_string_value (str))) {
+    if (!(n = treeobj_get_symlink_namespace (ctx->treeobj))
+        && errno != ENODATA) {
         errno = EINVAL;
         return -1;
     }
+    if (!(t = treeobj_get_symlink_target (ctx->treeobj))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (namespace)
+        *namespace = n;
     if (target)
-        *target = s;
+        *target = t;
     return 0;
 }
 
