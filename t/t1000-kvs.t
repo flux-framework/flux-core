@@ -466,10 +466,12 @@ test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
 	flux kvs put $DIR.valref=$(seq -s 1 100) &&
 	flux kvs mkdir $DIR.dirref &&
 	flux kvs link foo $DIR.symlink &&
+	flux kvs link --link-namespace=A bar $DIR.nslink &&
 	flux kvs get --treeobj $DIR.val | grep -q val &&
 	flux kvs get --treeobj $DIR.valref | grep -q valref &&
 	flux kvs get --treeobj $DIR.dirref | grep -q dirref &&
-	flux kvs get --treeobj $DIR.symlink | grep -q symlink
+	flux kvs get --treeobj $DIR.symlink | grep -q symlink &&
+	flux kvs get --treeobj $DIR.nslink | grep -q nslink
 '
 test_expect_success 'kvs: get --treeobj: returns value ref for large value' '
 	flux kvs unlink -Rf $DIR &&
@@ -599,7 +601,10 @@ EOF
 #
 # ls tests
 #
+
 test_expect_success 'kvs: ls -1F works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs mkdir $DIR &&
 	flux kvs ls -1F >output &&
 	cat >expected <<-EOF &&
 	test.
@@ -607,6 +612,8 @@ test_expect_success 'kvs: ls -1F works' '
 	test_cmp expected output
 '
 test_expect_success 'kvs: ls -1F . works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs mkdir $DIR &&
 	flux kvs ls -1F . >output &&
 	cat >expected <<-EOF &&
 	test.
@@ -618,11 +625,13 @@ test_expect_success 'kvs: ls -1F DIR works' '
 	flux kvs put --json $DIR.a=69 &&
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
+	flux kvs link --link-namespace=foo c $DIR.d &&
 	flux kvs ls -1F $DIR >output &&
 	cat >expected <<-EOF &&
 	a
 	b.
 	c@
+	d@
 	EOF
 	test_cmp expected output
 '
@@ -632,19 +641,23 @@ test_expect_success 'kvs: ls -1F DIR. works' '
 	a
 	b.
 	c@
+	d@
 	EOF
 	test_cmp expected output
 '
-test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c works' '
+test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c DIR.d works' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a=69 &&
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
-	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c >output &&
+	flux kvs link --link-namespace=foo c $DIR.d &&
+	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c $DIR.d >output-1 &&
+	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c $DIR.d >output &&
 	cat >expected <<-EOF &&
 	$DIR.a
 	$DIR.b.
 	$DIR.c@
+	$DIR.d@
 	EOF
 	test_cmp expected output
 '
@@ -653,6 +666,7 @@ test_expect_success 'kvs: ls -1RF shows directory titles' '
 	flux kvs put --json $DIR.a=69 &&
 	flux kvs put --json $DIR.b.d=42 &&
 	flux kvs link b $DIR.c &&
+	flux kvs ls -1RF $DIR | grep : >output-2 &&
 	flux kvs ls -1RF $DIR | grep : | wc -l >output &&
 	cat >expected <<-EOF &&
 	2
@@ -869,8 +883,97 @@ test_expect_success 'kvs: link: path resolution with intermediate link and nonex
 '
 
 #
+# link/readlink tests - across namespace
+#
+
+test_expect_success 'kvs: namespace create setup' '
+	flux kvs namespace-create TESTNSLINK
+'
+test_expect_success 'kvs: nslink works' '
+	TARGET=$DIR.target &&
+	flux kvs --namespace=TESTNSLINK put --json $TARGET=\"foo\" &&
+	flux kvs link --link-namespace=TESTNSLINK $TARGET $DIR.nslink &&
+	OUTPUT=$(flux kvs get --json $DIR.nslink) &&
+	test "$OUTPUT" = "foo"
+'
+test_expect_success 'kvs: nslink fails on bad namespace' '
+	TARGET=$DIR.target &&
+	flux kvs put --json $TARGET=\"foo\" &&
+	flux kvs link --link-namespace=TESTNSLINK-FAKE $TARGET $DIR.nslink &&
+	! flux kvs get --json $DIR.nslink
+'
+test_expect_success 'kvs: readlink on nslink works' '
+	TARGET=$DIR.target &&
+	flux kvs put --json $TARGET=\"foo\" &&
+	flux kvs link --link-namespace=TESTNSLINK $TARGET $DIR.nslink &&
+	OUTPUT=$(flux kvs readlink $DIR.nslink) &&
+	test "$OUTPUT" = "TESTNSLINK::$TARGET"
+'
+test_expect_success 'kvs: readlink works with nslnks (multiple inputs)' '
+	TARGET1=$DIR.target1 &&
+	TARGET2=$DIR.target2 &&
+	flux kvs --namespace=TESTNSLINK put --json $TARGET1=\"foo1\" &&
+	flux kvs --namespace=TESTNSLINK put --json $TARGET2=\"foo2\" &&
+	flux kvs link --link-namespace=TESTNSLINK $TARGET1 $DIR.nslink1 &&
+	flux kvs link --link-namespace=TESTNSLINK $TARGET2 $DIR.nslink2 &&
+	flux kvs readlink $DIR.nslink1 $DIR.nslink2 >output &&
+	cat >expected <<EOF &&
+TESTNSLINK::$TARGET1
+TESTNSLINK::$TARGET2
+EOF
+	test_cmp output expected
+'
+test_expect_success 'kvs: nslink: path resolution when intermediate component is a link' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK put --json $DIR.a.b.c=42 &&
+	flux kvs link --link-namespace=TESTNSLINK $DIR.a.b $DIR.Z.Y &&
+	OUTPUT=$(flux kvs get --json $DIR.Z.Y.c) &&
+	test "$OUTPUT" = "42"
+'
+test_expect_success 'kvs: nslink: intermediate link points to another namespace link' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK put --json $DIR.a.b.c=42 &&
+	flux kvs --namespace=TESTNSLINK link --link-namespace=TESTNSLINK $DIR.a.b $DIR.Z.Y &&
+	flux kvs link --link-namespace=TESTNSLINK $DIR.Z.Y $DIR.X.W &&
+	test_kvs_key $DIR.X.W.c 42
+'
+test_expect_success 'kvs: nslink: intermediate link points to another symlink' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK put --json $DIR.a.b.c=42 &&
+	flux kvs --namespace=TESTNSLINK link $DIR.a.b $DIR.Z.Y &&
+	flux kvs link --link-namespace=TESTNSLINK $DIR.Z.Y $DIR.X.W &&
+	test_kvs_key $DIR.X.W.c 42
+'
+test_expect_success 'kvs: nslink: put cant cross namespace' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK mkdir $DIR.a &&
+	flux kvs link --link-namespace=TESTNSLINK $DIR.a $DIR.link &&
+	! flux kvs put --json $DIR.link.X=42
+'
+test_expect_success 'kvs: nslink: dangling link' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK unlink -Rf $DIR &&
+	flux kvs link --link-namespace=TESTNSLINK-FAKE $DIR.dangle $DIR.a.b.c
+'
+test_expect_success 'kvs: nslink: readlink on dangling link' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs --namespace=TESTNSLINK unlink -Rf $DIR &&
+	flux kvs link --link-namespace=TESTNSLINK-FAKE $DIR.dangle $DIR.a.b.c &&
+	OUTPUT=$(flux kvs readlink $DIR.a.b.c) &&
+	test "$OUTPUT" = "TESTNSLINK-FAKE::$DIR.dangle"
+'
+test_expect_success 'kvs: namespace remove cleanup' '
+	flux kvs namespace-remove TESTNSLINK
+'
+
+#
 # get --at tests
 #
+
 test_expect_success 'kvs: get --at: works on root from get --treeobj' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a.b.c=42 &&
@@ -897,6 +1000,14 @@ test_expect_success 'kvs: readlink --at works after symlink unlinked' '
 	flux kvs unlink -R $DIR &&
 	LINKVAL=$(flux kvs readlink --at $ROOTREF $DIR.a.b.link) &&
 	test "$LINKVAL" = "$DIR.a.b.X"
+'
+test_expect_success 'kvs: readlink --at works after nslink unlinked' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs link --link-namespace=foo $DIR.a.b.X $DIR.a.b.link &&
+	ROOTREF=$(flux kvs get --treeobj .) &&
+	flux kvs unlink -R $DIR &&
+	LINKVAL=$(flux kvs readlink --at $ROOTREF $DIR.a.b.link) &&
+	test "$LINKVAL" = "foo::$DIR.a.b.X"
 '
 test_expect_success 'kvs: directory with multiple subdirs using dir --at' '
 	flux kvs unlink -Rf $DIR &&
