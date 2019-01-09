@@ -72,6 +72,10 @@ bool flux_kvsdir_isdir (const flux_kvsdir_t *dir, const char *name);
  */
 bool flux_kvsdir_issymlink (const flux_kvsdir_t *dir, const char *name);
 
+/* Test whether 'name' exists in 'dir' and is a namespace + target link.
+ */
+bool flux_kvsdir_isnslink (const flux_kvsdir_t *dir, const char *name);
+
 /* Access the original 'key', 'json_str', 'handle', and 'rootref' parameters
  * passed to flux_kvsdir_create ()
  */

@@ -196,6 +196,16 @@ bool flux_kvsdir_issymlink (const flux_kvsdir_t *dir, const char *name)
     return false;
 }
 
+bool flux_kvsdir_isnslink (const flux_kvsdir_t *dir, const char *name)
+{
+    json_t *obj = treeobj_get_entry (dir->dirobj, name);
+
+    if (obj) {
+        if (treeobj_is_nslink (obj))
+            return true;
+    }
+    return false;
+}
 
 char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *name)
 {
