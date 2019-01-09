@@ -68,6 +68,12 @@ static struct optparse_option readlink_opts[] =  {
     { .name = "at", .key = 'a', .has_arg = 1,
       .usage = "Lookup relative to RFC 11 snapshot reference",
     },
+    { .name = "namespace-only", .key = 'o', .has_arg = 0,
+      .usage = "Output only namespace if link points to a namespace",
+    },
+    { .name = "key-only", .key = 'k', .has_arg = 0,
+      .usage = "Output only key if link points to a namespace",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -935,14 +941,19 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     int optindex, i;
+    const char *namespace;
     const char *target;
     flux_future_t *f;
+    bool namespace_only;
+    bool key_only;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
+    namespace_only = optparse_hasopt (p, "namespace-only");
+    key_only = optparse_hasopt (p, "key-only");
 
     for (i = optindex; i < argc; i++) {
         if (optparse_hasopt (p, "at")) {
@@ -954,9 +965,18 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
             if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
                 log_err_exit ("%s", argv[i]);
         }
-        if (flux_kvs_lookup_get_symlink (f, &target) < 0)
+        if (!namespace_only && !flux_kvs_lookup_get_symlink (f, &target))
+            printf ("%s\n", target);
+        else if (!flux_kvs_lookup_get_nslink (f, &namespace, &target)) {
+            if (namespace_only)
+                printf ("%s\n", namespace);
+            else if (key_only)
+                printf ("%s\n", target);
+            else
+                printf ("%s::%s\n", namespace, target);
+        }
+        else
             log_err_exit ("%s", argv[i]);
-        printf ("%s\n", target);
         flux_future_destroy (f);
     }
     return (0);
