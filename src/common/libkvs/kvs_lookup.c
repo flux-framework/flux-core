@@ -393,6 +393,33 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
     return 0;
 }
 
+int flux_kvs_lookup_get_nslink (flux_future_t *f,
+                                const char **namespace,
+                                const char **target)
+{
+    struct lookup_ctx *ctx;
+    const char *n, *t;
+
+    if (!(ctx = get_lookup_ctx (f)))
+        return -1;
+    if (parse_response (f, ctx) < 0)
+        return -1;
+    if (!treeobj_is_nslink (ctx->treeobj)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(n = treeobj_get_nslink_namespace (ctx->treeobj))
+        || !(t = treeobj_get_nslink_target (ctx->treeobj))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (namespace)
+        *namespace = n;
+    if (target)
+        *target = t;
+    return 0;
+}
+
 const char *flux_kvs_lookup_get_key (flux_future_t *f)
 {
     struct lookup_ctx *ctx;
