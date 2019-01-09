@@ -136,7 +136,7 @@ void test_full (void)
     if (!(o = treeobj_create_dir ()))
         BAIL_OUT ("treeobj_create_dir failed");
     if (!(dirent = treeobj_create_symlink (NULL, "a.b.c")))
-        BAIL_OUT ("treeobj_create_symlink failed");
+        BAIL_OUT ("treeobj_create_symlink failed (no namespace)");
     if (treeobj_insert_entry (o, "foo", dirent) < 0)
         BAIL_OUT ("treeobj_insert_entry failed");
     json_decref (dirent);
@@ -148,6 +148,11 @@ void test_full (void)
     if (!(dirent = treeobj_create_dir ()))
         BAIL_OUT ("treeobj_create_dir failed");
     if (treeobj_insert_entry (o, "baz", dirent) < 0)
+        BAIL_OUT ("treeobj_insert_entry failed");
+    json_decref (dirent);
+    if (!(dirent = treeobj_create_symlink ("ns", "d.e.f")))
+        BAIL_OUT ("treeobj_create_symlink failed (namespace)");
+    if (treeobj_insert_entry (o, "boo", dirent) < 0)
         BAIL_OUT ("treeobj_insert_entry failed");
     json_decref (dirent);
 
@@ -167,6 +172,8 @@ void test_full (void)
         "flux_kvsdir_exists on existing val returns true");
     ok (flux_kvsdir_exists (dir, "baz"),
         "flux_kvsdir_exists on existing dir returns true");
+    ok (flux_kvsdir_exists (dir, "boo"),
+        "flux_kvsdir_exists on existing dir returns true");
 
     ok (!flux_kvsdir_isdir (dir, "noexist"),
         "flux_kvsdir_isdir on nonexistent key returns false");
@@ -176,6 +183,8 @@ void test_full (void)
         "flux_kvsdir_isdir on existing val returns false");
     ok (flux_kvsdir_isdir (dir, "baz"),
         "flux_kvsdir_isdir on existing symlink returns true");
+    ok (!flux_kvsdir_isdir (dir, "boo"),
+        "flux_kvsdir_isdir on existing symlink returns false");
 
     ok (!flux_kvsdir_issymlink (dir, "noexist"),
         "flux_kvsdir_issymlink on nonexistent key returns false");
@@ -185,9 +194,11 @@ void test_full (void)
         "flux_kvsdir_issymlink on existing val returns false");
     ok (!flux_kvsdir_issymlink (dir, "baz"),
         "flux_kvsdir_issymlink on existing dir returns false");
+    ok (flux_kvsdir_issymlink (dir, "boo"),
+        "flux_kvsdir_issymlink on existing dir returns false");
 
-    ok (flux_kvsdir_get_size (dir) == 3,
-        "flux_kvsdir_get_size returns 3");
+    ok (flux_kvsdir_get_size (dir) == 4,
+        "flux_kvsdir_get_size returns 4");
 
     itr = flux_kvsitr_create (dir);
     ok (itr != NULL,
@@ -198,8 +209,10 @@ void test_full (void)
         "flux_kvsitr_next returns non-NULL on second call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on third call");
-    ok (flux_kvsitr_next (itr) == NULL,
+    ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns NULL on fourth call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on fifth call");
 
     flux_kvsitr_rewind (itr);
     ok (flux_kvsitr_next (itr) != NULL,
@@ -208,20 +221,22 @@ void test_full (void)
         "flux_kvsitr_next returns non-NULL on second call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on third call");
-    ok (flux_kvsitr_next (itr) == NULL,
+    ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns NULL on fourth call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on fifth call");
     flux_kvsitr_destroy (itr);
 
     flux_kvsdir_t *cpy = flux_kvsdir_copy (dir);
     ok (cpy != NULL,
         "flux_kvsdir_copy was successful");
-    ok (flux_kvsdir_get_size (cpy) == 3,
-        "flux_kvsdir_get_size on copy returns 3");
+    ok (flux_kvsdir_get_size (cpy) == 4,
+        "flux_kvsdir_get_size on copy returns 4");
 
     flux_kvsdir_destroy (dir);
 
-    ok (flux_kvsdir_get_size (cpy) == 3,
-        "flux_kvsdir_get_size on copy still returns 3 after orig freed");
+    ok (flux_kvsdir_get_size (cpy) == 4,
+        "flux_kvsdir_get_size on copy still returns 4 after orig freed");
 
     flux_kvsdir_destroy (cpy);
 }
