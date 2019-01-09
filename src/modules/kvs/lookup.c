@@ -359,6 +359,125 @@ cleanup:
     return ret;
 }
 
+static lookup_process_t symlink_check_namespace (lookup_t *lh,
+                                                 const char *namespace,
+                                                 struct kvsroot **rootp)
+{
+    struct kvsroot *root = NULL;
+    lookup_process_t ret = LOOKUP_PROCESS_ERROR;
+
+    root = kvsroot_mgr_lookup_root (lh->krm, namespace);
+
+    if (!root) {
+        free (lh->missing_namespace);
+        if (!(lh->missing_namespace = strdup (namespace))) {
+            lh->errnum = ENOMEM;
+            goto done;
+        }
+        ret = LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
+        goto done;
+    }
+
+    if (kvsroot_check_user (lh->krm,
+                            root,
+                            lh->rolemask,
+                            lh->userid) < 0) {
+        lh->errnum = EPERM;
+        goto done;
+    }
+
+    (*rootp) = root;
+    ret = LOOKUP_PROCESS_FINISHED;
+done:
+    return ret;
+}
+
+/* If recursing, wlp will be set to new walk level pointer
+ */
+static lookup_process_t walk_symlink_namespace (lookup_t *lh,
+                                                walk_level_t *wl,
+                                                const json_t *dirent_tmp,
+                                                char *current_pathcomp,
+                                                walk_level_t **wlp)
+{
+    lookup_process_t ret = LOOKUP_PROCESS_ERROR;
+    struct kvsroot *root = NULL;
+    walk_level_t *wltmp;
+    const char *namespace;
+    const char *target;
+
+    if (!(namespace = treeobj_get_symlink_namespace (dirent_tmp))) {
+        lh->errnum = errno;
+        goto cleanup;
+    }
+
+    if (!(target = treeobj_get_symlink_target (dirent_tmp))) {
+        lh->errnum = errno;
+        goto cleanup;
+    }
+
+    /* Follow link if in middle of path or if end of path,
+     * flags say we can follow it
+     */
+    if (!last_pathcomp (wl->pathcomps, current_pathcomp)
+        || (!(lh->flags & FLUX_KVS_READLINK)
+            && !(lh->flags & FLUX_KVS_TREEOBJ))) {
+        lookup_process_t nsret;
+
+        if (wl->depth == SYMLINK_CYCLE_LIMIT) {
+            lh->errnum = ELOOP;
+            goto cleanup;
+        }
+
+        nsret = symlink_check_namespace (lh,
+                                         namespace,
+                                         &root);
+        if (nsret != LOOKUP_PROCESS_FINISHED) {
+            ret = nsret;
+            goto cleanup;
+        }
+
+        /* Set wl->dirent, now that we've resolved namespace in the
+         * symlink.
+         */
+        wl->dirent = dirent_tmp;
+
+        /* if symlink target is root, no need to recurse, just get
+         * root_dirent and continue on.
+         */
+        if (!strcmp (target, ".")) {
+            free (wl->tmp_dirent);
+            wl->tmp_dirent = treeobj_create_dirref (root->ref);
+            if (!wl->tmp_dirent) {
+                lh->errnum = errno;
+                goto cleanup;
+            }
+            wl->dirent = wl->tmp_dirent;
+        }
+        else {
+            /* "recursively" determine link dirent */
+            if (!(wltmp = walk_levels_push (lh,
+                                            root->ref,
+                                            target,
+                                            wl->depth + 1))) {
+                lh->errnum = errno;
+                goto cleanup;
+            }
+
+            (*wlp) = wltmp;
+            goto done;
+        }
+    }
+    else
+        wl->dirent = dirent_tmp;
+
+    (*wlp) = NULL;
+done:
+    ret = LOOKUP_PROCESS_FINISHED;
+cleanup:
+    return ret;
+}
+
 /* Get dirent of the requested path starting at the given root.
  *
  * Return true on success or error, error code is returned in ep and
@@ -469,8 +588,17 @@ static lookup_process_t walk (lookup_t *lh)
         if (treeobj_is_symlink (dirent_tmp)) {
             walk_level_t *wltmp = NULL;
             lookup_process_t sret;
+            const char *namespace = treeobj_get_symlink_namespace (dirent_tmp);
 
-            sret = walk_symlink (lh, wl, dirent_tmp, pathcomp, &wltmp);
+            if (namespace)
+                sret = walk_symlink_namespace (lh,
+                                               wl,
+                                               dirent_tmp,
+                                               pathcomp,
+                                               &wltmp);
+            else
+                sret = walk_symlink (lh, wl, dirent_tmp, pathcomp, &wltmp);
+
             if (sret == LOOKUP_PROCESS_ERROR)
                 goto error;
             else if (sret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE)
