@@ -45,10 +45,12 @@ RUN apt-get -qq install -y --no-install-recommends \
         python-cffi \
         python-six \
 	python-yaml \
+	python-jsonschema \
         python3-dev \
         python3-cffi \
         python3-six \
-	python3-yaml
+	python3-yaml \
+	python3-jsonschema
 
 # Other deps
 RUN apt-get -qq install -y --no-install-recommends \

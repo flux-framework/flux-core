@@ -44,10 +44,12 @@ RUN yum -y update \
       python-cffi \
       python-six \
       python-yaml \
+      python-jsonschema \
       python34-devel \
       python34-cffi \
       python34-six \
       python34-yaml \
+      python34-jsonschema \
       ruby \
       sqlite \
       yaml-cpp-devel \

@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "http://github.com/flux-framework/rfc/tree/master/data/spec_14/schema.json",
+  "title": "jobspec-01",
+
+  "description":         "Flux jobspec version 1",
+
+  "definitions": {
+    "complex_range": {
+      "description": "a complex range of numbers",
+      "type": "object",
+      "required":["min", "max", "operator", "operand"],
+      "properties":{
+        "min": { "type": "integer", "minimum" : 1 },
+        "max": { "type": "integer", "minimum" : 1 },
+        "operator": { "type": "string", "enum": ["+", "*", "^"] },
+        "operand": { "type": "integer", "minimum" : 1 }
+      },
+      "additionalProperties": false
+
+    },
+    "resource_vertex_base": {
+      "description": "base schema for slot/other resource vertex",
+      "type": "object",
+      "required": ["type", "count"],
+      "properties": {
+        "type": { "type": "string" },
+        "count": {
+          "oneOf": [
+            { "type": "integer", "minimum" : 1 },
+            { "$ref": "#/definitions/complex_range" }
+          ]
+        },
+        "exclusive": { "type": "boolean" },
+        "with": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/resource_vertex" }
+        },
+        "id": { "type": "string" },
+        "unit": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "resource_vertex_slot": {
+      "description": "special slot resource type - label assigns to task slot",
+      "allOf": [
+        { "$ref": "#/definitions/resource_vertex_base" },
+        {
+          "properties": {
+            "type": { "enum": ["slot"] }
+          },
+          "required": ["label"]
+        }
+      ]
+    },
+    "resource_vertex_other": {
+      "description": "other (non-slot) resource type",
+      "allOf": [
+        { "$ref": "#/definitions/resource_vertex_base" },
+        {
+          "properties": {
+            "type": { "not": { "enum": ["slot"] } }
+          }
+        }
+      ]
+    },
+    "resource_vertex": {
+      "oneOf":[
+        { "$ref": "#/definitions/resource_vertex_slot" },
+        { "$ref": "#/definitions/resource_vertex_other" }
+      ]
+    }
+  },
+
+  "type": "object",
+  "required": ["version", "resources", "attributes", "tasks"],
+  "properties": {
+    "version": {
+      "description": "the jobspec version",
+      "type": "integer",
+      "enum": [1]
+    },
+    "resources": {
+      "description": "requested resources",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/resource_vertex" }
+    },
+    "attributes": {
+      "description": "system and user attributes",
+      "type": ["object", "null"],
+      "properties": {
+        "system": {
+          "type": "object",
+          "properties": {
+            "duration": { "type": "string" }
+          },
+          "additonalProperties": { "type": "string" }
+        },
+        "user": {
+          "type": "object",
+          "additonalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tasks": {
+      "description": "task configuration",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "slot", "count" ],
+        "properties": {
+          "command": {
+            "type": ["string", "array"],
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "slot": { "type": "string" },
+          "count": {
+            "type": "object",
+            "properties": {
+              "per_slot": { "type": "integer", "minimum" : 1 },
+              "total": { "type": "integer", "minimum" : 1 }
+            }
+          },
+          "distribution": { "type": "string" },
+          "attributes": {
+            "type": "object",
+	    "additionalProperties": { "type": "string" }
+          }
+        },
+	"additionalProperties": false
+      }
+    }
+  }
+}

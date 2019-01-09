@@ -59,6 +59,7 @@ TESTS = \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
 	t0017-security.t \
+	t0019-jobspec-schema.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1002-kvs-watch.t \
@@ -175,6 +176,7 @@ check_SCRIPTS = \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
 	t0017-security.t \
+	t0019-jobspec-schema.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1002-kvs-watch.t \

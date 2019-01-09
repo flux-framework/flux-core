@@ -12,7 +12,7 @@
 #include <fstream>
 #include <string>
 
-#include <flux/jobspec.hpp>
+#include "jobspec.hpp"
 #include <yaml-cpp/yaml.h>
 
 using namespace std;
