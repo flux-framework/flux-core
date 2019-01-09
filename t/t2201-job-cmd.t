@@ -16,6 +16,7 @@ fi
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 SUBMITBENCH="flux job submitbench $SUBMITBENCH_OPT_NONE"
+Y2J=${JOBSPEC}/y2j.py
 
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
@@ -30,8 +31,12 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
+test_expect_success 'flux-job: convert basic.yaml to JSON' '
+	${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
+'
+
 test_expect_success 'flux-job: submit one job to get one valid job in queue' '
-	validjob=$(${SUBMITBENCH} ${JOBSPEC}/valid/basic.yaml) &&
+	validjob=$(${SUBMITBENCH} basic.json) &&
 	echo Valid job is ${validjob}
 '
 
@@ -56,21 +61,20 @@ test_expect_success 'flux-job: submitbench with nonexistent jobpsec fails' '
 
 test_expect_success 'flux-job: submitbench with bad broker connection fails' '
 	! FLUX_URI=/wrong flux job submitbench \
-	    --sign-type=none \
-	    ${JOBSPEC}/valid/basic.yaml
+	    --sign-type=none basic.json
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'flux-job: submitbench with bad security config fails' '
 	test_must_fail flux job submitbench \
 	    --sign-type=none \
             --security-config=/nonexist \
-	    ${JOBSPEC}/valid/basic.yaml
+	    basic.json
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'flux-job: submitbench with bad sign type fails' '
 	test_must_fail flux job submitbench \
 	    --sign-type=notvalid \
-	    ${JOBSPEC}/valid/basic.yaml
+	    basic.json
 '
 
 test_expect_success 'flux-job: id without from/to args is dec to dec' '
