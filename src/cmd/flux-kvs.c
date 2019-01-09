@@ -215,6 +215,13 @@ static struct optparse_option copy_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option link_opts[] =  {
+    { .name = "link-namespace", .key = 'L', .has_arg = 1,
+      .usage = "Specify link's namespace",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "namespace-create",
       "name [name...]",
@@ -273,11 +280,11 @@ static struct optparse_subcommand subcommands[] = {
       unlink_opts
     },
     { "link",
-      "target linkname",
+      "[-L ns] target linkname",
       "Create a new name for target",
       cmd_link,
       0,
-      NULL
+      link_opts
     },
     { "readlink",
       "[-a treeobj] key [key...]",
@@ -889,6 +896,8 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
 int cmd_link (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *linkns = NULL;
+    const char *target, *linkname;
     int optindex;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
@@ -901,10 +910,14 @@ int cmd_link (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 2))
         log_msg_exit ("link: specify target and link_name");
 
+    linkns = optparse_get_str (p, "link-namespace", NULL);
+    target = argv[optindex];
+    linkname = argv[optindex + 1];
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_symlink (txn, 0, argv[optindex + 1], argv[optindex]) < 0)
-        log_err_exit ("%s", argv[optindex + 1]);
+    if (flux_kvs_txn_symlink (txn, 0, linkname, linkns, target) < 0)
+        log_err_exit ("%s", linkname);
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
