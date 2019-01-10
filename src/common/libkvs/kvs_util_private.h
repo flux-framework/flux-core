@@ -18,20 +18,6 @@
  */
 char *kvs_util_normalize_key (const char *key, bool *want_directory);
 
-/* Check if key contains a namespace within it with the "ns:X/" prefix
- * format, e.g.
- *
- * key_orig = "ns:foo/bar"
- *
- * Indicates a namespace of "foo" and the key "bar".  Returns 1 if
- * namespace prefix exists, 0 if not, -1 on error.  Returns prefix and
- * suffix in namespace_prefix and key_suffix appropriately.  Caller is
- * responsible for freeing memory from return pointers.
- */
-int kvs_namespace_prefix (const char *key,
-                          char **namespace_prefix,
-                          char **key_suffix);
-
 #endif  /* !_FLUX_KVS_UTIL_H */
 
 /*
