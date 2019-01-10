@@ -349,6 +349,37 @@ test_expect_success 'kvs: namespace prefix works across symlinks (user)' '
 '
 
 #
+# namespace link cross
+#
+
+test_expect_success 'kvs: namespace create works (owner, for user)' '
+	flux kvs namespace-create -o 9000 $NAMESPACETMP-NSLINK1 &&
+	flux kvs namespace-create -o 9001 $NAMESPACETMP-NSLINK2 &&
+	flux kvs namespace-create -o 9001 $NAMESPACETMP-NSLINK3
+'
+
+test_expect_success 'kvs: nslink works (owner)' '
+        flux kvs --namespace=${NAMESPACETMP}-NSLINK1 put $DIR.linktest=1 &&
+        flux kvs --namespace=${NAMESPACETMP}-NSLINK2 put $DIR.linktest=2 &&
+        flux kvs --namespace=${NAMESPACETMP}-NSLINK1 link --link-namespace=${NAMESPACETMP}-NSLINK2 $DIR.linktest $DIR.link &&
+        test_kvs_key_namespace ${NAMESPACETMP}-NSLINK1 $DIR.link 2
+'
+
+test_expect_success 'kvs: nslink fails (wrong user)' '
+        set_userid 9000 &&
+        ! flux kvs --namespace=${NAMESPACETMP}-NSLINK1 get $DIR.link &&
+        unset_userid
+'
+
+test_expect_success 'kvs: nslink works (user)' '
+        set_userid 9001 &&
+        flux kvs --namespace=${NAMESPACETMP}-NSLINK3 put $DIR.linktest=3 &&
+        flux kvs --namespace=${NAMESPACETMP}-NSLINK2 link --link-namespace=${NAMESPACETMP}-NSLINK3 $DIR.linktest $DIR.link &&
+        test_kvs_key_namespace ${NAMESPACETMP}-NSLINK2 $DIR.link 3 &&
+        unset_userid
+'
+
+#
 # Basic tests, user can't perform non-namespace operations
 #
 
