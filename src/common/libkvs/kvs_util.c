@@ -56,66 +56,6 @@ char *kvs_util_normalize_key (const char *key, bool *want_directory)
     return cpy;
 }
 
-int kvs_namespace_prefix (const char *key,
-                          char **namespace_prefix,
-                          char **key_suffix)
-{
-
-    if (key && !strncmp (key, "ns:", 3)) {
-        char *ptr;
-        char *cpy;
-
-        if (!(ptr = strchr (key + 3, '/'))) {
-            errno = EINVAL;
-            return -1;
-        }
-
-        /* Ensure user listed a namespace, i.e. not "ns:/" */
-        if (!((ptr - (key + 3)) > 0)) {
-            errno = EINVAL;
-            return -1;
-        }
-
-        /* Ensures user did not pass in key of "ns:X/",
-         * i.e. namespace only
-         */
-        if (*(ptr + 1) == '\0') {
-            errno = EINVAL;
-            return -1;
-        }
-
-        /* Ensure no chained namespaces */
-        if (strstr (ptr + 1, "ns:")) {
-            errno = EINVAL;
-            return -1;
-        }
-
-        if (!(cpy = strdup (key + 3))) {
-            errno = ENOMEM;
-            return -1;
-        }
-        (*(cpy + (ptr - (key + 3)))) = '\0';
-
-        if (key_suffix) {
-            char *keyptr = (cpy + (ptr - (key + 3)) + 1);
-            if (!((*key_suffix) = strdup (keyptr))) {
-                free (cpy);
-                errno = ENOMEM;
-                return -1;
-            }
-        }
-
-        if (namespace_prefix)
-            (*namespace_prefix) = cpy;
-        else
-            free (cpy);
-
-        return 1;
-    }
-
-    return 0;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
