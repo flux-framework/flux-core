@@ -7,7 +7,7 @@ test_description='Test flux job ingest service'
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
-if test -x ${FLUX_BUILD_DIR}/src/cmd/flux-jobspec-validate; then
+if test -x ${FLUX_BUILD_DIR}/src/common/libjobspec/test_validate; then
     test_set_prereq ENABLE_JOBSPEC
 fi
 if flux job submitbench --help 2>&1 | grep -q sign-type; then
