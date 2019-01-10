@@ -318,6 +318,37 @@ test_expect_success 'kvs: namespace remove still works (owner)' '
 '
 
 #
+# namespace link cross
+#
+
+test_expect_success 'kvs: namespace create works (owner, for user)' '
+	flux kvs namespace-create -o 9000 $NAMESPACETMP-SYMLINKNS1 &&
+	flux kvs namespace-create -o 9001 $NAMESPACETMP-SYMLINKNS2 &&
+	flux kvs namespace-create -o 9001 $NAMESPACETMP-SYMLINKNS3
+'
+
+test_expect_success 'kvs: symlink w/ Namespace works (owner)' '
+        flux kvs --namespace=${NAMESPACETMP}-SYMLINKNS1 put $DIR.linktest=1 &&
+        flux kvs --namespace=${NAMESPACETMP}-SYMLINKNS2 put $DIR.linktest=2 &&
+        flux kvs --namespace=${NAMESPACETMP}-SYMLINKNS1 link --target-namespace=${NAMESPACETMP}-SYMLINKNS2 $DIR.linktest $DIR.link &&
+        test_kvs_key_namespace ${NAMESPACETMP}-SYMLINKNS1 $DIR.link 2
+'
+
+test_expect_success 'kvs: symlinkw/ Namespace fails (wrong user)' '
+        set_userid 9000 &&
+        ! flux kvs --namespace=${NAMESPACETMP}-SYMLINKNS1 get $DIR.link &&
+        unset_userid
+'
+
+test_expect_success 'kvs: symlink w/ Namespace works (user)' '
+        set_userid 9001 &&
+        flux kvs --namespace=${NAMESPACETMP}-SYMLINKNS3 put $DIR.linktest=3 &&
+        flux kvs --namespace=${NAMESPACETMP}-SYMLINKNS2 link --target-namespace=${NAMESPACETMP}-SYMLINKNS3 $DIR.linktest $DIR.link &&
+        test_kvs_key_namespace ${NAMESPACETMP}-SYMLINKNS2 $DIR.link 3 &&
+        unset_userid
+'
+
+#
 # Basic tests, user can't perform non-namespace operations
 #
 
