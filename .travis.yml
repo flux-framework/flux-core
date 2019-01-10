@@ -75,7 +75,7 @@ jobs:
       compiler: gcc
       env:
        - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
-       - IMG=centos7-base
+       - IMG=centos7
        - DOCKER_TAG=t
        - PYTHON_VERSION=2.7
     - name: "Centos 7: py3.4 --with-flux-security"
@@ -83,7 +83,7 @@ jobs:
       compiler: gcc
       env:
        - ARGS="--with-flux-security --prefix=/usr"
-       - IMG=centos7-base
+       - IMG=centos7
        - PYTHON_VERSION=3.4
 
 stages:
@@ -109,7 +109,7 @@ before_install:
  - python -c 'import os,sys,fcntl; flags = fcntl.fcntl(sys.stdout, fcntl.F_GETFL); exit(flags&os.O_NONBLOCK);'
  # coveralls-lcov required only for coveralls upload:
  - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
- - if test -z "${IMG}"; then IMG="bionic-base"; fi
+ - if test -z "${IMG}"; then IMG="bionic"; fi
  #
  #  Tag image if this build is on master or result of a tag:
  - |
@@ -117,7 +117,7 @@ before_install:
     -a "$TRAVIS_REPO_SLUG" = "flux-framework/flux-core" \
     -a "$TRAVIS_PULL_REQUEST" = "false" \
     -a \( "$TRAVIS_BRANCH" = "master" -o -n "$TRAVIS_TAG" \); then
-     export TAGNAME="${DOCKERREPO}:${IMG}-${TRAVIS_TAG:-latest}"
+     export TAGNAME="${DOCKERREPO}:${IMG}${TRAVIS_TAG:+-${TRAVIS_TAG}}"
      echo "Tagging new image $TAGNAME"
   fi
 
@@ -142,8 +142,8 @@ after_success:
      echo "$DOCKER_PASSWORD" | \
        docker login -u "$DOCKER_USERNAME" --password-stdin && \
      docker push ${TAGNAME}
-     # If this is the bionic-base build, then also tag without image name:
-     if echo "$TAGNAME" | grep -q "bionic-base"; then
+     # If this is the bionic build, then also tag without image name:
+     if echo "$TAGNAME" | grep -q "bionic"; then
        t="${DOCKERREPO}:${TRAVIS_TAG:-latest}"
        docker tag "$TAGNAME" ${t} && \
        docker push ${t}

@@ -13,9 +13,9 @@ or a tagged version of flux-core.
 
 #### fluxrm/testenv Docker images
 
-The Dockerfiles under `bionic-base/Dockerfile` and
-`centos7-base/Dockerfile` describe the images built under the
-`fluxrm/testenv:bionic-base` and `fluxrm/testenv:centos7-base`
+The Dockerfiles under `bionic/Dockerfile` and
+`centos7/Dockerfile` describe the images built under the
+`fluxrm/testenv:bionic` and `fluxrm/testenv:centos7`
 respectively, and include the base dependencies required to build
 flux-core. These images are updated manually by flux-core maintainers, but
 the Dockerfiles should be kept up to date for a single point of management.
@@ -40,18 +40,18 @@ result in a temporary docker image being created during testing of the
 PR with the dependency installed.
 
 Later, a flux-core maintainer can move the dependency into the `testenv`
-Docker images `bionic-base/Dockerfile` and `centos7-base/Dockerfile`.
+Docker images `bionic/Dockerfile` and `centos7/Dockerfile`.
 These docker images should then be built by hand and manually
-pushed to DockerHub at `fluxrm/testenv:bionic-base` and
-`fluxrm/testenv:centos7-base`. Be sure to test that the `docker-run-test.sh`
+pushed to DockerHub at `fluxrm/testenv:bionic` and
+`fluxrm/testenv:centos7`. Be sure to test that the `docker-run-test.sh`
 script still runs against the new `testenv` images, e.g.:
 
 ```
-$ for i in bionic-base centos7-base; do
+$ for i in bionic centos7; do
     make clean &&
     docker build --no-cache -t fluxrm/testenv:$i src/test/docker/$i &&
     src/test/docker/docker-run-checks.sh -j 4 --image=$i &&
-    docker push fluxrm/testenv:bionic-base
+    docker push fluxrm/testenv:$i
    done
 ```
 
