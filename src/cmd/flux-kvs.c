@@ -1274,13 +1274,16 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
     while ((name = flux_kvsitr_next (itr))) {
         key = flux_kvsdir_key_at (dir, name);
         if (flux_kvsdir_issymlink (dir, name)) {
-            const char *link;
+            const char *ns = NULL;
+            const char *target = NULL;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get_symlink (f, NULL, &link) < 0)
+                    || flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
                 log_err_exit ("%s", key);
-            printf ("%s -> %s\n", key, link);
+            if (ns)
+                printf ("%s -> %s::%s\n", key, ns, target);
+            else
+                printf ("%s -> %s\n", key, target);
             flux_future_destroy (f);
-
         } else if (flux_kvsdir_isdir (dir, name)) {
             if (Ropt) {
                 const flux_kvsdir_t *ndir;
