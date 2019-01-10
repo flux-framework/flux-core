@@ -1274,7 +1274,14 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
             flux_future_destroy (f);
-
+        } else if (flux_kvsdir_isnslink (dir, name)) {
+            const char *namespace;
+            const char *link;
+            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
+                    || flux_kvs_lookup_get_nslink (f, &namespace, &link) < 0)
+                log_err_exit ("%s", key);
+            printf ("%s -> %s::%s\n", key, namespace, link);
+            flux_future_destroy (f);
         } else if (flux_kvsdir_isdir (dir, name)) {
             if (Ropt) {
                 const flux_kvsdir_t *ndir;
@@ -1442,7 +1449,8 @@ static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
         if (optparse_hasopt (p, "classify")) {
             if (flux_kvsdir_isdir (dir, name))
                 strcat (namebuf, ".");
-            else if (flux_kvsdir_issymlink (dir, name))
+            else if (flux_kvsdir_issymlink (dir, name)
+                     || flux_kvsdir_isnslink (dir, name))
                 strcat (namebuf, "@");
         }
         printf ("%s", namebuf);
@@ -1589,7 +1597,8 @@ static int categorize_key (optparse_t *p, const char *key,
         if (zlist_append (singles, xstrdup (key)) < 0)
             log_err_exit ("zlist_append");
     }
-    else if (treeobj_is_symlink (treeobj)) {
+    else if (treeobj_is_symlink (treeobj)
+             || treeobj_is_nslink (treeobj)) {
         if (require_directory) {
             fprintf (stderr, "%s: Not a directory\n", nkey);
             goto error;
