@@ -1211,23 +1211,13 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static char *process_key (const char *key, char **key_suffix)
+static char *process_key (const char *key)
 {
     char *nkey;
-    char *ptr;
 
     if (!(nkey = malloc (strlen (key) + 2))) // room for decoration char + null
         log_err_exit ("malloc");
     strcpy (nkey, key);
-
-    if (!strncmp (nkey, "ns:", 3)
-        && (ptr = strchr (nkey + 3, '/'))) {
-        /* No key suffix, decorate with default '.' */
-        if (*(ptr + 1) == '\0')
-            strcat (nkey, ".");
-        if (key_suffix)
-            (*key_suffix) = ptr + 1;
-    }
 
     return nkey;
 }
@@ -1323,9 +1313,9 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
     if (optindex == argc)
-        key = process_key (".", NULL);
+        key = ".";
     else if (optindex == (argc - 1))
-        key = process_key (argv[optindex], NULL);
+        key = argv[optindex];
     else
         log_msg_exit ("dir: specify zero or one directory");
 
@@ -1342,7 +1332,6 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
         log_err_exit ("%s", key);
     dump_kvs_dir (dir, maxcol, Ropt, dopt);
     flux_future_destroy (f);
-    free (key);
     return (0);
 }
 
@@ -1545,18 +1534,14 @@ static int categorize_key (optparse_t *p, const char *key,
     char *nkey;
     json_t *treeobj = NULL;
     bool require_directory = false;
-    char *key_ptr = NULL;
 
-    nkey = process_key (key, &key_ptr);
-
-    if (!key_ptr)
-        key_ptr = nkey;
+    nkey = process_key (key);
 
     /* If the key has a "." suffix, strip it off, but require
      * that the key be a directory type.
      */
-    while (strlen (key_ptr) > 1 && key_ptr[strlen (key_ptr) - 1] == '.') {
-        key_ptr[strlen (key_ptr) - 1] = '\0';
+    while (strlen (nkey) > 1 && nkey[strlen (nkey) - 1] == '.') {
+        nkey[strlen (nkey) - 1] = '\0';
         require_directory = true;
     }
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, nkey)))
