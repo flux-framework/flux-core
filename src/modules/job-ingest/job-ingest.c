@@ -22,9 +22,7 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/sign_none.h"
 
-#if HAVE_JOBSPEC
-#include "jobspec.h"
-#endif
+#include "validate.h"
 
 /* job-ingest takes in signed jobspec submitted through flux_job_submit(),
  * performing the following tasks for each job:
@@ -421,31 +419,6 @@ error:
     return -1;
 }
 
-/* Simply ensure that jobspec is valid JSON.
- * For the time being, RFC 14 validation is performed by
- * the C++ validator.
- */
-static int jobspec_validate_json (const char *buf, int len,
-                                  char *errbuf, int errbufsz)
-{
-    json_t *o;
-    json_error_t error;
-
-    if (!(o = json_loadb (buf, len, 0, &error))) {
-        (void)snprintf (errbuf, errbufsz,
-                        "jobspec: invalid JSON: %s", error.text);
-        return -1;
-    }
-    if (!json_is_object (o)) {
-        (void)snprintf (errbuf, errbufsz,
-                        "jobspec: not a JSON object");
-        json_decref (o);
-        return 0;
-    }
-    json_decref (o);
-    return 0;
-}
-
 /* Handle "job-ingest.submit" request to add a new job.
  * Unwrap the signed jobspec and compare claimed userid to authenticated
  * userid from request (they must match).  Signature does not need to be
@@ -470,6 +443,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     int priority;
     int64_t userid_signer;
     const char *mech_type;
+    flux_future_t *f = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:i s:i}",
                              "J", &J,
@@ -542,19 +516,12 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
-    if (jobspec_validate_json (jobspec, jobspecsz,
-                               errbuf, sizeof (errbuf)) < 0) {
-        errmsg = errbuf;
-        errno = EINVAL;
+    if (!(f = validate_jobspec (h, jobspec, jobspecsz)))
+        goto error;
+    if (flux_future_get (f, NULL) < 0) {
+        errmsg = flux_future_error_string (f);
         goto error;
     }
-#if HAVE_JOBSPEC
-    if (jobspec_validate (jobspec, jobspecsz, errbuf, sizeof (errbuf)) < 0) {
-        errmsg = errbuf;
-        errno = EINVAL;
-        goto error;
-    }
-#endif
     if (!ctx->batch) {
         if (!(ctx->batch = batch_create (ctx)))
             goto error;
@@ -569,6 +536,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     free (jobspec_cpy);
+    flux_future_destroy (f);
     return;
 error:
     if (errmsg)
@@ -578,6 +546,7 @@ error:
     if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (jobspec_cpy);
+    flux_future_destroy (f);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
