@@ -364,22 +364,6 @@ test_expect_success 'kvs: put - namespace specified in command line overrides en
 '
 
 #
-# Namespace prefix tests
-#
-
-test_expect_success 'kvs: namespace prefix setup' '
-	flux kvs namespace-create $NAMESPACEPREFIX-1 &&
-	flux kvs namespace-create $NAMESPACEPREFIX-2
-'
-
-test_expect_success 'kvs: namespace prefix works across symlinks' '
-        flux kvs --namespace=${NAMESPACEPREFIX}-1 put $DIR.linktest=1 &&
-        flux kvs --namespace=${NAMESPACEPREFIX}-2 put $DIR.linktest=2 &&
-        flux kvs --namespace=${NAMESPACEPREFIX}-1 link ns:${NAMESPACEPREFIX}-2/$DIR.linktest $DIR.link &&
-        test_kvs_key_namespace ${NAMESPACEPREFIX}-1 $DIR.link 2
-'
-
-#
 # Namespace corner case tests
 #
 

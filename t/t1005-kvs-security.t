@@ -318,37 +318,6 @@ test_expect_success 'kvs: namespace remove still works (owner)' '
 '
 
 #
-# Namespace prefix tests
-#
-
-test_expect_success 'kvs: namespace create works (owner, for user)' '
-	flux kvs namespace-create -o 9000 $NAMESPACETMP-PREFIX1 &&
-	flux kvs namespace-create -o 9001 $NAMESPACETMP-PREFIX2 &&
-	flux kvs namespace-create -o 9001 $NAMESPACETMP-PREFIX3
-'
-
-test_expect_success 'kvs: namespace prefix works across symlinks (owner)' '
-        flux kvs --namespace=${NAMESPACETMP}-PREFIX1 put $DIR.linktest=1 &&
-        flux kvs --namespace=${NAMESPACETMP}-PREFIX2 put $DIR.linktest=2 &&
-        flux kvs --namespace=${NAMESPACETMP}-PREFIX1 link ns:${NAMESPACETMP}-PREFIX2/$DIR.linktest $DIR.link &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX1 $DIR.link 2
-'
-
-test_expect_success 'kvs: namespace prefix fails across symlinks (wrong user)' '
-        set_userid 9000 &&
-        ! flux kvs --namespace=${NAMESPACETMP}-PREFIX1 get $DIR.link &&
-        unset_userid
-'
-
-test_expect_success 'kvs: namespace prefix works across symlinks (user)' '
-        set_userid 9001 &&
-        flux kvs --namespace=${NAMESPACETMP}-PREFIX3 put $DIR.linktest=3 &&
-        flux kvs --namespace=${NAMESPACETMP}-PREFIX2 link ns:${NAMESPACETMP}-PREFIX3/$DIR.linktest $DIR.link &&
-        test_kvs_key_namespace ${NAMESPACETMP}-PREFIX2 $DIR.link 3 &&
-        unset_userid
-'
-
-#
 # namespace link cross
 #
 
