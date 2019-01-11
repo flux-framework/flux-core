@@ -80,9 +80,20 @@ struct job_ingest_ctx {
 };
 
 struct job {
-    fluid_t id;
-    char idstr[32];
-    flux_msg_t *msg;    // orig. request message
+    fluid_t id;         // jobid
+    char idstr[32];     // DOTHEX rendition of jobid
+
+    flux_msg_t *msg;    // copy of submit request message
+    const char *J;      // signed jobspec
+    uint32_t userid;    // submitting userid
+    uint32_t rolemask;  // submitting rolemask
+    int priority;       // requested job priority
+    int flags;          // submit flags
+
+    char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
+    int jobspecsz;      // jobspec string length
+
+    struct job_ingest_ctx *ctx;
 };
 
 struct batch {
@@ -94,41 +105,63 @@ struct batch {
 
 static int make_key (char *buf, int bufsz, struct job *job, const char *name);
 
+static void job_clean (struct job *job)
+{
+    if (job) {
+        free (job->jobspec);
+        job->jobspec = NULL;
+        (void)flux_msg_set_payload (job->msg, NULL, 0);
+        job->J = NULL;
+    }
+}
 
 static void job_destroy (struct job *job)
 {
     if (job) {
         int saved_errno = errno;
+        free (job->jobspec);
         flux_msg_destroy (job->msg);
         free (job);
         errno = saved_errno;
     }
 }
 
-/* Create a 'struct job', assigning its job id and pre-caching
- * its DOTHEX encoding.  Original submit request message is copied
- * and stuck here for delayed response.
- */
-static struct job *job_create (struct fluid_generator *gen,
-                               const flux_msg_t *msg)
+static struct job *job_create (const flux_msg_t *msg,
+                               struct job_ingest_ctx *ctx)
 {
     struct job *job;
 
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
-    if (fluid_generate (gen, &job->id) < 0)
-        goto error_inval;
-    if (fluid_encode (job->idstr, sizeof (job->idstr), job->id,
-                      FLUID_STRING_DOTHEX) < 0)
-        goto error_inval;
-    if (!(job->msg = flux_msg_copy (msg, false)))
+    if (!(job->msg = flux_msg_copy (msg, true)))
         goto error;
+    if (flux_request_unpack (job->msg, NULL, "{s:s s:i s:i}",
+                             "J", &job->J,
+                             "priority", &job->priority,
+                             "flags", &job->flags) < 0)
+        goto error;
+    if (flux_msg_get_userid (job->msg, &job->userid) < 0)
+        goto error;
+    if (flux_msg_get_rolemask (job->msg, &job->rolemask) < 0)
+        goto error;
+    job->ctx = ctx;
     return job;
-error_inval:
-    errno = EINVAL;
 error:
     job_destroy (job);
     return NULL;
+}
+
+static int job_assign_id (struct job *job, struct fluid_generator *gen)
+{
+    if (fluid_generate (gen, &job->id) < 0)
+        goto error;
+    if (fluid_encode (job->idstr, sizeof (job->idstr), job->id,
+                      FLUID_STRING_DOTHEX) < 0)
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
 }
 
 static void batch_destroy (struct batch *batch)
@@ -358,9 +391,7 @@ static int get_timestamp_now (double *timestamp)
 /* Add 'job' to 'batch'.
  * On error, ensure that no remnants of job made into KVS transaction.
  */
-static int batch_add_job (struct batch *batch, struct job *job,
-                          const char *J, uint32_t userid, int priority,
-                          const char *jobspec, int jobspecsz)
+static int batch_add_job (struct batch *batch, struct job *job)
 {
     char key[64];
     int saved_errno;
@@ -374,19 +405,20 @@ static int batch_add_job (struct batch *batch, struct job *job,
     }
     if (make_key (key, sizeof (key), job, "J-signed") < 0)
         goto error;
-    if (flux_kvs_txn_put (batch->txn, 0, key, J) < 0)
+    if (flux_kvs_txn_put (batch->txn, 0, key, job->J) < 0)
         goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
-    if (flux_kvs_txn_put_raw (batch->txn, 0, key, jobspec, jobspecsz) < 0)
+    if (flux_kvs_txn_put_raw (batch->txn, 0, key,
+                              job->jobspec, job->jobspecsz) < 0)
         goto error;
     if (make_key (key, sizeof (key), job, "userid") < 0)
         goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", userid) < 0)
+    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", job->userid) < 0)
         goto error;
     if (make_key (key, sizeof (key), job, "priority") < 0)
         goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", priority) < 0)
+    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", job->priority) < 0)
         goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;
@@ -397,8 +429,8 @@ static int batch_add_job (struct batch *batch, struct job *job,
     if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, event) < 0)
         goto error;
     if (!(jobentry = json_pack ("{s:I s:i s:i s:f}", "id", job->id,
-                                                     "userid", userid,
-                                                     "priority", priority,
+                                                     "userid", job->userid,
+                                                     "priority", job->priority,
                                                      "t_submit", t)))
         goto nomem;
     if (json_array_append_new (batch->joblist, jobentry) < 0) {
@@ -406,6 +438,7 @@ static int batch_add_job (struct batch *batch, struct job *job,
         goto nomem;
     }
     free (event);
+    job_clean (job); // batch->txn now holds this info
     return 0;
 nomem:
     errno = ENOMEM;
@@ -419,53 +452,81 @@ error:
     return -1;
 }
 
+void validate_continuation (flux_future_t *f, void *arg)
+{
+    struct job *job = arg;
+    struct job_ingest_ctx *ctx = job->ctx;
+    flux_t *h = flux_future_get_flux (f);
+    const char *errmsg = NULL;
+    int rc;
+
+    /* If jobspec validation failed, respond immediately to the user.
+     */
+    if (flux_future_get (f, NULL) < 0) {
+        errmsg = flux_future_error_string (f);
+        goto error;
+    }
+    if (job_assign_id (job, &ctx->gen) < 0)
+        goto error;
+    /* Add job to the current "batch" of new jobs, creating the batch if
+     * one doesn't exist already.  Submit is finalized upon timer expiration.
+     */
+    if (!ctx->batch) {
+        if (!(ctx->batch = batch_create (ctx)))
+            goto error;
+        flux_timer_watcher_reset (ctx->timer, batch_timeout, 0.);
+        flux_watcher_start (ctx->timer);
+    }
+    if (batch_add_job (ctx->batch, job) < 0)
+        goto error;
+    return;
+error:
+    if (errmsg)
+        rc = flux_respond_error (h, job->msg, errno, "%s", errmsg);
+    else
+        rc = flux_respond_error (h, job->msg, errno, NULL);
+    if (rc < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    job_destroy (job);
+    flux_future_destroy (f);
+}
+
 /* Handle "job-ingest.submit" request to add a new job.
- * Unwrap the signed jobspec and compare claimed userid to authenticated
- * userid from request (they must match).  Signature does not need to be
- * verified here.  Add job to a batch of new jobs that will be committed
- * after a timer expires.
  */
 static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
-    int flags;
-    struct job *job = NULL;
-    const char *J;
-    const char *jobspec;
-    char *jobspec_cpy = NULL;
+    struct job *job;
     const char *errmsg = NULL;
     char errbuf[256];
-    int jobspecsz;
-    int rc;
-    uint32_t userid;
-    uint32_t rolemask;
-    int priority;
     int64_t userid_signer;
     const char *mech_type;
     flux_future_t *f = NULL;
+    int rc;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i}",
-                             "J", &J,
-                             "priority", &priority,
-                             "flags", &flags) < 0)
+    /* Parse request.
+     */
+    if (!(job = job_create (msg, ctx)))
         goto error;
-    if (flags != 0) {
+    /* Validate submit flags.
+     */
+    if (job->flags != 0) {
         errno = EPROTO;
         goto error;
     }
-    if (flux_msg_get_userid (msg, &userid) < 0)
-        goto error;
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
-        goto error;
-    if (priority < FLUX_JOB_PRIORITY_MIN || priority > FLUX_JOB_PRIORITY_MAX) {
+    /* Validate requested job priority.
+     */
+    if (job->priority < FLUX_JOB_PRIORITY_MIN
+            || job->priority > FLUX_JOB_PRIORITY_MAX) {
         snprintf (errbuf, sizeof (errbuf), "priority range is [%d:%d]",
                   FLUX_JOB_PRIORITY_MIN, FLUX_JOB_PRIORITY_MAX);
         errmsg = errbuf;
         errno = EINVAL;
         goto error;
     }
-    if (!(rolemask & FLUX_ROLE_OWNER) && priority > FLUX_JOB_PRIORITY_DEFAULT) {
+    if (!(job->rolemask & FLUX_ROLE_OWNER)
+           && job->priority > FLUX_JOB_PRIORITY_DEFAULT) {
         snprintf (errbuf, sizeof (errbuf),
                   "only the instance owner can submit with priority >%d",
                   FLUX_JOB_PRIORITY_DEFAULT);
@@ -473,70 +534,58 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto error;
     }
+    /* Validate jobspec signature, and unwrap(J) -> jobspec,  jobspecsz.
+     * Userid claimed by signature must match authenticated job->userid.
+     * If not the instance owner, a strong signature is required
+     * to give the IMP permission to launch processes on behalf of the user.
+     */
 #if HAVE_FLUX_SECURITY
-    if (flux_sign_unwrap_anymech (ctx->sec, J, (const void **)&jobspec,
-                                  &jobspecsz, &mech_type, &userid_signer,
+    const void *jobspec;
+    if (flux_sign_unwrap_anymech (ctx->sec, job->J, &jobspec, &job->jobspecsz,
+                                  &mech_type, &userid_signer,
                                   FLUX_SIGN_NOVERIFY) < 0) {
         errmsg = flux_security_last_error (ctx->sec);
         goto error;
     }
+    if (!(job->jobspec = malloc (job->jobspecsz)))
+        goto error;
+    memcpy (job->jobspec, jobspec, job->jobspecsz);
 #else
     uint32_t userid_signer_u32;
     /* Simplified unwrap only understands mech=none.
      * Unlike flux-security version, returned payload must be freed,
      * and returned userid is a uint32_t.
      */
-    if (sign_none_unwrap (J, (void **)&jobspec_cpy, &jobspecsz,
+    if (sign_none_unwrap (job->J, (void **)&job->jobspec, &job->jobspecsz,
                           &userid_signer_u32) < 0) {
         errmsg = "could not unwrap jobspec";
         goto error;
     }
     mech_type = "none";
-    jobspec = jobspec_cpy;
     userid_signer = userid_signer_u32;
 #endif
-    /* If the signature claims to be a user other than the submitting user,
-     * do not allow that.
-     */
-    if (userid_signer != userid) {
+    if (userid_signer != job->userid) {
         snprintf (errbuf, sizeof (errbuf),
                   "signer=%lu != requestor=%lu",
-                  (unsigned long)userid_signer, (unsigned long)userid);
+                  (unsigned long)userid_signer, (unsigned long)job->userid);
         errmsg = errbuf;
         errno = EPERM;
         goto error;
     }
-    /* If not the instance owner, a strong signature is required
-     * to give the imp permission to launch processes as the user.
-     */
-    if (!(rolemask & FLUX_ROLE_OWNER) && !strcmp (mech_type, "none")) {
+    if (!(job->rolemask & FLUX_ROLE_OWNER) && !strcmp (mech_type, "none")) {
         snprintf (errbuf, sizeof (errbuf),
                   "only instance owner can use sign-type=none");
         errmsg = errbuf;
         errno = EPERM;
         goto error;
     }
-    if (!(f = validate_jobspec (h, jobspec, jobspecsz)))
+    /* Validate jobspec asynchronously.
+     * Continue submission process in validate_continuation().
+     */
+    if (!(f = validate_jobspec (h, job->jobspec, job->jobspecsz)))
         goto error;
-    if (flux_future_get (f, NULL) < 0) {
-        errmsg = flux_future_error_string (f);
+    if (flux_future_then (f, -1., validate_continuation, job) < 0)
         goto error;
-    }
-    if (!ctx->batch) {
-        if (!(ctx->batch = batch_create (ctx)))
-            goto error;
-        flux_timer_watcher_reset (ctx->timer, batch_timeout, 0.);
-        flux_watcher_start (ctx->timer);
-    }
-    if (!(job = job_create (&ctx->gen, msg)))
-        goto error;
-    if (batch_add_job (ctx->batch, job, J, userid, priority,
-                       jobspec, jobspecsz) < 0) {
-        job_destroy (job);
-        goto error;
-    }
-    free (jobspec_cpy);
-    flux_future_destroy (f);
     return;
 error:
     if (errmsg)
@@ -545,7 +594,7 @@ error:
         rc = flux_respond_error (h, msg, errno, NULL);
     if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    free (jobspec_cpy);
+    job_destroy (job);
     flux_future_destroy (f);
 }
 
