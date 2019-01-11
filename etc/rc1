@@ -18,6 +18,9 @@ flux module load -r 0 userdb ${FLUX_USERDB_OPTIONS}
 # make flux wreckrun/submit -onokz the default (override w/ -o kz):
 flux wreck setopt nokz
 
+flux module load -r all job-ingest
+flux module load -r 0 job-manager
+
 wait $pids
 
 core_dir=$(cd ${0%/*} && pwd -P)
