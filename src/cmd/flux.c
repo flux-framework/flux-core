@@ -199,6 +199,9 @@ int main (int argc, char *argv[])
     environment_from_env (env, "FLUX_WREXECD_PATH",
                           flux_conf_get ("wrexecd_path", flags), 0);
 
+    if ((flags & CONF_FLAG_INTREE))
+        environment_push (env, "FLUX_CONF_INTREE", "1");
+
     environment_apply(env);
     optparse_set_data (p, "env", env);
 

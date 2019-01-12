@@ -42,6 +42,10 @@ static struct config default_config[] = {
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
     { "rundir",         INSTALLED_RUNDIR,           NULL },
     { "bindir",         INSTALLED_BINDIR,           INTREE_BINDIR },
+    { "jobspec_validate_path", INSTALLED_JOBSPEC_VALIDATE_PATH,
+                                            INTREE_JOBSPEC_VALIDATE_PATH },
+    { "jobspec_schema_path", INSTALLED_JOBSPEC_SCHEMA_PATH,
+                                            INTREE_JOBSPEC_SCHEMA_PATH },
     { NULL, NULL, NULL },
 };
 
