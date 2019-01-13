@@ -69,6 +69,7 @@ const double batch_timeout = 0.01;
 
 struct job_ingest_ctx {
     flux_t *h;
+    struct validate *validate;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
 #endif
@@ -479,6 +480,7 @@ void validate_continuation (flux_future_t *f, void *arg)
     }
     if (batch_add_job (ctx->batch, job) < 0)
         goto error;
+    flux_future_destroy (f);
     return;
 error:
     if (errmsg)
@@ -582,7 +584,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     /* Validate jobspec asynchronously.
      * Continue submission process in validate_continuation().
      */
-    if (!(f = validate_jobspec (h, job->jobspec, job->jobspecsz)))
+    if (!(f = validate_jobspec (ctx->validate, job->jobspec, job->jobspecsz)))
         goto error;
     if (flux_future_then (f, -1., validate_continuation, job) < 0)
         goto error;
@@ -643,6 +645,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log (h, LOG_ERR, "fluid_init failed");
         errno = EINVAL;
     }
+    if (!(ctx.validate = validate_create (h))) {
+        flux_log_error (h, "validate_create");
+        goto done;
+    }
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
@@ -654,6 +660,7 @@ done:
 #if HAVE_FLUX_SECURITY
     flux_security_destroy (ctx.sec);
 #endif
+    validate_destroy (ctx.validate);
     return rc;
 }
 

@@ -8,21 +8,22 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _JOB_INGEST_VALIDATE_H
-#define _JOB_INGEST_VALIDATE_H
+#ifndef _JOB_INGEST_WORKER_H
+#define _JOB_INGEST_WORKER_H
 
 #include <flux/core.h>
 
-struct validate *v;
+struct worker;
 
-/* Submit jobspec ('buf, 'len') for validation.
- * Future is fulfilled once validation is complete.
- */
-flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len);
+flux_future_t *worker_request (struct worker *w, const char *s);
 
-struct validate *validate_create (flux_t *h);
+int worker_queue_depth (struct worker *w);
+bool worker_is_running (struct worker *w);
 
-void validate_destroy (struct validate *v);
+void worker_destroy (struct worker *w);
+struct worker *worker_create (flux_t *h, double inactivity_timeout,
+                              int argc, char **argv);
+
 
 #endif /* !_JOB_INGEST_VALIDATE_H */
 
