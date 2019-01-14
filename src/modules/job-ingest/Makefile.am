@@ -28,6 +28,9 @@ job_ingest_la_LIBADD = $(fluxmod_libadd) \
 		    $(FLUX_SECURITY_LIBS) \
 		    $(ZMQ_LIBS)
 
+dist_fluxlibexec_SCRIPTS = \
+	validators/validate-schema.py
+
 if ENABLE_JOBSPEC
 job_ingest_la_SOURCES += jobspec_wrap.cpp jobspec.h
 job_ingest_la_LIBADD += \
