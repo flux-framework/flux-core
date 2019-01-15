@@ -35,13 +35,3 @@ dist_fluxlibexec_SCRIPTS = \
 
 fluxschemadir = $(datadir)/flux/schema/jobspec/
 dist_fluxschema_DATA = schemas/jobspec.jsonschema
-
-if ENABLE_JOBSPEC
-fluxlibexec_PROGRAMS = \
-	validators/validate-jobspec
-validators_validate_jobspec_SOURCES = \
-	validators/validate-jobspec.cpp
-validators_validate_jobspec_LDADD = \
-	$(top_builddir)/src/common/libjobspec/libjobspec.la \
-        $(YAMLCPP_LIBS) $(JANSSON_LIBS)
-endif

@@ -15,10 +15,6 @@ SUBDIRS = libtap \
 	  libkz \
           libsubprocess
 
-if ENABLE_JOBSPEC
-SUBDIRS += libjobspec
-endif
-
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
 
