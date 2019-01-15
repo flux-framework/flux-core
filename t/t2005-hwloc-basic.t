@@ -118,15 +118,6 @@ test_expect_success 'hwloc: no broken down resource info by default' '
     test_must_fail flux kvs get --json resource.hwloc.by_rank.0.Machine_0.OSName
 '
 
-test_expect_success 'hwloc: reload --walk-topology=yes works' '
-    flux hwloc reload --walk-topology=yes &&
-    flux kvs get --json resource.hwloc.by_rank.0.Machine_0.OSName
-'
-test_expect_success 'hwloc: reload --walk-topology=no removes broken down topo' '
-    flux hwloc reload --walk-topology=no &&
-    test_must_fail flux kvs get --json resource.hwloc.by_rank.0.Machine_0.OSName
-'
-
 test_expect_success 'hwloc: reload fails on invalid rank' '
     flux hwloc reload -r $(invalid_rank) 2> stderr &&
     grep "No route to host" stderr
