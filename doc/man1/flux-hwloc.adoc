@@ -58,12 +58,6 @@ Options:
  Only reload XML on provided 'NODESET'.  See NODESET FORMAT below for
  more information.
 
- --walk-topology=['yes|no']:::
- -t ['yes|no']:::
- If 'yes', force resource-hwloc module to walk full topology on each reloaded
- rank and insert broken down topology into KVS under. If 'no', force disable
- the topology walk if enabled by default in module.
-
 *topology*::
 Dump current aggregate topology XML for the current session to stdout.
 
