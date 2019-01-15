@@ -12,6 +12,9 @@ for rcdir in $all_dirs; do
 done
 shopt -u nullglob
 
+flux module remove -r 0 job-manager
+flux module remove -r all job-ingest
+
 if PERSISTDIR=$(flux getattr persist-directory 2>/dev/null); then
     flux wreck ls >${PERSISTDIR}/joblog 2>/dev/null || :
 fi

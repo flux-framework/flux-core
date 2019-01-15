@@ -275,7 +275,8 @@ check_PROGRAMS = \
 	reactor/reactorcat \
 	rexec/rexec \
 	rexec/rexec_signal \
-	rexec/rexec_ps
+	rexec/rexec_ps \
+	ingest/submitbench
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -485,3 +486,8 @@ ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
 ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 ingest_job_manager_dummy_la_LIBADD = \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+ingest_submitbench_SOURCES = ingest/submitbench.c
+ingest_submitbench_CPPFLAGS = $(test_cppflags)
+ingest_submitbench_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)

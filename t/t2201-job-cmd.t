@@ -8,14 +8,11 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
-if flux job submitbench --help 2>&1 | grep -q sign-type; then
+if flux job submit --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
-    SUBMITBENCH_OPT_R="--reuse-signature"
-    SUBMITBENCH_OPT_NONE="--sign-type=none"
 fi
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
-SUBMITBENCH="flux job submitbench $SUBMITBENCH_OPT_NONE"
 Y2J=${JOBSPEC}/y2j.py
 
 # 2^64 - 1
@@ -36,7 +33,7 @@ test_expect_success 'flux-job: convert basic.yaml to JSON' '
 '
 
 test_expect_success 'flux-job: submit one job to get one valid job in queue' '
-	validjob=$(${SUBMITBENCH} basic.json) &&
+	validjob=$(flux job submit basic.json) &&
 	echo Valid job is ${validjob}
 '
 
@@ -50,31 +47,32 @@ test_expect_success 'flux-job: missing sub-command fails with usage message' '
 	grep -q Usage: usage2.out
 '
 
-test_expect_success 'flux-job: submitbench with no jobspec fails with usage' '
-	test_must_fail flux job submitbench 2>usage3.out &&
-	grep -q Usage: usage3.out
+test_expect_success 'flux-job: submit with nonexistent jobpsec fails' '
+	test_must_fail flux job submit /noexist
 '
 
-test_expect_success 'flux-job: submitbench with nonexistent jobpsec fails' '
-	test_must_fail flux job submitbench /noexist
+test_expect_success 'flux-job: submit with bad broker connection fails' '
+	! FLUX_URI=/wrong flux job submit basic.json
 '
 
-test_expect_success 'flux-job: submitbench with bad broker connection fails' '
-	! FLUX_URI=/wrong flux job submitbench \
-	    --sign-type=none basic.json
-'
-
-test_expect_success HAVE_FLUX_SECURITY 'flux-job: submitbench with bad security config fails' '
-	test_must_fail flux job submitbench \
-	    --sign-type=none \
+test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit with bad security config fails' '
+	test_must_fail flux job submit \
             --security-config=/nonexist \
 	    basic.json
 '
 
-test_expect_success HAVE_FLUX_SECURITY 'flux-job: submitbench with bad sign type fails' '
-	test_must_fail flux job submitbench \
+test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit with bad sign type fails' '
+	test_must_fail flux job submit \
 	    --sign-type=notvalid \
 	    basic.json
+'
+
+test_expect_success 'flux-job: can submit jobspec on stdin with -' '
+        flux job submit - <basic.json
+'
+
+test_expect_success 'flux-job: can submit jobspec on stdin without -' '
+        flux job submit <basic.json
 '
 
 test_expect_success 'flux-job: id without from/to args is dec to dec' '

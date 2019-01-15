@@ -7,10 +7,8 @@ test_description='Test flux job manager service'
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
-if flux job submitbench --help 2>&1 | grep -q sign-type; then
+if flux job submit --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
-    SUBMITBENCH_OPT_R="--reuse-signature"
-    SUBMITBENCH_OPT_NONE="--sign-type=none"
 fi
 
 test_under_flux 4 kvs
@@ -18,7 +16,6 @@ test_under_flux 4 kvs
 flux setattr log-stderr-level 1
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
-SUBMITBENCH="flux job submitbench $SUBMITBENCH_OPT_NONE"
 Y2J=${JOBSPEC}/y2j.py
 
 test_expect_success 'flux-job: convert basic.yaml to JSON' '
@@ -31,7 +28,7 @@ test_expect_success 'job-manager: load job-ingest, job-manager' '
 '
 
 test_expect_success 'job-manager: submit one job' '
-	${SUBMITBENCH} basic.json >submit1.out
+	flux job submit basic.json >submit1.out
 '
 
 test_expect_success 'job-manager: queue contains 1 job' '
@@ -65,9 +62,9 @@ test_expect_success 'job-manager: queue contains 0 jobs' '
 '
 
 test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
-	${SUBMITBENCH} -p0  basic.json >submit_min.out &&
-	${SUBMITBENCH}      basic.json >submit_def.out &&
-	${SUBMITBENCH} -p31 basic.json >submit_max.out
+	flux job submit -p0  basic.json >submit_min.out &&
+	flux job submit      basic.json >submit_def.out &&
+	flux job submit -p31 basic.json >submit_max.out
 '
 
 test_expect_success 'job-manager: queue contains 3 jobs' '
@@ -105,7 +102,10 @@ test_expect_success 'job-manager: queue contains 0 jobs' '
 '
 
 test_expect_success 'job-manager: submit 10 jobs of equal priority' '
-	${SUBMITBENCH} -r10 basic.json >submit10.out
+	rm -f submit10.out &&
+	for i in $(seq 1 10); do \
+	    flux job submit basic.json >>submit10.out; \
+	done
 '
 
 test_expect_success 'job-manager: jobs are listed in submit order' '
@@ -152,7 +152,7 @@ test_expect_success 'job-manager: purge jobs' '
 '
 
 test_expect_success 'job-manager: flux job priority fails on invalid priority' '
-	jobid=$(${SUBMITBENCH} basic.json) &&
+	jobid=$(flux job submit basic.json) &&
 	flux job priority ${jobid} 31 &&
 	test_must_fail flux job priority ${jobid} -1 &&
 	test_must_fail flux job priority ${jobid} 32 &&
@@ -160,31 +160,31 @@ test_expect_success 'job-manager: flux job priority fails on invalid priority' '
 '
 
 test_expect_success 'job-manager: guest can reduce priority from default' '
-	jobid=$(${SUBMITBENCH} basic.json) &&
+	jobid=$(flux job submit  basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 5 &&
 	flux job purge ${jobid}
 '
 
 test_expect_success 'job-manager: guest can increase to default' '
-	jobid=$(${SUBMITBENCH} -p 0 basic.json) &&
+	jobid=$(flux job submit -p 0 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 16 &&
 	flux job purge ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot increase past default' '
-	jobid=$(${SUBMITBENCH} basic.json) &&
+	jobid=$(flux job submit basic.json) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
 	flux job purge ${jobid}
 '
 
 test_expect_success 'job-manager: guest can decrease from from >default' '
-	jobid=$(${SUBMITBENCH} -p 31 basic.json) &&
+	jobid=$(flux job submit -p 31 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
 	flux job purge ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot set priority of others jobs' '
-	jobid=$(${SUBMITBENCH} basic.json) &&
+	jobid=$(flux job submit basic.json) &&
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
 		flux job priority ${jobid} 0 &&
@@ -192,7 +192,7 @@ test_expect_success 'job-manager: guest cannot set priority of others jobs' '
 '
 
 test_expect_success 'job-manager: guest cannot purge others jobs' '
-	jobid=$(${SUBMITBENCH} basic.json) &&
+	jobid=$(flux job submit basic.json) &&
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
 		flux job purge ${jobid} &&
