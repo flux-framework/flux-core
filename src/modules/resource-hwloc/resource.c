@@ -29,7 +29,6 @@ typedef struct
     uint32_t rank;
     hwloc_topology_t topology;
     bool loaded;
-    bool walk_topology;
 } resource_ctx_t;
 
 static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
@@ -182,97 +181,6 @@ static char *escape_kvs_key (const char *key)
     return ret_str;
 }
 
-static char *escape_and_join_kvs_path (const char *base,
-                                       int64_t num_suffixes,
-                                       ...)
-{
-    int64_t i;
-    va_list varargs;
-    char *ret_str = base ? xstrdup (base) : NULL;
-    va_start (varargs, num_suffixes);
-    for (i = 0; i < num_suffixes; i++) {
-        char *tmp = ret_str;
-        char *suffix = va_arg (varargs, char *);
-        if (!suffix || !strlen (suffix))
-            continue;
-
-        suffix = escape_kvs_key (suffix);
-
-        if (!ret_str || !strlen (ret_str))
-            ret_str = xstrdup (suffix);
-        else
-            ret_str = xasprintf ("%s.%s", ret_str, suffix);
-        free (suffix);
-        free (tmp);
-    }
-    va_end (varargs);
-    return ret_str;
-}
-
-static int walk_topology (flux_t *h,
-                          hwloc_topology_t topology,
-                          hwloc_obj_t obj,
-                          const char *path,
-                          flux_kvs_txn_t *txn)
-{
-    int ret = -1;
-    int size_buf = hwloc_obj_attr_snprintf (NULL, 0, obj, ":-!:", 1) + 1;
-    int size_type = hwloc_obj_type_snprintf (NULL, 0, obj, 1) + 1;
-    char *os_index_path, *new_path = NULL, *token = NULL, *end = NULL;
-    char *buf = xzmalloc (size_buf);
-    char *type = xzmalloc (size_type);
-    hwloc_obj_t prev = NULL;
-
-    hwloc_obj_attr_snprintf (buf, size_buf, obj, ":-!:", 1);
-    hwloc_obj_type_snprintf (type, size_type, obj, 1);
-
-    new_path = xasprintf ("%s.%s_%u", path, type, obj->logical_index);
-
-    os_index_path = xasprintf ("%s.os_index", new_path);
-    if (flux_kvs_txn_pack (txn, 0, os_index_path, "i", obj->os_index) < 0) {
-        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
-        goto done;
-    }
-
-    // Tokenize the string, break out key/value pairs and store appropriately
-    for (token = buf, end = strstr (token, ":-!:"); end && token;
-         token = end + 4, end = strstr (token, ":-!:")) {
-        end[0] = '\0';
-        char *value = strstr (token, "=");
-        if (value) {
-            value[0] = '\0';
-            {
-                char *value_path =
-                    escape_and_join_kvs_path (new_path, 1, token);
-                int kvs_ret = -1;
-                value++;
-
-                kvs_ret = flux_kvs_txn_pack (txn, 0, value_path, "s", value);
-
-                free (value_path);
-                if (kvs_ret < 0) {
-                    flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
-                    goto done;
-                }
-            }
-        }
-    }
-
-    // Recurse into the children of this object
-    while ((prev = hwloc_get_next_child (topology, obj, prev))) {
-        if (walk_topology (h, topology, prev, new_path, txn) < 0)
-            goto done;
-    }
-
-    ret = 0;
-done:
-    free (os_index_path);
-    free (new_path);
-    free (buf);
-    free (type);
-    return ret;
-}
-
 static int put_hostname (flux_t *h, const char *base, const char *hostname,
                          flux_kvs_txn_t *txn)
 {
@@ -309,15 +217,6 @@ static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx,
         }
         free (obj_path);
     }
-    if (ctx->walk_topology &&
-        walk_topology (h,
-                       ctx->topology,
-                       hwloc_get_root_obj (ctx->topology),
-                       base_path,
-                       txn) < 0) {
-        flux_log (h, LOG_ERR, "walk_topology");
-        goto done;
-    }
     hwloc_obj_t machine =
         hwloc_get_obj_by_type (ctx->topology, HWLOC_OBJ_MACHINE, 0);
     if (machine) {
@@ -335,16 +234,6 @@ static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx,
 
         if (flux_kvs_txn_unlink (txn, 0, host_path) < 0) {
             flux_log_error (h, "%s: flux_kvs_txn_unlink", __FUNCTION__);
-            free (host_path);
-            goto done;
-        }
-        if (ctx->walk_topology &&
-            walk_topology (h,
-                           ctx->topology,
-                           hwloc_get_root_obj (ctx->topology),
-                           host_path,
-                           txn) < 0) {
-            flux_log (h, LOG_ERR, "walk_topology");
             free (host_path);
             goto done;
         }
@@ -403,20 +292,10 @@ done:
 static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
                                   const flux_msg_t *msg)
 {
-    int walk_topology = ctx->walk_topology;
-
     if (flux_request_unpack (msg, NULL, "{}") < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return (-1);
     }
-
-    /*
-     *  Set ctx->walk_topology to value in payload, if given.
-     */
-    if (!flux_request_unpack (msg, NULL, "{ s:b }",
-                              "walk_topology", &walk_topology))
-        ctx->walk_topology = walk_topology;
-
     return (0);
 }
 
@@ -556,10 +435,7 @@ static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strcmp (argv[i], "walk_topology") == 0)
-            ctx->walk_topology = true;
-        else
-            flux_log (h, LOG_ERR, "Unknown option: %s\n", argv[i]);
+        flux_log (h, LOG_ERR, "Unknown option: %s\n", argv[i]);
     }
 }
 
