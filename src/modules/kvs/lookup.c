@@ -286,7 +286,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
     walk_level_t *wltmp;
     const char *linkstr;
 
-    if (!(linkstr = treeobj_get_symlink (dirent_tmp))) {
+    if (!(linkstr = treeobj_get_symlink_target (dirent_tmp))) {
         lh->errnum = errno;
         goto cleanup;
     }
