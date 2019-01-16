@@ -66,6 +66,9 @@ flux_t *flux_future_get_flux (flux_future_t *f);
 void flux_future_set_reactor (flux_future_t *f, flux_reactor_t *r);
 flux_reactor_t *flux_future_get_reactor (flux_future_t *f);
 
+void flux_future_incref (flux_future_t *f);
+void flux_future_decref (flux_future_t *f);
+
 /* Composite future implementation
  */
 flux_future_t *flux_future_wait_all_create (void);
