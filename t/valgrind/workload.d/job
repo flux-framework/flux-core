@@ -1,0 +1,15 @@
+#!/bin/bash
+
+runjob() {
+    local size=$1
+    flux job submit <<EOT
+{"attributes":null,"tasks":[{"slot":"foo","count":{"per_slot":1},"command":"/bin/true"}],"version":1,"resources":[{"count":1,"type":"slot","with":[{"count":${size},"type":"node"}],"label":"foo"}]}
+EOT
+}
+
+NJOBS=10
+NTASKS_PER_JOB=1
+
+for i in `seq 1 $NJOBS`; do
+     runjob ${NTASKS_PER_JOB}
+done

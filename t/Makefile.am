@@ -310,6 +310,8 @@ dist_check_SCRIPTS = \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
 	valgrind/valgrind-workload.sh \
+	valgrind/workload.d/wreck \
+	valgrind/workload.d/job \
 	kvs/kvs-helper.sh
 
 test_ldadd = \
