@@ -49,4 +49,15 @@ if ! test -x ${fluxbin}; then
     return 1
 fi
 
+#  Python's site module won't be able to determine the correct path
+#   for site.USER_SITE because sharness reassigns HOME to a per-test
+#   trash directory. Set up a REAL_HOME here from the passwd database
+#   and append the real USER_SITE to PYTHONPATH so Python can find
+#   user installed modules (e.g. those installed with pip install --user)
+#
+REAL_HOME=$(getent passwd $USER | cut -d: -f6)
+USER_SITE=$(HOME=$REAL_HOME python -c 'import site; print site.USER_SITE')
+PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}${USER_SITE}
+export REAL_HOME PYTHONPATH
+
 # vi: ts=4 sw=4 expandtab
