@@ -171,28 +171,6 @@ done:
     return ret;
 }
 
-static char *escape_kvs_key (const char *key)
-{
-    char *ret_str = key ? xstrdup (key) : NULL;
-    char *s;
-    for (s = ret_str; s && *s; s++)
-        if (*s == '.')
-            *s = ':';
-    return ret_str;
-}
-
-static int put_hostname (flux_t *h, const char *base, const char *hostname,
-                         flux_kvs_txn_t *txn)
-{
-    int rc;
-    char *key;
-    if (asprintf (&key, "%s.HostName", base) < 0)
-        return (-1);
-    rc = flux_kvs_txn_pack (txn, 0, key, "s", hostname);
-    free (key);
-    return (rc);
-}
-
 static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx,
                              flux_kvs_txn_t *txn)
 {
@@ -216,28 +194,6 @@ static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx,
             goto done;
         }
         free (obj_path);
-    }
-    hwloc_obj_t machine =
-        hwloc_get_obj_by_type (ctx->topology, HWLOC_OBJ_MACHINE, 0);
-    if (machine) {
-        const char *hostname = hwloc_obj_get_info_by_name (machine, "HostName");
-        char *kvs_hostname = escape_kvs_key (hostname);
-        char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
-
-        if (put_hostname (h, base_path, hostname, txn) < 0) {
-            flux_log_error (h, "%s: put_hostname", __FUNCTION__);
-            free (kvs_hostname);
-            free (host_path);
-            goto done;
-        }
-        free (kvs_hostname);
-
-        if (flux_kvs_txn_unlink (txn, 0, host_path) < 0) {
-            flux_log_error (h, "%s: flux_kvs_txn_unlink", __FUNCTION__);
-            free (host_path);
-            goto done;
-        }
-        free (host_path);
     }
     ret = 0;
 done:
