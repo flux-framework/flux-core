@@ -21,20 +21,9 @@ test_debug '
 '
 
 test_expect_success 'hwloc: load hwloc module' '
+    flux module load -r all aggregator &&
     flux module load -r all resource-hwloc
 '
-
-#
-#  Ensure resource-hwloc is initialized here. There is currently no
-#   way to synchronize, so we run `flux hwloc topology` repeatedly
-#   until it succeeds.
-#
-count=0
-while ! flux hwloc topology > system.xml; do
-   sleep 0.5
-   count=$(expr $count + 1)
-   test $count -eq 5 && break
-done
 
 #  Set path to lstopo or lstopo-no-graphics command:
 #
@@ -46,6 +35,7 @@ invalid_rank() {
 }
 
 test_expect_success 'hwloc: ensure we have system lstopo output' '
+    flux hwloc topology > system.xml &&
     test -f system.xml &&
     test -s system.xml &&
     grep "<object type=\"System\" os_index=\"0\">" system.xml
@@ -119,12 +109,13 @@ test_expect_success 'hwloc: no broken down resource info by default' '
 '
 
 test_expect_success 'hwloc: reload fails on invalid rank' '
-    flux hwloc reload -r $(invalid_rank) 2> stderr &&
+    test_expect_code 1 flux hwloc reload -r $(invalid_rank) 2> stderr &&
     grep "No route to host" stderr
 '
 
 test_expect_success 'hwloc: remove hwloc module' '
-    flux module remove -r all resource-hwloc
+    flux module remove -r all resource-hwloc &&
+    flux module remove -r all aggregator
 '
 
 test_done
