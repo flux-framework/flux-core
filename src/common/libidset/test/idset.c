@@ -212,6 +212,8 @@ void test_badparam (void)
         "idset_next (prev=INVALID) returns IDSET_INVALID_ID");
     ok (idset_next (idset, 101) == IDSET_INVALID_ID,
         "idset_next (prev=out of range) returns IDSET_INVALID_ID");
+    ok (idset_last (NULL) == IDSET_INVALID_ID,
+        "idset_last (idset=NULL) returns IDSET_INVALID_ID");
 
     idset_destroy (idset);
 }
@@ -219,9 +221,12 @@ void test_badparam (void)
 void test_iter (void)
 {
     struct idset *idset;
+    struct idset *idset_empty;
 
     if (!(idset = idset_decode ("7-9")))
         BAIL_OUT ("idset_decode 7-9 failed");
+    if (!(idset_empty = idset_create (0, 0)))
+        BAIL_OUT ("idset_create (0, 0) failed");
 
     ok (idset_first (idset) == 7,
         "idset_first idset=[7-9] returned 7");
@@ -237,8 +242,18 @@ void test_iter (void)
         "idset_next idset=[7-9] prev=4096 returned INVALID");
     ok (idset_next (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
         "idset_next idset=[7-9] prev=INVALID returned INVALID");
+    ok (idset_last (idset) == 9,
+        "idset_last idset=[7-9] returned 9");
+
+    ok (idset_first (idset_empty) == IDSET_INVALID_ID,
+        "idset_first idset=[] returned IDSET_INVALID_ID");
+    ok (idset_last (idset_empty) == IDSET_INVALID_ID,
+        "idset_last idset=[] returned IDSET_INVALID_ID");
+    ok (idset_next (idset_empty, 0) == IDSET_INVALID_ID,
+        "idset_next idset=[] prev=0 returned IDSET_INVALID_ID");
 
     idset_destroy (idset);
+    idset_destroy (idset_empty);
 }
 
 void test_set (void)

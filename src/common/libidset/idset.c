@@ -224,6 +224,18 @@ unsigned int idset_next (const struct idset *idset, unsigned int prev)
     return next;
 }
 
+unsigned int idset_last (const struct idset *idset)
+{
+    unsigned int last = IDSET_INVALID_ID;
+
+    if (idset) {
+        last = vebpred (idset->T, idset->T.M - 1);
+        if (last == idset->T.M)
+            last = IDSET_INVALID_ID;
+    }
+    return last;
+}
+
 size_t idset_count (const struct idset *idset)
 {
     unsigned int id;
