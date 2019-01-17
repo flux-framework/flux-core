@@ -124,11 +124,6 @@ TESTS = \
 	python/t1000-service-add-remove.py
 
 
-if ENABLE_JOBSPEC
-TESTS += \
-	t0018-jobspec.t
-endif
-
 if HAVE_FLUX_SECURITY
 TESTS += python/t0009-security.py
 endif
@@ -233,7 +228,6 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
-	t0018-jobspec.t \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
@@ -316,6 +310,8 @@ dist_check_SCRIPTS = \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
 	valgrind/valgrind-workload.sh \
+	valgrind/workload.d/wreck \
+	valgrind/workload.d/job \
 	kvs/kvs-helper.sh
 
 test_ldadd = \

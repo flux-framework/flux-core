@@ -52,7 +52,6 @@ RUN yum -y update \
       python34-jsonschema \
       ruby \
       sqlite \
-      yaml-cpp-devel \
       valgrind \
       man-db \
       aspell \

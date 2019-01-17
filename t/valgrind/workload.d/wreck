@@ -1,0 +1,8 @@
+#!/bin/bash
+
+size=$(flux getattr size)
+NJOBS=10
+
+for i in `seq 1 $NJOBS`; do
+     flux wreckrun --ntasks $size /bin/true
+done

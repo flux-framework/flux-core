@@ -11,10 +11,6 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(FLUX_SECURITY_CFLAGS) $(LIBSODIUM_CFLAGS)
 
-AM_CXXFLAGS = \
-	$(WARNING_CXXFLAGS) \
-	$(CODE_COVERAGE_CXXFLAGS)
-
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \

@@ -104,19 +104,6 @@ AS_CASE($ax_cv_c_compiler_vendor,
   ]
 )
 
-AC_PROG_CXX
-# Check compiler vendor for c++, need to temporarily update AC_LANG
-AC_LANG_PUSH([C++])
-AX_COMPILER_VENDOR
-AC_LANG_POP
-AS_CASE($ax_cv_cxx_compiler_vendor,
-  [clang | gnu], [
-    WARNING_CXXFLAGS=$WARNING_CFLAGS
-    AC_SUBST([WARNING_CXXFLAGS])
-  ]
-)
-AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
-
 X_AC_ENABLE_SANITIZER
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[
   #include <dlfcn.h>
@@ -288,7 +275,6 @@ AX_LUA_HEADERS
 AX_LUA_LIBS
 X_AC_ZEROMQ
 X_AC_JANSSON
-X_AC_YAMLCPP
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
@@ -415,7 +401,6 @@ AC_CONFIG_FILES( \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
-  src/common/libjobspec/Makefile \
   src/common/libtomlc99/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \

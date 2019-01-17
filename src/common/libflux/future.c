@@ -61,6 +61,7 @@ struct flux_future {
     struct now_context *now;
     struct then_context *then;
     zlist_t *queue;
+    int refcount;
 };
 
 static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -291,8 +292,8 @@ static struct future_result *future_result_errnum_create (int errnum,
  */
 void flux_future_destroy (flux_future_t *f)
 {
-    int saved_errno = errno;
-    if (f) {
+    if (f && (--f->refcount == 0)) {
+        int saved_errno = errno;
         aux_destroy (&f->aux);
         clear_result (&f->result);
         free (f->fatal_errnum_string);
@@ -300,8 +301,8 @@ void flux_future_destroy (flux_future_t *f)
         then_context_destroy (f->then);
         zlist_destroy (&f->queue);
         free (f);
+        errno = saved_errno;
     }
-    errno = saved_errno;
 }
 
 /* Create a future.
@@ -316,10 +317,22 @@ flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
     f->init = cb;
     f->init_arg = arg;
     f->queue = NULL;
+    f->refcount = 1;
     return f;
 error:
     flux_future_destroy (f);
     return NULL;
+}
+
+void flux_future_incref (flux_future_t *f)
+{
+    if (f)
+        f->refcount++;
+}
+
+void flux_future_decref (flux_future_t *f)
+{
+    flux_future_destroy (f);
 }
 
 static void post_fulfill (flux_future_t *f)

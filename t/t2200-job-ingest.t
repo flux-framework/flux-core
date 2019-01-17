@@ -7,9 +7,6 @@ test_description='Test flux job ingest service'
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
-if test -x ${FLUX_BUILD_DIR}/src/common/libjobspec/test_validate; then
-    test_set_prereq ENABLE_JOBSPEC
-fi
 if ${FLUX_BUILD_DIR}/t/ingest/submitbench --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
     SUBMITBENCH_OPT_R="--reuse-signature"
@@ -128,7 +125,7 @@ test_expect_success 'job-ingest: valid jobspecs accepted' '
 	test_valid ${JOBSPEC}/valid/*
 '
 
-test_expect_success ENABLE_JOBSPEC 'job-ingest: invalid jobs rejected' '
+test_expect_success 'job-ingest: invalid jobs rejected' '
 	test_invalid ${JOBSPEC}/invalid/*
 '
 

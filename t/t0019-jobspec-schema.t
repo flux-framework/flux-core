@@ -6,7 +6,7 @@ test_description='Test the jobspec schema validation'
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 VALIDATE=${JOBSPEC}/validate.py
-SCHEMA=${JOBSPEC}/schema.json
+SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 
 validate() {
    ${VALIDATE} --schema ${SCHEMA} $1

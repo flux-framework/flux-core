@@ -9,11 +9,18 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(FLUX_SECURITY_CFLAGS) $(YAMLCPP_CFLAGS)
+	$(ZMQ_CFLAGS) $(FLUX_SECURITY_CFLAGS) $(YAMLCPP_CFLAGS) \
+	$(JANSSON_CFLAGS)
 
 fluxmod_LTLIBRARIES = job-ingest.la
 
-job_ingest_la_SOURCES = job-ingest.c
+job_ingest_la_SOURCES = \
+	job-ingest.c \
+	validate.c \
+	validate.h \
+	worker.c \
+	worker.h
+
 job_ingest_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_ingest_la_LIBADD = $(fluxmod_libadd) \
 		    $(top_builddir)/src/common/libjob/libjob.la \
@@ -23,9 +30,8 @@ job_ingest_la_LIBADD = $(fluxmod_libadd) \
 		    $(FLUX_SECURITY_LIBS) \
 		    $(ZMQ_LIBS)
 
-if ENABLE_JOBSPEC
-job_ingest_la_SOURCES += jobspec_wrap.cpp jobspec.h
-job_ingest_la_LIBADD += \
-		    $(top_builddir)/src/common/libjobspec/libjobspec.la \
-                    $(YAMLCPP_LIBS)
-endif
+dist_fluxlibexec_SCRIPTS = \
+	validators/validate-schema.py
+
+fluxschemadir = $(datadir)/flux/schema/jobspec/
+dist_fluxschema_DATA = schemas/jobspec.jsonschema

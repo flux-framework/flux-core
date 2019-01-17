@@ -57,7 +57,6 @@ RUN apt-get -qq install -y --no-install-recommends \
         libsodium-dev \
         libzmq3-dev \
         libczmq-dev \
-        libyaml-cpp-dev \
         libjansson-dev \
         libmunge-dev \
         liblua5.2-dev \
