@@ -79,6 +79,11 @@ unsigned int idset_first (const struct idset *idset);
  */
 unsigned int idset_next (const struct idset *idset, unsigned int prev);
 
+/* Returns the last id in the idset.
+ * Returns IDSET_INVALID_ID if the idset is empty.
+ */
+unsigned int idset_last (const struct idset *idset);
+
 /* Return the number of id's in idset.
  * If idset is invalid, return 0.
  */
