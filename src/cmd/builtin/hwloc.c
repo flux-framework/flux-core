@@ -257,20 +257,12 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
 
 static void request_hwloc_reload (flux_t *h, const char *nodeset)
 {
-    flux_mrpc_t *mrpc;
-    if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload", nodeset, 0, "{}")))
-        log_err_exit ("flux_mrpc_pack");
-    do {
-        uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_mrpc_get (mrpc, NULL) < 0
-                        || flux_mrpc_get_nodeid (mrpc, &nodeid)) {
-            if (nodeid == FLUX_NODEID_ANY)
-                log_err ("flux_mrpc_get");
-            else
-                log_err ("mrpc(%"PRIu32")", nodeid);
-        }
-    } while (flux_mrpc_next (mrpc) == 0);
-    flux_mrpc_destroy (mrpc);
+    flux_future_t *f;
+    if (!(f = flux_rpc_pack (h, "resource-hwloc.reload", 0, 0,
+                           "{s:s}", "ranks", nodeset)) ||
+        (flux_future_get (f, NULL)  < 0))
+        log_err_exit ("rpc: resource-hwloc.reload");
+    flux_future_destroy (f);
 }
 
 static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])

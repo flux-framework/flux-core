@@ -20,13 +20,19 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <jansson.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libidset/idset.h"
+
+#include "aggregate.h"
+
 
 typedef struct
 {
     uint32_t rank;
+    unsigned int reload_count;  // Sequence number for reload request
     hwloc_topology_t topology;
     bool loaded;
 } resource_ctx_t;
@@ -171,42 +177,96 @@ done:
     return ret;
 }
 
-static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx,
-                             flux_kvs_txn_t *txn)
+static json_t *topo_info_tojson (hwloc_topology_t topology)
 {
-    char *base_path = NULL;
-    int ret = -1, i;
-    int depth = hwloc_topology_get_depth (ctx->topology);
+    int i;
+    json_t *o = NULL;
+    int depth = hwloc_topology_get_depth (topology);
 
-    base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, ctx->rank);
-    if (flux_kvs_txn_unlink (txn, 0, base_path) < 0) {
-        flux_log_error (h, "%s: flux_kvs_unlink", __FUNCTION__);
+    if (!(o = json_object ()))
+        return NULL;
+    for (i = 0; i < depth; i++) {
+        json_t *v = NULL;
+        hwloc_obj_type_t t = hwloc_get_depth_type (topology, i);
+        int nobj = hwloc_get_nbobjs_by_depth (topology, i);
+        /* Skip "Machine" = 1 */
+        if (t == HWLOC_OBJ_MACHINE && nobj == 1)
+            continue;
+        if (!(v = json_integer (nobj)))
+            goto error;
+        if (json_object_set_new (o, hwloc_obj_type_string (t), v) < 0)
+            goto error;
+    }
+    return (o);
+error:
+    json_decref (o);
+    return (NULL);
+}
+
+static int aggregate_key_get (char *dst, size_t len, unsigned int seq)
+{
+    int n;
+    if ((n = snprintf (dst, len, "resource.hwloc.reload:%u", seq) < 0)
+        || (n >= len))
+        return (-1);
+    return 0;
+}
+
+/*   Wait for current reload to complete by waiting for current generation
+ *    of aggregate topology information in kvs.
+ */
+static int reload_event_wait (flux_t *h, resource_ctx_t *ctx)
+{
+    int rc = -1;
+    flux_future_t *f = NULL;
+    char key [1024];
+    flux_log (h, LOG_DEBUG, "seq=%d: waiting for reload", ctx->reload_count);
+    if (aggregate_key_get (key, sizeof (key), ctx->reload_count) < 0
+        || !(f = aggregate_wait (h, key))) {
+        flux_log_error (h, "reload_event_wait: aggregate_wait");
         goto done;
     }
-    for (i = 0; i < depth; ++i) {
-        int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
-        hwloc_obj_type_t t = hwloc_get_depth_type (ctx->topology, i);
-        char *obj_path =
-            xasprintf ("%s.%s", base_path, hwloc_obj_type_string (t));
-        if (flux_kvs_txn_pack (txn, 0, obj_path, "i", nobj) < 0) {
-            flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
-            free (obj_path);
-            goto done;
-        }
-        free (obj_path);
+    if (flux_future_wait_for (f, 5.) < 0) {
+        flux_log_error (h, "reload_event_wait: flux_future_wait_for");
+        goto done;
     }
-    ret = 0;
+    rc = aggregate_unpack (f, "resource.hwloc.by_rank");
+    flux_log (h, LOG_DEBUG, "seq=%d: reload complete", ctx->reload_count);
 done:
-    free (base_path);
-    return ret;
+    flux_future_destroy (f);
+    return (rc);
+}
+
+static int aggregate_push_rank_info (flux_t *h, resource_ctx_t *ctx,
+                                     unsigned int seq)
+{
+    int rc = -1;
+    char key [1024];
+    flux_future_t *f = NULL;
+    json_t *o = NULL;
+
+    if (aggregate_key_get (key, sizeof (key), seq) < 0) {
+        flux_log_error (h, "%s: aggregate_key_get", __FUNCTION__);
+    }
+    if (!(o = topo_info_tojson (ctx->topology))) {
+        flux_log_error (h, "%s: topo_info_tojson", __FUNCTION__);
+        goto done;
+    }
+    if (!(f = aggregator_push_json (h, key, o))
+        || (flux_future_get (f, NULL) < 0)) {
+        flux_log_error (h, "%s: aggregator.push", __FUNCTION__);
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return (rc);
 }
 
 static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
 {
-    uint32_t size;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
-    char *completion_path = NULL;
     int rc = -1;
 
     if (!(txn = flux_kvs_txn_create ())) {
@@ -217,58 +277,162 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "%s: failed to load xml to kvs", __FUNCTION__);
         goto done;
     }
-    if (load_info_to_kvs (h, ctx, txn) < 0) {
-        flux_log_error (h, "%s: failed to load info to kvs", __FUNCTION__);
-        goto done;
-    }
-    if (flux_get_size (h, &size) < 0) {
-        flux_log_error (h, "%s: flux_get_size", __FUNCTION__);
-        goto done;
-    }
-    completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, ctx->rank);
-    if (flux_kvs_txn_pack (txn, 0, completion_path, "i", 1) < 0) {
-        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
+    if (ctx->rank == 0
+        && (flux_kvs_txn_unlink (txn, 0, "resource.hwloc.by_rank") < 0)) {
+        flux_log_error (h, "%s: failed to unlink %s", __FUNCTION__,
+                            "resource.hwloc.by_rank");
         goto done;
     }
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
     }
-    flux_log (h, LOG_DEBUG, "loaded");
     ctx->loaded = true;
     rc = 0;
 done:
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
-    if (completion_path)
-        free (completion_path);
     return rc;
 }
 
-static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
-                                  const flux_msg_t *msg)
+/*  Reload hwloc on ranks in nodeset `ranks`, then all ranks re-aggregate
+ *   the topology rank info (allowing synchronization on the result).
+ *
+ *  The sequence number `seq` is used to form a unique aggregation key in
+ *   the kvs for each reload request.
+ */
+static int reload_hwloc (flux_t *h, resource_ctx_t *ctx,
+                         const char *ranks, unsigned int seq)
 {
-    if (flux_request_unpack (msg, NULL, "{}") < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
-        return (-1);
+    int rc = -1;
+    bool all = false;
+    struct idset *ids = NULL;
+
+    if (strcmp (ranks, "all") == 0)
+        all = true;
+    if (!all && !(ids = idset_decode (ranks))) {
+        flux_log_error (h, "reload_event_cb: idset_decode (%s)", ranks);
+        goto out;
     }
-    return (0);
+    /*  Only perform reload if this rank was targeted inthe ranks field
+     *   of the current event
+     */
+    if (all || idset_test (ids, ctx->rank)) {
+        /* Re-initialize ctx and reload hwloc on this rank */
+        if (ctx_hwloc_init (h, ctx) < 0) {
+            flux_log_error (h, "ctx_hwloc_init");
+            goto out;
+        }
+        if (load_hwloc (h, ctx) < 0) {
+            flux_log_error (h, "load_hwloc");
+            goto out;
+        }
+    }
+    /*  All ranks push an aggregate back to kvs. Errors are logged in
+     *   aggregate_push_rank_info()
+     */
+    rc = aggregate_push_rank_info (h, ctx, seq);
+out:
+    idset_destroy (ids);
+    return (rc);
 }
 
+static bool valid_ranks (flux_t *h, const char *ranks)
+{
+    uint32_t size;
+    struct idset *ids = NULL;
+    bool rv = false;
+
+    if (strcmp (ranks, "all") == 0)
+        return true;
+    if (!(ids = idset_decode (ranks))
+        || (flux_get_size (h, &size) < 0)
+        || (idset_last (ids) > size -1))
+        goto out;
+    rv = true;
+out:
+    idset_destroy (ids);
+    return (rv);
+}
+
+/* Handle a reload RPC. This handler is only active on rank 0 */
 static void reload_request_cb (flux_t *h,
                                flux_msg_handler_t *mh,
                                const flux_msg_t *msg,
                                void *arg)
 {
     resource_ctx_t *ctx = arg;
-    int errnum = 0;
+    flux_future_t *f = NULL;
+    const char *ranks;
+    int errnum = ENOSYS;
 
-    if ((decode_reload_request (h, ctx, msg) < 0)
-        || (ctx_hwloc_init (h, ctx) < 0)
-        || (load_hwloc (h, ctx) < 0))
+    if (ctx->rank != 0)
+        goto out;
+    if (flux_request_unpack (msg, NULL, "{s:s}", "ranks", &ranks) < 0) {
         errnum = errno;
+        goto out;
+    }
+    if (!valid_ranks (h, ranks)) {
+        errnum = EHOSTUNREACH;
+        goto out;
+    }
+    /*  Issue reload/aggregate.push on rank 0 before sending event
+     *   to other ranks. This is becuase rank 0 wants to synchronously
+     *   wait for aggregate completion, and therefore it will not be
+     *   able to process the global event.
+     */
+    ctx->reload_count++;
+    if (reload_hwloc (h, ctx, ranks, ctx->reload_count) < 0) {
+        errnum = errno;
+        flux_log_error (h, "load_hwloc_and_aggregate");
+        goto out;
+    }
+    flux_log (h, LOG_DEBUG, "reload request: ranks=%s seq=%u",
+                            ranks, ctx->reload_count);
+    /*  Send a reload event to all ranks, specifying that targeted "ranks"
+     *   only should reload hwloc. (this will be ignored on rank 0)
+     */
+    if (!(f = flux_event_publish_pack (h, "resource-hwloc.reload", 0,
+                                       "{s:s,s:i}",
+                                       "ranks", ranks,
+                                       "sequence", ctx->reload_count))
+        || (flux_future_get (f, 0) < 0)) {
+        errnum = errno;
+    }
+    /*  Now wait for completion of the aggregate before responding to
+     *   reload RPC.
+     */
+    if (reload_event_wait (h, ctx) < 0) {
+        flux_log_error (h, "reload_request: wait_for_aggregate failed");
+        errnum = errno;
+        goto out;
+    }
+    errnum = 0;
+out:
+    flux_future_destroy (f);
     if (flux_respond (h, msg, errnum, NULL) < 0)
-        flux_log_error (h, "flux_respond");
+        flux_log_error (h, "reload: flux_respond");
+}
+
+static void reload_event_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
+{
+    resource_ctx_t *ctx = arg;
+    const char *nodeset;
+    int seq;
+
+    /*  Ignored on rank 0 */
+    if (ctx->rank == 0)
+        return;
+
+    if (flux_event_unpack (msg, NULL, "{s:s,s:i}",
+                           "ranks", &nodeset, "sequence", &seq) < 0) {
+        flux_log_error (h, "reload_event_cb: flux_event_unpack");
+        return;
+    }
+    (void) reload_hwloc (h, ctx, nodeset, seq);
 }
 
 static void topo_request_cb (flux_t *h,
@@ -337,8 +501,6 @@ static void topo_request_cb (flux_t *h,
         hwloc_topology_destroy (rank);
         flux_future_destroy (f);
         free (key);
-
-        flux_log (h, LOG_DEBUG, "%s: loaded", base_key);
         count++;
     }
 
@@ -397,7 +559,10 @@ static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb,
-       0
+       FLUX_ROLE_OWNER
+    },
+    { FLUX_MSGTYPE_EVENT,   "resource-hwloc.reload", reload_event_cb,
+       FLUX_ROLE_OWNER
     },
     { FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb,
        FLUX_ROLE_USER
@@ -417,10 +582,17 @@ int mod_main (flux_t *h, int argc, char **argv)
     process_args (h, ctx, argc, argv);
 
     // Load hardware information immediately
-    if (load_hwloc (h, ctx) < 0)
+    if ((load_hwloc (h, ctx) < 0)
+        || (aggregate_push_rank_info (h, ctx, 0) < 0))
         goto done;
 
-    if (flux_event_subscribe (h, "resource-hwloc.load") < 0) {
+    // Wait for aggregate information from all ranks on rank 0
+    if (ctx->rank == 0 && (reload_event_wait (h, ctx) < 0)) {
+        flux_log_error (h, "reload_event_wait");
+        goto done;
+    }
+
+    if (flux_event_subscribe (h, "resource-hwloc.reload") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         goto done;
     }
