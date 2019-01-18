@@ -16,7 +16,10 @@ AM_CPPFLAGS = \
 #
 fluxmod_LTLIBRARIES = resource-hwloc.la
 
-resource_hwloc_la_SOURCES = resource.c
+resource_hwloc_la_SOURCES = \
+	resource.c \
+	aggregate.c \
+	aggregate.h
 resource_hwloc_la_CFLAGS = $(AM_CFLAGS) $(HWLOC_CFLAGS)
 resource_hwloc_la_LDFLAGS = $(fluxmod_ldflags) -module
 resource_hwloc_la_LIBADD = $(top_builddir)/src/common/libflux-core.la \
