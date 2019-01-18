@@ -175,24 +175,42 @@ done:
     return ret;
 }
 
+static int hwloc_gpu_count (hwloc_topology_t topology)
+{
+    int nobjs = 0;
+    hwloc_obj_t obj = NULL;
+    while ((obj = hwloc_get_next_osdev (topology, obj))) {
+        /* Only count cudaX and openclX devices for now */
+        const char *s = hwloc_obj_get_info_by_name (obj, "Backend");
+        if (s && ((strcmp (s, "CUDA") == 0) || (strcmp (s, "OpenCL") == 0)))
+            nobjs++;
+    }
+    return (nobjs);
+}
+
 static json_t *topo_info_tojson (hwloc_topology_t topology)
 {
-    int i;
+    int nobj, i;
     json_t *o = NULL;
+    json_t *v = NULL;
     int depth = hwloc_topology_get_depth (topology);
 
     if (!(o = json_object ()))
         return NULL;
     for (i = 0; i < depth; i++) {
-        json_t *v = NULL;
         hwloc_obj_type_t t = hwloc_get_depth_type (topology, i);
-        int nobj = hwloc_get_nbobjs_by_depth (topology, i);
+        nobj = hwloc_get_nbobjs_by_depth (topology, i);
         /* Skip "Machine" = 1 */
         if (t == HWLOC_OBJ_MACHINE && nobj == 1)
             continue;
         if (!(v = json_integer (nobj)))
             goto error;
         if (json_object_set_new (o, hwloc_obj_type_string (t), v) < 0)
+            goto error;
+    }
+    if ((nobj = hwloc_gpu_count (topology))) {
+        if (!(v = json_integer (nobj))
+            || json_object_set_new (o, "GPU", v) < 0)
             goto error;
     }
     return (o);
