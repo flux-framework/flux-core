@@ -34,7 +34,6 @@ typedef struct
     uint32_t rank;
     unsigned int reload_count;  // Sequence number for reload request
     hwloc_topology_t topology;
-    bool loaded;
 } resource_ctx_t;
 
 static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
@@ -113,7 +112,6 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
             goto done;
         }
     }
-    ctx->loaded = false;
     ret = 0;
 done:
     if (restrictset)
@@ -287,7 +285,6 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
     }
-    ctx->loaded = true;
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -440,7 +437,6 @@ static void topo_request_cb (flux_t *h,
                              const flux_msg_t *msg,
                              void *arg)
 {
-    resource_ctx_t *ctx = (resource_ctx_t *)arg;
     flux_future_t *df = NULL;
     const flux_kvsdir_t *kd;
     char *buffer = NULL;
@@ -449,13 +445,6 @@ static void topo_request_cb (flux_t *h,
     int count = 0;
     int rc = -1;
 
-    if (!ctx->loaded) {
-        flux_log (h,
-                  LOG_ERR,
-                  "topology cannot be aggregated, it has not been loaded");
-        errno = EINVAL;
-        goto done;
-    }
     if (!(df = flux_kvs_lookup (h, FLUX_KVS_READDIR, "resource.hwloc.xml"))
                 || flux_kvs_lookup_get_dir (df, &kd) < 0) {
         flux_log (h, LOG_ERR, "xml dir is not available");
