@@ -166,6 +166,23 @@ class TestKVS(unittest.TestCase):
         for r, ds, fs in walk_gen:
             pass
 
+    def test_put_mkdir(self):
+        flux.kvs.put_mkdir(self.f, "txn_mkdir")
+        flux.kvs.commit(self.f)
+        self.assertTrue(flux.kvs.exists(self.f, "txn_mkdir"))
+
+    def test_put_unlink(self):
+        flux.kvs.put(self.f, "txn_unlink", 1)
+        flux.kvs.commit(self.f)
+        flux.kvs.put_unlink(self.f, "txn_unlink")
+        flux.kvs.commit(self.f)
+        self.assertFalse(flux.kvs.exists(self.f, "txn_unlink"))
+
+    def test_put_symlink(self):
+        flux.kvs.put_symlink(self.f, "txn_symlink", "txn_target")
+        flux.kvs.commit(self.f)
+        self.assertFalse(flux.kvs.exists(self.f, "txn_symlink"))
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
