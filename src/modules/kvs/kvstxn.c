@@ -545,31 +545,6 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
     return 0;
 }
 
-static int check_cross_namespace (kvstxn_t *kt,
-                                  const char *key,
-                                  char **key_suffixp)
-{
-    char *ns_prefix = NULL, *key_suffix = NULL;
-    int pret;
-
-    if ((pret = kvs_namespace_prefix (key, &ns_prefix, &key_suffix)) < 0)
-        return -1;
-
-    if (pret) {
-        /* Cannot cross namespaces */
-        if (strcmp (ns_prefix, kt->ktm->namespace)) {
-            free (ns_prefix);
-            free (key_suffix);
-            errno = EINVAL;
-            return -1;
-        }
-    }
-
-    free (ns_prefix);
-    (*key_suffixp) = key_suffix;
-    return 0;
-}
-
 /* link (key, dirent) into directory 'dir'.
  */
 static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
@@ -670,58 +645,18 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                 goto done;
             }
             json_decref (subdir);
-        } else if (treeobj_is_symlink (dir_entry)
-                   && !treeobj_get_symlink_namespace (dir_entry)) {
-            const char *symlinktarget = treeobj_get_symlink_target (dir_entry);
-            char *nkey = NULL;
-            char *sym_suffix = NULL;
-
-            if (!symlinktarget) {
-                saved_errno = errno;
-                goto done;
-            }
-
-            if (check_cross_namespace (kt, symlinktarget, &sym_suffix) < 0) {
-                saved_errno = errno;
-                goto done;
-            }
-
-            if (sym_suffix)
-                symlinktarget = sym_suffix;
-
-            if (asprintf (&nkey, "%s.%s", symlinktarget, next) < 0) {
-                saved_errno = ENOMEM;
-                free (sym_suffix);
-                goto done;
-            }
-            if (kvstxn_link_dirent (kt,
-                                    current_epoch,
-                                    rootdir,
-                                    nkey,
-                                    dirent,
-                                    flags,
-                                    missing_ref) < 0) {
-                saved_errno = errno;
-                free (sym_suffix);
-                free (nkey);
-                goto done;
-            }
-            free (sym_suffix);
-            free (nkey);
-            goto success;
-        } else if (treeobj_is_symlink (dir_entry)
-                   && treeobj_get_symlink_namespace (dir_entry)) {
+        } else if (treeobj_is_symlink (dir_entry)) {
             const char *namespace = treeobj_get_symlink_namespace (dir_entry);
             const char *target = treeobj_get_symlink_target (dir_entry);
             char *nkey;
 
-            if (!namespace || !target) {
+            if (!target) {
                 saved_errno = EINVAL;
                 goto done;
             }
 
             /* can't cross into a new namespace */
-            if (strcmp (namespace, kt->ktm->namespace)) {
+            if (namespace && strcmp (namespace, kt->ktm->namespace)) {
                 saved_errno = EINVAL;
                 goto done;
             }
