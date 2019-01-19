@@ -289,6 +289,8 @@ dist_check_DATA = \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/1.xml \
+	hwloc-data/02N-sierra/0.xml \
+	hwloc-data/02N-sierra/1.xml \
 	valgrind/valgrind.supp \
 	conf.d/private.conf \
 	conf.d/shared.conf \
