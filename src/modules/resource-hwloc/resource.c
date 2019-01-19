@@ -451,9 +451,7 @@ static void reload_event_cb (flux_t *h,
     const char *nodeset;
     int seq;
 
-    /*  Ignored on rank 0 */
-    if (ctx->rank == 0)
-        return;
+    assert (ctx->rank != 0);
 
     if (flux_event_unpack (msg, NULL, "{s:s,s:i}",
                            "ranks", &nodeset, "sequence", &seq) < 0) {
@@ -612,7 +610,9 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
 
-    if (flux_event_subscribe (h, "resource-hwloc.reload") < 0) {
+    // Only ranks other than 0 need to listen for the reload event
+    if (ctx->rank != 0
+        && flux_event_subscribe (h, "resource-hwloc.reload") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         goto done;
     }
