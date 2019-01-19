@@ -13,6 +13,7 @@ test_under_flux ${SIZE} kvs
 
 shared2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/shared/02-brokers`
 exclu2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/nonoverlapping/02-brokers`
+sierra2="${SHARNESS_TEST_SRCDIR}/hwloc-data/02N-sierra/"
 
 test_debug '
     echo ${dn} &&
@@ -107,6 +108,11 @@ test_expect_success HAVE_LSTOPO 'hwloc: test failure of lstopo command' '
 test_expect_success 'hwloc: reload fails on invalid rank' '
     test_expect_code 1 flux hwloc reload -r $(invalid_rank) 2> stderr &&
     grep "No route to host" stderr
+'
+
+test_expect_success 'hwloc: reload xml with GPU objects' '
+    flux hwloc reload ${sierra2} &&
+    flux kvs get resource.hwloc.by_rank | grep "\"GPU\":  *4"
 '
 
 test_expect_success 'hwloc: remove hwloc module' '
