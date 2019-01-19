@@ -172,9 +172,9 @@ void _treeobj_insert_entry_val (json_t *obj, const char *name,
  * created symlink can be properly dereferenced
  */
 void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
-                                    const char *target)
+                                    const char *ns, const char *target)
 {
-    json_t *symlink = treeobj_create_symlink (NULL, target);
+    json_t *symlink = treeobj_create_symlink (ns, target);
     treeobj_insert_entry (obj, name, symlink);
     json_decref (symlink);
 }
@@ -2015,7 +2015,7 @@ void kvstxn_process_invalid_hash (void)
     json_decref (root);
 }
 
-void kvstxn_process_follow_link (void)
+void kvstxn_process_follow_link_no_namespace (void)
 {
     struct cache *cache;
     kvsroot_mgr_t *krm;
@@ -2053,7 +2053,7 @@ void kvstxn_process_follow_link (void)
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (root, "dir", dir_ref);
-    _treeobj_insert_entry_symlink (root, "symlink", "dir");
+    _treeobj_insert_entry_symlink (root, "symlink", NULL, "dir");
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2094,6 +2094,105 @@ void kvstxn_process_follow_link (void)
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
     json_decref (dir);
+    json_decref (root);
+}
+
+void kvstxn_process_follow_link_namespace (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    json_t *root;
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+    const char *newroot;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This root is
+     *
+     * root_ref
+     * "val" : val w/ "42"
+     * "symlinkNS2A" : symlink to "." in namespace=A
+     * "symlinkNS2B" : symlink to "." in namespace=B
+     */
+
+    root = treeobj_create_dir ();
+    _treeobj_insert_entry_val (root, "val", "42", 2);
+    _treeobj_insert_entry_symlink (root, "symlinkNS2A", "A", ".");
+    _treeobj_insert_entry_symlink (root, "symlinkNS2B", "B", ".");
+
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
+        "treeobj_hash worked");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
+
+    setup_kvsroot (krm, "A", cache, root_ref);
+
+    /* First test, follow namespace in symlink within same namespace */
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  "A",
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", "symlinkNS2A.val", "100", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_keys_and_ops_standard (kt);
+
+    verify_value (cache, krm, "A", newroot, "val", "100");
+
+    memcpy (root_ref, newroot, sizeof (root_ref));
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    kvstxn_mgr_destroy (ktm);
+
+    /* Second test, namespace crossing in symlink results in error */
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  "A",
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", "symlinkNS2B.val", "200", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
+
+    ok (kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_get_errnum return EINVAL");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
     json_decref (root);
 }
 
@@ -2901,12 +3000,14 @@ void kvstxn_process_append_errors (void)
      * root_ref
      * "dir" : empty directory
      * "symlink" : symlink to "dir"
+     * "symlinkNS" : symlink to "dir" in namespace=A
      */
 
     dir = treeobj_create_dir ();
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", dir);
-    _treeobj_insert_entry_symlink (root, "symlink", "dir");
+    _treeobj_insert_entry_symlink (root, "symlink", NULL, "dir");
+    _treeobj_insert_entry_symlink (root, "symlinkNS", "A", "dir");
 
     ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
         "treeobj_hash worked");
@@ -2942,6 +3043,23 @@ void kvstxn_process_append_errors (void)
      */
 
     create_ready_kvstxn (ktm, "transaction2", "symlink", "2", FLUX_KVS_APPEND, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
+
+    ok (kvstxn_get_errnum (kt) == EOPNOTSUPP,
+        "kvstxn_get_errnum return EOPNOTSUPP");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    /*
+     * append to a symlinkNS, should get EOPNOTSUPP
+     */
+
+    create_ready_kvstxn (ktm, "transaction3", "symlinkNS", "3", FLUX_KVS_APPEND, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -3146,7 +3264,8 @@ int main (int argc, char *argv[])
     kvstxn_process_invalid_operation ();
     kvstxn_process_malformed_operation ();
     kvstxn_process_invalid_hash ();
-    kvstxn_process_follow_link ();
+    kvstxn_process_follow_link_no_namespace ();
+    kvstxn_process_follow_link_namespace ();
     kvstxn_process_dirval_test ();
     kvstxn_process_delete_test ();
     kvstxn_process_delete_nosubdir_test ();
