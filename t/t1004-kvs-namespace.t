@@ -31,7 +31,6 @@ NAMESPACETEST=namespacetest
 NAMESPACETMP=namespacetmp
 NAMESPACERANK1=namespacerank1
 NAMESPACEORDER=namespaceorder
-NAMESPACEPREFIX=namespaceprefix
 
 namespace_create_loop() {
         i=0
@@ -361,22 +360,6 @@ test_expect_success 'kvs: put - namespace specified in command line overrides en
         unset FLUX_KVS_NAMESPACE &&
         test_kvs_key_namespace $NAMESPACEORDER-1 $DIR.puttest 4 &&
         test_kvs_key_namespace $NAMESPACEORDER-2 $DIR.puttest 5
-'
-
-#
-# Namespace prefix tests
-#
-
-test_expect_success 'kvs: namespace prefix setup' '
-	flux kvs namespace-create $NAMESPACEPREFIX-1 &&
-	flux kvs namespace-create $NAMESPACEPREFIX-2
-'
-
-test_expect_success 'kvs: namespace prefix works across symlinks' '
-        flux kvs --namespace=${NAMESPACEPREFIX}-1 put $DIR.linktest=1 &&
-        flux kvs --namespace=${NAMESPACEPREFIX}-2 put $DIR.linktest=2 &&
-        flux kvs --namespace=${NAMESPACEPREFIX}-1 link ns:${NAMESPACEPREFIX}-2/$DIR.linktest $DIR.link &&
-        test_kvs_key_namespace ${NAMESPACEPREFIX}-1 $DIR.link 2
 '
 
 #

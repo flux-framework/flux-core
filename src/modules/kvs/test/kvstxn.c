@@ -3120,129 +3120,6 @@ void kvstxn_process_fallback_merge (void)
     cache_destroy (cache);
 }
 
-void kvstxn_namespace_prefix_symlink (void)
-{
-    struct cache *cache;
-    kvsroot_mgr_t *krm;
-    kvstxn_mgr_t *ktm;
-    kvstxn_t *kt;
-    json_t *root;
-    char root_ref[BLOBREF_MAX_STRING_SIZE];
-    const char *newroot;
-
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
-
-    /* This root is
-     *
-     * root_ref
-     * "val" : val w/ "42"
-     * "symlink2A" : symlink to "ns:A/."
-     * "symlink2Achain" : symlink to "ns:A/ns:A/."
-     * "symlink2B" : symlink to "ns:B/."
-     */
-
-    root = treeobj_create_dir ();
-    _treeobj_insert_entry_val (root, "val", "42", 2);
-    _treeobj_insert_entry_symlink (root, "symlink2A", "ns:A/.");
-    _treeobj_insert_entry_symlink (root, "symlink2Achain", "ns:A/ns:A/.");
-    _treeobj_insert_entry_symlink (root, "symlink2B", "ns:B/.");
-
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (root_ref)) == 0,
-        "treeobj_hash worked");
-
-    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
-
-    setup_kvsroot (krm, "A", cache, root_ref);
-
-    /* First test, namespace crossing in symlink within same namespace works */
-
-    ok ((ktm = kvstxn_mgr_create (cache,
-                                  "A",
-                                  "sha1",
-                                  NULL,
-                                  &test_global)) != NULL,
-        "kvstxn_mgr_create works");
-
-    create_ready_kvstxn (ktm, "transaction1", "symlink2A.val", "100", 0, 0);
-
-    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
-        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
-
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
-        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
-
-    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
-        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
-
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
-        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
-
-    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
-        "kvstxn_get_newroot_ref returns != NULL when processing complete");
-
-    verify_keys_and_ops_standard (kt);
-
-    verify_value (cache, krm, "A", newroot, "val", "100");
-
-    memcpy (root_ref, newroot, sizeof (root_ref));
-
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
-    kvstxn_mgr_destroy (ktm);
-
-    /* Second test, namespace chain in symlink fails */
-
-    ok ((ktm = kvstxn_mgr_create (cache,
-                                  "A",
-                                  "sha1",
-                                  NULL,
-                                  &test_global)) != NULL,
-        "kvstxn_mgr_create works");
-
-    create_ready_kvstxn (ktm, "transaction1", "symlink2Achain.val", "200", 0, 0);
-
-    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
-        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
-
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
-        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
-
-    ok (kvstxn_get_errnum (kt) == EINVAL,
-        "kvstxn_get_errnum return EINVAL");
-
-    kvstxn_mgr_destroy (ktm);
-
-    /* Third test, namespace crossing in symlink results in error */
-
-    ok ((ktm = kvstxn_mgr_create (cache,
-                                  "A",
-                                  "sha1",
-                                  NULL,
-                                  &test_global)) != NULL,
-        "kvstxn_mgr_create works");
-
-    create_ready_kvstxn (ktm, "transaction1", "symlink2B.val", "200", 0, 0);
-
-    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
-        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
-
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
-        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
-
-    ok (kvstxn_get_errnum (kt) == EINVAL,
-        "kvstxn_get_errnum return EINVAL");
-
-    kvstxn_mgr_remove_transaction (ktm, kt, false);
-
-    kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
-    json_decref (root);
-}
-
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -3280,7 +3157,6 @@ int main (int argc, char *argv[])
     kvstxn_process_append ();
     kvstxn_process_append_errors ();
     kvstxn_process_fallback_merge ();
-    kvstxn_namespace_prefix_symlink ();
 
     done_testing ();
     return (0);
