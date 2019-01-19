@@ -370,7 +370,16 @@ out:
     return (rv);
 }
 
-/* Handle a reload RPC. This handler is only active on rank 0 */
+/*
+ *  Handle a reload RPC.
+ *
+ *  All `resource-hwloc.reload` requests go to rank 0, and a global reload
+ *   is accomplished via a sequenced event that indicates which ranks
+ *   should actually perform a topology reload. All ranks, however,
+ *   perform a new aggregation on every reload event, allowing rank 0
+ *   to synchronize on the aggregate, and respond to the reload RPC only
+ *   after the reload is fully complete.
+ */
 static void reload_request_cb (flux_t *h,
                                flux_msg_handler_t *mh,
                                const flux_msg_t *msg,
@@ -429,6 +438,10 @@ out:
         flux_log_error (h, "reload: flux_respond");
 }
 
+/*  Handle a global topology reload event. Only the ranks in the `ranks`
+ *   field of the payload actually reload topology, but all ranks perform
+ *   a new aggregation so that rank 0 can synchronize on the result.
+ */
 static void reload_event_cb (flux_t *h,
                              flux_msg_handler_t *mh,
                              const flux_msg_t *msg,
