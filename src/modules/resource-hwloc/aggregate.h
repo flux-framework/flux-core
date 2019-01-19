@@ -15,16 +15,14 @@
 flux_future_t *aggregator_push_json (flux_t *h, const char *key, json_t *o);
 
 /*  Fulfill future when aggregate at `key` is "complete", i.e.
- *   count == total. The future `f` is fulfilled with the result of
- *   flux_kvs_lookup() and thus the aggregate json object can be
- *   unpacked with flux_kvs_lookup_unpack().
+ *   count == total. Use aggreate_wait_get_unpack () to unpack final
+ *   aggregate kvs value after successful fulfillment.
  */
 flux_future_t *aggregate_wait (flux_t *h, const char *key);
 
-/*  Get the underlying future returned from flux_kvs_lookup(3)
- *   from the future returned by aggregate_wait().
+/*  Get final aggregate JSON object using Jansson json_unpack() format:
  */
-flux_future_t *aggregate_get (flux_future_t *f);
+int aggregate_wait_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 /*  Unpack the aggregate fulfilled in `f` into the kvs at path.
  *   Just the aggregate `entries` object is pushed to the new location,
@@ -32,4 +30,4 @@ flux_future_t *aggregate_get (flux_future_t *f);
  *
  *  The original aggregate key is removed.
  */
-int aggregate_unpack (flux_future_t *f, const char *path);
+int aggregate_unpack_to_kvs (flux_future_t *f, const char *path);

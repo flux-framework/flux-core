@@ -246,7 +246,7 @@ static int reload_event_wait (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "reload_event_wait: flux_future_wait_for");
         goto done;
     }
-    rc = aggregate_unpack (f, "resource.hwloc.by_rank");
+    rc = aggregate_unpack_to_kvs (f, "resource.hwloc.by_rank");
     flux_log (h, LOG_DEBUG, "seq=%d: reload complete", ctx->reload_count);
 done:
     flux_future_destroy (f);
