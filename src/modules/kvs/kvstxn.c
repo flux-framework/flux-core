@@ -683,7 +683,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
             char *sym_suffix = NULL;
 
             if (!symlink) {
-                saved_errno = errno;
+                saved_errno = EINVAL;
                 goto done;
             }
 
