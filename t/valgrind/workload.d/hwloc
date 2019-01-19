@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Ensure reloads do not leak memory
+flux hwloc reload
+flux hwloc reload
+flux hwloc reload
+flux hwloc reload -r 1

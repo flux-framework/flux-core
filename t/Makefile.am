@@ -312,6 +312,7 @@ dist_check_SCRIPTS = \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/wreck \
 	valgrind/workload.d/job \
+	valgrind/workload.d/hwloc \
 	kvs/kvs-helper.sh
 
 test_ldadd = \
