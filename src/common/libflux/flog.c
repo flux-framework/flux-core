@@ -25,6 +25,7 @@
 #include "flog.h"
 #include "attr.h"
 #include "message.h"
+#include "request.h"
 #include "rpc.h"
 
 #include "src/common/libutil/wallclock.h"
@@ -111,14 +112,13 @@ const char *flux_strerror (int errnum)
 
 static int log_rpc (flux_t *h, const char *buf, int len)
 {
-    flux_future_t *f;
+    flux_msg_t *msg;
     int rc;
 
-    if (!(f = flux_rpc_raw (h, "log.append", buf, len,
-                            FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
+    if (!(msg = flux_request_encode_raw ("log.append", buf, len)))
         return -1;
-    rc = flux_future_get (f, NULL);
-    flux_future_destroy (f);
+    rc = flux_send (h, msg, 0);
+    flux_msg_destroy (msg);
     return rc;
 }
 
