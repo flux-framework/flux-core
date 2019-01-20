@@ -25,11 +25,6 @@ extern "C" {
 
 #define FLUX_MAX_LOGBUF     2048
 
-/* May be ored with 'level' to cause log request
- * to wait for a success/fail response.
- */
-#define FLUX_LOG_CHECK      0x1000
-
 typedef void (*flux_log_f)(const char *buf, int len, void *arg);
 
 /* Set log appname for handle instance.

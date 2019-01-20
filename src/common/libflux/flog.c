@@ -109,19 +109,15 @@ const char *flux_strerror (int errnum)
     return zmq_strerror (errnum);
 }
 
-static int log_rpc (flux_t *h, const char *buf, int len, int flags)
+static int log_rpc (flux_t *h, const char *buf, int len)
 {
     flux_future_t *f;
-    int rc = (flags & FLUX_RPC_NORESPONSE) ? 0 : -1;
+    int rc;
 
-    if (!(f = flux_rpc_raw (h, "log.append", buf, len, FLUX_NODEID_ANY, flags)))
-        goto done;
-    if ((flags & FLUX_RPC_NORESPONSE))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
+    if (!(f = flux_rpc_raw (h, "log.append", buf, len,
+                            FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
+        return -1;
+    rc = flux_future_get (f, NULL);
     flux_future_destroy (f);
     return rc;
 }
@@ -135,7 +131,6 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     char timestamp[WALLCLOCK_MAXLEN];
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
-    int rpc_flags = FLUX_RPC_NORESPONSE;
     char *xtra = NULL;
 
     if (!h) {
@@ -149,11 +144,6 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     if (!(ctx = getctx (h))) {
         errno = ENOMEM;
         goto fatal;
-    }
-
-    if ((level & FLUX_LOG_CHECK)) {
-        rpc_flags &= ~FLUX_RPC_NORESPONSE;
-        level &= ~FLUX_LOG_CHECK;
     }
 
     stdlog_init (&hdr);
@@ -178,7 +168,7 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     if (ctx->cb) {
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
-        if (log_rpc (h, ctx->buf, len, rpc_flags) < 0)
+        if (log_rpc (h, ctx->buf, len) < 0)
             goto fatal;
     }
     /* If addition log lines were saved above, log them separately.
