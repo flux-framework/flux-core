@@ -39,11 +39,6 @@ levels, which are, in order of decreasing importance:
 'LOG_INFO'::       informational message
 'LOG_DEBUG'::      debug-level message
 
-In addition, the flag 'FLUX_LOG_CHECK' may be logically ORed with
-the 'level' to direct `flux_log()` to wait for a response from the broker
-indicating whether the log request was accepted or not.  Otherwise, log
-requests are "fire and forget".
-
 When 'h' is specified, log messages are are added to the broker's
 circular buffer which can be accessed with flux-dmesg(3).  From there,
 a message's disposition is up to the broker's log configuration.
@@ -98,9 +93,8 @@ characters.  At this time non-ASCII UTF-8 is not supported by `flux_log()`.
 RETURN VALUE
 ------------
 
-`flux_log()` normally returns 0 with no possibility of error.
-However, if the 'FLUX_LOG_CHECK' check flag is specified, it may
-return -1 with errno set on error.
+`flux_log()` normally returns 0 on success, or -1 if there was
+a problem building or sending the log message, with errno set.
 
 
 ERRORS
