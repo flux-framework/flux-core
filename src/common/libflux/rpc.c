@@ -39,6 +39,12 @@ struct flux_rpc {
     flux_future_t *f;
 };
 
+static void log_matchtag_leak (flux_t *h, const char *msg, int matchtag)
+{
+    if ((flux_flags_get (h) & FLUX_O_MATCHDEBUG))
+        fprintf (stderr, "MATCHDEBUG: %s leaks matchtag=%d\n", msg, matchtag);
+}
+
 static void rpc_destroy (struct flux_rpc *rpc)
 {
     if (rpc) {
@@ -52,11 +58,14 @@ static void rpc_destroy (struct flux_rpc *rpc)
         if ((rpc->flags & FLUX_RPC_STREAMING)) {
             if (!flux_future_is_ready (rpc->f)
                                     || flux_future_get (rpc->f, NULL) == 0) {
+                log_matchtag_leak (rpc->h, "unterminated streaming RPC",
+                                   rpc->matchtag);
                 goto done;
             }
         }
         else {
             if (!flux_future_is_ready (rpc->f)) {
+                log_matchtag_leak (rpc->h, "unfulfilled RPC", rpc->matchtag);
                 goto done;
             }
         }
