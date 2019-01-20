@@ -275,6 +275,8 @@ flux_t *flux_open (const char *uri, int flags)
         goto done;
     if (getenv ("FLUX_HANDLE_TRACE"))
         flags |= FLUX_O_TRACE;
+    if (getenv ("FLUX_HANDLE_MATCHDEBUG"))
+        flags |= FLUX_O_MATCHDEBUG;
     if (!(h = connector_init (path, flags))) {
         dlclose (dso);
         goto done;
