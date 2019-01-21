@@ -97,6 +97,12 @@ No response is expected.  The request will not be assigned a matchtag,
 and the returned flux_future_t is immediately fulfilled, and may simply
 be destroyed.
 
+FLUX_RPC_STREAMING::
+Multiple responses are expected, terminated by ENODATA or another error
+response.  If this flag is specified, matchtag will not be recycled
+upon future destruction, unless future was fulfilled with an error.
+
+
 RESPONSE OPTIONS
 ----------------
 
