@@ -138,7 +138,9 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
         const char *lstr = stdlog_severity_to_string (LOG_PRI (level));
 
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
-        return fprintf (stderr, "%s: %s\n", lstr, buf);
+        if (fprintf (stderr, "%s: %s\n", lstr, buf) < 0)
+            return -1;
+        return 0;
     }
 
     if (!(ctx = getctx (h))) {
