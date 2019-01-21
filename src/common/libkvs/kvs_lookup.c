@@ -112,6 +112,7 @@ flux_future_t *flux_kvs_lookup_ns (flux_t *h,
     struct lookup_ctx *ctx;
     flux_future_t *f;
     const char *topic = "kvs.lookup";
+    int rpc_flags = 0;
 
     if (!h || !namespace || !key || strlen (key) == 0
         || validate_lookup_flags (flags, true) < 0) {
@@ -123,7 +124,9 @@ flux_future_t *flux_kvs_lookup_ns (flux_t *h,
     if ((flags & FLUX_KVS_WATCH)
         || (flags & FLUX_KVS_WAITCREATE))
         topic = "kvs-watch.lookup"; // redirect to kvs-watch module
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if ((flags & FLUX_KVS_WATCH))
+        rpc_flags |= FLUX_RPC_STREAMING;
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
                              "{s:s s:s s:i}",
                              "key", key,
                              "namespace", namespace,
