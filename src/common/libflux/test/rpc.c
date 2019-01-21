@@ -722,6 +722,7 @@ int main (int argc, char *argv[])
     if (!h)
         BAIL_OUT ("can't continue without test server");
     flux_fatal_set (h, fatal_err, NULL);
+    flux_flags_set (h, FLUX_O_MATCHDEBUG);
 
     test_service (h);
     test_basic (h);
