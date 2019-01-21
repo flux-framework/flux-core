@@ -2,16 +2,20 @@
 
 from __future__ import print_function
 
+import re
 import sys
+import logging
 import argparse
 import json
 from collections import Sequence
 
+import yaml
+
 
 def create_resource(res_type, count, with_child=[]):
-    assert isinstance(with_child, Sequence)
-    assert not isinstance(with_child, str)
-    assert count > 0
+    assert isinstance(with_child, Sequence), "child resource must be a sequence"
+    assert not isinstance(with_child, str), "child resource must not be a string"
+    assert count > 0, "resource count must be > 0"
 
     res = {"type": res_type, "count": count}
 
@@ -26,11 +30,13 @@ def create_slot(label, count, with_child):
     return slot
 
 
-def main():
-    core = create_resource("core", args.cores_per_task)
+def create_slurm_style_jobspec(
+    command, num_tasks, cores_per_task, num_nodes=0, walltime=None
+):
+    core = create_resource("core", cores_per_task)
     slot = create_slot("task", 1, [core])
-    if args.num_nodes:
-        resource_section = create_resource("node", args.num_nodes, [slot])
+    if num_nodes > 0:
+        resource_section = create_resource("node", num_nodes, [slot])
     else:
         resource_section = slot
 
@@ -39,38 +45,106 @@ def main():
         "resources": [resource_section],
         "tasks": [
             {
-                "command": args.command,
+                "command": command,
                 "slot": "task",
-                "count": {"total": args.num_tasks},
+                "count": {"total": num_tasks},
+                "attributes": {},
             }
         ],
-        "attributes": {"system": {"duration": "{} seconds".format(args.walltime)}},
+        "attributes": {"system": {}},
     }
+    if walltime:
+        jobspec["attributes"]["system"]["duration"] = walltime
 
-    if args.pretty:
-        out = json.dumps(jobspec, indent=4, sort_keys=True)
+    return jobspec
+
+
+def validate_slurm_args(args):
+    if (
+        args.time
+        and re.match(r"^(\d+-)?\d+:\d+:\d+$") is None
+        and re.match(r"^\d+(:\d+)?$") is None
+    ):
+        raise ValueError(
+            "invalid time limit string format. "
+            "Acceptable formats include minutes[:seconds], [days-]hours:minutes:seconds"
+        )
+
+    # TODO: is there any validation of the stdout redirection path that we can do?
+    # IDEA: print a warning if the file already exists or if the parent dir doesn't exist
+
+
+def slurm_jobspec(args):
+    try:
+        validate_slurm_args(args)
+    except ValueError as e:
+        logger.error(e.message)
+        sys.exit(1)
+    return create_slurm_style_jobspec(
+        args.command, args.ntasks, args.cpus_per_task, args.nodes, args.time
+    )
+
+
+def get_slurm_common_parser():
+    """
+    Shared arguments amongst srun and sbatch.
+    Used src/srun/libsrun/opt.c and src/sbatch/opt.c of the
+    [SLURM repository](https://github.com/SchedMD/slurm.git) as reference
+    """
+    slurm_parser = argparse.ArgumentParser(add_help=False)
+    slurm_parser.add_argument("-N", "--nodes", type=int, default=0)
+    slurm_parser.add_argument("-n", "--ntasks", type=int, default=1)
+    slurm_parser.add_argument("-c", "--cpus-per-task", type=int, default=1)
+    slurm_parser.add_argument(
+        "-t",
+        "--time",
+        help="time limit. Acceptable formats include minutes[:seconds], "
+        "[days-]hours:minutes:seconds",
+    )
+    slurm_parser.add_argument("-o", "--output", help="location of stdout redirection")
+    slurm_parser.add_argument("command", nargs=argparse.REMAINDER)
+    return slurm_parser
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--format", choices=["json", "yaml"], default="json")
+
+    subparsers = parser.add_subparsers()
+    slurm_parser = get_slurm_common_parser()
+    srun_parser = subparsers.add_parser(
+        "srun", parents=[slurm_parser], help="subcommand for SLURM-style CLI arguments"
+    )
+    srun_parser.set_defaults(func=slurm_jobspec)
+
+    args = parser.parse_args()
+
+    if len(args.command) == 0:
+        parser.error("command is required")
+        sys.exit(1)
+
+    jobspec = args.func(args)
+
+    if args.format == "yaml":
+        out = yaml.dump(jobspec)
     else:
         out = json.dumps(jobspec)
     print(out)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-N", "--num-nodes", type=int, default=0)
-    parser.add_argument("-n", "--num-tasks", type=int, default=1)
-    parser.add_argument("-c", "--cores-per-task", type=int, default=1)
-    parser.add_argument(
-        "-t", "--walltime", type=int, default=3600, help="walltime in seconds"
+    logging.basicConfig(
+        level=logging.INFO, format="%(module)s: %(levelname)s: %(message)s"
     )
-    parser.add_argument(
-        "-p", "--pretty", action="store_true", help="pretty print the jobspec json"
-    )
-    parser.add_argument("command", nargs=argparse.REMAINDER)
-    args = parser.parse_args()
-
-    if len(args.command) == 0:
-        parser.print_usage()
-        print("command is required")
-        sys.exit(1)
-
-    main()
+    logger = logging.getLogger(__name__)
+    exit_code = 0
+    try:
+        main()
+    except SystemExit as e:  # don't intercept sys.exit calls
+        exit_code = e
+    except Exception as e:
+        logging.error(e.message)
+        exit_code = 1
+    finally:
+        logging.shutdown()
+        sys.exit(exit_code)
