@@ -79,7 +79,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_open");
 
     flux_log_set_appname (h, appname);
-    if (flux_log (h, severity | FLUX_LOG_CHECK, "%s", message) < 0)
+    if (flux_log (h, severity, "%s", message) < 0)
         log_err_exit ("flux_log");
 
     flux_close (h);

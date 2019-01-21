@@ -25,6 +25,7 @@
 #include "flog.h"
 #include "attr.h"
 #include "message.h"
+#include "request.h"
 #include "rpc.h"
 
 #include "src/common/libutil/wallclock.h"
@@ -109,20 +110,15 @@ const char *flux_strerror (int errnum)
     return zmq_strerror (errnum);
 }
 
-static int log_rpc (flux_t *h, const char *buf, int len, int flags)
+static int log_rpc (flux_t *h, const char *buf, int len)
 {
-    flux_future_t *f;
-    int rc = (flags & FLUX_RPC_NORESPONSE) ? 0 : -1;
+    flux_msg_t *msg;
+    int rc;
 
-    if (!(f = flux_rpc_raw (h, "log.append", buf, len, FLUX_NODEID_ANY, flags)))
-        goto done;
-    if ((flags & FLUX_RPC_NORESPONSE))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
+    if (!(msg = flux_request_encode_raw ("log.append", buf, len)))
+        return -1;
+    rc = flux_send (h, msg, 0);
+    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -135,7 +131,6 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     char timestamp[WALLCLOCK_MAXLEN];
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
-    int rpc_flags = FLUX_RPC_NORESPONSE;
     char *xtra = NULL;
 
     if (!h) {
@@ -143,17 +138,14 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
         const char *lstr = stdlog_severity_to_string (LOG_PRI (level));
 
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
-        return fprintf (stderr, "%s: %s\n", lstr, buf);
+        if (fprintf (stderr, "%s: %s\n", lstr, buf) < 0)
+            return -1;
+        return 0;
     }
 
     if (!(ctx = getctx (h))) {
         errno = ENOMEM;
         goto fatal;
-    }
-
-    if ((level & FLUX_LOG_CHECK)) {
-        rpc_flags &= ~FLUX_RPC_NORESPONSE;
-        level &= ~FLUX_LOG_CHECK;
     }
 
     stdlog_init (&hdr);
@@ -178,7 +170,7 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     if (ctx->cb) {
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
-        if (log_rpc (h, ctx->buf, len, rpc_flags) < 0)
+        if (log_rpc (h, ctx->buf, len) < 0)
             goto fatal;
     }
     /* If addition log lines were saved above, log them separately.

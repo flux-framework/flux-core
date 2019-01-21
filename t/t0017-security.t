@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test broker security' 
+test_description='Test broker security'
 
 . `dirname $0`/sharness.sh
 
@@ -139,13 +139,13 @@ test_expect_success 'flux setattr NOT allowed for non-owner' '
 '
 
 test_expect_success 'flux logger not allowed for non-owner' '
-	MSG="hello world $$" &&
-	! FLUX_HANDLE_ROLEMASK=0x2 flux logger $MSG 2>logger.err &&
-	grep -q "Operation not permitted" logger.err
+	MSG="hello-unauthorized-world $$" &&
+	FLUX_HANDLE_ROLEMASK=0x2 flux logger $MSG &&
+	! flux dmesg | grep -q $MSG
+
 '
 
 test_expect_success 'flux dmesg not allowed for non-owner' '
-	MSG="hello world $$" &&
 	! FLUX_HANDLE_ROLEMASK=0x2 flux dmesg 2>dmesg.err &&
 	grep -q "Operation not permitted" dmesg.err
 '
