@@ -20,6 +20,7 @@ extern "C" {
 
 enum {
     FLUX_RPC_NORESPONSE = 1,
+    FLUX_RPC_STREAMING = 2,
 };
 
 flux_future_t *flux_rpc (flux_t *h, const char *topic, const char *s,
