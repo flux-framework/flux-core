@@ -32,6 +32,7 @@
 typedef struct
 {
     uint32_t rank;
+    int fwd_count;              // Local forward count for reload aggregation
     unsigned int reload_count;  // Sequence number for reload request
     hwloc_topology_t topology;
 } resource_ctx_t;
@@ -130,6 +131,15 @@ static void resource_hwloc_ctx_destroy (resource_ctx_t *ctx)
     }
 }
 
+static int get_fwd_count (flux_t *h)
+{
+    const char *s = flux_attr_get (h, "tbon.descendants");
+    long v = strtol (s, NULL, 10);
+    if (v >= 0)
+        return ((int) v + 1);
+    return (0);
+}
+
 static resource_ctx_t *resource_hwloc_ctx_create (flux_t *h)
 {
     resource_ctx_t *ctx = xzmalloc (sizeof(resource_ctx_t));
@@ -137,6 +147,7 @@ static resource_ctx_t *resource_hwloc_ctx_create (flux_t *h)
         flux_log_error (h, "flux_get_rank");
         goto error;
     }
+    ctx->fwd_count = get_fwd_count (h);
     if (ctx_hwloc_init (h, ctx)) {
         flux_log_error (h, "hwloc context could not be created");
         goto error;
@@ -268,7 +279,7 @@ static int aggregate_push_rank_info (flux_t *h, resource_ctx_t *ctx,
         flux_log_error (h, "%s: topo_info_tojson", __FUNCTION__);
         goto done;
     }
-    if (!(f = aggregator_push_json (h, key, o))
+    if (!(f = aggregator_push_json (h, ctx->fwd_count, key, o))
         || (flux_future_get (f, NULL) < 0)) {
         flux_log_error (h, "%s: aggregator.push", __FUNCTION__);
         goto done;
