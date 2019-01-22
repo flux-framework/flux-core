@@ -1236,8 +1236,6 @@ static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm, int flags)
         goto error_enomem;
     if (!(ktnew->ops = json_array ()))
         goto error_enomem;
-    if (!(ktnew->keys = json_array ()))
-        goto error_enomem;
     if (!(ktnew->names = json_array ()))
         goto error_enomem;
     if (!(ktnew->missing_refs_list = zlist_new ()))
