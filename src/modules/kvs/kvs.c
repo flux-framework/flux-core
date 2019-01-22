@@ -427,7 +427,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
     }
 
     if (lh
-        && flux_msg_aux_set (msg, "lookup_handle", lh, NULL) < 0) {
+        && flux_msg_aux_set (msgcpy, "lookup_handle", lh, NULL) < 0) {
         flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
         goto error;
     }
