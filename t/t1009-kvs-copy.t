@@ -78,21 +78,21 @@ test_expect_success 'kvs-move dir dst contains expected value' '
 	test "$value" = "bar"
 '
 
-# from namespace
+# from namespace, via nsprefix
 #   copy a value, move a dir
 
 test_expect_success 'create test namespace' '
-	flux kvs namespace-create fromns
+	flux kvs namespace-create fromns-prefix
 '
 
 test_expect_success 'kvs-copy from namespace works' '
         flux kvs unlink -Rf test &&
-        flux kvs unlink -Rf ns:fromns/test &&
-	flux kvs put ns:fromns/test.src=foo &&
-        flux kvs copy ns:fromns/test.src test.dst
+        flux kvs unlink -Rf ns:fromns-prefix/test &&
+	flux kvs put ns:fromns-prefix/test.src=foo &&
+        flux kvs copy ns:fromns-prefix/test.src test.dst
 '
 test_expect_success 'kvs-copy from namespace does not unlink src' '
-	value=$(flux kvs get ns:fromns/test.src) &&
+	value=$(flux kvs get ns:fromns-prefix/test.src) &&
 	test "$value" = "foo"
 '
 test_expect_success 'kvs-copy from namespace dst contains expected value' '
@@ -102,12 +102,12 @@ test_expect_success 'kvs-copy from namespace dst contains expected value' '
 
 test_expect_success 'kvs-move from namespace works' '
         flux kvs unlink -Rf test &&
-        flux kvs unlink -Rf ns:fromns/test &&
-	flux kvs put ns:fromns/test.src.a.b.c=foo &&
-        flux kvs move ns:fromns/test.src test.dst
+        flux kvs unlink -Rf ns:fromns-prefix/test &&
+	flux kvs put ns:fromns-prefix/test.src.a.b.c=foo &&
+        flux kvs move ns:fromns-prefix/test.src test.dst
 '
 test_expect_success 'kvs-move from namespace unlinks src' '
-	test_must_fail flux kvs get --treeobj ns:fromns/test.src
+	test_must_fail flux kvs get --treeobj ns:fromns-prefix/test.src
 '
 test_expect_success 'kvs-move from namespace dst contains expected value' '
 	value=$(flux kvs get test.dst.a.b.c) &&
@@ -115,49 +115,128 @@ test_expect_success 'kvs-move from namespace dst contains expected value' '
 '
 
 test_expect_success 'remove test namespace' '
-	flux kvs namespace-remove fromns
+	flux kvs namespace-remove fromns-prefix
 '
 
-# to namespace
+# to namespace, via nsprefix
 #   copy a value, move a dir
 
 test_expect_success 'create test namespace' '
-	flux kvs namespace-create tons
+	flux kvs namespace-create tons-prefix
 '
 
 test_expect_success 'kvs-copy to namespace works' '
-        flux kvs unlink -Rf ns:tons/test &&
+        flux kvs unlink -Rf ns:tons-prefix/test &&
         flux kvs unlink -Rf test &&
 	flux kvs put test.src=foo &&
-        flux kvs copy test.src ns:tons/test.dst
+        flux kvs copy test.src ns:tons-prefix/test.dst
 '
 test_expect_success 'kvs-copy to namespace does not unlink src' '
 	value=$(flux kvs get test.src) &&
 	test "$value" = "foo"
 '
 test_expect_success 'kvs-copy to namespace dst contains expected value' '
-	value=$(flux kvs get ns:tons/test.dst) &&
+	value=$(flux kvs get ns:tons-prefix/test.dst) &&
 	test "$value" = "foo"
 '
 
 test_expect_success 'kvs-move to namespace works' '
-        flux kvs unlink -Rf ns:tons/test &&
+        flux kvs unlink -Rf ns:tons-prefix/test &&
         flux kvs unlink -Rf test &&
 	flux kvs put test.src.a.b.c=foo &&
-        flux kvs move test.src ns:tons/test.dst
+        flux kvs move test.src ns:tons-prefix/test.dst
 '
 test_expect_success 'kvs-move to namespace unlinks src' '
 	test_must_fail flux kvs get --treeobj test.src
 '
 test_expect_success 'kvs-move to namespace dst contains expected value' '
-	value=$(flux kvs get ns:tons/test.dst.a.b.c) &&
+	value=$(flux kvs get ns:tons-prefix/test.dst.a.b.c) &&
 	test "$value" = "foo"
 '
 
 test_expect_success 'remove test namespace' '
-	flux kvs namespace-remove tons
+	flux kvs namespace-remove tons-prefix
 '
 
+# from namespace, via option
+#   copy a value, move a dir
+
+test_expect_success 'create test namespace' '
+	flux kvs namespace-create fromns-option
+'
+
+test_expect_success 'kvs-copy from namespace works' '
+        flux kvs unlink -Rf test &&
+        flux kvs --namespace=fromns-option unlink -Rf test &&
+	flux kvs --namespace=fromns-option put test.src=foo &&
+        flux kvs copy --src-namespace=fromns-option test.src test.dst
+'
+test_expect_success 'kvs-copy from namespace does not unlink src' '
+	value=$(flux kvs --namespace=fromns-option get test.src) &&
+	test "$value" = "foo"
+'
+test_expect_success 'kvs-copy from namespace dst contains expected value' '
+	value=$(flux kvs get test.dst) &&
+	test "$value" = "foo"
+'
+
+test_expect_success 'kvs-move from namespace works' '
+        flux kvs unlink -Rf test &&
+        flux kvs --namespace=fromns-option unlink -Rf test &&
+	flux kvs --namespace=fromns-option put test.src.a.b.c=foo &&
+        flux kvs move --src-namespace=fromns-option test.src test.dst
+'
+test_expect_success 'kvs-move from namespace unlinks src' '
+	test_must_fail flux kvs --namespace=fromns-option get --treeobj test.src
+'
+test_expect_success 'kvs-move from namespace dst contains expected value' '
+	value=$(flux kvs get test.dst.a.b.c) &&
+	test "$value" = "foo"
+'
+
+test_expect_success 'remove test namespace' '
+	flux kvs namespace-remove fromns-option
+'
+
+# to namespace, via option
+#   copy a value, move a dir
+
+test_expect_success 'create test namespace' '
+	flux kvs namespace-create tons-option
+'
+
+test_expect_success 'kvs-copy to namespace works' '
+        flux kvs --namespace=tons-option unlink -Rf test &&
+        flux kvs unlink -Rf test &&
+	flux kvs put test.src=foo &&
+        flux kvs copy --dst-namespace=tons-option test.src test.dst
+'
+test_expect_success 'kvs-copy to namespace does not unlink src' '
+	value=$(flux kvs get test.src) &&
+	test "$value" = "foo"
+'
+test_expect_success 'kvs-copy to namespace dst contains expected value' '
+	value=$(flux kvs --namespace=tons-option get test.dst) &&
+	test "$value" = "foo"
+'
+
+test_expect_success 'kvs-move to namespace works' '
+        flux kvs --namespace=tons-option unlink -Rf test &&
+        flux kvs unlink -Rf test &&
+	flux kvs put test.src.a.b.c=foo &&
+        flux kvs move --dst-namespace=tons-option test.src test.dst
+'
+test_expect_success 'kvs-move to namespace unlinks src' '
+	test_must_fail flux kvs get --treeobj test.src
+'
+test_expect_success 'kvs-move to namespace dst contains expected value' '
+	value=$(flux kvs --namespace=tons-option get test.dst.a.b.c) &&
+	test "$value" = "foo"
+'
+
+test_expect_success 'remove test namespace' '
+	flux kvs namespace-remove tons-option
+'
 
 # expected failures
 

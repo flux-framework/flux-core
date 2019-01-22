@@ -46,18 +46,17 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                           "ops", ops);
 }
 
-flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
+flux_future_t *flux_kvs_commit_ns (flux_t *h,
+                                   const char *namespace,
+                                   int flags,
+                                   flux_kvs_txn_t *txn)
 {
-    const char *namespace;
     json_t *ops;
 
-    if (!txn) {
+    if (!txn || !namespace) {
         errno = EINVAL;
         return NULL;
     }
-
-    if (!(namespace = flux_kvs_get_namespace (h)))
-        return NULL;
 
     if (!(ops = txn_get_ops (txn))) {
         errno = EINVAL;
@@ -69,6 +68,16 @@ flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
                           "namespace", namespace,
                           "flags", flags,
                           "ops", ops);
+}
+
+flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
+{
+    const char *namespace;
+
+    if (!(namespace = flux_kvs_get_namespace (h)))
+        return NULL;
+
+    return flux_kvs_commit_ns (h, namespace, flags, txn);
 }
 
 /*

@@ -21,10 +21,14 @@
 #include <flux/core.h>
 
 #include "kvs_copy.h"
+#include "kvs_commit_private.h"
+#include "kvs_lookup_private.h"
 
 struct copy_context {
     int commit_flags;
+    char *srcns;
     char *srckey;
+    char *dstns;
     char *dstkey;
 };
 
@@ -32,14 +36,18 @@ static void copy_context_destroy (struct copy_context *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
+        free (ctx->srcns);
         free (ctx->srckey);
+        free (ctx->dstns);
         free (ctx->dstkey);
         free (ctx);
         errno = saved_errno;
     }
 }
 
-static struct copy_context *copy_context_create (const char *srckey,
+static struct copy_context *copy_context_create (const char *srcns,
+                                                 const char *srckey,
+                                                 const char *dstns,
                                                  const char *dstkey,
                                                  int commit_flags)
 {
@@ -47,7 +55,10 @@ static struct copy_context *copy_context_create (const char *srckey,
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if (!(ctx->srckey = strdup (srckey)) || !(ctx->dstkey = strdup (dstkey))) {
+    if ((srcns && !(ctx->srcns = strdup (srcns)))
+        || !(ctx->srckey = strdup (srckey))
+        || (dstns && !(ctx->dstns = strdup (dstns)))
+        || !(ctx->dstkey = strdup (dstkey))) {
         copy_context_destroy (ctx);
         return NULL;
     }
@@ -76,8 +87,14 @@ static void copy_continuation (flux_future_t *f, void *arg)
         goto error;
     if (flux_kvs_txn_unlink (txn, 0, ctx->srckey) < 0)
         goto error;
-    if (!(f2 = flux_kvs_commit (h, ctx->commit_flags, txn)))
-        goto error;
+    if (ctx->srcns) {
+        if (!(f2 = flux_kvs_commit_ns (h, ctx->srcns, ctx->commit_flags, txn)))
+            goto error;
+    }
+    else {
+        if (!(f2 = flux_kvs_commit (h, ctx->commit_flags, txn)))
+            goto error;
+    }
     if (flux_future_continue (f, f2) < 0) {
         flux_future_destroy (f2);
         goto error;
@@ -110,8 +127,14 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         goto error;
     if (flux_kvs_txn_put_treeobj (txn, 0, ctx->dstkey, val) < 0)
         goto error;
-    if (!(f2 = flux_kvs_commit (h, ctx->commit_flags, txn)))
-        goto error;
+    if (ctx->dstns) {
+        if (!(f2 = flux_kvs_commit_ns (h, ctx->dstns, ctx->commit_flags, txn)))
+            goto error;
+    }
+    else {
+        if (!(f2 = flux_kvs_commit (h, ctx->commit_flags, txn)))
+            goto error;
+    }
     if (flux_future_continue (f, f2) < 0) {
         flux_future_destroy (f2);
         goto error;
@@ -124,9 +147,12 @@ done:
     flux_kvs_txn_destroy (txn);
 }
 
-flux_future_t *flux_kvs_copy (flux_t *h, const char *srckey,
-                                         const char *dstkey,
-                                         int commit_flags)
+flux_future_t *flux_kvs_copy (flux_t *h,
+                              const char *srcns,
+                              const char *srckey,
+                              const char *dstns,
+                              const char *dstkey,
+                              int commit_flags)
 {
     struct copy_context *ctx;
     flux_future_t *f1;
@@ -136,9 +162,19 @@ flux_future_t *flux_kvs_copy (flux_t *h, const char *srckey,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f1 = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey)))
-        return NULL;
-    if (!(ctx = copy_context_create (srckey, dstkey, commit_flags)))
+    if (srcns) {
+        if (!(f1 = flux_kvs_lookup_ns (h, srcns, FLUX_KVS_TREEOBJ, srckey)))
+            return NULL;
+    }
+    else {
+        if (!(f1 = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey)))
+            return NULL;
+    }
+    if (!(ctx = copy_context_create (srcns,
+                                     srckey,
+                                     dstns,
+                                     dstkey,
+                                     commit_flags)))
         goto error;
     if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);
@@ -152,9 +188,12 @@ error:
     return NULL;
 }
 
-flux_future_t *flux_kvs_move (flux_t *h, const char *srckey,
-                                         const char *dstkey,
-                                         int commit_flags)
+flux_future_t *flux_kvs_move (flux_t *h,
+                              const char *srcns,
+                              const char *srckey,
+                              const char *dstns,
+                              const char *dstkey,
+                              int commit_flags)
 {
     struct copy_context *ctx;
     flux_future_t *f1;
@@ -164,9 +203,13 @@ flux_future_t *flux_kvs_move (flux_t *h, const char *srckey,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f1 = flux_kvs_copy (h, srckey, dstkey, commit_flags)))
+    if (!(f1 = flux_kvs_copy (h, srcns, srckey, dstns, dstkey, commit_flags)))
         return NULL;
-    if (!(ctx = copy_context_create (srckey, dstkey, commit_flags)))
+    if (!(ctx = copy_context_create (srcns,
+                                     srckey,
+                                     dstns,
+                                     dstkey,
+                                     commit_flags)))
         goto error;
     if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);

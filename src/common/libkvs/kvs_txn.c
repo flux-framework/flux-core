@@ -183,7 +183,7 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
     int saved_errno;
     char *s;
 
-    if (!txn || !key | !fmt) {
+    if (!txn || !key || !fmt) {
         errno = EINVAL;
         goto error;
     }
@@ -290,7 +290,7 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
     json_t *dirent = NULL;
     int saved_errno;
 
-    if (!txn || !key | !target) {
+    if (!txn || !key || !target) {
         errno = EINVAL;
         goto error;
     }
