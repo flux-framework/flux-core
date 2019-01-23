@@ -90,55 +90,39 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
                                 int flags)
 {
     kvstxn_t *kt;
-    int saved_errno;
 
-    if (!(kt = calloc (1, sizeof (*kt)))) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
+    if (!(kt = calloc (1, sizeof (*kt))))
+        goto error_enomem;
     if (ops) {
-        if (!(kt->ops = json_copy (ops))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
+        if (!(kt->ops = json_copy (ops)))
+            goto error_enomem;
     }
     else {
-        if (!(kt->ops = json_array ())) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
+        if (!(kt->ops = json_array ()))
+            goto error_enomem;
     }
-    if (!(kt->names = json_array ())) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
+    if (!(kt->names = json_array ()))
+        goto error_enomem;
     if (name) {
         json_t *s;
-        if (!(s = json_string (name))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
+        if (!(s = json_string (name)))
+            goto error_enomem;
         if (json_array_append_new (kt->names, s) < 0) {
             json_decref (s);
-            saved_errno = ENOMEM;
-            goto error;
+            goto error_enomem;
         }
     }
     kt->flags = flags;
-    if (!(kt->missing_refs_list = zlist_new ())) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
-    if (!(kt->dirty_cache_entries_list = zlist_new ())) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
+    if (!(kt->missing_refs_list = zlist_new ()))
+        goto error_enomem;
+    if (!(kt->dirty_cache_entries_list = zlist_new ()))
+        goto error_enomem;
     kt->ktm = ktm;
     kt->state = KVSTXN_STATE_INIT;
     return kt;
- error:
+ error_enomem:
     kvstxn_destroy (kt);
-    errno = saved_errno;
+    errno = ENOMEM;
     return NULL;
 }
 
