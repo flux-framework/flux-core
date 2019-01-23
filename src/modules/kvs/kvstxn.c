@@ -96,9 +96,17 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(kt->ops = json_copy (ops))) {
-        saved_errno = ENOMEM;
-        goto error;
+    if (ops) {
+        if (!(kt->ops = json_copy (ops))) {
+            saved_errno = ENOMEM;
+            goto error;
+        }
+    }
+    else {
+        if (!(kt->ops = json_array ())) {
+            saved_errno = ENOMEM;
+            goto error;
+        }
     }
     if (!(kt->names = json_array ())) {
         saved_errno = ENOMEM;
@@ -1228,31 +1236,6 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
     return 1;
 }
 
-static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm, int flags)
-{
-    kvstxn_t *ktnew;
-
-    if (!(ktnew = calloc (1, sizeof (*ktnew))))
-        goto error_enomem;
-    if (!(ktnew->ops = json_array ()))
-        goto error_enomem;
-    if (!(ktnew->names = json_array ()))
-        goto error_enomem;
-    if (!(ktnew->missing_refs_list = zlist_new ()))
-        goto error_enomem;
-    if (!(ktnew->dirty_cache_entries_list = zlist_new ()))
-        goto error_enomem;
-    ktnew->flags = flags;
-    ktnew->ktm = ktm;
-    ktnew->state = KVSTXN_STATE_INIT;
-    return ktnew;
-
-error_enomem:
-    kvstxn_destroy (ktnew);
-    errno = ENOMEM;
-    return NULL;
-}
-
 /* Merge ready transactions that are mergeable, where merging consists
  * creating a new kvstxn_t, and merging the other transactions in the
  * ready queue and appending their ops/names to the new transaction.
@@ -1295,7 +1278,7 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
         || (first->flags != second->flags))
         return 0;
 
-    if (!(new = kvstxn_create_empty (ktm, first->flags)))
+    if (!(new = kvstxn_create (ktm, NULL, NULL, first->flags)))
         return -1;
     new->internal_flags |= KVSTXN_MERGED;
 
