@@ -24,6 +24,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 
 #include "aggregate.h"
@@ -247,6 +248,8 @@ static int reload_event_wait (flux_t *h, resource_ctx_t *ctx)
     int rc = -1;
     flux_future_t *f = NULL;
     char key [1024];
+    struct timespec tstart;
+    monotime (&tstart);
     flux_log (h, LOG_DEBUG, "seq=%d: waiting for reload", ctx->reload_count);
     if (aggregate_key_get (key, sizeof (key), ctx->reload_count) < 0
         || !(f = aggregate_wait (h, key))) {
@@ -258,7 +261,8 @@ static int reload_event_wait (flux_t *h, resource_ctx_t *ctx)
         goto done;
     }
     rc = aggregate_unpack_to_kvs (f, "resource.hwloc.by_rank");
-    flux_log (h, LOG_DEBUG, "seq=%d: reload complete", ctx->reload_count);
+    flux_log (h, LOG_DEBUG, "seq=%d: reload complete (%.3fs)",
+                             ctx->reload_count, monotime_since (tstart)/1000);
 done:
     flux_future_destroy (f);
     return (rc);
