@@ -216,62 +216,6 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
     return wl;
 }
 
-static lookup_process_t symlink_namespace (lookup_t *lh,
-                                           const char *linkpath,
-                                           struct kvsroot **rootp,
-                                           char **linkpathp)
-{
-    struct kvsroot *root = NULL;
-    char *linkpath_norm = NULL;
-    char *ns_prefix = NULL;
-    char *p_suffix = NULL;
-    lookup_process_t ret = LOOKUP_PROCESS_ERROR;
-    int pret;
-
-    if ((pret = kvs_namespace_prefix (linkpath,
-                                      &ns_prefix,
-                                      &p_suffix)) < 0) {
-        lh->errnum = errno;
-        goto done;
-    }
-
-    if (pret) {
-        root = kvsroot_mgr_lookup_root (lh->krm, ns_prefix);
-
-        if (!root) {
-            free (lh->missing_namespace);
-            lh->missing_namespace = ns_prefix;
-            ns_prefix = NULL;
-            ret = LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
-            goto done;
-        }
-
-        if (kvsroot_check_user (lh->krm,
-                                root,
-                                lh->rolemask,
-                                lh->userid) < 0) {
-            lh->errnum = EPERM;
-            goto done;
-        }
-
-        if (!(linkpath_norm = kvs_util_normalize_key (p_suffix, NULL))) {
-            lh->errnum = errno;
-            goto done;
-        }
-    }
-
-    /* if no namespace prefix, these are set to NULL so caller knows
-     * no namespace prefix
-     */
-    (*rootp) = root;
-    (*linkpathp) = linkpath_norm;
-    ret = LOOKUP_PROCESS_FINISHED;
-done:
-    free (ns_prefix);
-    free (p_suffix);
-    return ret;
-}
-
 /* If recursing, wlp will be set to new walk level pointer
  */
 static lookup_process_t walk_symlink (lookup_t *lh,
@@ -281,8 +225,6 @@ static lookup_process_t walk_symlink (lookup_t *lh,
                                       walk_level_t **wlp)
 {
     lookup_process_t ret = LOOKUP_PROCESS_ERROR;
-    struct kvsroot *root = NULL;
-    char *linkpath = NULL;
     walk_level_t *wltmp;
     const char *linkstr;
 
@@ -297,19 +239,9 @@ static lookup_process_t walk_symlink (lookup_t *lh,
     if (!last_pathcomp (wl->pathcomps, current_pathcomp)
         || (!(lh->flags & FLUX_KVS_READLINK)
             && !(lh->flags & FLUX_KVS_TREEOBJ))) {
-        lookup_process_t sret;
 
         if (wl->depth == SYMLINK_CYCLE_LIMIT) {
             lh->errnum = ELOOP;
-            goto cleanup;
-        }
-
-        sret = symlink_namespace (lh,
-                                  linkstr,
-                                  &root,
-                                  &linkpath);
-        if (sret != LOOKUP_PROCESS_FINISHED) {
-            ret = sret;
             goto cleanup;
         }
 
@@ -321,24 +253,13 @@ static lookup_process_t walk_symlink (lookup_t *lh,
         /* if symlink is root, no need to recurse, just get
          * root_dirent and continue on.
          */
-        if (!strcmp (linkpath ? linkpath : linkstr, ".")) {
-            if (root) {
-                free (wl->tmp_dirent);
-                wl->tmp_dirent = treeobj_create_dirref (root->ref);
-                if (!wl->tmp_dirent) {
-                    lh->errnum = errno;
-                    goto cleanup;
-                }
-                wl->dirent = wl->tmp_dirent;
-            }
-            else
-                wl->dirent = wl->root_dirent;
-        }
+        if (!strcmp (linkstr, "."))
+            wl->dirent = wl->root_dirent;
         else {
             /* "recursively" determine link dirent */
             if (!(wltmp = walk_levels_push (lh,
-                                            root ? root->ref : wl->root_ref,
-                                            linkpath ? linkpath : linkstr,
+                                            wl->root_ref,
+                                            linkstr,
                                             wl->depth + 1))) {
                 lh->errnum = errno;
                 goto cleanup;
@@ -355,7 +276,6 @@ static lookup_process_t walk_symlink (lookup_t *lh,
 done:
     ret = LOOKUP_PROCESS_FINISHED;
 cleanup:
-    free (linkpath);
     return ret;
 }
 
@@ -533,9 +453,7 @@ lookup_t *lookup_create (struct cache *cache,
                          flux_t *h)
 {
     lookup_t *lh = NULL;
-    char *ns_prefix = NULL;
-    char *p_suffix = NULL;
-    int pret, saved_errno;
+    int saved_errno;
 
     if (!cache || !krm || !namespace || !path) {
         errno = EINVAL;
@@ -551,42 +469,15 @@ lookup_t *lookup_create (struct cache *cache,
     lh->krm = krm;
     lh->current_epoch = current_epoch;
 
-    if ((pret = kvs_namespace_prefix (path, &ns_prefix, &p_suffix)) < 0) {
-        saved_errno = errno;
+    /* must duplicate strings, user may not keep pointer alive */
+    if (!(lh->namespace = strdup (namespace))) {
+        saved_errno = ENOMEM;
         goto cleanup;
     }
 
-    if (pret) {
-        /* Cannot leap namespaces if user specified root reference to
-         * start at.  With minor exception if namespace is identical
-         * to one input by user. */
-        if (root_ref
-            && strcmp (namespace, ns_prefix)) {
-            saved_errno = EINVAL;
-            goto cleanup;
-        }
-
-        lh->namespace = ns_prefix;
-        ns_prefix = NULL;
-
-        if (!(lh->path = kvs_util_normalize_key (p_suffix, NULL))) {
-            saved_errno = errno;
-            goto cleanup;
-        }
-        free (p_suffix);
-        p_suffix = NULL;
-    }
-    else {
-        /* must duplicate strings, user may not keep pointer alive */
-        if (!(lh->namespace = strdup (namespace))) {
-            saved_errno = ENOMEM;
-            goto cleanup;
-        }
-
-        if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
-            saved_errno = errno;
-            goto cleanup;
-        }
+    if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
+        saved_errno = errno;
+        goto cleanup;
     }
 
     if (root_ref) {
@@ -620,8 +511,6 @@ lookup_t *lookup_create (struct cache *cache,
     return lh;
 
  cleanup:
-    free (ns_prefix);
-    free (p_suffix);
     lookup_destroy (lh);
     errno = saved_errno;
     return NULL;

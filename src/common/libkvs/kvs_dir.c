@@ -199,23 +199,12 @@ bool flux_kvsdir_issymlink (const flux_kvsdir_t *dir, const char *name)
 
 char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *name)
 {
-    char *ptr;
     char *s;
     int len;
 
     if (!strcmp (dir->key, ".")) {
         if (!(s = strdup (name)))
             goto nomem;
-    }
-    else if (!strncmp (dir->key, "ns:", 3)
-             && (ptr = strchr (dir->key + 3, '/'))
-             && !strcmp (ptr + 1, ".")) {
-        if (!(s = malloc (strlen (dir->key) + strlen (name) + 1)))
-            goto nomem;
-        len = strlen (dir->key);
-        strcpy (s, dir->key);
-        s[len - 1] = '\0';
-        strcat (s, name);
     }
     else {
         len = strlen (dir->key);
