@@ -29,6 +29,7 @@
 #include "reactor.h"
 #include "msg_handler.h"
 #include "mrpc.h"
+#include "flog.h"
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/aux.h"
@@ -57,6 +58,12 @@ static void flux_mrpc_usecount_incr (flux_mrpc_t *mrpc)
     mrpc->usecount++;
 }
 
+static void log_matchtag_leak (flux_t *h, const char *s, int matchtag)
+{
+    if ((flux_flags_get (h) & FLUX_O_MATCHDEBUG))
+        fprintf (stderr, "MATCHDEBUG: %s leaks matchtag=%d\n", s, matchtag);
+}
+
 static void flux_mrpc_usecount_decr (flux_mrpc_t *mrpc)
 {
     if (!mrpc)
@@ -67,12 +74,14 @@ static void flux_mrpc_usecount_decr (flux_mrpc_t *mrpc)
             flux_msg_handler_stop (mrpc->mh);
             flux_msg_handler_destroy (mrpc->mh);
         }
+        /* If future is unfulfilled, a response is potentially in flight.
+         * Better to leak the matchtag than reuse it prematurely.
+         */
         if (mrpc->m.matchtag != FLUX_MATCHTAG_NONE) {
-            /* FIXME: we cannot safely return matchtags to the pool here
-             * if the rpc was not completed.  Lacking a proper cancellation
-             * protocol, we simply leak them.  See issue #212.
-             */
-            if (mrpc->rx_count >= mrpc->rx_expected)
+            if (mrpc->rx_count < mrpc->rx_expected)
+                log_matchtag_leak (mrpc->h, "incomplete MRPC",
+                                   mrpc->m.matchtag);
+            else
                 flux_matchtag_free (mrpc->h, mrpc->m.matchtag);
         }
         flux_msg_destroy (mrpc->rx_msg);

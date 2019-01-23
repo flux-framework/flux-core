@@ -43,6 +43,7 @@ enum {
     FLUX_O_TRACE = 1,   /* send message trace to stderr */
     FLUX_O_CLONE = 2,   /* handle was created with flux_clone() */
     FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
+    FLUX_O_MATCHDEBUG = 8,/* enable matchtag debugging */
 };
 
 /* Flags for flux_requeue().

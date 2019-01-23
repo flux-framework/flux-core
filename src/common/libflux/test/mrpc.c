@@ -642,7 +642,7 @@ int main (int argc, char *argv[])
         "created test server thread");
     if (!h)
         BAIL_OUT ("can't continue without test server");
-    flux_fatal_set (h, fatal_err, NULL);
+    flux_flags_set (h, FLUX_O_MATCHDEBUG);
 
     flux_fatal_set (h, fatal_err, NULL);
     flux_fatal_error (h, __FUNCTION__, "Foo");

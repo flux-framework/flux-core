@@ -35,19 +35,42 @@
 struct flux_rpc {
     flux_t *h;
     uint32_t matchtag;
+    int flags;
     flux_future_t *f;
 };
+
+static void log_matchtag_leak (flux_t *h, const char *msg, int matchtag)
+{
+    if ((flux_flags_get (h) & FLUX_O_MATCHDEBUG))
+        fprintf (stderr, "MATCHDEBUG: %s leaks matchtag=%d\n", msg, matchtag);
+}
 
 static void rpc_destroy (struct flux_rpc *rpc)
 {
     if (rpc) {
-        /* If future is unfulilled, a response is potentially in flight.
-         * Better to leak the matchtag than reuse it prematurely.
+        /* If future is unfulilled, or a streaming future is fulfilled but
+         * not with an error indicating end-of-stream, then responses
+         * may still be coming.  Better to leak the matchtag than reuse
+         * it prematurely.
          */
-        if (rpc->matchtag != FLUX_MATCHTAG_NONE
-                                 && flux_future_wait_for (rpc->f, 0.) == 0) {
-            flux_matchtag_free (rpc->h, rpc->matchtag);
+        if (rpc->matchtag == FLUX_MATCHTAG_NONE)
+            goto done;
+        if ((rpc->flags & FLUX_RPC_STREAMING)) {
+            if (!flux_future_is_ready (rpc->f)
+                                    || flux_future_get (rpc->f, NULL) == 0) {
+                log_matchtag_leak (rpc->h, "unterminated streaming RPC",
+                                   rpc->matchtag);
+                goto done;
+            }
         }
+        else {
+            if (!flux_future_is_ready (rpc->f)) {
+                log_matchtag_leak (rpc->h, "unfulfilled RPC", rpc->matchtag);
+                goto done;
+            }
+        }
+        flux_matchtag_free (rpc->h, rpc->matchtag);
+done:
         free (rpc);
     }
 }
@@ -62,6 +85,7 @@ static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
     }
     rpc->h = h;
     rpc->f = f;
+    rpc->flags = flags;
     if ((flags & FLUX_RPC_NORESPONSE)) {
         rpc->matchtag = FLUX_MATCHTAG_NONE;
     }
@@ -243,6 +267,15 @@ error:
     return NULL;
 }
 
+static int validate_flags (int flags, int allowed)
+{
+    if ((flags & allowed) != flags) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 flux_future_t *flux_rpc_message (flux_t *h,
                                  const flux_msg_t *msg,
                                  uint32_t nodeid,
@@ -251,7 +284,8 @@ flux_future_t *flux_rpc_message (flux_t *h,
     flux_msg_t *cpy;
     flux_future_t *f;
 
-    if (!h || !msg || (flags != 0 && flags != FLUX_RPC_NORESPONSE)) {
+    if (!h || !msg || validate_flags (flags, FLUX_RPC_NORESPONSE
+                                           | FLUX_RPC_STREAMING)) {
         errno = EINVAL;
         return NULL;
     }

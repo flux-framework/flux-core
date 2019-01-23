@@ -275,6 +275,8 @@ flux_t *flux_open (const char *uri, int flags)
         goto done;
     if (getenv ("FLUX_HANDLE_TRACE"))
         flags |= FLUX_O_TRACE;
+    if (getenv ("FLUX_HANDLE_MATCHDEBUG"))
+        flags |= FLUX_O_MATCHDEBUG;
     if (!(h = connector_init (path, flags))) {
         dlclose (dso);
         goto done;
@@ -357,6 +359,18 @@ nomem:
     return NULL;
 }
 
+static void report_leaked_matchtags (struct tagpool *tp)
+{
+    uint32_t reg = tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_SIZE) -
+                   tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_AVAIL);
+    uint32_t grp = tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_SIZE) -
+                   tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_AVAIL);
+    if (reg > 0 || grp > 0)
+        fprintf (stderr,
+                 "MATCHDEBUG: pool destroy with reg=%d grp=%d allocated\n",
+                 reg, grp);
+}
+
 void flux_handle_destroy (flux_t *h)
 {
     if (h && --h->usecount == 0) {
@@ -367,6 +381,8 @@ void flux_handle_destroy (flux_t *h)
         else {
             if (h->ops->impl_destroy)
                 h->ops->impl_destroy (h->impl);
+            if ((h->flags & FLUX_O_MATCHDEBUG))
+                report_leaked_matchtags (h->tagpool);
             tagpool_destroy (h->tagpool);
             if (h->dso)
                 dlclose (h->dso);

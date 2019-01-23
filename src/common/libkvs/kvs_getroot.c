@@ -48,7 +48,6 @@ static struct getroot_ctx *alloc_ctx (void)
 flux_future_t *flux_kvs_getroot (flux_t *h, const char *namespace, int flags)
 {
     flux_future_t *f;
-    const char *topic = "kvs.getroot";
     struct getroot_ctx *ctx;
 
     if (!h || flags) {
@@ -59,7 +58,7 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *namespace, int flags)
         return NULL;
     if (!namespace && !(namespace = flux_kvs_get_namespace (h)))
         goto error;
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0,
                              "{s:s s:i}",
                              "namespace", namespace,
                              "flags", flags)))
