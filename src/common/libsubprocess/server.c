@@ -654,23 +654,40 @@ void server_stop (flux_subprocess_server_t *s)
     flux_msg_handler_delvec (s->handlers);
 }
 
-void terminate_uuid (flux_subprocess_t *p, const char *id)
+static void terminate (flux_subprocess_t *p)
+{
+    flux_future_t *f;
+    if (!(f = flux_subprocess_kill (p, SIGKILL))) {
+        flux_subprocess_server_t *s;
+        s = flux_subprocess_aux_get (p, "server_ctx");
+        flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
+        return;
+    }
+    flux_future_destroy (f);
+}
+
+int server_terminate_subprocesses (flux_subprocess_server_t *s)
+{
+    flux_subprocess_t *p;
+
+    p = zhash_first (s->subprocesses);
+    while (p) {
+        terminate (p);
+        p = zhash_next (s->subprocesses);
+    }
+
+    return 0;
+}
+
+static void terminate_uuid (flux_subprocess_t *p, const char *id)
 {
     char *sender;
 
     if (!(sender = subprocess_sender (p)))
         return;
 
-    if (!strcmp (id, sender)) {
-        flux_future_t *f;
-        if (!(f = flux_subprocess_kill (p, SIGKILL))) {
-            flux_subprocess_server_t *s;
-            s = flux_subprocess_aux_get (p, "server_ctx");
-            flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
-            return;
-        }
-        flux_future_destroy (f);
-    }
+    if (!strcmp (id, sender))
+        terminate (p);
 
     free (sender);
 }
