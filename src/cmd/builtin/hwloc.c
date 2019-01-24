@@ -21,8 +21,6 @@
 
 #include <hwloc.h>
 
-#include "src/common/libutil/sds.h"
-
 struct hwloc_topo {
     flux_t *h;
     flux_future_t *f;
