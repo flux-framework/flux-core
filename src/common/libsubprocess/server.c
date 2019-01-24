@@ -128,7 +128,7 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
         return;
 
     /* report of state change handled through typical state change
-     * callback.  Normaly cleanup occurs through completion of local
+     * callback.  Normally cleanup occurs through completion of local
      * subprocess.
      */
     p->state = FLUX_SUBPROCESS_FAILED;
