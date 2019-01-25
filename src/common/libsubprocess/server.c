@@ -33,11 +33,19 @@
 #include "server.h"
 #include "util.h"
 
+static void subprocesses_free_fn (void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    flux_subprocess_unref (p);
+}
+
 static int store_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
 {
     pid_t pid = flux_subprocess_pid (p);
     char *str = NULL;
     int rv = -1;
+    void *ret = NULL;
 
     if (asprintf (&str, "%d", pid) < 0) {
         flux_log_error (s->h, "%s: asprintf", __FUNCTION__);
@@ -48,6 +56,9 @@ static int store_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
         flux_log_error (s->h, "%s: zhash_insert", __FUNCTION__);
         goto cleanup;
     }
+
+    ret = zhash_freefn (s->subprocesses, str, subprocesses_free_fn);
+    assert (ret);
 
     rv = 0;
 cleanup:
@@ -100,8 +111,6 @@ static void subprocess_cleanup (flux_subprocess_t *p)
     assert (s && msg);
 
     remove_pid (s, p);
-    flux_msg_destroy (msg);
-    flux_subprocess_unref (p);
 }
 
 static void rexec_completion_cb (flux_subprocess_t *p)
@@ -128,7 +137,7 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
         return;
 
     /* report of state change handled through typical state change
-     * callback.  Normaly cleanup occurs through completion of local
+     * callback.  Normally cleanup occurs through completion of local
      * subprocess.
      */
     p->state = FLUX_SUBPROCESS_FAILED;
@@ -281,6 +290,12 @@ error:
     internal_fatal (s, p);
 }
 
+static void flux_msg_destroy_wrapper (void *arg)
+{
+    flux_msg_t *msg = arg;
+    flux_msg_destroy (msg);
+}
+
 static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
@@ -362,8 +377,9 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (!(copy = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_subprocess_aux_set (p, "msg", copy, NULL) < 0)
+    if (flux_subprocess_aux_set (p, "msg", copy, flux_msg_destroy_wrapper) < 0)
         goto error;
+    copy = NULL;                /* owned by 'p' now */
     if (flux_subprocess_aux_set (p, "server_ctx", s, NULL) < 0)
         goto error;
 
@@ -654,23 +670,40 @@ void server_stop (flux_subprocess_server_t *s)
     flux_msg_handler_delvec (s->handlers);
 }
 
-void terminate_uuid (flux_subprocess_t *p, const char *id)
+static void terminate (flux_subprocess_t *p)
+{
+    flux_future_t *f;
+    if (!(f = flux_subprocess_kill (p, SIGKILL))) {
+        flux_subprocess_server_t *s;
+        s = flux_subprocess_aux_get (p, "server_ctx");
+        flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
+        return;
+    }
+    flux_future_destroy (f);
+}
+
+int server_terminate_subprocesses (flux_subprocess_server_t *s)
+{
+    flux_subprocess_t *p;
+
+    p = zhash_first (s->subprocesses);
+    while (p) {
+        terminate (p);
+        p = zhash_next (s->subprocesses);
+    }
+
+    return 0;
+}
+
+static void terminate_uuid (flux_subprocess_t *p, const char *id)
 {
     char *sender;
 
     if (!(sender = subprocess_sender (p)))
         return;
 
-    if (!strcmp (id, sender)) {
-        flux_future_t *f;
-        if (!(f = flux_subprocess_kill (p, SIGKILL))) {
-            flux_subprocess_server_t *s;
-            s = flux_subprocess_aux_get (p, "server_ctx");
-            flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
-            return;
-        }
-        flux_future_destroy (f);
-    }
+    if (!strcmp (id, sender))
+        terminate (p);
 
     free (sender);
 }

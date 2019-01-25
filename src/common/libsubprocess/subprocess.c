@@ -201,7 +201,7 @@ static void subprocess_server_destroy (void *arg)
 {
     flux_subprocess_server_t *s = arg;
     if (s && s->magic == SUBPROCESS_SERVER_MAGIC) {
-        /* s->handlers handle in server_stop, this is for destroying
+        /* s->handlers handled in server_stop, this is for destroying
          * things only
          */
         zhash_destroy (&s->subprocesses);
@@ -286,6 +286,7 @@ void flux_subprocess_server_stop (flux_subprocess_server_t *s)
 {
     if (s && s->magic == SUBPROCESS_SERVER_MAGIC) {
         server_stop (s);
+        server_terminate_subprocesses (s);
         subprocess_server_destroy (s);
     }
 }
