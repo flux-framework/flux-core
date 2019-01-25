@@ -8,7 +8,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import errno
 import json
+
+import six
 
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
@@ -145,7 +148,16 @@ class MessageWatcher(Watcher):
         self.callback = callback
         self.args = args
         self.wargs = ffi.new_handle(self)
+
+        if topic_glob is None or topic_glob == ffi.NULL:
+            topic_glob = ffi.NULL
+        elif isinstance(topic_glob, six.text_type):
+            topic_glob = topic_glob.encode("UTF-8")
+        elif not isinstance(topic_glob, six.binary_type):
+            errmsg = "Topic must be a string, not {}".format(type(topic_glob))
+            raise TypeError(errno.EINVAL, errmsg)
         c_topic_glob = ffi.new("char[]", topic_glob)
+
         match = ffi.new(
             "struct flux_match *",
             {"typemask": type_mask, "matchtag": match_tag, "topic_glob": c_topic_glob},
