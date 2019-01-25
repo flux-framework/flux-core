@@ -100,7 +100,6 @@ static void subprocess_cleanup (flux_subprocess_t *p)
     assert (s && msg);
 
     remove_pid (s, p);
-    flux_msg_destroy (msg);
     flux_subprocess_unref (p);
 }
 
@@ -281,6 +280,12 @@ error:
     internal_fatal (s, p);
 }
 
+static void flux_msg_destroy_wrapper (void *arg)
+{
+    flux_msg_t *msg = arg;
+    flux_msg_destroy (msg);
+}
+
 static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
@@ -362,8 +367,9 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (!(copy = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_subprocess_aux_set (p, "msg", copy, NULL) < 0)
+    if (flux_subprocess_aux_set (p, "msg", copy, flux_msg_destroy_wrapper) < 0)
         goto error;
+    copy = NULL;                /* owned by 'p' now */
     if (flux_subprocess_aux_set (p, "server_ctx", s, NULL) < 0)
         goto error;
 
