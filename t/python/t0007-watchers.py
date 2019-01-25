@@ -65,6 +65,20 @@ class TestTimer(unittest.TestCase):
             self.assertEqual(ret, 0, msg="Reactor exit")
             self.assertTrue(timer_ran[0], msg="Timer did not run successfully")
 
+    def test_msg_watcher_unicode(self):
+        with self.f.msg_watcher_create(
+            lambda handle, x, y, z: handle.fatal_error("cb should not run"),
+            topic_glob=u"foo.*",
+        ) as mw:
+            self.assertIsNotNone(mw)
+
+    def test_msg_watcher_bytes(self):
+        with self.f.msg_watcher_create(
+            lambda handle, x, y, z: handle.fatal_error("cb should not run"),
+            topic_glob=b"foo.*",
+        ) as mw:
+            self.assertIsNotNone(mw)
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
