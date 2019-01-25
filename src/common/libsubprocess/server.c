@@ -33,11 +33,19 @@
 #include "server.h"
 #include "util.h"
 
+static void subprocesses_free_fn (void *arg)
+{
+    flux_subprocess_t *p = arg;
+
+    flux_subprocess_unref (p);
+}
+
 static int store_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
 {
     pid_t pid = flux_subprocess_pid (p);
     char *str = NULL;
     int rv = -1;
+    void *ret = NULL;
 
     if (asprintf (&str, "%d", pid) < 0) {
         flux_log_error (s->h, "%s: asprintf", __FUNCTION__);
@@ -48,6 +56,9 @@ static int store_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
         flux_log_error (s->h, "%s: zhash_insert", __FUNCTION__);
         goto cleanup;
     }
+
+    ret = zhash_freefn (s->subprocesses, str, subprocesses_free_fn);
+    assert (ret);
 
     rv = 0;
 cleanup:
@@ -100,7 +111,6 @@ static void subprocess_cleanup (flux_subprocess_t *p)
     assert (s && msg);
 
     remove_pid (s, p);
-    flux_subprocess_unref (p);
 }
 
 static void rexec_completion_cb (flux_subprocess_t *p)
