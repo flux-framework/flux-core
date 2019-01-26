@@ -40,8 +40,6 @@ enum kvs_op {
     FLUX_KVS_WATCH_UNIQ = 128
 };
 
-typedef struct flux_kvs_namespace_itr flux_kvs_namespace_itr_t;
-
 /* Namespace
  * - namespace create only creates the namespace on rank 0.  Other
  *   ranks initialize against that namespace the first time they use
@@ -57,19 +55,6 @@ typedef struct flux_kvs_namespace_itr flux_kvs_namespace_itr_t;
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *name_space,
                                           uint32_t owner, int flags);
 flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *name_space);
-
-/* Namespace list
- * - Returns flux_kvs_namespace_itr_t for iterating through namespaces.
- *
- *   NOTE: Take care to avoid conflicting with C++'s keyword "namespace"
- *   in the external interfaces.
- */
-flux_kvs_namespace_itr_t *flux_kvs_namespace_list (flux_t *h);
-const char *flux_kvs_namespace_itr_next (flux_kvs_namespace_itr_t *itr,
-                                         uint32_t *owner,
-                                         int *flags);
-void flux_kvs_namespace_itr_rewind (flux_kvs_namespace_itr_t *itr);
-void flux_kvs_namespace_itr_destroy (flux_kvs_namespace_itr_t *itr);
 
 /* Namespace Selection
  * - configure a KVS namespace to use in all kvs operations using this

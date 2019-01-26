@@ -482,23 +482,45 @@ int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
 int cmd_namespace_list (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    flux_kvs_namespace_itr_t *itr;
-    const char *namespace;
-    uint32_t owner;
-    int optindex, flags;
+    int optindex;
+    flux_future_t *f;
+    json_t *array;
+    int i, size;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) != 0) {
         optparse_print_usage (p);
         exit (1);
     }
-    if (!(itr = flux_kvs_namespace_list (h)))
-        log_err_exit ("flux_kvs_namespace_list");
+
+    if (!(f = flux_rpc (h, "kvs.namespace-list", NULL, FLUX_NODEID_ANY, 0)))
+        log_err_exit ("flux_rpc");
+    if (flux_rpc_get_unpack (f, "{ s:o }", "namespaces", &array) < 0)
+        log_err_exit ("flux_rpc_get_unpack");
+    if (!json_is_array (array))
+        log_msg_exit ("namespaces object is not an array");
+
+    size = json_array_size (array);
     printf ("NAMESPACE                                 OWNER      FLAGS\n");
-    while ((namespace = flux_kvs_namespace_itr_next (itr, &owner, &flags))) {
+    for (i = 0; i < size; i++) {
+        const char *namespace;
+        uint32_t owner;
+        int flags;
+        json_t *o;
+
+        if (!(o = json_array_get (array, i)))
+            log_err_exit ("json_array_get");
+
+        if (json_unpack (o, "{ s:s s:i s:i }",
+                         "namespace", &namespace,
+                         "owner", &owner,
+                         "flags", &flags) < 0)
+            log_err_exit ("json_unpack");
+
         printf ("%-36s %10u 0x%08X\n", namespace, owner, flags);
     }
-    flux_kvs_namespace_itr_destroy (itr);
+
+    flux_future_destroy (f);
     return (0);
 }
 

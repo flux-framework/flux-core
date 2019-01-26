@@ -18,12 +18,6 @@
 
 #define FLUX_HANDLE_KVS_NAMESPACE "kvsnamespace"
 
-struct flux_kvs_namespace_itr {
-    json_t *namespace_array;
-    int size;
-    int index;
-};
-
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
                                           uint32_t owner, int flags)
 {
@@ -50,90 +44,6 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace)
     return flux_rpc_pack (h, "kvs.namespace-remove", 0, 0,
                           "{ s:s }",
                           "namespace", namespace);
-}
-
-flux_kvs_namespace_itr_t *flux_kvs_namespace_list (flux_t *h)
-{
-    flux_future_t *f;
-    json_t *array = NULL;
-    flux_kvs_namespace_itr_t *itr = NULL;
-
-    if (!h) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (!(f = flux_rpc (h, "kvs.namespace-list", NULL, FLUX_NODEID_ANY, 0)))
-        goto error;
-    if (flux_rpc_get_unpack (f, "{ s:O }", "namespaces", &array) < 0)
-        goto error;
-    if (!json_is_array (array)) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (!(itr = calloc (1, sizeof (*itr)))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    itr->namespace_array = array;
-    itr->size = json_array_size (array);
-    itr->index = 0;
-    return itr;
-
-error:
-    flux_kvs_namespace_itr_destroy (itr);
-    json_decref (array);
-    return NULL;
-}
-
-const char *flux_kvs_namespace_itr_next (flux_kvs_namespace_itr_t *itr,
-                                         uint32_t *owner,
-                                         int *flags)
-{
-    const char *namespace;
-    uint32_t owner_tmp;
-    int flags_tmp;
-    json_t *o;
-
-    if (!itr) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (itr->size == itr->index) {
-        errno = 0;
-        return NULL;
-    }
-
-    if (!(o = json_array_get (itr->namespace_array, itr->index))) {
-        errno = EPROTO;
-        return NULL;
-    }
-
-    if (json_unpack (o, "{ s:s s:i s:i }",
-                     "namespace", &namespace,
-                     "owner", &owner_tmp,
-                     "flags", &flags_tmp) < 0)
-        return NULL;
-    if (owner)
-        (*owner) = owner_tmp;
-    if (flags)
-        (*flags) = flags_tmp;
-    itr->index++;
-    return namespace;
-}
-
-void flux_kvs_namespace_itr_rewind (flux_kvs_namespace_itr_t *itr)
-{
-    if (itr)
-        itr->index = 0;
-}
-
-void flux_kvs_namespace_itr_destroy (flux_kvs_namespace_itr_t *itr)
-{
-    if (itr) {
-        json_decref (itr->namespace_array);
-        free (itr);
-    }
 }
 
 int flux_kvs_set_namespace (flux_t *h, const char *namespace)
