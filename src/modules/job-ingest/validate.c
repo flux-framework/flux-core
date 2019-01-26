@@ -60,17 +60,6 @@ struct validate {
     struct worker *worker[MAX_WORKER_COUNT];
 };
 
-/* Trigger cleanpup in broker exec service.
- */
-static void disconnect (flux_t *h)
-{
-    flux_future_t *f;
-
-    f = flux_rpc (h, "cmb.disconnect", NULL,
-                  FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
-    flux_future_destroy (f);
-}
-
 void validate_destroy (struct validate *v)
 {
     if (v) {
@@ -78,7 +67,6 @@ void validate_destroy (struct validate *v)
         int i;
         for (i = 0; i < MAX_WORKER_COUNT; i++)
             worker_destroy (v->worker[i]);
-        disconnect (v->h);
         free (v);
         errno = saved_errno;
     }
