@@ -12,7 +12,7 @@
 #define _KVS_LOOKUP_PRIVATE_H
 
 flux_future_t *flux_kvs_lookup_ns (flux_t *h,
-                                   const char *namespace,
+                                   const char *ns,
                                    int flags,
                                    const char *key);
 

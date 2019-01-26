@@ -12,7 +12,7 @@
 #define _KVS_COMMIT_PRIVATE_H
 
 flux_future_t *flux_kvs_commit_ns (flux_t *h,
-                                   const char *namespace,
+                                   const char *ns,
                                    int flags,
                                    flux_kvs_txn_t *txn);
 

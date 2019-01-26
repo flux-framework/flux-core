@@ -128,7 +128,7 @@ void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry);
 
 /* flux_t is optional, if NULL logging will go to stderr */
 kvstxn_mgr_t *kvstxn_mgr_create (struct cache *ktache,
-                                 const char *namespace,
+                                 const char *ns,
                                  const char *hash_name,
                                  flux_t *h,
                                  void *aux);

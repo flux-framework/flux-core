@@ -141,7 +141,7 @@ int roots_error_cb (struct kvsroot *root, void *arg)
 int roots_remove_cb (struct kvsroot *root, void *arg)
 {
     kvsroot_mgr_t *krm = arg;
-    kvsroot_mgr_remove_root (krm, root->namespace);
+    kvsroot_mgr_remove_root (krm, root->ns_name);
     return 1;
 }
 

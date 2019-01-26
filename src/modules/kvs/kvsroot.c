@@ -80,8 +80,8 @@ static void kvsroot_destroy (void *data)
 {
     if (data) {
         struct kvsroot *root = data;
-        if (root->namespace)
-            free (root->namespace);
+        if (root->ns_name)
+            free (root->ns_name);
         if (root->ktm)
             kvstxn_mgr_destroy (root->ktm);
         if (root->trm)
@@ -97,7 +97,7 @@ static void kvsroot_destroy (void *data)
 struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
                                          struct cache *cache,
                                          const char *hash_name,
-                                         const char *namespace,
+                                         const char *ns,
                                          uint32_t owner,
                                          int flags)
 {
@@ -115,13 +115,13 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         return NULL;
     }
 
-    if (!(root->namespace = strdup (namespace))) {
+    if (!(root->ns_name = strdup (ns))) {
         flux_log_error (krm->h, "strdup");
         goto error;
     }
 
     if (!(root->ktm = kvstxn_mgr_create (cache,
-                                         root->namespace,
+                                         root->ns_name,
                                          hash_name,
                                          krm->h,
                                          krm->arg))) {
@@ -143,15 +143,15 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     root->flags = flags;
     root->remove = false;
 
-    if (zhash_insert (krm->roothash, namespace, root) < 0) {
+    if (zhash_insert (krm->roothash, ns, root) < 0) {
         flux_log_error (krm->h, "zhash_insert");
         goto error;
     }
 
-    if (!zhash_freefn (krm->roothash, namespace, kvsroot_destroy)) {
+    if (!zhash_freefn (krm->roothash, ns, kvsroot_destroy)) {
         flux_log_error (krm->h, "zhash_freefn");
         save_errnum = errno;
-        zhash_delete (krm->roothash, namespace);
+        zhash_delete (krm->roothash, ns);
         errno = save_errnum;
         goto error;
     }
@@ -165,12 +165,12 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     return NULL;
 }
 
-int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *namespace)
+int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns)
 {
     /* don't want to remove while iterating, so save namespace for
      * later removal */
     if (krm->iterating_roots) {
-        char *str = strdup (namespace);
+        char *str = strdup (ns);
 
         if (!str) {
             errno = ENOMEM;
@@ -184,22 +184,22 @@ int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *namespace)
         }
     }
     else
-        zhash_delete (krm->roothash, namespace);
+        zhash_delete (krm->roothash, ns);
     return 0;
 }
 
 struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm,
-                                         const char *namespace)
+                                         const char *ns)
 {
-    return zhash_lookup (krm->roothash, namespace);
+    return zhash_lookup (krm->roothash, ns);
 }
 
 struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
-                                              const char *namespace)
+                                              const char *ns)
 {
     struct kvsroot *root;
 
-    if ((root = kvsroot_mgr_lookup_root (krm, namespace))) {
+    if ((root = kvsroot_mgr_lookup_root (krm, ns))) {
         if (root->remove)
             root = NULL;
     }
@@ -209,7 +209,7 @@ struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
 int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
 {
     struct kvsroot *root;
-    char *namespace;
+    char *ns;
 
     krm->iterating_roots = true;
 
@@ -228,16 +228,16 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg)
 
     krm->iterating_roots = false;
 
-    while ((namespace = zlist_pop (krm->removelist))) {
-        kvsroot_mgr_remove_root (krm, namespace);
-        free (namespace);
+    while ((ns = zlist_pop (krm->removelist))) {
+        kvsroot_mgr_remove_root (krm, ns);
+        free (ns);
     }
 
     return 0;
 
 error:
-    while ((namespace = zlist_pop (krm->removelist)))
-        free (namespace);
+    while ((ns = zlist_pop (krm->removelist)))
+        free (ns);
     krm->iterating_roots = false;
     return -1;
 }

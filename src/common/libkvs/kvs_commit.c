@@ -21,7 +21,7 @@
 flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                int nprocs, flux_kvs_txn_t *txn)
 {
-    const char *namespace;
+    const char *ns;
     json_t *ops;
 
     if (!name || nprocs <= 0 || !txn) {
@@ -29,7 +29,7 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
         return NULL;
     }
 
-    if (!(namespace = flux_kvs_get_namespace (h)))
+    if (!(ns = flux_kvs_get_namespace (h)))
         return NULL;
 
     if (!(ops = txn_get_ops (txn))) {
@@ -41,19 +41,19 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                           "{s:s s:i s:s s:i s:O}",
                           "name", name,
                           "nprocs", nprocs,
-                          "namespace", namespace,
+                          "namespace", ns,
                           "flags", flags,
                           "ops", ops);
 }
 
 flux_future_t *flux_kvs_commit_ns (flux_t *h,
-                                   const char *namespace,
+                                   const char *ns,
                                    int flags,
                                    flux_kvs_txn_t *txn)
 {
     json_t *ops;
 
-    if (!txn || !namespace) {
+    if (!txn || !ns) {
         errno = EINVAL;
         return NULL;
     }
@@ -65,19 +65,19 @@ flux_future_t *flux_kvs_commit_ns (flux_t *h,
 
     return flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
                           "{s:s s:i s:O}",
-                          "namespace", namespace,
+                          "namespace", ns,
                           "flags", flags,
                           "ops", ops);
 }
 
 flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
 {
-    const char *namespace;
+    const char *ns;
 
-    if (!(namespace = flux_kvs_get_namespace (h)))
+    if (!(ns = flux_kvs_get_namespace (h)))
         return NULL;
 
-    return flux_kvs_commit_ns (h, namespace, flags, txn);
+    return flux_kvs_commit_ns (h, ns, flags, txn);
 }
 
 /*

@@ -51,7 +51,7 @@ struct lookup {
     kvsroot_mgr_t *krm;
     int current_epoch;
 
-    char *namespace;
+    char *ns_name;
     char *root_ref;
     int root_seq;
     bool root_ref_set_by_user;  /* if root_ref passed in by user */
@@ -443,7 +443,7 @@ error:
 lookup_t *lookup_create (struct cache *cache,
                          kvsroot_mgr_t *krm,
                          int current_epoch,
-                         const char *namespace,
+                         const char *ns,
                          const char *root_ref,
                          int root_seq,
                          const char *path,
@@ -455,7 +455,7 @@ lookup_t *lookup_create (struct cache *cache,
     lookup_t *lh = NULL;
     int saved_errno;
 
-    if (!cache || !krm || !namespace || !path) {
+    if (!cache || !krm || !ns || !path) {
         errno = EINVAL;
         return NULL;
     }
@@ -470,7 +470,7 @@ lookup_t *lookup_create (struct cache *cache,
     lh->current_epoch = current_epoch;
 
     /* must duplicate strings, user may not keep pointer alive */
-    if (!(lh->namespace = strdup (namespace))) {
+    if (!(lh->ns_name = strdup (ns))) {
         saved_errno = ENOMEM;
         goto cleanup;
     }
@@ -519,7 +519,7 @@ lookup_t *lookup_create (struct cache *cache,
 void lookup_destroy (lookup_t *lh)
 {
     if (lh) {
-        free (lh->namespace);
+        free (lh->ns_name);
         free (lh->root_ref);
         free (lh->path);
         json_decref (lh->val);
@@ -633,7 +633,7 @@ int lookup_get_current_epoch (lookup_t *lh)
 const char *lookup_get_namespace (lookup_t *lh)
 {
     if (lh)
-        return lh->namespace;
+        return lh->ns_name;
     return NULL;
 }
 
@@ -668,7 +668,7 @@ static int namespace_still_valid (lookup_t *lh)
     if (lh->root_ref_set_by_user)
         return 0;
 
-    if (!(root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace))) {
+    if (!(root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->ns_name))) {
         lh->errnum = ENOTSUP;
         return -1;
     }
@@ -862,11 +862,11 @@ lookup_process_t lookup (lookup_t *lh)
             if (!lh->root_ref) {
                 struct kvsroot *root;
 
-                root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
+                root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->ns_name);
 
                 if (!root) {
                     free (lh->missing_namespace);
-                    if (!(lh->missing_namespace = strdup (lh->namespace))) {
+                    if (!(lh->missing_namespace = strdup (lh->ns_name))) {
                         lh->errnum = ENOMEM;
                         goto error;
                     }
