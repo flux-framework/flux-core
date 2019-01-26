@@ -402,6 +402,7 @@ AC_CONFIG_FILES( \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \
+  src/common/libaggregate/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
