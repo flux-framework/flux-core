@@ -33,7 +33,7 @@ int main (int argc, char *argv[])
     int ch;
     bool pause = false;
     bool unpause = false;
-    const char *namespace = KVS_PRIMARY_NAMESPACE;
+    const char *ns = KVS_PRIMARY_NAMESPACE;
     char *topic;
     flux_future_t *f;
 
@@ -51,7 +51,7 @@ int main (int argc, char *argv[])
                 unpause = true;
                 break;
             case 'n': /* --namespace */
-                namespace = optarg;
+                ns = optarg;
                 break;
             default:
                 usage ();
@@ -72,7 +72,7 @@ int main (int argc, char *argv[])
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{ s:s }",
-                             "namespace", namespace)))
+                             "namespace", ns)))
         log_err_exit ("flux_rpc_pack");
 
     if (flux_future_get (f, NULL) < 0)

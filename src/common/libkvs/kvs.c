@@ -18,10 +18,10 @@
 
 #define FLUX_HANDLE_KVS_NAMESPACE "kvsnamespace"
 
-flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
+flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags)
 {
-    if (!namespace || flags) {
+    if (!ns || flags) {
         errno = EINVAL;
         return NULL;
     }
@@ -29,33 +29,33 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
     /* N.B. owner cast to int */
     return flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
                           "{ s:s s:i s:i }",
-                          "namespace", namespace,
+                          "namespace", ns,
                           "owner", owner,
                           "flags", flags);
 }
 
-flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace)
+flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
 {
-    if (!namespace) {
+    if (!ns) {
         errno = EINVAL;
         return NULL;
     }
 
     return flux_rpc_pack (h, "kvs.namespace-remove", 0, 0,
                           "{ s:s }",
-                          "namespace", namespace);
+                          "namespace", ns);
 }
 
-int flux_kvs_set_namespace (flux_t *h, const char *namespace)
+int flux_kvs_set_namespace (flux_t *h, const char *ns)
 {
     char *str;
 
-    if (!h || !namespace) {
+    if (!h || !ns) {
         errno = EINVAL;
         return -1;
     }
 
-    if (!(str = strdup (namespace))) {
+    if (!(str = strdup (ns))) {
         errno = ENOMEM;
         return -1;
     }
@@ -71,18 +71,18 @@ int flux_kvs_set_namespace (flux_t *h, const char *namespace)
 
 const char *flux_kvs_get_namespace (flux_t *h)
 {
-    const char *namespace;
+    const char *ns;
 
     if (!h) {
         errno = EINVAL;
         return NULL;
     }
 
-    if ((namespace = flux_aux_get (h, FLUX_HANDLE_KVS_NAMESPACE)))
-        return namespace;
+    if ((ns = flux_aux_get (h, FLUX_HANDLE_KVS_NAMESPACE)))
+        return ns;
 
-    if ((namespace = getenv ("FLUX_KVS_NAMESPACE")))
-        return namespace;
+    if ((ns = getenv ("FLUX_KVS_NAMESPACE")))
+        return ns;
 
     return KVS_PRIMARY_NAMESPACE;
 }
@@ -90,14 +90,14 @@ const char *flux_kvs_get_namespace (flux_t *h)
 int flux_kvs_get_version (flux_t *h, int *versionp)
 {
     flux_future_t *f;
-    const char *namespace;
+    const char *ns;
     int version;
     int rc = -1;
 
-    if (!(namespace = flux_kvs_get_namespace (h)))
+    if (!(ns = flux_kvs_get_namespace (h)))
         return -1;
     if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
-                             "namespace", namespace)))
+                             "namespace", ns)))
         goto done;
     if (flux_rpc_get_unpack (f, "{ s:i }", "rootseq", &version) < 0)
         goto done;
@@ -112,14 +112,14 @@ done:
 int flux_kvs_wait_version (flux_t *h, int version)
 {
     flux_future_t *f;
-    const char *namespace;
+    const char *ns;
     int ret = -1;
 
-    if (!(namespace = flux_kvs_get_namespace (h)))
+    if (!(ns = flux_kvs_get_namespace (h)))
         return -1;
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
                              "rootseq", version,
-                             "namespace", namespace)))
+                             "namespace", ns)))
         goto done;
     /* N.B. response contains (rootseq, rootref) but we don't need it.
      */

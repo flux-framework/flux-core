@@ -105,7 +105,7 @@ static int validate_lookup_flags (int flags, bool watch_ok)
 }
 
 flux_future_t *flux_kvs_lookup_ns (flux_t *h,
-                                   const char *namespace,
+                                   const char *ns,
                                    int flags,
                                    const char *key)
 {
@@ -114,7 +114,7 @@ flux_future_t *flux_kvs_lookup_ns (flux_t *h,
     const char *topic = "kvs.lookup";
     int rpc_flags = 0;
 
-    if (!h || !namespace || !key || strlen (key) == 0
+    if (!h || !ns || !key || strlen (key) == 0
         || validate_lookup_flags (flags, true) < 0) {
         errno = EINVAL;
         return NULL;
@@ -129,7 +129,7 @@ flux_future_t *flux_kvs_lookup_ns (flux_t *h,
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
                              "{s:s s:s s:i}",
                              "key", key,
-                             "namespace", namespace,
+                             "namespace", ns,
                              "flags", flags))) {
         free_ctx (ctx);
         return NULL;
@@ -144,11 +144,11 @@ flux_future_t *flux_kvs_lookup_ns (flux_t *h,
 
 flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
 {
-    const char *namespace;
+    const char *ns;
 
-    if (!(namespace = flux_kvs_get_namespace (h)))
+    if (!(ns = flux_kvs_get_namespace (h)))
         return NULL;
-    return flux_kvs_lookup_ns (h, namespace, flags, key);
+    return flux_kvs_lookup_ns (h, ns, flags, key);
 }
 
 flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
@@ -174,9 +174,9 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         }
     }
     else {
-        const char *namespace;
+        const char *ns;
 
-        if (!(namespace = flux_kvs_get_namespace (h)))
+        if (!(ns = flux_kvs_get_namespace (h)))
             return NULL;
         if (!(ctx->atref = strdup (treeobj)))
             return NULL;
@@ -187,7 +187,7 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
                                  "{s:s s:s s:i s:O}",
                                  "key", key,
-                                 "namespace", namespace,
+                                 "namespace", ns,
                                  "flags", flags,
                                  "rootdir", obj))) {
             free_ctx (ctx);

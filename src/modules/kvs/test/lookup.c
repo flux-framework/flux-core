@@ -138,7 +138,7 @@ int lookup_ref_error (lookup_t *c,
 }
 
 void setup_kvsroot (kvsroot_mgr_t *krm,
-                    const char *namespace,
+                    const char *ns,
                     struct cache *cache,
                     const char *ref,
                     uint32_t owner)
@@ -148,7 +148,7 @@ void setup_kvsroot (kvsroot_mgr_t *krm,
     ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
-                                         namespace,
+                                         ns,
                                          owner,
                                          0)) != NULL,
         "kvsroot_mgr_create_root works");

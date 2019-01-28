@@ -38,7 +38,7 @@ struct watcher {
     int flags;                  // kvs_lookup flags
     zlist_t *lookups;           // list of futures, in commit order
 
-    struct namespace *ns;       // back pointer for removal
+    struct ns_monitor *nsm;     // back pointer for removal
     json_t *prev;               // previous watch value for KVS_WATCH_FULL
 };
 
@@ -55,8 +55,8 @@ struct commit {
 
 /* State for monitoring a KVS namespace.
  */
-struct namespace {
-    char *name;                 // namespace name, hash key for ctx->namespaces
+struct ns_monitor {
+    char *ns_name;              // namespace name, hash key for ctx->namespaces
     uint32_t owner;             // namespace owner (userid)
     struct commit *commit;      // current commit data
     int fatal_errnum;           // non-skippable error pending for all watchers
@@ -152,76 +152,76 @@ static struct commit *commit_create (const char *rootref, int rootseq,
     return commit;
 }
 
-static void namespace_destroy (struct namespace *ns)
+static void namespace_destroy (struct ns_monitor *nsm)
 {
-    if (ns) {
+    if (nsm) {
         int saved_errno = errno;
-        commit_destroy (ns->commit);
-        if (ns->watchers) {
+        commit_destroy (nsm->commit);
+        if (nsm->watchers) {
             struct watcher *w;
-            while ((w = zlist_pop (ns->watchers)))
+            while ((w = zlist_pop (nsm->watchers)))
                 watcher_destroy (w);
-            zlist_destroy (&ns->watchers);
+            zlist_destroy (&nsm->watchers);
         }
-        if (ns->setroot_subscribed)
-            (void)flux_event_unsubscribe (ns->ctx->h, ns->setroot_topic);
-        if (ns->created_subscribed)
-            (void)flux_event_unsubscribe (ns->ctx->h, ns->created_topic);
-        if (ns->removed_subscribed)
-            (void)flux_event_unsubscribe (ns->ctx->h, ns->removed_topic);
-        free (ns->setroot_topic);
-        free (ns->created_topic);
-        free (ns->removed_topic);
-        free (ns->name);
-        flux_future_destroy (ns->getrootf);
-        free (ns);
+        if (nsm->setroot_subscribed)
+            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->setroot_topic);
+        if (nsm->created_subscribed)
+            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->created_topic);
+        if (nsm->removed_subscribed)
+            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->removed_topic);
+        free (nsm->setroot_topic);
+        free (nsm->created_topic);
+        free (nsm->removed_topic);
+        free (nsm->ns_name);
+        flux_future_destroy (nsm->getrootf);
+        free (nsm);
         errno = saved_errno;
     }
 }
 
-static struct namespace *namespace_create (struct watch_ctx *ctx,
-                                           const char *namespace)
+static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
+                                            const char *ns)
 {
-    struct namespace *ns = calloc (1, sizeof (*ns));
-    if (!ns)
+    struct ns_monitor *nsm = calloc (1, sizeof (*nsm));
+    if (!nsm)
         return NULL;
-    if (!(ns->watchers = zlist_new ()))
+    if (!(nsm->watchers = zlist_new ()))
         goto error;
-    if (!(ns->name = strdup (namespace)))
+    if (!(nsm->ns_name = strdup (ns)))
         goto error;
-    if (asprintf (&ns->setroot_topic, "kvs.setroot-%s", namespace) < 0)
+    if (asprintf (&nsm->setroot_topic, "kvs.setroot-%s", ns) < 0)
         goto error;
-    if (asprintf (&ns->created_topic, "kvs.namespace-created-%s", namespace) < 0)
+    if (asprintf (&nsm->created_topic, "kvs.namespace-created-%s", ns) < 0)
         goto error;
-    if (asprintf (&ns->removed_topic, "kvs.namespace-removed-%s", namespace) < 0)
+    if (asprintf (&nsm->removed_topic, "kvs.namespace-removed-%s", ns) < 0)
         goto error;
-    ns->owner = FLUX_USERID_UNKNOWN;
-    ns->ctx = ctx;
-    if (flux_event_subscribe (ctx->h, ns->setroot_topic) < 0)
+    nsm->owner = FLUX_USERID_UNKNOWN;
+    nsm->ctx = ctx;
+    if (flux_event_subscribe (ctx->h, nsm->setroot_topic) < 0)
         goto error;
-    ns->setroot_subscribed = true;
-    if (flux_event_subscribe (ctx->h, ns->created_topic) < 0)
+    nsm->setroot_subscribed = true;
+    if (flux_event_subscribe (ctx->h, nsm->created_topic) < 0)
         goto error;
-    ns->created_subscribed = true;
-    if (flux_event_subscribe (ctx->h, ns->removed_topic) < 0)
+    nsm->created_subscribed = true;
+    if (flux_event_subscribe (ctx->h, nsm->removed_topic) < 0)
         goto error;
-    ns->removed_subscribed = true;
-    return ns;
+    nsm->removed_subscribed = true;
+    return nsm;
 error:
-    namespace_destroy (ns);
+    namespace_destroy (nsm);
     return NULL;
 }
 
-/* Verify that (userid, rolemask) credential is authorized to access 'ns'.
+/* Verify that (userid, rolemask) credential is authorized to access 'nsm'.
  * The instance owner or namespace owner are permitted (return 0).
  * All others are denied (return -1, errno == EPERM).
  */
-static int check_authorization (struct namespace *ns,
+static int check_authorization (struct ns_monitor *nsm,
                                 uint32_t rolemask, uint32_t userid)
 {
     if ((rolemask & FLUX_ROLE_OWNER))
         return 0;
-    if (ns->owner != FLUX_USERID_UNKNOWN && userid == ns->owner)
+    if (nsm->owner != FLUX_USERID_UNKNOWN && userid == nsm->owner)
         return 0;
     errno = EPERM;
     return -1;
@@ -243,17 +243,17 @@ static bool array_match (json_t *a, const char *key)
     return false;
 }
 
-static void watcher_cleanup (struct namespace *ns, struct watcher *w)
+static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
 {
     /* wait for all in flight lookups to complete before destroying watcher */
     if (zlist_size (w->lookups) == 0) {
-        zlist_remove (ns->watchers, w);
+        zlist_remove (nsm->watchers, w);
         watcher_destroy (w);
     }
-    /* if ns->getrootf, destroy when getroot_continuation completes */
-    if (zlist_size (ns->watchers) == 0
-        && !ns->getrootf)
-        zhash_delete (ns->ctx->namespaces, ns->name);
+    /* if nsm->getrootf, destroy when getroot_continuation completes */
+    if (zlist_size (nsm->watchers) == 0
+        && !nsm->getrootf)
+        zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
 static int handle_initial_response (flux_t *h,
@@ -431,7 +431,7 @@ error:
 static void lookup_continuation (flux_future_t *f, void *arg)
 {
     struct watcher *w = arg;
-    struct namespace *ns = w->ns;
+    struct ns_monitor *nsm = w->nsm;
 
     while ((f = zlist_first (w->lookups)) && flux_future_is_ready (f)) {
         f = zlist_pop (w->lookups);
@@ -448,7 +448,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
             w->finished = true;
     }
     if (w->finished)
-        watcher_cleanup (ns, w);
+        watcher_cleanup (nsm, w);
 }
 
 /* Like flux_kvs_lookupat() except:
@@ -463,7 +463,7 @@ static flux_future_t *lookupat (flux_t *h,
                                 struct watcher *w,
                                 const char *blobref,
                                 int root_seq,
-                                const char *namespace)
+                                const char *ns)
 {
     flux_msg_t *msg;
     json_t *o = NULL;
@@ -475,7 +475,7 @@ static flux_future_t *lookupat (flux_t *h,
     if (!w->initial_rpc_sent) {
         if (flux_msg_pack (msg, "{s:s s:s s:i}",
                            "key", w->key,
-                           "namespace", namespace,
+                           "namespace", ns,
                            "flags", w->flags) < 0)
             goto error;
     }
@@ -484,7 +484,7 @@ static flux_future_t *lookupat (flux_t *h,
             goto error;
         if (flux_msg_pack (msg, "{s:s s:s s:i s:i s:O}",
                            "key", w->key,
-                           "namespace", namespace,
+                           "namespace", ns,
                            "flags", w->flags,
                            "rootseq", root_seq,
                            "rootdir", o) < 0)
@@ -521,15 +521,15 @@ error:
     return NULL;
 }
 
-static int process_lookup_response (struct namespace *ns, struct watcher *w)
+static int process_lookup_response (struct ns_monitor *nsm, struct watcher *w)
 {
     flux_future_t *f;
-    if (!(f = lookupat (ns->ctx->h,
+    if (!(f = lookupat (nsm->ctx->h,
                         w,
-                        ns->commit->rootref,
-                        ns->commit->rootseq,
-                        ns->name))) {
-        flux_log_error (ns->ctx->h, "%s: lookupat", __FUNCTION__);
+                        nsm->commit->rootref,
+                        nsm->commit->rootseq,
+                        nsm->ns_name))) {
+        flux_log_error (nsm->ctx->h, "%s: lookupat", __FUNCTION__);
         return -1;
     }
     if (zlist_append (w->lookups, f) < 0) {
@@ -541,7 +541,7 @@ static int process_lookup_response (struct namespace *ns, struct watcher *w)
         flux_future_destroy (f);
         return -1;
     }
-    w->rootseq = ns->commit->rootseq;
+    w->rootseq = nsm->commit->rootseq;
     return 0;
 }
 
@@ -549,7 +549,7 @@ static int process_lookup_response (struct namespace *ns, struct watcher *w)
  * De-list and destroy watcher from namespace on error.
  * De-hash and destroy namespace if watchers list becomes empty.
  */
-static void watcher_respond (struct namespace *ns, struct watcher *w)
+static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
 {
     /* If this watcher is already done, we should ignore namespace
      * remove, setroot, cancel, etc.  that leads us here.  Just goto
@@ -561,31 +561,31 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
         errno = ENODATA;
         goto error_respond;
     }
-    if (ns->fatal_errnum != 0) {
-        errno = ns->fatal_errnum;
+    if (nsm->fatal_errnum != 0) {
+        errno = nsm->fatal_errnum;
         goto error_respond;
     }
-    if (ns->errnum != 0) {
+    if (nsm->errnum != 0) {
         /* if namespace not yet created, don't return error to user if
          * they want to wait */
         if ((w->flags & FLUX_KVS_WAITCREATE)
-            && ns->errnum == ENOTSUP
+            && nsm->errnum == ENOTSUP
             && w->responded == false) {
-            ns->errnum = 0;
+            nsm->errnum = 0;
             return;
         }
-        errno = ns->errnum;
+        errno = nsm->errnum;
         goto error_respond;
     }
     /* This assert is safe, only potential case is if namespace
      * removed before initial getroot or a setroot received.  But that
      * case is handled by error handling above.
      */
-    assert (ns->commit != NULL);
-    if (ns->commit->rootseq <= w->rootseq)
+    assert (nsm->commit != NULL);
+    if (nsm->commit->rootseq <= w->rootseq)
         return;
-    if (check_authorization (ns, w->rolemask, w->userid) < 0) {
-        flux_log (ns->ctx->h, LOG_DEBUG, "%s: auth failure", __FUNCTION__);
+    if (check_authorization (nsm, w->rolemask, w->userid) < 0) {
+        flux_log (nsm->ctx->h, LOG_DEBUG, "%s: auth failure", __FUNCTION__);
         goto error_respond;
     }
     /* flux_kvs_lookup (FLUX_KVS_WATCH)
@@ -607,48 +607,48 @@ static void watcher_respond (struct namespace *ns, struct watcher *w)
      */
     if (w->rootseq == -1
         || (w->flags & FLUX_KVS_WATCH_FULL)
-        || array_match (ns->commit->keys, w->key)) {
-        if (process_lookup_response (ns, w) < 0)
+        || array_match (nsm->commit->keys, w->key)) {
+        if (process_lookup_response (nsm, w) < 0)
             goto error_respond;
     }
     return;
 error_respond:
     if (!w->mute) {
-        if (flux_respond_error (ns->ctx->h, w->request, errno, NULL) < 0)
-            flux_log_error (ns->ctx->h, "%s: flux_respond_error", __FUNCTION__);
+        if (flux_respond_error (nsm->ctx->h, w->request, errno, NULL) < 0)
+            flux_log_error (nsm->ctx->h, "%s: flux_respond_error", __FUNCTION__);
     }
     w->finished = true;
 finished:
-    watcher_cleanup (ns, w);
+    watcher_cleanup (nsm, w);
 }
 
 /* Respond to all ready watchers.
- * N.B. watcher_respond() may call zlist_remove() on ns->watchers.
+ * N.B. watcher_respond() may call zlist_remove() on nsm->watchers.
  * Since zlist_t is not deletion-safe for traversal, a temporary duplicate
  * must be created here.
  */
-static void watcher_respond_ns (struct namespace *ns)
+static void watcher_respond_ns (struct ns_monitor *nsm)
 {
     zlist_t *l;
     struct watcher *w;
 
-    if ((l = zlist_dup (ns->watchers))) {
+    if ((l = zlist_dup (nsm->watchers))) {
         w = zlist_first (l);
         while (w) {
-            watcher_respond (ns, w);
+            watcher_respond (nsm, w);
             w = zlist_next (l);
         }
         zlist_destroy (&l);
     }
     else
-        flux_log_error (ns->ctx->h, "%s: zlist_dup", __FUNCTION__);
+        flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
 /* Cancel watcher 'w' if it matches (sender, matchtag).
  * matchtag=FLUX_MATCHTAG_NONE matches any matchtag.
  * If 'mute' is true, suppress response (e.g. for disconnect handling).
  */
-static void watcher_cancel (struct namespace *ns, struct watcher *w,
+static void watcher_cancel (struct ns_monitor *nsm, struct watcher *w,
                             const char *sender, uint32_t matchtag,
                             bool mute)
 {
@@ -663,7 +663,7 @@ static void watcher_cancel (struct namespace *ns, struct watcher *w,
     if (!strcmp (sender, s)) {
         w->cancelled = true;
         w->mute = mute;
-        watcher_respond (ns, w);
+        watcher_respond (nsm, w);
     }
     free (s);
 }
@@ -671,23 +671,23 @@ static void watcher_cancel (struct namespace *ns, struct watcher *w,
 /* Cancel all namespace watchers that match (sender, matchtag).
  * If 'mute' is true, suppress response.
  */
-static void watcher_cancel_ns (struct namespace *ns,
+static void watcher_cancel_ns (struct ns_monitor *nsm,
                                const char *sender, uint32_t matchtag,
                                bool mute)
 {
     zlist_t *l;
     struct watcher *w;
 
-    if ((l = zlist_dup (ns->watchers))) {
+    if ((l = zlist_dup (nsm->watchers))) {
         w = zlist_first (l);
         while (w) {
-            watcher_cancel (ns, w, sender, matchtag, mute);
+            watcher_cancel (nsm, w, sender, matchtag, mute);
             w = zlist_next (l);
         }
         zlist_destroy (&l);
     }
     else
-        flux_log_error (ns->ctx->h, "%s: zlist_dup", __FUNCTION__);
+        flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
 /* Cancel all watchers that match (sender, matchtag).
@@ -699,13 +699,13 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
 {
     zlist_t *l;
     char *name;
-    struct namespace *ns;
+    struct ns_monitor *nsm;
 
     if ((l = zhash_keys (ctx->namespaces))) {
         name = zlist_first (l);
         while (name) {
-            ns = zhash_lookup (ctx->namespaces, name);
-            watcher_cancel_ns (ns, sender, matchtag, mute);
+            nsm = zhash_lookup (ctx->namespaces, name);
+            watcher_cancel_ns (nsm, sender, matchtag, mute);
             name = zlist_next (l);
         }
         zlist_destroy (&l);
@@ -721,16 +721,16 @@ static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
-    const char *namespace;
-    struct namespace *ns;
+    const char *ns;
+    struct ns_monitor *nsm;
 
-    if (flux_event_unpack (msg, NULL, "{s:s}", "namespace", &namespace) < 0) {
+    if (flux_event_unpack (msg, NULL, "{s:s}", "namespace", &ns) < 0) {
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if ((ns = zhash_lookup (ctx->namespaces, namespace))) {
-        ns->fatal_errnum = ENOTSUP;
-        watcher_respond_ns (ns);
+    if ((nsm = zhash_lookup (ctx->namespaces, ns))) {
+        nsm->fatal_errnum = ENOTSUP;
+        watcher_respond_ns (nsm);
     }
 }
 
@@ -742,46 +742,46 @@ static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
                                   const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
-    struct namespace *ns;
-    const char *namespace;
+    struct ns_monitor *nsm;
+    const char *ns;
     int rootseq;
     const char *rootref;
     int owner;
     struct commit *commit;
 
     if (flux_event_unpack (msg, NULL, "{s:s s:i s:s s:i}",
-                           "namespace", &namespace,
+                           "namespace", &ns,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
                            "owner", &owner) < 0) {
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if (!(ns = zhash_lookup (ctx->namespaces, namespace))
-        || ns->commit)
+    if (!(nsm = zhash_lookup (ctx->namespaces, ns))
+        || nsm->commit)
         return;
     if (!(commit = commit_create (rootref, rootseq, NULL))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
-        ns->errnum = errno;
+        nsm->errnum = errno;
         goto done;
     }
-    ns->commit = commit;
-    if (ns->owner == FLUX_USERID_UNKNOWN)
-        ns->owner = owner;
+    nsm->commit = commit;
+    if (nsm->owner == FLUX_USERID_UNKNOWN)
+        nsm->owner = owner;
 done:
-    watcher_respond_ns (ns);
+    watcher_respond_ns (nsm);
 }
 
 /* kvs.setroot event
  * Update namespace with new commit info.
- * Subscribe/unsubscribe is tied to 'struct namespace' create/destroy.
+ * Subscribe/unsubscribe is tied to 'struct ns_monitor' create/destroy.
  */
 static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+                        const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
-    struct namespace *ns;
-    const char *namespace;
+    struct ns_monitor *nsm;
+    const char *ns;
     int rootseq;
     const char *rootref;
     int owner;
@@ -789,7 +789,7 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
     struct commit *commit;
 
     if (flux_event_unpack (msg, NULL, "{s:s s:i s:s s:i s:o}",
-                           "namespace", &namespace,
+                           "namespace", &ns,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
                            "owner", &owner,
@@ -797,20 +797,20 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if (!(ns = zhash_lookup (ctx->namespaces, namespace))
-            || (ns->commit && rootseq <= ns->commit->rootseq))
+    if (!(nsm = zhash_lookup (ctx->namespaces, ns))
+            || (nsm->commit && rootseq <= nsm->commit->rootseq))
         return;
     if (!(commit = commit_create (rootref, rootseq, keys))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
-        ns->errnum = errno;
+        nsm->errnum = errno;
         goto done;
     }
-    commit_destroy (ns->commit);
-    ns->commit = commit;
-    if (ns->owner == FLUX_USERID_UNKNOWN)
-        ns->owner = owner;
+    commit_destroy (nsm->commit);
+    nsm->commit = commit;
+    if (nsm->owner == FLUX_USERID_UNKNOWN)
+        nsm->owner = owner;
 done:
-    watcher_respond_ns (ns);
+    watcher_respond_ns (nsm);
 }
 
 /* kvs.getroot response for initial namespace creation
@@ -819,113 +819,114 @@ done:
  */
 static void namespace_getroot_continuation (flux_future_t *f, void *arg)
 {
-    struct namespace *ns = arg;
+    struct ns_monitor *nsm = arg;
     const char *rootref;
     int rootseq;
     uint32_t owner;
     struct commit *commit;
 
     /* small racy chance watcher cancelled before getroot completes */
-    if (zlist_size (ns->watchers) == 0) {
-        zhash_delete (ns->ctx->namespaces, ns->name);
+    fprintf (stderr, "%s:%d %p %p\n", __FUNCTION__, __LINE__, nsm, nsm->watchers);
+    if (zlist_size (nsm->watchers) == 0) {
+        zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
         return;
     }
-    if (ns->commit) {
+    if (nsm->commit) {
         flux_future_destroy (f);
-        ns->getrootf = NULL;
+        nsm->getrootf = NULL;
         return;
     }
     if (flux_kvs_getroot_get_sequence (f, &rootseq) < 0
             || flux_kvs_getroot_get_blobref (f, &rootref) < 0
             || flux_kvs_getroot_get_owner (f, &owner) < 0) {
         if (errno != ENOTSUP && errno != EPERM)
-            flux_log_error (ns->ctx->h, "%s: kvs_getroot", __FUNCTION__);
-        ns->errnum = errno;
+            flux_log_error (nsm->ctx->h, "%s: kvs_getroot", __FUNCTION__);
+        nsm->errnum = errno;
         goto done;
     }
     if (!(commit = commit_create (rootref, rootseq, NULL))) {
-        flux_log_error (ns->ctx->h, "%s: commit_create", __FUNCTION__);
-        ns->errnum = errno;
+        flux_log_error (nsm->ctx->h, "%s: commit_create", __FUNCTION__);
+        nsm->errnum = errno;
         goto done;
     }
-    ns->commit = commit;
-    ns->owner = owner;
+    nsm->commit = commit;
+    nsm->owner = owner;
 done:
     /* chance watch_respond_ns() will destroy namespace, so should
      * destroy future first
      */
     flux_future_destroy (f);
-    ns->getrootf = NULL;
-    watcher_respond_ns (ns);
+    nsm->getrootf = NULL;
+    watcher_respond_ns (nsm);
 }
 
-/* Create 'ns' if not already monitoring this namespace, and
+/* Create 'nsm' if not already monitoring this namespace, and
  * send a getroot RPC to the kvs so first response need not wait
  * for the next commit to occur in the arbitrarily distant future.
  */
-struct namespace *namespace_monitor (struct watch_ctx *ctx,
-                                     const char *namespace)
+struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
+                                      const char *ns)
 {
-    struct namespace *ns;
+    struct ns_monitor *nsm;
 
-    if (!(ns = zhash_lookup (ctx->namespaces, namespace))) {
-        if (!(ns = namespace_create (ctx, namespace)))
+    if (!(nsm = zhash_lookup (ctx->namespaces, ns))) {
+        if (!(nsm = namespace_create (ctx, ns)))
             return NULL;
-        if (zhash_insert (ctx->namespaces, namespace, ns) < 0) {
-            namespace_destroy (ns);
+        if (zhash_insert (ctx->namespaces, ns, nsm) < 0) {
+            namespace_destroy (nsm);
             return NULL;
         }
-        zhash_freefn (ctx->namespaces, namespace,
+        zhash_freefn (ctx->namespaces, ns,
                       (zhash_free_fn *)namespace_destroy);
         /* store future in namespace, so namespace can be destroyed
          * appropriately to avoid matchtag leak */
-        if (!(ns->getrootf = flux_kvs_getroot (ctx->h, namespace, 0))) {
-            zhash_delete (ctx->namespaces, namespace);
+        if (!(nsm->getrootf = flux_kvs_getroot (ctx->h, ns, 0))) {
+            zhash_delete (ctx->namespaces, ns);
             return NULL;
         }
-        if (flux_future_then (ns->getrootf, -1.,
-                              namespace_getroot_continuation, ns) < 0) {
-            zhash_delete (ctx->namespaces, namespace);
+        if (flux_future_then (nsm->getrootf, -1.,
+                              namespace_getroot_continuation, nsm) < 0) {
+            zhash_delete (ctx->namespaces, ns);
             return NULL;
         }
     }
-    return ns;
+    return nsm;
 }
 
 static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
-    const char *namespace;
+    const char *ns;
     const char *key;
     int flags;
-    struct namespace *ns;
+    struct ns_monitor *nsm;
     struct watcher *w;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:s s:i}",
-                             "namespace", &namespace,
+                             "namespace", &ns,
                              "key", &key,
                              "flags", &flags) < 0)
         goto error;
 
-    if (!(ns = namespace_monitor (ctx, namespace)))
+    if (!(nsm = namespace_monitor (ctx, ns)))
         goto error;
 
-    /* Thread a new watcher 'w' onto ns->watchers.
+    /* Thread a new watcher 'w' onto nsm->watchers.
      * If there is already a commit result available, send initial rpc,
      * otherwise initial rpc will be sent upon getroot RPC response
      * or setroot event.
      */
     if (!(w = watcher_create (msg, key, flags)))
         goto error;
-    w->ns = ns;
-    if (zlist_append (ns->watchers, w) < 0) {
+    w->nsm = nsm;
+    if (zlist_append (nsm->watchers, w) < 0) {
         watcher_destroy (w);
         errno = ENOMEM;
         goto error;
     }
-    if (ns->commit)
-        watcher_respond (ns, w);
+    if (nsm->commit)
+        watcher_respond (nsm, w);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -985,29 +986,29 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
-    struct namespace *ns;
+    struct ns_monitor *nsm;
     json_t *stats;
     int watchers = 0;
 
     if (!(stats = json_object()))
         goto nomem;
-    ns = zhash_first (ctx->namespaces);
-    while (ns) {
+    nsm = zhash_first (ctx->namespaces);
+    while (nsm) {
         json_t *o = json_pack ("{s:i s:i s:s s:i}",
-                               "owner", (int)ns->owner,
-                               "rootseq", ns->commit ? ns->commit->rootseq
-                                                     : -1,
-                               "rootref", ns->commit ? ns->commit->rootref
-                                                     : "(null)",
-                               "watchers", (int)zlist_size (ns->watchers));
+                               "owner", (int)nsm->owner,
+                               "rootseq", nsm->commit ? nsm->commit->rootseq
+                                                      : -1,
+                               "rootref", nsm->commit ? nsm->commit->rootref
+                                                      : "(null)",
+                               "watchers", (int)zlist_size (nsm->watchers));
         if (!o)
             goto nomem;
-        if (json_object_set_new (stats, ns->name, o) < 0) {
+        if (json_object_set_new (stats, nsm->ns_name, o) < 0) {
             json_decref (o);
             goto nomem;
         }
-        watchers += zlist_size (ns->watchers);
-        ns = zhash_next (ctx->namespaces);
+        watchers += zlist_size (nsm->watchers);
+        nsm = zhash_next (ctx->namespaces);
     }
     if (flux_respond_pack (h, msg, "{s:i s:i s:O}",
                            "watchers", watchers,

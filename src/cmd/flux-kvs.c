@@ -374,7 +374,7 @@ int main (int argc, char *argv[])
     optparse_t *p;
     int optindex;
     int exitval;
-    const char *namespace;
+    const char *ns;
 
     log_init ("flux-kvs");
 
@@ -410,8 +410,8 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if ((namespace = optparse_get_str (p, "namespace", NULL))) {
-        if (flux_kvs_set_namespace (h, namespace) < 0)
+    if ((ns = optparse_get_str (p, "namespace", NULL))) {
+        if (flux_kvs_set_namespace (h, ns) < 0)
             log_msg_exit ("flux_kvs_set_namespace");
     }
 
@@ -503,7 +503,7 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
     size = json_array_size (array);
     printf ("NAMESPACE                                 OWNER      FLAGS\n");
     for (i = 0; i < size; i++) {
-        const char *namespace;
+        const char *ns;
         uint32_t owner;
         int flags;
         json_t *o;
@@ -512,12 +512,12 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
             log_err_exit ("json_array_get");
 
         if (json_unpack (o, "{ s:s s:i s:i }",
-                         "namespace", &namespace,
+                         "namespace", &ns,
                          "owner", &owner,
                          "flags", &flags) < 0)
             log_err_exit ("json_unpack");
 
-        printf ("%-36s %10u 0x%08X\n", namespace, owner, flags);
+        printf ("%-36s %10u 0x%08X\n", ns, owner, flags);
     }
 
     flux_future_destroy (f);

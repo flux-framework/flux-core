@@ -37,7 +37,7 @@
 
 struct kvstxn_mgr {
     struct cache *cache;
-    const char *namespace;
+    const char *ns_name;
     const char *hash_name;
     int noop_stores;            /* for kvs.stats.get, etc.*/
     zlist_t *ready;
@@ -166,7 +166,7 @@ int kvstxn_get_flags (kvstxn_t *kt)
 
 const char *kvstxn_get_namespace (kvstxn_t *kt)
 {
-    return kt->ktm->namespace;
+    return kt->ktm->ns_name;
 }
 
 void *kvstxn_get_aux (kvstxn_t *kt)
@@ -1043,7 +1043,7 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
 }
 
 kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
-                                 const char *namespace,
+                                 const char *ns,
                                  const char *hash_name,
                                  flux_t *h,
                                  void *aux)
@@ -1051,7 +1051,7 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
     kvstxn_mgr_t *ktm = NULL;
     int saved_errno;
 
-    if (!cache || !namespace || !hash_name) {
+    if (!cache || !ns || !hash_name) {
         saved_errno = EINVAL;
         goto error;
     }
@@ -1061,7 +1061,7 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
         goto error;
     }
     ktm->cache = cache;
-    ktm->namespace = namespace;
+    ktm->ns_name = ns;
     ktm->hash_name = hash_name;
     if (!(ktm->ready = zlist_new ())) {
         saved_errno = ENOMEM;

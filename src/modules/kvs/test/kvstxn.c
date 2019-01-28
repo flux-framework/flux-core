@@ -537,7 +537,7 @@ void kvstxn_basic_tests (void)
     kvstxn_mgr_t *ktm;
     kvstxn_t *kt;
     char rootref[BLOBREF_MAX_STRING_SIZE];
-    const char *namespace;
+    const char *ns;
 
     cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
 
@@ -580,10 +580,10 @@ void kvstxn_basic_tests (void)
     ok (kvstxn_get_errnum (kt) == 0,
         "kvstxn_get_errnum still works");
 
-    ok ((namespace = kvstxn_get_namespace (kt)) != NULL,
+    ok ((ns = kvstxn_get_namespace (kt)) != NULL,
         "kvstxn_get_namespace returns non-NULL");
 
-    ok (!strcmp (namespace, KVS_PRIMARY_NAMESPACE),
+    ok (!strcmp (ns, KVS_PRIMARY_NAMESPACE),
         "kvstxn_get_namespace returns correct string");
 
     ok (kvstxn_get_aux (kt) == &test_global,
@@ -613,7 +613,7 @@ int cache_count_dirty_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 }
 
 void setup_kvsroot (kvsroot_mgr_t *krm,
-                    const char *namespace,
+                    const char *ns,
                     struct cache *cache,
                     const char *ref)
 {
@@ -622,7 +622,7 @@ void setup_kvsroot (kvsroot_mgr_t *krm,
     ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
-                                         namespace,
+                                         ns,
                                          0,
                                          0)) != NULL,
         "kvsroot_mgr_create_root works");
@@ -632,7 +632,7 @@ void setup_kvsroot (kvsroot_mgr_t *krm,
 
 void verify_value (struct cache *cache,
                    kvsroot_mgr_t *krm,
-                   const char *namespace,
+                   const char *ns,
                    const char *root_ref,
                    const char *key,
                    const char *val)
@@ -643,7 +643,7 @@ void verify_value (struct cache *cache,
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             namespace,
+                             ns,
                              root_ref,
                              0,
                              key,

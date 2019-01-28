@@ -42,7 +42,7 @@ int main (int argc, char *argv[])
     flux_t *h = NULL;
     uint32_t rank;
     char *key = NULL;
-    char *namespace = NULL;
+    char *ns = NULL;
     char *fence_name = NULL;
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
@@ -52,7 +52,7 @@ int main (int argc, char *argv[])
     if (argc != 3)
         usage ();
 
-    namespace = argv[1];
+    ns = argv[1];
     prefix = argv[2];
 
     if (!(h = flux_open (NULL, 0))) {
@@ -60,7 +60,7 @@ int main (int argc, char *argv[])
         goto done;
     }
 
-    if (flux_kvs_set_namespace (h, namespace) < 0) {
+    if (flux_kvs_set_namespace (h, ns) < 0) {
         log_err_exit ("flux_kvs_set_namespace");
         goto done;
     }

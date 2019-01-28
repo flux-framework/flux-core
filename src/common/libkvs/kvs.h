@@ -48,13 +48,10 @@ enum kvs_op {
  *   Garbage collection will happen in the background and the
  *   namespace will official be removed.  The removal is "eventually
  *   consistent".
- *
- *   NOTE: Take care to avoid conflicting with C++'s keyword "namespace"
- *   in the external interfaces.
  */
-flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *name_space,
+flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags);
-flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *name_space);
+flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns);
 
 /* Namespace Selection
  * - configure a KVS namespace to use in all kvs operations using this
@@ -62,11 +59,8 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *name_space);
  * - if never set, the value from the environment variable
  *   FLUX_KVS_NAMESPACE is used.
  * - if FLUX_KVS_NAMESPACE is not set, KVS_PRIMARY_NAMESPACE is assumed.
- *
- *   NOTE: Take care to avoid conflicting with C++'s keyword "namespace"
- *   in the external interfaces.
  */
-int flux_kvs_set_namespace (flux_t *h, const char *name_space);
+int flux_kvs_set_namespace (flux_t *h, const char *ns);
 const char *flux_kvs_get_namespace (flux_t *h);
 
 /* Synchronization:

@@ -23,7 +23,7 @@
 typedef struct kvsroot_mgr kvsroot_mgr_t;
 
 struct kvsroot {
-    char *namespace;
+    char *ns_name;
     uint32_t owner;
     int seq;
     char ref[BLOBREF_MAX_STRING_SIZE];
@@ -51,20 +51,20 @@ int kvsroot_mgr_root_count (kvsroot_mgr_t *krm);
 struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
                                          struct cache *cache,
                                          const char *hash_name,
-                                         const char *namespace,
+                                         const char *ns,
                                          uint32_t owner,
                                          int flags);
 
-int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *namespace);
+int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns);
 
 /* returns NULL if not found */
 struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm,
-                                         const char *namespace);
+                                         const char *ns);
 
 /* safe lookup, will return NULL if root in process of being removed,
  * i.e. remove flag set to true */
 struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
-                                              const char *namespace);
+                                              const char *ns);
 
 int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
 
