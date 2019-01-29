@@ -437,7 +437,7 @@ static void aggregate_sink (flux_t *h, struct aggregate *ag)
         flux_log_error (h, "sink: flux_kvs_txn_put");
         goto out;
     }
-    if (!(f = flux_kvs_commit (h, 0, txn))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
         || flux_future_then (f, -1., sink_continuation, (void *)ag) < 0) {
         flux_log_error (h, "sink: flux_kvs_commit");
         flux_future_destroy (f);

@@ -18,10 +18,10 @@
 #include "kvs_txn_private.h"
 #include "src/common/libutil/blobref.h"
 
-flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
-                               int nprocs, flux_kvs_txn_t *txn)
+flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
+                               const char *name, int nprocs,
+                               flux_kvs_txn_t *txn)
 {
-    const char *ns;
     json_t *ops;
 
     if (!name || nprocs <= 0 || !txn) {
@@ -29,8 +29,10 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
         return NULL;
     }
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return NULL;
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            return NULL;
+    }
 
     if (!(ops = txn_get_ops (txn))) {
         errno = EINVAL;
@@ -46,16 +48,19 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                           "ops", ops);
 }
 
-flux_future_t *flux_kvs_commit_ns (flux_t *h,
-                                   const char *ns,
-                                   int flags,
-                                   flux_kvs_txn_t *txn)
+flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
+                                flux_kvs_txn_t *txn)
 {
     json_t *ops;
 
-    if (!txn || !ns) {
+    if (!txn) {
         errno = EINVAL;
         return NULL;
+    }
+
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            return NULL;
     }
 
     if (!(ops = txn_get_ops (txn))) {
@@ -68,16 +73,6 @@ flux_future_t *flux_kvs_commit_ns (flux_t *h,
                           "namespace", ns,
                           "flags", flags,
                           "ops", ops);
-}
-
-flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
-{
-    const char *ns;
-
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return NULL;
-
-    return flux_kvs_commit_ns (h, ns, flags, txn);
 }
 
 /*

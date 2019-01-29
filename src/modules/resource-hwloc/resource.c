@@ -385,7 +385,8 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
         goto done;
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
     }

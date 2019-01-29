@@ -263,7 +263,7 @@ static int batch_cleanup (struct batch *batch)
             goto error;
         job = zlist_next (batch->jobs);
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         goto error;
     if (flux_future_then (f, -1., batch_cleanup_continuation, NULL) < 0)
         goto error;
@@ -351,7 +351,7 @@ static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
     batch = ctx->batch;
     ctx->batch = NULL;
 
-    if (!(f = flux_kvs_commit (ctx->h, 0, batch->txn))) {
+    if (!(f = flux_kvs_commit (ctx->h, NULL, 0, batch->txn))) {
         batch_respond_error (batch, errno, "flux_kvs_commit failed");
         goto error;
     }

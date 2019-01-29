@@ -89,12 +89,12 @@ int main (int argc, char *argv[])
 
     /* alter flags to generate an error on second fence */
 
-    if (!(f1 = flux_kvs_fence (h, 0x1, fence_name, 2, txn1))) {
+    if (!(f1 = flux_kvs_fence (h, NULL, 0x1, fence_name, 2, txn1))) {
         log_err ("flux_kvs_fence");
         goto done;
     }
 
-    if (!(f2 = flux_kvs_fence (h, 0x2, fence_name, 2, txn2))) {
+    if (!(f2 = flux_kvs_fence (h, NULL, 0x2, fence_name, 2, txn2))) {
         log_err ("flux_kvs_fence");
         goto done;
     }

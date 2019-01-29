@@ -366,7 +366,7 @@ static void job_create_continuation (flux_future_t *f, void *arg)
         goto error;
     if (add_jobinfo_txn (txn, job) < 0)
         goto error;
-    if (!(f_next = flux_kvs_commit (h, 0, txn)))
+    if (!(f_next = flux_kvs_commit (h, NULL, 0, txn)))
         goto error;
     if (flux_future_then (f_next, -1., job_create_kvs_continuation, job) < 0)
         goto error;

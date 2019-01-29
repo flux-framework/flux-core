@@ -189,7 +189,7 @@ flux_future_t *commit_int (flux_t *h, const char *k, int v)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_pack (txn, 0, k, "i", v) < 0)
         log_err_exit ("flux_kvs_txn_pack");
-    if (!(f = flux_kvs_commit (h, FLUX_KVS_NO_MERGE, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, FLUX_KVS_NO_MERGE, txn)))
         log_err_exit ("flux_kvs_commit");
     flux_kvs_txn_destroy (txn);
     if (verbose)

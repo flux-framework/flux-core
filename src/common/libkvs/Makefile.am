@@ -23,7 +23,6 @@ libkvs_la_SOURCES = \
 	kvs_classic.c \
 	kvs_watch.c \
 	kvs_commit.c \
-	kvs_commit_private.h \
 	kvs_txn.c \
 	kvs_txn_private.h \
 	treeobj.h \

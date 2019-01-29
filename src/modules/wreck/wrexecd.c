@@ -2304,7 +2304,7 @@ static int wreck_pmi_barrier_enter (void *arg)
                   strerror (errno));
         goto out;
     }
-    if ((f = flux_kvs_fence (ctx->flux, 0, ctx->barrier_name,
+    if ((f = flux_kvs_fence (ctx->flux, NULL, 0, ctx->barrier_name,
                              ctx->nnodes, ctx->barrier_txn)) == NULL) {
         wlog_err (ctx, "pmi_barrier_enter: flux_kvs_fence: %s",
                   strerror (errno));

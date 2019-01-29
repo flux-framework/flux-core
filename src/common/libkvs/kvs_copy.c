@@ -21,7 +21,6 @@
 #include <flux/core.h>
 
 #include "kvs_copy.h"
-#include "kvs_commit_private.h"
 #include "kvs_lookup_private.h"
 
 struct copy_context {
@@ -88,11 +87,11 @@ static void copy_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_txn_unlink (txn, 0, ctx->srckey) < 0)
         goto error;
     if (ctx->srcns) {
-        if (!(f2 = flux_kvs_commit_ns (h, ctx->srcns, ctx->commit_flags, txn)))
+        if (!(f2 = flux_kvs_commit (h, ctx->srcns, ctx->commit_flags, txn)))
             goto error;
     }
     else {
-        if (!(f2 = flux_kvs_commit (h, ctx->commit_flags, txn)))
+        if (!(f2 = flux_kvs_commit (h, NULL, ctx->commit_flags, txn)))
             goto error;
     }
     if (flux_future_continue (f, f2) < 0) {
@@ -128,11 +127,11 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_txn_put_treeobj (txn, 0, ctx->dstkey, val) < 0)
         goto error;
     if (ctx->dstns) {
-        if (!(f2 = flux_kvs_commit_ns (h, ctx->dstns, ctx->commit_flags, txn)))
+        if (!(f2 = flux_kvs_commit (h, ctx->dstns, ctx->commit_flags, txn)))
             goto error;
     }
     else {
-        if (!(f2 = flux_kvs_commit (h, ctx->commit_flags, txn)))
+        if (!(f2 = flux_kvs_commit (h, NULL, ctx->commit_flags, txn)))
             goto error;
     }
     if (flux_future_continue (f, f2) < 0) {

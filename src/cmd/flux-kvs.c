@@ -843,7 +843,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         }
         free (key);
     }
-    if (!(f = flux_kvs_commit (h, commit_flags, txn))
+    if (!(f = flux_kvs_commit (h, NULL, commit_flags, txn))
                                         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
@@ -914,7 +914,8 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
                 log_err_exit ("%s", argv[i]);
         }
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -946,7 +947,8 @@ int cmd_link (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_symlink (txn, 0, linkname, ns, target) < 0)
         log_err_exit ("%s", linkname);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -1017,7 +1019,8 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
         if (flux_kvs_txn_mkdir (txn, 0, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -1836,7 +1839,7 @@ static flux_future_t *eventlog_append_event (flux_t *h, const char *key,
         log_err_exit ("flux_kvs_event_encode");
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, event) < 0)
         log_err_exit ("flux_kvs_txn_put");
-    if (!(f = flux_kvs_commit (h, 0, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit");
     return f;
 }

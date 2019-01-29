@@ -13,10 +13,12 @@ SYNOPSIS
  #include <flux/core.h>
 
  flux_future_t *flux_kvs_commit (flux_t *h,
+                                 const char *ns,
                                  int flags,
                                  flux_kvs_txn_t *txn);
 
  flux_future_t *flux_kvs_fence (flux_t *h,
+                                const char *ns,
                                 int flags,
                                 const char *name,
                                 int nprocs,
@@ -26,11 +28,14 @@ DESCRIPTION
 -----------
 
 `flux_kvs_commit()` sends a request via handle _h_ to the KVS service
-to commit a transaction _txn_.  _txn_ is created with `flux_kvs_txn_create(3)`
-and after commit completion, is destroyed with `flux_kvs_txn_destroy()`.
-A `flux_future_t` object is returned, which acts as handle for synchronization
-and container for the response.  _flags_ modifies the request as described
-below.
+to commit a transaction _txn_.  _txn_ is created with
+`flux_kvs_txn_create(3)` and after commit completion, is destroyed
+with `flux_kvs_txn_destroy()`.  A `flux_future_t` object is returned,
+which acts as handle for synchronization and container for the
+response.  The _txn_ will operate in the namespace specified by _ns_.
+If _ns_ is NULL, `flux_kvs_commit()` will operate on the namespace
+returned via `flux_kvs_get_namespace()`.  Note that all transactions
+operate on the same namespace.
 
 `flux_kvs_fence()` is a "collective" version of `flux_kvs_commit()` that
 supports multiple callers.  Each caller uses the same _flags_, _name_,
@@ -47,13 +52,6 @@ block until the response has been received.  Both accept an optional timeout.
 `flux_future_get()` decodes the response, and returns 0 if the commit/fence
 was successful, indicating the entire transaction was committed, or -1
 on failure, indicating none of the transaction was committed.
-
-By default, both `flux_kvs_commit()` and `flux_kvs_fence()` operate on
-the default KVS namespace.  A different namespace can be chosen
-several ways.  A namespace can be set via the
-`flux_kvs_set_namespace()` function, or set via the environment
-variable FLUX_KVS_NAMESPACE.  Note that all transactions must operate
-on the same namespace.
 
 FLAGS
 -----

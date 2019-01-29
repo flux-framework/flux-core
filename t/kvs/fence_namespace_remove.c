@@ -87,7 +87,7 @@ int main (int argc, char *argv[])
      * flux_future_get() below should hang until an error occurs
      */
 
-    if (!(f = flux_kvs_fence (h, 0, fence_name, 2, txn))) {
+    if (!(f = flux_kvs_fence (h, NULL, 0, fence_name, 2, txn))) {
         log_err ("flux_kvs_fence");
         goto done;
     }

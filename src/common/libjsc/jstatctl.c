@@ -481,7 +481,8 @@ static int update_state (flux_t *h, int64_t jobid, json_t *jcb)
         goto done;
     if (flux_kvs_txn_pack (txn, 0, key, "s", jsc_job_num2state (state)) < 0)
         goto done;
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL,0, txn))
+        || flux_future_get (f, NULL) < 0)
         goto done;
     if (send_state_event (h, state, jobid) < 0)
         goto done;
@@ -534,7 +535,8 @@ static int update_rdesc (flux_t *h, int64_t jobid, json_t *jcb)
         goto done;
     if (flux_kvs_txn_pack (txn, 0, key, "I", ncores) < 0)
         goto done;
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -560,7 +562,8 @@ static int update_rdl (flux_t *h, int64_t jobid, json_t *jcb)
         goto done;
     if (flux_kvs_txn_pack (txn, 0, key, "O", rdl) < 0)
         goto done;
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -586,7 +589,8 @@ static int update_r_lite (flux_t *h, int64_t jobid, json_t *jcb)
         goto done;
     if (flux_kvs_txn_pack (txn, 0, key, "O", r_lite) < 0)
         goto done;
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:

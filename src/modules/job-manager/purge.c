@@ -144,7 +144,7 @@ void purge_handle_request (flux_t *h, struct queue *queue,
         goto error;
     if (active_unlink (r->txn, job) < 0)
         goto error;
-    if (!(f = flux_kvs_commit (h, 0, r->txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, r->txn)))
         goto error;
     if (flux_future_then (f, -1., purge_continuation, r) < 0) {
         flux_future_destroy (f);

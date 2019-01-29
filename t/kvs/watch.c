@@ -220,7 +220,8 @@ void test_mt (int argc, char **argv)
     key_stable = xasprintf ("%s-stable", key);
     if (flux_kvs_txn_pack (txn, 0, key_stable, "i", 0) < 0)
         log_err_exit ("flux_kvs_txn_pack %s", key);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -240,7 +241,8 @@ void test_mt (int argc, char **argv)
             log_err_exit ("flux_kvs_txn_create");
         if (flux_kvs_txn_pack (txn, 0, key, "i", i) < 0)
             log_err_exit ("flux_kvs_txn_pack %s", key);
-        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+            || flux_future_get (f, NULL) < 0)
             log_err_exit ("flux_kvs_commit");
         flux_future_destroy (f);
         flux_kvs_txn_destroy (txn);
@@ -301,7 +303,8 @@ static int selfmod_watch_cb (const char *key, const char *json_str, void *arg, i
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_pack (txn, 0, key, "i", val + 1) < 0)
         log_err_exit ("%s: flux_kvs_txn_pack", __FUNCTION__);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("%s: flux_kvs_commit", __FUNCTION__);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -328,7 +331,8 @@ void test_selfmod (int argc, char **argv)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_pack (txn, 0, key, "i", -1) < 0)
         log_err_exit ("flux_kvs_txn_pack");
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -368,7 +372,7 @@ static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_pack (txn, 0, ctx->key, "i", count++) < 0)
         log_err_exit ("%s: flux_kvs_txn_pack", __FUNCTION__);
-    if (!(f = flux_kvs_commit (ctx->h, 0, txn))
+    if (!(f = flux_kvs_commit (ctx->h, NULL, 0, txn))
                 || flux_future_get (f, NULL) < 0)
         log_err_exit ("%s: flux_kvs_commit", __FUNCTION__);
     flux_kvs_txn_destroy (txn);
