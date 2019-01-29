@@ -40,11 +40,11 @@ void errors (void)
         "flux_kvs_get_namespace fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_get_version (NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_get_version (NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_get_version fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_wait_version (NULL, 0) < 0 && errno == EINVAL,
+    ok (flux_kvs_wait_version (NULL, NULL, 0) < 0 && errno == EINVAL,
         "flux_kvs_wait_version fails on bad input");
 }
 

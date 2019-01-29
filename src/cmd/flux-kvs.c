@@ -1034,7 +1034,7 @@ int cmd_version (optparse_t *p, int argc, char **argv)
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
-    if (flux_kvs_get_version (h, &vers) < 0)
+    if (flux_kvs_get_version (h, NULL, &vers) < 0)
         log_err_exit ("flux_kvs_get_version");
     printf ("%d\n", vers);
     return (0);
@@ -1057,7 +1057,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 1))
         log_msg_exit ("wait: specify a version");
     vers = strtoul (argv[optindex], NULL, 10);
-    if (flux_kvs_wait_version (h, vers) < 0)
+    if (flux_kvs_wait_version (h, NULL, vers) < 0)
         log_err_exit ("flux_kvs_wait_version");
     return (0);
 }

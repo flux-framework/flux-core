@@ -66,10 +66,9 @@ const char *flux_kvs_get_namespace (flux_t *h);
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.
- * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE.
  */
-int flux_kvs_get_version (flux_t *h, int *versionp);
-int flux_kvs_wait_version (flux_t *h, int version);
+int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp);
+int flux_kvs_wait_version (flux_t *h,const char *ns, int version);
 
 /* Garbage collect the cache.  On the root node, drop all data that
  * doesn't have a reference in the namespace.  On other nodes, the entire

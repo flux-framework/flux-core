@@ -87,15 +87,16 @@ const char *flux_kvs_get_namespace (flux_t *h)
     return KVS_PRIMARY_NAMESPACE;
 }
 
-int flux_kvs_get_version (flux_t *h, int *versionp)
+int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp)
 {
     flux_future_t *f;
-    const char *ns;
     int version;
     int rc = -1;
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return -1;
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            return -1;
+    }
     if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
                              "namespace", ns)))
         goto done;
@@ -109,14 +110,15 @@ done:
     return rc;
 }
 
-int flux_kvs_wait_version (flux_t *h, int version)
+int flux_kvs_wait_version (flux_t *h, const char *ns, int version)
 {
     flux_future_t *f;
-    const char *ns;
     int ret = -1;
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return -1;
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            return -1;
+    }
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
                              "rootseq", version,
                              "namespace", ns)))
