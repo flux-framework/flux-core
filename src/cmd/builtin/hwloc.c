@@ -316,7 +316,7 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       0,
       reload_opts,
     },
-   { "lstopo",
+    { "lstopo",
       "[lstopo-OPTIONS]",
       "Show hwloc topology of the system",
       cmd_lstopo,
