@@ -25,48 +25,6 @@
 
 #define XML_BASEDIR "resource.hwloc.xml"
 
-struct hwloc_topo {
-    flux_t *h;
-    flux_future_t *f;
-    const char *topo;
-};
-
-/*
- * Gather concatenated hwloc xml topo file with resource-hwloc.topo RPC
- *  and save results until destroyed by hwloc_topo_destroy ().
- */
-static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
-{
-    struct hwloc_topo *t = xzmalloc (sizeof (*t));
-
-    if (!(t->h = builtin_get_flux_handle (p)))
-        log_err_exit ("flux_open");
-
-    if (!(t->f = flux_rpc (t->h, "resource-hwloc.topo", NULL,
-                                 FLUX_NODEID_ANY, 0)))
-        log_err_exit ("flux_rpc");
-
-    if (flux_rpc_get_unpack (t->f, "{ s:s }", "topology", &t->topo) < 0)
-        log_err_exit ("flux_rpc_get_unpack");
-
-    return (t);
-}
-
-/*
- * Free RPC for hwloc toplogy
- */
-static void hwloc_topo_destroy (struct hwloc_topo *t)
-{
-    flux_future_destroy (t->f);
-    flux_close (t->h);
-    free (t);
-}
-
-const char *hwloc_topo_topology (struct hwloc_topo *t)
-{
-    return (t->topo);
-}
-
 /*  idset helpers:
  */
 
@@ -405,10 +363,11 @@ static int exec_lstopo (optparse_t *p, int ac, char *av[], const char *topo)
 static int cmd_lstopo (optparse_t *p, int ac, char *av[])
 {
     int status;
-    struct hwloc_topo *t = hwloc_topo_create (p);
-    assert (t != NULL);
+    char *xml = flux_hwloc_global_xml (p);
+    if (xml == NULL)
+        log_msg_exit ("Failed to fetch global hwloc XML");
 
-    status = exec_lstopo (p, ac, av, hwloc_topo_topology (t));
+    status = exec_lstopo (p, ac, av, xml);
     if (status) {
         if (WIFEXITED (status)) {
             if (WEXITSTATUS (status) == ENOENT)
@@ -421,7 +380,7 @@ static int cmd_lstopo (optparse_t *p, int ac, char *av[])
                       WCOREDUMP (status) ? " (core dumped)" : "");
     }
 
-    hwloc_topo_destroy (t);
+    free (xml);
 
     return (0);
 }
