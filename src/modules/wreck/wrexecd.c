@@ -1369,7 +1369,7 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
      *  exit_status dir so reactor loop can exit
      */
     if (count == ctx->total_ntasks) {
-        flux_kvs_unwatch (h, key);
+        flux_kvs_unwatch (h, NULL, key);
         prog_ctx_remove_completion_ref (ctx, "exit_status");
     }
 
@@ -1395,7 +1395,7 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
      */
     prog_ctx_add_completion_ref (ctx, "exit_status");
 
-    if ((rc = flux_kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
+    if ((rc = flux_kvs_watch (h, NULL, key, exitstatus_watcher, ctx)) < 0)
         flux_log_error (h, "flux_kvs_watch");
     free (key);
     return (rc);

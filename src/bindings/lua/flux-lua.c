@@ -1080,7 +1080,7 @@ static int l_kvswatcher_remove (lua_State *L)
     struct l_flux_ref *kw = luaL_checkudata (L, 1, "FLUX.kvswatcher");
     l_flux_ref_gettable (kw, "kvswatcher");
     lua_getfield (L, -1, "key");
-    if (flux_kvs_unwatch (kw->flux, lua_tostring (L, -1)) < 0)
+    if (flux_kvs_unwatch (kw->flux, NULL, lua_tostring (L, -1)) < 0)
         return (lua_pusherror (L, "kvs_unwatch: %s",
                                (char *)flux_strerror (errno)));
     /*
@@ -1116,9 +1116,10 @@ static int l_kvswatcher_add (lua_State *L)
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
     lua_getfield (L, 2, "isdir");
     if (lua_toboolean (L, -1))
-        rc = flux_kvs_watch_dir (f, l_kvsdir_watcher, (void *) kw, "%s", key);
+        rc = flux_kvs_watch_dir (f, NULL, l_kvsdir_watcher, (void *) kw,
+                                 "%s", key);
     else
-        rc = flux_kvs_watch (f, key, l_kvswatcher, (void *) kw);
+        rc = flux_kvs_watch (f, NULL, key, l_kvswatcher, (void *) kw);
     if (rc < 0) {
         l_flux_ref_destroy (kw, "kvswatcher");
         return lua_pusherror (L, (char *)flux_strerror (errno));

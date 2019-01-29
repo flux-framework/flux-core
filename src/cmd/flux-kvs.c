@@ -1142,7 +1142,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     while (count && (rc == 0 || (rc < 0 && errno == ENOENT))) {
         if (isdir) {
-            rc = flux_kvs_watch_once_dir (h, &dir, "%s", key);
+            rc = flux_kvs_watch_once_dir (h, NULL, &dir, "%s", key);
             if (rc < 0 && (errno != ENOENT && errno != ENOTDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 if (dir)
@@ -1174,7 +1174,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
             }
         }
         else {
-            rc = flux_kvs_watch_once (h, key, &json_str);
+            rc = flux_kvs_watch_once (h, NULL, key, &json_str);
             if (rc < 0 && (errno != ENOENT && errno != EISDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 free (json_str);

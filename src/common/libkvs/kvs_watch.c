@@ -134,14 +134,15 @@ static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
     return zhash_lookup (ctx->watchers, k);
 }
 
-int flux_kvs_unwatch (flux_t *h, const char *key)
+int flux_kvs_unwatch (flux_t *h, const char *ns, const char *key)
 {
     flux_future_t *f = NULL;
-    const char *ns;
     int rc = -1;
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        goto done;
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            goto done;
+    }
     if (!(f = flux_rpc_pack (h, "kvs.unwatch", FLUX_NODEID_ANY, 0,
                              "{s:s s:s}",
                              "key", key,
@@ -223,16 +224,17 @@ done:
     free (json_str);
 }
 
-static flux_future_t *kvs_watch_rpc (flux_t *h, const char *key,
+static flux_future_t *kvs_watch_rpc (flux_t *h, const char *ns, const char *key,
                                      const char *json_str, int flags)
 {
     flux_future_t *f;
-    const char *ns;
     json_t *val = NULL;
     int saved_errno;
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        goto error;
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            goto error;
+    }
     if (!json_str)
         json_str = "null";
     if (!(val = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
@@ -326,7 +328,7 @@ static int kvs_watch_rpc_get_matchtag (flux_future_t *f, uint32_t *matchtag)
  * val_in may be NULL, in which case we send a json NULL value in the RPC.
  * Or val_in is an encoded JSON value, so enclose it in an RFC 11 'val' object.
  */
-int flux_kvs_watch_once (flux_t *h, const char *key, char **valp)
+int flux_kvs_watch_once (flux_t *h, const char *ns, const char *key, char **valp)
 {
     char *val_in = NULL;
     char *val_out;
@@ -347,7 +349,7 @@ int flux_kvs_watch_once (flux_t *h, const char *key, char **valp)
         if (!(xval_str = treeobj_encode (xval_obj)))
             goto done;
     }
-    if (!(f = kvs_watch_rpc (h, key, xval_str, KVS_WATCH_ONCE)))
+    if (!(f = kvs_watch_rpc (h, ns, key, xval_str, KVS_WATCH_ONCE)))
         goto done;
     if (kvs_watch_rpc_get (f, &val_out) < 0)
         goto done;
@@ -363,7 +365,8 @@ done:
     return rc;
 }
 
-static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
+static int watch_once_dir (flux_t *h, const char *ns, const char *key,
+                           flux_kvsdir_t **dirp)
 {
     char *val_in = NULL;
     char *val_out = NULL;
@@ -379,7 +382,7 @@ static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
         json_t *dir_in = kvsdir_get_obj (*dirp);
         val_in = treeobj_encode (dir_in);
     }
-    if (!(f = kvs_watch_rpc (h, key, val_in,
+    if (!(f = kvs_watch_rpc (h, ns, key, val_in,
                              KVS_WATCH_ONCE | FLUX_KVS_READDIR)))
         goto done;
     if (kvs_watch_rpc_get (f, &val_out) < 0)
@@ -399,7 +402,7 @@ done:
     return rc;
 }
 
-int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
+int flux_kvs_watch_once_dir (flux_t *h, const char *ns, flux_kvsdir_t **dirp,
                              const char *fmt, ...)
 {
     va_list ap;
@@ -417,19 +420,20 @@ int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
         errno = ENOMEM;
         return -1;
     }
-    rc = watch_once_dir (h, key, dirp);
+    rc = watch_once_dir (h, ns, key, dirp);
     free (key);
     return rc;
 }
 
-int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
+int flux_kvs_watch (flux_t *h, const char *ns, const char *key, kvs_set_f set,
+                    void *arg)
 {
     flux_future_t *f;
     uint32_t matchtag;
     kvs_watcher_t *wp;
     char *json_str = NULL;
 
-    if (!(f = kvs_watch_rpc (h, key, NULL, KVS_WATCH_FIRST)))
+    if (!(f = kvs_watch_rpc (h, ns, key, NULL, KVS_WATCH_FIRST)))
         goto error;
     if (kvs_watch_rpc_get (f, &json_str) < 0)
         goto error;
@@ -446,14 +450,16 @@ error:
     return -1;
 }
 
-static int watch_dir (flux_t *h, const char *key, kvs_set_dir_f set, void *arg)
+static int watch_dir (flux_t *h, const char *ns, const char *key,
+                      kvs_set_dir_f set, void *arg)
 {
     flux_future_t *f;
     uint32_t matchtag;
     kvs_watcher_t *wp;
     char *json_str = NULL;
 
-    if (!(f = kvs_watch_rpc (h, key, NULL, KVS_WATCH_FIRST | FLUX_KVS_READDIR)))
+    if (!(f = kvs_watch_rpc (h, ns, key, NULL,
+                             KVS_WATCH_FIRST | FLUX_KVS_READDIR)))
         goto error;
     if (kvs_watch_rpc_get (f, &json_str) < 0)
         goto error;
@@ -470,8 +476,8 @@ error:
     return -1;
 }
 
-int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
-                        const char *fmt, ...)
+int flux_kvs_watch_dir (flux_t *h, const char *ns, kvs_set_dir_f set,
+                        void *arg, const char *fmt, ...)
 {
     va_list ap;
     char *key;
@@ -488,7 +494,7 @@ int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
         errno = ENOMEM;
         return -1;
     }
-    rc = watch_dir (h, key, set, arg);
+    rc = watch_dir (h, ns, key, set, arg);
     free (key);
     return rc;
 }

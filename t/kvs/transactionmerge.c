@@ -97,7 +97,7 @@ static int watch_count_cb (const char *key, const char *json_str, void *arg, int
     }
 
     if (changecount == threadcount)
-        flux_kvs_unwatch (t->h, key);
+        flux_kvs_unwatch (t->h, NULL, key);
     return 0;
 }
 
@@ -144,7 +144,7 @@ void *watchthread (void *arg)
 
     r = flux_get_reactor (t->h);
 
-    if (flux_kvs_watch (t->h, key, watch_count_cb, t) < 0)
+    if (flux_kvs_watch (t->h, NULL, key, watch_count_cb, t) < 0)
         log_err_exit ("flux_kvs_watch %s", key);
 
     pw = flux_prepare_watcher_create (r, watch_prepare_cb, NULL);

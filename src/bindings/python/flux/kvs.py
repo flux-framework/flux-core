@@ -124,11 +124,11 @@ def watch_once(flux_handle, key):
     if isdir(flux_handle, key):
         directory = get_dir(flux_handle)
         # The wrapper automatically unpacks directory's handle
-        RAW.flux_kvs_watch_once_dir(flux_handle, directory)
+        RAW.flux_kvs_watch_once_dir(flux_handle, None, directory)
         return directory
 
     out_json_str = ffi.new("char *[1]")
-    RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
+    RAW.flux_kvs_watch_once(flux_handle, None, key, out_json_str)
     if out_json_str[0] == ffi.NULL:
         return None
     return json.loads(ffi.string(out_json_str[0]).decode("utf-8"))
@@ -348,7 +348,9 @@ KVSWATCHES = {}
 def watch(flux_handle, key, fun, arg):
     warg = (fun, arg)
     KVSWATCHES[key] = warg
-    return RAW.flux_kvs_watch(flux_handle, key, kvs_watch_wrapper, ffi.new_handle(warg))
+    return RAW.flux_kvs_watch(
+        flux_handle, None, key, kvs_watch_wrapper, ffi.new_handle(warg)
+    )
 
 
 def unwatch(flux_handle, key):
