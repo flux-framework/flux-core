@@ -13,6 +13,7 @@ AM_CPPFLAGS = \
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
+	$(top_builddir)/src/common/libaggregate/libaggregate.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
