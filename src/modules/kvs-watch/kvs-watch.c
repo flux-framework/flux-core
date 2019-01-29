@@ -826,7 +826,6 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     struct commit *commit;
 
     /* small racy chance watcher cancelled before getroot completes */
-    fprintf (stderr, "%s:%d %p %p\n", __FUNCTION__, __LINE__, nsm, nsm->watchers);
     if (zlist_size (nsm->watchers) == 0) {
         zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
         return;
