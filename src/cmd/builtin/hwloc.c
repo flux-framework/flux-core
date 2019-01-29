@@ -18,10 +18,12 @@
 #include <assert.h>
 #include <argz.h>
 #include <inttypes.h>
+#include <jansson.h>
 
 #include <hwloc.h>
 
 #include "src/common/libidset/idset.h"
+#include "src/common/libaggregate/aggregate.h"
 
 #define XML_BASEDIR "resource.hwloc.xml"
 
@@ -105,6 +107,22 @@ static int lookup_all_topo_xml (flux_t *h, char **xmls, struct idset *idset)
         i++;
     }
     return (flux_reactor_run (flux_get_reactor (h), 0));
+}
+
+/*  Lookup topo XML for a single rank using degenerate case of
+ *  lookup_all_topo_xml()
+ */
+static int lookup_one_topo_xml (flux_t *h, char **valp, uint32_t rank)
+{
+    int rc;
+    struct idset *idset = idset_create (0, IDSET_FLAG_AUTOGROW);
+    if (!idset || idset_set (idset, rank) < 0) {
+       log_err ("idset_create/set rank=%d", rank);
+        return (-1);
+    }
+    rc = lookup_all_topo_xml (h, valp, idset);
+    idset_destroy (idset);
+    return (rc);
 }
 
 /*  Given an array of topology XML strings with `n` entries, return
@@ -433,6 +451,19 @@ static int cmd_info (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+/*  flux-hwloc reload:
+ */
+
+/*  Add hwloc xml string `xml` to kvs for rank `rank` to a kvs txn
+ */
+static int kvs_txn_put_xml (flux_kvs_txn_t *txn, uint32_t rank,
+                             const char *xml)
+{
+    char key [1024];
+    snprintf (key, sizeof (key), "%s.%ju", XML_BASEDIR, (uintmax_t) rank);
+    return (flux_kvs_txn_pack (txn, 0, key, "s", xml));
+}
+
 static void config_hwloc_paths (flux_t *h, const char *dirpath)
 {
     uint32_t size, rank;
@@ -512,6 +543,200 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+/*  flux-hwloc aggregate-load:
+ */
+
+/*  Count supported GPU object in a hwloc topology object.
+ *
+ *  Currently only CUDA and OpenCL devices are counted.
+ */
+static int hwloc_gpu_count (hwloc_topology_t topology)
+{
+    int nobjs = 0;
+    hwloc_obj_t obj = NULL;
+    while ((obj = hwloc_get_next_osdev (topology, obj))) {
+        /* Only count cudaX and openclX devices for now */
+        const char *s = hwloc_obj_get_info_by_name (obj, "Backend");
+        if (s && ((strcmp (s, "CUDA") == 0) || (strcmp (s, "OpenCL") == 0)))
+            nobjs++;
+    }
+    return (nobjs);
+}
+
+/*  Emit a json object containing summary statistics for the topology argument.
+ */
+static json_t *topo_tojson (hwloc_topology_t topology)
+{
+    int nobj, i;
+    json_t *o = NULL;
+    json_t *v = NULL;
+    int depth = hwloc_topology_get_depth (topology);
+
+    if (!(o = json_object ()))
+        return NULL;
+    for (i = 0; i < depth; i++) {
+        hwloc_obj_type_t t = hwloc_get_depth_type (topology, i);
+        nobj = hwloc_get_nbobjs_by_depth (topology, i);
+        /* Skip "Machine" or "System" = 1 */
+        if ((t == HWLOC_OBJ_MACHINE || t == HWLOC_OBJ_SYSTEM) && nobj == 1)
+            continue;
+        if (!(v = json_integer (nobj)))
+            goto error;
+        if (json_object_set_new (o, hwloc_obj_type_string (t), v) < 0)
+            goto error;
+    }
+    if ((nobj = hwloc_gpu_count (topology))) {
+        if (!(v = json_integer (nobj))
+            || json_object_set_new (o, "GPU", v) < 0)
+            goto error;
+    }
+    return (o);
+error:
+    json_decref (o);
+    return (NULL);
+}
+
+static int get_fwd_count (flux_t *h)
+{
+    const char *s = flux_attr_get (h, "tbon.descendants");
+    long v = strtol (s, NULL, 10);
+    if (v >= 0)
+        return ((int) v + 1);
+    return (0);
+}
+
+/*  Create a JSON object summarizing object counts in local topology
+ *   and initiate an aggregate across all ranks of that object.
+ */
+static int aggregate_topo_summary (flux_t *h, const char *key, const char *xml)
+{
+    json_t *o = NULL;
+    flux_future_t *f = NULL;
+    hwloc_topology_t topo;
+    int fwd_count = get_fwd_count (h);
+
+    if (init_topo_from_xml (&topo, xml) < 0)
+        log_err_exit ("aggregate_topo_summary: failed to initialize topology");
+
+    if (!(o = topo_tojson (topo)))
+        log_err_exit ("Failed to convert topology to JSON");
+
+    if (!(f = aggregator_push_json (h, fwd_count, key, o))
+        || (flux_future_get (f, NULL) < 0))
+        log_err_exit ("aggregator_push_json");
+
+    flux_future_destroy (f);
+    hwloc_topology_destroy (topo);
+    return (0);
+}
+
+static void aggregate_load_wait (optparse_t *p, flux_t *h, const char *key)
+{
+    const char *unpack_path = NULL;
+    double timeout;
+    flux_future_t *f = NULL;
+
+    timeout = optparse_get_double (p, "timeout", 15.);
+
+    if (!(f = aggregate_wait (h, key))
+       || flux_future_wait_for (f, timeout) < 0)
+        log_err_exit ("aggregate_wait");
+
+    if (optparse_getopt (p, "unpack", &unpack_path)
+        && aggregate_unpack_to_kvs (f, unpack_path) < 0)
+        log_err_exit ("unable to unpack aggregate to kvs");
+
+    if (optparse_hasopt (p, "print-result")) {
+        const char *s;
+        if (aggregate_wait_get (f, &s) < 0)
+            log_err_exit ("aggregate_wait_get_unpack");
+        puts (s);
+    }
+    flux_future_destroy (f);
+}
+
+/*  Put xml string `xml` into hwloc xml entry in kvs for rank `rank`,
+ *   and then perform synchronous kvs_fence for nprocs entries.
+ */
+static int kvs_put_xml_fence (flux_t *h, int rank,
+                              const char *name, int nprocs,
+                              const char *xml)
+{
+    flux_future_t *f;
+    flux_kvs_txn_t *txn = NULL;
+
+    if (!(txn = flux_kvs_txn_create ())
+        || (kvs_txn_put_xml (txn, rank, xml) < 0))
+        log_err_exit ("kvs put xml (rank=%d)", rank);
+    if (!(f = flux_kvs_fence (h, NULL, 0, name, nprocs, txn))
+        || flux_future_get (f, NULL) < 0)
+        log_err_exit ("kvs_put_xml: commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
+    return (0);
+}
+
+/*  Undocumented utility function that optionally loads local topology XML
+ *   on selected ranks, then uses the aggregator module to create a
+ *   summary of all rank HW topology object types, optionally storing the
+ *   result in the KVS.
+ */
+static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
+{
+    char *xml = NULL;
+    const char *key = NULL;
+    const char *ranks = NULL;
+    struct idset *idset = NULL;
+    uint32_t rank;
+    flux_t *h = NULL;
+
+    if (!optparse_getopt (p, "key", &key))
+        log_err_exit ("Missing required option --key");
+
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+
+    /*  If rank not specified then default to an empty set */
+    if (optparse_getopt (p, "rank", &ranks) <= 0)
+        ranks = "";
+    if (!(idset = ranks_to_idset (h, ranks)))
+        log_err_exit ("Invalid argument: -rank='%s'", ranks);
+    if (flux_get_rank (h, &rank) < 0)
+        log_err_exit ("flux_get_rank");
+
+    /*  If this rank is in idset, then we need to reload local XML into
+     *   kvs before re-aggregation. Otherwise, fetch XML from kvs.
+     */
+    if (idset_test (idset, rank)) {
+        if (!(xml = flux_hwloc_local_xml ()))
+            log_err_exit ("Failed to get local XML");
+        if (kvs_put_xml_fence (h, rank, key, idset_count (idset), xml) < 0)
+            log_err_exit ("Failed to store local XML in kvs");
+    }
+    else if (lookup_one_topo_xml (h, &xml, rank) < 0)
+        log_err_exit ("lookup topo XML for this rank (%d)", rank);
+
+    /* Immediately push aggregate from all ranks
+     */
+    if (aggregate_topo_summary (h, key, xml) < 0)
+        log_err_exit ("Unable to aggregate topology summary");
+
+    /*  Rank 0 waits for aggregate completion and optionally "unpacks"
+     *   aggregate to new KVS location.
+     */
+    if (rank == 0)
+        aggregate_load_wait (p, h, key);
+
+    idset_destroy (idset);
+    free (xml);
+    flux_close (h);
+    return (0);
+}
+
+
+/*  flux-hwloc:
+ */
+
 int cmd_hwloc (optparse_t *p, int ac, char *av[])
 {
     log_init ("flux-hwloc");
@@ -532,6 +757,25 @@ static struct optparse_option topology_opts[] = {
     },
     { .name = "rank", .key = 'r', .has_arg = 1,
       .usage = "Target specified nodeset, or \"all\" (default)",
+    },
+    OPTPARSE_TABLE_END,
+};
+
+static struct optparse_option aggregate_load_opts[] = {
+    { .name = "timeout", .key = 't', .has_arg = 1,
+      .usage = "Time to wait for aggregate completion (default 15.0s)",
+    },
+    { .name = "rank", .key = 'r', .has_arg = 1,
+      .usage = "ranks on which to perform a local topology reload",
+    },
+    { .name = "key", .key = 'k', .has_arg = 1,
+      .usage = "KVS key for aggregate",
+    },
+    { .name = "unpack", .key = 'u', .has_arg = 1,
+      .usage = "KVS key to which to optionally \"unpack\" aggregate",
+    },
+    { .name = "print-result", .key = 'p', .has_arg = 0,
+      .usage = "Print final aggregate on rank 0 upon completion",
     },
     OPTPARSE_TABLE_END,
 };
@@ -564,6 +808,13 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       cmd_info,
       0,
       topology_opts,
+    },
+    { "aggregate-load",
+      "[OPTIONS]",
+      "aggregate hwloc summary with optional local topology reload",
+      cmd_aggregate_load,
+      OPTPARSE_SUBCMD_HIDDEN,
+      aggregate_load_opts,
     },
     OPTPARSE_SUBCMD_END,
 };
