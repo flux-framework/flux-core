@@ -171,9 +171,9 @@ void _treeobj_insert_entry_val (json_t *obj, const char *name,
  * created symlink can be properly dereferenced
  */
 void _treeobj_insert_entry_symlink (json_t *obj, const char *name,
-                                    const char *target)
+                                    const char *ns, const char *target)
 {
-    json_t *symlink = treeobj_create_symlink (target);
+    json_t *symlink = treeobj_create_symlink (ns, target);
     treeobj_insert_entry (obj, name, symlink);
     json_decref (symlink);
 }
@@ -694,6 +694,7 @@ void lookup_basic (void) {
      * "val" : val to "foo"
      * "dir" : dir w/ "val" : val to "bar"
      * "symlink" : symlink to "baz"
+     * "symlinkNS" : symlink to "boz" in namespace=primary
      *
      * root_ref
      * "dirref" : dirref to dirref_ref
@@ -719,7 +720,8 @@ void lookup_basic (void) {
     _treeobj_insert_entry_valref (dirref, "valref_with_dirref", dirref_test_ref);
     _treeobj_insert_entry_val (dirref, "val", "foo", 3);
     treeobj_insert_entry (dirref, "dir", dir);
-    _treeobj_insert_entry_symlink (dirref, "symlink", "baz");
+    _treeobj_insert_entry_symlink (dirref, "symlink", NULL, "baz");
+    _treeobj_insert_entry_symlink (dirref, "symlinkNS", KVS_PRIMARY_NAMESPACE, "boz");
 
     valref_multi = treeobj_create_valref (valref_ref);
     treeobj_append_blobref (valref_multi, valref2_ref);
@@ -874,8 +876,25 @@ void lookup_basic (void) {
                              FLUX_KVS_READLINK,
                              NULL)) != NULL,
         "lookup_create on path dirref.symlink");
-    test = treeobj_create_symlink ("baz");
+    test = treeobj_create_symlink (NULL, "baz");
     check_value (lh, test, "lookup dirref.symlink");
+    json_decref (test);
+
+    /* lookup symlinkNS */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "dirref.symlinkNS",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READLINK,
+                             NULL)) != NULL,
+        "lookup_create on path dirref.symlinkNS");
+    test = treeobj_create_symlink (KVS_PRIMARY_NAMESPACE, "boz");
+    check_value (lh, test, "lookup dirref.symlinkNS");
     json_decref (test);
 
     /* lookup dirref treeobj */
@@ -957,8 +976,25 @@ void lookup_basic (void) {
                              FLUX_KVS_TREEOBJ,
                              NULL)) != NULL,
         "lookup_create on path dirref.symlink (treeobj)");
-    test = treeobj_create_symlink ("baz");
+    test = treeobj_create_symlink (NULL, "baz");
     check_value (lh, test, "lookup dirref.symlink treeobj");
+    json_decref (test);
+
+    /* lookup symlinkNS treeobj */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "dirref.symlinkNS",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_TREEOBJ,
+                             NULL)) != NULL,
+        "lookup_create on path dirref.symlinkNS (treeobj)");
+    test = treeobj_create_symlink (KVS_PRIMARY_NAMESPACE, "boz");
+    check_value (lh, test, "lookup dirref.symlinkNS treeobj");
     json_decref (test);
 
     cache_destroy (cache);
@@ -1001,6 +1037,11 @@ void lookup_errors (void) {
      * "symlink" : symlink to "symlinkstr"
      * "symlink1" : symlink to "symlink2"
      * "symlink2" : symlink to "symlink1"
+     * "symlinkNS" : symlink to "symlinkNSstr" in namespace=primary
+     * "symlinkNS1" : symlink to "symlinkNS2" in namespace=primary
+     * "symlinkNS2" : symlink to "symlinkNS1" in namespace=primary
+     * "ns2symlink" : symlink to "symlink2ns" in namespace=primary
+     * "symlink2ns" : symlink to "ns2symlink"
      * "val" : val to "foo"
      * "valref" : valref to valref_ref
      * "dirref" : dirref to dirref_ref
@@ -1021,9 +1062,14 @@ void lookup_errors (void) {
     _treeobj_insert_entry_val (dir, "val", "baz", 3);
 
     root = treeobj_create_dir ();
-    _treeobj_insert_entry_symlink (root, "symlink", "symlinkstr");
-    _treeobj_insert_entry_symlink (root, "symlink1", "symlink2");
-    _treeobj_insert_entry_symlink (root, "symlink2", "symlink1");
+    _treeobj_insert_entry_symlink (root, "symlink", NULL, "symlinkstr");
+    _treeobj_insert_entry_symlink (root, "symlink1", NULL, "symlink2");
+    _treeobj_insert_entry_symlink (root, "symlink2", NULL, "symlink1");
+    _treeobj_insert_entry_symlink (root, "symlinkNS", KVS_PRIMARY_NAMESPACE, "symlinkNSstr");
+    _treeobj_insert_entry_symlink (root, "symlinkNS1", KVS_PRIMARY_NAMESPACE, "symlinkNS2");
+    _treeobj_insert_entry_symlink (root, "symlinkNS2", KVS_PRIMARY_NAMESPACE, "symlinkNS1");
+    _treeobj_insert_entry_symlink (root, "symlinkNS2symlink", KVS_PRIMARY_NAMESPACE, "symlink2symlinkNS");
+    _treeobj_insert_entry_symlink (root, "symlink2symlinkNS", NULL, "symlinkNS2symlink");
     _treeobj_insert_entry_val (root, "val", "foo", 3);
     _treeobj_insert_entry_valref (root, "valref", valref_ref);
     _treeobj_insert_entry_dirref (root, "dirref", dirref_ref);
@@ -1117,6 +1163,36 @@ void lookup_errors (void) {
                              NULL)) != NULL,
         "lookup_create on link loop");
     check_error (lh, ELOOP, "lookup infinite links");
+
+    /* Lookup path w/ infinite symlinkNS loop, should get ELOOP */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "symlinkNS1",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create on symlinkNS loop");
+    check_error (lh, ELOOP, "lookup infinite symlinkNS loop");
+
+    /* Lookup path w/ infinite symlink w/ & w/o namespace loop, should get ELOOP */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "symlinkNS2symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create on symlink (w/ & w/o namespace) loop");
+    check_error (lh, ELOOP, "lookup infinite symlink (w/ & w/o namespace) loop");
 
     /* Lookup a dirref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
@@ -1252,6 +1328,21 @@ void lookup_errors (void) {
                              NULL)) != NULL,
         "lookup_create on symlink");
     check_error (lh, ENOTDIR, "lookup symlink, expecting dir");
+
+    /* Lookup a symlinkNS, but expecting a dir, should get ENOTDIR. */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "symlinkNS",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READLINK | FLUX_KVS_READDIR,
+                             NULL)) != NULL,
+        "lookup_create on symlinkNS");
+    check_error (lh, ENOTDIR, "lookup symlinkNS, expecting dir");
 
     /* Lookup a dirref that doesn't point to a dir, should get ENOTRECOVERABLE. */
     ok ((lh = lookup_create (cache,
@@ -1585,16 +1676,16 @@ void lookup_links (void) {
     _treeobj_insert_entry_valref (dirref2, "valref", valref_ref);
     treeobj_insert_entry (dirref2, "dir", dir);
     _treeobj_insert_entry_dirref (dirref2, "dirref", dirref3_ref);
-    _treeobj_insert_entry_symlink (dirref2, "symlink", "dirref2.val");
+    _treeobj_insert_entry_symlink (dirref2, "symlink", NULL, "dirref2.val");
     treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
     (void)cache_insert (cache, create_cache_entry_treeobj (dirref2_ref, dirref2));
 
     dirref1 = treeobj_create_dir ();
-    _treeobj_insert_entry_symlink (dirref1, "link2dirref", "dirref2");
-    _treeobj_insert_entry_symlink (dirref1, "link2val", "dirref2.val");
-    _treeobj_insert_entry_symlink (dirref1, "link2valref", "dirref2.valref");
-    _treeobj_insert_entry_symlink (dirref1, "link2dir", "dirref2.dir");
-    _treeobj_insert_entry_symlink (dirref1, "link2symlink", "dirref2.symlink");
+    _treeobj_insert_entry_symlink (dirref1, "link2dirref", NULL, "dirref2");
+    _treeobj_insert_entry_symlink (dirref1, "link2val", NULL, "dirref2.val");
+    _treeobj_insert_entry_symlink (dirref1, "link2valref", NULL, "dirref2.valref");
+    _treeobj_insert_entry_symlink (dirref1, "link2dir", NULL, "dirref2.dir");
+    _treeobj_insert_entry_symlink (dirref1, "link2symlink", NULL, "dirref2.symlink");
     treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
     (void)cache_insert (cache, create_cache_entry_treeobj (dirref1_ref, dirref1));
 
@@ -1700,7 +1791,7 @@ void lookup_links (void) {
                              FLUX_KVS_READLINK,
                              NULL)) != NULL,
         "lookup_create link to symlink");
-    test = treeobj_create_symlink ("dirref2.val");
+    test = treeobj_create_symlink (NULL, "dirref2.val");
     check_value (lh, test, "dirref1.link2dirref.symlink");
     json_decref (test);
 
@@ -1781,7 +1872,7 @@ void lookup_links (void) {
                              FLUX_KVS_READLINK,
                              NULL)) != NULL,
         "lookup_create link to symlink (last part path)");
-    test = treeobj_create_symlink ("dirref2.symlink");
+    test = treeobj_create_symlink (NULL, "dirref2.symlink");
     check_value (lh, test, "dirref1.link2symlink");
     json_decref (test);
 
@@ -1919,13 +2010,13 @@ void lookup_root_symlink (void) {
     (void)cache_insert (cache, create_cache_entry_raw (valref_ref, "abcd", 4));
 
     dirref = treeobj_create_dir ();
-    _treeobj_insert_entry_symlink (dirref, "symlinkroot", ".");
+    _treeobj_insert_entry_symlink (dirref, "symlinkroot", NULL, ".");
     treeobj_hash ("sha1", dirref, dirref_ref, sizeof (dirref_ref));
     (void)cache_insert (cache, create_cache_entry_treeobj (dirref_ref, dirref));
 
     root = treeobj_create_dir ();
     _treeobj_insert_entry_val (root, "val", "foo", 3);
-    _treeobj_insert_entry_symlink (root, "symlinkroot", ".");
+    _treeobj_insert_entry_symlink (root, "symlinkroot", NULL, ".");
     _treeobj_insert_entry_dirref (root, "dirref", dirref_ref);
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
     (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
@@ -1991,7 +2082,7 @@ void lookup_root_symlink (void) {
                              FLUX_KVS_TREEOBJ,
                              NULL)) != NULL,
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_TREEOBJ, works");
-    test = treeobj_create_symlink (".");
+    test = treeobj_create_symlink (NULL, ".");
     check_value (lh, test, "symlinkroot w/ FLUX_KVS_TREEOBJ");
     json_decref (test);
 
@@ -2045,6 +2136,308 @@ void lookup_root_symlink (void) {
     kvsroot_mgr_destroy (krm);
     json_decref (dirref);
     json_decref (root);
+}
+
+/* lookup symlinkNS tests */
+void lookup_symlinkNS (void) {
+    json_t *rootA;
+    json_t *rootB;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    char root_refA[BLOBREF_MAX_STRING_SIZE];
+    char root_refB[BLOBREF_MAX_STRING_SIZE];
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-refA
+     * "val" : val to "1"
+     * "symlinkNS2A-invalid" : symlinkNS to an invalid key in namespace=A
+     * "symlinkNS2B-invalid" : symlinkNS to an invalid key in namespace=B
+     * "symlinkNS2A" : symlinkNS to "." in namespace=A
+     * "symlinkNS2B" : symlinkNS to "." in namespace=B
+     * "symlinkNS2A-val" : symlinkNS to "val" in namespace=A
+     * "symlinkNS2B-val" : symlinkNS to "val" in namespace=B
+     *
+     * root-refB
+     * "val" : val to "2"
+     */
+
+    rootA = treeobj_create_dir ();
+    _treeobj_insert_entry_val (rootA, "val", "1", 1);
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2A-invalid", "A", "foobar");
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2B-invalid", "A", "foobar");
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2A", "A", ".");
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2B", "B", ".");
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2A-val", "A", "val");
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2B-val", "B", "val");
+    treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_refA, rootA));
+
+    rootB = treeobj_create_dir ();
+    _treeobj_insert_entry_val (rootB, "val", "2", 1);
+    treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_refB, rootB));
+
+    setup_kvsroot (krm, "A", cache, root_refA, 0);
+    setup_kvsroot (krm, "B", cache, root_refB, 0);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2A-invalid",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2A-invalid on namespace A");
+    check_value (lh, NULL, "symlinkNS2A-invalid on namespace A");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2B-invalid",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2B-invalid on namespace A");
+    check_value (lh, NULL, "symlinkNS2B-invalid on namespace A");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2A.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2A.val on namespace A");
+    test = treeobj_create_val ("1", 1);
+    check_value (lh, test, "symlinkNS2A.val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2B.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2B.val on namespace A");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "symlinkNS2B.val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2A-val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2A-val on namespace A");
+    test = treeobj_create_val ("1", 1);
+    check_value (lh, test, "symlinkNS2A-val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2B-val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2B-val on namespace A");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "symlinkNS2B-val on namespace A");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2A",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2A on namespace A, readdir");
+    check_value (lh, rootA, "symlinkNS2A on namespace A, readdir");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2B",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL)) != NULL,
+        "lookup_create symlinkNS2B on namespace A, readdir");
+    check_value (lh, rootB, "symlinkNS2B on namespace A, readdir");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
+}
+
+void lookup_symlinkNS_security (void) {
+    json_t *rootA;
+    json_t *rootB;
+    json_t *rootC;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    char root_refA[BLOBREF_MAX_STRING_SIZE];
+    char root_refB[BLOBREF_MAX_STRING_SIZE];
+    char root_refC[BLOBREF_MAX_STRING_SIZE];
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-refA
+     * "val" : val to "1"
+     * "symlinkNS2B" : symlinkNS to "." in namespace=B
+     * "symlinkNS2C" : symlinkNS to "." in namespace=C
+     *
+     * root-refB
+     * "val" : val to "2"
+     *
+     * root-refC
+     * "val" : val to "3"
+     */
+
+    rootA = treeobj_create_dir ();
+    _treeobj_insert_entry_val (rootA, "val", "1", 1);
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2B", "B", ".");
+    _treeobj_insert_entry_symlink (rootA, "symlinkNS2C", "C", ".");
+    treeobj_hash ("sha1", rootA, root_refA, sizeof (root_refA));
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_refA, rootA));
+
+    rootB = treeobj_create_dir ();
+    _treeobj_insert_entry_val (rootB, "val", "2", 1);
+    treeobj_hash ("sha1", rootB, root_refB, sizeof (root_refB));
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_refB, rootB));
+
+    rootC = treeobj_create_dir ();
+    _treeobj_insert_entry_val (rootC, "val", "3", 1);
+    treeobj_hash ("sha1", rootC, root_refC, sizeof (root_refC));
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_refC, rootC));
+
+    setup_kvsroot (krm, "A", cache, root_refA, 1000);
+    setup_kvsroot (krm, "B", cache, root_refB, 1000);
+    setup_kvsroot (krm, "C", cache, root_refC, 2000);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2B.val",
+                             FLUX_ROLE_OWNER,
+                             1000,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create on symlinkNS2B.val with rolemask owner");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "lookup symlinkNS2B.val with rolemask owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2C.val",
+                             FLUX_ROLE_OWNER,
+                             1000,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create on symlinkNS2C.val with rolemask owner");
+    test = treeobj_create_val ("3", 1);
+    check_value (lh, test, "lookup symlinkNS2C.val with rolemask owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2B.val",
+                             FLUX_ROLE_USER,
+                             1000,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create on symlinkNS2B.val with rolemask user and valid owner");
+    test = treeobj_create_val ("2", 1);
+    check_value (lh, test, "lookup symlinkNS2B.val with rolemask user and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             "A",
+                             NULL,
+                             0,
+                             "symlinkNS2C.val",
+                             FLUX_ROLE_USER,
+                             1000,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create on symlinkNS2C.val with rolemask user and invalid owner");
+    check_error (lh, EPERM, "lookup_create on symlinkNS2C.val with rolemask user and invalid owner");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+    json_decref (rootA);
+    json_decref (rootB);
+    json_decref (rootC);
 }
 
 /* lookup stall namespace tests */
@@ -2370,7 +2763,7 @@ void lookup_stall_ref (void) {
     root = treeobj_create_dir ();
     _treeobj_insert_entry_dirref (root, "dirref1", dirref1_ref);
     _treeobj_insert_entry_dirref (root, "dirref2", dirref2_ref);
-    _treeobj_insert_entry_symlink (root, "symlink", "dirref2");
+    _treeobj_insert_entry_symlink (root, "symlink", NULL, "dirref2");
     treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
@@ -2990,6 +3383,8 @@ int main (int argc, char *argv[])
     lookup_links ();
     lookup_alt_root ();
     lookup_root_symlink ();
+    lookup_symlinkNS ();
+    lookup_symlinkNS_security ();
     lookup_stall_namespace ();
     lookup_stall_ref_root ();
     lookup_stall_ref ();

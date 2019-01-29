@@ -638,20 +638,23 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
             }
             json_decref (subdir);
         } else if (treeobj_is_symlink (dir_entry)) {
-            json_t *symlink = treeobj_get_data (dir_entry);
-            const char *symlinkstr;
+            const char *ns = NULL;
+            const char *target = NULL;
             char *nkey = NULL;
 
-            if (!symlink) {
+            if (treeobj_get_symlink (dir_entry, &ns, &target) < 0) {
+                saved_errno = EINVAL;
+                goto done;
+            }
+            assert (target);
+
+            /* can't cross into a new namespace */
+            if (ns && strcmp (ns, kt->ktm->ns_name)) {
                 saved_errno = EINVAL;
                 goto done;
             }
 
-            assert (json_is_string (symlink));
-
-            symlinkstr = json_string_value (symlink);
-
-            if (asprintf (&nkey, "%s.%s", symlinkstr, next) < 0) {
+            if (asprintf (&nkey, "%s.%s", target, next) < 0) {
                 saved_errno = ENOMEM;
                 goto done;
             }

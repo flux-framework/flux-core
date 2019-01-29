@@ -29,7 +29,8 @@ SYNOPSIS
 
  int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj);
 
- int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target);
+ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **ns,
+                                  const char **target);
 
  const char *flux_kvs_lookup_get_key (flux_future_t *f);
 
@@ -87,7 +88,9 @@ function should work on all.
 
 `flux_kvs_lookup_get_symlink()` interprets the result as a symlink target,
 e.g. in response to a lookup with the FLUX_KVS_READLINK flag set.
-The result is parsed and symlink target is assigned to _target_.
+The result is parsed and symlink namespace is assigned to _ns_ and
+the symlink target is assigned to _target_.  If a namespace was not assigned
+to the symlink, _ns_ is set to NULL.
 
 `flux_kvs_lookup_get_key()` accesses the key argument from the original
 lookup.

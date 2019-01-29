@@ -68,6 +68,12 @@ static struct optparse_option readlink_opts[] =  {
     { .name = "at", .key = 'a', .has_arg = 1,
       .usage = "Lookup relative to RFC 11 snapshot reference",
     },
+    { .name = "namespace-only", .key = 'o', .has_arg = 0,
+      .usage = "Output only namespace if link points to a namespace",
+    },
+    { .name = "key-only", .key = 'k', .has_arg = 0,
+      .usage = "Output only key if link points to a namespace",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -215,6 +221,13 @@ static struct optparse_option copy_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option link_opts[] =  {
+    { .name = "target-namespace", .key = 'T', .has_arg = 1,
+      .usage = "Specify target's namespace",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "namespace-create",
       "name [name...]",
@@ -273,14 +286,14 @@ static struct optparse_subcommand subcommands[] = {
       unlink_opts
     },
     { "link",
-      "target linkname",
+      "[-T ns] target linkname",
       "Create a new name for target",
       cmd_link,
       0,
-      NULL
+      link_opts
     },
     { "readlink",
-      "[-a treeobj] key [key...]",
+      "[-a treeobj] [ -o | -k ] key [key...]",
       "Retrieve the key a link refers to",
       cmd_readlink,
       0,
@@ -911,6 +924,8 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
 int cmd_link (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
+    const char *target, *linkname;
     int optindex;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
@@ -923,10 +938,14 @@ int cmd_link (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 2))
         log_msg_exit ("link: specify target and link_name");
 
+    ns = optparse_get_str (p, "target-namespace", NULL);
+    target = argv[optindex];
+    linkname = argv[optindex + 1];
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_symlink (txn, 0, argv[optindex + 1], argv[optindex]) < 0)
-        log_err_exit ("%s", argv[optindex + 1]);
+    if (flux_kvs_txn_symlink (txn, 0, linkname, ns, target) < 0)
+        log_err_exit ("%s", linkname);
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
@@ -938,16 +957,21 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     int optindex, i;
-    const char *target;
     flux_future_t *f;
+    bool ns_only;
+    bool key_only;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
+    ns_only = optparse_hasopt (p, "namespace-only");
+    key_only = optparse_hasopt (p, "key-only");
 
     for (i = optindex; i < argc; i++) {
+        const char *ns = NULL;
+        const char *target = NULL;
         if (optparse_hasopt (p, "at")) {
             const char *ref = optparse_get_str (p, "at", "");
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[i], ref)))
@@ -957,9 +981,18 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
             if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
                 log_err_exit ("%s", argv[i]);
         }
-        if (flux_kvs_lookup_get_symlink (f, &target) < 0)
+        if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
             log_err_exit ("%s", argv[i]);
-        printf ("%s\n", target);
+        if (ns_only && ns)
+            printf ("%s\n", ns);
+        else if (key_only)
+            printf ("%s\n", target);
+        else {
+            if (ns)
+                printf ("%s::%s\n", ns, target);
+            else
+                printf ("%s\n", target);
+        }
         flux_future_destroy (f);
     }
     return (0);
@@ -1241,13 +1274,16 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
     while ((name = flux_kvsitr_next (itr))) {
         key = flux_kvsdir_key_at (dir, name);
         if (flux_kvsdir_issymlink (dir, name)) {
-            const char *link;
+            const char *ns = NULL;
+            const char *target = NULL;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get_symlink (f, &link) < 0)
+                    || flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
                 log_err_exit ("%s", key);
-            printf ("%s -> %s\n", key, link);
+            if (ns)
+                printf ("%s -> %s::%s\n", key, ns, target);
+            else
+                printf ("%s -> %s\n", key, target);
             flux_future_destroy (f);
-
         } else if (flux_kvsdir_isdir (dir, name)) {
             if (Ropt) {
                 const flux_kvsdir_t *ndir;

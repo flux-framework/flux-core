@@ -32,7 +32,8 @@ SYNOPSIS
                           const char *key);
 
  int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
-                           const char *key, const char *target);
+                           const char *key, const char *ns,
+                           const char *target);
 
  int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
                            const char *key, const void *data, int len);
@@ -71,8 +72,10 @@ from a JSON object built with `json_pack()` style arguments (see below).
 `flux_kvs_txn_unlink()` removes _key_.  If _key_ is a directory,
 all its contents are removed as well.
 
-`flux_kvs_txn_symlink()` sets _key_ to a symbolic link pointing to _target_,
-another key.  _target_ need not exist.
+`flux_kvs_txn_symlink()` sets _key_ to a symbolic link pointing to a
+namespace _ns_ and a _target_ key within that namespace.  Neither _ns_
+nor _target_ must exist.  The namespace _ns_ is optional, if set to
+NULL the _target_ is assumed to be in the key's current namespace.
 
 `flux_kvs_txn_put_raw()` sets _key_ to a value containing raw data
 referred to by _data_ of length _len_.
