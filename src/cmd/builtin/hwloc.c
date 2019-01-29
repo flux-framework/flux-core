@@ -253,35 +253,13 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
     flux_kvs_txn_destroy (txn);
 }
 
-static bool hwloc_reload_bool_value (const char *walk_topology)
-{
-    bool v = true;
-
-    if (strcmp (walk_topology, "no") == 0
-        || strcmp (walk_topology, "0") == 0
-        || strcmp (walk_topology, "false") == 0)
-        v = false;
-    return (v);
-}
-
-static void request_hwloc_reload (flux_t *h, const char *nodeset,
-                                  const char *walk_topology)
+static void request_hwloc_reload (flux_t *h, const char *nodeset)
 {
     flux_mrpc_t *mrpc;
 
-    if (!walk_topology) {
-        if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload",
-                                     nodeset, 0, "{}")))
-            log_err_exit ("flux_mrpc_pack");
-    }
-    else {
-        bool v = hwloc_reload_bool_value (walk_topology);
-
-        if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload", nodeset, 0,
-                                     "{ s:b }", "walk_topology", v)))
-            log_err_exit ("flux_mrpc_pack");
-    }
-
+    if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload",
+                                    nodeset, 0, "{}")))
+        log_err_exit ("flux_mrpc_pack");
     do {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_mrpc_get (mrpc, NULL) < 0
@@ -300,7 +278,6 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     int n = optparse_option_index (p);
     const char *default_nodeset = "all";
     const char *nodeset = optparse_get_str (p, "rank", default_nodeset);
-    const char *walk_topology = optparse_get_str (p, "walk-topology", NULL);
     char *dirpath = NULL;
     flux_t *h;
 
@@ -310,7 +287,7 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
         log_err_exit ("%s", av[n]);
 
     config_hwloc_paths (h, dirpath);
-    request_hwloc_reload (h, nodeset, walk_topology);
+    request_hwloc_reload (h, nodeset);
 
     free (dirpath);
     flux_close (h);
@@ -328,9 +305,6 @@ int cmd_hwloc (optparse_t *p, int ac, char *av[])
 static struct optparse_option reload_opts[] = {
     { .name = "rank",  .key = 'r',  .has_arg = 1,
       .usage = "Target specified nodeset, or \"all\" (default)", },
-    { .name = "walk-topology",  .key = 't',  .has_arg = 1,
-      .arginfo = "yes/no",
-      .usage = "Force enable/disable topology walk for reload", },
     OPTPARSE_TABLE_END,
 };
 
