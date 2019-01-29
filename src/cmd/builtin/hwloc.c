@@ -27,6 +27,8 @@
 
 #define XML_BASEDIR "resource.hwloc.xml"
 
+extern char **environ;
+
 /*  idset helpers:
  */
 
@@ -281,6 +283,23 @@ static char *flux_hwloc_xml (optparse_t *p)
     return flux_hwloc_global_xml (p);
 }
 
+static int argz_appendf (char **argzp, size_t *argz_len, const char *fmt, ...)
+{
+    char s [4096];
+    int rc = -1;
+    int n;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if ((n = vsnprintf (s, sizeof (s), fmt, ap) < 0) || (n >= sizeof (s)))
+        goto out;
+    va_end (ap);
+
+    if ((errno = argz_add (argzp, argz_len, s)) == 0)
+        rc = 0;
+out:
+    return (rc);
+}
 
 static void lstopo_argz_init (char *cmd, char **argzp, size_t *argz_lenp,
                               char *extra_args[])
@@ -464,35 +483,59 @@ static int kvs_txn_put_xml (flux_kvs_txn_t *txn, uint32_t rank,
     return (flux_kvs_txn_pack (txn, 0, key, "s", xml));
 }
 
-static void config_hwloc_paths (flux_t *h, const char *dirpath)
+/*  Add hwloc xml from file at path <basedir>/<rank>.xml to kvs for
+ *   rank. The topology is first loaded into a hwloc_topology_t object
+ *   so that the common Flux hwloc flags may be applied,  and to check
+ *   that the XML is valid before putting it in the kvs.
+ */
+static flux_future_t *kvs_txn_put_xml_file (flux_kvs_txn_t *txn, int rank,
+                                            const char *basedir)
 {
-    uint32_t size, rank;
-    const char *key_prefix = "config.resource.hwloc.xml";
-    char key[64];
-    char path[PATH_MAX];
-    flux_kvs_txn_t *txn;
-    flux_future_t *f;
-    int n;
+    char path [8192];
+    int n, len;
+    char *xml;
+    hwloc_topology_t topo = NULL;
 
-    if (flux_get_size (h, &size) < 0)
-        log_err_exit ("flux_get_size");
+    if ((n = snprintf (path, sizeof (path), "%s/%d.xml", basedir, rank) < 0)
+        || (n >= sizeof (path)))
+        log_err_exit ("failed to create xml path");
+
+    topo_init_common (&topo);
+
+    if (hwloc_topology_set_xml (topo, path) < 0)
+        log_err_exit ("Unable to set XML to path=%s", path);
+
+    if (hwloc_topology_load (topo) < 0)
+        log_err_exit ("hwloc_topology_load (%s)", path);
+
+    if (hwloc_topology_export_xmlbuffer (topo, &xml, &len) < 0)
+        log_err_exit ("hwloc_topology_export_xmlbuffer");
+
+    if (kvs_txn_put_xml (txn, rank, xml) < 0)
+        log_err_exit ("kvs_txn_put_xml");
+
+    hwloc_free_xmlbuffer (topo, xml);
+    hwloc_topology_destroy (topo);
+    return (0);
+}
+
+/*  Load XML for all ranks in `idset` from files in `basedir`, one per
+ *   rank: <basedir>/<rank>.xml. All KVS puts are performed under a
+ *   single transaction.
+ */
+flux_future_t * kvs_load_xml_idset (flux_t *h, const char *basedir,
+                                    struct idset *idset)
+{
+    flux_future_t *f = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    unsigned int rank = idset_first (idset);
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    for (rank = 0; rank < size; rank++) {
-        n = snprintf (key, sizeof (key), "%s.%"PRIu32, key_prefix, rank);
-        assert (n < sizeof (key));
-        if (dirpath == NULL) {
-            /* Remove any per rank xml and reload default xml */
-            if (flux_kvs_txn_unlink (txn, 0, key) < 0)
-                log_err_exit ("flux_kvs_txn_unlink");
-            continue;
-        }
-        n = snprintf (path, sizeof (path), "%s/%"PRIu32".xml", dirpath, rank);
-        assert (n < sizeof (path));
-        if (access (path, R_OK) < 0)
-            log_err_exit ("%s", path);
-        if (flux_kvs_txn_pack (txn, 0, key, "s", path) < 0)
-            log_err_exit ("flux_kvs_txn_pack");
+
+    while (rank != IDSET_INVALID_ID) {
+        kvs_txn_put_xml_file (txn, rank, basedir);
+        rank = idset_next (idset, rank);
     }
     if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit request");
@@ -500,26 +543,44 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
         log_err_exit ("flux_kvs_commit response");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
+    return (f);
 }
 
-static void request_hwloc_reload (flux_t *h, const char *nodeset)
+/*  Execute flux-hwloc aggregate-load across all ranks, optionally
+ *   reloading local hwloc XML on `reload_ranks`.
+ */
+static int run_hwloc_aggregate (flux_t *h, const char *ranks)
 {
-    flux_mrpc_t *mrpc;
+    const char *base = "resource.hwloc";
+    char *argz = NULL;
+    size_t argz_len = 0;
+    uint32_t rank, size;
+    double timeout = 5.;
+    char *argv[] = {
+        "flux", "exec", "-r", "all", "flux", "hwloc", "aggregate-load", NULL
+    };
 
-    if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload",
-                                    nodeset, 0, "{}")))
-        log_err_exit ("flux_mrpc_pack");
-    do {
-        uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_mrpc_get (mrpc, NULL) < 0
-                        || flux_mrpc_get_nodeid (mrpc, &nodeid)) {
-            if (nodeid == FLUX_NODEID_ANY)
-                log_err ("flux_mrpc_get");
-            else
-                log_err ("mrpc(%"PRIu32")", nodeid);
-        }
-    } while (flux_mrpc_next (mrpc) == 0);
-    flux_mrpc_destroy (mrpc);
+    if (flux_get_rank (h, &rank) < 0)
+        log_err_exit ("flux_get_rank");
+    if (flux_get_size (h, &size) < 0)
+        log_err_exit ("flux_get_rank");
+
+    /* XXX: scale timeout by size just in case.. */
+    if (size > 512)
+        timeout = timeout + size/512.;
+
+    if ((errno = argz_create (argv, &argz, &argz_len)))
+        log_err_exit ("exec aggregate-load: argz_create");
+    if ((ranks && (argz_appendf (&argz, &argz_len, "--rank=%s", ranks) < 0))
+        || (argz_appendf (&argz, &argz_len, "--timeout=%.3f", timeout) < 0)
+        || (argz_appendf (&argz, &argz_len, "--unpack=%s.by_rank", base) < 0)
+        || (argz_appendf (&argz, &argz_len, "--key=%s.reload:%u-%u",
+                          base, rank, getpid()) < 0))
+        log_err_exit ("exec aggregate-load: argz_appendf");
+
+    argz_execp (argz, argz_len);
+
+    log_err_exit ("exec: flux-exec flux hwloc aggregate-load");
 }
 
 static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
@@ -527,21 +588,43 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     int n = optparse_option_index (p);
     const char *default_nodeset = "all";
     const char *nodeset = optparse_get_str (p, "rank", default_nodeset);
+    uint32_t size;
+    struct idset *idset = NULL;
     char *dirpath = NULL;
+    char *reload_ranks;
     flux_t *h;
 
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
+    if (flux_get_size (h, &size) < 0)
+        log_err_exit ("flux_get_size");
     if (av[n] && !(dirpath = realpath (av[n], NULL)))
         log_err_exit ("%s", av[n]);
+    if (!(idset = ranks_to_idset (h, nodeset)))
+        log_msg_exit ("--rank=%s: Invalid argument", nodeset);
+    if (idset_last (idset) > size - 1)
+        log_msg_exit ("--rank=%s: Invalid rank specified", nodeset);
 
-    config_hwloc_paths (h, dirpath);
-    request_hwloc_reload (h, nodeset);
+    if (dirpath) {
+        flux_future_t *f = kvs_load_xml_idset (h, dirpath, idset);
+        if (!f || flux_future_get (f, NULL) < 0)
+            log_err_exit ("%s: failed to load all XML", dirpath);
+        flux_future_destroy (f);
+        reload_ranks = NULL;
+    }
+    else
+        reload_ranks = strdup (nodeset);
+
+    run_hwloc_aggregate (h, reload_ranks);
 
     free (dirpath);
+    free (reload_ranks);
+    idset_destroy (idset);
     flux_close (h);
     return (0);
 }
+
+
 
 /*  flux-hwloc aggregate-load:
  */
