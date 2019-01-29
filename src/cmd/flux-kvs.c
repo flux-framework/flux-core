@@ -1055,7 +1055,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         log_msg_exit ("wait: specify a version");
     vers = strtoul (argv[optindex], NULL, 10);
     if (flux_kvs_wait_version (h, vers) < 0)
-        log_err_exit ("flux_kvs_get_version");
+        log_err_exit ("flux_kvs_wait_version");
     return (0);
 }
 
