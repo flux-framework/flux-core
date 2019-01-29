@@ -174,10 +174,6 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         }
     }
     else {
-        const char *ns;
-
-        if (!(ns = flux_kvs_get_namespace (h)))
-            return NULL;
         if (!(ctx->atref = strdup (treeobj)))
             return NULL;
         if (!(obj = json_loads (treeobj, 0, NULL))) {
@@ -185,9 +181,8 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
             return NULL;
         }
         if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:s s:i s:O}",
+                                 "{s:s s:i s:O}",
                                  "key", key,
-                                 "namespace", ns,
                                  "flags", flags,
                                  "rootdir", obj))) {
             free_ctx (ctx);

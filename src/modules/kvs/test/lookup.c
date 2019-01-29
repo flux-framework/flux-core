@@ -277,6 +277,20 @@ void basic_api_errors (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             42,
+                             NULL,
+                             NULL,
+                             0,
+                             "path.bar",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) == NULL,
+        "lookup_create fails on no namespace or root ref");
+
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
@@ -385,7 +399,7 @@ void basic_lookup (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              root_ref,
                              18,
                              "val",
@@ -636,7 +650,7 @@ void lookup_root (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              valref_ref,
                              0,
                              ".",
@@ -1429,7 +1443,7 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              valref_ref,
                              0,
                              "val",
@@ -1531,7 +1545,7 @@ void lookup_security (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              root_ref,
                              0,
                              "val",
@@ -1938,7 +1952,7 @@ void lookup_alt_root (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              dirref1_ref,
                              0,
                              "val",
@@ -1955,7 +1969,7 @@ void lookup_alt_root (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              dirref2_ref,
                              0,
                              "val",
@@ -1964,6 +1978,40 @@ void lookup_alt_root (void) {
                              0,
                              NULL)) != NULL,
         "lookup_create val w/ dirref2 root_ref");
+    test = treeobj_create_val ("bar", 3);
+    check_value (lh, test, "alt root val");
+    json_decref (test);
+
+    /* lookup val, alt root-ref dirref1_ref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             dirref1_ref,
+                             0,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create val w/ dirref1 root_ref & input namespace");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "alt root val");
+    json_decref (test);
+
+    /* lookup val, alt root-ref dirref2_ref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             dirref2_ref,
+                             0,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create val w/ dirref2 root_ref & input namespace");
     test = treeobj_create_val ("bar", 3);
     check_value (lh, test, "alt root val");
     json_decref (test);
@@ -2106,7 +2154,7 @@ void lookup_root_symlink (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              dirref_ref,
                              0,
                              "symlinkroot",
@@ -2121,7 +2169,7 @@ void lookup_root_symlink (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              valref_ref,
                              0,
                              "symlinkroot",
@@ -2818,7 +2866,7 @@ void lookup_stall_ref (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              root_ref,
                              0,
                              "symlink.val",
@@ -3277,7 +3325,7 @@ void lookup_stall_namespace_removed (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              root_ref,
                              0,
                              "dirref.valref",
@@ -3319,7 +3367,7 @@ void lookup_stall_namespace_removed (void) {
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
-                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
                              root_ref,
                              0,
                              "dirref.valref",

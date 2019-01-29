@@ -33,8 +33,7 @@ typedef int (*lookup_ref_f)(lookup_t *c,
 
 /* Initialize a lookup handle
  *
- * - root_ref is optional.  If not specified, will use root ref
- *   specified in namespace.
+ * - atleast one of namespace & root_ref is required.
  * - root_seq is not used and is solely used for convenience being
  *   passed alongside root_ref.  Can be retrieved later with
  *   lookup_get_root_seq().  Will not be stored if root_ref is NULL.

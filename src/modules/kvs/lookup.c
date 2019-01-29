@@ -512,7 +512,13 @@ lookup_t *lookup_create (struct cache *cache,
     lookup_t *lh = NULL;
     int saved_errno;
 
-    if (!cache || !krm || !ns || !path) {
+    if (!cache || !krm || !path) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    /* have to specify atleast one */
+    if (!ns && !root_ref) {
         errno = EINVAL;
         return NULL;
     }
@@ -526,10 +532,12 @@ lookup_t *lookup_create (struct cache *cache,
     lh->krm = krm;
     lh->current_epoch = current_epoch;
 
-    /* must duplicate strings, user may not keep pointer alive */
-    if (!(lh->ns_name = strdup (ns))) {
-        saved_errno = ENOMEM;
-        goto cleanup;
+    if (ns) {
+        /* must duplicate strings, user may not keep pointer alive */
+        if (!(lh->ns_name = strdup (ns))) {
+            saved_errno = ENOMEM;
+            goto cleanup;
+        }
     }
 
     if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
