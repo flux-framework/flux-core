@@ -12,7 +12,8 @@ SYNOPSIS
 --------
  #include <flux/core.h>
 
- flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key);
+ flux_future_t *flux_kvs_lookup (flux_t *h, const char *ns, int flags,
+                                 const char *key);
 
  flux_future_t *flux_kvs_lookupat (flux_t *h, int flags,
                                    const char *key, const char *treeobj);
@@ -43,14 +44,12 @@ DESCRIPTION
 The Flux Key Value Store is a general purpose distributed storage
 service used by Flux services.
 
-`flux_kvs_lookup()` sends a request to the KVS service to look up _key_.
-It returns a `flux_future_t` object which acts as handle for synchronization
-and container for the result.  _flags_ modifies the request as described
-below.
-
-By default,`flux_kvs_lookup()` operates on the default KVS namespace.
-An alternate namespace can be set via the `flux_kvs_set_namespace()`
-function, or set via the environment variable FLUX_KVS_NAMESPACE.
+`flux_kvs_lookup()` sends a request to the KVS service to look up
+_key_ in namespace _ns_.  It returns a `flux_future_t` object which
+acts as handle for synchronization and container for the result.  The
+namespace _ns_ is optional.  If set to NULL, `flux_kvs_lookup()`
+operates on the namespace returned via `flux_kvs_get_namespace()`.
+_flags_ modifies the request as described below.
 
 `flux_kvs_lookupat()` is identical to `flux_kvs_lookup()` except
 _treeobj_ is a serialized RFC 11 object that references a particular

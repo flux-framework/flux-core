@@ -237,7 +237,7 @@ static int jobid_exist (flux_t *h, int64_t jobid)
     if (!active_lookup (ctx->active_jobs, jobid)) {
         if (!(path = jscctx_jobid_path (ctx, jobid)))
             goto done;
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, path))
                                     || flux_future_get (f, NULL) < 0)
             goto done;
     }
@@ -290,7 +290,7 @@ lookup_job_attribute (flux_t *h, int64_t jobid, const char *fmt, ...)
     va_end (ap);
     if (!key)
         return NULL;
-    f = flux_kvs_lookup (h, 0, key);
+    f = flux_kvs_lookup (h, NULL, 0, key);
     free (key);
     return f;
 }
@@ -309,7 +309,7 @@ static json_t *query_state_pair (flux_t *h, int64_t jobid)
     if (!(key = lwj_key (h, jobid, ".state")))
         return NULL;
 
-    if (!(f = flux_kvs_lookup (h, 0, key))
+    if (!(f = flux_kvs_lookup (h, NULL, 0, key))
              || flux_kvs_lookup_get_unpack (f, "s", &state_str) < 0)
         goto done;
     state = jsc_job_state2num (state_str);

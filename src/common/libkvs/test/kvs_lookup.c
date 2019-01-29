@@ -26,7 +26,7 @@ void errors (void)
     /* check simple error cases */
 
     errno = 0;
-    ok (flux_kvs_lookup (NULL, 0, NULL) == NULL && errno == EINVAL,
+    ok (flux_kvs_lookup (NULL, NULL, 0, NULL) == NULL && errno == EINVAL,
         "flux_kvs_lookup fails on bad input");
 
     errno = 0;

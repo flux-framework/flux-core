@@ -789,7 +789,7 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EINVAL;
         goto error;
     }
-    if (!(f = flux_kvs_lookup (h, 0, k)))
+    if (!(f = flux_kvs_lookup (h, NULL, 0, k)))
         goto error;
     if (flux_future_then (f, -1., runevent_continuation, job) < 0)
         goto error;

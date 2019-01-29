@@ -104,20 +104,24 @@ static int validate_lookup_flags (int flags, bool watch_ok)
     }
 }
 
-flux_future_t *flux_kvs_lookup_ns (flux_t *h,
-                                   const char *ns,
-                                   int flags,
-                                   const char *key)
+flux_future_t *flux_kvs_lookup (flux_t *h,
+                                const char *ns,
+                                int flags,
+                                const char *key)
 {
     struct lookup_ctx *ctx;
     flux_future_t *f;
     const char *topic = "kvs.lookup";
     int rpc_flags = 0;
 
-    if (!h || !ns || !key || strlen (key) == 0
+    if (!h || !key || strlen (key) == 0
         || validate_lookup_flags (flags, true) < 0) {
         errno = EINVAL;
         return NULL;
+    }
+    if (!ns) {
+        if (!(ns = flux_kvs_get_namespace (h)))
+            return NULL;
     }
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
@@ -140,15 +144,6 @@ flux_future_t *flux_kvs_lookup_ns (flux_t *h,
         return NULL;
     }
     return f;
-}
-
-flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
-{
-    const char *ns;
-
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return NULL;
-    return flux_kvs_lookup_ns (h, ns, flags, key);
 }
 
 flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,

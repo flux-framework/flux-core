@@ -891,7 +891,7 @@ int prog_ctx_options_init (struct prog_ctx *ctx, const char *basedir)
     assert (strlen (basedir) < sizeof (key)+9);
     sprintf (key, "%s.options", basedir);
 
-    if (!(f = flux_kvs_lookup (ctx->flux, 0, key))) {
+    if (!(f = flux_kvs_lookup (ctx->flux, NULL, 0, key))) {
         wlog_err (ctx, "flux_kvs_lookup (%s): %s\n",
                         key, flux_strerror (errno));
         return (-1);
@@ -1012,7 +1012,7 @@ static int kvs_lookup_int (flux_t *h, flux_kvsdir_t *kvs,
     int rc = 0;
     flux_future_t *f = NULL;
     char *key = flux_kvsdir_key_at (kvs, entry);
-    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+    if (!key || !(f = flux_kvs_lookup (h, NULL, 0, key))
              || (flux_kvs_lookup_get_unpack (f, "i", resultp) < 0))
         rc = -1;
     flux_future_destroy (f);
@@ -1041,7 +1041,7 @@ static int kvs_lookup_ioservices (flux_t *h, flux_kvsdir_t *kvs,
 
     char *key = flux_kvsdir_key_at (kvs, "ioservice");
 
-    if (!key || !(f = flux_kvs_lookup (h, 0, key)))
+    if (!key || !(f = flux_kvs_lookup (h, NULL, 0, key)))
         return (-1);
 
     if (flux_kvs_lookup_get_unpack (f, "{ s:o, s:o }",
@@ -1180,7 +1180,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%"PRId64, ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
-    if (!(f = flux_kvs_lookup (ctx->flux, FLUX_KVS_READDIR, ctx->kvspath))
+    if (!(f = flux_kvs_lookup (ctx->flux, NULL, FLUX_KVS_READDIR, ctx->kvspath))
             || flux_kvs_lookup_get_dir (f, &dir) < 0
             || !(ctx->kvs = flux_kvsdir_copy (dir))) {
         wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s): %s",
@@ -1672,7 +1672,7 @@ static flux_kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
         flux_future_t *f = NULL;
         const flux_kvsdir_t *dir;
         if (asprintf (&key, "%s.%d", ctx->kvspath, t->globalid) < 0
-                    || !(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
+                    || !(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key))
                     || flux_kvs_lookup_get_dir (f, &dir) < 0
                     || !(t->kvs = flux_kvsdir_copy (dir))) {
             if (errno != ENOENT)
@@ -1990,7 +1990,7 @@ int rexecd_init (struct prog_ctx *ctx)
      *   one or more nodes encountered a fatal error and we should abort
      */
     key = flux_kvsdir_key_at (ctx->kvs, "fatalerror");
-    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+    if (!key || !(f = flux_kvs_lookup (ctx->flux, NULL, 0, key))
              || (flux_kvs_lookup_get_unpack (f, "i", &errnum) < 0 && errno != ENOENT)) {
         errnum = 1;
         wlog_msg (ctx, "Error: flux_kvsdir_get (fatalerror): %s\n", flux_strerror (errno));
@@ -2262,7 +2262,7 @@ static int wreck_pmi_kvs_get (void *arg, void *client, const char *kvsname,
         goto done;
     }
 
-    if (!(f = flux_kvs_lookup (ctx->flux, 0, kvskey))) {
+    if (!(f = flux_kvs_lookup (ctx->flux, NULL, 0, kvskey))) {
         wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup: %s", strerror (errno));
         goto done;
     }

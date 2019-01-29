@@ -24,7 +24,7 @@ int flux_kvs_get (flux_t *h, const char *key, char **valp)
     const char *json_str;
     int rc = -1;
 
-    if (!(f = flux_kvs_lookup (h, 0, key)))
+    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
         goto done;
     if (flux_kvs_lookup_get (f, &json_str) < 0)
         goto done;
@@ -64,7 +64,7 @@ int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
      */
     const char *k = strlen (key) > 0 ? key : ".";
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, k)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, k)))
         goto done;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         goto done;
@@ -94,7 +94,7 @@ int flux_kvsdir_get (const flux_kvsdir_t *dir, const char *name, char **valp)
             goto done;
     }
     else {
-        if (!(f = flux_kvs_lookup (h, 0, key)))
+        if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
             goto done;
     }
     if (flux_kvs_lookup_get (f, &json_str) < 0)
@@ -138,7 +138,7 @@ int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
             goto done;
     }
     else {
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
             goto done;
     }
     if (flux_kvs_lookup_get_dir (f, &subdir) < 0)

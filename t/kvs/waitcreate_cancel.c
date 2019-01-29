@@ -25,7 +25,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_WAITCREATE, key)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE, key)))
         log_err_exit ("flux_kvs_lookup");
 
     if (flux_kvs_lookup_cancel (f) < 0)

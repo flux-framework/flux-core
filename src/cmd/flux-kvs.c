@@ -727,7 +727,7 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
             log_err_exit ("%s", key);
     }
     else {
-        if (!(f = flux_kvs_lookup (h, flags, key)))
+        if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
             log_err_exit ("%s", key);
     }
     if (flux_future_then (f, -1., lookup_continuation, ctx) < 0)
@@ -865,7 +865,7 @@ static int unlink_safety_check (flux_t *h, const char *key, bool Ropt,
 
     *unlinkable = false;
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
         goto done;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
         if (errno == ENOENT && fopt)
@@ -980,7 +980,7 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
                 log_err_exit ("%s", argv[i]);
         }
         else {
-            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
+            if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READLINK, argv[i])))
                 log_err_exit ("%s", argv[i]);
         }
         if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
@@ -1285,7 +1285,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                     log_err_exit ("%s", key);
             }
             else {
-                if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, key)))
+                if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READLINK, key)))
                     log_err_exit ("%s", key);
             }
             if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
@@ -1304,7 +1304,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                         log_err_exit ("%s", key);
                 }
                 else {
-                    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+                    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
                         log_err_exit ("%s", key);
                 }
                 if (flux_kvs_lookup_get_dir (f, &ndir) < 0)
@@ -1326,7 +1326,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                         log_err_exit ("%s", key);
                 }
                 else {
-                    if (!(f = flux_kvs_lookup (h, 0, key)))
+                    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
                         log_err_exit ("%s", key);
                 }
                 if (flux_kvs_lookup_get (f, &value) == 0) // null terminated
@@ -1372,7 +1372,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", key);
     }
     else {
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
             log_err_exit ("%s", key);
     }
     if (flux_kvs_lookup_get_dir (f, &dir) < 0)
@@ -1499,7 +1499,7 @@ static void list_kvs_dir (flux_t *h, const char *key, optparse_t *p,
     flux_kvsitr_t *itr;
     const char *name;
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0) {
         log_err_exit ("%s", key);
         goto done;
@@ -1591,7 +1591,7 @@ static int categorize_key (optparse_t *p, const char *key,
         nkey[strlen (nkey) - 1] = '\0';
         require_directory = true;
     }
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, nkey)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_TREEOBJ, nkey)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         fprintf (stderr, "%s: %s\n", nkey, flux_strerror (errno));
@@ -1995,7 +1995,7 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     ctx.count = 0;
     ctx.maxcount = optparse_get_int (p, "count", 0);
 
-    if (!(f = flux_kvs_lookup (h, flags, key)))
+    if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");

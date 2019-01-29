@@ -30,7 +30,7 @@ RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 def get_key_direct(flux_handle, key):
     valp = ffi.new("char *[1]")
-    future = RAW.flux_kvs_lookup(flux_handle, 0, key)
+    future = RAW.flux_kvs_lookup(flux_handle, None, 0, key)
     RAW.flux_kvs_lookup_get(future, valp)
     if valp[0] == ffi.NULL:
         return None

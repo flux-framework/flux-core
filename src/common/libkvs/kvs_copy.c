@@ -21,7 +21,6 @@
 #include <flux/core.h>
 
 #include "kvs_copy.h"
-#include "kvs_lookup_private.h"
 
 struct copy_context {
     int commit_flags;
@@ -162,11 +161,11 @@ flux_future_t *flux_kvs_copy (flux_t *h,
         return NULL;
     }
     if (srcns) {
-        if (!(f1 = flux_kvs_lookup_ns (h, srcns, FLUX_KVS_TREEOBJ, srckey)))
+        if (!(f1 = flux_kvs_lookup (h, srcns, FLUX_KVS_TREEOBJ, srckey)))
             return NULL;
     }
     else {
-        if (!(f1 = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey)))
+        if (!(f1 = flux_kvs_lookup (h, NULL, FLUX_KVS_TREEOBJ, srckey)))
             return NULL;
     }
     if (!(ctx = copy_context_create (srcns,

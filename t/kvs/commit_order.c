@@ -112,7 +112,7 @@ int main (int argc, char *argv[])
      * Wait for one response before unleashing async puts, to ensure
      * that first value is captured.
      */
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_WATCH, key)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH, key)))
         log_err_exit ("flux_kvs_lookup");
     watch_continuation (f, &last); // resets f, increments wrxcount
     if (flux_future_then (f, -1., watch_continuation, &last) < 0)

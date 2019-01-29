@@ -103,7 +103,7 @@ int main (int argc, char *argv[])
 
         setup_dir (h, prefix);
 
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, prefix))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, prefix))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0)
             log_err_exit ("flux_kvs_lookup %s", prefix);
 
@@ -116,7 +116,7 @@ int main (int argc, char *argv[])
 
         setup_dir (h, prefix);
 
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, prefix))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, prefix))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0)
             log_err_exit ("flux_kvs_lookup %s", prefix);
 
@@ -212,7 +212,7 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
                     log_err_exit ("flux_kvs_lookupat");
             }
             else {
-                if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, keyat)))
+                if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, keyat)))
                     log_err_exit ("flux_kvs_lookup");
             }
             if (flux_kvs_lookup_get_dir (f, &ndir) < 0)

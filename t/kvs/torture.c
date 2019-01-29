@@ -147,7 +147,7 @@ int main (int argc, char *argv[])
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        if (!(f = flux_kvs_lookup (h, 0, key))
+        if (!(f = flux_kvs_lookup (h, NULL, 0, key))
                             || flux_kvs_lookup_get_unpack (f, "s", &s) < 0)
             log_err_exit ("flux_kvs_get '%s'", key);
         if (verbose)
