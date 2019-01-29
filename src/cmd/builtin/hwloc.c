@@ -21,6 +21,10 @@
 
 #include <hwloc.h>
 
+#include "src/common/libidset/idset.h"
+
+#define XML_BASEDIR "resource.hwloc.xml"
+
 struct hwloc_topo {
     flux_t *h;
     flux_future_t *f;
@@ -63,14 +67,170 @@ const char *hwloc_topo_topology (struct hwloc_topo *t)
     return (t->topo);
 }
 
-char *flux_hwloc_global_xml (optparse_t *p)
+/*  idset helpers:
+ */
+
+/*  Return an idset with all ranks set for the current Flux instance:
+ */
+static struct idset *idset_all (uint32_t size)
 {
-    char *xml = NULL;
-    struct hwloc_topo *t = hwloc_topo_create (p);
-    if (!t || !(xml = strdup (t->topo))) {
-        hwloc_topo_destroy (t);
-        return (NULL);
+    struct idset *idset = NULL;
+    if (!(idset = idset_create (size, 0))
+        || (idset_range_set (idset, 0, size-1) < 0)) {
+        idset_destroy (idset);
+        return NULL;
     }
+    return (idset);
+}
+
+/*  Return an idset from the character string "ranks", returning all
+ *   current ranks for "all"
+ */
+static struct idset *ranks_to_idset (flux_t *h, const char *ranks)
+{
+    uint32_t size;
+    struct idset *idset;
+
+    if (flux_get_size (h, &size) < 0)
+        return NULL;
+
+    if (strcmp (ranks, "all") == 0)
+        idset = idset_all (size);
+    else {
+        idset = idset_decode (ranks);
+        if (idset_count (idset) > 0 && idset_last (idset) > size - 1) {
+            log_msg ("Invalid rank argument: '%s'", ranks);
+            idset_destroy (idset);
+            return (NULL);
+        }
+    }
+    return (idset);
+}
+
+/*  Topology kvs helpers:
+ */
+
+static void lookup_continuation (flux_future_t *f, void *arg)
+{
+    char **valp = arg;
+    const char *xml;
+
+    if (flux_kvs_lookup_get_unpack (f, "s", &xml) < 0)
+        log_err_exit ("unable to unpack rank xml");
+
+    *valp = strdup (xml);
+
+    flux_future_destroy (f);
+}
+
+/*  Send lookup request for topology XML for all ranks in idset, returning
+ *   copies of each XML in xmls array (The array must have space for
+ *   idset_count (idset) members).
+ *  There should be no other watchers registered on the main handle reactor
+ *   here, so it is safe to drop into the handle reactor and return when
+ *   all lookup handlers have completed.
+ */
+static int lookup_all_topo_xml (flux_t *h, char **xmls, struct idset *idset)
+{
+    flux_future_t *f = NULL;
+    char key [1024];
+    int rank = idset_first (idset);
+    int i = 0;
+
+    while (rank != IDSET_INVALID_ID) {
+        snprintf (key, sizeof (key), "%s.%d", XML_BASEDIR, rank);
+        if (!(f = flux_kvs_lookup (h, NULL, 0, key))
+            || (flux_future_then (f, -1., lookup_continuation, &xmls[i]) < 0))
+            log_err_exit ("kvs lookup");
+
+        rank = idset_next (idset, rank);
+        i++;
+    }
+    return (flux_reactor_run (flux_get_reactor (h), 0));
+}
+
+/*  Given an array of topology XML strings with `n` entries, return
+ *   a "global" topology object.
+ */
+static hwloc_topology_t global_hwloc_create (char **xml, int n)
+{
+    hwloc_topology_t global;
+    int i;
+
+    if (hwloc_topology_init (&global) < 0
+        || hwloc_topology_set_custom (global) < 0)
+        log_err_exit ("gather: unable to init topology");
+
+    for (i = 0; i < n; i++) {
+        hwloc_topology_t topo;
+        if (hwloc_topology_init (&topo) < 0)
+            log_err_exit ("hwloc_topology_init");
+        if (hwloc_topology_set_xmlbuffer (topo, xml[i], strlen(xml[i])+1) < 0)
+            log_err_exit ("hwloc_topology_set_xmlbuffer");
+        if (hwloc_topology_load (topo) < 0)
+            log_err_exit ("hwloc_topology_load");
+        if (hwloc_custom_insert_topology (global,
+                                          hwloc_get_root_obj (global),
+                                          topo, NULL) < 0)
+            log_err_exit ("hwloc_custom_insert_topo");
+        hwloc_topology_destroy (topo);
+    }
+    hwloc_topology_load (global);
+
+    return (global);
+}
+
+static void string_array_destroy (char **arg, int n)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        free (arg[i]);
+    free (arg);
+}
+
+char * flux_hwloc_global_xml (optparse_t *p)
+{
+    flux_t *h = NULL;
+    uint32_t size;
+    char *xml;
+    char *buf;
+    const char *arg;
+    int buflen;
+    struct idset *idset = NULL;
+    hwloc_topology_t global = NULL;
+    char **xmlv = NULL;
+
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+
+    if (optparse_getopt (p, "rank", &arg) <= 0)
+        arg = "all";
+    if (!(idset = ranks_to_idset (h, arg)))
+        log_msg_exit ("failed to get target ranks");
+
+    if ((size = idset_count (idset)) == 0)
+        log_msg_exit ("Invalid rank set when fetching global XML");
+
+    if (!(xmlv = calloc (size, sizeof (char *))))
+        log_msg_exit ("failed to alloc array for %d ranks", size);
+
+    if (lookup_all_topo_xml (h, xmlv, idset) < 0)
+        log_err_exit ("gather: failed to get all topo xml");
+
+    if (!(global = global_hwloc_create (xmlv, size)))
+        log_err_exit ("gather: failed create global xml");
+
+    if (hwloc_topology_export_xmlbuffer (global, &buf, &buflen) < 0)
+        log_err_exit ("hwloc export XML");
+
+    /* XML buffer must be destroyed by hwloc_free_xmlbuffer, so copy it here */
+    xml = strdup (buf);
+
+    hwloc_free_xmlbuffer (global, buf);
+    string_array_destroy (xmlv, size);
+    hwloc_topology_destroy (global);
+    idset_destroy (idset);
+    flux_close (h);
     return (xml);
 }
 
@@ -410,6 +570,9 @@ static struct optparse_option reload_opts[] = {
 static struct optparse_option topology_opts[] = {
     { .name = "local", .key = 'l', .has_arg = 0,
       .usage = "Dump topology XML for the local host only",
+    },
+    { .name = "rank", .key = 'r', .has_arg = 1,
+      .usage = "Target specified nodeset, or \"all\" (default)",
     },
     OPTPARSE_TABLE_END,
 };
