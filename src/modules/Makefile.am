@@ -5,7 +5,6 @@ SUBDIRS = \
  kvs-watch \
  content-sqlite \
  wreck \
- resource-hwloc \
  cron \
  aggregator \
  userdb \

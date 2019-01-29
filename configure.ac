@@ -423,7 +423,6 @@ AC_CONFIG_FILES( \
   src/modules/content-sqlite/Makefile \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
-  src/modules/resource-hwloc/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \
