@@ -63,6 +63,89 @@ const char *hwloc_topo_topology (struct hwloc_topo *t)
     return (t->topo);
 }
 
+char *flux_hwloc_global_xml (optparse_t *p)
+{
+    char *xml = NULL;
+    struct hwloc_topo *t = hwloc_topo_create (p);
+    if (!t || !(xml = strdup (t->topo))) {
+        hwloc_topo_destroy (t);
+        return (NULL);
+    }
+    return (xml);
+}
+
+/*  HWLOC topology helpers:
+ */
+
+/*  Common hwloc_topology_init() and flags for Flux hwloc usage:
+ */
+static void topo_init_common (hwloc_topology_t *tp)
+{
+    if (hwloc_topology_init (tp) < 0)
+        log_err_exit ("hwloc_topology_init");
+    if (hwloc_topology_set_flags (*tp, HWLOC_TOPOLOGY_FLAG_IO_DEVICES) < 0)
+        log_err_exit ("hwloc_topology_set_flags");
+    if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_CACHE) < 0)
+        log_err_exit ("hwloc_topology_ignore_type OBJ_CACHE failed");
+    if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_GROUP) < 0)
+        log_err_exit ("hwloc_topology_ignore_type OBJ_GROUP failed");
+}
+
+/*  Load the local topology in a manner most useful to Flux components,
+ *   i.e. grab IO devices, ignore cache and group objects, and mask off
+ *   objects not in our cpuset.
+ */
+static hwloc_topology_t local_topo_load (void)
+{
+    hwloc_topology_t topo;
+    hwloc_bitmap_t rset = NULL;
+    uint32_t hwloc_version = hwloc_get_api_version ();
+
+    if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16))
+        log_err_exit ("compiled for hwloc 0x%x but running against 0x%x\n",
+                      HWLOC_API_VERSION, hwloc_version);
+
+    topo_init_common (&topo);
+
+    if (hwloc_topology_load (topo) < 0)
+        log_err_exit ("hwloc_topology_load");
+    if (!(rset = hwloc_bitmap_alloc ())
+        || (hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0))
+        log_err_exit ("hwloc_get_cpubind");
+    if (hwloc_topology_restrict (topo, rset, 0) < 0)
+        log_err_exit ("hwloc_topology_restrict");
+    hwloc_bitmap_free (rset);
+    return (topo);
+}
+
+static char *flux_hwloc_local_xml (void)
+{
+    char *buf;
+    int buflen;
+    char *copy;
+    hwloc_topology_t topo = local_topo_load ();
+    if (topo == NULL)
+        return (NULL);
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0)
+        log_err_exit ("Failed to export hwloc to XML");
+    copy = strdup (buf);
+    hwloc_free_xmlbuffer (topo, buf);
+    return (copy);
+}
+
+/*
+ *  Return hwloc XML as a malloc()'d string. Returns the topolog of this
+ *   system if "--local" is set in the optparse object `p`, otherwise
+ *   returns the global XML. Caller must free the result.
+ */
+static char *flux_hwloc_xml (optparse_t *p)
+{
+    if (optparse_hasopt (p, "local"))
+        return flux_hwloc_local_xml ();
+    return flux_hwloc_global_xml (p);
+}
+
+
 static void lstopo_argz_init (char *cmd, char **argzp, size_t *argz_lenp,
                               char *extra_args[])
 {
@@ -183,25 +266,41 @@ static int cmd_lstopo (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+/*  flux-hwloc topology:
+ */
+
 static int cmd_topology (optparse_t *p, int ac, char *av[])
 {
-    struct hwloc_topo *t = hwloc_topo_create (p);
-    puts (hwloc_topo_topology (t));
-    hwloc_topo_destroy (t);
+    char *xml = flux_hwloc_xml (p);
+    puts (xml);
+    free (xml);
+    return (0);
+}
+
+/*  flux-hwloc info:
+ */
+
+/*  Initialize a hwloc toplogy from xml string `xml`, applying the common
+ *   flags and options for Flux usage.
+ */
+static int init_topo_from_xml (hwloc_topology_t *tp, const char *xml)
+{
+    topo_init_common (tp);
+    if ((hwloc_topology_set_xmlbuffer (*tp, xml, strlen (xml) + 1) < 0)
+        || (hwloc_topology_load (*tp) < 0)) {
+        hwloc_topology_destroy (*tp);
+        return (-1);
+    }
     return (0);
 }
 
 static int cmd_info (optparse_t *p, int ac, char *av[])
 {
-    struct hwloc_topo *t = hwloc_topo_create (p);
+    char *xml = flux_hwloc_xml (p);
     hwloc_topology_t topo;
 
-    if (hwloc_topology_init (&topo) < 0)
-        log_msg_exit ("hwloc_topology_init");
-    if (hwloc_topology_set_xmlbuffer (topo, t->topo, strlen (t->topo)) < 0)
-        log_msg_exit ("hwloc_topology_set_xmlbuffer");
-    if (hwloc_topology_load (topo) < 0)
-        log_msg_exit ("hwloc_topology_load");
+    if (!xml || init_topo_from_xml (&topo, xml) < 0)
+        log_msg_exit ("info: Failed to initialize topology from XML");
 
     int ncores = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_CORE);
     int npu    = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
@@ -211,7 +310,7 @@ static int cmd_info (optparse_t *p, int ac, char *av[])
             nnodes, nnodes > 1 ? "s" : "", ncores, npu);
 
     hwloc_topology_destroy (topo);
-    hwloc_topo_destroy (t);
+    free (xml);
     return (0);
 }
 
@@ -308,6 +407,13 @@ static struct optparse_option reload_opts[] = {
     OPTPARSE_TABLE_END,
 };
 
+static struct optparse_option topology_opts[] = {
+    { .name = "local", .key = 'l', .has_arg = 0,
+      .usage = "Dump topology XML for the local host only",
+    },
+    OPTPARSE_TABLE_END,
+};
+
 static struct optparse_subcommand hwloc_subcmds[] = {
     { "reload",
       "[OPTIONS] [DIR]",
@@ -328,14 +434,14 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       "Dump system topology XML to stdout",
       cmd_topology,
       0,
-      NULL,
+      topology_opts,
     },
     { "info",
       NULL,
       "Short-form dump of instance resources",
       cmd_info,
       0,
-      NULL
+      topology_opts,
     },
     OPTPARSE_SUBCMD_END,
 };
