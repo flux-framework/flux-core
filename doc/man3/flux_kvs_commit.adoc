@@ -53,8 +53,7 @@ the default KVS namespace.  A different namespace can be chosen
 several ways.  A namespace can be set via the
 `flux_kvs_set_namespace()` function, or set via the environment
 variable FLUX_KVS_NAMESPACE.  Note that all transactions must operate
-on the same namespace.  It is an error if multiple different
-namespaces are specified via a namespace prefix.
+on the same namespace.
 
 FLAGS
 -----

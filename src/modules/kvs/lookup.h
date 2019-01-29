@@ -91,9 +91,7 @@ const char *lookup_missing_namespace (lookup_t *lh);
 int lookup_get_current_epoch (lookup_t *lh);
 
 /* Convenience function to get namespace from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.  May not
- * necessarily return namespace passed in via 'namespace' in
- * lookup_create().  Could have been namespace via a namespace prefix.
+ * Convenient if replaying RPC and don't have it presently.
  */
 const char *lookup_get_namespace (lookup_t *lh);
 
