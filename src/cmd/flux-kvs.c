@@ -46,7 +46,7 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv);
 
 static int get_window_width (optparse_t *p, int fd);
 static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
-                          bool Ropt, bool dopt);
+                          const char *ns, bool Ropt, bool dopt);
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
@@ -65,6 +65,9 @@ static struct optparse_option namespace_create_opts[] =  {
 };
 
 static struct optparse_option readlink_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "at", .key = 'a', .has_arg = 1,
       .usage = "Lookup relative to RFC 11 snapshot reference",
     },
@@ -78,6 +81,9 @@ static struct optparse_option readlink_opts[] =  {
 };
 
 static struct optparse_option get_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "json", .key = 'j', .has_arg = 0,
       .usage = "Interpret value(s) as encoded JSON",
     },
@@ -112,6 +118,9 @@ static struct optparse_option get_opts[] =  {
 };
 
 static struct optparse_option put_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "json", .key = 'j', .has_arg = 0,
       .usage = "Store value(s) as encoded JSON",
     },
@@ -131,6 +140,9 @@ static struct optparse_option put_opts[] =  {
 };
 
 static struct optparse_option dir_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Recursively display keys under subdirectories",
     },
@@ -147,6 +159,9 @@ static struct optparse_option dir_opts[] =  {
 };
 
 static struct optparse_option ls_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "List directory recursively",
     },
@@ -166,6 +181,9 @@ static struct optparse_option ls_opts[] =  {
 };
 
 static struct optparse_option watch_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Recursively display keys under subdirectories",
     },
@@ -189,6 +207,9 @@ static struct optparse_option dropcache_opts[] =  {
 };
 
 static struct optparse_option unlink_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Remove directory contents recursively",
     },
@@ -199,6 +220,9 @@ static struct optparse_option unlink_opts[] =  {
 };
 
 static struct optparse_option getroot_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "blobref", .key = 'b', .has_arg = 0,
       .usage = "Show root as a blobref rather that an RFC 11 dirref",
     },
@@ -222,8 +246,18 @@ static struct optparse_option copy_opts[] =  {
 };
 
 static struct optparse_option link_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify link's namespace.",
+    },
     { .name = "target-namespace", .key = 'T', .has_arg = 1,
       .usage = "Specify target's namespace",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option namespace_opt[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
     },
     OPTPARSE_TABLE_END
 };
@@ -251,60 +285,60 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "get",
-      "[-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-f] [-c COUNT] key [key...]",
+      "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-f] [-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
       get_opts
     },
     { "put",
-      "[-j|-r|-t] [-n] key=value [key=value...]",
+      "[-N ns] [-j|-r|-t] [-n] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
       put_opts
     },
     { "dir",
-      "[-R] [-d] [-w COLS] [-a treeobj] [key]",
+      "[-N ns] [-R] [-d] [-w COLS] [-a treeobj] [key]",
       "Display all keys under directory",
       cmd_dir,
       0,
       dir_opts
     },
     { "ls",
-      "[-R] [-d] [-F] [-w COLS] [-1] [key...]",
+      "[-N ns] [-R] [-d] [-F] [-w COLS] [-1] [key...]",
       "List directory",
       cmd_ls,
       0,
       ls_opts
     },
     { "unlink",
-      "[-R] [-f] key [key...]",
+      "[-N ns] [-R] [-f] key [key...]",
       "Remove key",
       cmd_unlink,
       0,
       unlink_opts
     },
     { "link",
-      "[-T ns] target linkname",
+      "[-N ns] [-T ns] target linkname",
       "Create a new name for target",
       cmd_link,
       0,
       link_opts
     },
     { "readlink",
-      "[-a treeobj] [ -o | -k ] key [key...]",
+      "[-N ns] [-a treeobj] [ -o | -k ] key [key...]",
       "Retrieve the key a link refers to",
       cmd_readlink,
       0,
       readlink_opts
     },
     { "mkdir",
-      "key [key...]",
+      "[-N ns] key [key...]",
       "Create a directory",
       cmd_mkdir,
       0,
-      NULL
+      namespace_opt
     },
     { "copy",
       "[-S src-ns] [-D dst-ns] source destination",
@@ -328,28 +362,28 @@ static struct optparse_subcommand subcommands[] = {
       dropcache_opts
     },
     { "watch",
-      "[-R] [-d] [-o] [-c count] key",
+      "[-N ns] [-R] [-d] [-o] [-c count] key",
       "Watch key and output changes",
       cmd_watch,
       OPTPARSE_OPT_HIDDEN,
       watch_opts
     },
     { "version",
-      "",
+      "[-N ns]",
       "Display curent KVS version",
       cmd_version,
       0,
-      NULL
+      namespace_opt
     },
     { "wait",
-      "version",
+      "[-N ns] version",
       "Block until the KVS reaches version",
       cmd_wait,
       0,
-      NULL
+      namespace_opt
     },
     { "getroot",
-      "[-s|-o|-b]",
+      "[-N ns] [-s|-o|-b]",
       "Get KVS root treeobj",
       cmd_getroot,
       0,
@@ -642,6 +676,7 @@ struct lookup_ctx {
     optparse_t *p;
     int maxcount;
     int count;
+    const char *ns;
 };
 
 
@@ -727,7 +762,7 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
             log_err_exit ("%s", key);
     }
     else {
-        if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
+        if (!(f = flux_kvs_lookup (h, ctx->ns, flags, key)))
             log_err_exit ("%s", key);
     }
     if (flux_future_then (f, -1., lookup_continuation, ctx) < 0)
@@ -752,6 +787,8 @@ int cmd_get (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.count = 0;
     ctx.maxcount = optparse_get_int (p, "count", 0);
+    ctx.ns = optparse_get_str (p, "namespace", NULL);
+
     for (i = optindex; i < argc; i++)
         cmd_get_one (h, argv[i], &ctx);
     /* Unless --watch is specified, cmd_get_one() starts the reactor and
@@ -770,6 +807,7 @@ int cmd_get (optparse_t *p, int argc, char **argv)
 int cmd_put (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
     int optindex, i;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
@@ -781,6 +819,8 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    ns = optparse_get_str (p, "namespace", NULL);
+
     if (optparse_hasopt (p, "no-merge"))
         commit_flags |= FLUX_KVS_NO_MERGE;
     if (!(txn = flux_kvs_txn_create ()))
@@ -843,7 +883,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         }
         free (key);
     }
-    if (!(f = flux_kvs_commit (h, NULL, commit_flags, txn))
+    if (!(f = flux_kvs_commit (h, ns, commit_flags, txn))
                                         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
@@ -856,8 +896,8 @@ int cmd_put (optparse_t *p, int argc, char **argv)
  *   other fatal lookup error
  * - fail if key is a non-empty directory (ENOTEMPTY) and -R was not specified
  */
-static int unlink_safety_check (flux_t *h, const char *key, bool Ropt,
-                                bool fopt, bool *unlinkable)
+static int unlink_safety_check (flux_t *h, const char *key, const char *ns,
+                                bool Ropt, bool fopt, bool *unlinkable)
 {
     flux_future_t *f;
     const flux_kvsdir_t *dir = NULL;
@@ -865,7 +905,7 @@ static int unlink_safety_check (flux_t *h, const char *key, bool Ropt,
 
     *unlinkable = false;
 
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
         goto done;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
         if (errno == ENOENT && fopt)
@@ -890,6 +930,7 @@ done:
 int cmd_unlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
     int optindex, i;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
@@ -900,6 +941,7 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    ns = optparse_get_str (p, "namespace", NULL);
     Ropt = optparse_hasopt (p, "recursive");
     fopt = optparse_hasopt (p, "force");
 
@@ -907,14 +949,14 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_kvs_txn_create");
     for (i = optindex; i < argc; i++) {
         bool unlinkable;
-        if (unlink_safety_check (h, argv[i], Ropt, fopt, &unlinkable) < 0)
+        if (unlink_safety_check (h, argv[i], ns, Ropt, fopt, &unlinkable) < 0)
             log_err_exit ("cannot unlink '%s'", argv[i]);
         if (unlinkable) {
             if (flux_kvs_txn_unlink (txn, 0, argv[i]) < 0)
                 log_err_exit ("%s", argv[i]);
         }
     }
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+    if (!(f = flux_kvs_commit (h, ns, 0, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
@@ -925,7 +967,8 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
 int cmd_link (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    const char *ns = NULL;
+    const char *linkns = NULL;
+    const char *targetns = NULL;
     const char *target, *linkname;
     int optindex;
     flux_kvs_txn_t *txn;
@@ -939,15 +982,16 @@ int cmd_link (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 2))
         log_msg_exit ("link: specify target and link_name");
 
-    ns = optparse_get_str (p, "target-namespace", NULL);
+    linkns = optparse_get_str (p, "namespace", NULL);
+    targetns = optparse_get_str (p, "target-namespace", NULL);
     target = argv[optindex];
     linkname = argv[optindex + 1];
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_symlink (txn, 0, linkname, ns, target) < 0)
+    if (flux_kvs_txn_symlink (txn, 0, linkname, targetns, target) < 0)
         log_err_exit ("%s", linkname);
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+    if (!(f = flux_kvs_commit (h, linkns, 0, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
@@ -958,6 +1002,7 @@ int cmd_link (optparse_t *p, int argc, char **argv)
 int cmd_readlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
     int optindex, i;
     flux_future_t *f;
     bool ns_only;
@@ -968,11 +1013,12 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    ns = optparse_get_str (p, "namespace", NULL);
     ns_only = optparse_hasopt (p, "namespace-only");
     key_only = optparse_hasopt (p, "key-only");
 
     for (i = optindex; i < argc; i++) {
-        const char *ns = NULL;
+        const char *linkns = NULL;
         const char *target = NULL;
         if (optparse_hasopt (p, "at")) {
             const char *ref = optparse_get_str (p, "at", NULL);
@@ -980,18 +1026,18 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
                 log_err_exit ("%s", argv[i]);
         }
         else {
-            if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READLINK, argv[i])))
+            if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READLINK, argv[i])))
                 log_err_exit ("%s", argv[i]);
         }
-        if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
+        if (flux_kvs_lookup_get_symlink (f, &linkns, &target) < 0)
             log_err_exit ("%s", argv[i]);
-        if (ns_only && ns)
-            printf ("%s\n", ns);
+        if (ns_only && linkns)
+            printf ("%s\n", linkns);
         else if (key_only)
             printf ("%s\n", target);
         else {
-            if (ns)
-                printf ("%s::%s\n", ns, target);
+            if (linkns)
+                printf ("%s::%s\n", linkns, target);
             else
                 printf ("%s\n", target);
         }
@@ -1003,6 +1049,7 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
 int cmd_mkdir (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *ns;
     int optindex, i;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
@@ -1012,6 +1059,7 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    ns = optparse_get_str (p, "namespace", NULL);
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
@@ -1019,7 +1067,7 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
         if (flux_kvs_txn_mkdir (txn, 0, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+    if (!(f = flux_kvs_commit (h, ns, 0, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("kvs_commit");
     flux_future_destroy (f);
@@ -1030,11 +1078,14 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
 int cmd_version (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
+    const char *ns = NULL;
     int vers;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
-    if (flux_kvs_get_version (h, NULL, &vers) < 0)
+    ns = optparse_get_str (p, "namespace", NULL);
+
+    if (flux_kvs_get_version (h, ns, &vers) < 0)
         log_err_exit ("flux_kvs_get_version");
     printf ("%d\n", vers);
     return (0);
@@ -1043,6 +1094,7 @@ int cmd_version (optparse_t *p, int argc, char **argv)
 int cmd_wait (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
+    const char *ns = NULL;
     int vers;
     int optindex;
 
@@ -1056,8 +1108,11 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     }
     if (optindex != (argc - 1))
         log_msg_exit ("wait: specify a version");
+
+    ns = optparse_get_str (p, "namespace", NULL);
+
     vers = strtoul (argv[optindex], NULL, 10);
-    if (flux_kvs_wait_version (h, NULL, vers) < 0)
+    if (flux_kvs_wait_version (h, ns, vers) < 0)
         log_err_exit ("flux_kvs_wait_version");
     return (0);
 }
@@ -1073,17 +1128,58 @@ static void watch_dump_key (const char *json_str,
     *prev_output_iskey = true;
 }
 
-static void watch_dump_kvsdir (flux_kvsdir_t *dir, bool Ropt, bool dopt,
-                               const char *arg) {
+static void watch_dump_kvsdir (flux_kvsdir_t *dir, const char *ns,
+                               bool Ropt, bool dopt, const char *arg) {
     if (!dir) {
         output_key_json_str (NULL, NULL, arg);
         printf ("%s\n", WATCH_DIR_SEPARATOR);
         return;
     }
 
-    dump_kvs_dir (dir, 0, Ropt, dopt);
+    dump_kvs_dir (dir, 0, ns, Ropt, dopt);
     printf ("%s\n", WATCH_DIR_SEPARATOR);
     fflush (stdout);
+}
+
+int watch_kvs_lookup_wrapper (flux_t *h, const char *ns, const char *key,
+                              char **valp)
+{
+    flux_future_t *f = NULL;
+    const char *tmp;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (h, ns, 0, key)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &tmp) < 0)
+        goto done;
+    if (!(*valp = strdup (tmp))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+int watch_kvs_dir_wrapper (flux_t *h, const char *ns, const char *key,
+                           flux_kvsdir_t **dirp)
+{
+    flux_future_t *f = NULL;
+    const flux_kvsdir_t *tmp;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
+        goto done;
+    if (flux_kvs_lookup_get_dir (f, &tmp) < 0)
+        goto done;
+    if (!((*dirp) = flux_kvsdir_copy (tmp))) {
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
 }
 
 int cmd_watch (optparse_t *p, int argc, char **argv)
@@ -1093,6 +1189,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
     char *json_str = NULL;
     char *key;
     int count;
+    const char *ns = NULL;
     bool Ropt;
     bool dopt;
     bool oopt;
@@ -1112,6 +1209,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 1))
         log_msg_exit ("watch: specify one key");
 
+    ns = optparse_get_str (p, "namespace", NULL);
     Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
     oopt = optparse_hasopt (p, "current");
@@ -1119,13 +1217,13 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     key = argv[optindex];
 
-    rc = flux_kvs_get (h, key, &json_str);
+    rc = watch_kvs_lookup_wrapper (h, ns, key, &json_str);
     if (rc < 0 && (errno != ENOENT && errno != EISDIR))
         log_err_exit ("%s", key);
 
     /* key is a directory, setup for dir logic appropriately */
     if (rc < 0 && errno == EISDIR) {
-        rc = flux_kvs_get_dir (h, &dir, "%s", key);
+        rc = watch_kvs_dir_wrapper (h, ns, key, &dir);
         if (rc < 0 && errno != ENOENT)
             log_err_exit ("%s", key);
         isdir = true;
@@ -1135,14 +1233,14 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     if (oopt) {
         if (isdir)
-            watch_dump_kvsdir (dir, Ropt, dopt, key);
+            watch_dump_kvsdir (dir, ns, Ropt, dopt, key);
         else
             watch_dump_key (json_str, key, &prev_output_iskey);
     }
 
     while (count && (rc == 0 || (rc < 0 && errno == ENOENT))) {
         if (isdir) {
-            rc = flux_kvs_watch_once_dir (h, NULL, &dir, "%s", key);
+            rc = flux_kvs_watch_once_dir (h, ns, &dir, "%s", key);
             if (rc < 0 && (errno != ENOENT && errno != ENOTDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 if (dir)
@@ -1153,10 +1251,10 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                 if (dir)
                     flux_kvsdir_destroy (dir);
                 dir = NULL;
-                watch_dump_kvsdir (dir, Ropt, dopt, key);
+                watch_dump_kvsdir (dir, ns, Ropt, dopt, key);
             }
             else if (!rc) {
-                watch_dump_kvsdir (dir, Ropt, dopt, key);
+                watch_dump_kvsdir (dir, ns, Ropt, dopt, key);
             }
             else { /* rc < 0 && errno == ENOTDIR */
                 /* We were watching a dir that is now a key, need to
@@ -1166,7 +1264,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                     flux_kvsdir_destroy (dir);
                 dir = NULL;
 
-                rc = flux_kvs_get (h, key, &json_str);
+                rc = watch_kvs_lookup_wrapper (h, ns, key, &json_str);
                 if (rc < 0 && errno != ENOENT)
                     printf ("%s: %s\n", key, flux_strerror (errno));
                 else
@@ -1174,7 +1272,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
             }
         }
         else {
-            rc = flux_kvs_watch_once (h, NULL, key, &json_str);
+            rc = flux_kvs_watch_once (h, ns, key, &json_str);
             if (rc < 0 && (errno != ENOENT && errno != EISDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 free (json_str);
@@ -1202,11 +1300,11 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                     prev_output_iskey = false;
                 }
 
-                rc = flux_kvs_get_dir (h, &dir, "%s", key);
+                rc = watch_kvs_dir_wrapper (h, ns, key, &dir);
                 if (rc < 0 && errno != ENOENT)
                     printf ("%s: %s\n", key, flux_strerror (errno));
                 else /* rc == 0 || (rc < 0 && errno == ENOENT) */
-                    watch_dump_kvsdir (dir, Ropt, dopt, key);
+                    watch_dump_kvsdir (dir, ns, Ropt, dopt, key);
             }
         }
         count--;
@@ -1264,7 +1362,7 @@ static void dump_kvs_val (const char *key, int maxcol, const char *value)
 }
 
 static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
-                          bool Ropt, bool dopt)
+                          const char *ns, bool Ropt, bool dopt)
 {
     const char *rootref = flux_kvsdir_rootref (dir);
     flux_t *h = flux_kvsdir_handle (dir);
@@ -1285,7 +1383,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                     log_err_exit ("%s", key);
             }
             else {
-                if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READLINK, key)))
+                if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READLINK, key)))
                     log_err_exit ("%s", key);
             }
             if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
@@ -1304,7 +1402,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                         log_err_exit ("%s", key);
                 }
                 else {
-                    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
+                    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
                         log_err_exit ("%s", key);
                 }
                 if (flux_kvs_lookup_get_dir (f, &ndir) < 0)
@@ -1312,7 +1410,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                 if (flux_kvsdir_get_size (ndir) == 0)
                     printf ("%s.\n", key);
                 else
-                    dump_kvs_dir (ndir, maxcol, Ropt, dopt);
+                    dump_kvs_dir (ndir, maxcol, ns, Ropt, dopt);
                 flux_future_destroy (f);
             } else
                 printf ("%s.\n", key);
@@ -1326,7 +1424,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                         log_err_exit ("%s", key);
                 }
                 else {
-                    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
+                    if (!(f = flux_kvs_lookup (h, ns, 0, key)))
                         log_err_exit ("%s", key);
                 }
                 if (flux_kvs_lookup_get (f, &value) == 0) // null terminated
@@ -1349,6 +1447,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     int maxcol = get_window_width (p, STDOUT_FILENO);
+    const char *ns = NULL;
     bool Ropt;
     bool dopt;
     char *key;
@@ -1357,6 +1456,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     int optindex;
 
     optindex = optparse_option_index (p);
+    ns = optparse_get_str (p, "namespace", NULL);
     Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
     if (optindex == argc)
@@ -1372,12 +1472,12 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", key);
     }
     else {
-        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
+        if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
             log_err_exit ("%s", key);
     }
     if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", key);
-    dump_kvs_dir (dir, maxcol, Ropt, dopt);
+    dump_kvs_dir (dir, maxcol, ns, Ropt, dopt);
     flux_future_destroy (f);
     return (0);
 }
@@ -1491,15 +1591,16 @@ static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
 /* List contents of directory pointed to by 'key', descending into subdirs
  * if -R was specified.  First the directory is listed, then its subdirs.
  */
-static void list_kvs_dir (flux_t *h, const char *key, optparse_t *p,
-                          int win_width, bool print_label, bool print_vspace)
+static void list_kvs_dir (flux_t *h, const char *ns, const char *key,
+                          optparse_t *p, int win_width, bool print_label,
+                          bool print_vspace)
 {
     flux_future_t *f;
     const flux_kvsdir_t *dir;
     flux_kvsitr_t *itr;
     const char *name;
 
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key))
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0) {
         log_err_exit ("%s", key);
         goto done;
@@ -1518,7 +1619,7 @@ static void list_kvs_dir (flux_t *h, const char *key, optparse_t *p,
                     log_err ("%s: flux_kvsdir_key_at failed", name);
                     continue;
                 }
-                list_kvs_dir (h, nkey, p, win_width, print_label, true);
+                list_kvs_dir (h, ns, nkey, p, win_width, print_label, true);
                 free (nkey);
             }
         }
@@ -1649,6 +1750,7 @@ error:
 int cmd_ls (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
     int optindex = optparse_option_index (p);
     int win_width = get_window_width (p, STDOUT_FILENO);
     zlist_t *dirs, *singles;
@@ -1656,6 +1758,8 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
     bool print_label = false;   // print "name:" before directory contents
     bool print_vspace = false;  // print vertical space before label
     int rc = 0;
+
+    ns = optparse_get_str (p, "namespace", NULL);
 
     if (optparse_hasopt (p, "1"))
         win_width = 1;
@@ -1680,7 +1784,7 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "recursive") || zlist_size (dirs) > 1)
         print_label = true;
     while ((key = zlist_pop (dirs))) {
-        list_kvs_dir (h, key, p, win_width, print_label, print_vspace);
+        list_kvs_dir (h, ns, key, p, win_width, print_label, print_vspace);
         print_vspace = true;
         free (key);
     }
@@ -1785,6 +1889,7 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = optparse_get_data (p, "flux_handle");
     int optindex = optparse_option_index (p);
+    const char *ns = NULL;
     flux_future_t *f;
     int flags = 0;
 
@@ -1792,7 +1897,9 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    if (!(f = flux_kvs_getroot (h, NULL, flags)))
+    ns = optparse_get_str (p, "namespace", NULL);
+
+    if (!(f = flux_kvs_getroot (h, ns, flags)))
         log_err_exit ("flux_kvs_getroot");
     if (flux_future_then (f, -1., getroot_continuation, p) < 0)
         log_err_exit ("flux_future_then");
