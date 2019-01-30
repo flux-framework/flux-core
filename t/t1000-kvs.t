@@ -891,7 +891,7 @@ test_expect_success 'kvs: namespace create setup' '
 '
 test_expect_success 'kvs: symlink w/ Namespace works' '
 	TARGET=$DIR.target &&
-	flux kvs --namespace=TESTSYMLINKNS put --json $TARGET=\"foo\" &&
+	flux kvs put --namespace=TESTSYMLINKNS --json $TARGET=\"foo\" &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $TARGET $DIR.symlinkNS &&
 	OUTPUT=$(flux kvs get --json $DIR.symlinkNS) &&
 	test "$OUTPUT" = "foo"
@@ -912,8 +912,8 @@ test_expect_success 'kvs: readlink on symlink w/ Namespace works' '
 test_expect_success 'kvs: readlink works with nslnks (multiple inputs)' '
 	TARGET1=$DIR.target1 &&
 	TARGET2=$DIR.target2 &&
-	flux kvs --namespace=TESTSYMLINKNS put --json $TARGET1=\"foo1\" &&
-	flux kvs --namespace=TESTSYMLINKNS put --json $TARGET2=\"foo2\" &&
+	flux kvs put --namespace=TESTSYMLINKNS --json $TARGET1=\"foo1\" &&
+	flux kvs put --namespace=TESTSYMLINKNS --json $TARGET2=\"foo2\" &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $TARGET1 $DIR.symlinkNS1 &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $TARGET2 $DIR.symlinkNS2 &&
 	flux kvs readlink $DIR.symlinkNS1 $DIR.symlinkNS2 >output &&
@@ -925,43 +925,43 @@ EOF
 '
 test_expect_success 'kvs: symlinkNS: path resolution when intermediate component is a link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS put --json $DIR.a.b.c=42 &&
+	flux kvs unlink --namespace=TESTSYMLINKNS -Rf $DIR &&
+	flux kvs put --namespace=TESTSYMLINKNS --json $DIR.a.b.c=42 &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $DIR.a.b $DIR.Z.Y &&
 	OUTPUT=$(flux kvs get --json $DIR.Z.Y.c) &&
 	test "$OUTPUT" = "42"
 '
 test_expect_success 'kvs: symlinkNS: intermediate link points to another namespace link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS put --json $DIR.a.b.c=42 &&
-	flux kvs --namespace=TESTSYMLINKNS link --target-namespace=TESTSYMLINKNS $DIR.a.b $DIR.Z.Y &&
+	flux kvs unlink --namespace=TESTSYMLINKNS -Rf $DIR &&
+	flux kvs put --namespace=TESTSYMLINKNS --json $DIR.a.b.c=42 &&
+	flux kvs link --namespace=TESTSYMLINKNS --target-namespace=TESTSYMLINKNS $DIR.a.b $DIR.Z.Y &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $DIR.Z.Y $DIR.X.W &&
 	test_kvs_key $DIR.X.W.c 42
 '
 test_expect_success 'kvs: symlinkNS: intermediate link points to another symlink' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS put --json $DIR.a.b.c=42 &&
-	flux kvs --namespace=TESTSYMLINKNS link $DIR.a.b $DIR.Z.Y &&
+	flux kvs unlink --namespace=TESTSYMLINKNS -Rf $DIR &&
+	flux kvs put --namespace=TESTSYMLINKNS --json $DIR.a.b.c=42 &&
+	flux kvs link --namespace=TESTSYMLINKNS $DIR.a.b $DIR.Z.Y &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $DIR.Z.Y $DIR.X.W &&
 	test_kvs_key $DIR.X.W.c 42
 '
 test_expect_success 'kvs: symlinkNS: put cant cross namespace' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS mkdir $DIR.a &&
+	flux kvs unlink --namespace=TESTSYMLINKNS -Rf $DIR &&
+	flux kvs mkdir --namespace=TESTSYMLINKNS $DIR.a &&
 	flux kvs link --target-namespace=TESTSYMLINKNS $DIR.a $DIR.link &&
 	! flux kvs put --json $DIR.link.X=42
 '
 test_expect_success 'kvs: symlinkNS: dangling link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS unlink -Rf $DIR &&
+	flux kvs unlink --namespace=TESTSYMLINKNS -Rf $DIR &&
 	flux kvs link --target-namespace=TESTSYMLINKNS-FAKE $DIR.dangle $DIR.a.b.c
 '
 test_expect_success 'kvs: symlinkNS: readlink on dangling link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs --namespace=TESTSYMLINKNS unlink -Rf $DIR &&
+	flux kvs unlink --namespace=TESTSYMLINKNS -Rf $DIR &&
 	flux kvs link --target-namespace=TESTSYMLINKNS-FAKE $DIR.dangle $DIR.a.b.c &&
 	OUTPUT=$(flux kvs readlink $DIR.a.b.c) &&
 	test "$OUTPUT" = "TESTSYMLINKNS-FAKE::$DIR.dangle"
@@ -1099,10 +1099,10 @@ test_expect_success 'flux kvs getroot --owner returns instance owner' '
 
 test_expect_success 'flux kvs getroot works on alt namespace' '
 	flux kvs namespace-create testns1 &&
-	SEQ=$(flux kvs --namespace=testns1 getroot --sequence) &&
+	SEQ=$(flux kvs getroot --namespace=testns1 --sequence) &&
 	test $SEQ -eq 0 &&
-	flux kvs --namespace=testns1 put test.c=moop &&
-	SEQ2=$(flux kvs --namespace=testns1 getroot --sequence) &&
+	flux kvs put --namespace=testns1 test.c=moop &&
+	SEQ2=$(flux kvs getroot --namespace=testns1 --sequence) &&
 	test $SEQ -lt $SEQ2 &&
 	flux kvs namespace-remove testns1
 '

@@ -29,7 +29,7 @@ test_kvs_key() {
 # arg2 - key to retrieve
 # arg3 - expected value
 test_kvs_key_namespace() {
-	flux kvs --namespace="$1" get --json "$2" >output
+	flux kvs get --namespace="$1" --json "$2" >output
 	echo "$3" >expected
 	test_cmp expected output
 }
