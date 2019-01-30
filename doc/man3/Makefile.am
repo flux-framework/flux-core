@@ -48,7 +48,7 @@ MAN3_FILES_PRIMARY = \
 	flux_kvs_commit.3 \
 	flux_kvs_txn_create.3 \
 	flux_kvs_namespace_create.3 \
-	flux_kvs_set_namespace.3 \
+	flux_kvs_get_namespace.3 \
 	flux_kvs_getroot.3 \
 	flux_kvs_eventlog_create.3 \
 	flux_kvs_copy.3 \
@@ -301,7 +301,6 @@ flux_kvs_txn_symlink.3: flux_kvs_txn_create.3
 flux_kvs_txn_put_raw.3: flux_kvs_txn_create.3
 # N.B. exceeds max 8 stubs  flux_kvs_txn_put_treeobj.3: flux_kvs_txn_create.3
 flux_kvs_namespace_remove.3: flux_kvs_namespace_create.3
-flux_kvs_get_namespace.3: flux_kvs_set_namespace.3
 flux_kvs_eventlog_destroy.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_encode.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_decode.3: flux_kvs_eventlog_create.3

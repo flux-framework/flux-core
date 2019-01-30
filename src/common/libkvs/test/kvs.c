@@ -32,10 +32,6 @@ void errors (void)
         "flux_kvs_namespace_remove fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_set_namespace (NULL, NULL) < 0 && errno == EINVAL,
-        "flux_kvs_set_namespace fails on bad input");
-
-    errno = 0;
     ok (flux_kvs_get_namespace (NULL) == NULL && errno == EINVAL,
         "flux_kvs_get_namespace fails on bad input");
 

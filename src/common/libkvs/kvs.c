@@ -16,8 +16,6 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#define FLUX_HANDLE_KVS_NAMESPACE "kvsnamespace"
-
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags)
 {
@@ -46,29 +44,6 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
                           "namespace", ns);
 }
 
-int flux_kvs_set_namespace (flux_t *h, const char *ns)
-{
-    char *str;
-
-    if (!h || !ns) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (!(str = strdup (ns))) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    if (flux_aux_set (h, FLUX_HANDLE_KVS_NAMESPACE, str, free) < 0) {
-        int saved_errno = errno;
-        free (str);
-        errno = saved_errno;
-        return -1;
-    }
-    return 0;
-}
-
 const char *flux_kvs_get_namespace (flux_t *h)
 {
     const char *ns;
@@ -77,9 +52,6 @@ const char *flux_kvs_get_namespace (flux_t *h)
         errno = EINVAL;
         return NULL;
     }
-
-    if ((ns = flux_aux_get (h, FLUX_HANDLE_KVS_NAMESPACE)))
-        return ns;
 
     if ((ns = getenv ("FLUX_KVS_NAMESPACE")))
         return ns;
