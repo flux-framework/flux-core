@@ -286,6 +286,8 @@ check_PROGRAMS += \
 endif
 
 dist_check_DATA = \
+	hwloc-data/sierra2/0.xml \
+	hwloc-data/sierra2/1.xml \
 	hwloc-data/1N/shared/02-brokers/0.xml \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \

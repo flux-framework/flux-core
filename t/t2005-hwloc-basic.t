@@ -11,26 +11,33 @@ Ensure flux-hwloc reload subcommand works
 SIZE=2
 test_under_flux ${SIZE} kvs
 
-shared2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/shared/02-brokers`
-exclu2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/nonoverlapping/02-brokers`
+HWLOC_DATADIR="${SHARNESS_TEST_SRCDIR}/hwloc-data"
+shared2=$(readlink -e ${HWLOC_DATADIR}/1N/shared/02-brokers)
+exclu2=$(readlink -e  ${HWLOC_DATADIR}/1N/nonoverlapping/02-brokers)
+sierra=$(readlink -e  ${HWLOC_DATADIR}/sierra2)
 
 test_debug '
-    echo ${dn} &&
     echo ${shared} &&
-    echo ${exclu2}
+    echo ${exclu2} &&
+    echo ${sierra}
 '
 
 test_expect_success 'hwloc: load aggregator module' '
     flux module load -r all aggregator
 '
 test_expect_success 'hwloc: load hwloc xml' '
-    flux hwloc reload
+    flux hwloc reload -v
 '
 
 #  Set path to lstopo or lstopo-no-graphics command:
 #
 lstopo=$(which lstopo 2>/dev/null || which lstopo-no-graphics 2>/dev/null)
 test -n "$lstopo" && test_set_prereq HAVE_LSTOPO
+
+#  Set path to jq
+#
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
 
 invalid_rank() {
 	echo $((${SIZE} + 1))
@@ -47,6 +54,30 @@ test_expect_success 'hwloc: each rank reloads a non-overlapping set of a node ' 
     flux hwloc reload $exclu2
 '
 
+test_expect_success 'hwloc: internal aggregate-load cmd works' '
+    flux exec -r all \
+        flux hwloc aggregate-load --key=foo --unpack=bar --print-result | \
+	$jq -S . >aggregate.out &&
+    test_debug "flux kvs get bar" &&
+    cat <<-EOF | $jq -S . >aggregate.expected &&
+	{ "count": 2, "total": 2,
+	  "entries": {
+	    "[0-1]": { "Core": 8, "NUMANode": 1, "PU": 8, "Package": 1 }
+	  }
+	}
+	EOF
+    test_cmp aggregate.expected aggregate.out
+'
+
+
+test_expect_success HAVE_JQ 'hwloc: by_rank aggregate key exists after reload' '
+    flux kvs get resource.hwloc.by_rank | $jq -S . >  by_rank.out &&
+    cat <<-EOF | $jq -S . >by_rank.expected &&
+	{"[0-1]": {"NUMANode": 1, "Package": 1, "Core": 8, "PU": 8}}
+	EOF
+    test_cmp by_rank.expected by_rank.out
+'
+
 #  Keep this test after 'reload exclu2' above so we're processing
 #   know topology xml from reload.
 #
@@ -58,6 +89,14 @@ test_expect_success 'hwloc: flux-hwloc info reports expected resources' '
     test_cmp hwloc-info.expected1 hwloc-info.out1
 '
 
+test_expect_success 'hwloc: flux-hwloc info -r works' '
+    cat <<-EOF >hwloc-info-r.expected &&
+	1 Machine, 8 Cores, 8 PUs
+	EOF
+    flux hwloc info -r 1 > hwloc-info-r.out &&
+    test_cmp hwloc-info-r.expected hwloc-info-r.out
+'
+
 test_expect_success 'hwloc: every rank reloads the same xml of a node' '
     flux hwloc reload $shared2 &&
     cat <<-EOF > hwloc-info.expected2 &&
@@ -67,8 +106,27 @@ test_expect_success 'hwloc: every rank reloads the same xml of a node' '
     test_cmp hwloc-info.expected2 hwloc-info.out2
 '
 
-test_expect_success 'hwloc: only one rank reloads an xml file' '
-    flux hwloc reload --rank="[0]" $exclu2
+test_expect_success HAVE_JQ 'hwloc: only one rank reloads an xml file' '
+    flux hwloc reload --rank="[0]" $exclu2 &&
+    flux kvs get resource.hwloc.by_rank | $jq -S . > mixed.out &&
+    cat <<-EOF | $jq -S . >mixed.expected &&
+	{
+	 "0": {"NUMANode": 1, "Package": 1, "Core": 8, "PU": 8},
+	 "1": {"NUMANode": 2, "Package": 2, "Core": 16, "PU": 16}
+	}
+	EOF
+    test_cmp mixed.expected mixed.out
+'
+
+test_expect_success HAVE_JQ 'hwloc: reload xml with GPU resources' '
+    flux hwloc reload --rank=all $sierra &&
+    flux kvs get resource.hwloc.by_rank | $jq -S . > sierra.out &&
+    cat <<-EOF | $jq -S . > sierra.expected &&
+	{"[0-1]":
+          {"NUMANode": 6, "Package": 2, "Core": 44, "PU": 176, "GPU": 4}
+        }
+	EOF
+    test_cmp sierra.expected sierra.out
 '
 
 test_expect_success 'hwloc: return an error code on an invalid DIR' '
@@ -77,6 +135,12 @@ test_expect_success 'hwloc: return an error code on an invalid DIR' '
 
 test_expect_success 'hwloc: return an error code on valid DIR, invalid files' '
     test_expect_code 1 flux hwloc reload /
+'
+
+test_expect_success 'hwloc: reload with invalid rank fails' '
+    test_expect_code 1 flux hwloc reload -r $(invalid_rank) &&
+    test_expect_code 1 flux hwloc reload -r "0-$(invalid_rank)" &&
+    test_expect_code 1 flux hwloc reload -r foo
 '
 
 test_expect_success HAVE_LSTOPO 'hwloc: lstopo works' '
