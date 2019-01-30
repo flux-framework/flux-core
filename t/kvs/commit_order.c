@@ -21,6 +21,7 @@
 static bool verbose;
 static int totcount = 1000;
 static int max_queue_depth = 16;
+static char *ns = NULL;
 static const char *key;
 
 static int txcount;         // count of commit requests
@@ -60,7 +61,6 @@ int main (int argc, char *argv[])
     flux_reactor_t *r;
     int last = -1;
     int ch;
-    char *ns = NULL;
     flux_future_t *f;
 
     log_init ("commit_order");
@@ -98,10 +98,6 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_open");
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
-    if (ns) {
-        if (flux_kvs_set_namespace (h, ns) < 0)
-            log_err_exit ("flux_kvs_set_namespace");
-    }
     /* One synchronous put before watch request, so that
      * watch request doesn't fail with ENOENT.
      */
@@ -112,7 +108,7 @@ int main (int argc, char *argv[])
      * Wait for one response before unleashing async puts, to ensure
      * that first value is captured.
      */
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH, key)))
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_WATCH, key)))
         log_err_exit ("flux_kvs_lookup");
     watch_continuation (f, &last); // resets f, increments wrxcount
     if (flux_future_then (f, -1., watch_continuation, &last) < 0)
@@ -189,7 +185,7 @@ flux_future_t *commit_int (flux_t *h, const char *k, int v)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_pack (txn, 0, k, "i", v) < 0)
         log_err_exit ("flux_kvs_txn_pack");
-    if (!(f = flux_kvs_commit (h, NULL, FLUX_KVS_NO_MERGE, txn)))
+    if (!(f = flux_kvs_commit (h, ns, FLUX_KVS_NO_MERGE, txn)))
         log_err_exit ("flux_kvs_commit");
     flux_kvs_txn_destroy (txn);
     if (verbose)
