@@ -22,7 +22,8 @@ RUN apt-get -qq install -y --no-install-recommends \
         ccache \
         lua5.2 \
         mpich \
-        valgrind
+        valgrind \
+	jq
 
 # Compilers, autotools
 RUN apt-get -qq install -y --no-install-recommends \
