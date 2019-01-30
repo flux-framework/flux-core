@@ -160,35 +160,27 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
 
     /* N.B. FLUX_KVS_WATCH is not valid for lookupat (r/o snapshot).
      */
-    if (!h || !key || strlen (key) == 0
+    if (!h || !key || strlen (key) == 0 || !treeobj
         || validate_lookup_flags (flags, false) < 0) {
         errno = EINVAL;
         return NULL;
     }
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
-    if (!treeobj) {
-        if (!(f = flux_kvs_lookup (h, flags, key))) {
-            free_ctx (ctx);
-            return NULL;
-        }
+    if (!(ctx->atref = strdup (treeobj)))
+        return NULL;
+    if (!(obj = json_loads (treeobj, 0, NULL))) {
+        errno = EINVAL;
+        return NULL;
     }
-    else {
-        if (!(ctx->atref = strdup (treeobj)))
-            return NULL;
-        if (!(obj = json_loads (treeobj, 0, NULL))) {
-            errno = EINVAL;
-            return NULL;
-        }
-        if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:O}",
-                                 "key", key,
-                                 "flags", flags,
-                                 "rootdir", obj))) {
-            free_ctx (ctx);
-            json_decref (obj);
-            return NULL;
-        }
+    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
+                             "{s:s s:i s:O}",
+                             "key", key,
+                             "flags", flags,
+                             "rootdir", obj))) {
+        free_ctx (ctx);
+        json_decref (obj);
+        return NULL;
     }
     if (flux_future_aux_set (f, auxkey, ctx, (flux_free_f)free_ctx) < 0) {
         free_ctx (ctx);

@@ -203,8 +203,15 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
             setup_dir (h, keyat);
 
             rootref = flux_kvsdir_rootref (dir);
-            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, keyat, rootref)))
-                log_err_exit ("flux_kvs_lookupat");
+            if (rootref) {
+                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, keyat,
+                                             rootref)))
+                    log_err_exit ("flux_kvs_lookupat");
+            }
+            else {
+                if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, keyat)))
+                    log_err_exit ("flux_kvs_lookup");
+            }
             if (flux_kvs_lookup_get_dir (f, &ndir) < 0)
                 log_err_exit ("flux_kvs_lookup_get_dir");
 

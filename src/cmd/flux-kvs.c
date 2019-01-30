@@ -722,7 +722,7 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
     if (optparse_hasopt (ctx->p, "waitcreate"))
         flags |= FLUX_KVS_WAITCREATE;
     if (optparse_hasopt (ctx->p, "at")) {
-        const char *reference = optparse_get_str (ctx->p, "at", "");
+        const char *reference = optparse_get_str (ctx->p, "at", NULL);
         if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
             log_err_exit ("%s", key);
     }
@@ -973,7 +973,7 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
         const char *ns = NULL;
         const char *target = NULL;
         if (optparse_hasopt (p, "at")) {
-            const char *ref = optparse_get_str (p, "at", "");
+            const char *ref = optparse_get_str (p, "at", NULL);
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[i], ref)))
                 log_err_exit ("%s", argv[i]);
         }
@@ -1276,8 +1276,16 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
         if (flux_kvsdir_issymlink (dir, name)) {
             const char *ns = NULL;
             const char *target = NULL;
-            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
+            if (rootref) {
+                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key,
+                                             rootref)))
+                    log_err_exit ("%s", key);
+            }
+            else {
+                if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, key)))
+                    log_err_exit ("%s", key);
+            }
+            if (flux_kvs_lookup_get_symlink (f, &ns, &target) < 0)
                 log_err_exit ("%s", key);
             if (ns)
                 printf ("%s -> %s::%s\n", key, ns, target);
@@ -1287,8 +1295,16 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
         } else if (flux_kvsdir_isdir (dir, name)) {
             if (Ropt) {
                 const flux_kvsdir_t *ndir;
-                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref))
-                        || flux_kvs_lookup_get_dir (f, &ndir) < 0)
+                if (rootref) {
+                    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key,
+                                                 rootref)))
+                        log_err_exit ("%s", key);
+                }
+                else {
+                    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+                        log_err_exit ("%s", key);
+                }
+                if (flux_kvs_lookup_get_dir (f, &ndir) < 0)
                     log_err_exit ("%s", key);
                 if (flux_kvsdir_get_size (ndir) == 0)
                     printf ("%s.\n", key);
@@ -1302,8 +1318,14 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                 const char *value;
                 const void *buf;
                 int len;
-                if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
-                    log_err_exit ("%s", key);
+                if (rootref) {
+                    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+                        log_err_exit ("%s", key);
+                }
+                else {
+                    if (!(f = flux_kvs_lookup (h, 0, key)))
+                        log_err_exit ("%s", key);
+                }
                 if (flux_kvs_lookup_get (f, &value) == 0) // null terminated
                     dump_kvs_val (key, maxcol, value);
                 else if (flux_kvs_lookup_get_raw  (f, &buf, &len) == 0)
@@ -1342,7 +1364,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
         log_msg_exit ("dir: specify zero or one directory");
 
     if (optparse_hasopt (p, "at")) {
-        const char *reference = optparse_get_str (p, "at", "");
+        const char *reference = optparse_get_str (p, "at", NULL);
         if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, reference)))
             log_err_exit ("%s", key);
     }

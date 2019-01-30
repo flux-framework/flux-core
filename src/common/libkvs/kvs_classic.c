@@ -89,8 +89,14 @@ int flux_kvsdir_get (const flux_kvsdir_t *dir, const char *name, char **valp)
 
     if (!(key = flux_kvsdir_key_at (dir, name)))
         goto done;
-    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
-        goto done;
+    if (rootref) {
+        if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+            goto done;
+    }
+    else {
+        if (!(f = flux_kvs_lookup (h, 0, key)))
+            goto done;
+    }
     if (flux_kvs_lookup_get (f, &json_str) < 0)
         goto done;
     if (valp) {
@@ -127,8 +133,14 @@ int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
         goto done;
     if (!(key = flux_kvsdir_key_at (dir, name)))
         goto done;
-    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
-        goto done;
+    if (rootref) {
+        if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
+            goto done;
+    }
+    else {
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+            goto done;
+    }
     if (flux_kvs_lookup_get_dir (f, &subdir) < 0)
         goto done;
     if (!(cpy = flux_kvsdir_copy (subdir)))
