@@ -279,7 +279,7 @@ static struct optparse_subcommand subcommands[] = {
       ls_opts
     },
     { "unlink",
-      "key [key...]",
+      "[-R] [-f] key [key...]",
       "Remove key",
       cmd_unlink,
       0,
@@ -307,14 +307,14 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "copy",
-      "source destination",
+      "[-S src-ns] [-D dst-ns] source destination",
       "Copy source key to destination key",
       cmd_copy,
       0,
       copy_opts
     },
     { "move",
-      "source destination",
+      "[-S src-ns] [-D dst-ns] source destination",
       "Move source key to destination key",
       cmd_move,
       0,
