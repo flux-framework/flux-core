@@ -887,7 +887,7 @@ test_expect_success 'kvs: link: path resolution with intermediate link and nonex
 #
 
 test_expect_success 'kvs: namespace create setup' '
-	flux kvs namespace-create TESTSYMLINKNS
+	flux kvs namespace create TESTSYMLINKNS
 '
 test_expect_success 'kvs: symlink w/ Namespace works' '
 	TARGET=$DIR.target &&
@@ -967,7 +967,7 @@ test_expect_success 'kvs: symlinkNS: readlink on dangling link' '
 	test "$OUTPUT" = "TESTSYMLINKNS-FAKE::$DIR.dangle"
 '
 test_expect_success 'kvs: namespace remove cleanup' '
-	flux kvs namespace-remove TESTSYMLINKNS
+	flux kvs namespace remove TESTSYMLINKNS
 '
 
 #
@@ -1098,13 +1098,13 @@ test_expect_success 'flux kvs getroot --owner returns instance owner' '
 '
 
 test_expect_success 'flux kvs getroot works on alt namespace' '
-	flux kvs namespace-create testns1 &&
+	flux kvs namespace create testns1 &&
 	SEQ=$(flux kvs getroot --namespace=testns1 --sequence) &&
 	test $SEQ -eq 0 &&
 	flux kvs put --namespace=testns1 test.c=moop &&
 	SEQ2=$(flux kvs getroot --namespace=testns1 --sequence) &&
 	test $SEQ -lt $SEQ2 &&
-	flux kvs namespace-remove testns1
+	flux kvs namespace remove testns1
 '
 
 #

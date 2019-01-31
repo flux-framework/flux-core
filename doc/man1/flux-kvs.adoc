@@ -48,15 +48,15 @@ arguments are described below.
 
 COMMANDS
 --------
-*namespace-create* [-o owner] 'name' ['name...']::
+*namespace create* [-o owner] 'name' ['name...']::
 Create a new kvs namespace.  User may specify an alternate userid of a
 user that owns the namespace via '-o'.  Specifying an alternate owner
 would allow a non-instance owner to read/write to a namespace.
 
-*namespace-remove* 'name' ['name...']::
+*namespace remove* 'name' ['name...']::
 Remove a kvs namespace.
 
-*namespace-list*::
+*namespace list*::
 List all current namespaces and info on each namespace.
 
 *get* [-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-f] [-c count] 'key' ['key...']::

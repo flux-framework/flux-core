@@ -44,12 +44,12 @@ unset_userid() {
 
 test_expect_success 'kvs: namespace create fails (user)' '
         set_userid 9999 &&
-	! flux kvs namespace-create $NAMESPACETMP-OWNER &&
+	! flux kvs namespace create $NAMESPACETMP-OWNER &&
         unset_userid
 '
 
 test_expect_success 'kvs: namespace create works (owner)' '
-	flux kvs namespace-create $NAMESPACETMP-OWNER
+	flux kvs namespace create $NAMESPACETMP-OWNER
 '
 
 test_expect_success 'kvs: put fails (user)' '
@@ -134,14 +134,14 @@ test_expect_success 'kvs: setroot pause / unpause fails (user)' '
 
 test_expect_success 'kvs: namespace remove fails (user)' '
         set_userid 9999 &&
-	! flux kvs namespace-remove $NAMESPACETMP-OWNER &&
+	! flux kvs namespace remove $NAMESPACETMP-OWNER &&
         unset_userid
 '
 
 test_expect_success 'kvs: namespace remove works (owner)' '
         flux kvs put --namespace=$NAMESPACETMP-OWNER --json $DIR.tmp=1 &&
         test_kvs_key_namespace $NAMESPACETMP-OWNER $DIR.tmp 1 &&
-        flux kvs namespace-remove $NAMESPACETMP-OWNER &&
+        flux kvs namespace remove $NAMESPACETMP-OWNER &&
         ! flux kvs get --namespace=$NAMESPACETMP-OWNER --json $DIR.tmp
 '
 
@@ -150,11 +150,11 @@ test_expect_success 'kvs: namespace remove works (owner)' '
 #
 
 test_expect_success 'kvs: namespace create works (owner, for user)' '
-	flux kvs namespace-create -o 9999 $NAMESPACETMP-USER
+	flux kvs namespace create -o 9999 $NAMESPACETMP-USER
 '
 
 test_expect_success 'kvs: namespace listed with correct owner' '
-        flux kvs namespace-list | grep $NAMESPACETMP-USER | grep 9999
+        flux kvs namespace list | grep $NAMESPACETMP-USER | grep 9999
 '
 
 test_expect_success 'kvs: namespace put/get works (user)' '
@@ -306,14 +306,14 @@ test_expect_success 'kvs: setroot pause / unpause fails (wrong user)' '
 
 test_expect_success 'kvs: namespace remove still fails (user)' '
         set_userid 9999 &&
-        ! flux kvs namespace-remove $NAMESPACETMP-USER &&
+        ! flux kvs namespace remove $NAMESPACETMP-USER &&
         unset_userid
 '
 
 test_expect_success 'kvs: namespace remove still works (owner)' '
         flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.tmp=1 &&
         test_kvs_key_namespace $NAMESPACETMP-USER $DIR.tmp 1 &&
-        flux kvs namespace-remove $NAMESPACETMP-USER &&
+        flux kvs namespace remove $NAMESPACETMP-USER &&
         ! flux kvs get --namespace=$NAMESPACETMP-USER --json $DIR.tmp
 '
 
@@ -322,9 +322,9 @@ test_expect_success 'kvs: namespace remove still works (owner)' '
 #
 
 test_expect_success 'kvs: namespace create works (owner, for user)' '
-	flux kvs namespace-create -o 9000 $NAMESPACETMP-SYMLINKNS1 &&
-	flux kvs namespace-create -o 9001 $NAMESPACETMP-SYMLINKNS2 &&
-	flux kvs namespace-create -o 9001 $NAMESPACETMP-SYMLINKNS3
+	flux kvs namespace create -o 9000 $NAMESPACETMP-SYMLINKNS1 &&
+	flux kvs namespace create -o 9001 $NAMESPACETMP-SYMLINKNS2 &&
+	flux kvs namespace create -o 9001 $NAMESPACETMP-SYMLINKNS3
 '
 
 test_expect_success 'kvs: symlink w/ Namespace works (owner)' '
