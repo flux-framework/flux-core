@@ -194,7 +194,7 @@ int idset_range_clear (struct idset *idset, unsigned int lo, unsigned int hi)
 
 bool idset_test (const struct idset *idset, unsigned int id)
 {
-    if (!idset || !valid_id (id))
+    if (!idset || !valid_id (id) || id >= idset->T.M)
         return false;
     return (vebsucc (idset->T, id) == id);
 }
