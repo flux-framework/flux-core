@@ -199,6 +199,30 @@ test_expect_success 'job-manager: guest cannot cancel --purge others jobs' '
 	flux job cancel --purge ${jobid}
 '
 
+test_expect_success 'job-manager: no jobs in the queue' '
+	test $(flux job list -s | wc -l) -eq 0
+'
+
+test_expect_success 'job-manager: job cancellation logged to eventlog ' '
+	jobid=$(flux job submit <basic.json) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	flux job cancel ${jobid} &&
+	flux kvs eventlog get ${kvsdir}.eventlog | grep cancel
+'
+
+test_expect_success 'job-manager: no jobs in the queue' '
+	test $(flux job list -s | wc -l) -eq 0
+'
+
+test_expect_success 'job-manager: reload the job manager' '
+	flux module remove job-manager &&
+	flux module load job-manager
+'
+
+test_expect_success 'job-manager: still no jobs in the queue' '
+	test $(flux job list -s | wc -l) -eq 0
+'
+
 test_expect_success 'job-manager: remove job-manager, job-ingest' '
 	flux module remove -r 0 job-manager && \
 	flux module remove -r all job-ingest
