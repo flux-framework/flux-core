@@ -484,6 +484,18 @@ void test_autogrow (void)
     idset_destroy (idset);
 }
 
+void issue_1974(void)
+{
+    struct idset *idset;
+
+    idset = idset_create (1024, 0);
+    ok (idset != NULL,
+        "1974: idset_create size=1024 worked");
+    ok (idset_test (idset, 1024) == false,
+        "1974: idset_test id=1024 returned false");
+    idset_destroy (idset);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -499,6 +511,7 @@ int main (int argc, char *argv[])
     test_range_clear ();
     test_copy ();
     test_autogrow ();
+    issue_1974 ();
 
     done_testing ();
 }
