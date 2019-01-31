@@ -166,16 +166,20 @@ test_expect_success 'flux-job: priority fails with non-numeric priority' '
 	test_must_fail flux job priority ${validjob} foo
 '
 
-test_expect_success 'flux-job: cancel --purge fails with bad FLUX_URI' '
-	! FLUX_URI=/wrong flux job cancel --purge ${validjob}
+test_expect_success 'flux-job: cancel fails with bad FLUX_URI' '
+	! FLUX_URI=/wrong flux job cancel ${validjob}
 '
 
-test_expect_success 'flux-job: cancel --purge fails with no args' '
-	test_must_fail flux job cancel --purge
+test_expect_success 'flux-job: cancel fails with no args' '
+	test_must_fail flux job cancel
 '
 
-test_expect_success 'flux-job: cancel --purge fails with invalid jobid' '
-	test_must_fail flux job cancel --purge foo
+test_expect_success 'flux-job: cancel fails with invalid jobid' '
+	test_must_fail flux job cancel foo
+'
+
+test_expect_success 'flux-job: cancel fails with invalid option' '
+	test_must_fail flux job cancel --meep foo
 '
 
 test_expect_success 'flux-job: list fails with bad FLUX_URI' '
