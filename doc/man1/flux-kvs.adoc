@@ -21,10 +21,10 @@ service used a building block by other Flux components.
 flux-kvs(1) is a command line utility that operates on the KVS.
 It is a very thin layer on top of a C API.
 
-The Flux KVS stores JSON values under string keys.  The keys are
-hierarchical, using "." as a path separator, analogous to "/" separated
-UNIX file paths.  A single "." represents the root directory of
-the KVS.
+The Flux KVS stores values under string keys.  The keys are
+hierarchical, using "." as a path separator, analogous to "/"
+separated UNIX file paths.  A single "." represents the root directory
+of the KVS.
 
 The KVS is distributed among the ranks of a comms session.  Rank 0
 is the leader, and other ranks are caching followers.  All writes are flushed
