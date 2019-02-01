@@ -17,6 +17,7 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <stdbool.h>
 
 enum idset_flags {
     IDSET_FLAG_AUTOGROW = 1, // allow idset size to automatically grow
