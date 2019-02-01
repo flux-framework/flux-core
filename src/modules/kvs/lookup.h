@@ -33,8 +33,7 @@ typedef int (*lookup_ref_f)(lookup_t *c,
 
 /* Initialize a lookup handle
  *
- * - root_ref is optional.  If not specified, will use root ref
- *   specified in namespace.
+ * - atleast one of namespace & root_ref is required.
  * - root_seq is not used and is solely used for convenience being
  *   passed alongside root_ref.  Can be retrieved later with
  *   lookup_get_root_seq().  Will not be stored if root_ref is NULL.
@@ -91,9 +90,7 @@ const char *lookup_missing_namespace (lookup_t *lh);
 int lookup_get_current_epoch (lookup_t *lh);
 
 /* Convenience function to get namespace from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.  May not
- * necessarily return namespace passed in via 'namespace' in
- * lookup_create().  Could have been namespace via a namespace prefix.
+ * Convenient if replaying RPC and don't have it presently.
  */
 const char *lookup_get_namespace (lookup_t *lh);
 

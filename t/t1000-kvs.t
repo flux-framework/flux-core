@@ -1016,6 +1016,7 @@ test_expect_success 'kvs: directory with multiple subdirs using dir --at' '
         flux kvs put --json $DIR.c.a.b=3.14 &&
         flux kvs put --json $DIR.d=\"snerg\" &&
         flux kvs put --json $DIR.e=true &&
+        flux kvs link $DIR.a $DIR.f &&
         DIRREF=$(flux kvs get --treeobj $DIR) &&
 	flux kvs dir -R --at $DIRREF . | sort >output &&
 	cat >expected <<EOF &&
@@ -1024,6 +1025,7 @@ b.c.d.e.f.g = 70
 c.a.b = 3.140000
 d = snerg
 e = true
+f -> $DIR.a
 EOF
 	test_cmp expected output
 '

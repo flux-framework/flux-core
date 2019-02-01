@@ -258,6 +258,7 @@ check_PROGRAMS = \
 	kvs/transactionmerge \
 	kvs/fence_namespace_remove \
 	kvs/fence_invalid \
+	kvs/lookup_invalid \
 	kvs/commit_order \
 	kvs/issue1760 \
 	kvs/issue1876 \
@@ -380,6 +381,11 @@ kvs_fence_namespace_remove_LDADD = \
 kvs_fence_invalid_SOURCES = kvs/fence_invalid.c
 kvs_fence_invalid_CPPFLAGS = $(test_cppflags)
 kvs_fence_invalid_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_lookup_invalid_SOURCES = kvs/lookup_invalid.c
+kvs_lookup_invalid_CPPFLAGS = $(test_cppflags)
+kvs_lookup_invalid_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_commit_order_SOURCES = kvs/commit_order.c

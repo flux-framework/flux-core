@@ -465,4 +465,13 @@ test_expect_success 'kvs: test invalid fence arguments on rank 1' '
         grep "flux_future_get: Invalid argument" invalid_output
 '
 
+#
+# test invalid lookup rpc
+#
+
+test_expect_success 'kvs: test invalid lookup rpc' '
+        ${FLUX_BUILD_DIR}/t/kvs/lookup_invalid a-key > lookup_invalid_output &&
+        grep "flux_future_get: Protocol error" lookup_invalid_output
+'
+
 test_done

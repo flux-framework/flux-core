@@ -1317,7 +1317,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     int flags;
-    const char *ns;
+    const char *ns = NULL;
     const char *key;
     json_t *val = NULL;
     json_t *root_dirent = NULL;
@@ -1334,13 +1334,16 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         uint32_t rolemask, userid;
         int root_seq = -1;
 
-        if (flux_request_unpack (msg, NULL, "{ s:s s:s s:i }",
+        if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
                                  "key", &key,
-                                 "namespace", &ns,
                                  "flags", &flags) < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
+
+        /* namespace is optional */
+        (void)flux_request_unpack (msg, NULL, "{ s:s }",
+                                   "namespace", &ns);
 
         /* rootdir is optional */
         (void)flux_request_unpack (msg, NULL, "{ s:o }",
@@ -1349,6 +1352,12 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         /* rootseq is optional */
         (void)flux_request_unpack (msg, NULL, "{ s:i }",
                                    "rootseq", &root_seq);
+
+        /* either namespace or rootdir must be specified */
+        if (!ns && !root_dirent) {
+            errno = EPROTO;
+            goto done;
+        }
 
         /* If root dirent was specified, lookup corresponding
          * 'root' directory.  Otherwise, use the current root.
@@ -1369,7 +1378,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
                                   ctx->krm,
                                   ctx->epoch,
                                   ns,
-                                  root_ref ? root_ref : NULL,
+                                  root_ref,
                                   root_seq,
                                   key,
                                   rolemask,

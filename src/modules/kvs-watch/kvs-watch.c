@@ -482,9 +482,8 @@ static flux_future_t *lookupat (flux_t *h,
     else {
         if (!(o = treeobj_create_dirref (blobref)))
             goto error;
-        if (flux_msg_pack (msg, "{s:s s:s s:i s:i s:O}",
+        if (flux_msg_pack (msg, "{s:s s:i s:i s:O}",
                            "key", w->key,
-                           "namespace", ns,
                            "flags", w->flags,
                            "rootseq", root_seq,
                            "rootdir", o) < 0)
