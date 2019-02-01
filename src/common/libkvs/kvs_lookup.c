@@ -20,6 +20,7 @@
 
 #include "kvs_dir_private.h"
 #include "kvs_lookup.h"
+#include "kvs_util_private.h"
 #include "treeobj.h"
 
 struct lookup_ctx {
@@ -120,7 +121,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
         return NULL;
     }
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             return NULL;
     }
     if (!(ctx = alloc_ctx (h, flags, key)))

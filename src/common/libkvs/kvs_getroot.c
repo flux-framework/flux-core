@@ -19,6 +19,7 @@
 #include <flux/core.h>
 
 #include "kvs_getroot.h"
+#include "kvs_util_private.h"
 #include "treeobj.h"
 
 static const char *auxkey = "flux::getroot_ctx";
@@ -56,7 +57,7 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *ns, int flags)
     }
     if (!(ctx = alloc_ctx ()))
         return NULL;
-    if (!ns && !(ns = flux_kvs_get_namespace (h)))
+    if (!ns && !(ns = kvs_get_namespace ()))
         goto error;
     if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0,
                              "{s:s s:i}",

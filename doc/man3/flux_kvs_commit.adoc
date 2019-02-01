@@ -33,9 +33,10 @@ to commit a transaction _txn_.  _txn_ is created with
 with `flux_kvs_txn_destroy()`.  A `flux_future_t` object is returned,
 which acts as handle for synchronization and container for the
 response.  The _txn_ will operate in the namespace specified by _ns_.
-If _ns_ is NULL, `flux_kvs_commit()` will operate on the namespace
-returned via `flux_kvs_get_namespace()`.  Note that all transactions
-operate on the same namespace.
+If _ns_ is NULL, `flux_kvs_commit()` will operate on the default
+namespace, or if set, the namespace from the FLUX_KVS_NAMESPACE
+environment variable.  Note that all transactions operate on the same
+namespace.
 
 `flux_kvs_fence()` is a "collective" version of `flux_kvs_commit()` that
 supports multiple callers.  Each caller uses the same _flags_, _name_,

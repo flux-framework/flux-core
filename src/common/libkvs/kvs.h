@@ -53,12 +53,6 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags);
 flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns);
 
-/* Namespace Retrieval
- * - Checks if FLUX_KVS_NAMESPACE environment variable is set, otherwise
- *   returns KVS_PRIMARY_NAMESPACE.
- */
-const char *flux_kvs_get_namespace (flux_t *h);
-
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.

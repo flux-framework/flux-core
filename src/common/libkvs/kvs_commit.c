@@ -16,6 +16,7 @@
 #include <flux/core.h>
 
 #include "kvs_txn_private.h"
+#include "kvs_util_private.h"
 #include "src/common/libutil/blobref.h"
 
 flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
@@ -30,7 +31,7 @@ flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
     }
 
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             return NULL;
     }
 
@@ -59,7 +60,7 @@ flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
     }
 
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             return NULL;
     }
 

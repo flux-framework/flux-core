@@ -17,6 +17,7 @@
 
 #include "treeobj.h"
 #include "kvs_dir_private.h"
+#include "kvs_util_private.h"
 
 typedef enum {
     WATCH_JSONSTR, WATCH_DIR,
@@ -140,7 +141,7 @@ int flux_kvs_unwatch (flux_t *h, const char *ns, const char *key)
     int rc = -1;
 
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             goto done;
     }
     if (!(f = flux_rpc_pack (h, "kvs.unwatch", FLUX_NODEID_ANY, 0,
@@ -232,7 +233,7 @@ static flux_future_t *kvs_watch_rpc (flux_t *h, const char *ns, const char *key,
     int saved_errno;
 
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             goto error;
     }
     if (!json_str)

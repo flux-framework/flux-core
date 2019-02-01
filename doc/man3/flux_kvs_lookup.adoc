@@ -47,9 +47,10 @@ service used by Flux services.
 `flux_kvs_lookup()` sends a request to the KVS service to look up
 _key_ in namespace _ns_.  It returns a `flux_future_t` object which
 acts as handle for synchronization and container for the result.  The
-namespace _ns_ is optional.  If set to NULL, `flux_kvs_lookup()`
-operates on the namespace returned via `flux_kvs_get_namespace()`.
-_flags_ modifies the request as described below.
+namespace _ns_ is optional.  If set to NULL, `flux_kvs_lookup()` uses
+the default namespace, or if set, the namespace from the
+FLUX_KVS_NAMESPACE environment variable.  _flags_ modifies the request
+as described below.
 
 `flux_kvs_lookupat()` is identical to `flux_kvs_lookup()` except
 _treeobj_ is a serialized RFC 11 object that references a particular

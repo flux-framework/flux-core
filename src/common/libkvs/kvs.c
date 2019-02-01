@@ -16,6 +16,8 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "kvs_util_private.h"
+
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags)
 {
@@ -44,21 +46,6 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
                           "namespace", ns);
 }
 
-const char *flux_kvs_get_namespace (flux_t *h)
-{
-    const char *ns;
-
-    if (!h) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if ((ns = getenv ("FLUX_KVS_NAMESPACE")))
-        return ns;
-
-    return KVS_PRIMARY_NAMESPACE;
-}
-
 int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp)
 {
     flux_future_t *f;
@@ -66,7 +53,7 @@ int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp)
     int rc = -1;
 
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             return -1;
     }
     if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
@@ -88,7 +75,7 @@ int flux_kvs_wait_version (flux_t *h, const char *ns, int version)
     int ret = -1;
 
     if (!ns) {
-        if (!(ns = flux_kvs_get_namespace (h)))
+        if (!(ns = kvs_get_namespace ()))
             return -1;
     }
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
