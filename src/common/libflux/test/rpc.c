@@ -193,6 +193,74 @@ int test_server (flux_t *h, void *arg)
     return 0;
 }
 
+void test_corner_case (flux_t *h)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        BAIL_OUT ("flux_msg_create failed");
+
+    errno = 0;
+    ok (flux_rpc_message (NULL, msg, 0, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message fails with EINVAL on NULL handle");
+
+    errno = 0;
+    ok (flux_rpc (NULL, "topic", "data", 0, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc fails with EINVAL on NULL handle");
+
+    errno = 0;
+    ok (flux_rpc_raw (NULL, "topic", "data", 4, 0, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_raw fails with EINVAL on NULL handle");
+
+    errno = 0;
+    ok (flux_rpc_pack (NULL, "topic", 0, 0, "{ s:s }", "foo", "bar") == NULL
+        && errno == EINVAL,
+        "flux_rpc_pack fails with EINVAL on NULL handle");
+
+    errno = 0;
+    ok (flux_rpc_message (h, NULL, 0, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message fails with EINVAL on NULL msg");
+
+    errno = 0;
+    ok (flux_rpc (h, NULL, "data", 0, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc fails with EINVAL on NULL topic");
+
+    errno = 0;
+    ok (flux_rpc_raw (h, NULL, "data", 4, 0, 0) == NULL
+        && errno == EINVAL,
+        "flux_rpc_raw fails with EINVAL on NULL topic");
+
+    errno = 0;
+    ok (flux_rpc_pack (h, NULL, 0, 0, "{ s:s }", "foo", "bar") == NULL
+        && errno == EINVAL,
+        "flux_rpc_pack fails with EINVAL on NULL topic");
+
+    errno = 0;
+    ok (flux_rpc_message (h, msg, 0, 0xFF) == NULL
+        && errno == EINVAL,
+        "flux_rpc_message fails with EINVAL on invalid flags");
+
+    errno = 0;
+    ok (flux_rpc (h, "topic", "data", 0, 0xFF) == NULL
+        && errno == EINVAL,
+        "flux_rpc fails with EINVAL on invalid flags");
+
+    errno = 0;
+    ok (flux_rpc_raw (h, "topic", "data", 4, 0, 0xFF) == NULL
+        && errno == EINVAL,
+        "flux_rpc_raw fails with EINVAL on invalid flags");
+
+    errno = 0;
+    ok (flux_rpc_pack (h, "topic", 0, 0xFF, "{ s:s }", "foo", "bar") == NULL
+        && errno == EINVAL,
+        "flux_rpc_pack fails with EINVAL on invalid flags");
+}
+
 void test_service (flux_t *h)
 {
     flux_future_t *r;
@@ -724,6 +792,7 @@ int main (int argc, char *argv[])
     flux_fatal_set (h, fatal_err, NULL);
     flux_flags_set (h, FLUX_O_MATCHDEBUG);
 
+    test_corner_case (h);
     test_service (h);
     test_basic (h);
     test_error (h);

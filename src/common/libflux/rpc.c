@@ -308,6 +308,12 @@ flux_future_t *flux_rpc (flux_t *h,
 {
     flux_msg_t *msg = NULL;
     flux_future_t *f = NULL;
+
+    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE
+                                   | FLUX_RPC_STREAMING)) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(msg = flux_request_encode (topic, s)))
         goto done;
     if (!(f = flux_rpc_message_nocopy (h, msg, nodeid, flags)))
@@ -327,6 +333,11 @@ flux_future_t *flux_rpc_raw (flux_t *h,
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
+    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE
+                                   | FLUX_RPC_STREAMING)) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(msg = flux_request_encode_raw (topic, data, len)))
         goto done;
     if (!(f = flux_rpc_message_nocopy (h, msg, nodeid, flags)))
@@ -345,6 +356,11 @@ static flux_future_t *flux_rpc_vpack (flux_t *h,
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
+    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE
+                                   | FLUX_RPC_STREAMING)) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(msg = flux_request_encode (topic, NULL)))
         goto done;
     if (flux_msg_vpack (msg, fmt, ap) < 0)
