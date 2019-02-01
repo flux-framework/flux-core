@@ -24,6 +24,7 @@
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libaggregate/aggregate.h"
+#include "src/common/libutil/monotime.h"
 
 #define XML_BASEDIR "resource.hwloc.xml"
 
@@ -295,7 +296,7 @@ static int argz_appendf (char **argzp, size_t *argz_len, const char *fmt, ...)
         goto out;
     va_end (ap);
 
-    if ((errno = argz_add (argzp, argz_len, s)) == 0)
+    if ((errno = argz_add_sep (argzp, argz_len, s, ' ')) == 0)
         rc = 0;
 out:
     return (rc);
@@ -546,10 +547,16 @@ flux_future_t * kvs_load_xml_idset (flux_t *h, const char *basedir,
     return (f);
 }
 
+static double seconds_since (struct timespec t)
+{
+    return (monotime_since (t)/1000.);
+}
+
 /*  Execute flux-hwloc aggregate-load across all ranks, optionally
  *   reloading local hwloc XML on `reload_ranks`.
  */
-static int run_hwloc_aggregate (flux_t *h, const char *ranks)
+static int run_hwloc_aggregate (flux_t *h, const char *ranks, bool verbose,
+                                struct timespec t0)
 {
     const char *base = "resource.hwloc";
     char *argz = NULL;
@@ -557,7 +564,7 @@ static int run_hwloc_aggregate (flux_t *h, const char *ranks)
     uint32_t rank, size;
     double timeout = 5.;
     char *argv[] = {
-        "flux", "exec", "-r", "all", "flux", "hwloc", "aggregate-load", NULL
+        "flux", "exec", "-n", "-r", "all", NULL
     };
 
     if (flux_get_rank (h, &rank) < 0)
@@ -571,13 +578,26 @@ static int run_hwloc_aggregate (flux_t *h, const char *ranks)
 
     if ((errno = argz_create (argv, &argz, &argz_len)))
         log_err_exit ("exec aggregate-load: argz_create");
-    if ((ranks && (argz_appendf (&argz, &argz_len, "--rank=%s", ranks) < 0))
-        || (argz_appendf (&argz, &argz_len, "--timeout=%.3f", timeout) < 0)
-        || (argz_appendf (&argz, &argz_len, "--unpack=%s.by_rank", base) < 0)
-        || (argz_appendf (&argz, &argz_len, "--key=%s.reload:%u-%u",
-                          base, rank, getpid()) < 0))
+
+    /*  Append -v to flux-exec if verbose */
+    if (verbose && (argz_appendf (&argz, &argz_len, "-v")))
         log_err_exit ("exec aggregate-load: argz_appendf");
 
+    /*  Build flux hwloc aggregate-load command */
+    if ((argz_appendf (&argz, &argz_len,
+                "flux hwloc aggregate-load "
+                "--timeout=%.3f --unpack=%s.by_rank --key=%s.reload:%u-%u",
+                timeout, base, base, rank, getpid()) < 0)
+        || (ranks && (argz_appendf (&argz, &argz_len, "--rank=%s", ranks) < 0))
+        || (verbose && argz_appendf (&argz, &argz_len, "--verbose")))
+        log_err_exit ("argz_appendf flux-hwloc aggregate-load command");
+
+    if (verbose) {
+        char copy [argz_len];
+        memcpy (copy, argz, argz_len);
+        argz_stringify (copy, argz_len, ' ');
+        log_msg ("%.3fs: Running %s", seconds_since (t0), copy);
+    }
     argz_execp (argz, argz_len);
 
     log_err_exit ("exec: flux-exec flux hwloc aggregate-load");
@@ -589,10 +609,15 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     const char *default_nodeset = "all";
     const char *nodeset = optparse_get_str (p, "rank", default_nodeset);
     uint32_t size;
+    bool verbose;
+    struct timespec t0;
     struct idset *idset = NULL;
     char *dirpath = NULL;
     char *reload_ranks;
     flux_t *h;
+
+    if ((verbose = optparse_hasopt (p, "verbose")))
+        monotime (&t0);
 
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
@@ -605,18 +630,33 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     if (idset_last (idset) > size - 1)
         log_msg_exit ("--rank=%s: Invalid rank specified", nodeset);
 
+    if (verbose)
+        log_msg ("%.3fs: starting HWLOC reload on %ju ranks (%s)",
+                 seconds_since (t0), (uintmax_t) idset_count (idset), nodeset);
+
     if (dirpath) {
+        if (verbose)
+            log_msg ("%.3fs: starting load of XML from %s",
+                     seconds_since (t0), dirpath);
+
         flux_future_t *f = kvs_load_xml_idset (h, dirpath, idset);
         if (!f || flux_future_get (f, NULL) < 0)
             log_err_exit ("%s: failed to load all XML", dirpath);
         flux_future_destroy (f);
         reload_ranks = NULL;
+
+        if (verbose)
+            log_msg ("%.3fs: XML load complete", seconds_since (t0));
     }
     else
         reload_ranks = strdup (nodeset);
 
-    run_hwloc_aggregate (h, reload_ranks);
+    if (verbose)
+        log_msg ("%.3fs: executing aggregate-load across all ranks",
+                seconds_since (t0));
+    run_hwloc_aggregate (h, reload_ranks, optparse_hasopt (p, "verbose"), t0);
 
+    // run_hwloc_aggregate doesn't return, but clean up anyway:
     free (dirpath);
     free (reload_ranks);
     idset_destroy (idset);
@@ -759,6 +799,14 @@ static int kvs_put_xml_fence (flux_t *h, int rank,
     return (0);
 }
 
+double gettime (void)
+{
+    struct timespec t;
+    clock_gettime (CLOCK_MONOTONIC, &t);
+    return ((double) t.tv_sec + ((double) t.tv_nsec / 1000000000.));
+}
+
+
 /*  Undocumented utility function that optionally loads local topology XML
  *   on selected ranks, then uses the aggregator module to create a
  *   summary of all rank HW topology object types, optionally storing the
@@ -771,7 +819,16 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
     const char *ranks = NULL;
     struct idset *idset = NULL;
     uint32_t rank;
+    struct timespec t0;
+    bool verbose;
     flux_t *h = NULL;
+
+    log_init ("flux-hwloc aggregate-load");
+
+    if ((verbose = optparse_hasopt (p, "verbose"))) {
+        setlinebuf (stderr);
+        monotime (&t0);
+    }
 
     if (!optparse_getopt (p, "key", &key))
         log_err_exit ("Missing required option --key");
@@ -779,40 +836,63 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
 
+    if (flux_get_rank (h, &rank) < 0)
+        log_err_exit ("flux_get_rank");
+
+    if (verbose && rank != 0)
+        verbose = false;
+
     /*  If rank not specified then default to an empty set */
     if (optparse_getopt (p, "rank", &ranks) <= 0)
         ranks = "";
     if (!(idset = ranks_to_idset (h, ranks)))
         log_err_exit ("Invalid argument: -rank='%s'", ranks);
-    if (flux_get_rank (h, &rank) < 0)
-        log_err_exit ("flux_get_rank");
+
+    if (verbose)
+        log_msg ("%.3fs: %.3fs: starting", gettime (), seconds_since (t0));
 
     /*  If this rank is in idset, then we need to reload local XML into
      *   kvs before re-aggregation. Otherwise, fetch XML from kvs.
      */
     if (idset_test (idset, rank)) {
+        if (verbose)
+            log_msg ("%.3fs: %.3fs: pushing local xml", gettime (), seconds_since (t0));
         if (!(xml = flux_hwloc_local_xml ()))
             log_err_exit ("Failed to get local XML");
+        if (verbose)
+            log_msg ("%.3fs: %.3fs: starting kvs fence", gettime (), seconds_since (t0));
         if (kvs_put_xml_fence (h, rank, key, idset_count (idset), xml) < 0)
             log_err_exit ("Failed to store local XML in kvs");
+        if (verbose)
+            log_msg ("%.3fs: %.3fs: kvs fence complete", gettime (), seconds_since (t0));
     }
     else if (lookup_one_topo_xml (h, &xml, rank) < 0)
         log_err_exit ("lookup topo XML for this rank (%d)", rank);
+
+    if (verbose)
+        log_msg ("%.3fs: %.3fs: starting aggregate", gettime (), seconds_since (t0));
 
     /* Immediately push aggregate from all ranks
      */
     if (aggregate_topo_summary (h, key, xml) < 0)
         log_err_exit ("Unable to aggregate topology summary");
 
+    if (verbose)
+        log_msg ("%.3fs: %.3fs: aggregate push complete", gettime (), seconds_since (t0));
+
     /*  Rank 0 waits for aggregate completion and optionally "unpacks"
      *   aggregate to new KVS location.
      */
     if (rank == 0)
         aggregate_load_wait (p, h, key);
+    if (verbose)
+        log_msg ("%.3fs: %.3fs: aggregate_wait complete", gettime (), seconds_since (t0));
 
     idset_destroy (idset);
     free (xml);
     flux_close (h);
+    if (verbose)
+        log_msg ("%.3fs: done.", monotime_since (t0)/1000.);
     return (0);
 }
 
@@ -829,6 +909,8 @@ int cmd_hwloc (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_option reload_opts[] = {
+    { .name = "verbose",  .key = 'v',  .has_arg = 0,
+      .usage = "Increase verbosity", },
     { .name = "rank",  .key = 'r',  .has_arg = 1,
       .usage = "Target specified nodeset, or \"all\" (default)", },
     OPTPARSE_TABLE_END,
@@ -845,6 +927,9 @@ static struct optparse_option topology_opts[] = {
 };
 
 static struct optparse_option aggregate_load_opts[] = {
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Increase verbosity (only affects rank 0)",
+    },
     { .name = "timeout", .key = 't', .has_arg = 1,
       .usage = "Time to wait for aggregate completion (default 15.0s)",
     },
