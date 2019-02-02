@@ -90,7 +90,6 @@ TESTS = \
 	lua/t0003-events.t \
 	lua/t0004-getattr.t \
 	lua/t0007-alarm.t \
-	lua/t0009-sequences.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
 	lua/t1002-kvs.t \
@@ -185,7 +184,6 @@ check_SCRIPTS = \
 	lua/t0003-events.t \
 	lua/t0004-getattr.t \
 	lua/t0007-alarm.t \
-	lua/t0009-sequences.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
 	lua/t1002-kvs.t \

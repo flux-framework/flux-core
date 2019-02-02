@@ -62,7 +62,6 @@
 #include "hello.h"
 #include "shutdown.h"
 #include "attr.h"
-#include "sequence.h"
 #include "log.h"
 #include "content-cache.h"
 #include "runlevel.h"
@@ -560,8 +559,6 @@ int main (int argc, char *argv[])
         log_err_exit ("attr_register_handlers");
     if (heaptrace_initialize (ctx.h) < 0)
         log_msg_exit ("heaptrace_initialize");
-    if (sequence_hash_initialize (ctx.h) < 0)
-        log_err_exit ("sequence_hash_initialize");
     if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
         log_err_exit ("exec2_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
