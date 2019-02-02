@@ -20,8 +20,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 queue.h \
 			 active.h \
 			 active.c \
-			 purge.h \
-			 purge.c \
+			 cancel.h \
+			 cancel.c \
 			 list.h \
 			 list.c \
 			 priority.h \

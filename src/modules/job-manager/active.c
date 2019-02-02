@@ -153,7 +153,8 @@ static int decode_eventlog (const char *s, double *t_submit, int *flagsp)
         if (flux_kvs_event_decode (event, NULL, name, sizeof (name),
                                                                 NULL, 0) < 0)
             goto error;
-        /* Set flags based on events here */
+        if (!strcmp (name, "cancel"))
+            flags |= FLUX_JOB_CANCELED;
     }
     *t_submit = t;
     *flagsp = flags;

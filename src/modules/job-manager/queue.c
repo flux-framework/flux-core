@@ -11,7 +11,6 @@
 /* queue - maintain job queue
  *
  * The queue is kept sorted first by priority, then by submission time.
- * Submission time is appriximated by integer FLUID jobid.
  *
  * The list entries point to jobs stored in a hash, keyed by jobid.
  * Upon insertion into the hash, the job reference count is incremented;
@@ -76,7 +75,7 @@ static int job_list_cmp (const void *a1, const void *a2)
     int rc;
 
     if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
-        rc = NUMCMP (j1->id, j2->id);
+        rc = NUMCMP (j1->t_submit, j2->t_submit);
     return rc;
 }
 

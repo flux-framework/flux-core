@@ -36,7 +36,7 @@
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
-int cmd_purge (optparse_t *p, int argc, char **argv);
+int cmd_cancel (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
@@ -52,6 +52,14 @@ static struct optparse_option list_opts[] =  {
     },
     OPTPARSE_TABLE_END
 };
+
+static struct optparse_option cancel_opts[] =  {
+    { .name = "purge", .key = 'p', .has_arg = 0,
+      .usage = "Remove all trace of job from KVS",
+    },
+    OPTPARSE_TABLE_END
+};
+
 
 static struct optparse_option submit_opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
@@ -95,12 +103,12 @@ static struct optparse_subcommand subcommands[] = {
       0,
       NULL,
     },
-    { "purge",
+    { "cancel",
       "[OPTIONS] id ...",
-      "Remove job(s)",
-      cmd_purge,
+      "Abort job(s)",
+      cmd_cancel,
       0,
-      NULL,
+      cancel_opts,
     },
     { "submit",
       "[OPTIONS] [jobspec]",
@@ -213,7 +221,7 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
-int cmd_purge (optparse_t *p, int argc, char **argv)
+int cmd_cancel (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     flux_t *h;
@@ -224,6 +232,8 @@ int cmd_purge (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    if (optparse_hasopt (p, "purge"))
+        flags |= FLUX_JOB_PURGE;
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     while (optindex < argc) {
@@ -236,14 +246,12 @@ int cmd_purge (optparse_t *p, int argc, char **argv)
         id = strtoull (arg, &endptr, 10);
         if (errno != 0)
             log_err_exit ("error parsing jobid: %s", arg);
-        if (!(f = flux_job_purge (h, id, flags)))
-            log_err_exit ("flux_job_purge");
+        if (!(f = flux_job_cancel (h, id, flags)))
+            log_err_exit ("flux_job_cancel");
         if (flux_rpc_get (f, NULL) < 0) {
             const char *errmsg;
             if ((errmsg = flux_future_error_string (f)))
-                log_msg_exit ("%s: %s", arg, errmsg);
-            else if (errno == ENOENT)
-                log_msg ("%s: no such job", arg);
+                log_msg ("%s: %s", arg, errmsg);
             else
                 log_err ("%s", arg);
             rc = -1;
@@ -273,11 +281,12 @@ static int iso_timestr (double timestamp, char *buf, size_t size)
  */
 const char *flagstr (char *buf, int bufsz, int flags)
 {
-    (void)snprintf (buf, bufsz, "%s%s%s%s",
+    (void)snprintf (buf, bufsz, "%s%s%s%s%s",
                     (flags & FLUX_JOB_RESOURCE_REQUESTED) ? "r" : "",
                     (flags & FLUX_JOB_RESOURCE_ALLOCATED) ? "R" : "",
                     (flags & FLUX_JOB_EXEC_REQUESTED)     ? "x" : "",
-                    (flags & FLUX_JOB_EXEC_RUNNING)       ? "X" : "");
+                    (flags & FLUX_JOB_EXEC_RUNNING)       ? "X" : "",
+                    (flags & FLUX_JOB_CANCELED)           ? "c" : "");
 
     return buf;
 }

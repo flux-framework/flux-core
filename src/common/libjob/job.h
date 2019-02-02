@@ -23,6 +23,10 @@ enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
 };
 
+enum job_cancel_flags {
+    FLUX_JOB_PURGE = 1,         // remove all traces
+};
+
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,
@@ -34,6 +38,7 @@ enum job_status_flags {
     FLUX_JOB_RESOURCE_ALLOCATED     = 2,
     FLUX_JOB_EXEC_REQUESTED         = 4,
     FLUX_JOB_EXEC_RUNNING           = 8,
+    FLUX_JOB_CANCELED               = 16,
 };
 
 typedef uint64_t flux_jobid_t;
@@ -69,9 +74,9 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 flux_future_t *flux_job_list (flux_t *h, int max_entries,
                               const char *json_str);
 
-/* Remove a job from queue and KVS.
+/* Abort a job.
  */
-flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags);
+flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, int flags);
 
 /* Change job priority.
  */

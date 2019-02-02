@@ -17,7 +17,7 @@
 #include "job.h"
 #include "queue.h"
 #include "active.h"
-#include "purge.h"
+#include "cancel.h"
 #include "list.h"
 #include "priority.h"
 
@@ -93,13 +93,13 @@ static void list_cb (flux_t *h, flux_msg_handler_t *mh,
     list_handle_request (h, ctx->queue, msg);
 }
 
-/* purge request handled in purge.c
+/* cancel request handled in cancel.c
  */
-static void purge_cb (flux_t *h, flux_msg_handler_t *mh,
+static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    purge_handle_request (h, ctx->queue, msg);
+    cancel_handle_request (h, ctx->queue, msg);
 }
 
 /* priority request handled in priority.c
@@ -120,8 +120,10 @@ static int restart_map_cb (struct job *job, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
 
-    if (queue_insert (ctx->queue, job) < 0)
-        return -1;
+    if (!(job->flags & FLUX_JOB_CANCELED)) {
+        if (queue_insert (ctx->queue, job) < 0)
+            return -1;
+    }
     return 0;
 }
 
@@ -140,7 +142,7 @@ static int restart_from_kvs (flux_t *h, struct job_manager_ctx *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
     { FLUX_MSGTYPE_REQUEST, "job-manager.list", list_cb, FLUX_ROLE_USER},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.purge", purge_cb, FLUX_ROLE_USER},
+    { FLUX_MSGTYPE_REQUEST, "job-manager.cancel", cancel_cb, FLUX_ROLE_USER},
     { FLUX_MSGTYPE_REQUEST, "job-manager.priority", priority_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };

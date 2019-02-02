@@ -148,7 +148,7 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
     return f;
 }
 
-flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags)
+flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, int flags)
 {
     flux_future_t *f;
 
@@ -156,7 +156,7 @@ flux_future_t *flux_job_purge (flux_t *h, flux_jobid_t id, int flags)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.purge", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "job-manager.cancel", FLUX_NODEID_ANY, 0,
                              "{s:I s:i}",
                              "id", id,
                              "flags", flags)))
