@@ -82,7 +82,7 @@ test_expect_success 'kvs-move dir dst contains expected value' '
 #   copy a value, move a dir
 
 test_expect_success 'create test namespace' '
-	flux kvs namespace-create fromns
+	flux kvs namespace create fromns
 '
 
 test_expect_success 'kvs-copy from namespace works' '
@@ -115,14 +115,14 @@ test_expect_success 'kvs-move from namespace dst contains expected value' '
 '
 
 test_expect_success 'remove test namespace' '
-	flux kvs namespace-remove fromns
+	flux kvs namespace remove fromns
 '
 
 # to namespace
 #   copy a value, move a dir
 
 test_expect_success 'create test namespace' '
-	flux kvs namespace-create tons
+	flux kvs namespace create tons
 '
 
 test_expect_success 'kvs-copy to namespace works' '
@@ -155,7 +155,7 @@ test_expect_success 'kvs-move to namespace dst contains expected value' '
 '
 
 test_expect_success 'remove test namespace' '
-	flux kvs namespace-remove tons
+	flux kvs namespace remove tons
 '
 
 # expected failures

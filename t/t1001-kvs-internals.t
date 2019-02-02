@@ -400,7 +400,7 @@ test_expect_success 'kvs: read-your-writes consistency on primary namespace' '
 '
 
 test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
-        flux kvs namespace-create rywtestns &&
+        flux kvs namespace create rywtestns &&
         flux kvs put --namespace=rywtestns $DIR.test=1 &&
         VERS=$(flux kvs version --namespace=rywtestns) &&
         flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
@@ -418,7 +418,7 @@ test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
         flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-b.out &&
         test_cmp rank1-b.out new.out &&
         test_cmp rank2-b.out new.out &&
-        flux kvs namespace-remove rywtestns
+        flux kvs namespace remove rywtestns
 '
 
 #

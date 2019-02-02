@@ -24,9 +24,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libkvs/treeobj.h"
 
-int cmd_namespace_create (optparse_t *p, int argc, char **argv);
-int cmd_namespace_remove (optparse_t *p, int argc, char **argv);
-int cmd_namespace_list (optparse_t *p, int argc, char **argv);
+int cmd_namespace (optparse_t *p, int argc, char **argv);
 int cmd_get (optparse_t *p, int argc, char **argv);
 int cmd_put (optparse_t *p, int argc, char **argv);
 int cmd_unlink (optparse_t *p, int argc, char **argv);
@@ -49,13 +47,6 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                           const char *ns, bool Ropt, bool dopt);
 
 #define min(a,b) ((a)<(b)?(a):(b))
-
-static struct optparse_option namespace_create_opts[] =  {
-    { .name = "owner", .key = 'o', .has_arg = 1,
-      .usage = "Specify alternate namespace owner via userid",
-    },
-    OPTPARSE_TABLE_END
-};
 
 static struct optparse_option readlink_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
@@ -256,26 +247,12 @@ static struct optparse_option namespace_opt[] =  {
 };
 
 static struct optparse_subcommand subcommands[] = {
-    { "namespace-create",
-      "name [name...]",
-      "Create a KVS namespace",
-      cmd_namespace_create,
+    { "namespace",
+      NULL,
+      "Perform KVS namespace operations",
+      cmd_namespace,
       0,
-      namespace_create_opts
-    },
-    { "namespace-remove",
-      "name [name...]",
-      "Remove a KVS namespace",
-      cmd_namespace_remove,
-      0,
-      NULL
-    },
-    { "namespace-list",
-      "",
-      "List namespaces on local rank",
-      cmd_namespace_list,
-      0,
-      NULL
+      NULL,
     },
     { "get",
       "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-f] [-c COUNT] key [key...]",
@@ -552,6 +529,55 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
     }
 
     flux_future_destroy (f);
+    return (0);
+}
+
+static struct optparse_option namespace_create_opts[] =  {
+    { .name = "owner", .key = 'o', .has_arg = 1,
+      .usage = "Specify alternate namespace owner via userid",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_subcommand namespace_subcommands[] = {
+    { "create",
+      "name [name...]",
+      "Create a KVS namespace",
+      cmd_namespace_create,
+      0,
+      namespace_create_opts
+    },
+    { "remove",
+      "name [name...]",
+      "Remove a KVS namespace",
+      cmd_namespace_remove,
+      0,
+      NULL
+    },
+    { "list",
+      "",
+      "List namespaces on local rank",
+      cmd_namespace_list,
+      0,
+      NULL
+    },
+    OPTPARSE_SUBCMD_END
+};
+
+int cmd_namespace (optparse_t *p, int argc, char **argv)
+{
+    int optindex;
+
+    if (optparse_reg_subcommands (p, namespace_subcommands) != OPTPARSE_SUCCESS)
+        log_msg_exit ("namespace: optparse_reg_subcommands failed");
+
+    optindex = optparse_parse_args (p, argc, argv);
+    if (optindex < 0)
+        log_msg_exit ("namespace: optparse_parse_args failed");
+
+    if (optparse_run_subcommand (p, argc, argv) != OPTPARSE_SUCCESS)
+        log_msg_exit ("namespace: optparse_run_subcommand failed");
+
     return (0);
 }
 
