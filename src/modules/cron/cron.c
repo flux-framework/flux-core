@@ -40,6 +40,7 @@
 
 struct cron_ctx {
     flux_t *               h;
+    uint64_t               next_id;         /* Id for next cron entry        */
     char *                 sync_event;      /* If set, sync entries to event */
     flux_msg_handler_t *   mh;              /* sync event message handler    */
     zlist_t    *           entries;
@@ -316,35 +317,6 @@ static void cron_entry_destroy (cron_entry_t *e)
     free (e);
 }
 
-/*
- *  Get the next ID from global "cron" sequence number.
- *  This may be overkill, but is simplest so we go ahead an do it.
- */
-static int64_t next_cronid (flux_t *h)
-{
-    int64_t ret = (int64_t) -1;
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (h, "seq.fetch", 0, 0,
-                             "{ s:s s:i s:i s:b }",
-                             "name", "cron",
-                             "preincrement", 1,
-                             "postincrement", 0,
-                             "create", true))) {
-        flux_log_error (h, "flux_rpc_pack");
-        goto out;
-    }
-
-    if (flux_rpc_get_unpack (f, "{ s:I }", "value", &ret) < 0) {
-        flux_log_error (h, "next_cronid: rpc_get_unpack");
-        goto out;
-    }
-
-out:
-    flux_future_destroy (f);
-    return ret;
-}
-
 static void deferred_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
@@ -418,15 +390,7 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    /* Allocate a new ID from this cron entry:
-     */
-    if ((e->id = next_cronid (h)) < 0) {
-        cron_entry_destroy (e);
-        e = NULL;
-        saved_errno = errno;
-        goto done;
-    }
-
+    e->id = ctx->next_id++;;
     e->ctx = ctx;
     e->stopped = 1;
     if (!(e->name = strdup (name)) || !(e->command = strdup (command))) {
@@ -571,6 +535,7 @@ static cron_ctx_t * cron_ctx_create (flux_t *h)
 
     ctx->sync_event = NULL;
     ctx->last_sync  = 0.0;
+    ctx->next_id    = 1;
 
     /* Default: run synchronized events up to 15ms after sync event */
     ctx->sync_epsilon = 0.015;
