@@ -77,7 +77,6 @@ TESTS = \
 	t2005-hwloc-basic.t \
 	t2007-caliper.t \
 	t2008-althash.t \
-	t2009-hostlist.t \
 	t2010-kvs-snapshot-restore.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
@@ -169,7 +168,6 @@ check_SCRIPTS = \
 	t2005-hwloc-basic.t \
 	t2007-caliper.t \
 	t2008-althash.t \
-	t2009-hostlist.t \
 	t2010-kvs-snapshot-restore.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \

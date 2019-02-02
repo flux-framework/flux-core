@@ -31,8 +31,7 @@ luaexec_LTLIBRARIES = \
 	flux.la
 
 fluxluaexec_LTLIBRARIES = \
-	flux/affinity.la \
-	flux/hostlist.la
+	flux/affinity.la
 
 check_LTLIBRARIES = \
 	tests/jsontest.la \
@@ -81,18 +80,6 @@ flux_affinity_la_SOURCES = \
 	lua-affinity/cpuset-str.h \
 	lua-affinity/cpuset-str.c
 
-flux_hostlist_la_LDFLAGS = \
-	$(luamod_ldflags) \
-	-Wl,--defsym=luaopen_flux_hostlist=luaopen_hostlist
-
-flux_hostlist_la_LIBADD = \
-	$(LUA_LIB)
-
-flux_hostlist_la_SOURCES = \
-	lua-hostlist/hostlist.c \
-	lua-hostlist/hostlist.h \
-	lua-hostlist/lua-hostlist.c
-
 libfluxlua_la_SOURCES = \
 	flux-lua.c \
 	kvs-lua.c \
@@ -135,8 +122,7 @@ tests_zmsgtest_la_LIBADD = \
 TESTS = \
 	tests/t0000-json.t \
 	tests/t0001-zmsg.t \
-	lua-affinity/tests/test.lua \
-	lua-hostlist/tests/runtest.sh
+	lua-affinity/tests/test.lua
 
 EXTRA_DIST = \
 	README \
@@ -146,17 +132,7 @@ EXTRA_DIST = \
 	Test/dist.info \
 	lua-affinity/COPYING \
 	lua-affinity/DISCLAIMER.LLNS \
-	lua-affinity/README.md \
-	lua-hostlist/COPYING \
-	lua-hostlist/DISCLAIMER \
-	lua-hostlist/META \
-	lua-hostlist/NEWS \
-	lua-hostlist/README.md \
-	lua-hostlist/test.lua \
-	lua-hostlist/tests/lunit \
-	lua-hostlist/tests/lunit-console.lua \
-	lua-hostlist/tests/lunit.lua \
-	lua-hostlist/tests/tests.lua
+	lua-affinity/README.md
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
