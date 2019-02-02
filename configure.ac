@@ -402,6 +402,7 @@ AC_CONFIG_FILES( \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \
+  src/common/libaggregate/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
@@ -422,7 +423,6 @@ AC_CONFIG_FILES( \
   src/modules/content-sqlite/Makefile \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
-  src/modules/resource-hwloc/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \

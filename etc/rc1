@@ -9,7 +9,8 @@ flux module load -r all -x 0 kvs
 flux module load -r all kvs-watch
 flux module load -r all aggregator
 
-flux module load -r all resource-hwloc & pids="$pids $!"
+flux hwloc reload & pids="$pids $!"
+
 flux module load -r all job
 flux module load -r 0 cron sync=hb
 

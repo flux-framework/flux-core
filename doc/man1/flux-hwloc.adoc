@@ -23,12 +23,10 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-The Flux `resource-hwloc` module collects system topology at
-each flux-broker using the Portable Hardware Locality (hwloc)
-library.
-
-The *flux hwloc* command offers simple interfaces to query and
-control this hwloc data.
+The *flux-hwloc* utility provides a mechanism to collect
+system topology from each flux-broker using the Portable Hardware
+Locality (hwloc) library, and to query the resulting data
+stored in the Flux Key Value Store (KVS).
 
 COMMANDS
 --------
@@ -36,10 +34,11 @@ COMMANDS
 *flux hwloc* requires a 'COMMAND' argument. The supported commands
 are
 
-*info*::
+*info* ['-l,--local'|'-r,--rank=NODESET']::
 Dump a short-form summary of the total number of Machines, Cores,
 and Processing Units (PUs) available across all flux-brokers
-in the current instance.
+in the current instance. With '--ranks', dump information for
+only the specified ranks. With '--local' dump local system information.
 
 *lstopo*::
 Run `lstopo(1)` against the full hardware hierarchy configured in the
@@ -48,24 +47,16 @@ current Flux instance. Extra `OPTIONS` are passed along to the system
 By default, *flux hwloc lstopo* generates console output.
 For graphical output, try:  *flux hwloc lstopo --of graphical*.
 
-*reload* ['OPTIONS'] ['DIR']::
+*reload* ['-r,--rank=NODESET'] ['-v,--verbose] ['DIR']::
 Reload hwloc topology information, optionally loading hwloc XML files
-from `DIR/<rank>.xml` files.
-Options:
+from `DIR/<rank>.xml` files. With '--rank' only reload XML on specified
+ranks. With '--verbose' this command runs with extra debugging and
+timing information.
 
- --rank='NODESET':::
- -r 'NODESET':::
- Only reload XML on provided 'NODESET'.  See NODESET FORMAT below for
- more information.
-
- --walk-topology=['yes|no']:::
- -t ['yes|no']:::
- If 'yes', force resource-hwloc module to walk full topology on each reloaded
- rank and insert broken down topology into KVS under. If 'no', force disable
- the topology walk if enabled by default in module.
-
-*topology*::
+*topology* ['-l,--local'|'-r,--rank=NODESET']::
 Dump current aggregate topology XML for the current session to stdout.
+With '--rank' only dump aggregate topology for specified ranks. With
+'--local' dump topology XML for the local system.
 
 
 NODESET FORMAT

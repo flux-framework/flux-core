@@ -971,11 +971,7 @@ optparse_err_t optparse_add_doc (optparse_t *p, const char *doc, int group)
     if (p == NULL || !p->option_list)
         return OPTPARSE_BAD_ARG;
 
-    o.has_arg = 0;
-    o.arginfo = NULL;
-    o.cb    = NULL;
-    o.name  = NULL;
-    o.key   = 0;
+    memset (&o, 0, sizeof (o));
     o.usage = doc;
     o.group = group;
     return optparse_add_option (p, &o);

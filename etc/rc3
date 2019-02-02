@@ -23,7 +23,6 @@ flux module remove -r 0 userdb
 
 flux module remove -r 0 cron
 flux module remove -r all job
-flux module remove -r all resource-hwloc
 flux module remove -r all aggregator
 flux module remove -r all barrier
 
