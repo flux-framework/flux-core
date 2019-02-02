@@ -448,9 +448,7 @@ srckey
 dstkey
 semver
 versioning
-kz
 JOBNAME
-nokz
 LGPL
 SPDX
 MATCHDEBUG

@@ -72,7 +72,6 @@ TESTS = \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
-	t1104-kz.t \
 	t1105-proxy.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
@@ -96,9 +95,7 @@ TESTS = \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
 	lua/t1002-kvs.t \
-	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t \
 	python/t0001-handle.py \
 	python/t0002-wrapper.py \
 	python/t0003-barrier.py \
@@ -167,7 +164,6 @@ check_SCRIPTS = \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
-	t1104-kz.t \
 	t1105-proxy.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
@@ -195,9 +191,7 @@ check_SCRIPTS = \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
 	lua/t1002-kvs.t \
-	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
@@ -216,7 +210,6 @@ check_SCRIPTS = \
 check_PROGRAMS = \
 	shmem/backtoback.t \
 	loop/logstderr \
-	kz/kzcopy \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
@@ -306,10 +299,6 @@ loop_logstderr_LDADD = \
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
 mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
-
-kz_kzcopy_SOURCES = kz/kzcopy.c
-kz_kzcopy_CPPFLAGS = $(test_cppflags)
-kz_kzcopy_LDADD = $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)

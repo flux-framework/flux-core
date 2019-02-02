@@ -15,5 +15,4 @@
 /flux-start-single
 /flux-start-srun
 /flux-up
-/flux-zio
 /builtin-cmds.c

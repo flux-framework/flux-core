@@ -22,7 +22,6 @@ setup(
         "_flux/_core_build.py:ffi",
         "_flux/_jsc_build.py:ffi",
         "_flux/_kvs_build.py:ffi",
-        "_flux/_kz_build.py:ffi",
     ],
     install_requires=[cffi_dep],
 )

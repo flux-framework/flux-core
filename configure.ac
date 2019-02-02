@@ -387,9 +387,7 @@ AC_CONFIG_FILES( \
   src/common/libflux/Makefile \
   src/common/libflux/version.h \
   src/common/libkvs/Makefile \
-  src/common/libkz/Makefile \
   src/common/libjob/Makefile \
-  src/common/libzio/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \

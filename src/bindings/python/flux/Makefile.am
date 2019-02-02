@@ -5,7 +5,6 @@ fluxpy_PYTHON=\
 	      rpc.py\
 	      message.py\
 	      constants.py\
-	      kz.py\
 	      job.py \
 	      mrpc.py \
 	      util.py
