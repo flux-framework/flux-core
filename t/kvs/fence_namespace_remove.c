@@ -30,6 +30,7 @@
 #include "src/common/libutil/tstat.h"
 
 static char *prefix = NULL;
+static char *ns = NULL;
 
 static void usage (void)
 {
@@ -42,7 +43,6 @@ int main (int argc, char *argv[])
     flux_t *h = NULL;
     uint32_t rank;
     char *key = NULL;
-    char *ns = NULL;
     char *fence_name = NULL;
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
@@ -57,11 +57,6 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_open (NULL, 0))) {
         log_err_exit ("flux_open");
-        goto done;
-    }
-
-    if (flux_kvs_set_namespace (h, ns) < 0) {
-        log_err_exit ("flux_kvs_set_namespace");
         goto done;
     }
 
@@ -87,7 +82,7 @@ int main (int argc, char *argv[])
      * flux_future_get() below should hang until an error occurs
      */
 
-    if (!(f = flux_kvs_fence (h, 0, fence_name, 2, txn))) {
+    if (!(f = flux_kvs_fence (h, ns, 0, fence_name, 2, txn))) {
         log_err ("flux_kvs_fence");
         goto done;
     }

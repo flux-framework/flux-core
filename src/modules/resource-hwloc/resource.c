@@ -64,13 +64,14 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
     if (hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_GROUP) < 0)
         flux_log (h, LOG_ERR, "hwloc_topology_ignore_type OBJ_GROUP failed");
     key = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
-    if (!(f = flux_kvs_lookup (h, 0, key))) {
+    if (!(f = flux_kvs_lookup (h, NULL, 0, key))) {
         flux_log_error (h, "flux_kvs_lookup");
         goto done;
     }
     if (flux_kvs_lookup_get_unpack (f, "s", &path) < 0) {
         flux_future_destroy (f);
-        if (!(f = flux_kvs_lookup (h, 0, "config.resource.hwloc.default_xml"))) {
+        if (!(f = flux_kvs_lookup (h, NULL, 0,
+                                   "config.resource.hwloc.default_xml"))) {
             flux_log_error (h, "flux_kvs_lookup");
             goto done;
         }
@@ -385,7 +386,8 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
         goto done;
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
     }
@@ -457,7 +459,7 @@ static void topo_request_cb (flux_t *h,
         errno = EINVAL;
         goto done;
     }
-    if (!(df = flux_kvs_lookup (h, FLUX_KVS_READDIR, "resource.hwloc.xml"))
+    if (!(df = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, "resource.hwloc.xml"))
                 || flux_kvs_lookup_get_dir (df, &kd) < 0) {
         flux_log (h, LOG_ERR, "xml dir is not available");
         goto done;
@@ -476,7 +478,7 @@ static void topo_request_cb (flux_t *h,
         hwloc_topology_t rank;
         flux_future_t *f;
 
-        if (!(f = flux_kvs_lookup (h, 0, key))
+        if (!(f = flux_kvs_lookup (h, NULL, 0, key))
                 || flux_kvs_lookup_get_unpack (f, "s", &xml) < 0) {
             flux_log_error (h, "%s", base_key);
             flux_future_destroy (f);

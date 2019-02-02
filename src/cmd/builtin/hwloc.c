@@ -247,7 +247,7 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
         if (flux_kvs_txn_pack (txn, 0, key, "s", path) < 0)
             log_err_exit ("flux_kvs_txn_pack");
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit request");
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit response");

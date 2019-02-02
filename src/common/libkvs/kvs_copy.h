@@ -17,7 +17,8 @@ extern "C" {
 
 /* Create a copy of 'srckey' at 'dstkey'.  Read from / write to the
  * specified namespaces.  If a namespace is not specified (i.e. NULL),
- * the namespace from flux_kvs_get_namespace() will be used.
+ * the default namespace will be used, or if set, the namespace from
+ * the FLUX_KVS_NAMESPACE environment variable.
  *
  * Due to the hash-tree design of the KVS, dstkey is by definition a
  * "deep copy" (or writable snapshot) of all content below srckey.
@@ -35,7 +36,8 @@ flux_future_t *flux_kvs_copy (flux_t *h,
 
 /* Move 'srckey' to 'dstkey'.  Read from / write to the
  * specified namespaces.  If a namespace is not specified (i.e. NULL),
- * the namespace from flux_kvs_get_namespace() will be used.
+ * the default namespace will be used, or if set, the namespace from
+ * the FLUX_KVS_NAMESPACE environment variable.
  *
  * This is a copy followed by an unlink on 'srckey'.  The copy and
  * unlink are not atomic.

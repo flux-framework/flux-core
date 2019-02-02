@@ -238,7 +238,7 @@ static int l_kvsdir_watch (lua_State *L)
         lua_value_to_json_string (L, -1, &json_str);
     }
 
-    if ((rc = flux_kvs_watch_once (h, key, &json_str)) < 0) {
+    if ((rc = flux_kvs_watch_once (h, NULL, key, &json_str)) < 0) {
         rv = lua_pusherror (L, "flux_kvs_watch_once: %s",
                             (char *)flux_strerror (errno));
         goto err;
@@ -261,7 +261,7 @@ static int l_kvsdir_watch_dir (lua_State *L)
     dir = lua_get_kvsdir (L, 1);
     h = flux_kvsdir_handle (dir);
 
-    return l_pushresult (L, flux_kvs_watch_once_dir (h, &dir, "%s",
+    return l_pushresult (L, flux_kvs_watch_once_dir (h, NULL, &dir, "%s",
                          flux_kvsdir_key (dir)));
 }
 

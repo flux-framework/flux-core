@@ -17,6 +17,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include "kvs.h"
+
 char *kvs_util_normalize_key (const char *key, bool *want_directory)
 {
     const char sep = '.';
@@ -54,6 +56,16 @@ char *kvs_util_normalize_key (const char *key, bool *want_directory)
             *want_directory = has_sep_suffix;
     }
     return cpy;
+}
+
+const char *kvs_get_namespace (void)
+{
+    const char *ns;
+
+    if ((ns = getenv ("FLUX_KVS_NAMESPACE")))
+        return ns;
+
+    return KVS_PRIMARY_NAMESPACE;
 }
 
 /*

@@ -236,7 +236,7 @@ static char *getnext (kz_t *kz)
     char *json_str = NULL;
 
     if (!kz->lookup_f) {
-        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key)))
+        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, NULL, 0, key)))
             return NULL;
     }
     if (flux_kvs_lookup_get (kz->lookup_f, &s) < 0) {
@@ -259,7 +259,7 @@ static char *getnext_blocking (kz_t *kz)
     const char *key = format_key (kz, kz->seq);
     char *json_str = NULL;
 
-    if (flux_kvs_watch_once (kz->h, key, &json_str) < 0)
+    if (flux_kvs_watch_once (kz->h, NULL, key, &json_str) < 0)
         return NULL;
     kz->seq++;
     return json_str;
@@ -368,7 +368,7 @@ int kz_close (kz_t *kz)
     }
     if (kz->watching) {
         const char *key = clear_key (kz);
-        (void)flux_kvs_unwatch (kz->h, key);
+        (void)flux_kvs_unwatch (kz->h, NULL, key);
         kz->watching = false;
     }
     if (errnum_check (kz) < 0)
@@ -388,7 +388,7 @@ static void kz_unwatch (kz_t *kz)
 {
     if (kz->watching) {
         const char *key = clear_key (kz);
-        if (flux_kvs_unwatch (kz->h, key) >= 0)
+        if (flux_kvs_unwatch (kz->h, NULL, key) >= 0)
             kz->watching = false;
     }
 }
@@ -461,7 +461,7 @@ static int lookup_next (kz_t *kz)
 
     if (kz->seq < kz->last_dir_size) {
         const char *key = format_key (kz, kz->seq);
-        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key)))
+        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, NULL, 0, key)))
             return -1;
         if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
             flux_future_destroy (kz->lookup_f);
@@ -494,7 +494,7 @@ static int lookup_next (kz_t *kz)
         if (!kz->watching) {
             kz->watching = true; // N.B. careful to avoid infinite loop here!
             const char *key = clear_key (kz);
-            if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
+            if (flux_kvs_watch_dir (kz->h, NULL, kvswatch_cb, kz, "%s", key) < 0)
                 return -1;
         }
     }
@@ -540,7 +540,7 @@ static int lookup_dir (kz_t *kz)
         return 0;
 
     const char *key = clear_key (kz);
-    if (!(kz->lookup_f = flux_kvs_lookup (kz->h, FLUX_KVS_READDIR, key)))
+    if (!(kz->lookup_f = flux_kvs_lookup (kz->h, NULL, FLUX_KVS_READDIR, key)))
         return -1;
     if (flux_future_then (kz->lookup_f, -1.,
                           lookup_dir_continuation, kz) < 0) {
@@ -572,7 +572,7 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
      */
     else if (kz->ready_cb == NULL && kz->watching) {
         const char *key = clear_key (kz);
-        if (flux_kvs_unwatch (kz->h, key) < 0)
+        if (flux_kvs_unwatch (kz->h, NULL, key) < 0)
             return -1;
         kz->watching = false;
     }

@@ -401,21 +401,21 @@ test_expect_success 'kvs: read-your-writes consistency on primary namespace' '
 
 test_expect_success 'kvs: read-your-writes consistency on alt namespace' '
         flux kvs namespace-create rywtestns &&
-        flux kvs --namespace=rywtestns put $DIR.test=1 &&
-        VERS=$(flux kvs --namespace=rywtestns version) &&
-        flux exec -n sh -c "flux kvs --namespace=rywtestns wait ${VERS}" &&
+        flux kvs put --namespace=rywtestns $DIR.test=1 &&
+        VERS=$(flux kvs version --namespace=rywtestns) &&
+        flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
         flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=rywtestns" &&
-        flux exec -n -r 1 sh -c "flux kvs --namespace=rywtestns put $DIR.test=2" &&
-        flux exec -n -r 1 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank1-a.out &&
-        flux exec -n -r 2 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank2-a.out &&
+        flux exec -n -r 1 sh -c "flux kvs put --namespace=rywtestns $DIR.test=2" &&
+        flux exec -n -r 1 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank1-a.out &&
+        flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-a.out &&
         echo "1" > old.out &&
         echo "2" > new.out &&
         test_cmp rank1-a.out new.out &&
         test_cmp rank2-a.out old.out &&
         flux exec -n -r 2 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=rywtestns" &&
-        flux exec -n sh -c "flux kvs --namespace=rywtestns wait ${VERS}" &&
-        flux exec -n -r 1 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank1-b.out &&
-        flux exec -n -r 2 sh -c "flux kvs --namespace=rywtestns get $DIR.test" > rank2-b.out &&
+        flux exec -n sh -c "flux kvs wait --namespace=rywtestns ${VERS}" &&
+        flux exec -n -r 1 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank1-b.out &&
+        flux exec -n -r 2 sh -c "flux kvs get --namespace=rywtestns $DIR.test" > rank2-b.out &&
         test_cmp rank1-b.out new.out &&
         test_cmp rank2-b.out new.out &&
         flux kvs namespace-remove rywtestns

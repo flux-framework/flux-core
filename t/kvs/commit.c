@@ -99,13 +99,13 @@ void *thread (void *arg)
         else
             flags = 0;
         if (fopt) {
-            if (!(f = flux_kvs_fence (t->h, flags, fence_name,
+            if (!(f = flux_kvs_fence (t->h, NULL, flags, fence_name,
                                                    fence_nprocs, txn))
                     || flux_future_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_fence");
             flux_future_destroy (f);
         } else {
-            if (!(f = flux_kvs_commit (t->h, flags, txn))
+            if (!(f = flux_kvs_commit (t->h, NULL, flags, txn))
                     || flux_future_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_commit");
             flux_future_destroy (f);

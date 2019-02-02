@@ -87,12 +87,12 @@ test_expect_success 'create test namespace' '
 
 test_expect_success 'kvs-copy from namespace works' '
         flux kvs unlink -Rf test &&
-        flux kvs --namespace=fromns unlink -Rf test &&
-	flux kvs --namespace=fromns put test.src=foo &&
+        flux kvs unlink --namespace=fromns -Rf test &&
+	flux kvs put --namespace=fromns test.src=foo &&
         flux kvs copy --src-namespace=fromns test.src test.dst
 '
 test_expect_success 'kvs-copy from namespace does not unlink src' '
-	value=$(flux kvs --namespace=fromns get test.src) &&
+	value=$(flux kvs get --namespace=fromns test.src) &&
 	test "$value" = "foo"
 '
 test_expect_success 'kvs-copy from namespace dst contains expected value' '
@@ -102,12 +102,12 @@ test_expect_success 'kvs-copy from namespace dst contains expected value' '
 
 test_expect_success 'kvs-move from namespace works' '
         flux kvs unlink -Rf test &&
-        flux kvs --namespace=fromns unlink -Rf test &&
-	flux kvs --namespace=fromns put test.src.a.b.c=foo &&
+        flux kvs unlink --namespace=fromns -Rf test &&
+	flux kvs put --namespace=fromns test.src.a.b.c=foo &&
         flux kvs move --src-namespace=fromns test.src test.dst
 '
 test_expect_success 'kvs-move from namespace unlinks src' '
-	test_must_fail flux kvs --namespace=fromns get --treeobj test.src
+	test_must_fail flux kvs get --namespace=fromns --treeobj test.src
 '
 test_expect_success 'kvs-move from namespace dst contains expected value' '
 	value=$(flux kvs get test.dst.a.b.c) &&
@@ -126,7 +126,7 @@ test_expect_success 'create test namespace' '
 '
 
 test_expect_success 'kvs-copy to namespace works' '
-        flux kvs --namespace=tons unlink -Rf test &&
+        flux kvs unlink --namespace=tons -Rf test &&
         flux kvs unlink -Rf test &&
 	flux kvs put test.src=foo &&
         flux kvs copy --dst-namespace=tons test.src test.dst
@@ -136,12 +136,12 @@ test_expect_success 'kvs-copy to namespace does not unlink src' '
 	test "$value" = "foo"
 '
 test_expect_success 'kvs-copy to namespace dst contains expected value' '
-	value=$(flux kvs --namespace=tons get test.dst) &&
+	value=$(flux kvs get --namespace=tons test.dst) &&
 	test "$value" = "foo"
 '
 
 test_expect_success 'kvs-move to namespace works' '
-        flux kvs --namespace=tons unlink -Rf test &&
+        flux kvs unlink --namespace=tons -Rf test &&
         flux kvs unlink -Rf test &&
 	flux kvs put test.src.a.b.c=foo &&
         flux kvs move --dst-namespace=tons test.src test.dst
@@ -150,7 +150,7 @@ test_expect_success 'kvs-move to namespace unlinks src' '
 	test_must_fail flux kvs get --treeobj test.src
 '
 test_expect_success 'kvs-move to namespace dst contains expected value' '
-	value=$(flux kvs --namespace=tons get test.dst.a.b.c) &&
+	value=$(flux kvs get --namespace=tons test.dst.a.b.c) &&
 	test "$value" = "foo"
 '
 

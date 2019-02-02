@@ -108,7 +108,8 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_unlink (txn, 0, prefix) < 0)
         log_err_exit ("flux_kvs_txn_unlink");
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -133,7 +134,8 @@ int main (int argc, char *argv[])
              monotime_since (t0)/1000, count, size);
 
     monotime (&t0);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -145,7 +147,7 @@ int main (int argc, char *argv[])
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        if (!(f = flux_kvs_lookup (h, 0, key))
+        if (!(f = flux_kvs_lookup (h, NULL, 0, key))
                             || flux_kvs_lookup_get_unpack (f, "s", &s) < 0)
             log_err_exit ("flux_kvs_get '%s'", key);
         if (verbose)

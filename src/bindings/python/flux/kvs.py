@@ -30,7 +30,7 @@ RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 def get_key_direct(flux_handle, key):
     valp = ffi.new("char *[1]")
-    future = RAW.flux_kvs_lookup(flux_handle, 0, key)
+    future = RAW.flux_kvs_lookup(flux_handle, None, 0, key)
     RAW.flux_kvs_lookup_get(future, valp)
     if valp[0] == ffi.NULL:
         return None
@@ -105,7 +105,7 @@ def put_symlink(flux_handle, key, target):
 def commit(flux_handle, flags=0):
     if flux_handle.aux_txn is None:
         return -1
-    future = RAW.flux_kvs_commit(flux_handle, flags, flux_handle.aux_txn)
+    future = RAW.flux_kvs_commit(flux_handle, None, flags, flux_handle.aux_txn)
     RAW.flux_future_get(future, None)
     RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
     flux_handle.aux_txn = None
@@ -124,11 +124,11 @@ def watch_once(flux_handle, key):
     if isdir(flux_handle, key):
         directory = get_dir(flux_handle)
         # The wrapper automatically unpacks directory's handle
-        RAW.flux_kvs_watch_once_dir(flux_handle, directory)
+        RAW.flux_kvs_watch_once_dir(flux_handle, None, directory)
         return directory
 
     out_json_str = ffi.new("char *[1]")
-    RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
+    RAW.flux_kvs_watch_once(flux_handle, None, key, out_json_str)
     if out_json_str[0] == ffi.NULL:
         return None
     return json.loads(ffi.string(out_json_str[0]).decode("utf-8"))
@@ -348,7 +348,9 @@ KVSWATCHES = {}
 def watch(flux_handle, key, fun, arg):
     warg = (fun, arg)
     KVSWATCHES[key] = warg
-    return RAW.flux_kvs_watch(flux_handle, key, kvs_watch_wrapper, ffi.new_handle(warg))
+    return RAW.flux_kvs_watch(
+        flux_handle, None, key, kvs_watch_wrapper, ffi.new_handle(warg)
+    )
 
 
 def unwatch(flux_handle, key):

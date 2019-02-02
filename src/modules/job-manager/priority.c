@@ -157,7 +157,7 @@ void priority_handle_request (flux_t *h, struct queue *queue,
         goto error;
     if (active_pack (p->txn, job, "priority", "i", priority) < 0)
         goto error;
-    if (!(f = flux_kvs_commit (h, 0, p->txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, p->txn)))
         goto error;
     if (flux_future_then (f, -1., priority_continuation, p) < 0) {
         flux_future_destroy (f);

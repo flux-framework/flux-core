@@ -175,7 +175,7 @@ static flux_future_t *lookup_job_attr (flux_t *h, const char *jobdir,
         errno = EINVAL;
         return NULL;
     }
-    return flux_kvs_lookup (h, 0, key);
+    return flux_kvs_lookup (h, NULL, 0, key);
 }
 
 static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
@@ -246,7 +246,7 @@ static int depthfirst_map (flux_t *h, const char *key,
     int rc = -1;
 
     path_level = count_char (key + dirskip, '.');
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
         return -1;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
         if (errno == ENOENT && path_level == 0)

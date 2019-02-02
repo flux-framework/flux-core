@@ -50,7 +50,8 @@ void setup_dir (flux_t *h, const char *dir) {
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_mkdir (txn, 0, dir) < 0)
         log_err_exit ("flux_kvs_txn_mkdir %s", dir);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -102,7 +103,7 @@ int main (int argc, char *argv[])
 
         setup_dir (h, prefix);
 
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, prefix))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, prefix))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0)
             log_err_exit ("flux_kvs_lookup %s", prefix);
 
@@ -115,7 +116,7 @@ int main (int argc, char *argv[])
 
         setup_dir (h, prefix);
 
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, prefix))
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, prefix))
                 || flux_kvs_lookup_get_dir (f, &dir) < 0)
             log_err_exit ("flux_kvs_lookup %s", prefix);
 
@@ -132,7 +133,8 @@ int main (int argc, char *argv[])
         if (!(txn = flux_kvs_txn_create ()))
             log_err_exit ("flux_kvs_txn_create");
         dtree (txn, prefix, width, height);
-        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+            || flux_future_get (f, NULL) < 0)
            log_err_exit ("flux_kvs_commit");
         flux_future_destroy (f);
         flux_kvs_txn_destroy (txn);
@@ -185,7 +187,8 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
             if (flux_kvs_txn_pack (txn, 0, keyat, "i", 1) < 0)
                 log_err_exit ("flux_kvsdir_pack %s", key);
 
-            if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+            if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+                || flux_future_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_commit");
 
             flux_future_destroy (f);
@@ -209,7 +212,7 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
                     log_err_exit ("flux_kvs_lookupat");
             }
             else {
-                if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, keyat)))
+                if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, keyat)))
                     log_err_exit ("flux_kvs_lookup");
             }
             if (flux_kvs_lookup_get_dir (f, &ndir) < 0)

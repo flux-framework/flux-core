@@ -58,7 +58,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_mkdir (txn, 0, dir) < 0)
         log_err_exit ("flux_kvs_txn_mkdir");
-    if (!(f = flux_kvs_commit (h, 0, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit");
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_future_get");
@@ -81,7 +81,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_kvs_txn_put");
     if (flux_kvs_txn_unlink (txn, 0, dir) < 0)
         log_err_exit ("flux_kvs_txn_unlink");
-    if (!(f = flux_kvs_commit (h, 0, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit");
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_future_get");

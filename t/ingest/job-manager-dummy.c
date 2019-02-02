@@ -116,7 +116,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (!(txn = create_eventlog_txn (jobs)))
         goto error;
-    if (!(f = flux_kvs_commit (h, 0, txn)))
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         goto error;
     if (flux_future_then (f, -1., commit_continuation, cpy) < 0)
         goto error;

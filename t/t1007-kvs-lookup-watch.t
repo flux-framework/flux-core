@@ -19,8 +19,8 @@ test_expect_success 'flux kvs get --watch --count=1 works' '
 
 test_expect_success 'flux kvs get --watch works on alt namespace' '
 	flux kvs namespace-create testns1 &&
-	flux kvs --namespace=testns1 put test.b=foo &&
-	run_timeout 2 flux kvs --namespace=testns1 get --watch --count=1 test.b >getns.out &&
+	flux kvs put --namespace=testns1 test.b=foo &&
+	run_timeout 2 flux kvs get --namespace=testns1 --watch --count=1 test.b >getns.out &&
 	echo foo >getns.exp &&
 	test_cmp getns.exp getns.out &&
 	flux kvs namespace-remove testns1
@@ -79,8 +79,8 @@ test_expect_success 'flux kvs get --watch fails on nonexistent key' '
 '
 
 test_expect_success 'flux kvs get --watch fails on nonexistent namespace' '
-	test_must_fail flux kvs --namespace=noexist \
-		get --watch --count=1 test.noexist
+	test_must_fail flux kvs  \
+		get --namespace=noexist --watch --count=1 test.noexist
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch terminated by key removal' '
@@ -95,8 +95,8 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch terminated by key remova
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch terminated by namespace removal' '
 	flux kvs namespace-create testns2 &&
-	flux kvs --namespace=testns2 put meep=1 &&
-	flux kvs --namespace=testns2 get --watch meep >seq4.out &
+	flux kvs put --namespace=testns2 meep=1 &&
+	flux kvs get --namespace=testns2 --watch meep >seq4.out &
 	pid=$! &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="[0-9]+" seq4.out >/dev/null &&
@@ -166,13 +166,13 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existe
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --waitcreate works on non-existent namespace' '
-        ! flux kvs --namespace=ns_waitcreate get test.waitcreate3 &&
-        flux kvs --namespace=ns_waitcreate get --waitcreate \
+        ! flux kvs get --namespace=ns_waitcreate test.waitcreate3 &&
+        flux kvs get --namespace=ns_waitcreate --waitcreate \
                      test.waitcreate3 > waitcreate3.out &
         pid=$! &&
         wait_watcherscount_nonzero ns_waitcreate &&
         flux kvs namespace-create ns_waitcreate &&
-        flux kvs --namespace=ns_waitcreate put test.waitcreate3=3 &&
+        flux kvs put --namespace=ns_waitcreate test.waitcreate3=3 &&
 	$waitfile --count=1 --timeout=10 \
 		  --pattern="3" waitcreate3.out >/dev/null &&
         wait $pid
@@ -212,13 +212,13 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate & remove
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, create & remove namespace works' '
-        ! flux kvs --namespace=ns_create_and_remove get --watch test.ns_create_and_remove &&
-        flux kvs --namespace=ns_create_and_remove get --watch --waitcreate --count=2 \
+        ! flux kvs get --namespace=ns_create_and_remove --watch test.ns_create_and_remove &&
+        flux kvs get --namespace=ns_create_and_remove --watch --waitcreate --count=2 \
                      test.ns_create_and_remove > waitcreate4.out 2>&1 &
         pid=$! &&
         wait_watcherscount_nonzero ns_create_and_remove &&
         flux kvs namespace-create ns_create_and_remove &&
-        flux kvs --namespace=ns_create_and_remove put test.ns_create_and_remove=0 &&
+        flux kvs put --namespace=ns_create_and_remove test.ns_create_and_remove=0 &&
         $waitfile --count=1 --timeout=10 \
                   --pattern="0" waitcreate4.out >/dev/null &&
         flux kvs namespace-remove ns_create_and_remove &&
@@ -228,8 +228,8 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, create 
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt work on removed namespace' '
         flux kvs namespace-create ns_remove &&
-        ! flux kvs --namespace=ns_remove get --watch test.ns_remove &&
-        flux kvs --namespace=ns_remove get --watch --waitcreate --count=1 \
+        ! flux kvs get --namespace=ns_remove --watch test.ns_remove &&
+        flux kvs get --namespace=ns_remove --watch --waitcreate --count=1 \
                      test.ns_remove > waitcreate5.out 2>&1 &
         pid=$! &&
         wait_watcherscount_nonzero ns_remove &&
@@ -394,12 +394,12 @@ xyz
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get --watch, normalized key matching works ' '
 	flux kvs namespace-create testnorm1 &&
-        flux kvs --namespace=testnorm1 put testnormkey1.a=1 &&
-        flux kvs --namespace=testnorm1 get --watch --count=2 \
+        flux kvs put --namespace=testnorm1 testnormkey1.a=1 &&
+        flux kvs get --namespace=testnorm1 --watch --count=2 \
                      testnormkey1...a > norm1.out &
         pid=$! &&
         wait_watcherscount_nonzero testnorm1 &&
-        flux kvs --namespace=testnorm1 put testnormkey1.....a=2 &&
+        flux kvs put --namespace=testnorm1 testnormkey1.....a=2 &&
 	$waitfile --count=2 --timeout=10 \
 		  --pattern="[1-2]" norm1.out >/dev/null &&
         wait $pid
@@ -421,25 +421,25 @@ test_expect_success 'flux kvs get --watch allows owner userid' '
 
 test_expect_success 'flux kvs get --watch allows guest access to its ns' '
 	flux kvs namespace-create --owner=9999 testns3 &&
-	flux kvs --namespace=testns3 put test.i=69 &&
+	flux kvs put --namespace=testns3 test.i=69 &&
 	FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=9999 \
-		flux kvs --namespace=testns3 get --watch --count=1 test.i &&
+		flux kvs get --namespace=testns3 --watch --count=1 test.i &&
 	flux kvs namespace-remove testns3
 '
 
 test_expect_success 'flux kvs get --watch denies guest access to anothers ns' '
 	flux kvs namespace-create --owner=9999 testns4 &&
-	flux kvs --namespace=testns4 put test.j=102 &&
+	flux kvs put --namespace=testns4 test.j=102 &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=9998 \
-		flux kvs --namespace=testns4 get --watch --count=1 test.j &&
+		flux kvs get --namespace=testns4 --watch --count=1 test.j &&
 	flux kvs namespace-remove testns4
 '
 
 test_expect_success 'flux kvs get --watch allows owner access to guest ns' '
 	flux kvs namespace-create --owner=9999 testns5 &&
-	flux kvs --namespace=testns5 put test.k=100 &&
+	flux kvs put --namespace=testns5 test.k=100 &&
 	! FLUX_HANDLE_ROLEMASK=0x1 FLUX_HANDLE_USERID=9998 \
-		flux kvs --namespace=testns4 get --watch --count=1 test.k &&
+		flux kvs get --namespace=testns4 --watch --count=1 test.k &&
 	flux kvs namespace-remove testns4
 '
 

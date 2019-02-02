@@ -18,6 +18,10 @@
  */
 char *kvs_util_normalize_key (const char *key, bool *want_directory);
 
+/* Get kvs namespace from FLUX_KVS_NAMESPACE environment variable, or
+ * if not set, return default */
+const char *kvs_get_namespace (void);
+
 #endif  /* !_FLUX_KVS_UTIL_H */
 
 /*

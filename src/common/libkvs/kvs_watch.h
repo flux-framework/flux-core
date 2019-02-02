@@ -51,7 +51,8 @@ typedef int (*kvs_set_dir_f)(const char *key, flux_kvsdir_t *dir, void *arg,
  * Once the reactor is (re-)entered, it will then be called each time the
  * key changes.
  */
-int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
+int flux_kvs_watch (flux_t *h, const char *ns, const char *key,
+                    kvs_set_f set, void *arg)
                     __attribute__ ((deprecated));
 
 /* Register 'set' callback on directory 'key'.
@@ -61,14 +62,14 @@ int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
  * whenever any key under this directory changes, since that forces the
  * hash references to change on parents, all the way to the root.
  */
-int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
+int flux_kvs_watch_dir (flux_t *h, const char *ns, kvs_set_dir_f set, void *arg,
                         const char *fmt, ...)
-                        __attribute__ ((format (printf, 4, 5),deprecated));
+                        __attribute__ ((format (printf, 5, 6),deprecated));
 
 /* Cancel a flux_kvs_watch(), freeing server-side state, and unregistering
  * any callback.  Returns 0 on success, or -1 with errno set on error.
  */
-int flux_kvs_unwatch (flux_t *h, const char *key)
+int flux_kvs_unwatch (flux_t *h, const char *ns, const char *key)
                       __attribute__ ((deprecated));
 
 /* Block until 'key' changes from value represented by '*json_str'.
@@ -83,13 +84,14 @@ int flux_kvs_unwatch (flux_t *h, const char *key)
  * If 'key' initially exists, then is removed, the function fails with
  * ENOENT and the initial value is not freed.
  */
-int flux_kvs_watch_once (flux_t *h, const char *key, char **json_str)
+int flux_kvs_watch_once (flux_t *h, const char *ns, const char *key,
+                         char **json_str)
                          __attribute__ ((deprecated));
 /* Same as above except value is a directory pointed to by 'dirp'.
  */
-int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
+int flux_kvs_watch_once_dir (flux_t *h, const char *ns, flux_kvsdir_t **dirp,
                              const char *fmt, ...)
-                             __attribute__ ((format (printf, 3, 4),deprecated));
+                             __attribute__ ((format (printf, 4, 5),deprecated));
 
 #ifdef __cplusplus
 }

@@ -16,7 +16,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#define FLUX_HANDLE_KVS_NAMESPACE "kvsnamespace"
+#include "kvs_util_private.h"
 
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags)
@@ -46,56 +46,16 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
                           "namespace", ns);
 }
 
-int flux_kvs_set_namespace (flux_t *h, const char *ns)
-{
-    char *str;
-
-    if (!h || !ns) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (!(str = strdup (ns))) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    if (flux_aux_set (h, FLUX_HANDLE_KVS_NAMESPACE, str, free) < 0) {
-        int saved_errno = errno;
-        free (str);
-        errno = saved_errno;
-        return -1;
-    }
-    return 0;
-}
-
-const char *flux_kvs_get_namespace (flux_t *h)
-{
-    const char *ns;
-
-    if (!h) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if ((ns = flux_aux_get (h, FLUX_HANDLE_KVS_NAMESPACE)))
-        return ns;
-
-    if ((ns = getenv ("FLUX_KVS_NAMESPACE")))
-        return ns;
-
-    return KVS_PRIMARY_NAMESPACE;
-}
-
-int flux_kvs_get_version (flux_t *h, int *versionp)
+int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp)
 {
     flux_future_t *f;
-    const char *ns;
     int version;
     int rc = -1;
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return -1;
+    if (!ns) {
+        if (!(ns = kvs_get_namespace ()))
+            return -1;
+    }
     if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
                              "namespace", ns)))
         goto done;
@@ -109,14 +69,15 @@ done:
     return rc;
 }
 
-int flux_kvs_wait_version (flux_t *h, int version)
+int flux_kvs_wait_version (flux_t *h, const char *ns, int version)
 {
     flux_future_t *f;
-    const char *ns;
     int ret = -1;
 
-    if (!(ns = flux_kvs_get_namespace (h)))
-        return -1;
+    if (!ns) {
+        if (!(ns = kvs_get_namespace ()))
+            return -1;
+    }
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
                              "rootseq", version,
                              "namespace", ns)))

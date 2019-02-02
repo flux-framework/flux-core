@@ -97,7 +97,7 @@ static int watch_count_cb (const char *key, const char *json_str, void *arg, int
     }
 
     if (changecount == threadcount)
-        flux_kvs_unwatch (t->h, key);
+        flux_kvs_unwatch (t->h, NULL, key);
     return 0;
 }
 
@@ -136,14 +136,15 @@ void *watchthread (void *arg)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_unlink (txn, 0, key) < 0)
         log_err_exit ("flux_kvs_txn_unlink");
-    if (!(f = flux_kvs_commit (t->h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (t->h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
 
     r = flux_get_reactor (t->h);
 
-    if (flux_kvs_watch (t->h, key, watch_count_cb, t) < 0)
+    if (flux_kvs_watch (t->h, NULL, key, watch_count_cb, t) < 0)
         log_err_exit ("flux_kvs_watch %s", key);
 
     pw = flux_prepare_watcher_create (r, watch_prepare_cb, NULL);
@@ -183,7 +184,7 @@ void *committhread (void *arg)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_pack (txn, 0, key, "i", t->n) < 0)
         log_err_exit ("%s", key);
-    if (!(f = flux_kvs_commit (t->h, nopt ? FLUX_KVS_NO_MERGE : 0, txn))
+    if (!(f = flux_kvs_commit (t->h, NULL, nopt ? FLUX_KVS_NO_MERGE : 0, txn))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
 

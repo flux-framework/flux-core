@@ -24,23 +24,23 @@ void errors (void)
     /* check simple error cases */
 
     errno = 0;
-    ok (flux_kvs_unwatch (NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_unwatch (NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_unwatch fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_watch_once (NULL, NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_watch_once (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_watch_once fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_watch (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_watch (NULL, NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_watch fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_watch_once_dir (NULL, NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_watch_once_dir (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_watch_once_dir fails on bad input");
 
     errno = 0;
-    ok (flux_kvs_watch_dir (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
+    ok (flux_kvs_watch_dir (NULL, NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_watch_dir fails on bad input");
 }
 
