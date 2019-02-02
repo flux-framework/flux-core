@@ -182,10 +182,10 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void signal_cb (int signum)
 {
     flux_subprocess_t *p = zlist_first (subprocesses);
+    if (optparse_getopt (opts, "verbose", NULL) > 0)
+        fprintf (stderr, "sending signal %d to %d running processes\n",
+                 signum, started - exited);
     while (p) {
-        if (optparse_getopt (opts, "verbose", NULL) > 0)
-            fprintf (stderr, "sending signal %d to %d running processes\n",
-                     signum, started - exited);
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
             flux_future_t *f = flux_subprocess_kill (p, signum);
             if (!f) {
