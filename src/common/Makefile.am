@@ -5,7 +5,6 @@ SUBDIRS = libtap \
 	  libutil \
 	  libflux \
 	  libkvs \
-	  libjsc \
 	  libjob \
 	  libzio \
 	  libcompat \
@@ -44,7 +43,6 @@ libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
 	$(builddir)/libkvs/libkvs.la \
-	$(builddir)/libjsc/libjsc.la \
 	$(builddir)/libjob/libjob.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	libflux-internal.la

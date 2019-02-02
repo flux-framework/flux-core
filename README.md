@@ -139,8 +139,6 @@ Common commands from flux-core:
    start              bootstrap a local Flux instance
    submit             submit job requests to a scheduler
    user               Flux user database client
-   wreck              Flux wreck convenience utilities
-   wreckrun           Flux utility for remote execution
 ```
 
 Most of these have UNIX manual pages as `flux-<sub-command>(1)`,

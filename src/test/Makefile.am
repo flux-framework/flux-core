@@ -12,8 +12,6 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 noinst_SCRIPTS = \
-	soak.sh \
-	soak-workload.sh \
 	relnotes.sh
 
 LDADD = $(top_builddir)/src/common/libflux-internal.la \

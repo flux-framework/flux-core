@@ -388,7 +388,6 @@ AC_CONFIG_FILES( \
   src/common/libflux/version.h \
   src/common/libkvs/Makefile \
   src/common/libkz/Makefile \
-  src/common/libjsc/Makefile \
   src/common/libjob/Makefile \
   src/common/libzio/Makefile \
   src/common/libsubprocess/Makefile \
@@ -416,7 +415,6 @@ AC_CONFIG_FILES( \
   src/modules/kvs-watch/Makefile \
   src/modules/content-sqlite/Makefile \
   src/modules/barrier/Makefile \
-  src/modules/wreck/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \

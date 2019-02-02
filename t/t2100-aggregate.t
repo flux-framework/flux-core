@@ -4,7 +4,7 @@ test_description='Test basic flux aggreagation via aggregator module'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 8 wreck
+test_under_flux 8
 
 kvscheck="$SHARNESS_TEST_SRCDIR/scripts/kvs-get-ex.lua"
 

@@ -8,7 +8,6 @@ cppcheck --force --inline-suppr -j 2 --std=c99 --quiet \
     -i src/bindings/python \
     -i src/common/libutil/sds.c \
     -i src/modules/kvs/test \
-    -i src/modules/wreck/test \
     -i src/broker/test \
     -i src/common/libzio/test \
     -i src/common/libkz/test \

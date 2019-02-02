@@ -74,18 +74,8 @@ TESTS = \
 	t1103-apidisconnect.t \
 	t1104-kz.t \
 	t1105-proxy.t \
-	t1999-wreck-rcalc.t \
-	t2000-wreck.t \
-	t2000-wreck-env.t \
-	t2000-wreck-dummy-sched.t \
-	t2000-wreck-epilog.t \
-	t2000-wreck-nokz.t \
-	t2001-jsc.t \
-	t2002-pmi.t \
-	t2003-recurse.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
-	t2006-joblog.t \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2009-hostlist.t \
@@ -94,8 +84,6 @@ TESTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
-	t3000-mpi-basic.t \
-        t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -118,7 +106,6 @@ TESTS = \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
-	python/t0008-jsc.py \
 	python/t0010-job.py \
 	python/t0011-mrpc.py \
 	python/t1000-service-add-remove.py
@@ -138,15 +125,11 @@ EXTRA_DIST= \
 	test-under-flux/t_modcheck.t \
 	test-under-flux/test.t \
 	rc/rc1-kvs \
-	rc/rc1-wreck \
 	rc/rc1-testenv \
 	rc/rc1-job \
 	rc/rc3-kvs \
-	rc/rc3-wreck \
 	rc/rc3-testenv \
 	rc/rc3-job \
-	wreck/input \
-	wreck/output \
 	jobspec
 
 clean-local:
@@ -186,18 +169,8 @@ check_SCRIPTS = \
 	t1103-apidisconnect.t \
 	t1104-kz.t \
 	t1105-proxy.t \
-	t1999-wreck-rcalc.t \
-	t2000-wreck.t \
-	t2000-wreck-env.t \
-	t2000-wreck-dummy-sched.t \
-	t2000-wreck-epilog.t \
-	t2000-wreck-nokz.t \
-	t2001-jsc.t \
-	t2002-pmi.t \
-	t2003-recurse.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
-	t2006-joblog.t \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2009-hostlist.t \
@@ -206,15 +179,12 @@ check_SCRIPTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
-	t3000-mpi-basic.t \
-        t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
         issues/t0441-kvs-put-get.sh \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
-	issues/t0704-mpirun-rank.sh \
 	issues/t1760-kvs-use-after-free.sh \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
@@ -238,7 +208,6 @@ check_SCRIPTS = \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
-	python/t0008-jsc.py \
 	python/t0009-security.py \
 	python/t0010-job.py \
 	python/t0011-mrpc.py \
@@ -266,7 +235,6 @@ check_PROGRAMS = \
 	kvs/setrootevents \
 	request/treq \
 	barrier/tbarrier \
-	wreck/rcalc \
 	reactor/reactorcat \
 	rexec/rexec \
 	rexec/rexec_signal \
@@ -277,7 +245,6 @@ check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
 	request/req.la \
-	wreck/sched-dummy.la \
 	ingest/job-manager-dummy.la
 
 if HAVE_MPI
@@ -313,7 +280,6 @@ dist_check_SCRIPTS = \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
 	valgrind/valgrind-workload.sh \
-	valgrind/workload.d/wreck \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh
 
@@ -452,18 +418,6 @@ request_req_la_CPPFLAGS = $(test_cppflags)
 request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 request_req_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-wreck_rcalc_SOURCES = wreck/rcalc.c
-wreck_rcalc_CPPFLAGS = $(test_cppflags)
-wreck_rcalc_LDADD = \
-	$(top_builddir)/src/modules/wreck/librcalc.la \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-wreck_sched_dummy_la_SOURCES = wreck/sched-dummy.c
-wreck_sched_dummy_la_CPPFLAGS = $(test_cppflags)
-wreck_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-wreck_sched_dummy_la_LIBADD = \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)

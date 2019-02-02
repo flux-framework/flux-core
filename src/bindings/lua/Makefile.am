@@ -10,28 +10,14 @@ AM_CPPFLAGS =	\
 
 fluxluadir =     $(luadir)/flux
 fluxometerdir =  $(luadir)/fluxometer
-wreckluadir =    $(luadir)/wreck
-lustachedir =    $(fluxluadir)/lustache
 fluxluaexecdir = $(luaexecdir)/flux
-
-dist_lua_SCRIPTS = \
-	wreck.lua
 
 nobase_dist_lua_SCRIPTS = \
 	flux/timer.lua \
 	flux/alt_getopt.lua \
 	flux/posix.lua \
 	flux/base64.lua \
-	flux/lustache.lua \
-	flux/Subcommander.lua \
-	wreck/io.lua
-
-#  Required because install(1) doesn't seem to preserve
-#   full path when copying to directory:
-dist_lustache_SCRIPTS = \
-	flux/lustache/context.lua \
-	flux/lustache/renderer.lua \
-	flux/lustache/scanner.lua
+	flux/Subcommander.lua
 
 nobase_dist_fluxometer_SCRIPTS = \
 	Test/Builder/NoOutput.lua \

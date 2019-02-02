@@ -194,11 +194,6 @@ int main (int argc, char *argv[])
                           flux_conf_get ("rc3_path", flags), 0);
     environment_from_env (env, "FLUX_PMI_LIBRARY_PATH",
                           flux_conf_get ("pmi_library_path", flags), 0);
-    environment_from_env (env, "FLUX_WRECK_LUA_PATTERN",
-                          flux_conf_get ("wreck_lua_pattern", flags), 0);
-    environment_from_env (env, "FLUX_WREXECD_PATH",
-                          flux_conf_get ("wrexecd_path", flags), 0);
-
     if ((flags & CONF_FLAG_INTREE))
         environment_push (env, "FLUX_CONF_INTREE", "1");
 

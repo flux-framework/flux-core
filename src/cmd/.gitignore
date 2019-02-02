@@ -3,7 +3,6 @@
 /flux-comms-stats
 /flux-event
 /flux-jobspec-validate
-/flux-jstat
 /flux-keygen
 /flux-kvs
 /flux-logger

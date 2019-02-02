@@ -11,12 +11,11 @@
 -------------------------------------------------------------
 
 --
--- flux-hostlist: print list of hosts in hostfile format for instance or job
+-- flux-hostlist: print list of hosts in hostfile format for instance
 --
 --
 local getopt = require 'flux.alt_getopt'.get_opts
 local hostlist = require 'flux.hostlist'
-local wreck = require 'wreck'
 local prog = "flux-hostlist"
 local hostkey = "resource.hosts"
 
@@ -71,61 +70,6 @@ local function instance_host_table (arg)
     return hosts
 end
 
--- Get R_lite at arg.kvspath and return comma-separated list of hostnames
-local function R_lite_to_hosts (arg)
-    local f = arg.flux
-    local dir = arg.kvspath
-    local hosts = {}
-    local allhosts
-
-    local R, err = f:kvs_get (dir..".R_lite")
-    if not R then die ("Failed to get R_lite at %s: %s\n", dir, err) end
-
-    for _,entry in ipairs (R) do
-        if arg.ranks then
-            table.insert (hosts, entry.rank)
-        elseif entry.node then
-            table.insert (hosts, entry.node)
-        else
-            local allhosts = instance_host_table { flux = f }
-            table.insert (hosts, allhosts [entry.rank+1])
-        end
-    end
-    return table.concat (hosts, ",")
-end
-
--- Return a list of hosts for jobids given in arg.args list.
-local function jobs_host_table (arg)
-    local f = arg.flux
-    local args = arg.args
-    local ranks = arg.ranks
-    local function toint (t)
-        local r = {}
-        for _,v in ipairs (t) do table.insert (r, tonumber (v)) end
-        return r
-    end
-    local function bracketify (t)
-        local r = {}
-        for _,v in ipairs (t) do table.insert (r, "["..v.."]") end
-        return r
-    end
-    local hl, err = hostlist.union (unpack (bracketify (args)))
-    if not hl then die ("hostlist.union: %s\n", err) end
-
-    local kvspaths = wreck.jobids_to_kvspath { flux = f,
-                                               jobids = toint (hl:expand())
-                                             }
-    if not kvspaths then die ("wreck.jobids_to_kvspath failed") end
-
-    local hosts = hostlist.new ()
-
-    for _,p in ipairs (kvspaths) do
-        hosts:concat (R_lite_to_hosts { flux = f, kvspath = p, ranks = ranks })
-    end
-    return hosts:expand()
-end
-
-
 local function hosts_from_stream (fp)
     local hosts = {}
     for line in fp:lines() do
@@ -164,8 +108,8 @@ local function set_hostlist (arg)
 end
 
 local function usage (code)
-    printf ("Usage: %s [OPTIONS] [JOBIDS]...\n", prog)
-    printf ("Get/set a list of hosts for the current session or job(s)\n")
+    printf ("Usage: %s [OPTIONS]...\n", prog)
+    printf ("Get/set a list of hosts for the current session\n")
     printf ("Options:\n")
     printf (" -h, --help       Display this message.\n")
     printf (" -r, --ranks      Output rank ids instead of hostnames.\n")
@@ -199,14 +143,8 @@ end
 
 for i = 1,optind-1 do table.remove (arg, 1) end
 
--- Otherwise, read either the instance hosts table or job
---  specific hosts lists and emit one host per line to stdout:
-local hosts = {}
-if #arg == 0 then
-    hosts = instance_host_table { flux = f, ranks = opts.r }
-else
-    hosts = jobs_host_table { flux = f, ranks = opts.r, args = arg }
-end
+-- read the instance hosts table
+local hosts = instance_host_table { flux = f, ranks = opts.r }
 
 -- Print result:
 if opts.c then

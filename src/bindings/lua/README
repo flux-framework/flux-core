@@ -64,10 +64,6 @@ First, a quick example to display the basics:
     end
  end
 
- - For another example, see dlua/wreck.lua in-tree. It is a reimplementation
-   of wreck/wreckrun in pure Lua.
-
-
 =======================
 2. Flux API usage:
 

@@ -19,4 +19,4 @@ def Flux(*args, **kwargs):
     return flux.core.handle.Flux(*args, **kwargs)
 
 
-__all__ = ["core", "kvs", "jsc", "rpc", "mrpc", "constants", "Flux"]
+__all__ = ["core", "kvs", "rpc", "mrpc", "constants", "Flux"]

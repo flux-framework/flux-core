@@ -686,8 +686,6 @@ static struct attrmap attrmap[] = {
     { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1 },
     { "FLUX_RC1_PATH",          "broker.rc1_path",          1 },
     { "FLUX_RC3_PATH",          "broker.rc3_path",          1 },
-    { "FLUX_WRECK_LUA_PATTERN", "wrexec.lua_pattern",       1 },
-    { "FLUX_WREXECD_PATH",      "wrexec.wrexecd_path",      1 },
     { "FLUX_SEC_DIRECTORY",     "security.keydir",          1 },
 
     { "FLUX_URI",               "parent-uri",               0 },
@@ -699,8 +697,6 @@ static void init_attrs_from_environment (attr_t *attrs)
     struct attrmap *m;
     const char *val;
     int flags = 0;  // XXX possibly these should be immutable?
-                    //   however they weren't before and wreck test depends
-                    //   on changing wrexec.lua_pattern
 
     for (m = &attrmap[0]; m->env != NULL; m++) {
         val = getenv (m->env);

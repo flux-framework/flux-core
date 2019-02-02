@@ -8,9 +8,6 @@ MAN1_FILES_PRIMARY = \
 	flux-keygen.1 \
 	flux-logger.1 \
 	flux-ping.1 \
-	flux-submit.1 \
-	flux-wreckrun.1 \
-	flux-wreck.1 \
 	flux-start.1 \
 	flux-module.1 \
 	flux-exec.1 \
@@ -60,8 +57,6 @@ stderr_devnull_0 = 2>/dev/null
 EXTRA_DIST = \
 	$(ADOC_FILES) \
 	COPYRIGHT.adoc \
-	NODESET.adoc \
-	wreck-options.adoc \
-	wreck-extra-options.adoc
+	NODESET.adoc
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
