@@ -55,10 +55,10 @@ nodist_flux_SOURCES = \
 
 dist_fluxcmd_SCRIPTS = \
 	flux-cron \
-	flux-aggregate \
 	flux-hostlist
 
 fluxcmd_PROGRAMS = \
+	flux-aggregate \
 	flux-ping \
 	flux-keygen \
 	flux-logger \
