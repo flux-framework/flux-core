@@ -58,16 +58,6 @@ int lua_push_kvsdir (lua_State *L, flux_kvsdir_t *dir)
     return l_kvsdir_instantiate (L);
 }
 
-int lua_push_kvsdir_external (lua_State *L, flux_kvsdir_t *dir)
-{
-    /*
-     *  This kvsdir object has been created external to Lua, so take
-     *   an extra reference so we don't destroy at garbage collection.
-     */
-    flux_kvsdir_incref (dir);
-    return lua_push_kvsdir (L, dir);
-}
-
 static int l_kvsdir_kvsdir_new (lua_State *L)
 {
     const char *key;
@@ -210,61 +200,6 @@ static int l_kvsdir_unlink (lua_State *L)
     return (1);
 }
 
-
-static int l_kvsdir_watch (lua_State *L)
-{
-    int rc;
-    void *h;
-    char *key;
-    char *json_str = NULL;
-    flux_kvsdir_t *dir;
-    int rv = -1;
-
-    dir = lua_get_kvsdir (L, 1);
-    h = flux_kvsdir_handle (dir);
-    key = flux_kvsdir_key_at (dir, lua_tostring (L, 2));
-
-    if (lua_isnoneornil (L, 3)) {
-        /* Need to fetch initial value */
-        if (((rc = flux_kvs_get (h, key, &json_str)) < 0)
-            && (errno != ENOENT)) {
-            rv = lua_pusherror (L, "flux_kvs_get: %s",
-                                (char *)flux_strerror (errno));
-            goto err;
-        }
-    }
-    else {
-        /*  Otherwise, the value at top of stack is initial json_object */
-        lua_value_to_json_string (L, -1, &json_str);
-    }
-
-    if ((rc = flux_kvs_watch_once (h, NULL, key, &json_str)) < 0) {
-        rv = lua_pusherror (L, "flux_kvs_watch_once: %s",
-                            (char *)flux_strerror (errno));
-        goto err;
-    }
-err:
-    free (key);
-    if (rc < 0)
-        return rv;
-
-    json_object_string_to_lua (L, json_str);
-    free (json_str);
-    return (1);
-}
-
-static int l_kvsdir_watch_dir (lua_State *L)
-{
-    flux_t *h;
-    flux_kvsdir_t *dir;
-
-    dir = lua_get_kvsdir (L, 1);
-    h = flux_kvsdir_handle (dir);
-
-    return l_pushresult (L, flux_kvs_watch_once_dir (h, NULL, &dir, "%s",
-                         flux_kvsdir_key (dir)));
-}
-
 static int l_kvsdir_index (lua_State *L)
 {
     int rc;
@@ -307,16 +242,6 @@ out:
     return (rc);
 }
 
-#if 0
-static const struct luaL_Reg kvsdir_functions [] = {
-    { "commit",          l_kvsdir_commit    },
-    { "keys",            l_kvsdir_next      },
-    { "watch",           l_kvsdir_watch     },
-    { "watch_dir",       l_kvsdir_watch_dir },
-    { NULL,              NULL               },
-};
-#endif
-
 static const struct luaL_Reg kvsitr_methods [] = {
     { "__gc",           l_kvsitr_destroy   },
     { NULL,              NULL              }
@@ -330,8 +255,6 @@ static const struct luaL_Reg kvsdir_methods [] = {
     { "commit",          l_kvsdir_commit   },
     { "unlink",          l_kvsdir_unlink   },
     { "keys",            l_kvsdir_next     },
-    { "watch",           l_kvsdir_watch    },
-    { "watch_dir",       l_kvsdir_watch_dir},
     { NULL,              NULL              }
 };
 
