@@ -389,7 +389,6 @@ AC_CONFIG_FILES( \
   src/common/libkvs/Makefile \
   src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
-  src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \
