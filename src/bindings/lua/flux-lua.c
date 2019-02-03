@@ -18,9 +18,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <sys/signalfd.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -1309,186 +1307,6 @@ static int l_timeout_handler_newindex (lua_State *L)
     return (0);
 }
 
-static int sigmask_from_lua_table (lua_State *L, int index, sigset_t *maskp)
-{
-    sigemptyset (maskp);
-    lua_pushvalue (L, index);
-    lua_pushnil (L);
-    while (lua_next(L, -2))
-    {
-        int sig = lua_tointeger (L, -1);
-        if (sig <= 0) {
-            lua_pop (L, 3);
-            return (-1);
-        }
-        sigaddset (maskp, sig);
-        lua_pop(L, 1);
-    }
-    lua_pop(L, 1);
-    return (0);
-}
-
-static int get_signal_from_signalfd (int fd)
-{
-    int n;
-    struct signalfd_siginfo si;
-    n = read (fd, &si, sizeof (si));
-    if (n != sizeof (si))
-        return (-1);
-
-    return (si.ssi_signo);
-}
-
-static int signal_handler (flux_t *f, int fd, short revents, void *arg)
-{
-    int t, rc;
-    int sig;
-    struct l_flux_ref *sigh = arg;
-    lua_State *L = sigh->L;
-
-    assert (L != NULL);
-
-    if ((sig = get_signal_from_signalfd (fd)) < 0)
-        return (luaL_error (L, "failed to read signal from signalfd"));
-
-    l_flux_ref_gettable (sigh, "signal_handler");
-    t = lua_gettop (L);
-
-    lua_getfield (L, t, "handler");
-    assert (lua_isfunction (L, -1));
-
-    lua_push_flux_handle (L, f);
-    assert (lua_isuserdata (L, -1));
-
-    lua_getfield (L, t, "userdata");
-    assert (lua_isuserdata (L, -1));
-
-    lua_pushinteger (L, sig);
-
-    if ((rc = lua_pcall (L, 3, 1, 0))) {
-        return luaL_error (L, "pcall: %s", lua_tostring (L, -1));
-    }
-
-    rc = lua_tonumber (L, -1);
-
-    /* Reset Lua stack */
-    lua_settop (L, 0);
-
-    return (rc);
-}
-
-static int l_signal_handler_add (lua_State *L)
-{
-    int fd;
-    sigset_t mask;
-    struct l_flux_ref *sigh = NULL;
-    flux_t *f = lua_get_flux (L, 1);
-
-    if (!lua_istable (L, 2))
-        return lua_pusherror (L, "Expected table as 2nd argument");
-
-    /*
-     *  Check table for mandatory arguments
-     */
-    lua_getfield (L, 2, "sigmask");
-    if (lua_isnil (L, -1))
-        return lua_pusherror (L, "Mandatory table argument 'sigmask' missing");
-    if (sigmask_from_lua_table (L, -1, &mask) < 0)
-        return lua_pusherror (L, "Mandatory table argument 'sigmask' invalid");
-    lua_pop (L, 1);
-
-    if ((fd = signalfd (-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
-        return lua_pusherror (L, "signalfd: %s", (char *)flux_strerror (errno));
-
-    lua_getfield (L, 2, "handler");
-    if (lua_isnil (L, -1))
-        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
-    lua_pop (L, 1);
-
-    sigprocmask (SIG_BLOCK, &mask, NULL);
-
-    sigh = l_flux_ref_create (L, f, 2, "signal_handler");
-    if (flux_fdhandler_add (f, fd, ZMQ_POLLIN | ZMQ_POLLERR,
-        (FluxFdHandler) signal_handler,
-        (void *) sigh) < 0)
-        return lua_pusherror (L, "flux_fdhandler_add: %s",
-                              (char *)flux_strerror (errno));
-
-    /*
-     *  Get a copy of the underlying sighandler reftable on the stack
-     *   and set table.fd to signalfd.
-     */
-    l_flux_ref_gettable (sigh, "signal_handler");
-    lua_pushstring (L, "fd");
-    lua_pushnumber (L, fd);
-    lua_rawset (L, -3);
-
-    /*
-     *  Pop reftable table and leave ref userdata on stack as return value:
-     */
-    lua_pop (L, 1);
-
-    return (1);
-}
-
-static int l_signal_handler_remove (lua_State *L)
-{
-    int t;
-    int fd;
-    struct l_flux_ref *s = luaL_checkudata (L, 1, "FLUX.signal_handler");
-
-    l_flux_ref_gettable (s, "signal_handler");
-    t = lua_gettop (L);
-
-    lua_getfield (L, t, "fd");
-    fd = lua_tointeger (L, -1);
-    /*
-     *  Drop reference to the table and allow garbage collection
-     */
-    flux_fdhandler_remove (s->flux, fd, ZMQ_POLLIN | ZMQ_POLLERR);
-    close (fd);
-    l_flux_ref_destroy (s, "signal_handler");
-    return (0);
-}
-
-static int l_signal_handler_index (lua_State *L)
-{
-    struct l_flux_ref *s = luaL_checkudata (L, 1, "FLUX.signal_handler");
-    const char *key = lua_tostring (L, 2);
-
-    /*
-     *  Check for method names
-     */
-    if (strcmp (key, "remove") == 0) {
-        lua_getmetatable (L, 1);
-        lua_getfield (L, -1, "remove");
-        return (1);
-    }
-
-    /*  Get a copy of the underlying timeout handler Lua table and pass-through
-     *   the index:
-     */
-    l_flux_ref_gettable (s, "signal_handler");
-    lua_getfield (L, -1, key);
-    return (1);
-}
-
-
-static int l_signal_handler_newindex (lua_State *L)
-{
-    struct l_flux_ref *s = luaL_checkudata (L, 1, "FLUX.signal_handler");
-
-    /*  Set value in the underlying msghandler table:
-     */
-    l_flux_ref_gettable (s, "signal_handler");
-    lua_pushvalue (L, 2); /* Key   */
-    lua_pushvalue (L, 3); /* Value */
-    lua_rawset (L, -3);
-    return (0);
-}
-
-
-
 static int l_flux_reactor_start (lua_State *L)
 {
     int rc;
@@ -1561,7 +1379,6 @@ static const struct luaL_Reg flux_methods [] = {
     { "msghandler",      l_msghandler_add    },
     { "statwatcher",     l_stat_watcher_add  },
     { "timer",           l_timeout_handler_add },
-    { "sighandler",      l_signal_handler_add },
     { "reactor",         l_flux_reactor_start },
     { "reactor_stop",    l_flux_reactor_stop },
     { "reactor_stop_error",
@@ -1591,14 +1408,6 @@ static const struct luaL_Reg timeout_handler_methods [] = {
     { NULL,              NULL                  }
 };
 
-static const struct luaL_Reg signal_handler_methods [] = {
-    { "__index",         l_signal_handler_index    },
-    { "__newindex",      l_signal_handler_newindex },
-    { "remove",          l_signal_handler_remove   },
-    { NULL,              NULL                  }
-};
-
-
 #define FLUX_CONSTANT_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
   lua_pushnumber(L, FLUX_ ## name); \
@@ -1614,8 +1423,6 @@ int luaopen_flux (lua_State *L)
     luaL_setfuncs (L, watcher_methods, 0);
     luaL_newmetatable (L, "FLUX.timeout_handler");
     luaL_setfuncs (L, timeout_handler_methods, 0);
-    luaL_newmetatable (L, "FLUX.signal_handler");
-    luaL_setfuncs (L, signal_handler_methods, 0);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_setfuncs (L, flux_methods, 0);
