@@ -25,8 +25,6 @@
 
 #include "flux/core.h"
 
-#include "src/common/libcompat/reactor.h"
-
 #include "jansson-lua.h"
 #include "kvs-lua.h"
 #include "zmsg-lua.h"
@@ -1174,7 +1172,8 @@ static int l_watcher_newindex (lua_State *L)
 }
 
 
-static int timeout_handler (flux_t *f, void *arg)
+static void
+timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     int rc;
     int t;
@@ -1183,41 +1182,35 @@ static int timeout_handler (flux_t *f, void *arg)
 
     assert (L != NULL);
 
-    l_flux_ref_gettable (to, "timeout_handler");
+    l_flux_ref_gettable (to, "watcher");
     t = lua_gettop (L);
 
     lua_getfield (L, t, "handler");
-    assert (lua_isfunction (L, -1));
-
-    lua_push_flux_handle (L, f);
-    assert (lua_isuserdata (L, -1));
-
+    lua_push_flux_handle (L, to->flux);
     lua_getfield (L, t, "userdata");
-    assert (lua_isuserdata (L, -1));
 
     if ((rc = lua_pcall (L, 2, 1, 0))) {
-        return luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+        luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+        flux_reactor_stop_error (r);
     }
 
-    rc = lua_tonumber (L, -1);
+    if ((rc = lua_tonumber (L, -1)) < 0)
+        flux_reactor_stop_error (r);
 
     /* Reset Lua stack */
     lua_settop (L, 0);
-
-    return (rc);
 }
 
 static int l_timeout_handler_add (lua_State *L)
 {
-    int id;
     unsigned long ms;
     bool oneshot = true;
     struct l_flux_ref *to = NULL;
+    flux_watcher_t *w = NULL;
     flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
-
     /*
      *  Check table for mandatory arguments
      */
@@ -1237,23 +1230,26 @@ static int l_timeout_handler_add (lua_State *L)
         oneshot = lua_toboolean (L, -1);
     lua_pop (L, 1);
 
-    to = l_flux_ref_create (L, f, 2, "timeout_handler");
-    id = flux_tmouthandler_add (f, ms, oneshot, timeout_handler, (void *) to);
-    if (id < 0) {
-        l_flux_ref_destroy (to, "timeout_handler");
-        return lua_pusherror (L, "flux_tmouthandler_add: %s",
+    to = l_flux_ref_create (L, f, 2, "watcher");
+    w = flux_timer_watcher_create (flux_get_reactor (f),
+                                   ms/1000., oneshot ? 0 : ms/1000.,
+                                   timeout_cb, (void *) to);
+    if (w == NULL) {
+        l_flux_ref_destroy (to, "watcher");
+        return lua_pusherror (L, "flux_timer_watcher_create: %s",
                               (char *)flux_strerror (errno));
     }
+    to->arg = w;
+    flux_watcher_start (w);
 
     /*
-     *  Get a copy of the underlying timeout reftable on the stack
-     *   and set table.id to the new timer id. This will make the
-     *   id available for later callbacks and from lua:
+     *  Get a copy of the underlying timeout reftable on the stack so
+     *   a timer "id" can be stored for backwards compatibility. Here
+     *   we use the pointer as a unique identifier.
      */
-    l_flux_ref_gettable (to, "timeout_handler");
-    lua_pushstring (L, "id");
-    lua_pushnumber (L, id);
-    lua_rawset (L, -3);
+    l_flux_ref_gettable (to, "watcher");
+    lua_pushnumber (L, (intptr_t) w);
+    lua_setfield (L, -2, "id");
 
     /*
      *  Pop reftable table and leave ref userdata on stack as return value:
@@ -1261,60 +1257,6 @@ static int l_timeout_handler_add (lua_State *L)
     lua_pop (L, 1);
 
     return (1);
-}
-
-static int l_timeout_handler_remove (lua_State *L)
-{
-    int t;
-    int id;
-    struct l_flux_ref *to = luaL_checkudata (L, 1, "FLUX.timeout_handler");
-
-    l_flux_ref_gettable (to, "timeout_handler");
-    t = lua_gettop (L);
-
-    lua_getfield (L, t, "id");
-    id = lua_tointeger (L, -1);
-    /*
-     *  Drop reference to the table and allow garbage collection
-     */
-    flux_tmouthandler_remove (to->flux, id);
-    l_flux_ref_destroy (to, "timeout_handler");
-    return (0);
-}
-
-static int l_timeout_handler_index (lua_State *L)
-{
-    struct l_flux_ref *to = luaL_checkudata (L, 1, "FLUX.timeout_handler");
-    const char *key = lua_tostring (L, 2);
-
-    /*
-     *  Check for method names
-     */
-    if (strcmp (key, "remove") == 0) {
-        lua_getmetatable (L, 1);
-        lua_getfield (L, -1, "remove");
-        return (1);
-    }
-
-    /*  Get a copy of the underlying timeout handler Lua table and pass-through
-     *   the index:
-     */
-    l_flux_ref_gettable (to, "timeout_handler");
-    lua_getfield (L, -1, key);
-    return (1);
-}
-
-static int l_timeout_handler_newindex (lua_State *L)
-{
-    struct l_flux_ref *to = luaL_checkudata (L, 1, "FLUX.timeout_handler");
-
-    /*  Set value in the underlying msghandler table:
-     */
-    l_flux_ref_gettable (to, "timeout_handler");
-    lua_pushvalue (L, 2); /* Key   */
-    lua_pushvalue (L, 3); /* Value */
-    lua_rawset (L, -3);
-    return (0);
 }
 
 static int l_flux_reactor_start (lua_State *L)
@@ -1411,13 +1353,6 @@ static const struct luaL_Reg watcher_methods [] = {
     { NULL,              NULL                  }
 };
 
-static const struct luaL_Reg timeout_handler_methods [] = {
-    { "__index",         l_timeout_handler_index    },
-    { "__newindex",      l_timeout_handler_newindex },
-    { "remove",          l_timeout_handler_remove   },
-    { NULL,              NULL                  }
-};
-
 #define FLUX_CONSTANT_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
   lua_pushnumber(L, FLUX_ ## name); \
@@ -1431,8 +1366,6 @@ int luaopen_flux (lua_State *L)
     luaL_setfuncs (L, msghandler_methods, 0);
     luaL_newmetatable (L, "FLUX.watcher");
     luaL_setfuncs (L, watcher_methods, 0);
-    luaL_newmetatable (L, "FLUX.timeout_handler");
-    luaL_setfuncs (L, timeout_handler_methods, 0);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_setfuncs (L, flux_methods, 0);
