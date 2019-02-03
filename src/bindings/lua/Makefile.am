@@ -30,9 +30,6 @@ nobase_dist_fluxometer_SCRIPTS = \
 luaexec_LTLIBRARIES = \
 	flux.la
 
-fluxluaexec_LTLIBRARIES = \
-	flux/affinity.la
-
 check_LTLIBRARIES = \
 	tests/jsontest.la \
 	tests/zmsgtest.la
@@ -67,18 +64,6 @@ flux_la_SOURCES = \
 	zmsg-lua.h \
 	lutil.c \
 	lutil.h
-
-flux_affinity_la_LDFLAGS = \
-	$(luamod_ldflags) \
-	-Wl,--defsym=luaopen_flux_affinity=luaopen_affinity
-
-flux_affinity_la_LIBADD = \
-	$(LUA_LIB)
-
-flux_affinity_la_SOURCES = \
-	lua-affinity/lua-affinity.c \
-	lua-affinity/cpuset-str.h \
-	lua-affinity/cpuset-str.c
 
 libfluxlua_la_SOURCES = \
 	flux-lua.c \
@@ -121,18 +106,14 @@ tests_zmsgtest_la_LIBADD = \
 
 TESTS = \
 	tests/t0000-json.t \
-	tests/t0001-zmsg.t \
-	lua-affinity/tests/test.lua
+	tests/t0001-zmsg.t
 
 EXTRA_DIST = \
 	README \
 	$(TESTS) \
 	Test/COPYRIGHT \
 	Test/README.md \
-	Test/dist.info \
-	lua-affinity/COPYING \
-	lua-affinity/DISCLAIMER.LLNS \
-	lua-affinity/README.md
+	Test/dist.info
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
