@@ -721,7 +721,7 @@ static int l_flux_recv_event (lua_State *L)
  */
 struct l_flux_ref {
     lua_State *L;    /* Copy of this lua state */
-    flux_t *flux;     /* Copy of flux handle for flux reftable lookup */
+    flux_t *flux;    /* Copy of flux handle for flux reftable lookup */
     void   *arg;     /* optional argument */
     int    ref;      /* reference into flux reftable                 */
 };
@@ -873,14 +873,15 @@ static int l_flux_recvmsg (lua_State *L)
     return (1);
 }
 
-static int msghandler (flux_t *f, int typemask, flux_msg_t **msg, void *arg)
+static void msg_handler_cb (flux_t *f, flux_msg_handler_t *fmh,
+                            const flux_msg_t *msg, void *arg)
 {
     int rc;
     int t;
+    int type;
+    flux_msg_t *copy = NULL;
     struct l_flux_ref *mh = arg;
     lua_State *L = mh->L;
-
-    assert (L != NULL);
 
     l_flux_ref_gettable (mh, "msghandler");
     t = lua_gettop (L);
@@ -891,54 +892,59 @@ static int msghandler (flux_t *f, int typemask, flux_msg_t **msg, void *arg)
     lua_push_flux_handle (L, f);
     assert (lua_isuserdata (L, -1));
 
-    create_and_push_zmsg_info (L, f, typemask, msg);
+    if (flux_msg_get_type (msg, &type) < 0) {
+        luaL_error (L, "flux_msg_get_type: %s", flux_strerror (errno));
+        goto done;
+    }
+    if (!(copy = flux_msg_copy (msg, true))) {
+        luaL_error (L, "flux_msg_copy: %s", flux_strerror (errno));
+        goto done;
+    }
+
+    create_and_push_zmsg_info (L, f, type, &copy);
     assert (lua_isuserdata (L, -1));
 
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
     if ((rc = lua_pcall (L, 3, 1, 0))) {
-        return luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+        luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+        goto done;
     }
-
-    rc = lua_tonumber (L, -1);
+    // XXX: lua "msghandlers" are allowed to return -1 to indicate failure.
+    //  terminate the reactor immediately on non-zero return
+    if ((rc = lua_tonumber (L, -1)) < 0)
+        flux_reactor_stop_error (flux_get_reactor (f));
 
     /* Reset Lua stack */
+done:
     lua_settop (L, 0);
-
-    return (rc);
+    flux_msg_destroy (copy);
 }
 
 static int l_msghandler_remove (lua_State *L)
 {
     int t;
-    const char *pattern;
-    int typemask;
+    flux_msg_handler_t *fmh = NULL;
     struct l_flux_ref *mh = luaL_checkudata (L, 1, "FLUX.msghandler");
 
     l_flux_ref_gettable (mh, "msghandler");
     t = lua_gettop (L);
 
-    lua_getfield (L, t, "pattern");
-    pattern = lua_tostring (L, -1);
-    lua_getfield (L, t, "msgtypes");
-    if (lua_isnil (L, -1))
-        typemask = FLUX_MSGTYPE_ANY;
-    else
-        typemask = l_get_typemask (L, -1);
-    /*
-     *  Drop reference to the table and allow garbage collection
-     */
-    flux_msghandler_remove (mh->flux, typemask, pattern);
+    lua_getfield (L, t, "flux_msg_handler_t");
+    assert (lua_islightuserdata (L, -1));
+    fmh = lua_touserdata (L, -1);
+    lua_pop (L, 1);
+    flux_msg_handler_destroy (fmh);
     l_flux_ref_destroy (mh, "msghandler");
     return (0);
 }
 
 static int l_msghandler_add (lua_State *L)
 {
-    const char *pattern;
-    int typemask;
+    struct flux_match match;
     struct l_flux_ref *mh = NULL;
+    flux_msg_handler_t *fmh = NULL;
     flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
@@ -950,7 +956,7 @@ static int l_msghandler_add (lua_State *L)
     lua_getfield (L, 2, "pattern");
     if (lua_isnil (L, -1))
         return lua_pusherror (L, "Mandatory table argument 'pattern' missing");
-    pattern = lua_tostring (L, -1);
+    match.topic_glob = (char *) lua_tostring (L, -1);
     lua_pop (L, 1);
 
     lua_getfield (L, 2, "handler");
@@ -960,20 +966,24 @@ static int l_msghandler_add (lua_State *L)
 
     lua_getfield (L, 2, "msgtypes");
     if (lua_isnil (L, -1))
-        typemask = FLUX_MSGTYPE_ANY;
+        match.typemask = FLUX_MSGTYPE_ANY;
     else
-        typemask = l_get_typemask (L, -1);
-    if (typemask == 0)
+        match.typemask = l_get_typemask (L, -1);
+    if (match.typemask == 0)
         return lua_pusherror (L, "Invalid typemask in msghandler");
     lua_pop (L, 1);
 
     mh = l_flux_ref_create (L, f, 2, "msghandler");
-    if (flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh) < 0) {
+    fmh = flux_msg_handler_create (f, match, msg_handler_cb, (void *)mh);
+    if (fmh == NULL) {
         l_flux_ref_destroy (mh, "msghandler");
-        return lua_pusherror (L, "flux_msghandler_add: %s",
+        return lua_pusherror (L, "flux_msg_handler_create: %s",
                              (char *)flux_strerror (errno));
     }
-
+    flux_msg_handler_start (fmh);
+    /* Save flux_msg_handler_t * in mh ref table */
+    lua_pushlightuserdata (L, fmh);
+    lua_setfield (L, -2, "flux_msg_handler_t");
     return (1);
 }
 
