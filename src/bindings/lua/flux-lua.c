@@ -1533,34 +1533,8 @@ static int l_flux_reactor_stop_error (lua_State *L)
     return 0;
 }
 
-static int l_exitstatus (lua_State *L)
-{
-    int status = lua_tointeger (L, -1);
-    if (WIFEXITED (status)) {
-        lua_pushliteral (L, "exited");
-        lua_pushinteger (L, WEXITSTATUS (status));
-        return 2;
-    }
-    else if (WIFSIGNALED (status)) {
-        lua_pushliteral (L, "killed");
-        lua_pushinteger (L, WTERMSIG (status));
-        if (WCOREDUMP (status)) {
-            lua_pushstring (L, "core dumped");
-            return 3;
-        }
-        return 2;
-    }
-    else if (WIFSTOPPED (status)) {
-        lua_pushliteral (L, "stopped");
-        lua_pushinteger (L, WSTOPSIG (status));
-        return 2;
-    }
-    return (lua_pusherror (L, "Unable to decode exit status 0x%04x", status));
-}
-
 static const struct luaL_Reg flux_functions [] = {
     { "new",             l_flux_new         },
-    { "exitstatus",      l_exitstatus       },
     { NULL,              NULL              }
 };
 
