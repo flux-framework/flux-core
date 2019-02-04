@@ -741,7 +741,7 @@ static int aggregate_topo_summary (flux_t *h, const char *key, const char *xml)
     if (!(o = topo_tojson (topo)))
         log_err_exit ("Failed to convert topology to JSON");
 
-    if (!(f = aggregator_push_json (h, fwd_count, key, o))
+    if (!(f = aggregator_push_json (h, fwd_count, 1., key, o))
         || (flux_future_get (f, NULL) < 0))
         log_err_exit ("aggregator_push_json");
 

@@ -162,8 +162,8 @@ int aggregate_unpack_to_kvs (flux_future_t *f, const char *path)
     return (rc);
 }
 
-flux_future_t *aggregator_push_json (flux_t *h, int fwd_count,
-                                            const char *key, json_t *o)
+flux_future_t *aggregator_push_json (flux_t *h, int fwd_count, double timeout,
+                                     const char *key, json_t *o)
 {
     uint32_t size;
     uint32_t rank;
@@ -176,10 +176,22 @@ flux_future_t *aggregator_push_json (flux_t *h, int fwd_count,
         || (n >= sizeof (rankstr)))
         return NULL;
 
-    return flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_ANY, 0,
+    if (timeout >= 0.)
+        return flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_ANY, 0,
+                             "{s:s,s:i,s:i,s:f,s:{s:o}}",
+                             "key", key,
+                             "total", size,
+                             "fwd_count", fwd_count,
+                             "timeout" , timeout,
+                             "entries", rankstr, o);
+    else
+        return flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_ANY, 0,
                              "{s:s,s:i,s:i,s:{s:o}}",
                              "key", key,
                              "total", size,
                              "fwd_count", fwd_count,
                              "entries", rankstr, o);
 }
+
+/* vi: ts=4 sw=4 expandtab
+ */

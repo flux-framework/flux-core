@@ -10,9 +10,11 @@
 
 /*
  *  Push single json object `o` to local aggregator module via RPC.
- *   Steals the reference to `o`.
+ *   Steals the reference to `o`. If fwd_count > 0, then set local
+ *   forward count in aggregator message. If `t` is non-negative,
+ *   then set local forward timeout to this value.
  */
-flux_future_t *aggregator_push_json (flux_t *h, int fwd_count,
+flux_future_t *aggregator_push_json (flux_t *h, int fwd_count, double t,
 		                     const char *key, json_t *o);
 
 /*  Fulfill future when aggregate at `key` is "complete", i.e.
