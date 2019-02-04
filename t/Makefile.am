@@ -92,7 +92,6 @@ TESTS = \
 	lua/t0007-alarm.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
-	lua/t1002-kvs.t \
 	lua/t1004-statwatcher.t \
 	python/t0001-handle.py \
 	python/t0002-wrapper.py \
@@ -186,7 +185,6 @@ check_SCRIPTS = \
 	lua/t0007-alarm.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
-	lua/t1002-kvs.t \
 	lua/t1004-statwatcher.t \
 	python/__init__.py \
 	python/subflux.py \
@@ -262,7 +260,6 @@ dist_check_DATA = \
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
 	scripts/event-trace-bypass.lua \
-	scripts/kvs-get-ex.lua \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \

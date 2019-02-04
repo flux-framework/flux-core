@@ -56,8 +56,6 @@ flux_la_LIBADD = \
 flux_la_SOURCES = \
 	flux-lua.c \
 	flux-lua.h \
-	kvs-lua.c \
-	kvs-lua.h \
 	jansson-lua.c \
 	jansson-lua.h \
 	zmsg-lua.c \
@@ -67,7 +65,6 @@ flux_la_SOURCES = \
 
 libfluxlua_la_SOURCES = \
 	flux-lua.c \
-	kvs-lua.c \
 	jansson-lua.c \
 	zmsg-lua.c \
 	lutil.c
