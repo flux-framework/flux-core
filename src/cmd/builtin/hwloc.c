@@ -796,14 +796,6 @@ static int kvs_put_xml_fence (flux_t *h, int rank,
     return (0);
 }
 
-double gettime (void)
-{
-    struct timespec t;
-    clock_gettime (CLOCK_MONOTONIC, &t);
-    return ((double) t.tv_sec + ((double) t.tv_nsec / 1000000000.));
-}
-
-
 /*  Undocumented utility function that optionally loads local topology XML
  *   on selected ranks, then uses the aggregator module to create a
  *   summary of all rank HW topology object types, optionally storing the
@@ -846,28 +838,28 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
         log_err_exit ("Invalid argument: -rank='%s'", ranks);
 
     if (verbose)
-        log_msg ("%.3fs: %.3fs: starting", gettime (), seconds_since (t0));
+        log_msg ("%.3fs: starting", seconds_since (t0));
 
     /*  If this rank is in idset, then we need to reload local XML into
      *   kvs before re-aggregation. Otherwise, fetch XML from kvs.
      */
     if (idset_test (idset, rank)) {
         if (verbose)
-            log_msg ("%.3fs: %.3fs: pushing local xml", gettime (), seconds_since (t0));
+            log_msg ("%.3fs: pushing local xml", seconds_since (t0));
         if (!(xml = flux_hwloc_local_xml ()))
             log_err_exit ("Failed to get local XML");
         if (verbose)
-            log_msg ("%.3fs: %.3fs: starting kvs fence", gettime (), seconds_since (t0));
+            log_msg ("%.3fs: starting kvs fence", seconds_since (t0));
         if (kvs_put_xml_fence (h, rank, key, idset_count (idset), xml) < 0)
             log_err_exit ("Failed to store local XML in kvs");
         if (verbose)
-            log_msg ("%.3fs: %.3fs: kvs fence complete", gettime (), seconds_since (t0));
+            log_msg ("%.3fs: kvs fence complete", seconds_since (t0));
     }
     else if (lookup_one_topo_xml (h, &xml, rank) < 0)
         log_err_exit ("lookup topo XML for this rank (%d)", rank);
 
     if (verbose)
-        log_msg ("%.3fs: %.3fs: starting aggregate", gettime (), seconds_since (t0));
+        log_msg ("%.3fs: starting aggregate", seconds_since (t0));
 
     /* Immediately push aggregate from all ranks
      */
@@ -875,7 +867,7 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
         log_err_exit ("Unable to aggregate topology summary");
 
     if (verbose)
-        log_msg ("%.3fs: %.3fs: aggregate push complete", gettime (), seconds_since (t0));
+        log_msg ("%.3fs: aggregate push complete", seconds_since (t0));
 
     /*  Rank 0 waits for aggregate completion and optionally "unpacks"
      *   aggregate to new KVS location.
@@ -883,7 +875,7 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
     if (rank == 0)
         aggregate_load_wait (p, h, key);
     if (verbose)
-        log_msg ("%.3fs: %.3fs: aggregate_wait complete", gettime (), seconds_since (t0));
+        log_msg ("%.3fs: aggregate_wait complete", seconds_since (t0));
 
     idset_destroy (idset);
     free (xml);
