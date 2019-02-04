@@ -44,18 +44,6 @@ int active_eventlog_append (flux_kvs_txn_t *txn,
  */
 int active_unlink (flux_kvs_txn_t *txn, struct job *job);
 
-
-/* active_map callback should return -1 on error to stop map with error,
- * or 0 on success.  'job' is only valid for the duration of the callback.
- */
-typedef int (*active_map_f)(struct job *job, void *arg);
-
-/* call 'cb' once for each job found in active job directory.
- * Returns number of jobs mapped, or -1 on error.
- */
-int active_map (flux_t *h, active_map_f cb, void *arg);
-
-
 #endif /* _FLUX_JOB_MANAGER_ACTIVE_H */
 
 /*
