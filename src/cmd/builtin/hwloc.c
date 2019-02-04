@@ -540,9 +540,6 @@ flux_future_t * kvs_load_xml_idset (flux_t *h, const char *basedir,
     }
     if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit request");
-    if (flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit response");
-    flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     return (f);
 }
