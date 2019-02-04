@@ -181,17 +181,6 @@ static int lua_push_flux_handle (lua_State *L, flux_t *f)
     return (1);
 }
 
-int lua_push_flux_handle_external (lua_State *L, flux_t *f)
-{
-    /*
-     *  Increase reference count on this flux handle since we are
-     *   pushing a handle opened external into Lua. We will rely on
-     *   lua gc to decref via flux_close().
-     */
-    flux_incref (f);
-    return (lua_push_flux_handle (L, f));
-}
-
 static void l_flux_reftable_unref (lua_State *L, flux_t *f)
 {
     l_get_flux_reftable (L, f);
@@ -226,17 +215,6 @@ static int l_flux_new (lua_State *L)
     if (f == NULL)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     return (lua_push_flux_handle (L, f));
-}
-
-static int l_flux_barrier (lua_State *L)
-{
-    flux_t *f = lua_get_flux (L, 1);
-    const char *name = luaL_checkstring (L, 2);
-    int nprocs = luaL_checkinteger (L, 3);
-    flux_future_t *future = flux_barrier (f, name, nprocs);
-    int rc = future ? flux_future_get (future , NULL) : -1;
-    flux_future_destroy (future);
-    return (l_pushresult (L, rc));
 }
 
 static int l_flux_rank (lua_State *L)
@@ -987,20 +965,6 @@ static int l_watcher_index (lua_State *L)
     return (1);
 }
 
-static int l_watcher_newindex (lua_State *L)
-{
-    struct l_flux_ref *iow = luaL_checkudata (L, 1, "FLUX.watcher");
-
-    /*  Set value in the underlying table:
-     */
-    l_flux_ref_gettable (iow, "watcher");
-    lua_pushvalue (L, 2); /* Key   */
-    lua_pushvalue (L, 3); /* Value */
-    lua_rawset (L, -3);
-    return (0);
-}
-
-
 static void
 timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
@@ -1140,7 +1104,6 @@ static const struct luaL_Reg flux_functions [] = {
 static const struct luaL_Reg flux_methods [] = {
     { "__gc",            l_flux_destroy     },
     { "__index",         l_flux_index       },
-    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
     { "recvmsg",         l_flux_recvmsg     },
@@ -1170,7 +1133,6 @@ static const struct luaL_Reg msghandler_methods [] = {
 static const struct luaL_Reg watcher_methods [] = {
     { "__gc",            l_watcher_destroy  },
     { "__index",         l_watcher_index    },
-    { "__newindex",      l_watcher_newindex },
     { "remove",          l_watcher_remove   },
     { NULL,              NULL                  }
 };

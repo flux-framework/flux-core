@@ -16,7 +16,6 @@ nobase_dist_lua_SCRIPTS = \
 	flux/timer.lua \
 	flux/alt_getopt.lua \
 	flux/posix.lua \
-	flux/base64.lua \
 	flux/Subcommander.lua
 
 nobase_dist_fluxometer_SCRIPTS = \
@@ -55,7 +54,6 @@ flux_la_LIBADD = \
 
 flux_la_SOURCES = \
 	flux-lua.c \
-	flux-lua.h \
 	jansson-lua.c \
 	jansson-lua.h \
 	zmsg-lua.c \
