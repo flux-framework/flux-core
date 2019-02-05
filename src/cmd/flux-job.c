@@ -214,8 +214,13 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
 
     if (!(f = flux_job_set_priority (h, id, priority)))
         log_err_exit ("flux_job_set_priority");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_err_exit ("flux_job_set_priority");
+    if (flux_rpc_get (f, NULL) < 0) {
+        const char *errmsg;
+        if ((errmsg = flux_future_error_string (f)))
+            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
+        else
+            log_err_exit ("%llu", (unsigned long long)id);
+    }
     flux_future_destroy (f);
     flux_close (h);
     return 0;
