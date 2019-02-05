@@ -82,6 +82,9 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         else if (!strcmp (attr, "flags")) {
             val = json_integer (job->flags);
         }
+        else if (!strcmp (attr, "state")) {
+            val = json_integer (job->state);
+        }
         else {
             errno = EINVAL;
             goto error;

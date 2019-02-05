@@ -43,13 +43,13 @@ test_expect_success 'job-manager: queue lists job with correct jobid' '
 
 test_expect_success 'job-manager: queue lists job with correct userid' '
 	id -u >list1_userid.exp &&
-	cut -f2 <list1.out >list1_userid.out &&
+	cut -f3 <list1.out >list1_userid.out &&
 	test_cmp list1_userid.exp list1_userid.out
 '
 
 test_expect_success 'job-manager: queue list job with correct priority' '
 	echo 16 >list1_priority.exp &&
-	cut -f3 <list1.out >list1_priority.out &&
+	cut -f4 <list1.out >list1_priority.out &&
 	test_cmp list1_priority.exp list1_priority.out
 '
 
@@ -78,7 +78,7 @@ test_expect_success 'job-manager: queue is sorted in priority order' '
 	16
 	0
 	EOT &&
-	cut -f3 <list3.out >list3_pri.out &&
+	cut -f4 <list3.out >list3_pri.out &&
 	test_cmp list3_pri.exp list3_pri.out
 '
 

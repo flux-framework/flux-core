@@ -296,11 +296,30 @@ const char *flagstr (char *buf, int bufsz, int flags)
     return buf;
 }
 
+char statechar (flux_job_state_t state)
+{
+    switch (state) {
+        case FLUX_JOB_NEW:
+            return 'N';
+        case FLUX_JOB_DEPEND:
+            return 'D';
+        case FLUX_JOB_SCHED:
+            return 'S';
+        case FLUX_JOB_RUN:
+            return 'R';
+        case FLUX_JOB_CLEANUP:
+            return 'C';
+        case FLUX_JOB_INACTIVE:
+            return 'I';
+    }
+    return '?';
+}
+
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     int max_entries = optparse_get_int (p, "count", 0);
-    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"flags\"]";
+    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"flags\",\"state\"]";
     flux_t *h;
     flux_future_t *f;
     json_t *jobs;
@@ -319,8 +338,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");
     if (!optparse_hasopt (p, "suppress-header"))
-        printf ("%s\t\t%s\t%s\t%s\t%s\n",
-                "JOBID", "USERID", "PRI", "FLAGS", "T_SUBMIT");
+        printf ("%s\t\t%s\t%s\t%s\t%s\t%s\n",
+                "JOBID", "STATE", "USERID", "PRI", "FLAGS", "T_SUBMIT");
     json_array_foreach (jobs, index, value) {
         flux_jobid_t id;
         int priority;
@@ -328,17 +347,20 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         double t_submit;
         char timestr[80];
         int flags;
+        flux_job_state_t state;
         char buf[16];
-        if (json_unpack (value, "{s:I s:i s:i s:f s:i}",
+        if (json_unpack (value, "{s:I s:i s:i s:f s:i s:i}",
                                 "id", &id,
                                 "priority", &priority,
                                 "userid", &userid,
                                 "t_submit", &t_submit,
-                                "flags", &flags) < 0)
+                                "flags", &flags,
+                                "state", &state) < 0)
             log_msg_exit ("error parsing job data");
         if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
             log_err_exit ("time conversion error");
-        printf ("%llu\t%lu\t%d\t%s\t%s\n", (unsigned long long)id,
+        printf ("%llu\t%c\t%lu\t%d\t%s\t%s\n", (unsigned long long)id,
+                                       statechar (state),
                                        (unsigned long)userid,
                                        priority,
                                        flagstr (buf, sizeof (buf), flags),

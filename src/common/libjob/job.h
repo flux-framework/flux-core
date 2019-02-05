@@ -41,6 +41,15 @@ enum job_status_flags {
     FLUX_JOB_CANCELED               = 16,
 };
 
+typedef enum {
+    FLUX_JOB_NEW                    = 1,
+    FLUX_JOB_DEPEND                 = 2,
+    FLUX_JOB_SCHED                  = 4,
+    FLUX_JOB_RUN                    = 8,
+    FLUX_JOB_CLEANUP                = 16,
+    FLUX_JOB_INACTIVE               = 32,   // captive end state
+} flux_job_state_t;
+
 typedef uint64_t flux_jobid_t;
 
 /* Submit a job to the system.
