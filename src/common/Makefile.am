@@ -81,7 +81,7 @@ libpmi_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
-	-version-info @LIBPMI_VERSION_INFO@ \
+	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
@@ -92,7 +92,7 @@ libpmi2_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi2_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi2.map \
-	-version-info @LIBPMI2_VERSION_INFO@ \
+	-version-info 0:0:0 \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
