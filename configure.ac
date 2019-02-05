@@ -79,18 +79,6 @@ LIBFLUX_OPTPARSE_AGE=0
 LIBFLUX_OPTPARSE_VERSION_INFO=$LIBFLUX_OPTPARSE_CURRENT:$LIBFLUX_OPTPARSE_REVISION:$LIBFLUX_OPTPARSE_AGE
 AC_SUBST([LIBFLUX_OPTPARSE_VERSION_INFO])
 
-LIBPMI_CURRENT=1
-LIBPMI_REVISION=0
-LIBPMI_AGE=0
-LIBPMI_VERSION_INFO=$LIBPMI_CURRENT:$LIBPMI_REVISION:$LIBPMI_AGE
-AC_SUBST([LIBPMI_VERSION_INFO])
-
-LIBPMI2_CURRENT=1
-LIBPMI2_REVISION=0
-LIBPMI2_AGE=0
-LIBPMI2_VERSION_INFO=$LIBPMI2_CURRENT:$LIBPMI2_REVISION:$LIBPMI2_AGE
-AC_SUBST([LIBPMI2_VERSION_INFO])
-
 ##
 # Checks for programs
 ##
@@ -132,8 +120,14 @@ AS_IF([test "x$enable_docs" != "xno"], [
 	AC_SUBST([ADOC_FORMAT_OPT])
   ])
   AS_IF([test "$ADOC" == "asciidoctor"], [
-	ADOC_FORMAT_OPT="--backend"
-	AC_SUBST([ADOC_FORMAT_OPT])
+	ASCIIDOCTOR_VERSION=$(asciidoctor --version | sed -n 's/^Asciidoctor \([^ ]*\) .*$/\1/p')
+	AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
+	  ADOC_FORMAT_OPT="--backend"
+	  AC_SUBST([ADOC_FORMAT_OPT])
+  	  ], [
+	  ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required"
+	  AC_MSG_WARN([$ADOC_ERROR_MSG])
+	  ADOC=""])
   ])
 ])
 AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
@@ -454,6 +448,6 @@ AC_OUTPUT
 
 AS_IF([test "x$enable_docs" != "xno"], [
   if test -z "$ADOC"; then
-    AC_MSG_WARN([No asciidoc formatter found. Manual pages will not be generated.])
+    AC_MSG_WARN([${ADOC_ERROR_MSG:-No asciidoc formatter found}. Manual pages will not be generated.])
   fi
 ])
