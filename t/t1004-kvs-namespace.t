@@ -138,22 +138,6 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait on primary namespace works' '
         test_expect_code 0 wait $kvswaitpid
 '
 
-test_expect_success NO_CHAIN_LINT 'kvs: watch a key in primary namespace works'  '
-        flux kvs unlink --namespace=$PRIMARYNAMESPACE -Rf $DIR &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch --namespace=$PRIMARYNAMESPACE -o -c 1 $DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.watch=1 &&
-        wait $watchpid
-cat >expected <<-EOF &&
-0
-1
-EOF
-        test_cmp watch_out expected
-'
-
 #
 # Basic tests in new namespace
 #
@@ -209,22 +193,6 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait in new namespace works' '
         kvswaitpid=$!
         flux kvs put --namespace=$NAMESPACETEST --json $DIR.xxx=99
         test_expect_code 0 wait $kvswaitpid
-'
-
-test_expect_success NO_CHAIN_LINT 'kvs: watch a key in new namespace works'  '
-        flux kvs unlink --namespace=$NAMESPACETEST -Rf $DIR &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch --namespace=$NAMESPACETEST -o -c 1 $DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.watch=1 &&
-        wait $watchpid
-cat >expected <<-EOF &&
-0
-1
-EOF
-        test_cmp watch_out expected
 '
 
 test_expect_success 'kvs: namespace remove non existing namespace silently passes' '
@@ -408,43 +376,6 @@ test_expect_success 'kvs: wait fails on invalid namespace on rank 1' '
         ! flux exec -n -r 1 sh -c "flux kvs wait --namespace=$NAMESPACEBAD 1"
 '
 
-test_expect_success NO_CHAIN_LINT 'kvs: watch fails on invalid namespace' '
-	! flux kvs watch --namespace=$NAMESPACEBAD -c 1 $DIR.test
-'
-
-test_expect_success 'kvs: watch fails on invalid namespace on rank 1' '
-        ! flux exec -n -r 1 sh -c "flux kvs watch --namespace=$NAMESPACEBAD -c 1 $DIR.test"
-'
-
-# watch errors are output to stdout, so grep for "Operation not supported"
-test_expect_success NO_CHAIN_LINT 'kvs: watch gets ENOTSUP when namespace is removed' '
-        flux kvs namespace create $NAMESPACETMP-REMOVE-WATCH0 &&
-        flux kvs put --namespace=$NAMESPACETMP-REMOVE-WATCH0 --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch --namespace=$NAMESPACETMP-REMOVE-WATCH0 -o -c 1 $DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs namespace remove $NAMESPACETMP-REMOVE-WATCH0 &&
-        wait $watchpid &&
-        grep "Operation not supported" watch_out
-'
-
-# watch errors are output to stdout, so grep for "Operation not supported"
-# stdbuf -oL necessary to ensure waitfile can succeed
-test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namespace is removed' '
-        flux kvs namespace create $NAMESPACETMP-REMOVE-WATCH1 &&
-        flux kvs put --namespace=$NAMESPACETMP-REMOVE-WATCH1 --json $DIR.watch=0 &&
-        VERS=`flux kvs version --namespace=$NAMESPACETMP-REMOVE-WATCH1` &&
-        rm -f watch_out
-        stdbuf -oL flux exec -n -r 1 sh -c "flux kvs wait --namespace=$NAMESPACETMP-REMOVE-WATCH1 ${VERS}; \
-                                         flux kvs watch --namespace=$NAMESPACETMP-REMOVE-WATCH1 -o -c 1 $DIR.watch" > watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out &&
-        flux kvs namespace remove $NAMESPACETMP-REMOVE-WATCH1 &&
-        wait $watchpid &&
-        grep "Operation not supported" watch_out
-'
-
 # When we call fence_namespace_remove, we know fence sent to server,
 # but no way of knowing if server has accepted/processed fence.  To
 # avoid racing in this test, we iterate on the fence stat until it is
@@ -558,38 +489,6 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait in different namespaces works' '
 
         test_expect_code 0 wait $primarykvswaitpid
         test_expect_code 0 wait $testkvswaitpid
-'
-
-test_expect_success NO_CHAIN_LINT 'kvs: watch a key in different namespaces works'  '
-        flux kvs unlink --namespace=$PRIMARYNAMESPACE -Rf $DIR &&
-        flux kvs unlink --namespace=$NAMESPACETEST -Rf $DIR &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.watch=0 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.watch=1 &&
-        rm -f primary_watch_out
-        rm -f test_watch_out
-
-        flux kvs watch -o -c 1 $DIR.watch >primary_watch_out &
-        primarywatchpid=$! &&
-        $waitfile -q -t 5 -p "0" primary_watch_out
-
-        flux kvs watch --namespace=$NAMESPACETEST -o -c 1 $DIR.watch >test_watch_out &
-        testwatchpid=$! &&
-        $waitfile -q -t 5 -p "1" test_watch_out
-
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.watch=1 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.watch=2 &&
-        wait $primarywatchpid &&
-        wait $testwatchpid
-cat >primaryexpected <<-EOF &&
-0
-1
-EOF
-cat >testexpected <<-EOF &&
-1
-2
-EOF
-        test_cmp primaryexpected primary_watch_out &&
-        test_cmp testexpected test_watch_out
 '
 
 test_done
