@@ -16,7 +16,7 @@
 
 #include "job.h"
 #include "queue.h"
-#include "active.h"
+#include "util.h"
 #include "restart.h"
 #include "cancel.h"
 #include "list.h"

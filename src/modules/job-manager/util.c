@@ -8,19 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* active - manipulate active jobs in the KVS
- *
- * Active jobs are stored in the KVS under "jobs.active" per RFC 16.
- *
- * To avoid the job.active directory becoming large and impacting KVS
- * performance over time, jobs are spread across subdirectries using
- * FLUID_STRING_DOTHEX encoding (see fluid.h).
- *
- * In general, an operation that alters the job state follows this pattern:
- * - prepare KVS transaction
- * - commit KVS transaction, with continuation
- * - on success: continuation updates in-memory job state and completes request
- * - on error: in-memory job state is unchanged and error is returned to caller
+/* util - misc. job manager support
  */
 
 #if HAVE_CONFIG_H
@@ -32,16 +20,18 @@
 #include "src/common/libutil/fluid.h"
 
 #include "job.h"
-#include "active.h"
+#include "util.h"
 
-int active_key (char *buf, int bufsz, struct job *job, const char *key)
+int util_jobkey (char *buf, int bufsz, bool active,
+                 struct job *job, const char *key)
 {
     char idstr[32];
     int len;
 
     if (fluid_encode (idstr, sizeof (idstr), job->id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    len = snprintf (buf, bufsz, "job.active.%s%s%s",
+    len = snprintf (buf, bufsz, "job.%s.%s%s%s",
+                    active ? "active" : "inactive",
                     idstr,
                     key ? "." : "",
                     key ? key : "");
@@ -50,11 +40,10 @@ int active_key (char *buf, int bufsz, struct job *job, const char *key)
     return len;
 }
 
-int active_eventlog_append (flux_kvs_txn_t *txn,
-                            struct job *job,
-                            const char *key,
-                            const char *name,
-                            const char *fmt, ...)
+int util_eventlog_append (flux_kvs_txn_t *txn,
+                          struct job *job,
+                          const char *name,
+                          const char *fmt, ...)
 {
     va_list ap;
     char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
@@ -68,7 +57,7 @@ int active_eventlog_append (flux_kvs_txn_t *txn,
     va_end (ap);
     if (n >= sizeof (context))
         goto error_inval;
-    if (active_key (path, sizeof (path), job, key) < 0)
+    if (util_jobkey (path, sizeof (path), true, job, "eventlog") < 0)
         goto error_inval;
     if (!(event = flux_kvs_event_encode (name, context)))
         goto error;
@@ -85,16 +74,16 @@ error:
     return -1;
 }
 
-int active_pack (flux_kvs_txn_t *txn,
-                 struct job *job,
-                 const char *key,
-                 const char *fmt, ...)
+int util_attr_pack (flux_kvs_txn_t *txn,
+                    struct job *job,
+                    const char *key,
+                    const char *fmt, ...)
 {
     va_list ap;
     int n;
     char path[64];
 
-    if (active_key (path, sizeof (path), job, key) < 0)
+    if (util_jobkey (path, sizeof (path), true, job, key) < 0)
         goto error_inval;
     va_start (ap, fmt);
     n = flux_kvs_txn_vpack (txn, 0, path, fmt, ap);
@@ -108,11 +97,11 @@ error:
     return -1;
 }
 
-int active_unlink (flux_kvs_txn_t *txn, struct job *job)
+int util_active_unlink (flux_kvs_txn_t *txn, struct job *job)
 {
     char path[64];
 
-    if (active_key (path, sizeof (path), job, NULL) < 0)
+    if (util_jobkey (path, sizeof (path), true, job, NULL) < 0)
         goto error_inval;
     if (flux_kvs_txn_unlink (txn, 0, path) < 0)
         goto error;

@@ -39,7 +39,7 @@
 
 #include "job.h"
 #include "queue.h"
-#include "active.h"
+#include "util.h"
 #include "cancel.h"
 
 struct cancel {
@@ -205,9 +205,9 @@ static void update_kvs_eventlog (struct cancel *c)
     int rc;
 
     if ((c->flags & FLUX_JOB_PURGE))
-        rc = active_unlink (c->txn, c->job);
+        rc = util_active_unlink (c->txn, c->job);
     else
-        rc = active_eventlog_append (c->txn, c->job, "eventlog", "cancel",
+        rc = util_eventlog_append (c->txn, c->job, "cancel",
                                      "userid=%lu flags=%d",
                                      (unsigned long)c->userid, c->flags);
     if (rc < 0)
