@@ -132,8 +132,14 @@ AS_IF([test "x$enable_docs" != "xno"], [
 	AC_SUBST([ADOC_FORMAT_OPT])
   ])
   AS_IF([test "$ADOC" == "asciidoctor"], [
-	ADOC_FORMAT_OPT="--backend"
-	AC_SUBST([ADOC_FORMAT_OPT])
+	ASCIIDOCTOR_VERSION=$(asciidoctor --version | sed -n 's/^Asciidoctor \([^ ]*\) .*$/\1/p')
+	AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
+	  ADOC_FORMAT_OPT="--backend"
+	  AC_SUBST([ADOC_FORMAT_OPT])
+  	  ], [
+	  ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required"
+	  AC_MSG_WARN([$ADOC_ERROR_MSG])
+	  ADOC=""])
   ])
 ])
 AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
@@ -454,6 +460,6 @@ AC_OUTPUT
 
 AS_IF([test "x$enable_docs" != "xno"], [
   if test -z "$ADOC"; then
-    AC_MSG_WARN([No asciidoc formatter found. Manual pages will not be generated.])
+    AC_MSG_WARN([${ADOC_ERROR_MSG:-No asciidoc formatter found}. Manual pages will not be generated.])
   fi
 ])
