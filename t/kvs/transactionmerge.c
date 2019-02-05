@@ -47,7 +47,7 @@ typedef struct {
 
 #define KEYSUFFIX "commitwatch-key"
 
-#define WATCH_TIMEOUT 5
+#define WATCH_TIMEOUT 5.0
 
 static int threadcount = -1;
 static int changecount = 0;
@@ -82,48 +82,41 @@ void watch_prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
         pthread_mutex_unlock (&watch_init_lock);
     }
 
-    if (changecount >= threadcount)
-        flux_reactor_stop (r);
+    flux_watcher_stop (w);
 }
 
-static int watch_count_cb (const char *key, const char *json_str, void *arg, int errnum)
+static void watch_count_cb (flux_future_t *f, void *arg)
 {
-    thd_t *t = arg;
-
-    /* First value should be empty & get ENOENT */
-    if (!errnum) {
-        //printf ("watch %s = %d\n", key, val);
-        changecount++;
+    if (flux_rpc_get (f, NULL)) {
+        if (errno == ETIMEDOUT)
+            log_msg_exit ("timeout: saw %d changes", changecount);
+        if (errno != ENODATA)
+            log_err_exit ("flux_rpc_get");
+        flux_future_destroy (f);
+        return;
     }
 
-    if (changecount == threadcount)
-        flux_kvs_unwatch (t->h, NULL, key);
-    return 0;
-}
+    changecount++;
 
-static void watch_timeout_cb (flux_reactor_t *r,
-                              flux_watcher_t *w,
-                              int revents,
-                              void *arg)
-{
-    watch_count_t *wc = arg;
+    flux_future_reset (f);
 
-    /* timeout */
-    if (wc->lastcount == changecount)
-        flux_reactor_stop (r);
-    else
-        wc->lastcount = changecount;
+    /* re-call to set timeout */
+    if (flux_future_then (f, WATCH_TIMEOUT, watch_count_cb, arg) < 0)
+        log_err_exit ("flux_future_then");
+
+    if (changecount == threadcount) {
+        if (flux_kvs_lookup_cancel (f) < 0)
+            log_err_exit ("flux_kvs_lookup_cancel");
+    }
 }
 
 void *watchthread (void *arg)
 {
     thd_t *t = arg;
-    watch_count_t wc;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     flux_reactor_t *r;
     flux_watcher_t *pw = NULL;
-    flux_watcher_t *tw = NULL;
 
     if (!(t->h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -144,29 +137,23 @@ void *watchthread (void *arg)
 
     r = flux_get_reactor (t->h);
 
-    if (flux_kvs_watch (t->h, NULL, key, watch_count_cb, t) < 0)
-        log_err_exit ("flux_kvs_watch %s", key);
+    if (!(f = flux_kvs_lookup (t->h,
+                               NULL,
+                               FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE,
+                               key)))
+        log_err_exit ("flux_kvs_lookup %s", key);
+
+    if (flux_future_then (f, WATCH_TIMEOUT, watch_count_cb, t) < 0)
+        log_err_exit ("flux_future_then %s", key);
 
     pw = flux_prepare_watcher_create (r, watch_prepare_cb, NULL);
 
-    wc.t = t;
-    wc.lastcount = -1;
-
-    /* So test won't hang if there's a bug */
-    tw = flux_timer_watcher_create (r,
-                                    WATCH_TIMEOUT,
-                                    WATCH_TIMEOUT,
-                                    watch_timeout_cb,
-                                    &wc);
-
     flux_watcher_start (pw);
-    flux_watcher_start (tw);
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
     flux_watcher_destroy (pw);
-    flux_watcher_destroy (tw);
     flux_close (t->h);
     return NULL;
 }

@@ -17,27 +17,22 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
-/* Current kvs_watch() API doesn't accept a rank, so we cheat and
- * build the minimal kvs.watch request message from scratch here.
- * Read the first response and pretend we're done.  If this key actually
- * changes then we are screwed here because we will have recycled the
- * matchtags but more responses will be coming.
+/* A kvs lookup API doesn't accept a rank, so we cheat and build the
+ * kvs-watch.lookup request message from scratch here.  We have to set
+ * FLUX_KVS_WAITCREATE, to ensure the lookup "hangs" for this test.
  */
 void send_watch_requests (flux_t *h, const char *key)
 {
-    int flags = KVS_WATCH_FIRST;
     flux_mrpc_t *r;
 
-    if (!(r = flux_mrpc_pack (h, "kvs.watch", "all", 0, "{s:s s:s s:i s:n}",
-                                                    "key", key,
-                                                    "namespace", KVS_PRIMARY_NAMESPACE,
-                                                    "flags", flags,
-                                                    "val")))
-        log_err_exit ("flux_mrpc kvs.watch");
-    do {
-        if (flux_mrpc_get (r, NULL) < 0)
-            log_err_exit ("kvs.watch");
-    } while (flux_mrpc_next (r) == 0);
+    if (!(r = flux_mrpc_pack (h, "kvs-watch.lookup", "all",
+                              FLUX_RPC_STREAMING,
+                              "{s:s s:s s:i}",
+                              "key", key,
+                              "namespace", KVS_PRIMARY_NAMESPACE,
+                              "flags", FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE)))
+        log_err_exit ("flux_mrpc kvs-watch.lookup");
+
     flux_mrpc_destroy (r);
 }
 
@@ -48,16 +43,11 @@ int count_watchers (flux_t *h)
     int n, count = 0;
     flux_mrpc_t *r;
 
-    if (!(r = flux_mrpc (h, "kvs.stats.get", NULL, "all", 0)))
-        log_err_exit ("flux_mrpc kvs.stats.get");
+    if (!(r = flux_mrpc (h, "kvs-watch.stats.get", NULL, "all", 0)))
+        log_err_exit ("flux_mrpc kvs-watch.stats.get");
     do {
-        json_t *ns, *p;
-        if (flux_mrpc_get_unpack (r, "{ s:o }", "namespace", &ns) < 0)
-            log_err_exit ("kvs.stats.get namespace");
-        if (json_unpack (ns, "{ s:o }", KVS_PRIMARY_NAMESPACE, &p) < 0)
-            log_err_exit ("kvs.stats.get %s", KVS_PRIMARY_NAMESPACE);
-        if (json_unpack (p, "{ s:i }", "#watchers", &n) < 0)
-            log_err_exit ("kvs.stats.get #watchers");
+        if (flux_mrpc_get_unpack (r, "{ s:i }", "watchers", &n) < 0)
+            log_err_exit ("kvs-watch.stats.get");
         count += n;
     } while (flux_mrpc_next (r) == 0);
     flux_mrpc_destroy (r);
@@ -80,6 +70,7 @@ int main (int argc, char **argv)
     log_msg ("test watchers: %d", w1);
     flux_close (h);
     log_msg ("disconnected");
+
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
