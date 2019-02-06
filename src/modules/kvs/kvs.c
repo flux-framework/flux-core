@@ -325,7 +325,7 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
          * Maintains consistency model */
         if (wait_runqueue (root->watchlist) < 0)
             flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
-        root->watchlist_lastrun_epoch = ctx->epoch;
+        root->last_update_epoch = ctx->epoch;
     }
 }
 
@@ -1243,7 +1243,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     else if (ctx->rank != 0
              && !root->remove
              && strcasecmp (root->ns_name, KVS_PRIMARY_NAMESPACE)
-             && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
+             && (ctx->epoch - root->last_update_epoch) > max_namespace_age
              && !wait_queue_length (root->watchlist)
              && !treq_mgr_transactions_count (root->trm)
              && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
@@ -1256,13 +1256,13 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     else {
         /* "touch" objects involved in watched keys */
         if (wait_queue_length (root->watchlist) > 0
-            && (ctx->epoch - root->watchlist_lastrun_epoch) > max_lastuse_age) {
+            && (ctx->epoch - root->last_update_epoch) > max_lastuse_age) {
             /* log error on wait_runqueue(), don't error out.  watchers
              * may miss value change, but will never get older one.
              * Maintains consistency model */
             if (wait_runqueue (root->watchlist) < 0)
                 flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
-            root->watchlist_lastrun_epoch = ctx->epoch;
+            root->last_update_epoch = ctx->epoch;
         }
         /* "touch" root */
         (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
