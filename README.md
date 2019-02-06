@@ -58,6 +58,7 @@ asciidoctor	| asciidoctor         	| >= 1.5.7		| *2*
 aspell		| aspell		|			| *3*
 valgrind	| valgrind		|			| *3*
 mpich		| mpich			|			| *3*
+jq		    | jq			|			| *3*
 
 *Note 1 - Due to a packaging issue, Ubuntu lua-posix may need the
 following symlink (true for version 33.4.0-2):*
