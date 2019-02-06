@@ -6,7 +6,7 @@ test_description='Test the jobspec emission tool'
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 VALIDATE=${JOBSPEC}/validate.py
-SCHEMA=${JOBSPEC}/schema.json
+SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 MINI_SCHEMA=${JOBSPEC}/minimal-schema.json
 EMIT=${JOBSPEC}/emit-jobspec.py
 
