@@ -54,6 +54,12 @@ optparse_t *opts = NULL;
 int stdin_flags;
 flux_watcher_t *stdin_w;
 
+/* time to wait in between SIGINTs */
+#define INTERRUPT_MILLISECS 1000.0
+
+struct timespec last;
+int sigint_count = 0;
+
 void completion_cb (flux_subprocess_t *p)
 {
     int ec = flux_subprocess_exit_code (p);
@@ -182,9 +188,19 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void signal_cb (int signum)
 {
     flux_subprocess_t *p = zlist_first (subprocesses);
+
+    if (signum == SIGINT) {
+        if (sigint_count >= 2) {
+            double since_last = monotime_since (last);
+            if (since_last < INTERRUPT_MILLISECS)
+                exit (1);
+        }
+    }
+
     if (optparse_getopt (opts, "verbose", NULL) > 0)
         fprintf (stderr, "sending signal %d to %d running processes\n",
                  signum, started - exited);
+
     while (p) {
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
             flux_future_t *f = flux_subprocess_kill (p, signum);
@@ -197,6 +213,17 @@ static void signal_cb (int signum)
             flux_future_destroy (f);
         }
         p = zlist_next (subprocesses);
+    }
+
+    if (signum == SIGINT) {
+        if (sigint_count)
+            fprintf (stderr,
+                     "interrupt (Ctrl+C) one more time "
+                     "within %f sec to exit\n",
+                     (INTERRUPT_MILLISECS / 1000.0));
+
+        monotime (&last);
+        sigint_count++;
     }
 }
 
