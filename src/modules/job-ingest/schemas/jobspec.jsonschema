@@ -9,15 +9,19 @@
     "complex_range": {
       "description": "a complex range of numbers",
       "type": "object",
-      "required":["min", "max", "operator", "operand"],
       "properties":{
         "min": { "type": "integer", "minimum" : 1 },
         "max": { "type": "integer", "minimum" : 1 },
         "operator": { "type": "string", "enum": ["+", "*", "^"] },
         "operand": { "type": "integer", "minimum" : 1 }
       },
+      "required": ["min"],
+      "dependencies": {
+         "max":      { "required": ["operator", "operand"] },
+         "operator": { "required": ["max", "operand"] },
+         "operand":  { "required": ["max", "operator"] }
+      },
       "additionalProperties": false
-
     },
     "resource_vertex_base": {
       "description": "base schema for slot/other resource vertex",
