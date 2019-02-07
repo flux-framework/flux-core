@@ -8,7 +8,8 @@ resources:
       count: 1
       with:
         - type: memory
-          count: 4
+          count:
+            min: 4
           unit: GB
 tasks:
   - command: app

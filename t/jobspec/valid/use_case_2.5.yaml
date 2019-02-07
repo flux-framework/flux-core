@@ -5,7 +5,8 @@ resources:
     count: 10
     with:
     - type: memory
-      count: 2
+      count:
+        min: 2
       unit: GB
     - type: core
       count: 1

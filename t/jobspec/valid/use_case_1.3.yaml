@@ -5,13 +5,16 @@ resources:
     label: nodelevel
     with:
     - type: node
+      exclusive: false
       count: 1
       with:
         - type: socket
-          count: 2
+          count:
+            min: 2
           with:
             - type: core
-              count: 4
+              count:
+                min: 4
 tasks:
   - command: [ "flux", "start" ]
     slot: nodelevel
