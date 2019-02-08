@@ -183,7 +183,6 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
     p->reactor = r;
     p->rank = rank;
     p->flags = flags;
-    p->kill_signum = 0;
 
     p->local = local;
 
@@ -875,12 +874,6 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
         return NULL;
     }
 
-    if (p->kill_signum) {
-        /* XXX right errno? */
-        errno = EBUSY;
-        return NULL;
-    }
-
     if (p->state != FLUX_SUBPROCESS_RUNNING) {
         /* XXX right errno? */
         errno = EINVAL;
@@ -906,7 +899,6 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
             flux_future_fulfill_error (f, save_errno, NULL);
         }
     }
-    p->kill_signum = signum;
     return f;
 }
 
