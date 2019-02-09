@@ -116,6 +116,12 @@ test_expect_success HAVE_JQ 'specifying -N8 -n16 should produce (in total) 8 nod
     jq -e ".total_num_nodes == 8 and .total_num_tasks == 16 and .total_num_cores == 16" nodes-tasks.summary.json
 '
 
+test_expect_success HAVE_JQ 'specifying -N8 -n16 should produce tasks.count.per_slot == 1 and no warning' '
+    flux jobspec srun -N8 -n16 hostname > nodes-tasks-2.jobspec.json 2> nodes-tasks-2.err &&
+    jq -e ".tasks[0].count.per_slot == 1" nodes-tasks-2.jobspec.json &&
+    [ -f nodes-tasks-2.err ] && [ ! -s nodes-tasks-2.err ]
+'
+
 test_expect_success HAVE_JQ 'specifying -n16 -c4 should produce (in total) 0 nodes, 16 tasks, 64 cores' '
     flux jobspec srun -n16 -c4 hostname > tasks-cores.jobspec.json &&
     ${VALIDATE} -s ${MINI_SCHEMA} tasks-cores.jobspec.json &&

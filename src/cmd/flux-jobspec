@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import re
 import sys
+import math
 import logging
 import argparse
 import json
@@ -34,10 +35,21 @@ def create_slurm_style_jobspec(
     command, num_tasks, cores_per_task, num_nodes=0, walltime=None
 ):
     core = create_resource("core", cores_per_task)
-    slot = create_slot("task", 1, [core])
     if num_nodes > 0:
+        num_slots = int(math.ceil(num_tasks / float(num_nodes)))
+        if num_tasks % num_nodes != 0:
+            logging.warn(
+                "Number of tasks is not an integer multiple of the number of nodes. "
+                "More resources than required will be requested to satisfy your job."
+            )
+            task_count_dict = {"total": num_tasks}
+        else:
+            task_count_dict = {"per_slot": 1}
+        slot = create_slot("task", num_slots, [core])
         resource_section = create_resource("node", num_nodes, [slot])
     else:
+        task_count_dict = {"per_slot": 1}
+        slot = create_slot("task", num_tasks, [core])
         resource_section = slot
 
     jobspec = {
@@ -47,7 +59,7 @@ def create_slurm_style_jobspec(
             {
                 "command": command,
                 "slot": "task",
-                "count": {"total": num_tasks},
+                "count": task_count_dict,
                 "attributes": {},
             }
         ],
@@ -60,6 +72,9 @@ def create_slurm_style_jobspec(
 
 
 def validate_slurm_args(args):
+    if args.nodes > args.ntasks:
+        raise ValueError("Number of nodes greater than the number of tasks")
+
     if (
         args.time
         and re.match(r"^(\d+-)?\d+:\d+:\d+$") is None
@@ -75,6 +90,9 @@ def validate_slurm_args(args):
 
 
 def slurm_jobspec(args):
+    if args.ntasks is None:
+        args.ntasks = max(args.nodes, 1)
+
     try:
         validate_slurm_args(args)
     except ValueError as e:
@@ -93,7 +111,7 @@ def get_slurm_common_parser():
     """
     slurm_parser = argparse.ArgumentParser(add_help=False)
     slurm_parser.add_argument("-N", "--nodes", type=int, default=0)
-    slurm_parser.add_argument("-n", "--ntasks", type=int, default=1)
+    slurm_parser.add_argument("-n", "--ntasks", type=int)
     slurm_parser.add_argument("-c", "--cpus-per-task", type=int, default=1)
     slurm_parser.add_argument(
         "-t",
