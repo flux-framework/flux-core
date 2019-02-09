@@ -1,0 +1,13 @@
+t_rules:
+  - name: automatic merge with strict
+    conditions:
+      - base=master
+      - status-success=continuous-integration/travis-ci/pr
+      - status-success=codecov/project
+      - label="merge-when-passing"
+      - label!="work-in-progress"
+    actions:
+      merge:
+        method: merge
+        strict: true
+        strict_method: rebase
