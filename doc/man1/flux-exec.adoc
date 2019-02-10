@@ -25,6 +25,10 @@ stdout and stderr.
 On receipt of SIGINT and SIGTERM signals, flux-exec(1) shall forward
 the received signal to all currently running remote processes.
 
+In the event subprocesses are hanging or ignoring SIGINT, two SIGINT
+signals (typically sent via Ctrl+C) in short succession can force
+flux-exec(1) to exit.
+
 flux-exec(1) is meant as an administrative and test utility, and cannot
 be used to launch Flux jobs.
 

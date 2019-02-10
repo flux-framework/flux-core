@@ -988,9 +988,6 @@ void test_kill (flux_reactor_t *r)
     ok (f != NULL, "flux_subprocess_kill returns future_t");
     ok (flux_future_wait_for (f, 0.) == 0,
         "future fulfilled immediately for local process");
-    ok (flux_subprocess_kill (p, SIGINT) == NULL
-        && errno == EBUSY,
-        "flux_subprocess_kill returns EBUSY, trying to kill again");
 
     ok (flux_future_get (f, NULL) == 0, "flux_future_get (f) returns 0");
     ok (flux_reactor_run (r, 0) == 0, "reactor_run exits normally");
