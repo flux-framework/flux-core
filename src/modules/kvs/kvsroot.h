@@ -29,7 +29,7 @@ struct kvsroot {
     char ref[BLOBREF_MAX_STRING_SIZE];
     kvstxn_mgr_t *ktm;
     treq_mgr_t *trm;
-    waitqueue_t *watchlist;
+    zlist_t *synclist;
     int last_update_epoch;
     int flags;
     bool remove;
