@@ -63,7 +63,6 @@ struct flux_subprocess {
     flux_reactor_t *reactor;
     uint32_t rank;
     int flags;
-    int kill_signum;
     bool local;                     /* This is a local process, not remote. */
 
     int refcount;
