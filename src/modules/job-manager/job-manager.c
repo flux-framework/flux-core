@@ -18,7 +18,7 @@
 #include "queue.h"
 #include "util.h"
 #include "restart.h"
-#include "cancel.h"
+#include "raise.h"
 #include "list.h"
 #include "priority.h"
 
@@ -94,7 +94,7 @@ static void list_cb (flux_t *h, flux_msg_handler_t *mh,
     list_handle_request (h, ctx->queue, msg);
 }
 
-/* exception request handled in cancel.c
+/* exception request handled in raise.c
  */
 static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)

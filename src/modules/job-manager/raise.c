@@ -40,7 +40,7 @@
 #include "job.h"
 #include "queue.h"
 #include "util.h"
-#include "cancel.h"
+#include "raise.h"
 
 struct cancel {
     flux_t *h;
