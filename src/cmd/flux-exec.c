@@ -219,7 +219,7 @@ static void signal_cb (int signum)
         if (sigint_count)
             fprintf (stderr,
                      "interrupt (Ctrl+C) one more time "
-                     "within %f sec to exit\n",
+                     "within %.2f sec to exit\n",
                      (INTERRUPT_MILLISECS / 1000.0));
 
         monotime (&last);
