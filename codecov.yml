@@ -1,6 +1,6 @@
 coverage:
  round: down
- range: "50...100"
+ range: "65...100"
  ignore:
  - "^t/.*"
  - ".*/test/.*"
@@ -24,3 +24,4 @@ coverage:
 
 comment:
  layout: "header, diff, changes, tree"
+ behavior: new
