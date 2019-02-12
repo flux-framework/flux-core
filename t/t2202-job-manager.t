@@ -53,8 +53,8 @@ test_expect_success 'job-manager: queue list job with correct priority' '
 	test_cmp list1_priority.exp list1_priority.out
 '
 
-test_expect_success 'job-manager: cancel --purge job' '
-	flux job cancel --purge $(cat list1_jobid.out)
+test_expect_success 'job-manager: cancel job' '
+	flux job cancel $(cat list1_jobid.out)
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
@@ -91,9 +91,9 @@ test_expect_success 'job-manager: flux job list --count shows highest priority j
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 
-test_expect_success 'job-manager: cancel --purge jobs' '
+test_expect_success 'job-manager: cancel jobs' '
 	for jobid in $(cut -f1 <list3.out); do \
-		flux job cancel --purge ${jobid}; \
+		flux job cancel ${jobid}; \
 	done
 '
 
@@ -144,9 +144,9 @@ test_expect_success 'job-manager: queue was successfully reconstructed' '
 	test_cmp list10_reordered.out list_reload.out
 '
 
-test_expect_success 'job-manager: cancel --purge jobs' '
+test_expect_success 'job-manager: cancel jobs' '
 	for jobid in $(cut -f1 <list_reload.out); do \
-		flux job cancel --purge ${jobid}; \
+		flux job cancel ${jobid}; \
 	done &&
 	test $(flux job list -s | wc -l) -eq 0
 '
@@ -156,31 +156,31 @@ test_expect_success 'job-manager: flux job priority fails on invalid priority' '
 	flux job priority ${jobid} 31 &&
 	test_must_fail flux job priority ${jobid} -1 &&
 	test_must_fail flux job priority ${jobid} 32 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can reduce priority from default' '
 	jobid=$(flux job submit  basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 5 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can increase to default' '
 	jobid=$(flux job submit -p 0 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 16 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot increase past default' '
 	jobid=$(flux job submit basic.json) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can decrease from from >default' '
 	jobid=$(flux job submit -p 31 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot set priority of others jobs' '
@@ -188,15 +188,15 @@ test_expect_success 'job-manager: guest cannot set priority of others jobs' '
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
 		flux job priority ${jobid} 0 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
-test_expect_success 'job-manager: guest cannot cancel --purge others jobs' '
+test_expect_success 'job-manager: guest cannot cancel others jobs' '
 	jobid=$(flux job submit basic.json) &&
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
-		flux job cancel --purge ${jobid} &&
-	flux job cancel --purge ${jobid}
+		flux job cancel ${jobid} &&
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: no jobs in the queue' '

@@ -53,13 +53,6 @@ static struct optparse_option list_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
-static struct optparse_option cancel_opts[] =  {
-    { .name = "purge", .key = 'p', .has_arg = 0,
-      .usage = "Remove all trace of job from KVS",
-    },
-    OPTPARSE_TABLE_END
-};
-
 
 static struct optparse_option submit_opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
@@ -108,7 +101,7 @@ static struct optparse_subcommand subcommands[] = {
       "Abort job(s)",
       cmd_cancel,
       0,
-      cancel_opts,
+      NULL,
     },
     { "submit",
       "[OPTIONS] [jobspec]",
@@ -237,8 +230,6 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    if (optparse_hasopt (p, "purge"))
-        flags |= FLUX_JOB_PURGE;
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     while (optindex < argc) {

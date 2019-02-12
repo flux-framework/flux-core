@@ -23,10 +23,6 @@ enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
 };
 
-enum job_cancel_flags {
-    FLUX_JOB_PURGE = 1,         // remove all traces
-};
-
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,

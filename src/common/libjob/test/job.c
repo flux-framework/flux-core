@@ -57,8 +57,8 @@ int main (int argc, char *argv[])
     /* flux_job_cancel */
 
     errno = 0;
-    ok (flux_job_cancel (NULL, 0, FLUX_JOB_PURGE) == NULL && errno == EINVAL,
-        "flux_job_purge h=NULL fails with EINVAL");
+    ok (flux_job_cancel (NULL, 0, 0) == NULL && errno == EINVAL,
+        "flux_job_cancel h=NULL fails with EINVAL");
 
     /* flux_job_set_priority */
 
