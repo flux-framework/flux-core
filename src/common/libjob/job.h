@@ -33,14 +33,6 @@ enum job_priority {
     FLUX_JOB_PRIORITY_MAX = 31,
 };
 
-enum job_status_flags {
-    FLUX_JOB_RESOURCE_REQUESTED     = 1,
-    FLUX_JOB_RESOURCE_ALLOCATED     = 2,
-    FLUX_JOB_EXEC_REQUESTED         = 4,
-    FLUX_JOB_EXEC_RUNNING           = 8,
-    FLUX_JOB_CANCELED               = 16,
-};
-
 typedef enum {
     FLUX_JOB_NEW                    = 1,
     FLUX_JOB_DEPEND                 = 2,

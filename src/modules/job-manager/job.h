@@ -13,6 +13,10 @@
 
 #include "src/common/libjob/job.h"
 
+enum job_status_flags {
+    FLUX_JOB_CANCELED = 1,
+};
+
 struct job {
     flux_jobid_t id;
     uint32_t userid;

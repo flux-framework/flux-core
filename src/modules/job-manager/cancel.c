@@ -79,11 +79,7 @@ static void cancel_decref (struct cancel *c)
 {
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
-        if (!(c->job->flags & FLUX_JOB_RESOURCE_ALLOCATED)
-                && !(c->job->flags & FLUX_JOB_RESOURCE_REQUESTED)) {
-            queue_delete (c->queue, c->job);
-            /* FIXME: move to inactive */
-        }
+        queue_delete (c->queue, c->job);
         if (c->request) {
             cancel_respond (c);
             flux_msg_destroy (c->request);
