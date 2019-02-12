@@ -48,6 +48,16 @@ void errors (void)
         && errno == EINVAL,
         "flux_kvs_commit fails on bad handle");
 
+    errno = 0;
+    ok (flux_kvs_commit_get_treeobj (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_kvs_commit_get_treeobj fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_commit_get_sequence (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_kvs_commit_get_sequence fails on bad input");
+
     flux_kvs_txn_destroy (txn);
 }
 
