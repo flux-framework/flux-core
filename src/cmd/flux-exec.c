@@ -62,7 +62,7 @@ int sigint_count = 0;
 
 void completion_cb (flux_subprocess_t *p)
 {
-    int ec = flux_subprocess_exit_code (p);
+    int ec;
 
     if ((ec = flux_subprocess_exit_code (p)) < 0) {
         /* bash standard, signals + 128 */
