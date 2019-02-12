@@ -166,6 +166,22 @@ test_expect_success 'flux-job: priority fails with non-numeric priority' '
 	test_must_fail flux job priority ${validjob} foo
 '
 
+test_expect_success 'flux-job: raise fails with bad FLUX_URI' '
+	! FLUX_URI=/wrong flux job raise ${validjob}
+'
+
+test_expect_success 'flux-job: raise fails with no args' '
+	test_must_fail flux job raise
+'
+
+test_expect_success 'flux-job: raise fails with invalid jobid' '
+	test_must_fail flux job raise foo
+'
+
+test_expect_success 'flux-job: raise fails with invalid option' '
+	test_must_fail flux job raise --meep foo
+'
+
 test_expect_success 'flux-job: cancel fails with bad FLUX_URI' '
 	! FLUX_URI=/wrong flux job cancel ${validjob}
 '

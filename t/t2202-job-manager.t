@@ -48,6 +48,12 @@ test_expect_success 'job-manager: queue lists job with correct jobid' '
 	test_cmp submit1.out list1_jobid.out
 '
 
+test_expect_success 'job-manager: queue lists job with state=N' '
+	echo "N" >list1_state.exp &&
+	cut -f2 <list1.out >list1_state.out &&
+	test_cmp list1_state.exp list1_state.out
+'
+
 test_expect_success 'job-manager: queue lists job with correct userid' '
 	id -u >list1_userid.exp &&
 	cut -f3 <list1.out >list1_userid.out &&
@@ -60,8 +66,26 @@ test_expect_success 'job-manager: queue list job with correct priority' '
 	test_cmp list1_priority.exp list1_priority.out
 '
 
+test_expect_success 'job-manager: raise non-fatal exception on job' '
+	jobid=$(cat list1_jobid.out) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
+	flux kvs eventlog get ${kvsdir}.eventlog \
+		| grep exception >list1_exception.out &&
+	grep -q type=testing list1_exception.out &&
+	grep -q severity=1 list1_exception.out &&
+	grep -q "Mumble grumble" list1_exception.out
+'
+
+test_expect_success 'job-manager: queue contains 1 jobs' '
+	test $(list_jobs | wc -l) -eq 1
+'
+
 test_expect_success 'job-manager: cancel job' '
-	flux job cancel $(cat list1_jobid.out)
+	jobid=$(cat list1_jobid.out) &&
+	flux job cancel ${jobid} &&
+	flux kvs eventlog get ${kvsdir}.eventlog | grep exception \
+		| grep severity=0 | grep type=cancel
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
@@ -204,17 +228,6 @@ test_expect_success 'job-manager: guest cannot cancel others jobs' '
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
 		flux job cancel ${jobid} &&
 	flux job cancel ${jobid}
-'
-
-test_expect_success 'job-manager: no jobs in the queue' '
-	test $(list_jobs  | wc -l) -eq 0
-'
-
-test_expect_success 'job-manager: job cancellation logged to eventlog ' '
-	jobid=$(flux job submit <basic.json) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux job cancel ${jobid} &&
-	flux kvs eventlog get ${kvsdir}.eventlog | grep cancel
 '
 
 test_expect_success 'job-manager: no jobs in the queue' '
