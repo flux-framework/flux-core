@@ -2,10 +2,10 @@ coverage:
  round: down
  range: "50...100"
  ignore:
- - "t/.*"
+ - "^t/.*"
  - ".*/test/.*"
  - ".*/tests/.*"
- - ".*/man3/*.c"
+ - ".*/man3/.*"
  - ".*/common/libtap/.*"
  - ".*/common/liblsd/.*"
  - ".*/common/libev/.*"
@@ -15,6 +15,12 @@ coverage:
  - ".*/common/libminilzo/.*"
  - "/usr/include/.*"
  - "/usr/lib/.*"
+
+ # Allow coverage to drop up to 0.1%
+ status:
+  project:
+   default:
+    threshold: .1
 
 comment:
  layout: "header, diff, changes, tree"
