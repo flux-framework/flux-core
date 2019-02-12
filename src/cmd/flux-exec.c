@@ -46,6 +46,7 @@ uint32_t rank_count;
 uint32_t started = 0;
 uint32_t exited = 0;
 int exit_code = 0;
+zhashx_t *exitsets;
 
 zlist_t *subprocesses;
 
@@ -60,17 +61,61 @@ flux_watcher_t *stdin_w;
 struct timespec last;
 int sigint_count = 0;
 
+void output_exitsets (const char *key, void *item)
+{
+    struct idset *idset = item;
+    int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
+    char *idset_str;
+
+    if (!(idset_str = idset_encode (idset, flags)))
+        log_err_exit ("idset_encode");
+
+    /* key is string form of exit code / signal */
+    fprintf (stderr, "%s: %s\n", idset_str, key);
+    free (idset_str);
+}
+
+void idset_destroy_wrapper (void *data)
+{
+    struct idset *idset = data;
+    idset_destroy (idset);
+}
+
 void completion_cb (flux_subprocess_t *p)
 {
-    int ec;
+    int rank = flux_subprocess_rank (p);
+    int ec, signum = 0;
 
     if ((ec = flux_subprocess_exit_code (p)) < 0) {
         /* bash standard, signals + 128 */
-        if ((ec = flux_subprocess_signaled (p)) > 0)
-            ec += 128;
+        if ((signum = flux_subprocess_signaled (p)) > 0)
+            ec = signum + 128;
     }
     if (ec > exit_code)
         exit_code = ec;
+
+    if (ec > 0) {
+        char buf[128];
+        struct idset *idset;
+
+        if (signum)
+            sprintf (buf, "%s", strsignal (signum));
+        else
+            sprintf (buf, "Exit %d", ec);
+
+        /* use exit code as key for hash */
+        if (!(idset = zhashx_lookup (exitsets, buf))) {
+            if (!(idset = idset_create (rank_count, 0)))
+                log_err_exit ("idset_create");
+            if (zhashx_insert (exitsets, buf, idset) < 0)
+                log_err_exit ("zhashx_insert");
+            if (!zhashx_freefn (exitsets, buf, idset_destroy_wrapper))
+                log_err_exit ("zhashx_freefn");
+        }
+
+        if (idset_set (idset, rank) < 0)
+            log_err_exit ("idset_set");
+    }
 }
 
 void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -326,6 +371,9 @@ int main (int argc, char *argv[])
     if (!(subprocesses = zlist_new ()))
         log_err_exit ("zlist_new");
 
+    if (!(exitsets = zhashx_new ()))
+        log_err_exit ("zhashx_new()");
+
     rank = idset_first (ns);
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
@@ -379,6 +427,16 @@ int main (int argc, char *argv[])
         fprintf (stderr, "%03fms: %d tasks complete with code %d\n",
                  monotime_since (t0), exited, exit_code);
 
+    /* output message on any tasks that exited non-zero */
+    if (zhashx_size (exitsets) > 0) {
+        struct id_set *idset = zhashx_first (exitsets);
+        while (idset) {
+            const char *key = zhashx_cursor (exitsets);
+            output_exitsets (key, idset);
+            idset = zhashx_next (exitsets);
+        }
+    }
+
     /* Clean up.
      */
     idset_destroy (ns);
@@ -386,6 +444,8 @@ int main (int argc, char *argv[])
     flux_close (h);
     optparse_destroy (opts);
     log_fini ();
+
+    zhashx_destroy (&exitsets);
     zlist_destroy (&subprocesses);
 
     return exit_code;

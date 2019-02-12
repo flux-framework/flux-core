@@ -109,6 +109,15 @@ test_expect_success 'flux exec passes non-zero exit status' '
 	test_expect_code 139 flux exec -n sh -c "kill -11 \$\$"
 '
 
+test_expect_success 'flux exec outputs tasks with errors' '
+	! flux exec -n sh -c "exit 2" > 2.out 2>&1 &&
+        grep "\[0-3\]: Exit 2" 2.out &&
+	! flux exec -n sh -c "exit 3" > 3.out 2>&1 &&
+        grep "\[0-3\]: Exit 3" 3.out &&
+	! flux exec -n sh -c "kill -11 \$\$" > 139.out 2>&1 &&
+        grep "\[0-3\]: Segmentation fault" 139.out
+'
+
 test_expect_success 'basic IO testing' '
 	flux exec -n -r0 echo Hello | grep ^Hello\$  &&
 	flux exec -n -r0 sh -c "echo Hello >&2" 2>stderr &&
