@@ -15,8 +15,8 @@
 
 /* Handle a 'cancel' request - to abort job with flags
  */
-void cancel_handle_request (flux_t *h, struct queue *queue,
-                            const flux_msg_t *msg);
+void raise_handle_request (flux_t *h, struct queue *queue,
+                           const flux_msg_t *msg);
 
 
 #endif /* ! _FLUX_JOB_MANAGER_CANCEL_H */

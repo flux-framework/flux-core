@@ -71,9 +71,18 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 flux_future_t *flux_job_list (flux_t *h, int max_entries,
                               const char *json_str);
 
-/* Abort a job.
+/* Raise an exception for job.
+ * Severity is 0-7, with severity=0 causing the job to abort.
+ * Note may be NULL or a human readable message.
  */
-flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, int flags);
+flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
+                               const char *type, int severity,
+                               const char *note);
+
+/* Cancel a job.
+ * Reason may be NULL or a human readable message.
+ */
+flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason);
 
 /* Change job priority.
  */

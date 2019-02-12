@@ -224,7 +224,6 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_t *h;
     int rc = 0;
-    int flags = 0;
 
     if (optindex == argc) {
         optparse_print_usage (p);
@@ -242,8 +241,8 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         id = strtoull (arg, &endptr, 10);
         if (errno != 0)
             log_err_exit ("error parsing jobid: %s", arg);
-        if (!(f = flux_job_cancel (h, id, flags)))
-            log_err_exit ("flux_job_cancel");
+        if (!(f = flux_job_raise (h, id, "cancel", 0, NULL)))
+            log_err_exit ("flux_job_raise type=cancel severity=0");
         if (flux_rpc_get (f, NULL) < 0) {
             const char *errmsg;
             if ((errmsg = flux_future_error_string (f)))

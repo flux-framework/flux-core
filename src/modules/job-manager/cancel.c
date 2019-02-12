@@ -32,6 +32,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <ctype.h>
 #include <flux/core.h>
 
 #include "src/common/libjob/job.h"
@@ -47,6 +48,9 @@ struct cancel {
     struct job *job;
     flux_kvs_txn_t *txn;
     uint32_t userid;
+    int severity;
+    char *type;
+    char *note;
     int errnum;
     char *errstr;
 
@@ -71,19 +75,22 @@ static void cancel_respond (struct cancel *c)
 /* If c->message is non-NULL, assume refcount reaches zero when all (parallel)
  * work to accomplish the cancel has been completed.  If any errors occurred,
  * c->errno will be non-zero.  Respond to the request and, advance the job
- * state to CLEANUP.
+ * state to CLEANUP (if severity=0)
  */
 static void cancel_decref (struct cancel *c)
 {
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
         c->job->flags &= ~JOB_EXCEPTION_PENDING;
-        c->job->state = FLUX_JOB_CLEANUP;
+        if (c->severity == 0)
+            c->job->state = FLUX_JOB_CLEANUP;
         if (c->request) {
             cancel_respond (c);
             flux_msg_destroy (c->request);
         }
         flux_kvs_txn_destroy (c->txn);
+        free (c->note);
+        free (c->type);
         free (c->errstr);
         free (c);
         errno = saved_errno;
@@ -101,7 +108,10 @@ static struct cancel *cancel_create (flux_t *h,
                                      struct queue *queue,
                                      struct job *job,
                                      const flux_msg_t *request,
-                                     uint32_t userid)
+                                     uint32_t userid,
+                                     int severity,
+                                     const char *type,
+                                     const char *note)
 {
     struct cancel *c;
 
@@ -112,6 +122,11 @@ static struct cancel *cancel_create (flux_t *h,
     c->userid = userid;
     c->h = h;
     c->refcount = 1;
+    c->severity = severity;
+    if (!(c->type = strdup (type)))
+        goto error;
+    if (note && !(c->note = strdup (note)))
+        goto error;
     if (!(c->txn = flux_kvs_txn_create ()))
         goto error;
     if (!(c->request = flux_msg_copy (request, false)))
@@ -161,8 +176,8 @@ static void publish_exception (struct cancel *c)
                                        FLUX_MSGFLAG_PRIVATE,
                                        "{s:I s:s s:i}",
                                        "id", c->job->id,
-                                       "type", "cancel",
-                                       "severity", 0)))
+                                       "type", c->type,
+                                       "severity", c->severity)))
         goto error;
     if (flux_future_then (f, -1., publish_exception_continuation, c) < 0) {
         flux_future_destroy (f);
@@ -197,8 +212,12 @@ static void update_kvs_eventlog (struct cancel *c)
     flux_future_t *f;
 
     if (util_eventlog_append (c->txn, c->job, "exception",
-                              "type=cancel severity=0 userid=%lu",
-                              (unsigned long)c->userid) < 0)
+                              "type=%s severity=%d userid=%lu%s%s",
+                              c->type,
+                              c->severity,
+                              (unsigned long)c->userid,
+                              c->note ? " " : "",
+                              c->note ? c->note : "") < 0)
         goto error;
     if (!(f = flux_kvs_commit (c->h, NULL, 0, c->txn)))
         goto error;
@@ -214,25 +233,47 @@ error:
                     (unsigned long long)c->job->id);
 }
 
-void cancel_handle_request (flux_t *h, struct queue *queue,
-                            const flux_msg_t *msg)
+static int check_type (const char *s)
+{
+    const char *cp;
+
+    if (strlen (s)  == 0)
+        return -1;
+    for (cp = s; *cp != '\0'; cp++)
+        if (isspace (*cp) || *cp == '=')
+            return -1;
+    return 0;
+}
+
+void raise_handle_request (flux_t *h, struct queue *queue,
+                           const flux_msg_t *msg)
 {
     uint32_t userid;
     uint32_t rolemask;
     flux_jobid_t id;
     struct job *job;
-    int flags;
+    int severity;
+    const char *type;
+    const char *note = NULL;
     struct cancel *c;
     const char *errstr = NULL;
     int rc;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:i s:s s?:s}",
                                         "id", &id,
-                                        "flags", &flags) < 0
+                                        "severity", &severity,
+                                        "type", &type,
+                                        "note", &note) < 0
                     || flux_msg_get_userid (msg, &userid) < 0
                     || flux_msg_get_rolemask (msg, &rolemask) < 0)
         goto error;
-    if (flags != 0) {
+    if (severity < 0 || severity > 7) {
+        errstr = "invalid exception severity";
+        errno = EPROTO;
+        goto error;
+    }
+    if (check_type (type) < 0) {
+        errstr = "invalid exception type";
         errno = EPROTO;
         goto error;
     }
@@ -240,10 +281,10 @@ void cancel_handle_request (flux_t *h, struct queue *queue,
         errstr = "unknown job id";
         goto error;
     }
-    /* Security: guests can only cancel jobs that they submitted.
+    /* Security: guests can only raise exceptions on jobs that they submitted.
      */
     if (!(rolemask & FLUX_ROLE_OWNER) && userid != job->userid) {
-        errstr = "guests can only cancel their own jobs";
+        errstr = "guests can only raise exceptions on their own jobs";
         errno = EPERM;
         goto error;
     }
@@ -251,7 +292,7 @@ void cancel_handle_request (flux_t *h, struct queue *queue,
      * When the last one completes, 'c' is destroyed and
      * the user receives a response to the job-manager.cancel request.
      */
-    if (!(c = cancel_create (h, queue, job, msg, userid)))
+    if (!(c = cancel_create (h, queue, job, msg, userid, severity, type, note)))
         goto error;
     job->flags |= JOB_EXCEPTION_PENDING;
     update_kvs_eventlog (c);

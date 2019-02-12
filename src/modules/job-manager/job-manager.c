@@ -94,13 +94,13 @@ static void list_cb (flux_t *h, flux_msg_handler_t *mh,
     list_handle_request (h, ctx->queue, msg);
 }
 
-/* cancel request handled in cancel.c
+/* exception request handled in cancel.c
  */
-static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
+static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    cancel_handle_request (h, ctx->queue, msg);
+    raise_handle_request (h, ctx->queue, msg);
 }
 
 /* priority request handled in priority.c
@@ -141,7 +141,7 @@ static int restart_from_kvs (flux_t *h, struct job_manager_ctx *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
     { FLUX_MSGTYPE_REQUEST, "job-manager.list", list_cb, FLUX_ROLE_USER},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.cancel", cancel_cb, FLUX_ROLE_USER},
+    { FLUX_MSGTYPE_REQUEST, "job-manager.raise", raise_cb, FLUX_ROLE_USER},
     { FLUX_MSGTYPE_REQUEST, "job-manager.priority", priority_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };

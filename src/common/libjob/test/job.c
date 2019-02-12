@@ -54,11 +54,14 @@ int main (int argc, char *argv[])
     ok (flux_job_list (h, 0, "wrong") == NULL && errno == EINVAL,
         "flux_job_list json_str=(inval JSON) fails with EINVAL");
 
-    /* flux_job_cancel */
+    /* flux_job_raise */
 
     errno = 0;
-    ok (flux_job_cancel (NULL, 0, 0) == NULL && errno == EINVAL,
-        "flux_job_cancel h=NULL fails with EINVAL");
+    ok (flux_job_raise (NULL, 0, "cancel", 0, NULL) == NULL && errno == EINVAL,
+        "flux_job_raise h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_job_raise (h, 0, NULL, 0, NULL) == NULL && errno == EINVAL,
+        "flux_job_raise type=NULL fails with EINVAL");
 
     /* flux_job_set_priority */
 
