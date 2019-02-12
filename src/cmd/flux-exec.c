@@ -66,7 +66,7 @@ void completion_cb (flux_subprocess_t *p)
 
     if ((ec = flux_subprocess_exit_code (p)) < 0) {
         /* bash standard, signals + 128 */
-        if ((ec = flux_subprocess_signaled (p)) >= 0)
+        if ((ec = flux_subprocess_signaled (p)) > 0)
             ec += 128;
     }
     if (ec > exit_code)
