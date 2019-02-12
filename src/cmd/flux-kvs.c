@@ -242,7 +242,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-N ns] [-j|-r|-t] [-n] key=value [key=value...]",
+      "[-N ns] [-j|-r|-t] [-n] [-A] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
