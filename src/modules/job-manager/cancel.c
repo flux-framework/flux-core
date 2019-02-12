@@ -190,14 +190,14 @@ static void update_kvs_eventlog_continuation (flux_future_t *f, void *arg)
     cancel_decref (c);
 }
 
-/* Log cancel event to the job's eventlog.
+/* Log exception to the job's eventlog.
  */
 static void update_kvs_eventlog (struct cancel *c)
 {
     flux_future_t *f;
 
-    if (util_eventlog_append (c->txn, c->job, "cancel",
-                              "userid=%lu",
+    if (util_eventlog_append (c->txn, c->job, "exception",
+                              "type=cancel severity=0 userid=%lu",
                               (unsigned long)c->userid) < 0)
         goto error;
     if (!(f = flux_kvs_commit (c->h, NULL, 0, c->txn)))

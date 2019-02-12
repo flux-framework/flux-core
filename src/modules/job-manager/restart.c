@@ -14,12 +14,44 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <argz.h>
+#include <envz.h>
 
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/fluid.h"
 
 #include "job.h"
 #include "restart.h"
+
+/* Parse severity (0-7) from exception event context.
+ * Returns severity on success, -1 on failure.
+ */
+static int exception_severity (const char *s)
+{
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *sevstr;
+    int severity;
+    char *endptr;
+
+    if (argz_create_sep (s, ' ', &argz, &argz_len) != 0)
+        return -1;
+    if (!(sevstr = envz_get (argz, argz_len, "severity")))
+        goto error;
+    errno = 0;
+    severity = strtol (sevstr, &endptr, 10);
+    if (errno != 0)
+        goto error;
+    if (*endptr != '\0')
+        goto error;
+    if (severity < 0 || severity > 7)
+        goto error;
+    free (argz);
+    return severity;
+error:
+    free (argz);
+    return -1;
+}
 
 static int count_char (const char *s, char c)
 {
@@ -37,6 +69,7 @@ static int replay_eventlog (const char *s, double *t_submit, int *flagsp,
     struct flux_kvs_eventlog *eventlog;
     const char *event;
     char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
     double t;
     int flags = 0;
     int state = FLUX_JOB_NEW;
@@ -44,16 +77,16 @@ static int replay_eventlog (const char *s, double *t_submit, int *flagsp,
     if (!(eventlog = flux_kvs_eventlog_decode (s)))
         return -1;
     if (!(event = flux_kvs_eventlog_first (eventlog)))
-        goto error;
+        goto error_inval;
     if (flux_kvs_event_decode (event, &t, name, sizeof (name), NULL, 0) < 0)
         goto error;
     if (strcmp (name, "submit") != 0)
         goto error_inval;
     while ((event = flux_kvs_eventlog_next (eventlog))) {
         if (flux_kvs_event_decode (event, NULL, name, sizeof (name),
-                                                                NULL, 0) < 0)
+                                   context, sizeof (context)) < 0)
             goto error;
-        if (!strcmp (name, "cancel"))
+        if (!strcmp (name, "exception") && exception_severity (context) == 0)
             state = FLUX_JOB_CLEANUP;
     }
     *t_submit = t;
