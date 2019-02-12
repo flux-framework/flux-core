@@ -47,6 +47,7 @@ uint32_t started = 0;
 uint32_t exited = 0;
 int exit_code = 0;
 zhashx_t *exitsets;
+struct idset *hanging;
 
 zlist_t *subprocesses;
 
@@ -116,6 +117,9 @@ void completion_cb (flux_subprocess_t *p)
         if (idset_set (idset, rank) < 0)
             log_err_exit ("idset_set");
     }
+
+    if (idset_clear (hanging, rank) < 0)
+        log_err_exit ("idset_clear");
 }
 
 void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -237,8 +241,18 @@ static void signal_cb (int signum)
     if (signum == SIGINT) {
         if (sigint_count >= 2) {
             double since_last = monotime_since (last);
-            if (since_last < INTERRUPT_MILLISECS)
+            if (since_last < INTERRUPT_MILLISECS) {
+                int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
+                char *idset_str;
+
+                if (!(idset_str = idset_encode (hanging, flags)))
+                    log_err_exit ("idset_encode");
+
+                fprintf (stderr, "%s: command still running at exit\n",
+                         idset_str);
+                free (idset_str);
                 exit (1);
+            }
         }
     }
 
@@ -355,6 +369,9 @@ int main (int argc, char *argv[])
         if (idset_range_set (ns, 0, rank_count - 1) < 0)
             log_err_exit ("idset_range_set");
     }
+
+    if (!(hanging = idset_copy (ns)))
+        log_err_exit ("idset_copy");
 
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
