@@ -18,7 +18,7 @@
  * - flags
  *
  * Action:
- * - publish job-cancel event (for e.g. scheduler to abort queued requests)
+ * - publish exception event (for e.g. scheduler to abort queued requests)
  * - update kvs event log
  * - response indicating success or failure
  * - removal from queue once job no longer has pending resource actions
@@ -137,40 +137,42 @@ static void cancel_set_error (struct cancel *c, int errnum, const char *errstr)
     }
 }
 
-static void send_cancel_event_continuation (flux_future_t *f, void *arg)
+static void publish_exception_continuation (flux_future_t *f, void *arg)
 {
     flux_t *h = flux_future_get_flux (f);
     struct cancel *c = arg;
 
     if (flux_future_get (f, NULL) < 0) {
-        cancel_set_error (c, errno, "error publishing cancel-job event");
-        flux_log_error (h, "publish cancel-job id=%llu",
+        cancel_set_error (c, errno, "error publishing job-exception event");
+        flux_log_error (h, "publish job-exception id=%llu",
                         (unsigned long long)c->job->id);
     }
     flux_future_destroy (f);
     cancel_decref (c);
 }
 
-/* Publish a 'cancel-job' event message.
+/* Publish a 'job-exception' event message.
  */
-static void send_cancel_event (struct cancel *c)
+static void publish_exception (struct cancel *c)
 {
     flux_future_t *f;
 
-    if (!(f = flux_event_publish_pack (c->h, "cancel-job",
+    if (!(f = flux_event_publish_pack (c->h, "job-exception",
                                        FLUX_MSGFLAG_PRIVATE,
-                                       "{s:I}",
-                                       "id", c->job->id)))
+                                       "{s:I s:s s:i}",
+                                       "id", c->job->id,
+                                       "type", "cancel",
+                                       "severity", 0)))
         goto error;
-    if (flux_future_then (f, -1., send_cancel_event_continuation, c) < 0) {
+    if (flux_future_then (f, -1., publish_exception_continuation, c) < 0) {
         flux_future_destroy (f);
         goto error;
     }
     cancel_incref (c);
     return;
 error:
-    cancel_set_error (c, errno, "error publishing cancel-job event");
-    flux_log_error (c->h, "publish cancel-job id=%llu",
+    cancel_set_error (c, errno, "error publishing job-exception event");
+    flux_log_error (c->h, "publish job-exception id=%llu",
                     (unsigned long long)c->job->id);
 }
 
@@ -253,7 +255,7 @@ void cancel_handle_request (flux_t *h, struct queue *queue,
         goto error;
     job->flags |= JOB_EXCEPTION_PENDING;
     update_kvs_eventlog (c);
-    send_cancel_event (c);
+    publish_exception (c);
     cancel_decref (c);
     return;
 error:
