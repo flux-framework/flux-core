@@ -8,25 +8,23 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* cancel - abort job
+/* raise - raise an exception on a job
  *
  * Purpose:
- *   Handle job-manager.cancel RPC
+ *   Handle job-manager.raise RPC
  *
  * Input:
- * - job id
- * - flags
+ * - job id, severity, type, note (optional)
  *
  * Action:
  * - publish exception event (for e.g. scheduler to abort queued requests)
  * - update kvs event log
  * - response indicating success or failure
- * - removal from queue once job no longer has pending resource actions
+ * - transition state to CLEANUP for severity=0
  *
  * Caveats:
- * - Although the first error encountered during cancellation is propagated
+ * - Although the first error encountered during parallel work is propagated
  *   to the user, no attempt is made to unwind prior successful actions.
- * - Job is left in the active KVS area (needs to be moved to inactive).
  */
 
 #if HAVE_CONFIG_H
@@ -42,7 +40,7 @@
 #include "util.h"
 #include "raise.h"
 
-struct cancel {
+struct raise_ctx {
     flux_t *h;
     flux_msg_t *request;
     struct job *job;
@@ -58,7 +56,7 @@ struct cancel {
     int refcount;
 };
 
-static void cancel_respond (struct cancel *c)
+void raise_respond (struct raise_ctx *c)
 {
     int rc;
 
@@ -73,11 +71,11 @@ static void cancel_respond (struct cancel *c)
 }
 
 /* If c->message is non-NULL, assume refcount reaches zero when all (parallel)
- * work to accomplish the cancel has been completed.  If any errors occurred,
+ * work to raise the exception is complete.  If any errors occurred,
  * c->errno will be non-zero.  Respond to the request and, advance the job
  * state to CLEANUP (if severity=0)
  */
-static void cancel_decref (struct cancel *c)
+void raise_ctx_decref (struct raise_ctx *c)
 {
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
@@ -85,7 +83,7 @@ static void cancel_decref (struct cancel *c)
         if (c->severity == 0)
             c->job->state = FLUX_JOB_CLEANUP;
         if (c->request) {
-            cancel_respond (c);
+            raise_respond (c);
             flux_msg_destroy (c->request);
         }
         flux_kvs_txn_destroy (c->txn);
@@ -97,23 +95,23 @@ static void cancel_decref (struct cancel *c)
     }
 }
 
-static struct cancel *cancel_incref (struct cancel *c)
+struct raise_ctx *raise_ctx_incref (struct raise_ctx *c)
 {
     if (c)
         c->refcount++;
     return c;
 }
 
-static struct cancel *cancel_create (flux_t *h,
-                                     struct queue *queue,
-                                     struct job *job,
-                                     const flux_msg_t *request,
-                                     uint32_t userid,
-                                     int severity,
-                                     const char *type,
-                                     const char *note)
+struct raise_ctx *raise_ctx_create (flux_t *h,
+                                    struct queue *queue,
+                                    struct job *job,
+                                    const flux_msg_t *request,
+                                    uint32_t userid,
+                                    int severity,
+                                    const char *type,
+                                    const char *note)
 {
-    struct cancel *c;
+    struct raise_ctx *c;
 
     if (!(c = calloc (1, sizeof (*c))))
         return NULL;
@@ -133,11 +131,11 @@ static struct cancel *cancel_create (flux_t *h,
         goto error;
     return c;
 error:
-    cancel_decref (c);
+    raise_ctx_decref (c);
     return NULL;
 }
 
-static void cancel_set_error (struct cancel *c, int errnum, const char *errstr)
+void raise_set_error (struct raise_ctx *c, int errnum, const char *errstr)
 {
     if (c && c->errnum == 0) {
         int saved_errno = errno;
@@ -152,23 +150,23 @@ static void cancel_set_error (struct cancel *c, int errnum, const char *errstr)
     }
 }
 
-static void publish_exception_continuation (flux_future_t *f, void *arg)
+void raise_publish_continuation (flux_future_t *f, void *arg)
 {
     flux_t *h = flux_future_get_flux (f);
-    struct cancel *c = arg;
+    struct raise_ctx *c = arg;
 
     if (flux_future_get (f, NULL) < 0) {
-        cancel_set_error (c, errno, "error publishing job-exception event");
+        raise_set_error (c, errno, "error publishing job-exception event");
         flux_log_error (h, "publish job-exception id=%llu",
                         (unsigned long long)c->job->id);
     }
     flux_future_destroy (f);
-    cancel_decref (c);
+    raise_ctx_decref (c);
 }
 
 /* Publish a 'job-exception' event message.
  */
-static void publish_exception (struct cancel *c)
+void raise_publish (struct raise_ctx *c)
 {
     flux_future_t *f;
 
@@ -179,35 +177,33 @@ static void publish_exception (struct cancel *c)
                                        "type", c->type,
                                        "severity", c->severity)))
         goto error;
-    if (flux_future_then (f, -1., publish_exception_continuation, c) < 0) {
+    if (flux_future_then (f, -1., raise_publish_continuation, c) < 0) {
         flux_future_destroy (f);
         goto error;
     }
-    cancel_incref (c);
+    raise_ctx_incref (c);
     return;
 error:
-    cancel_set_error (c, errno, "error publishing job-exception event");
+    raise_set_error (c, errno, "error publishing job-exception event");
     flux_log_error (c->h, "publish job-exception id=%llu",
                     (unsigned long long)c->job->id);
 }
 
-static void update_kvs_eventlog_continuation (flux_future_t *f, void *arg)
+void raise_eventlog_continuation (flux_future_t *f, void *arg)
 {
-    struct cancel *c = arg;
+    struct raise_ctx *c = arg;
     flux_t *h = flux_future_get_flux (f);
 
     if (flux_future_get (f, NULL) < 0) {
-        cancel_set_error (c, errno, "error updating KVS event log");
+        raise_set_error (c, errno, "error updating KVS event log");
         flux_log_error (h, "eventlog_update id=%llu",
                         (unsigned long long)c->job->id);
     }
     flux_future_destroy (f);
-    cancel_decref (c);
+    raise_ctx_decref (c);
 }
 
-/* Log exception to the job's eventlog.
- */
-static void update_kvs_eventlog (struct cancel *c)
+void raise_eventlog (struct raise_ctx *c)
 {
     flux_future_t *f;
 
@@ -221,19 +217,19 @@ static void update_kvs_eventlog (struct cancel *c)
         goto error;
     if (!(f = flux_kvs_commit (c->h, NULL, 0, c->txn)))
         goto error;
-    if (flux_future_then (f, -1, update_kvs_eventlog_continuation, c) < 0) {
+    if (flux_future_then (f, -1, raise_eventlog_continuation, c) < 0) {
         flux_future_destroy (f);
         goto error;
     }
-    cancel_incref (c);
+    raise_ctx_incref (c);
     return;
 error:
-    cancel_set_error (c, errno, "error updating KVS event log");
+    raise_set_error (c, errno, "error updating KVS event log");
     flux_log_error (c->h, "eventlog_update id=%llu",
                     (unsigned long long)c->job->id);
 }
 
-static int check_type (const char *s)
+int raise_check_type (const char *s)
 {
     const char *cp;
 
@@ -255,7 +251,7 @@ void raise_handle_request (flux_t *h, struct queue *queue,
     int severity;
     const char *type;
     const char *note = NULL;
-    struct cancel *c;
+    struct raise_ctx *c;
     const char *errstr = NULL;
     int rc;
 
@@ -272,7 +268,7 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPROTO;
         goto error;
     }
-    if (check_type (type) < 0) {
+    if (raise_check_type (type) < 0) {
         errstr = "invalid exception type";
         errno = EPROTO;
         goto error;
@@ -290,14 +286,15 @@ void raise_handle_request (flux_t *h, struct queue *queue,
     }
     /* Perform some tasks asynchronously.
      * When the last one completes, 'c' is destroyed and
-     * the user receives a response to the job-manager.cancel request.
+     * the user receives a response to the job-manager.raise request.
      */
-    if (!(c = cancel_create (h, queue, job, msg, userid, severity, type, note)))
+    if (!(c = raise_ctx_create (h, queue, job, msg, userid,
+                                severity, type, note)))
         goto error;
     job->flags |= JOB_EXCEPTION_PENDING;
-    update_kvs_eventlog (c);
-    publish_exception (c);
-    cancel_decref (c);
+    raise_eventlog (c);
+    raise_publish (c);
+    raise_ctx_decref (c);
     return;
 error:
     if (errstr)
