@@ -50,12 +50,6 @@ test_expect_success 'kvs: store 3x4 directory tree using kvsdir functions' '
 	test $(flux kvs dir -R $DIR.dtree | wc -l) = 81
 '
 
-test_expect_success 'kvs: store 3x4 directory tree using kvsdir classic functions' '
-	flux kvs unlink -Rf $DIR.dtree &&
-	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir-classic -h4 -w3 --prefix $DIR.dtree &&
-	test $(flux kvs dir -R $DIR.dtree | wc -l) = 81
-'
-
 # commit test
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
