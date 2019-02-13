@@ -185,7 +185,7 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
                 log_err_exit ("flux_kvs_txn_create");
 
             if (flux_kvs_txn_pack (txn, 0, keyat, "i", 1) < 0)
-                log_err_exit ("flux_kvsdir_pack %s", key);
+                log_err_exit ("flux_kvs_txn_pack %s", key);
 
             if (!(f = flux_kvs_commit (h, NULL, 0, txn))
                 || flux_future_get (f, NULL) < 0)
