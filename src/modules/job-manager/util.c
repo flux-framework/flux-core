@@ -97,21 +97,6 @@ error:
     return -1;
 }
 
-int util_active_unlink (flux_kvs_txn_t *txn, struct job *job)
-{
-    char path[64];
-
-    if (util_jobkey (path, sizeof (path), true, job, NULL) < 0)
-        goto error_inval;
-    if (flux_kvs_txn_unlink (txn, 0, path) < 0)
-        goto error;
-    return 0;
-error_inval:
-    errno = EINVAL;
-error:
-    return -1;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

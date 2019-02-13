@@ -38,10 +38,6 @@ int util_eventlog_append (flux_kvs_txn_t *txn,
                           const char *name,
                           const char *fmt, ...);
 
-/* Unlink the active job directory for 'job'.
- */
-int util_active_unlink (flux_kvs_txn_t *txn, struct job *job);
-
 #endif /* _FLUX_JOB_MANAGER_UTIL_H */
 
 /*
