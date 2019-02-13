@@ -431,6 +431,14 @@ test_expect_success 'kvs: clear stats globally' '
 '
 
 #
+# test fence api
+#
+
+test_expect_success 'kvs: test fence returns identical root info on all responses' '
+        ${FLUX_BUILD_DIR}/t/kvs/fence_api 8 apitest
+'
+
+#
 # test invalid fence arguments
 #
 
