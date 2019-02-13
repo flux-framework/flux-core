@@ -109,13 +109,23 @@ int main (int argc, char *argv[])
     ok (queue_first (q) == job[2],
         "reorder job 3 pri=max moves that job first");
 
+    /* queue_delete */
+
+    queue_delete (q, njob[0]);
+    queue_delete (q, njob[1]);
+
+    ok (njob[0]->refcount == 1 && njob[1]->refcount == 1,
+        "queue_delete dropped reference on jobs");
+
+    errno = 0;
+    ok (queue_lookup_by_id (q, 100) == NULL && errno == ENOENT,
+        "queue_lookup_by_id on deleted job fails with ENOENT");
+
     /* destroy */
 
     queue_destroy (q);
     ok (job[0]->refcount == 1 && job[1]->refcount == 1
-                              && job[2]->refcount == 1
-                              && njob[0]->refcount == 1
-                              && njob[0]->refcount == 1,
+                              && job[2]->refcount == 1,
         "queue dropped reference on jobs at destruction");
 
     job_decref (job[0]);
