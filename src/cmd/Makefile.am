@@ -54,14 +54,10 @@ nodist_flux_SOURCES = \
 #
 
 dist_fluxcmd_SCRIPTS = \
-	flux-submit \
-	flux-wreckrun \
-	flux-wreck \
-	flux-cron \
-	flux-aggregate \
-	flux-hostlist
+	flux-cron
 
 fluxcmd_PROGRAMS = \
+	flux-aggregate \
 	flux-ping \
 	flux-keygen \
 	flux-logger \
@@ -70,7 +66,6 @@ fluxcmd_PROGRAMS = \
 	flux-comms \
 	flux-kvs \
 	flux-start \
-	flux-jstat \
 	flux-job \
 	flux-exec
 

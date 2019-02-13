@@ -17,7 +17,6 @@
 
 #include "core/flux.h"
 #include "core/kvs.h"
-#include "core/jstatctl.h"
 #include "core/job.h"
 
 #endif /* !_FLUX_CORE_H */

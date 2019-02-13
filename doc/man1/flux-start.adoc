@@ -83,12 +83,6 @@ shell as the initial program:
 
   srun --pty -N8 flux start
 
-Launch an 8-way Flux instance under Flux, with /bin/true as
-the initial program:
-
-  flux wreckrun -N8 flux start /bin/true
-
-
 AUTHOR
 ------
 This page is maintained by the Flux community.

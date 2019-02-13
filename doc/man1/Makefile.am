@@ -8,9 +8,6 @@ MAN1_FILES_PRIMARY = \
 	flux-keygen.1 \
 	flux-logger.1 \
 	flux-ping.1 \
-	flux-submit.1 \
-	flux-wreckrun.1 \
-	flux-wreck.1 \
 	flux-start.1 \
 	flux-module.1 \
 	flux-exec.1 \
@@ -23,8 +20,7 @@ MAN1_FILES_PRIMARY = \
 	flux-proxy.1 \
 	flux-cron.1 \
 	flux-user.1 \
-	flux-event.1 \
-	flux-hostlist.1
+	flux-event.1
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -60,8 +56,6 @@ stderr_devnull_0 = 2>/dev/null
 EXTRA_DIST = \
 	$(ADOC_FILES) \
 	COPYRIGHT.adoc \
-	NODESET.adoc \
-	wreck-options.adoc \
-	wreck-extra-options.adoc
+	NODESET.adoc
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)

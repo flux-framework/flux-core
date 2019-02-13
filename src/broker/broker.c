@@ -62,7 +62,6 @@
 #include "hello.h"
 #include "shutdown.h"
 #include "attr.h"
-#include "sequence.h"
 #include "log.h"
 #include "content-cache.h"
 #include "runlevel.h"
@@ -560,8 +559,6 @@ int main (int argc, char *argv[])
         log_err_exit ("attr_register_handlers");
     if (heaptrace_initialize (ctx.h) < 0)
         log_msg_exit ("heaptrace_initialize");
-    if (sequence_hash_initialize (ctx.h) < 0)
-        log_err_exit ("sequence_hash_initialize");
     if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
         log_err_exit ("exec2_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
@@ -686,8 +683,6 @@ static struct attrmap attrmap[] = {
     { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1 },
     { "FLUX_RC1_PATH",          "broker.rc1_path",          1 },
     { "FLUX_RC3_PATH",          "broker.rc3_path",          1 },
-    { "FLUX_WRECK_LUA_PATTERN", "wrexec.lua_pattern",       1 },
-    { "FLUX_WREXECD_PATH",      "wrexec.wrexecd_path",      1 },
     { "FLUX_SEC_DIRECTORY",     "security.keydir",          1 },
 
     { "FLUX_URI",               "parent-uri",               0 },
@@ -699,8 +694,6 @@ static void init_attrs_from_environment (attr_t *attrs)
     struct attrmap *m;
     const char *val;
     int flags = 0;  // XXX possibly these should be immutable?
-                    //   however they weren't before and wreck test depends
-                    //   on changing wrexec.lua_pattern
 
     for (m = &attrmap[0]; m->env != NULL; m++) {
         val = getenv (m->env);

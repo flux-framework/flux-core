@@ -48,14 +48,6 @@ int l_pushresult (lua_State *L, int rc)
     return (1);
 }
 
-int l_loadlibrary (lua_State *L, const char *name)
-{
-    /* Equivalent of require(name) */
-    lua_getglobal (L, "require");
-    lua_pushstring (L, name);
-    return lua_pcall (L, 1, 0, 0);
-}
-
 int l_format_args (lua_State *L, int index)
 {
     int i;

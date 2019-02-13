@@ -96,9 +96,6 @@ runtime
 src
 tpn
 uuid
-wreckrun
-wrexec
-wrexecd
 ary
 baz
 EPGM
@@ -451,9 +448,7 @@ srckey
 dstkey
 semver
 versioning
-kz
 JOBNAME
-nokz
 LGPL
 SPDX
 MATCHDEBUG

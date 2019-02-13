@@ -36,8 +36,6 @@ libbroker_la_SOURCES = \
 	shutdown.c \
 	attr.h \
 	attr.c \
-	sequence.h \
-	sequence.c \
 	log.h \
 	log.c \
 	content-cache.h \

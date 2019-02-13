@@ -3,7 +3,6 @@
 /flux-comms-stats
 /flux-event
 /flux-jobspec-validate
-/flux-jstat
 /flux-keygen
 /flux-kvs
 /flux-logger
@@ -16,5 +15,4 @@
 /flux-start-single
 /flux-start-srun
 /flux-up
-/flux-zio
 /builtin-cmds.c
