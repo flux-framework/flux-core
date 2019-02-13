@@ -77,8 +77,8 @@ def validate_slurm_args(args):
 
     if (
         args.time
-        and re.match(r"^(\d+-)?\d+:\d+:\d+$") is None
-        and re.match(r"^\d+(:\d+)?$") is None
+        and re.match(r"^(\d+-)?\d+:\d+:\d+$", args.time) is None
+        and re.match(r"^\d+(:\d+)?$", args.time) is None
     ):
         raise ValueError(
             "invalid time limit string format. "

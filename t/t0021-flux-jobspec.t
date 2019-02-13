@@ -71,6 +71,11 @@ test_expect_success HAVE_JQ 'ensure flux-jobspec does not gobble application arg
     test_cmp myApp.expected myApp.out
 '
 
+test_expect_success 'an improperly formatted time string should produce an error' '
+    test_must_fail flux jobspec srun -t foo myApp 2>&1 | 
+    grep -q "flux-jobspec: ERROR: invalid time limit string format"
+'
+
 test_expect_success 'requesting more nodes than tasks should produce an error' '
    test_must_fail flux jobspec srun -N8 -n2 hostname 2>&1 |
    grep -q "Number of nodes greater than the number of tasks"
