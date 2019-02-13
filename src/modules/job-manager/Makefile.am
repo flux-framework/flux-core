@@ -40,7 +40,8 @@ TESTS = \
 	test_queue.t \
 	test_list.t \
 	test_raise.t \
-	test_util.t
+	test_util.t \
+	test_restart.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -87,4 +88,11 @@ test_util_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/util.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/common/libkvs/libkvs.la \
+        $(test_ldadd)
+
+test_restart_t_SOURCES = test/restart.c
+test_restart_t_CPPFLAGS = $(test_cppflags)
+test_restart_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/restart.o \
+        $(top_builddir)/src/modules/job-manager/job.o \
         $(test_ldadd)
