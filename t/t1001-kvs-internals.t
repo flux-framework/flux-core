@@ -346,6 +346,71 @@ test_expect_success 'kvs: cover pause / unpause namespace invalid' '
 '
 
 #
+# test causal consistency
+#
+
+# test strategy is to get treeobj / sequence from a write operation, then test
+# that the change is noticed on other ranks.  When using the treeobj, pause
+# setroot events b/c it shouldn't be necessary.
+
+test_expect_success 'kvs: causal consistency (put)' '
+        flux kvs unlink -Rf $DIR &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+        ATREF=$(flux kvs put -O $DIR.testA=1) &&
+        VAL=$(flux exec -n -r 1 flux kvs get --at $ATREF $DIR.testA) &&
+        test "$VAL" = "1" &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+        VERS=$(flux kvs put -s $DIR.testB=2) &&
+        flux exec -n -r 2 flux kvs wait $VERS &&
+        VAL=$(flux exec -n -r 2 flux kvs get $DIR.testB) &&
+        test "$VAL" = "2" &&
+        flux exec -n -r [1-2] sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause"
+'
+
+test_expect_success 'kvs: causal consistency (mkdir)' '
+        flux kvs unlink -Rf $DIR &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+        ATREF=$(flux kvs mkdir -O $DIR.dirA) &&
+        ! flux exec -n -r 1 flux kvs get --at $ATREF $DIR.dirA > output 2>&1 &&
+        grep "Is a directory" output &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+        VERS=$(flux kvs mkdir -s $DIR.dirB) &&
+        flux exec -n -r 2 flux kvs wait $VERS &&
+        ! flux exec -n -r 2 flux kvs get $DIR.dirB > output 2>&1 &&
+        grep "Is a directory" output
+'
+
+test_expect_success 'kvs: causal consistency (link)' '
+        flux kvs unlink -Rf $DIR &&
+        flux kvs put $DIR.fooA=3 &&
+        flux kvs put $DIR.fooB=4 &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+        ATREF=$(flux kvs link -O $DIR.fooA $DIR.linkA) &&
+        VAL=$(flux exec -n -r 1 flux kvs get --at $ATREF $DIR.linkA) &&
+        test "$VAL" = "3" &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+        VERS=$(flux kvs link -s $DIR.fooB $DIR.linkB) &&
+        flux exec -n -r 2 flux kvs wait $VERS &&
+        VAL=$(flux exec -n -r 2 flux kvs get $DIR.linkB) &&
+        test "$VAL" = "4"
+'
+
+test_expect_success 'kvs: causal consistency (unlink)' '
+        flux kvs unlink -Rf $DIR &&
+        flux kvs put $DIR.unlinkA=5 &&
+        flux kvs put $DIR.unlinkB=6 &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause" &&
+        ATREF=$(flux kvs unlink -O $DIR.unlinkA) &&
+        ! flux exec -n -r 1 flux kvs get --at $ATREF $DIR.unlinkA > output 2>&1 &&
+        grep "No such file or directory" output &&
+        flux exec -n -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause" &&
+        VERS=$(flux kvs unlink -s $DIR.unlinkB) &&
+        flux exec -n -r 2 flux kvs wait $VERS &&
+        ! flux exec -n -r 2 flux kvs get $DIR.unlinkB > output 2>&1 &&
+        grep "No such file or directory" output
+'
+
+#
 # test read-your-writes consistency
 #
 
