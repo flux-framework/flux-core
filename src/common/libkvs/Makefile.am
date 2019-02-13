@@ -19,7 +19,6 @@ libkvs_la_SOURCES = \
 	kvs_getroot.c \
 	kvs_dir.c \
 	kvs_dir_private.h \
-	kvs_classic.c \
 	kvs_commit.c \
 	kvs_txn.c \
 	kvs_txn_private.h \
@@ -35,7 +34,6 @@ fluxcoreinclude_HEADERS = \
 	kvs_lookup.h \
 	kvs_getroot.h \
 	kvs_dir.h \
-	kvs_classic.h \
 	kvs_txn.h \
 	kvs_commit.h \
 	kvs_eventlog.h \
