@@ -38,7 +38,8 @@ job_manager_la_LIBADD = $(fluxmod_libadd) \
 
 TESTS = \
 	test_queue.t \
-	test_list.t
+	test_list.t \
+	test_raise.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -68,4 +69,13 @@ test_list_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/list.o \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
+        $(test_ldadd)
+
+test_raise_t_SOURCES = test/raise.c
+test_raise_t_CPPFLAGS = $(test_cppflags)
+test_raise_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/raise.o \
+        $(top_builddir)/src/modules/job-manager/queue.o \
+        $(top_builddir)/src/modules/job-manager/job.o \
+        $(top_builddir)/src/modules/job-manager/util.o \
         $(test_ldadd)
