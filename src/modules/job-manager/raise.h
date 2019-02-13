@@ -12,12 +12,17 @@
 #define _FLUX_JOB_MANAGER_RAISE_H
 
 #include "queue.h"
+#include <stdint.h>
 
 /* Hande a request to raise an exception on job.
  */
 void raise_handle_request (flux_t *h, struct queue *queue,
                            const flux_msg_t *msg);
 
+/* exposed for unit testing only */
+int raise_check_type (const char *type);
+int raise_check_severity (int severity);
+int raise_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid);
 
 #endif /* ! _FLUX_JOB_MANAGER_RAISE_H */
 /*

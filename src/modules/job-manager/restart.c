@@ -26,7 +26,7 @@
 /* Parse severity (0-7) from exception event context.
  * Returns severity on success, -1 on failure.
  */
-static int exception_severity (const char *s)
+int restart_decode_exception_severity (const char *s)
 {
     char *argz = NULL;
     size_t argz_len = 0;
@@ -53,7 +53,7 @@ error:
     return -1;
 }
 
-static int count_char (const char *s, char c)
+int restart_count_char (const char *s, char c)
 {
     int count = 0;
     while (*s) {
@@ -63,8 +63,8 @@ static int count_char (const char *s, char c)
     return count;
 }
 
-static int replay_eventlog (const char *s, double *t_submit, int *flagsp,
-                            int *statep)
+int restart_replay_eventlog (const char *s, double *t_submit,
+                             int *flagsp, int *statep)
 {
     struct flux_kvs_eventlog *eventlog;
     const char *event;
@@ -86,7 +86,8 @@ static int replay_eventlog (const char *s, double *t_submit, int *flagsp,
         if (flux_kvs_event_decode (event, NULL, name, sizeof (name),
                                    context, sizeof (context)) < 0)
             goto error;
-        if (!strcmp (name, "exception") && exception_severity (context) == 0)
+        if (!strcmp (name, "exception")
+                    && restart_decode_exception_severity (context) == 0)
             state = FLUX_JOB_CLEANUP;
     }
     *t_submit = t;
@@ -151,7 +152,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
         goto error;
     if (flux_kvs_lookup_get (f, &eventlog) < 0)
         goto error_future;
-    if (replay_eventlog (eventlog, &t_submit, &flags, &state) < 0)
+    if (restart_replay_eventlog (eventlog, &t_submit, &flags, &state) < 0)
         goto error_future;
     flux_future_destroy (f);
 
@@ -182,7 +183,7 @@ static int depthfirst_map (flux_t *h, const char *key,
     int count = 0;
     int rc = -1;
 
-    path_level = count_char (key + dirskip, '.');
+    path_level = restart_count_char (key + dirskip, '.');
     if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
         return -1;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0) {

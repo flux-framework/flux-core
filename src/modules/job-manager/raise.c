@@ -241,6 +241,20 @@ int raise_check_type (const char *s)
     return 0;
 }
 
+int raise_check_severity (int severity)
+{
+    if (severity < 0 || severity > 7)
+        return -1;
+    return 0;
+}
+
+int raise_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid)
+{
+    if (!(rolemask & FLUX_ROLE_OWNER) && userid != job_userid)
+        return -1;
+    return 0;
+}
+
 void raise_handle_request (flux_t *h, struct queue *queue,
                            const flux_msg_t *msg)
 {
@@ -263,7 +277,7 @@ void raise_handle_request (flux_t *h, struct queue *queue,
                     || flux_msg_get_userid (msg, &userid) < 0
                     || flux_msg_get_rolemask (msg, &rolemask) < 0)
         goto error;
-    if (severity < 0 || severity > 7) {
+    if (raise_check_severity (severity)) {
         errstr = "invalid exception severity";
         errno = EPROTO;
         goto error;
@@ -277,9 +291,7 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errstr = "unknown job id";
         goto error;
     }
-    /* Security: guests can only raise exceptions on jobs that they submitted.
-     */
-    if (!(rolemask & FLUX_ROLE_OWNER) && userid != job->userid) {
+    if (raise_allow (rolemask, userid, job->userid) < 0) {
         errstr = "guests can only raise exceptions on their own jobs";
         errno = EPERM;
         goto error;
