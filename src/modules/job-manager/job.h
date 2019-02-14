@@ -25,7 +25,8 @@ struct job {
     int flags;
     flux_job_state_t state;
 
-    void *list_handle;  // private to queue.c
+    void *aux_queue_handle;
+    void *queue_handle; // primary queue handle (for listing all active jobs)
     int refcount;       // private to job.c
 };
 

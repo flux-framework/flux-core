@@ -95,7 +95,7 @@ static void priority_continuation (flux_future_t *f, void *arg)
         goto done;
     }
     p->job->priority = p->priority;
-    queue_reorder (p->queue, p->job);
+    queue_reorder (p->queue, p->job, p->job->queue_handle);
     if (flux_respond (h, p->request, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 done:

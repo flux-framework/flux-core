@@ -66,7 +66,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         /* N.B. ignore EEXIST, in case restart_from_kvs() loaded a job
          * while its submit request was in still flight.
          */
-        if (queue_insert (ctx->queue, job) < 0 && errno != EEXIST) {
+        if (queue_insert (ctx->queue, job, &job->queue_handle) < 0
+                                                        && errno != EEXIST) {
             flux_log_error (h, "%s: queue_insert %llu",
                             __FUNCTION__, (unsigned long long)id);
             job_decref (job);
@@ -121,7 +122,7 @@ static int restart_map_cb (struct job *job, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
 
-    if (queue_insert (ctx->queue, job) < 0)
+    if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
         return -1;
     return 0;
 }
@@ -155,7 +156,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
 
-    if (!(ctx.queue = queue_create ())) {
+    if (!(ctx.queue = queue_create (true))) {
         flux_log_error (h, "error creating queue");
         goto done;
     }

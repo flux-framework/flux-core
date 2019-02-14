@@ -32,7 +32,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    q = queue_create ();
+    q = queue_create (true);
     if (!q)
         BAIL_OUT ("could not create queue");
     ok (queue_size (q) == 0,
@@ -43,15 +43,15 @@ int main (int argc, char *argv[])
     job[0] = job_create_test (1, FLUX_JOB_PRIORITY_DEFAULT);
     job[1] = job_create_test (2, FLUX_JOB_PRIORITY_DEFAULT);
     job[2] = job_create_test (3, FLUX_JOB_PRIORITY_DEFAULT);
-    ok (queue_insert (q, job[0]) == 0,
+    ok (queue_insert (q, job[0], &job[0]->queue_handle) == 0,
         "queue_insert 1 pri=def");
-    ok (queue_insert (q, job[1]) == 0,
+    ok (queue_insert (q, job[1], &job[1]->queue_handle) == 0,
         "queue_insert 2 pri=def");
-    ok (queue_insert (q, job[2]) == 0,
+    ok (queue_insert (q, job[2], &job[2]->queue_handle) == 0,
         "queue_insert 3 pri=def");
 
     errno = 0;
-    ok (queue_insert (q, job[2]) < 0 && errno == EEXIST,
+    ok (queue_insert (q, job[2], &job[2]->queue_handle) < 0 && errno == EEXIST,
         "queue_insert 3 again fails with EEXIST");
 
     /* queue size, refcounts */
@@ -81,7 +81,7 @@ int main (int argc, char *argv[])
     /* insert high priority */
 
     njob[0] = job_create_test (100, FLUX_JOB_PRIORITY_MAX);
-    ok (queue_insert (q, njob[0]) == 0,
+    ok (queue_insert (q, njob[0], &njob[0]->queue_handle) == 0,
         "queue_insert 100 pri=max");
     ok (queue_first (q) == njob[0],
         "queue_first returns high priority job");
@@ -89,7 +89,7 @@ int main (int argc, char *argv[])
     /* insert low priority */
 
     njob[1] = job_create_test (101, FLUX_JOB_PRIORITY_MIN);
-    ok (queue_insert (q, njob[1]) == 0,
+    ok (queue_insert (q, njob[1], &njob[1]->queue_handle) == 0,
         "queue_insert 101 pri=min");
 
     j_prev = NULL;
@@ -105,14 +105,14 @@ int main (int argc, char *argv[])
      *   review: queue contains 100,1,2,3,101
      */
     job[2]->priority = FLUX_JOB_PRIORITY_MAX; // job 3
-    queue_reorder (q, job[2]);
+    queue_reorder (q, job[2], job[2]->queue_handle);
     ok (queue_first (q) == job[2],
         "reorder job 3 pri=max moves that job first");
 
     /* queue_delete */
 
-    queue_delete (q, njob[0]);
-    queue_delete (q, njob[1]);
+    queue_delete (q, njob[0], njob[0]->queue_handle);
+    queue_delete (q, njob[1], njob[1]->queue_handle);
 
     ok (njob[0]->refcount == 1 && njob[1]->refcount == 1,
         "queue_delete dropped reference on jobs");

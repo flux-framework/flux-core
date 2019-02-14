@@ -24,7 +24,7 @@ struct queue *make_test_queue (int size)
     struct queue *q;
     flux_jobid_t id;
 
-    q = queue_create ();
+    q = queue_create (true);
     if (!q)
         BAIL_OUT ("could not create queue");
 
@@ -32,7 +32,7 @@ struct queue *make_test_queue (int size)
         struct job *j;
         if (!(j = job_create (id, 0, 0, 0, 0)))
             BAIL_OUT ("job_create failed");
-        if (queue_insert (q, j) < 0)
+        if (queue_insert (q, j, &j->queue_handle) < 0)
             BAIL_OUT ("queue_insert failed");
     }
     return q;
