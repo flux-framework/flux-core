@@ -18,7 +18,6 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libsubprocess/command.h"
 #include "src/common/libutil/log.h"
 

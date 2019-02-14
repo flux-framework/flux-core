@@ -19,7 +19,6 @@
 #include <signal.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libsubprocess/subprocess.h"
 
 extern char **environ;
 

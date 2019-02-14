@@ -33,7 +33,6 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/fdutils.h"
-#include "src/common/libsubprocess/subprocess.h"
 
 #define LISTEN_BACKLOG      5
 

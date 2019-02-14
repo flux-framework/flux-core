@@ -13,7 +13,6 @@
 
 #include <stdint.h>
 #include <flux/core.h>
-#include "src/common/libsubprocess/subprocess.h"
 #include "attr.h"
 
 /* Kill any processes started by disconnecting client.
