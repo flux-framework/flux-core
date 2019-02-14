@@ -24,7 +24,6 @@ struct job {
     double t_submit;
     int flags;
     flux_job_state_t state;
-    char *note;
 
     void *list_handle;  // private to queue.c
     int refcount;       // private to job.c
