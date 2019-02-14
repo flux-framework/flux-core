@@ -62,7 +62,7 @@ def isdir(flux_handle, key):
     return False
 
 
-def get_dir(flux_handle, key=""):
+def get_dir(flux_handle, key="."):
     return KVSDir(path=key, flux_handle=flux_handle)
 
 
