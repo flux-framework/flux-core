@@ -29,7 +29,7 @@ test_expect_success 'kvs watcher gets disconnected on client exit' '
 '
 
 test_expect_success 'multi-node kvs watcher gets disconnected on client exit' '
-	${FLUX_BUILD_DIR}/t/kvs/watch_disconnect
+	${FLUX_BUILD_DIR}/t/kvs/watch_disconnect $SIZE
 '
 
 
