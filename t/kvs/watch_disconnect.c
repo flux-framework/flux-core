@@ -12,10 +12,13 @@
 #include "config.h"
 #endif
 #include <jansson.h>
+#include <unistd.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+
+#define MAX_ITERS 50
 
 /* A kvs lookup API doesn't accept a rank, so we cheat and build the
  * kvs-watch.lookup request message from scratch here.  We have to set
@@ -54,10 +57,23 @@ int count_watchers (flux_t *h)
     return count;
 }
 
+static void usage (void)
+{
+    fprintf (stderr, "Usage: watch_disconnect <rankcount>\n");
+    exit (1);
+}
+
 int main (int argc, char **argv)
 {
     flux_t *h;
-    int w0, w1, w2;
+    int i, rankcount, w0, w1, w2;
+
+    if (argc != 2)
+        usage();
+
+    rankcount = strtoul (argv[1], NULL, 10);
+    if (!rankcount)
+        log_msg_exit ("rankcount must be > 0");
 
     /* Install watchers on every rank, then disconnect.
      * The number of watchers should return to the original count.
@@ -66,7 +82,15 @@ int main (int argc, char **argv)
         log_err_exit ("flux_open");
     w0 = count_watchers (h);
     send_watch_requests (h, "nonexist");
-    w1 = count_watchers (h) - w0;
+
+    /* must spin / wait for watchers to be registered */
+    for (i = 0; i < MAX_ITERS; i++) {
+        w1 = count_watchers (h) - w0;
+        if (w1 == rankcount)
+            break;
+        usleep (100000);
+    }
+
     log_msg ("test watchers: %d", w1);
     flux_close (h);
     log_msg ("disconnected");
@@ -74,7 +98,15 @@ int main (int argc, char **argv)
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    w2 = count_watchers (h) - w0;
+
+    /* must spin / wait for disconnects to be processed */
+    for (i = 0; i < MAX_ITERS; i++) {
+        w2 = count_watchers (h) - w0;
+        if (w2 == 0)
+            break;
+        usleep (100000);
+    }
+
     log_msg ("test watchers: %d", w2);
     if (w2 != 0)
         log_err_exit ("Test failure, watchers were not removed on disconnect");
