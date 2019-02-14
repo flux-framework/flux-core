@@ -80,28 +80,6 @@ test_expect_success 'kvs: get works on other ranks (owner)' '
 '
 
 
-test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
-        flux kvs unlink --namespace=$NAMESPACETMP-OWNER -Rf $DIR &&
-        flux kvs put --namespace=$NAMESPACETMP-OWNER --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch --namespace=$NAMESPACETMP-OWNER -o -c 1 $DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs put --namespace=$NAMESPACETMP-OWNER --json $DIR.watch=1 &&
-        wait $watchpid
-cat >expected <<-EOF &&
-0
-1
-EOF
-        test_cmp watch_out expected
-'
-
-test_expect_success 'kvs: watch fails (user)' '
-        set_userid 9999 &&
-        ! flux kvs watch --namespace=$NAMESPACETMP-OWNER -o -c 1 $DIR.test &&
-        unset_userid
-'
-
 test_expect_success 'kvs: version fails (user)' '
         set_userid 9999 &&
         ! flux kvs version --namespace=$NAMESPACETMP-OWNER &&
@@ -203,46 +181,6 @@ test_expect_success 'kvs: get works (wrong user, but with at reference)' '
         unset_userid &&
         set_userid 9000 &&
         flux kvs get --namespace=$NAMESPACETMP-USER --at ${ref} --json $DIR.test &&
-        unset_userid
-'
-
-test_expect_success NO_CHAIN_LINT 'kvs: watch works (user)'  '
-        set_userid 9999 &&
-        flux kvs unlink --namespace=$NAMESPACETMP-USER -Rf $DIR &&
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch --namespace=$NAMESPACETMP-USER -o -c 1 $DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.watch=1 &&
-        wait $watchpid
-        unset_userid
-cat >expected <<-EOF &&
-0
-1
-EOF
-        test_cmp watch_out expected
-'
-
-test_expect_success NO_CHAIN_LINT 'kvs: watch works (owner)'  '
-        flux kvs unlink --namespace=$NAMESPACETMP-USER -Rf $DIR &&
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.watch=0 &&
-        rm -f watch_out
-        flux kvs watch --namespace=$NAMESPACETMP-USER -o -c 1 $DIR.watch >watch_out &
-        watchpid=$! &&
-        $waitfile -q -t 5 -p "0" watch_out
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.watch=1 &&
-        wait $watchpid
-cat >expected <<-EOF &&
-0
-1
-EOF
-        test_cmp watch_out expected
-'
-
-test_expect_success 'kvs: watch fails (wrong user)' '
-        set_userid 9000 &&
-        ! flux kvs watch --namespace=$NAMESPACETMP-USER -o -c 1 $DIR.test &&
         unset_userid
 '
 

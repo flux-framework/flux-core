@@ -116,24 +116,6 @@ def dropcache(flux_handle):
     return RAW.flux_kvs_dropcache(flux_handle)
 
 
-def watch_once(flux_handle, key):
-    """
-    Watches the selected key until the next change, then returns the
-    updated value of the key
-    """
-    if isdir(flux_handle, key):
-        directory = get_dir(flux_handle)
-        # The wrapper automatically unpacks directory's handle
-        RAW.flux_kvs_watch_once_dir(flux_handle, None, directory)
-        return directory
-
-    out_json_str = ffi.new("char *[1]")
-    RAW.flux_kvs_watch_once(flux_handle, None, key, out_json_str)
-    if out_json_str[0] == ffi.NULL:
-        return None
-    return json.loads(ffi.string(out_json_str[0]).decode("utf-8"))
-
-
 class KVSDir(WrapperPimpl, collections.MutableMapping):
     # pylint: disable=too-many-ancestors, too-many-public-methods
 
@@ -294,14 +276,6 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         self.commit()
         return False
 
-    def watch_once(self, key):
-        """
-        Watches the selected key until the next change, then returns the
-        updated value of the key
-        """
-        full_key = self.key_at(key)
-        return watch_once(self.fhdl, full_key)
-
 
 def join(*args):
     return ".".join([a for a in args if len(a) > 0])
@@ -328,31 +302,3 @@ def walk(directory, topdown=False, flux_handle=None):
             raise ValueError("If directory is a key, flux_handle must be specified")
         directory = KVSDir(flux_handle, directory)
     return inner_walk(directory, "", topdown)
-
-
-@ffi.callback("kvs_set_f")
-def kvs_watch_wrapper(key, value, arg, errnum):
-    (callback, real_arg) = ffi.from_handle(arg)
-    if errnum == errno.ENOENT:
-        value = None
-    else:
-        value = json.loads(ffi.string(value).decode("utf-8"))
-    key = ffi.string(key)
-    ret = callback(key, value, real_arg, errnum)
-    return ret if ret is not None else 0
-
-
-KVSWATCHES = {}
-
-
-def watch(flux_handle, key, fun, arg):
-    warg = (fun, arg)
-    KVSWATCHES[key] = warg
-    return RAW.flux_kvs_watch(
-        flux_handle, None, key, kvs_watch_wrapper, ffi.new_handle(warg)
-    )
-
-
-def unwatch(flux_handle, key):
-    KVSWATCHES.pop(key, None)
-    return RAW.flux_kvs_unwatch(flux_handle, key)

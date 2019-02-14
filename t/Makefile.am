@@ -62,7 +62,6 @@ TESTS = \
 	t0019-jobspec-schema.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
-	t1002-kvs-watch.t \
 	t1003-kvs-stress.t \
 	t1004-kvs-namespace.t \
 	t1005-kvs-security.t \
@@ -151,7 +150,6 @@ check_SCRIPTS = \
 	t0019-jobspec-schema.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
-	t1002-kvs-watch.t \
 	t1003-kvs-stress.t \
 	t1004-kvs-namespace.t \
 	t1005-kvs-security.t \
@@ -208,7 +206,6 @@ check_PROGRAMS = \
 	kvs/dtree \
 	kvs/blobref \
 	kvs/hashtest \
-	kvs/watch \
 	kvs/watch_disconnect \
 	kvs/commit \
 	kvs/transactionmerge \
@@ -304,11 +301,6 @@ kvs_dtree_LDADD = \
 kvs_blobref_SOURCES = kvs/blobref.c
 kvs_blobref_CPPFLAGS = $(test_cppflags)
 kvs_blobref_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-kvs_watch_SOURCES = kvs/watch.c
-kvs_watch_CPPFLAGS = $(test_cppflags)
-kvs_watch_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_commit_SOURCES = kvs/commit.c
