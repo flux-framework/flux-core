@@ -18,10 +18,6 @@ setup(
     version="0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1a1",
     description="Bindings to the flux resource manager API",
     setup_requires=[cffi_dep],
-    cffi_modules=[
-        "_flux/_core_build.py:ffi",
-        "_flux/_jsc_build.py:ffi",
-        "_flux/_kvs_build.py:ffi",
-    ],
+    cffi_modules=["_flux/_core_build.py:ffi"],
     install_requires=[cffi_dep],
 )
