@@ -24,6 +24,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 restart.c \
 			 raise.h \
 			 raise.c \
+			 alloc.h \
+			 alloc.c \
 			 list.h \
 			 list.c \
 			 priority.h \
