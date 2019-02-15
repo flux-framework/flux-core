@@ -38,6 +38,7 @@
 #include "treq.h"
 #include "kvstxn.h"
 #include "kvsroot.h"
+#include "kvssync.h"
 
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
@@ -319,13 +320,8 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
 {
     if (rootseq == 0 || rootseq > root->seq) {
         kvsroot_setroot (ctx->krm, root, rootref, rootseq);
-
-        /* log error on wait_runqueue(), don't error out.  watchers
-         * may miss value change, but will never get older one.
-         * Maintains consistency model */
-        if (wait_runqueue (root->watchlist) < 0)
-            flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
-        root->watchlist_lastrun_epoch = ctx->epoch;
+        kvssync_process (root, false);
+        root->last_update_epoch = ctx->epoch;
     }
 }
 
@@ -1227,7 +1223,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     kvs_ctx_t *ctx = arg;
 
     if (root->remove) {
-        if (!wait_queue_length (root->watchlist)
+        if (!zlist_size (root->synclist)
             && !treq_mgr_transactions_count (root->trm)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
@@ -1243,8 +1239,8 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     else if (ctx->rank != 0
              && !root->remove
              && strcasecmp (root->ns_name, KVS_PRIMARY_NAMESPACE)
-             && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
-             && !wait_queue_length (root->watchlist)
+             && (ctx->epoch - root->last_update_epoch) > max_namespace_age
+             && !zlist_size (root->synclist)
              && !treq_mgr_transactions_count (root->trm)
              && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
@@ -1253,20 +1249,8 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
          */
         start_root_remove (ctx, root->ns_name);
     }
-    else {
-        /* "touch" objects involved in watched keys */
-        if (wait_queue_length (root->watchlist) > 0
-            && (ctx->epoch - root->watchlist_lastrun_epoch) > max_lastuse_age) {
-            /* log error on wait_runqueue(), don't error out.  watchers
-             * may miss value change, but will never get older one.
-             * Maintains consistency model */
-            if (wait_runqueue (root->watchlist) < 0)
-                flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
-            root->watchlist_lastrun_epoch = ctx->epoch;
-        }
-        /* "touch" root */
+    else /* "touch" root */
         (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
-    }
 
     return 0;
 }
@@ -1966,8 +1950,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     kvs_ctx_t *ctx = arg;
     const char *ns;
     struct kvsroot *root;
-    int saved_errno, rootseq;
-    wait_t *wait = NULL;
+    int rootseq;
     bool stall = false;
 
     if (flux_request_unpack (msg, NULL, "{ s:i s:s }",
@@ -1985,17 +1968,13 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (root->seq < rootseq) {
-        if (!(wait = wait_create_msg_handler (h, mh, msg, arg,
-                                              sync_request_cb)))
-            goto error;
-        if (wait_addqueue (root->watchlist, wait) < 0) {
-            saved_errno = errno;
-            wait_destroy (wait);
-            errno = saved_errno;
+        if (kvssync_add (root, sync_request_cb, h, mh, msg, ctx, rootseq) < 0) {
+            flux_log_error (h, "%s: kvssync_add", __FUNCTION__);
             goto error;
         }
         return; /* stall */
     }
+
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", root->seq,
                            "rootref", root->ref) < 0) {
@@ -2247,8 +2226,8 @@ static int disconnect_request_root_cb (struct kvsroot *root, void *arg)
 
     /* Log error, but don't return -1, can continue to iterate
      * remaining roots */
-    if (wait_destroy_msg (root->watchlist, disconnect_cmp, cbd->sender) < 0)
-        flux_log_error (cbd->ctx->h, "%s: wait_destroy_msg", __FUNCTION__);
+    if (kvssync_remove_msg (root, disconnect_cmp, cbd->sender) < 0)
+        flux_log_error (cbd->ctx->h, "%s: kvssync_remove_msg", __FUNCTION__);
 
     return 0;
 }
@@ -2264,13 +2243,6 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-   /* N.B. impossible for a watch to be on watchlist and cache waiter
-     * at the same time (i.e. on watchlist means we're watching, if on
-     * cache waiter we're not done processing towards being on the
-     * watchlist).  So if wait_destroy_msg() on the waitlist succeeds
-     * but cache_wait_destroy_msg() fails, it's not that big of a
-     * deal.  The current state is still maintained.
-     */
     cbd.ctx = ctx;
     cbd.sender = sender;
     if (kvsroot_mgr_iter_roots (ctx->krm, disconnect_request_root_cb, &cbd) < 0)
@@ -2287,8 +2259,8 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
     json_t *s;
 
     if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
-                         "#watchers",
-                         wait_queue_length (root->watchlist),
+                         "#syncers",
+                         zlist_size (root->synclist),
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#transactions",
@@ -2577,13 +2549,11 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *ns)
 
         root->remove = true;
 
-        /* Now that root has been marked for removal from roothash, run
-         * the watchlist.  watch requests will notice root removed, return
-         * ENOTSUP to watchers.
+        /* Now that root has been marked for removal from roothash, run through
+         * the whole synclist.  requests will notice root removed, return
+         * ENOTSUP to all those trying to sync.
          */
-
-        if (wait_runqueue (root->watchlist) < 0)
-            flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
+        kvssync_process (root, true);
 
         /* Ready transactions will be processed and errors returned to
          * callers via the code path in kvstxn_apply().  But not ready

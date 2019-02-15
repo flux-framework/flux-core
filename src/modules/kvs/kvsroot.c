@@ -86,8 +86,8 @@ static void kvsroot_destroy (void *data)
             kvstxn_mgr_destroy (root->ktm);
         if (root->trm)
             treq_mgr_destroy (root->trm);
-        if (root->watchlist)
-            wait_queue_destroy (root->watchlist);
+        if (root->synclist)
+            zlist_destroy (&root->synclist);
         if (root->setroot_queue)
             zlist_destroy (&root->setroot_queue);
         free (data);
@@ -134,8 +134,8 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
-    if (!(root->watchlist = wait_queue_create ())) {
-        flux_log_error (krm->h, "wait_queue_create");
+    if (!(root->synclist = zlist_new ())) {
+        flux_log_error (krm->h, "zlist_new");
         goto error;
     }
 

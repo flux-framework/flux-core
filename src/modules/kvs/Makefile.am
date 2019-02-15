@@ -26,7 +26,9 @@ kvs_la_SOURCES = \
 	kvstxn.h \
 	kvstxn.c \
 	kvsroot.h \
-	kvsroot.c
+	kvsroot.c \
+	kvssync.h \
+	kvssync.c
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
@@ -40,7 +42,8 @@ TESTS = \
 	test_lookup.t \
 	test_treq.t \
 	test_kvstxn.t \
-	test_kvsroot.t
+	test_kvsroot.t \
+	test_kvssync.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -105,6 +108,17 @@ test_kvsroot_t_CPPFLAGS = $(test_cppflags)
 test_kvsroot_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvsroot.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/kvstxn.o \
+	$(top_builddir)/src/modules/kvs/cache.o \
+	$(top_builddir)/src/modules/kvs/treq.o \
+	$(test_ldadd)
+
+test_kvssync_t_SOURCES = test/kvssync.c
+test_kvssync_t_CPPFLAGS = $(test_cppflags)
+test_kvssync_t_LDADD = \
+	$(top_builddir)/src/modules/kvs/kvssync.o \
+	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/kvsroot.o \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/treq.o \
