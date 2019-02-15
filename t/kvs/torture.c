@@ -149,16 +149,16 @@ int main (int argc, char *argv[])
         fill (val, i, size);
         if (!(f = flux_kvs_lookup (h, NULL, 0, key))
                             || flux_kvs_lookup_get_unpack (f, "s", &s) < 0)
-            log_err_exit ("flux_kvs_get '%s'", key);
+            log_err_exit ("flux_kvs_lookup '%s'", key);
         if (verbose)
             log_msg ("%s = %s", key, s);
         if (strcmp (s, val) != 0)
-            log_msg_exit ("kvs_get: key '%s' wrong value '%s'", key, s);
+            log_msg_exit ("kvs_lookup: key '%s' wrong value '%s'", key, s);
         free (key);
         flux_future_destroy (f);
     }
     if (!quiet)
-        log_msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
+        log_msg ("kvs_lookup:    time=%0.3f s (%d keys of size %d)",
              monotime_since (t0)/1000, count, size);
 
     if (prefix)

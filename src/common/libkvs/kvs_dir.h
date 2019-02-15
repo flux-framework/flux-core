@@ -17,9 +17,7 @@ extern "C" {
 
 /* The flux_kvsdir_t represents an unordered list of directory entries.
  * It is also overloaded as a container for a flux_t handle, a snapshot
- * reference, and a namespace placeholder, in support of legacy
- * flux_kvsdir_get() and flux_kvsdir_put() series of functions in
- * kvs_classic.h.  Those features may be deprecated in the future.
+ * reference, and a namespace placeholder.
  */
 
 typedef struct flux_kvsdir flux_kvsdir_t;
@@ -30,8 +28,7 @@ typedef struct flux_kvsitr flux_kvsitr_t;
  * flux_kvsdir_create() creates a new object from 'json_str', an encoded
  * RFC 11 dir object.  'key' is the full key path associated with the
  * directory.  Optional: 'handle', is a flux_t handle, and 'rootref' is
- * a snapshot reference.  The optional arguments are  used to support the
- * legacy flux_kvsdir_get() and flux_kvsdir_put() series of functions.
+ * a snapshot reference.
  *
  * flux_kvsdir_incref() increments an internal reference count that is
  * decremented by each call to flux_kvsdir_destroy().  Resources

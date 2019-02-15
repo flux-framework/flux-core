@@ -20,25 +20,22 @@
 #include "src/common/libutil/log.h"
 
 
-#define OPTIONS "p:w:h:DC"
+#define OPTIONS "p:w:h:D"
 static const struct option longopts[] = {
     {"prefix",          required_argument,  0, 'p'},
     {"width",           required_argument,  0, 'w'},
     {"height",          required_argument,  0, 'h'},
     {"mkdir",           no_argument,        0, 'D'},
-    {"mkdir-classic",   no_argument,        0, 'C'},
     { 0, 0, 0, 0 },
 };
 
 void dtree (flux_kvs_txn_t *txn, const char *prefix, int width, int height);
 void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height);
-void dtree_mkdir_classic (flux_t *h, const flux_kvsdir_t *dir,
-                          int width, int height);
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: dtree [--mkdir | --mkdir-classic] [--prefix NAME] [--width N] [--height N]\n"
+"Usage: dtree [--mkdir] [--prefix NAME] [--width N] [--height N]\n"
 );
     exit (1);
 }
@@ -64,7 +61,6 @@ int main (int argc, char *argv[])
     int height = 1;
     char *prefix = "dtree";
     int Dopt = 0;
-    int Copt = 0;
     flux_t *h;
 
     log_init ("dtree");
@@ -82,9 +78,6 @@ int main (int argc, char *argv[])
                 break;
             case 'D': /* --mkdir */
                 Dopt++;
-                break;
-            case 'C': /* --mkdir-classic */
-                Copt++;
                 break;
             default:
                 usage ();
@@ -110,22 +103,6 @@ int main (int argc, char *argv[])
         dtree_mkdir (h, dir, width, height);
 
         flux_future_destroy (f);
-    } else if (Copt) {
-        const flux_kvsdir_t *dir;
-        flux_future_t *f;
-
-        setup_dir (h, prefix);
-
-        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, prefix))
-                || flux_kvs_lookup_get_dir (f, &dir) < 0)
-            log_err_exit ("flux_kvs_lookup %s", prefix);
-
-        dtree_mkdir_classic (h, dir, width, height);
-
-        flux_future_destroy (f);
-
-        if (flux_kvs_commit_anon (h, 0) < 0)
-           log_err_exit ("flux_kvs_commit_anon");
     } else {
         flux_kvs_txn_t *txn;
         flux_future_t *f;
@@ -185,7 +162,7 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
                 log_err_exit ("flux_kvs_txn_create");
 
             if (flux_kvs_txn_pack (txn, 0, keyat, "i", 1) < 0)
-                log_err_exit ("flux_kvsdir_pack %s", key);
+                log_err_exit ("flux_kvs_txn_pack %s", key);
 
             if (!(f = flux_kvs_commit (h, NULL, 0, txn))
                 || flux_future_get (f, NULL) < 0)
@@ -222,33 +199,6 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
 
             flux_future_destroy (f);
             free (keyat);
-        }
-    }
-}
-
-/* Legacy test: remove this when kvs classic functions are removed
- */
-void dtree_mkdir_classic (flux_t *h, const flux_kvsdir_t *dir,
-                          int width, int height)
-{
-    int i;
-    char key[16];
-    flux_kvsdir_t *ndir;
-
-    for (i = 0; i < width; i++) {
-        snprintf (key, sizeof (key), "%.4x", i);
-        if (height == 1) {
-            if (flux_kvsdir_pack (dir, key, "i", 1) < 0)
-                log_err_exit ("flux_kvsdir_pack %s", key);
-        } else {
-            if (flux_kvsdir_mkdir (dir, key) < 0)
-                log_err_exit ("flux_kvsdir_mkdir %s", key);
-            if (flux_kvs_commit_anon (h, 0) < 0)
-                log_err_exit ("kvs_commit");
-            if (flux_kvsdir_get_dir (dir, &ndir, "%s", key) < 0)
-                log_err_exit ("flux_kvsdir_get_dir");
-            dtree_mkdir_classic (h, ndir, width, height - 1);
-            flux_kvsdir_destroy (ndir);
         }
     }
 }

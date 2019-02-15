@@ -62,7 +62,7 @@ def isdir(flux_handle, key):
     return False
 
 
-def get_dir(flux_handle, key=""):
+def get_dir(flux_handle, key="."):
     return KVSDir(path=key, flux_handle=flux_handle)
 
 
@@ -140,8 +140,12 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                 )
             if handle is None:
                 directory = ffi.new("flux_kvsdir_t *[1]")
-                RAW.flux_kvs_get_dir(flux_handle, directory, path)
-                self.handle = directory[0]
+                future = RAW.flux_kvs_lookup(
+                    flux_handle, None, RAW.FLUX_KVS_READDIR, path
+                )
+                RAW.flux_kvs_lookup_get_dir(future, directory)
+                self.handle = RAW.flux_kvsdir_copy(directory[0])
+                RAW.flux_future_destroy(future)
                 if self.handle is None or self.handle == ffi.NULL:
                     raise EnvironmentError("No such file or directory")
 
