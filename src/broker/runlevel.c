@@ -19,7 +19,6 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"

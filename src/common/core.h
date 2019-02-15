@@ -18,6 +18,7 @@
 #include "core/flux.h"
 #include "core/kvs.h"
 #include "core/job.h"
+#include "core/subprocess.h"
 
 #endif /* !_FLUX_CORE_H */
 

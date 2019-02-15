@@ -3,13 +3,12 @@ pull_request_rules:
     conditions:
       - base=master
       - status-success=continuous-integration/travis-ci/pr
-      - status-success=codecov/project
       - label="merge-when-passing"
       - label!="work-in-progress"
       - "approved-reviews-by=@flux-framework/core"
       - "#approved-reviews-by>0"
       - "#changes-requested-reviews-by=0"
-      - -title~="^\[*(WIP|wip)"
+      - -title~="^\[*[Ww][Ii][Pp]"
     actions:
       merge:
         method: merge

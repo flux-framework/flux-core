@@ -54,8 +54,6 @@
 #include <flux/core.h>
 #include "worker.h"
 
-#include "src/common/libsubprocess/subprocess.h"
-
 const char *worker_auxkey = "flux::worker";
 
 struct worker {

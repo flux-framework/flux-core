@@ -11,6 +11,8 @@
 #ifndef _FLUX_CORE_SUBPROCESS_H
 #define _FLUX_CORE_SUBPROCESS_H
 
+#include <sys/types.h>
+
 #include <flux/core.h>
 
 /*

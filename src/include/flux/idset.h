@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* Allow in-tree programs to #include <flux/jobspec.hpp> like out-of-tree would.
+/* Allow in-tree programs to #include <flux/idset.h> like out-of-tree would.
  */
 
-#include "src/common/libjobspec/jobspec.hpp"
+#include "src/common/libidset/idset.h"
