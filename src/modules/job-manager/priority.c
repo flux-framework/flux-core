@@ -35,7 +35,7 @@
 
 #include "job.h"
 #include "queue.h"
-#include "active.h"
+#include "util.h"
 #include "priority.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
@@ -113,6 +113,8 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     struct priority *p = NULL;
     flux_future_t *f;
     int priority;
+    int rc;
+    const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:i}",
                                         "id", &id,
@@ -121,14 +123,18 @@ void priority_handle_request (flux_t *h, struct queue *queue,
                     || flux_msg_get_rolemask (msg, &rolemask) < 0)
         goto error;
     if (priority < FLUX_JOB_PRIORITY_MIN || priority > FLUX_JOB_PRIORITY_MAX) {
+        errstr = "priority value is out of range";
         errno = EINVAL;
         goto error;
     }
-    if (!(job = queue_lookup_by_id (queue, id)))
+    if (!(job = queue_lookup_by_id (queue, id))) {
+        errstr = "unknown job";
         goto error;
+    }
     /* Security: guests can only adjust jobs that they submitted.
      */
     if (!(rolemask & FLUX_ROLE_OWNER) && userid != job->userid) {
+        errstr = "guests can only reprioritize their own jobs";
         errno = EPERM;
         goto error;
     }
@@ -136,12 +142,14 @@ void priority_handle_request (flux_t *h, struct queue *queue,
      */
     if (!(rolemask & FLUX_ROLE_OWNER)
             && priority > MAXOF (FLUX_JOB_PRIORITY_DEFAULT, job->priority)) {
+        errstr = "guests can only adjust priority <= default";
         errno = EPERM;
         goto error;
     }
     /* If job has requested resources/exec, don't allow adjustment.
      */
     if (job->flags != 0) {
+        errstr = "it is too late to reprioritize this job";
         errno = EPERM;
         goto error;
     }
@@ -151,11 +159,11 @@ void priority_handle_request (flux_t *h, struct queue *queue,
      */
     if (!(p = priority_create (queue, job, msg, priority)))
         goto error;
-    if (active_eventlog_append (p->txn, job, "eventlog", "priority",
-                                "userid=%lu priority=%d",
-                                (unsigned long)userid, priority) < 0)
+    if (util_eventlog_append (p->txn, job, "priority",
+                              "userid=%lu priority=%d",
+                              (unsigned long)userid, priority) < 0)
         goto error;
-    if (active_pack (p->txn, job, "priority", "i", priority) < 0)
+    if (util_attr_pack (p->txn, job, "priority", "i", priority) < 0)
         goto error;
     if (!(f = flux_kvs_commit (h, NULL, 0, p->txn)))
         goto error;
@@ -165,7 +173,11 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (errstr)
+        rc = flux_respond_error (h, msg, errno, "%s", errstr);
+    else
+        rc = flux_respond_error (h, msg, errno, NULL);
+    if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     priority_destroy (p);
 }

@@ -23,23 +23,20 @@ enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
 };
 
-enum job_cancel_flags {
-    FLUX_JOB_PURGE = 1,         // remove all traces
-};
-
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,
     FLUX_JOB_PRIORITY_MAX = 31,
 };
 
-enum job_status_flags {
-    FLUX_JOB_RESOURCE_REQUESTED     = 1,
-    FLUX_JOB_RESOURCE_ALLOCATED     = 2,
-    FLUX_JOB_EXEC_REQUESTED         = 4,
-    FLUX_JOB_EXEC_RUNNING           = 8,
-    FLUX_JOB_CANCELED               = 16,
-};
+typedef enum {
+    FLUX_JOB_NEW                    = 1,
+    FLUX_JOB_DEPEND                 = 2,
+    FLUX_JOB_SCHED                  = 4,
+    FLUX_JOB_RUN                    = 8,
+    FLUX_JOB_CLEANUP                = 16,
+    FLUX_JOB_INACTIVE               = 32,   // captive end state
+} flux_job_state_t;
 
 typedef uint64_t flux_jobid_t;
 
@@ -74,9 +71,18 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 flux_future_t *flux_job_list (flux_t *h, int max_entries,
                               const char *json_str);
 
-/* Abort a job.
+/* Raise an exception for job.
+ * Severity is 0-7, with severity=0 causing the job to abort.
+ * Note may be NULL or a human readable message.
  */
-flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, int flags);
+flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
+                               const char *type, int severity,
+                               const char *note);
+
+/* Cancel a job.
+ * Reason may be NULL or a human readable message.
+ */
+flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason);
 
 /* Change job priority.
  */

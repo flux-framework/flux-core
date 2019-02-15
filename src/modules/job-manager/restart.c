@@ -8,122 +8,52 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* active - manipulate active jobs in the KVS
- *
- * Active jobs are stored in the KVS under "jobs.active" per RFC 16.
- *
- * To avoid the job.active directory becoming large and impacting KVS
- * performance over time, jobs are spread across subdirectries using
- * FLUID_STRING_DOTHEX encoding (see fluid.h).
- *
- * In general, an operation that alters the job state follows this pattern:
- * - prepare KVS transaction
- * - commit KVS transaction, with continuation
- * - on success: continuation updates in-memory job state and completes request
- * - on error: in-memory job state is unchanged and error is returned to caller
- */
+/* restart - reload active jobs from the KVS */
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <argz.h>
+#include <envz.h>
 
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/fluid.h"
 
 #include "job.h"
-#include "active.h"
+#include "restart.h"
 
-int active_key (char *buf, int bufsz, struct job *job, const char *key)
+/* Parse severity (0-7) from exception event context.
+ * Returns severity on success, -1 on failure.
+ */
+int restart_decode_exception_severity (const char *s)
 {
-    char idstr[32];
-    int len;
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *sevstr;
+    int severity;
+    char *endptr;
 
-    if (fluid_encode (idstr, sizeof (idstr), job->id, FLUID_STRING_DOTHEX) < 0)
+    if (argz_create_sep (s, ' ', &argz, &argz_len) != 0)
         return -1;
-    len = snprintf (buf, bufsz, "job.active.%s%s%s",
-                    idstr,
-                    key ? "." : "",
-                    key ? key : "");
-    if (len >= bufsz)
-        return -1;
-    return len;
-}
-
-int active_eventlog_append (flux_kvs_txn_t *txn,
-                            struct job *job,
-                            const char *key,
-                            const char *name,
-                            const char *fmt, ...)
-{
-    va_list ap;
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-    int n;
-    char path[64];
-    char *event = NULL;
-    int saved_errno;
-
-    va_start (ap, fmt);
-    n = vsnprintf (context, sizeof (context), fmt, ap);
-    va_end (ap);
-    if (n >= sizeof (context))
-        goto error_inval;
-    if (active_key (path, sizeof (path), job, key) < 0)
-        goto error_inval;
-    if (!(event = flux_kvs_event_encode (name, context)))
+    if (!(sevstr = envz_get (argz, argz_len, "severity")))
         goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, path, event) < 0)
+    errno = 0;
+    severity = strtol (sevstr, &endptr, 10);
+    if (errno != 0)
         goto error;
-    free (event);
-    return 0;
-error_inval:
-    errno = EINVAL;
+    if (*endptr != '\0')
+        goto error;
+    if (severity < 0 || severity > 7)
+        goto error;
+    free (argz);
+    return severity;
 error:
-    saved_errno = errno;
-    free (event);
-    errno = saved_errno;
+    free (argz);
     return -1;
 }
 
-int active_pack (flux_kvs_txn_t *txn,
-                 struct job *job,
-                 const char *key,
-                 const char *fmt, ...)
-{
-    va_list ap;
-    int n;
-    char path[64];
-
-    if (active_key (path, sizeof (path), job, key) < 0)
-        goto error_inval;
-    va_start (ap, fmt);
-    n = flux_kvs_txn_vpack (txn, 0, path, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        goto error;
-    return 0;
-error_inval:
-    errno = EINVAL;
-error:
-    return -1;
-}
-
-int active_unlink (flux_kvs_txn_t *txn, struct job *job)
-{
-    char path[64];
-
-    if (active_key (path, sizeof (path), job, NULL) < 0)
-        goto error_inval;
-    if (flux_kvs_txn_unlink (txn, 0, path) < 0)
-        goto error;
-    return 0;
-error_inval:
-    errno = EINVAL;
-error:
-    return -1;
-}
-
-static int count_char (const char *s, char c)
+int restart_count_char (const char *s, char c)
 {
     int count = 0;
     while (*s) {
@@ -133,31 +63,36 @@ static int count_char (const char *s, char c)
     return count;
 }
 
-static int decode_eventlog (const char *s, double *t_submit, int *flagsp)
+int restart_replay_eventlog (const char *s, double *t_submit,
+                             int *flagsp, int *statep)
 {
     struct flux_kvs_eventlog *eventlog;
     const char *event;
     char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
     double t;
     int flags = 0;
+    int state = FLUX_JOB_NEW;
 
     if (!(eventlog = flux_kvs_eventlog_decode (s)))
         return -1;
     if (!(event = flux_kvs_eventlog_first (eventlog)))
-        goto error;
+        goto error_inval;
     if (flux_kvs_event_decode (event, &t, name, sizeof (name), NULL, 0) < 0)
         goto error;
     if (strcmp (name, "submit") != 0)
         goto error_inval;
     while ((event = flux_kvs_eventlog_next (eventlog))) {
         if (flux_kvs_event_decode (event, NULL, name, sizeof (name),
-                                                                NULL, 0) < 0)
+                                   context, sizeof (context)) < 0)
             goto error;
-        if (!strcmp (name, "cancel"))
-            flags |= FLUX_JOB_CANCELED;
+        if (!strcmp (name, "exception")
+                    && restart_decode_exception_severity (context) == 0)
+            state = FLUX_JOB_CLEANUP;
     }
     *t_submit = t;
     *flagsp = flags;
+    *statep = state;
     flux_kvs_eventlog_destroy (eventlog);
     return 0;
 error_inval:
@@ -180,7 +115,7 @@ static flux_future_t *lookup_job_attr (flux_t *h, const char *jobdir,
 }
 
 static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
-                               active_map_f cb, void *arg)
+                               restart_map_f cb, void *arg)
 {
     flux_jobid_t id;
     flux_future_t *f = NULL;
@@ -190,6 +125,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     struct job *job;
     double t_submit;
     int flags;
+    int state;
 
     if (strlen (key) <= dirskip) {
         errno = EINVAL;
@@ -211,18 +147,19 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
         goto error_future;
     flux_future_destroy (f);
 
-    /* t_submit, inactive (via eventlog) */
+    /* get t_submit, flags, state from eventlog) */
     if (!(f = lookup_job_attr (h, key, "eventlog")))
         goto error;
     if (flux_kvs_lookup_get (f, &eventlog) < 0)
         goto error_future;
-    if (decode_eventlog (eventlog, &t_submit, &flags) < 0)
+    if (restart_replay_eventlog (eventlog, &t_submit, &flags, &state) < 0)
         goto error_future;
     flux_future_destroy (f);
 
     /* make callback */
     if (!(job = job_create (id, priority, userid, t_submit, flags)))
         goto error;
+    job->state = state;
     if (cb (job, arg) < 0) {
         job_decref (job);
         goto error;
@@ -236,7 +173,7 @@ error:
 }
 
 static int depthfirst_map (flux_t *h, const char *key,
-                           int dirskip, active_map_f cb, void *arg)
+                           int dirskip, restart_map_f cb, void *arg)
 {
     flux_future_t *f;
     const flux_kvsdir_t *dir;
@@ -246,7 +183,7 @@ static int depthfirst_map (flux_t *h, const char *key,
     int count = 0;
     int rc = -1;
 
-    path_level = count_char (key + dirskip, '.');
+    path_level = restart_count_char (key + dirskip, '.');
     if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, key)))
         return -1;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
@@ -284,7 +221,7 @@ done:
     return rc;
 }
 
-int active_map (flux_t *h, active_map_f cb, void *arg)
+int restart_map (flux_t *h, restart_map_f cb, void *arg)
 {
     const char *dirname = "job.active";
 

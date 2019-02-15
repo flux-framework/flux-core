@@ -13,12 +13,17 @@
 
 #include "src/common/libjob/job.h"
 
+enum job_status_flags {
+    JOB_EXCEPTION_PENDING = 1,  // exception not yet commited to eventlog
+};
+
 struct job {
     flux_jobid_t id;
     uint32_t userid;
     int priority;
     double t_submit;
     int flags;
+    flux_job_state_t state;
 
     void *list_handle;  // private to queue.c
     int refcount;       // private to job.c

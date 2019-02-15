@@ -18,6 +18,13 @@ flux setattr log-stderr-level 1
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J=${JOBSPEC}/y2j.py
 
+# List jobs without header
+# N.B. cancellation only advances job to CLEANUP state at the moment
+# so omit jobs in CLEANUP state
+list_jobs() {
+	flux job list -s | awk '$2 != "C"'
+}
+
 test_expect_success 'flux-job: convert basic.yaml to JSON' '
         ${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
 '
@@ -32,7 +39,7 @@ test_expect_success 'job-manager: submit one job' '
 '
 
 test_expect_success 'job-manager: queue contains 1 job' '
-	flux job list -s >list1.out &&
+	list_jobs >list1.out &&
 	test $(wc -l <list1.out) -eq 1
 '
 
@@ -41,24 +48,48 @@ test_expect_success 'job-manager: queue lists job with correct jobid' '
 	test_cmp submit1.out list1_jobid.out
 '
 
+test_expect_success 'job-manager: queue lists job with state=N' '
+	echo "N" >list1_state.exp &&
+	cut -f2 <list1.out >list1_state.out &&
+	test_cmp list1_state.exp list1_state.out
+'
+
 test_expect_success 'job-manager: queue lists job with correct userid' '
 	id -u >list1_userid.exp &&
-	cut -f2 <list1.out >list1_userid.out &&
+	cut -f3 <list1.out >list1_userid.out &&
 	test_cmp list1_userid.exp list1_userid.out
 '
 
 test_expect_success 'job-manager: queue list job with correct priority' '
 	echo 16 >list1_priority.exp &&
-	cut -f3 <list1.out >list1_priority.out &&
+	cut -f4 <list1.out >list1_priority.out &&
 	test_cmp list1_priority.exp list1_priority.out
 '
 
-test_expect_success 'job-manager: cancel --purge job' '
-	flux job cancel --purge $(cat list1_jobid.out)
+test_expect_success 'job-manager: raise non-fatal exception on job' '
+	jobid=$(cat list1_jobid.out) &&
+	kvsdir=$(flux job id --to=kvs-active $jobid) &&
+	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
+	flux kvs eventlog get ${kvsdir}.eventlog \
+		| grep exception >list1_exception.out &&
+	grep -q type=testing list1_exception.out &&
+	grep -q severity=1 list1_exception.out &&
+	grep -q "Mumble grumble" list1_exception.out
+'
+
+test_expect_success 'job-manager: queue contains 1 jobs' '
+	test $(list_jobs | wc -l) -eq 1
+'
+
+test_expect_success 'job-manager: cancel job' '
+	jobid=$(cat list1_jobid.out) &&
+	flux job cancel ${jobid} &&
+	flux kvs eventlog get ${kvsdir}.eventlog | grep exception \
+		| grep severity=0 | grep type=cancel
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
-	test $(flux job list -s | wc -l) -eq 0
+	test $(list_jobs | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
@@ -68,7 +99,7 @@ test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
 '
 
 test_expect_success 'job-manager: queue contains 3 jobs' '
-	flux job list -s >list3.out &&
+	list_jobs >list3.out &&
 	test $(wc -l <list3.out) -eq 3
 '
 
@@ -78,7 +109,7 @@ test_expect_success 'job-manager: queue is sorted in priority order' '
 	16
 	0
 	EOT &&
-	cut -f3 <list3.out >list3_pri.out &&
+	cut -f4 <list3.out >list3_pri.out &&
 	test_cmp list3_pri.exp list3_pri.out
 '
 
@@ -91,14 +122,14 @@ test_expect_success 'job-manager: flux job list --count shows highest priority j
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 
-test_expect_success 'job-manager: cancel --purge jobs' '
+test_expect_success 'job-manager: cancel jobs' '
 	for jobid in $(cut -f1 <list3.out); do \
-		flux job cancel --purge ${jobid}; \
+		flux job cancel ${jobid}; \
 	done
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
-       test $(flux job list -s | wc -l) -eq 0
+       test $(list_jobs | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: submit 10 jobs of equal priority' '
@@ -109,7 +140,7 @@ test_expect_success 'job-manager: submit 10 jobs of equal priority' '
 '
 
 test_expect_success 'job-manager: jobs are listed in submit order' '
-	flux job list -s >list10.out &&
+	list_jobs >list10.out &&
 	cut -f1 <list10.out >list10_ids.out &&
 	test_cmp submit10.out list10_ids.out
 '
@@ -128,7 +159,7 @@ test_expect_success 'job-manager: priority was updated in KVS' '
 '
 
 test_expect_success 'job-manager: that job is now the first job' '
-	flux job list -s >list10_reordered.out &&
+	list_jobs >list10_reordered.out &&
 	firstid=$(cut -f1 <list10_reordered.out | head -1) &&
 	lastid=$(tail -1 <list10_ids.out) &&
 	test "${lastid}" -eq "${firstid}"
@@ -140,15 +171,15 @@ test_expect_success 'job-manager: reload the job manager' '
 '
 
 test_expect_success 'job-manager: queue was successfully reconstructed' '
-	flux job list -s >list_reload.out &&
+	list_jobs >list_reload.out &&
 	test_cmp list10_reordered.out list_reload.out
 '
 
-test_expect_success 'job-manager: cancel --purge jobs' '
+test_expect_success 'job-manager: cancel jobs' '
 	for jobid in $(cut -f1 <list_reload.out); do \
-		flux job cancel --purge ${jobid}; \
+		flux job cancel ${jobid}; \
 	done &&
-	test $(flux job list -s | wc -l) -eq 0
+	test $(list_jobs | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: flux job priority fails on invalid priority' '
@@ -156,31 +187,31 @@ test_expect_success 'job-manager: flux job priority fails on invalid priority' '
 	flux job priority ${jobid} 31 &&
 	test_must_fail flux job priority ${jobid} -1 &&
 	test_must_fail flux job priority ${jobid} 32 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can reduce priority from default' '
 	jobid=$(flux job submit  basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 5 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can increase to default' '
 	jobid=$(flux job submit -p 0 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 16 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot increase past default' '
 	jobid=$(flux job submit basic.json) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can decrease from from >default' '
 	jobid=$(flux job submit -p 31 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot set priority of others jobs' '
@@ -188,30 +219,19 @@ test_expect_success 'job-manager: guest cannot set priority of others jobs' '
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
 		flux job priority ${jobid} 0 &&
-	flux job cancel --purge ${jobid}
+	flux job cancel ${jobid}
 '
 
-test_expect_success 'job-manager: guest cannot cancel --purge others jobs' '
+test_expect_success 'job-manager: guest cannot cancel others jobs' '
 	jobid=$(flux job submit basic.json) &&
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
-		flux job cancel --purge ${jobid} &&
-	flux job cancel --purge ${jobid}
+		flux job cancel ${jobid} &&
+	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: no jobs in the queue' '
-	test $(flux job list -s | wc -l) -eq 0
-'
-
-test_expect_success 'job-manager: job cancellation logged to eventlog ' '
-	jobid=$(flux job submit <basic.json) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux job cancel ${jobid} &&
-	flux kvs eventlog get ${kvsdir}.eventlog | grep cancel
-'
-
-test_expect_success 'job-manager: no jobs in the queue' '
-	test $(flux job list -s | wc -l) -eq 0
+	test $(list_jobs | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: reload the job manager' '
@@ -220,7 +240,7 @@ test_expect_success 'job-manager: reload the job manager' '
 '
 
 test_expect_success 'job-manager: still no jobs in the queue' '
-	test $(flux job list -s | wc -l) -eq 0
+	test $(list_jobs | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: remove job-manager, job-ingest' '

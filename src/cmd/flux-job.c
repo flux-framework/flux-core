@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <jansson.h>
+#include <argz.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #if HAVE_FLUX_SECURITY
@@ -37,6 +38,7 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
+int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
@@ -53,13 +55,15 @@ static struct optparse_option list_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
-static struct optparse_option cancel_opts[] =  {
-    { .name = "purge", .key = 'p', .has_arg = 0,
-      .usage = "Remove all trace of job from KVS",
+static struct optparse_option raise_opts[] =  {
+    { .name = "severity", .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Set exception severity [0-7] (default=0)",
+    },
+    { .name = "type", .key = 't', .has_arg = 1, .arginfo = "TYPE",
+      .usage = "Set exception type (default=cancel)",
     },
     OPTPARSE_TABLE_END
 };
-
 
 static struct optparse_option submit_opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
@@ -104,11 +108,18 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "cancel",
-      "[OPTIONS] id ...",
-      "Abort job(s)",
+      "[OPTIONS] id [message ...]",
+      "Cancel a job",
       cmd_cancel,
       0,
-      cancel_opts,
+      NULL,
+    },
+    { "raise",
+      "[OPTIONS] id [message ...]",
+      "Raise exception for job",
+      cmd_raise,
+      0,
+      raise_opts,
     },
     { "submit",
       "[OPTIONS] [jobspec]",
@@ -187,6 +198,37 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
+/* Parse a free argument 's', expected to be a 64-bit unsigned.
+ * On error, exit complaining about parsing 'name'.
+ */
+static unsigned long long parse_arg_unsigned (const char *s, const char *name)
+{
+    unsigned long long i;
+    char *endptr;
+
+    errno = 0;
+    i = strtoull (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        log_msg_exit ("error parsing %s", name);
+    return i;
+}
+
+/* Parse free arguments into a space-delimited message.
+ * On error, exit complaning about parsing 'name'.
+ * Caller must free the resulting string
+ */
+static char *parse_arg_message (char **argv, const char *name)
+{
+    char *argz = NULL;
+    size_t argz_len = 0;
+    error_t e;
+
+    if ((e = argz_create (argv, &argz, &argz_len)) != 0)
+        log_errn_exit (e, "error parsing %s", name);
+    argz_stringify (argz, argz_len, ' ');
+    return argz;
+}
+
 int cmd_priority (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -194,7 +236,6 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     int priority;
     flux_jobid_t id;
-    char *endptr;
 
     if (optindex != argc - 2) {
         optparse_print_usage (p);
@@ -203,21 +244,55 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    errno = 0;
-    id = strtoull (argv[optindex++], &endptr, 10);
-    if (errno != 0 || *endptr != '\0')
-        log_err_exit ("error parsing jobid");
-    errno = 0;
-    priority = strtol (argv[optindex++], &endptr, 10);
-    if (errno != 0 || *endptr != '\0')
-        log_err_exit ("error parsing priority");
+    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    priority = parse_arg_unsigned (argv[optindex++], "priority");
 
     if (!(f = flux_job_set_priority (h, id, priority)))
         log_err_exit ("flux_job_set_priority");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_err_exit ("flux_job_set_priority");
+    if (flux_rpc_get (f, NULL) < 0) {
+        const char *errmsg;
+        if ((errmsg = flux_future_error_string (f)))
+            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
+        else
+            log_err_exit ("%llu", (unsigned long long)id);
+    }
     flux_future_destroy (f);
     flux_close (h);
+    return 0;
+}
+
+int cmd_raise (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    int severity = optparse_get_int (p, "severity", 0);
+    const char *type = optparse_get_str (p, "type", "cancel");
+    flux_t *h;
+    flux_jobid_t id;
+    char *note = NULL;
+    flux_future_t *f;
+
+    if (argc - optindex < 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    if (optindex < argc)
+        note = parse_arg_message (argv + optindex, "message");
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (!(f = flux_job_raise (h, id, type, severity, note)))
+        log_err_exit ("flux_job_raise");
+    if (flux_rpc_get (f, NULL) < 0) {
+        const char *errmsg;
+        if ((errmsg = flux_future_error_string (f)))
+            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
+        log_err_exit ("%llu", (unsigned long long)id);
+    }
+    flux_future_destroy (f);
+    flux_close (h);
+    free (note);
     return 0;
 }
 
@@ -225,41 +300,33 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     flux_t *h;
-    int rc = 0;
-    int flags = 0;
+    flux_jobid_t id;
+    char *note = NULL;
+    flux_future_t *f;
 
-    if (optindex == argc) {
+    if (argc - optindex < 1) {
         optparse_print_usage (p);
         exit (1);
     }
-    if (optparse_hasopt (p, "purge"))
-        flags |= FLUX_JOB_PURGE;
+
+    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    if (optindex < argc)
+        note = parse_arg_message (argv + optindex, "message");
+
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    while (optindex < argc) {
-        char *arg = argv[optindex++];
-        char *endptr;
-        flux_jobid_t id;
-        flux_future_t *f;
-
-        errno = 0;
-        id = strtoull (arg, &endptr, 10);
-        if (errno != 0)
-            log_err_exit ("error parsing jobid: %s", arg);
-        if (!(f = flux_job_cancel (h, id, flags)))
-            log_err_exit ("flux_job_cancel");
-        if (flux_rpc_get (f, NULL) < 0) {
-            const char *errmsg;
-            if ((errmsg = flux_future_error_string (f)))
-                log_msg ("%s: %s", arg, errmsg);
-            else
-                log_err ("%s", arg);
-            rc = -1;
-        }
-        flux_future_destroy (f);
+    if (!(f = flux_job_cancel (h, id, note)))
+        log_err_exit ("flux_job_cancel");
+    if (flux_rpc_get (f, NULL) < 0) {
+        const char *errmsg;
+        if ((errmsg = flux_future_error_string (f)))
+            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
+        log_err_exit ("%llu", (unsigned long long)id);
     }
+    flux_future_destroy (f);
     flux_close (h);
-    return rc;
+    free (note);
+    return 0;
 }
 
 /* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
@@ -277,25 +344,30 @@ static int iso_timestr (double timestamp, char *buf, size_t size)
     return 0;
 }
 
-/* convert job status flags to string
- */
-const char *flagstr (char *buf, int bufsz, int flags)
+char statechar (flux_job_state_t state)
 {
-    (void)snprintf (buf, bufsz, "%s%s%s%s%s",
-                    (flags & FLUX_JOB_RESOURCE_REQUESTED) ? "r" : "",
-                    (flags & FLUX_JOB_RESOURCE_ALLOCATED) ? "R" : "",
-                    (flags & FLUX_JOB_EXEC_REQUESTED)     ? "x" : "",
-                    (flags & FLUX_JOB_EXEC_RUNNING)       ? "X" : "",
-                    (flags & FLUX_JOB_CANCELED)           ? "c" : "");
-
-    return buf;
+    switch (state) {
+        case FLUX_JOB_NEW:
+            return 'N';
+        case FLUX_JOB_DEPEND:
+            return 'D';
+        case FLUX_JOB_SCHED:
+            return 'S';
+        case FLUX_JOB_RUN:
+            return 'R';
+        case FLUX_JOB_CLEANUP:
+            return 'C';
+        case FLUX_JOB_INACTIVE:
+            return 'I';
+    }
+    return '?';
 }
 
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     int max_entries = optparse_get_int (p, "count", 0);
-    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"flags\"]";
+    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"state\"]";
     flux_t *h;
     flux_future_t *f;
     json_t *jobs;
@@ -315,28 +387,28 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_list");
     if (!optparse_hasopt (p, "suppress-header"))
         printf ("%s\t\t%s\t%s\t%s\t%s\n",
-                "JOBID", "USERID", "PRI", "FLAGS", "T_SUBMIT");
+                "JOBID", "STATE", "USERID", "PRI", "T_SUBMIT");
     json_array_foreach (jobs, index, value) {
         flux_jobid_t id;
         int priority;
         uint32_t userid;
         double t_submit;
         char timestr[80];
-        int flags;
-        char buf[16];
+        flux_job_state_t state;
+
         if (json_unpack (value, "{s:I s:i s:i s:f s:i}",
                                 "id", &id,
                                 "priority", &priority,
                                 "userid", &userid,
                                 "t_submit", &t_submit,
-                                "flags", &flags) < 0)
+                                "state", &state) < 0)
             log_msg_exit ("error parsing job data");
         if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
             log_err_exit ("time conversion error");
-        printf ("%llu\t%lu\t%d\t%s\t%s\n", (unsigned long long)id,
+        printf ("%llu\t%c\t%lu\t%d\t%s\n", (unsigned long long)id,
+                                       statechar (state),
                                        (unsigned long)userid,
                                        priority,
-                                       flagstr (buf, sizeof (buf), flags),
                                        timestr);
     }
     flux_future_destroy (f);
@@ -448,13 +520,7 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     /* src to id
      */
     if (!strcmp (from, "dec")) {
-        char *endptr;
-        errno = 0;
-        id = strtoull (src, &endptr, 10);
-        if (errno != 0)
-            log_err_exit ("%s", src);
-        if (*endptr != '\0')
-            log_msg_exit ("%s: malformed input", src);
+        id = parse_arg_unsigned (src, "input");
     }
     else if (!strcmp (from, "kvs-active")) {
         if (strncmp (src, "job.active.", 11) != 0)

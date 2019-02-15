@@ -148,20 +148,45 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
     return f;
 }
 
-flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, int flags)
+flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
+                               const char *type, int severity, const char *note)
 {
     flux_future_t *f;
+    json_t *o;
+    int saved_errno;
 
-    if (!h) {
+    if (!h || !type) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.cancel", FLUX_NODEID_ANY, 0,
-                             "{s:I s:i}",
-                             "id", id,
-                             "flags", flags)))
-        return NULL;
+    if (!(o = json_pack ("{s:I s:s s:i}",
+                         "id", id,
+                         "type", type,
+                         "severity", severity)))
+        goto nomem;
+    if (note) {
+        json_t *o_note = json_string (note);
+        if (!o_note || json_object_set_new (o, "note", o_note) < 0) {
+            json_decref (o_note);
+            goto nomem;
+        }
+    }
+    if (!(f = flux_rpc_pack (h, "job-manager.raise", FLUX_NODEID_ANY, 0,
+                                                                    "o", o)))
+        goto error;
     return f;
+nomem:
+    errno = ENOMEM;
+error:
+    saved_errno = errno;
+    json_decref (o);
+    errno = saved_errno;
+    return NULL;
+}
+
+flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason)
+{
+    return flux_job_raise (h, id, "cancel", 0, reason);
 }
 
 flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)

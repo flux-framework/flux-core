@@ -16,8 +16,9 @@
 
 #include "job.h"
 #include "queue.h"
-#include "active.h"
-#include "cancel.h"
+#include "util.h"
+#include "restart.h"
+#include "raise.h"
 #include "list.h"
 #include "priority.h"
 
@@ -93,13 +94,13 @@ static void list_cb (flux_t *h, flux_msg_handler_t *mh,
     list_handle_request (h, ctx->queue, msg);
 }
 
-/* cancel request handled in cancel.c
+/* exception request handled in raise.c
  */
-static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
+static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    cancel_handle_request (h, ctx->queue, msg);
+    raise_handle_request (h, ctx->queue, msg);
 }
 
 /* priority request handled in priority.c
@@ -111,7 +112,7 @@ static void priority_cb (flux_t *h, flux_msg_handler_t *mh,
     priority_handle_request (h, ctx->queue, msg);
 }
 
-/* active_map_f callback
+/* reload_map_f callback
  * This is called for each job encountered in the KVS during startup.
  * The 'job' struct is valid only during the callback.
  * queue_insert() increments the 'job' usecount upon successful insert.
@@ -120,10 +121,8 @@ static int restart_map_cb (struct job *job, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
 
-    if (!(job->flags & FLUX_JOB_CANCELED)) {
-        if (queue_insert (ctx->queue, job) < 0)
-            return -1;
-    }
+    if (queue_insert (ctx->queue, job) < 0)
+        return -1;
     return 0;
 }
 
@@ -133,7 +132,7 @@ static int restart_from_kvs (flux_t *h, struct job_manager_ctx *ctx)
 {
     int count;
 
-    if ((count = active_map (h, restart_map_cb, ctx)) < 0)
+    if ((count = restart_map (h, restart_map_cb, ctx)) < 0)
         return -1;
     flux_log (h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__, count);
     return 0;
@@ -142,7 +141,7 @@ static int restart_from_kvs (flux_t *h, struct job_manager_ctx *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
     { FLUX_MSGTYPE_REQUEST, "job-manager.list", list_cb, FLUX_ROLE_USER},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.cancel", cancel_cb, FLUX_ROLE_USER},
+    { FLUX_MSGTYPE_REQUEST, "job-manager.raise", raise_cb, FLUX_ROLE_USER},
     { FLUX_MSGTYPE_REQUEST, "job-manager.priority", priority_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
