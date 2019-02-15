@@ -45,9 +45,11 @@ typedef struct {
     int lastcount;
 } watch_count_t;
 
-#define KEYSUFFIX "commitwatch-key"
+#define KEYSUFFIX "transactionmerge-key"
 
 #define WATCH_TIMEOUT 5.0
+
+#define MAX_ITERS 50
 
 static int threadcount = -1;
 static int changecount = 0;
@@ -69,20 +71,6 @@ static void usage (void)
 {
     fprintf (stderr, "Usage: commitmerge [--nomerge] threadcount prefix\n");
     exit (1);
-}
-
-void watch_prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
-{
-    /* Tell main it can now launch commit threads */
-    if (!watch_init) {
-        pthread_mutex_lock (&watch_init_lock);
-        watch_init++;
-        pthread_cond_signal (&watch_init_cond);
-        pthread_mutex_unlock (&watch_init_lock);
-    }
-
-    flux_watcher_stop (w);
 }
 
 static void watch_count_cb (flux_future_t *f, void *arg)
@@ -110,25 +98,38 @@ static void watch_count_cb (flux_future_t *f, void *arg)
     }
 }
 
+static void watch_init_cb (flux_future_t *f, void *arg)
+{
+    /* Tell main it can now launch commit threads */
+    if (!watch_init) {
+        pthread_mutex_lock (&watch_init_lock);
+        watch_init++;
+        pthread_cond_signal (&watch_init_cond);
+        pthread_mutex_unlock (&watch_init_lock);
+    }
+
+    flux_future_reset (f);
+
+    /* set alternate cb for counting */
+    if (flux_future_then (f, WATCH_TIMEOUT, watch_count_cb, arg) < 0)
+        log_err_exit ("flux_future_then");
+}
+
 void *watchthread (void *arg)
 {
     thd_t *t = arg;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     flux_reactor_t *r;
-    flux_watcher_t *pw = NULL;
 
     if (!(t->h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    /* Make sure key doesn't already exist, initial value may affect
-     * test by chance (i.e. initial value = 0, commit 0 and thus no
-     * change)
-     */
+    /* set an initial value to sync w/ watch_init */
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_unlink (txn, 0, key) < 0)
-        log_err_exit ("flux_kvs_txn_unlink");
+    if (flux_kvs_txn_put (txn, 0, key, "init-val") < 0)
+        log_err_exit ("flux_kvs_txn_put");
     if (!(f = flux_kvs_commit (t->h, NULL, 0, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
@@ -139,21 +140,16 @@ void *watchthread (void *arg)
 
     if (!(f = flux_kvs_lookup (t->h,
                                NULL,
-                               FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE,
+                               FLUX_KVS_WATCH,
                                key)))
         log_err_exit ("flux_kvs_lookup %s", key);
 
-    if (flux_future_then (f, WATCH_TIMEOUT, watch_count_cb, t) < 0)
+    if (flux_future_then (f, WATCH_TIMEOUT, watch_init_cb, t) < 0)
         log_err_exit ("flux_future_then %s", key);
-
-    pw = flux_prepare_watcher_create (r, watch_prepare_cb, NULL);
-
-    flux_watcher_start (pw);
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
-    flux_watcher_destroy (pw);
     flux_close (t->h);
     return NULL;
 }
