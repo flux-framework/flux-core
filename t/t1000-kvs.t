@@ -1113,11 +1113,6 @@ test_expect_success 'flux kvs getroot returns valid dirref object' '
 # getroot tests
 #
 
-test_expect_success 'flux kvs getroot --blobref returns valid blobref' '
-	BLOBREF=$(flux kvs getroot --blobref) &&
-	flux content load $BLOBREF >/dev/null
-'
-
 test_expect_success 'flux kvs getroot --sequence returns increasing rootseq' '
 	SEQ=$(flux kvs getroot --sequence) &&
 	flux kvs put test.b=hello &&
