@@ -1562,8 +1562,16 @@ static int finalize_transaction_req (treq_t *tr,
 {
     struct kvs_cb_data *cbd = data;
 
-    if (flux_respond (cbd->ctx->h, req, cbd->errnum, NULL) < 0)
-        flux_log_error (cbd->ctx->h, "%s: flux_respond", __FUNCTION__);
+    if (cbd->errnum) {
+        if (flux_respond (cbd->ctx->h, req, cbd->errnum, NULL) < 0)
+            flux_log_error (cbd->ctx->h, "%s: flux_respond", __FUNCTION__);
+    }
+    else {
+        if (flux_respond_pack (cbd->ctx->h, req, "{ s:s s:i }",
+                               "rootref", cbd->root->ref,
+                               "rootseq", cbd->root->seq) < 0)
+            flux_log_error (cbd->ctx->h, "%s: flux_respond", __FUNCTION__);
+    }
 
     return 0;
 }
@@ -1574,7 +1582,7 @@ static void finalize_transaction_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
     int i, len;
     json_t *name;
     treq_t *tr;
-    struct kvs_cb_data cbd = { .ctx = ctx, .errnum = errnum };
+    struct kvs_cb_data cbd = { .ctx = ctx, .root = root, .errnum = errnum };
 
     if (!(len = json_array_size (names))) {
         flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);

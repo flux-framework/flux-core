@@ -104,6 +104,12 @@ static struct optparse_option put_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
       .usage = "Specify KVS namespace to use.",
     },
+    { .name = "treeobj-root", .key = 'O', .has_arg = 0,
+      .usage = "Output resulting RFC11 root containing puts",
+    },
+    { .name = "sequence", .key = 's', .has_arg = 0,
+      .usage = "Output root sequence of root containing puts",
+    },
     { .name = "json", .key = 'j', .has_arg = 0,
       .usage = "Store value(s) as encoded JSON",
     },
@@ -174,6 +180,12 @@ static struct optparse_option unlink_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
       .usage = "Specify KVS namespace to use.",
     },
+    { .name = "treeobj-root", .key = 'O', .has_arg = 0,
+      .usage = "Output resulting RFC11 root containing unlinks",
+    },
+    { .name = "sequence", .key = 's', .has_arg = 0,
+      .usage = "Output root sequence of root containing unlinks",
+    },
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Remove directory contents recursively",
     },
@@ -186,9 +198,6 @@ static struct optparse_option unlink_opts[] =  {
 static struct optparse_option getroot_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
       .usage = "Specify KVS namespace to use.",
-    },
-    { .name = "blobref", .key = 'b', .has_arg = 0,
-      .usage = "Show root as a blobref rather that an RFC 11 dirref",
     },
     { .name = "sequence", .key = 's', .has_arg = 0,
       .usage = "Show sequence number",
@@ -216,6 +225,25 @@ static struct optparse_option link_opts[] =  {
     { .name = "target-namespace", .key = 'T', .has_arg = 1,
       .usage = "Specify target's namespace",
     },
+    { .name = "treeobj-root", .key = 'O', .has_arg = 0,
+      .usage = "Output resulting RFC11 root containing link",
+    },
+    { .name = "sequence", .key = 's', .has_arg = 0,
+      .usage = "Output root sequence of root containing link",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option mkdir_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
+    { .name = "treeobj-root", .key = 'O', .has_arg = 0,
+      .usage = "Output resulting RFC11 root containing new directory",
+    },
+    { .name = "sequence", .key = 's', .has_arg = 0,
+      .usage = "Output root sequence of root containing new directory",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -242,7 +270,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-N ns] [-j|-r|-t] [-n] key=value [key=value...]",
+      "[-N ns] [-O|-s] [-j|-r|-t] [-n] [-A] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
@@ -263,14 +291,14 @@ static struct optparse_subcommand subcommands[] = {
       ls_opts
     },
     { "unlink",
-      "[-N ns] [-R] [-f] key [key...]",
+      "[-N ns] [-O|-s] [-R] [-f] key [key...]",
       "Remove key",
       cmd_unlink,
       0,
       unlink_opts
     },
     { "link",
-      "[-N ns] [-T ns] target linkname",
+      "[-N ns] [-T ns] [-O|-s] target linkname",
       "Create a new name for target",
       cmd_link,
       0,
@@ -284,11 +312,11 @@ static struct optparse_subcommand subcommands[] = {
       readlink_opts
     },
     { "mkdir",
-      "[-N ns] key [key...]",
+      "[-N ns] [-O|-s] key [key...]",
       "Create a directory",
       cmd_mkdir,
       0,
-      namespace_opt
+      mkdir_opts
     },
     { "copy",
       "[-S src-ns] [-D dst-ns] source destination",
@@ -326,7 +354,7 @@ static struct optparse_subcommand subcommands[] = {
       namespace_opt
     },
     { "getroot",
-      "[-N ns] [-s|-o|-b]",
+      "[-N ns] [-s|-o]",
       "Get KVS root treeobj",
       cmd_getroot,
       0,
@@ -787,6 +815,26 @@ int cmd_get (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+void commit_finish (flux_future_t *f, optparse_t *p)
+{
+    if (optparse_hasopt (p, "treeobj-root")) {
+        const char *treeobj = NULL;
+        if (flux_kvs_commit_get_treeobj (f, &treeobj) < 0)
+            log_err_exit ("flux_kvs_commit_get_treeobj");
+        printf ("%s\n", treeobj);
+    }
+    else if (optparse_hasopt (p, "sequence")) {
+        int sequence;
+        if (flux_kvs_commit_get_sequence (f, &sequence) < 0)
+            log_err_exit ("flux_kvs_commit_get_sequence");
+        printf ("%d\n", sequence);
+    }
+    else {
+        if (flux_future_get (f, NULL) < 0)
+            log_err_exit ("flux_kvs_commit");
+    }
+}
+
 int cmd_put (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
@@ -866,9 +914,9 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         }
         free (key);
     }
-    if (!(f = flux_kvs_commit (h, ns, commit_flags, txn))
-                                        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, ns, commit_flags, txn)))
         log_err_exit ("flux_kvs_commit");
+    commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     return (0);
@@ -939,9 +987,9 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
                 log_err_exit ("%s", argv[i]);
         }
     }
-    if (!(f = flux_kvs_commit (h, ns, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, ns, 0, txn)))
         log_err_exit ("flux_kvs_commit");
+    commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     return (0);
@@ -974,9 +1022,9 @@ int cmd_link (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_symlink (txn, 0, linkname, targetns, target) < 0)
         log_err_exit ("%s", linkname);
-    if (!(f = flux_kvs_commit (h, linkns, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, linkns, 0, txn)))
         log_err_exit ("flux_kvs_commit");
+    commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     return (0);
@@ -1050,9 +1098,9 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
         if (flux_kvs_txn_mkdir (txn, 0, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
-    if (!(f = flux_kvs_commit (h, ns, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, ns, 0, txn)))
         log_err_exit ("kvs_commit");
+    commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     return (0);
@@ -1651,13 +1699,6 @@ void getroot_continuation (flux_future_t *f, void *arg)
         if (flux_kvs_getroot_get_sequence (f, &sequence) < 0)
             log_err_exit ("flux_kvs_getroot_get_sequence");
         printf ("%d\n", sequence);
-    }
-    else if (optparse_hasopt (p, "blobref")) {
-        const char *blobref;
-
-        if (flux_kvs_getroot_get_blobref (f, &blobref) < 0)
-            log_err_exit ("flux_kvs_getroot_get_blobref");
-        printf ("%s\n", blobref);
     }
     else {
         const char *treeobj;

@@ -157,6 +157,8 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_getroot_get_owner.3 \
 	flux_kvs_getroot_cancel.3 \
 	flux_kvs_fence.3 \
+	flux_kvs_commit_get_treeobj.3 \
+	flux_kvs_commit_get_sequence.3 \
 	flux_kvs_txn_destroy.3 \
 	flux_kvs_txn_put.3 \
 	flux_kvs_txn_pack.3 \
@@ -289,6 +291,8 @@ flux_kvs_getroot_get_sequence.3: flux_kvs_getroot.3
 flux_kvs_getroot_get_owner.3: flux_kvs_getroot.3
 flux_kvs_getroot_cancel.3: flux_kvs_getroot.3
 flux_kvs_fence.3: flux_kvs_commit.3
+flux_kvs_commit_get_treeobj.3: flux_kvs_commit.3
+flux_kvs_commit_get_sequence.3: flux_kvs_commit.3
 flux_kvs_txn_destroy.3: flux_kvs_txn_create.3
 flux_kvs_txn_put.3: flux_kvs_txn_create.3
 flux_kvs_txn_pack.3: flux_kvs_txn_create.3

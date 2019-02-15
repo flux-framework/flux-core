@@ -49,7 +49,7 @@ static struct getroot_ctx *alloc_ctx (void)
 flux_future_t *flux_kvs_getroot (flux_t *h, const char *ns, int flags)
 {
     flux_future_t *f;
-    struct getroot_ctx *ctx;
+    struct getroot_ctx *ctx = NULL;
 
     if (!h || flags) {
         errno = EINVAL;

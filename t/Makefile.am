@@ -212,6 +212,7 @@ check_PROGRAMS = \
 	kvs/hashtest \
 	kvs/watch_disconnect \
 	kvs/commit \
+	kvs/fence_api \
 	kvs/transactionmerge \
 	kvs/fence_namespace_remove \
 	kvs/fence_invalid \
@@ -310,6 +311,11 @@ kvs_blobref_LDADD = \
 kvs_commit_SOURCES = kvs/commit.c
 kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_fence_api_SOURCES = kvs/fence_api.c
+kvs_fence_api_CPPFLAGS = $(test_cppflags)
+kvs_fence_api_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_transactionmerge_SOURCES = kvs/transactionmerge.c

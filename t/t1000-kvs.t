@@ -1044,6 +1044,39 @@ test_expect_success 'kvs: get --at: fails bad on dirent' '
 '
 
 #
+# -O, -s options in write commands
+#
+
+test_expect_success 'kvs: --treeobj-root on write ops works' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs put -O $DIR.a=1 > output &&
+        grep "dirref" output &&
+        flux kvs unlink -O $DIR.a > output &&
+        grep "dirref" output &&
+        flux kvs mkdir -O $DIR.a > output &&
+        grep "dirref" output &&
+        flux kvs link -O $DIR.a $DIR.b > output &&
+        grep "dirref" output
+'
+
+test_expect_success 'kvs: --sequence on write ops works' '
+	flux kvs unlink -Rf $DIR &&
+        VER=$(flux kvs version) &&
+        VER=$((VER + 1)) &&
+        SEQ=$(flux kvs put -s $DIR.a=1) &&
+        test $VER -eq $SEQ &&
+        VER=$((VER + 1)) &&
+        SEQ=$(flux kvs unlink -s $DIR.a) &&
+        test $VER -eq $SEQ &&
+        VER=$((VER + 1)) &&
+        SEQ=$(flux kvs mkdir -s $DIR.a) &&
+        test $VER -eq $SEQ &&
+        VER=$((VER + 1)) &&
+        SEQ=$(flux kvs link -s $DIR.a $DIR.b) &&
+        test $VER -eq $SEQ
+'
+
+#
 # dropcache tests
 #
 
@@ -1079,11 +1112,6 @@ test_expect_success 'flux kvs getroot returns valid dirref object' '
 #
 # getroot tests
 #
-
-test_expect_success 'flux kvs getroot --blobref returns valid blobref' '
-	BLOBREF=$(flux kvs getroot --blobref) &&
-	flux content load $BLOBREF >/dev/null
-'
 
 test_expect_success 'flux kvs getroot --sequence returns increasing rootseq' '
 	SEQ=$(flux kvs getroot --sequence) &&
