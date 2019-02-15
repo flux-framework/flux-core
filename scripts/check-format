@@ -2,7 +2,12 @@
 set -e
 
 if command -v black 2>&1 > /dev/null ; then
-  find src t -name '*.py' -print0 | xargs -0 black --check
+    # awk cmd copied from:
+    # https://unix.stackexchange.com/questions/66097/find-all-files-with-a-python-shebang
+    find src t -type f \
+         \( -name "*.py" -print -o \
+         -exec awk ' /^#!.*python/{print FILENAME} {nextfile}' {} + \) \
+        | xargs black --check
 else
   echo "black not found, failing"
   exit 1

@@ -54,7 +54,8 @@ nodist_flux_SOURCES = \
 #
 
 dist_fluxcmd_SCRIPTS = \
-	flux-cron
+	flux-cron \
+	flux-jobspec
 
 fluxcmd_PROGRAMS = \
 	flux-aggregate \
