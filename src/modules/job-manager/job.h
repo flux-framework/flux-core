@@ -14,7 +14,7 @@
 #include "src/common/libjob/job.h"
 
 enum job_status_flags {
-    FLUX_JOB_CANCELED = 1,
+    JOB_EXCEPTION_PENDING = 1,  // exception not yet commited to eventlog
 };
 
 struct job {

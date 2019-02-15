@@ -31,13 +31,15 @@ static int count_char (const char *s, char c)
     return count;
 }
 
-static int decode_eventlog (const char *s, double *t_submit, int *flagsp)
+static int replay_eventlog (const char *s, double *t_submit, int *flagsp,
+                            int *statep)
 {
     struct flux_kvs_eventlog *eventlog;
     const char *event;
     char name[FLUX_KVS_MAX_EVENT_NAME + 1];
     double t;
     int flags = 0;
+    int state = FLUX_JOB_NEW;
 
     if (!(eventlog = flux_kvs_eventlog_decode (s)))
         return -1;
@@ -52,10 +54,11 @@ static int decode_eventlog (const char *s, double *t_submit, int *flagsp)
                                                                 NULL, 0) < 0)
             goto error;
         if (!strcmp (name, "cancel"))
-            flags |= FLUX_JOB_CANCELED;
+            state = FLUX_JOB_CLEANUP;
     }
     *t_submit = t;
     *flagsp = flags;
+    *statep = state;
     flux_kvs_eventlog_destroy (eventlog);
     return 0;
 error_inval:
@@ -88,6 +91,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     struct job *job;
     double t_submit;
     int flags;
+    int state;
 
     if (strlen (key) <= dirskip) {
         errno = EINVAL;
@@ -109,18 +113,19 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
         goto error_future;
     flux_future_destroy (f);
 
-    /* t_submit, inactive (via eventlog) */
+    /* get t_submit, flags, state from eventlog) */
     if (!(f = lookup_job_attr (h, key, "eventlog")))
         goto error;
     if (flux_kvs_lookup_get (f, &eventlog) < 0)
         goto error_future;
-    if (decode_eventlog (eventlog, &t_submit, &flags) < 0)
+    if (replay_eventlog (eventlog, &t_submit, &flags, &state) < 0)
         goto error_future;
     flux_future_destroy (f);
 
     /* make callback */
     if (!(job = job_create (id, priority, userid, t_submit, flags)))
         goto error;
+    job->state = state;
     if (cb (job, arg) < 0) {
         job_decref (job);
         goto error;

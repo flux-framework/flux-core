@@ -70,14 +70,15 @@ static void cancel_respond (struct cancel *c)
 
 /* If c->message is non-NULL, assume refcount reaches zero when all (parallel)
  * work to accomplish the cancel has been completed.  If any errors occurred,
- * c->errno will be non-zero.  Respond to the request and, if appropriate,
- * remove the job from the queue.
+ * c->errno will be non-zero.  Respond to the request and, advance the job
+ * state to CLEANUP.
  */
 static void cancel_decref (struct cancel *c)
 {
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
-        queue_delete (c->queue, c->job);
+        c->job->flags &= ~JOB_EXCEPTION_PENDING;
+        c->job->state = FLUX_JOB_CLEANUP;
         if (c->request) {
             cancel_respond (c);
             flux_msg_destroy (c->request);
@@ -250,7 +251,7 @@ void cancel_handle_request (flux_t *h, struct queue *queue,
      */
     if (!(c = cancel_create (h, queue, job, msg, userid)))
         goto error;
-    job->flags |= FLUX_JOB_CANCELED;
+    job->flags |= JOB_EXCEPTION_PENDING;
     update_kvs_eventlog (c);
     send_cancel_event (c);
     cancel_decref (c);

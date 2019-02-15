@@ -121,10 +121,8 @@ static int restart_map_cb (struct job *job, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
 
-    if (!(job->flags & FLUX_JOB_CANCELED)) {
-        if (queue_insert (ctx->queue, job) < 0)
-            return -1;
-    }
+    if (queue_insert (ctx->queue, job) < 0)
+        return -1;
     return 0;
 }
 
