@@ -22,12 +22,14 @@
 #include "raise.h"
 #include "list.h"
 #include "priority.h"
+#include "alloc.h"
 
 
 struct job_manager_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     struct queue *queue;
+    struct alloc_ctx *alloc_ctx;
 };
 
 /* Enqueue jobs from 'jobs' array in queue.
@@ -112,7 +114,10 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      * Now walk the list of new jobs and advance their state.
      */
     while ((job = zlist_pop (newjobs))) {
-        /* FILL IN */
+        job->state = FLUX_JOB_SCHED;
+        if (alloc_do_request (ctx->alloc_ctx, job) < 0)
+            flux_log_error (h, "%s: error notifying scheduler of new job %llu",
+                            __FUNCTION__, (unsigned long long)job->id);
         job_decref (job);
     }
     zlist_destroy (&newjobs);
@@ -161,6 +166,14 @@ static int restart_map_cb (struct job *job, void *arg)
 
     if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
         return -1;
+    if (job->state == FLUX_JOB_NEW)
+        job->state = FLUX_JOB_SCHED;
+    if (job->state == FLUX_JOB_SCHED) {
+        if (alloc_do_request (ctx->alloc_ctx, job) < 0) {
+            flux_log_error (ctx->h, "%s: error notifying scheduler of job %llu",
+                __FUNCTION__, (unsigned long long)job->id);
+        }
+    }
     return 0;
 }
 
@@ -197,6 +210,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating queue");
         goto done;
     }
+    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue))) {
+        flux_log_error (h, "error creating scheduler interface");
+        goto done;
+    }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
@@ -212,6 +229,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    alloc_ctx_destroy (ctx.alloc_ctx);
     queue_destroy (ctx.queue);
     return rc;
 }
