@@ -13,7 +13,22 @@
 
 #include <flux/core.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include "job.h"
+
+/* Parse key=val integer from event context.  val may be NULL.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+int util_int_from_context (const char *context, const char *key, int *val);
+/* Parse key=val string from event context.  val may be NULL.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+int util_str_from_context (const char *context, const char *key,
+                           char *val, int valsize);
+/* Parse trailing non key=val context.  Context must not contain \n.
+ * NULL if there is none.
+ */
+const char *util_note_from_context (const char *context);
 
 /* Write KVS path to 'key' relative to active job directory for 'job'.
  * If key=NULL, write the job directory.
