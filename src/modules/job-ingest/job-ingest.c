@@ -399,6 +399,8 @@ static int batch_add_job (struct batch *batch, struct job *job)
     json_t *jobentry;
     char *event = NULL;
     double t;
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+    int n;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -423,7 +425,13 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;
-    if (!(event = flux_kvs_event_encode_timestamp (t, "submit", NULL)))
+    n = snprintf (context, sizeof (context), "userid=%d priority=%d",
+                  job->userid, job->priority);
+    if (n < 0 || n >= sizeof (context)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(event = flux_kvs_event_encode_timestamp (t, "submit", context)))
         goto error;
     if (make_key (key, sizeof (key), job, "eventlog") < 0)
         goto error;
