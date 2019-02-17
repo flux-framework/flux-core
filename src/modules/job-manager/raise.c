@@ -296,6 +296,11 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
+    if (note && strchr (note, '=')) {
+        errstr = "exception note may not contain key=value attributes";
+        errno = EPROTO;
+        goto error;
+    }
     /* Perform some tasks asynchronously.
      * When the last one completes, 'c' is destroyed and
      * the user receives a response to the job-manager.raise request.

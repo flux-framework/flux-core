@@ -77,6 +77,11 @@ test_expect_success 'job-manager: raise non-fatal exception on job' '
 	grep -q "Mumble grumble" list1_exception.out
 '
 
+test_expect_success 'job-manager: exception note with embedded = is rejected' '
+	jobid=$(cat list1_jobid.out) &&
+	! flux job raise --severity=1 --type=testing ${jobid} foo=bar
+'
+
 test_expect_success 'job-manager: queue contains 1 jobs' '
 	test $(list_jobs | wc -l) -eq 1
 '
