@@ -1,0 +1,6 @@
+//flux_msg_handler_f
+extern "Python" void message_handler_wrapper(flux_t *, flux_msg_handler_t *, const flux_msg_t *, void *);
+
+//flux_watcher_f
+extern "Python" void timeout_handler_wrapper(flux_reactor_t *, flux_watcher_t *, int, void *);
+extern "Python" void fd_handler_wrapper(flux_reactor_t *, flux_watcher_t *, int, void *);

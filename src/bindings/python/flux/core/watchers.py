@@ -9,7 +9,7 @@
 ###############################################################
 
 import abc
-from flux.core.inner import raw, ffi
+from flux.core.inner import raw, lib, ffi
 
 __all__ = ["TimerWatcher", "FDWatcher"]
 
@@ -46,7 +46,7 @@ class Watcher(object):
             self.handle = None
 
 
-@ffi.callback("flux_watcher_f")
+@ffi.def_extern()
 def timeout_handler_wrapper(unused1, unused2, revents, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
@@ -67,13 +67,13 @@ class TimerWatcher(Watcher):
                 raw.flux_get_reactor(flux_handle),
                 float(after),
                 float(repeat),
-                timeout_handler_wrapper,
+                lib.timeout_handler_wrapper,
                 self.wargs,
             )
         )
 
 
-@ffi.callback("flux_watcher_f")
+@ffi.def_extern()
 def fd_handler_wrapper(unused1, unused2, revents, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
@@ -95,7 +95,7 @@ class FDWatcher(Watcher):
                 raw.flux_get_reactor(flux_handle),
                 self.fd_int,
                 self.events,
-                fd_handler_wrapper,
+                lib.fd_handler_wrapper,
                 self.wargs,
             )
         )
