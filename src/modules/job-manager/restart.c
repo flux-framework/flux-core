@@ -34,18 +34,6 @@ int restart_count_char (const char *s, char c)
     return count;
 }
 
-static flux_future_t *lookup_job_attr (flux_t *h, const char *jobdir,
-                                       const char *name)
-{
-    char key[80];
-
-    if (snprintf (key, sizeof (key), "%s.%s", jobdir, name) >= sizeof (key)) {
-        errno = EINVAL;
-        return NULL;
-    }
-    return flux_kvs_lookup (h, NULL, 0, key);
-}
-
 static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
                                restart_map_f cb, void *arg)
 {
@@ -61,7 +49,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     }
     if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    if (!(f = lookup_job_attr (h, key, "eventlog")))
+    if (!(f = util_attr_lookup (h, id, true, 0, "eventlog")))
         goto done;
     if (flux_kvs_lookup_get (f, &eventlog) < 0)
         goto done;
