@@ -192,6 +192,18 @@ error:
     return -1;
 }
 
+flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,
+                                 int flags, const char *key)
+{
+    char path[64];
+
+    if (util_jobkey (path, sizeof (path), active, id, key) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return flux_kvs_lookup (h, NULL, flags, path);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -52,6 +52,11 @@ int util_eventlog_append (flux_kvs_txn_t *txn,
                           const char *name,
                           const char *fmt, ...);
 
+/* Look up 'key' relative to active/inactive job directory for job 'id'.
+ */
+flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,
+                                 int flags, const char *key);
+
 #endif /* _FLUX_JOB_MANAGER_UTIL_H */
 
 /*
