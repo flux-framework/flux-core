@@ -118,12 +118,12 @@ const char *util_note_from_context (const char *context)
 }
 
 int util_jobkey (char *buf, int bufsz, bool active,
-                 struct job *job, const char *key)
+                 flux_jobid_t id, const char *key)
 {
     char idstr[32];
     int len;
 
-    if (fluid_encode (idstr, sizeof (idstr), job->id, FLUID_STRING_DOTHEX) < 0)
+    if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
     len = snprintf (buf, bufsz, "job.%s.%s%s%s",
                     active ? "active" : "inactive",
@@ -136,7 +136,7 @@ int util_jobkey (char *buf, int bufsz, bool active,
 }
 
 int util_eventlog_append (flux_kvs_txn_t *txn,
-                          struct job *job,
+                          flux_jobid_t id,
                           const char *name,
                           const char *fmt, ...)
 {
@@ -152,7 +152,7 @@ int util_eventlog_append (flux_kvs_txn_t *txn,
     va_end (ap);
     if (n >= sizeof (context))
         goto error_inval;
-    if (util_jobkey (path, sizeof (path), true, job, "eventlog") < 0)
+    if (util_jobkey (path, sizeof (path), true, id, "eventlog") < 0)
         goto error_inval;
     if (!(event = flux_kvs_event_encode (name, context)))
         goto error;
@@ -170,7 +170,7 @@ error:
 }
 
 int util_attr_pack (flux_kvs_txn_t *txn,
-                    struct job *job,
+                    flux_jobid_t id,
                     const char *key,
                     const char *fmt, ...)
 {
@@ -178,7 +178,7 @@ int util_attr_pack (flux_kvs_txn_t *txn,
     int n;
     char path[64];
 
-    if (util_jobkey (path, sizeof (path), true, job, key) < 0)
+    if (util_jobkey (path, sizeof (path), true, id, key) < 0)
         goto error_inval;
     va_start (ap, fmt);
     n = flux_kvs_txn_vpack (txn, 0, path, fmt, ap);

@@ -207,7 +207,7 @@ void raise_eventlog (struct raise_ctx *c)
 {
     flux_future_t *f;
 
-    if (util_eventlog_append (c->txn, c->job, "exception",
+    if (util_eventlog_append (c->txn, c->job->id, "exception",
                               "type=%s severity=%d userid=%lu%s%s",
                               c->type,
                               c->severity,
