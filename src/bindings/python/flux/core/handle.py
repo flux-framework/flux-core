@@ -84,14 +84,18 @@ class Flux(Wrapper):
             return Message(handle=handle)
         return None
 
-    def rpc_send(self, topic, payload=None, nodeid=raw.FLUX_NODEID_ANY, flags=0):
-        """ Create and send an RPC in one step """
-        with RPC(self, topic, payload, nodeid, flags) as rpc:
-            return rpc.get()
+    def rpc(self, topic, payload=None, nodeid=raw.FLUX_NODEID_ANY, flags=0):
+        """ Create a new RPC object """
+        return RPC(self, topic, payload, nodeid, flags)
 
     def rpc_create(self, topic, payload=None, nodeid=raw.FLUX_NODEID_ANY, flags=0):
         """ Create a new RPC object """
         return RPC(self, topic, payload, nodeid, flags)
+
+    def rpc_send(self, topic, payload=None, nodeid=raw.FLUX_NODEID_ANY, flags=0):
+        """ Create and send an RPC in one step """
+        with RPC(self, topic, payload, nodeid, flags) as rpc:
+            return rpc.get()
 
     def mrpc_create(self, topic, payload=None, rankset="any", flags=0):
         """

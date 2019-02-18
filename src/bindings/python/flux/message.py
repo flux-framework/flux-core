@@ -164,7 +164,10 @@ class MessageWatcher(Watcher):
         )
         super(MessageWatcher, self).__init__(
             raw.flux_msg_handler_create(
-                self.flux_handle.handle, match[0], lib.message_handler_wrapper, self.wargs
+                self.flux_handle.handle,
+                match[0],
+                lib.message_handler_wrapper,
+                self.wargs,
             )
         )
 
