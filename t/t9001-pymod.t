@@ -26,7 +26,7 @@ test_expect_success 'pymod echo.py function works' '
 	import flux,sys
 	p = { "data": "foo" }
 	f = flux.Flux()
-	r = f.rpc_send ("echo.foo", p)
+	r = f.rpc ("echo.foo", p).get()
 	sys.exit (not all(item in r.items() for item in p.items()))
 EOF
 '

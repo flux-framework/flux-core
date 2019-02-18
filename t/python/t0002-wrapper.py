@@ -56,22 +56,20 @@ class TestWrapper(unittest.TestCase):
 
     def test_masked_function(self):
         with self.assertRaisesRegexp(AttributeError, r".*masks function.*"):
-            flux.Flux("loop://").rpc_create("topic").pimpl.flux_request_encode(
-                "request", 15
-            )
+            flux.Flux("loop://").rpc("topic").pimpl.flux_request_encode("request", 15)
 
     def test_set_pimpl_handle(self):
         f = flux.Flux("loop://")
-        r = f.rpc_create("topic")
+        r = f.rpc("topic")
         r.handle = raw.flux_rpc(
             f.handle, "other topic", ffi.NULL, flux.constants.FLUX_NODEID_ANY, 0
         )
 
     def test_set_pimpl_handle_invalid(self):
         f = flux.Flux("loop://")
-        r = f.rpc_create("topic")
+        r = f.rpc("topic")
         with self.assertRaisesRegexp(TypeError, r".*expected a.*"):
-            r.handle = f.rpc_create("other topic")
+            r.handle = f.rpc("other topic")
 
     def test_read_basic_value(self):
         self.assertGreater(flux.constants.FLUX_NODEID_ANY, 0)
