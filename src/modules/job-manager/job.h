@@ -38,6 +38,10 @@ struct job *job_create (flux_jobid_t id,
                         double t_submit,
                         int flags);
 
+/* (re-)create job by replaying its KVS eventlog.
+ */
+struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
+
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
 /*
