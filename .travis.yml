@@ -122,6 +122,9 @@ before_install:
   fi
 
 script:
+ # Unshallow repository so git describe works.
+ # (The one inside docker-run-checks may fail if git version is too old)
+ - git fetch --unshallow --tags
  - |
   src/test/docker/docker-run-checks.sh -j2 \
     --image=${IMG} \
