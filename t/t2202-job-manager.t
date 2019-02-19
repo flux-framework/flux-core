@@ -49,7 +49,7 @@ test_expect_success 'job-manager: queue lists job with correct jobid' '
 '
 
 test_expect_success 'job-manager: queue lists job with state=N' '
-	echo "N" >list1_state.exp &&
+	echo "S" >list1_state.exp &&
 	cut -f2 <list1.out >list1_state.out &&
 	test_cmp list1_state.exp list1_state.out
 '
