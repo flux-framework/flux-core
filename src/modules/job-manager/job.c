@@ -73,6 +73,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
 
     if (!(job = job_create_uninit (id)))
         return NULL;
+    job->state = FLUX_JOB_SCHED;
     if (!(eventlog = flux_kvs_eventlog_decode (s)))
         goto error;
     event = flux_kvs_eventlog_first (eventlog);
@@ -104,6 +105,14 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
                 goto error;
             if (severity == 0)
                 job->state = FLUX_JOB_CLEANUP;
+        }
+        else if (!strcmp (name, "alloc")) {
+            job->has_resources = 1;
+            job->state = FLUX_JOB_RUN;
+        }
+        else if (!strcmp (name, "free")) {
+            job->has_resources = 0;
+            job->state = FLUX_JOB_CLEANUP;
         }
         event = flux_kvs_eventlog_next (eventlog);
     }
