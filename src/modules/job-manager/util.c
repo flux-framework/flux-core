@@ -15,20 +15,115 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <ctype.h>
+#include <argz.h>
+#include <envz.h>
 
-#include "src/common/libjob/job.h"
+#include <flux/core.h>
 #include "src/common/libutil/fluid.h"
 
 #include "job.h"
 #include "util.h"
 
+int util_int_from_context (const char *context, const char *key, int *val)
+{
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *endptr;
+    unsigned long i;
+    char *s;
+
+    if (argz_create_sep (context, ' ', &argz, &argz_len) != 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (!(s = envz_get (argz, argz_len, key))) {
+        free (argz);
+        errno = ENOENT;
+        return -1;
+    }
+    errno = 0;
+    i = strtoll (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || endptr == s) {
+        free (argz);
+        errno = EINVAL;
+        return -1;
+    }
+    if (val)
+        *val = i;
+    free (argz);
+    return 0;
+}
+
+int util_str_from_context (const char *context, const char *key,
+                           char *val, int valsize)
+{
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *s;
+
+    if (argz_create_sep (context, ' ', &argz, &argz_len) != 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (!(s = envz_get (argz, argz_len, key))) {
+        free (argz);
+        errno = ENOENT;
+        return -1;
+    }
+    if (val) {
+        if (valsize < strlen (s) + 1) {
+            free (argz);
+            errno = EINVAL;
+            return -1;
+        }
+        strcpy (val, s);
+    }
+    free (argz);
+    return 0;
+}
+
+/* Skip over key=val and any trailing whitespace
+ */
+static const char *skip_keyval (const char *s)
+{
+    const char *equal = strchr (s, '=');
+    const char *cp = s;
+
+    if (equal) {
+        while (cp < equal && !isspace (*cp))
+            cp++;
+        if (cp++ != equal)
+            return NULL;
+        while (*cp && !isspace (*cp))
+            cp++;
+        while (*cp && isspace (*cp))
+            cp++;
+        return cp;
+    }
+    return NULL;
+}
+
+const char *util_note_from_context (const char *context)
+{
+    const char *p;
+
+    if (context) {
+        while ((p = skip_keyval (context)))
+            context = p;
+        if (strlen (context) == 0)
+            context = NULL;
+    }
+    return context;
+}
+
 int util_jobkey (char *buf, int bufsz, bool active,
-                 struct job *job, const char *key)
+                 flux_jobid_t id, const char *key)
 {
     char idstr[32];
     int len;
 
-    if (fluid_encode (idstr, sizeof (idstr), job->id, FLUID_STRING_DOTHEX) < 0)
+    if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
     len = snprintf (buf, bufsz, "job.%s.%s%s%s",
                     active ? "active" : "inactive",
@@ -41,7 +136,7 @@ int util_jobkey (char *buf, int bufsz, bool active,
 }
 
 int util_eventlog_append (flux_kvs_txn_t *txn,
-                          struct job *job,
+                          flux_jobid_t id,
                           const char *name,
                           const char *fmt, ...)
 {
@@ -57,7 +152,7 @@ int util_eventlog_append (flux_kvs_txn_t *txn,
     va_end (ap);
     if (n >= sizeof (context))
         goto error_inval;
-    if (util_jobkey (path, sizeof (path), true, job, "eventlog") < 0)
+    if (util_jobkey (path, sizeof (path), true, id, "eventlog") < 0)
         goto error_inval;
     if (!(event = flux_kvs_event_encode (name, context)))
         goto error;
@@ -75,7 +170,7 @@ error:
 }
 
 int util_attr_pack (flux_kvs_txn_t *txn,
-                    struct job *job,
+                    flux_jobid_t id,
                     const char *key,
                     const char *fmt, ...)
 {
@@ -83,7 +178,7 @@ int util_attr_pack (flux_kvs_txn_t *txn,
     int n;
     char path[64];
 
-    if (util_jobkey (path, sizeof (path), true, job, key) < 0)
+    if (util_jobkey (path, sizeof (path), true, id, key) < 0)
         goto error_inval;
     va_start (ap, fmt);
     n = flux_kvs_txn_vpack (txn, 0, path, fmt, ap);
@@ -95,6 +190,18 @@ error_inval:
     errno = EINVAL;
 error:
     return -1;
+}
+
+flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,
+                                 int flags, const char *key)
+{
+    char path[64];
+
+    if (util_jobkey (path, sizeof (path), active, id, key) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return flux_kvs_lookup (h, NULL, flags, path);
 }
 
 /*

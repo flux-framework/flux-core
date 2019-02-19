@@ -25,10 +25,7 @@ typedef int (*restart_map_f)(struct job *job, void *arg);
 int restart_map (flux_t *h, restart_map_f cb, void *arg);
 
 /* exposed for unit testing only */
-int restart_decode_exception_severity (const char *s);
 int restart_count_char (const char *s, char c);
-int restart_replay_eventlog (const char *s, double *t_submit,
-                             int *flagsp, int *statep);
 
 #endif /* _FLUX_JOB_MANAGER_RESTART_H */
 

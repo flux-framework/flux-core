@@ -207,7 +207,7 @@ void raise_eventlog (struct raise_ctx *c)
 {
     flux_future_t *f;
 
-    if (util_eventlog_append (c->txn, c->job, "exception",
+    if (util_eventlog_append (c->txn, c->job->id, "exception",
                               "type=%s severity=%d userid=%lu%s%s",
                               c->type,
                               c->severity,
@@ -294,6 +294,11 @@ void raise_handle_request (flux_t *h, struct queue *queue,
     if (raise_allow (rolemask, userid, job->userid) < 0) {
         errstr = "guests can only raise exceptions on their own jobs";
         errno = EPERM;
+        goto error;
+    }
+    if (note && strchr (note, '=')) {
+        errstr = "exception note may not contain key=value attributes";
+        errno = EPROTO;
         goto error;
     }
     /* Perform some tasks asynchronously.

@@ -159,11 +159,11 @@ void priority_handle_request (flux_t *h, struct queue *queue,
      */
     if (!(p = priority_create (queue, job, msg, priority)))
         goto error;
-    if (util_eventlog_append (p->txn, job, "priority",
+    if (util_eventlog_append (p->txn, job->id, "priority",
                               "userid=%lu priority=%d",
                               (unsigned long)userid, priority) < 0)
         goto error;
-    if (util_attr_pack (p->txn, job, "priority", "i", priority) < 0)
+    if (util_attr_pack (p->txn, job->id, "priority", "i", priority) < 0)
         goto error;
     if (!(f = flux_kvs_commit (h, NULL, 0, p->txn)))
         goto error;
