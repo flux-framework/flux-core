@@ -4,19 +4,9 @@ test_description='Test flux job manager service'
 
 . $(dirname $0)/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-if flux job submit --help 2>&1 | grep -q sign-type; then
-    test_set_prereq HAVE_FLUX_SECURITY
-fi
-
 test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
-
-JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
-Y2J=${JOBSPEC}/y2j.py
 
 # List jobs without header
 # N.B. cancellation only advances job to CLEANUP state at the moment
@@ -25,8 +15,8 @@ list_jobs() {
 	flux job list -s | awk '$2 != "C"'
 }
 
-test_expect_success 'flux-job: convert basic.yaml to JSON' '
-        ${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
+test_expect_success 'flux-job: generate jobspec for simple test job' '
+        flux jobspec srun -n1 hostname >basic.json
 '
 
 test_expect_success 'job-manager: load job-ingest, job-manager' '
