@@ -84,6 +84,7 @@ test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
+        $(top_builddir)/src/modules/job-manager/alloc.o \
         $(test_ldadd)
 
 test_util_t_SOURCES = test/util.c

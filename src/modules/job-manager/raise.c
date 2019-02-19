@@ -53,6 +53,7 @@ struct raise_ctx {
     char *errstr;
 
     struct queue *queue;
+    struct alloc_ctx *alloc_ctx;
     int refcount;
 };
 
@@ -80,11 +81,17 @@ void raise_ctx_decref (struct raise_ctx *c)
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
         c->job->exception_pending = 0;
-        if (c->severity == 0)
-            c->job->state = FLUX_JOB_CLEANUP;
         if (c->request) {
             raise_respond (c);
             flux_msg_destroy (c->request);
+        }
+        if (c->severity == 0) {
+            c->job->state = FLUX_JOB_CLEANUP;
+            if (alloc_do_request (c->alloc_ctx, c->job) < 0) {
+                flux_log_error (c->h,
+                    "%s: error notifying scheduler of job %llu cleanup",
+                    __FUNCTION__, (unsigned long long)c->job->id);
+            }
         }
         flux_kvs_txn_destroy (c->txn);
         free (c->note);
@@ -104,6 +111,7 @@ struct raise_ctx *raise_ctx_incref (struct raise_ctx *c)
 
 struct raise_ctx *raise_ctx_create (flux_t *h,
                                     struct queue *queue,
+                                    struct alloc_ctx *alloc_ctx,
                                     struct job *job,
                                     const flux_msg_t *request,
                                     uint32_t userid,
@@ -116,6 +124,7 @@ struct raise_ctx *raise_ctx_create (flux_t *h,
     if (!(c = calloc (1, sizeof (*c))))
         return NULL;
     c->queue = queue;
+    c->alloc_ctx = alloc_ctx;
     c->job = job;
     c->userid = userid;
     c->h = h;
@@ -256,6 +265,7 @@ int raise_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid)
 }
 
 void raise_handle_request (flux_t *h, struct queue *queue,
+                           struct alloc_ctx *alloc_ctx,
                            const flux_msg_t *msg)
 {
     uint32_t userid;
@@ -305,7 +315,7 @@ void raise_handle_request (flux_t *h, struct queue *queue,
      * When the last one completes, 'c' is destroyed and
      * the user receives a response to the job-manager.raise request.
      */
-    if (!(c = raise_ctx_create (h, queue, job, msg, userid,
+    if (!(c = raise_ctx_create (h, queue, alloc_ctx, job, msg, userid,
                                 severity, type, note)))
         goto error;
     job->exception_pending = 1;

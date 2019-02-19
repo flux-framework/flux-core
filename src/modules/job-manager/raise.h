@@ -11,12 +11,14 @@
 #ifndef _FLUX_JOB_MANAGER_RAISE_H
 #define _FLUX_JOB_MANAGER_RAISE_H
 
-#include "queue.h"
 #include <stdint.h>
+#include "queue.h"
+#include "alloc.h"
 
 /* Hande a request to raise an exception on job.
  */
 void raise_handle_request (flux_t *h, struct queue *queue,
+                           struct alloc_ctx *ctx,
                            const flux_msg_t *msg);
 
 /* exposed for unit testing only */
