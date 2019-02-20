@@ -83,6 +83,7 @@ TESTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
+	t2203-job-manager-dummysched.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -174,6 +175,7 @@ check_SCRIPTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
+	t2203-job-manager-dummysched.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
