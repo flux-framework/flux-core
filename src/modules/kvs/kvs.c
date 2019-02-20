@@ -2560,6 +2560,8 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *ns)
     if ((root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
         struct kvs_cb_data cbd = { .ctx = ctx, .root = root };
 
+        flux_log (ctx->h, LOG_DEBUG, "%s: namespace %s being removed",
+                  __FUNCTION__, ns);
         root->remove = true;
 
         /* Now that root has been marked for removal from roothash, run through
