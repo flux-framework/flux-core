@@ -420,8 +420,11 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP 
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
         flux kvs namespace create $NAMESPACETMP-REMOVE-WAIT &&
+        echo "before kvs version" &&
         VERS=$(flux kvs version --namespace=$NAMESPACETMP-REMOVE-WAIT) &&
+        echo "after kvs version" &&
         VERS=$((VERS + 1)) &&
+        echo "before kvs wait" &&
         flux kvs wait --namespace=$NAMESPACETMP-REMOVE-WAIT $VERS > wait_out 2>&1 &
         waitpid=$! &&
         wait_syncers_nonzero 1 $NAMESPACETMP-REMOVE-WAIT &&
