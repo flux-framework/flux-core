@@ -2016,8 +2016,8 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         /* namespace must exist given we are on rank 0 */
         if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
             root = kvsroot_mgr_lookup_root (ctx->krm, ns);
-            flux_log (h, LOG_DEBUG, "%s: namespace %s not available (lookup_notsafe = %p)",
-                      __FUNCTION__, ns, root);
+            flux_log (h, LOG_DEBUG, "%s: namespace %s not available (lookup_notsafe = %s / %s)",
+                      __FUNCTION__, ns, root ? "not null" : "null", root ? (root->remove ? "remove" : "not remove") : "N/A");
             errno = ENOTSUP;
             goto error;
         }
@@ -2483,6 +2483,9 @@ static int namespace_create (kvs_ctx_t *ctx, const char *ns,
         flux_log_error (ctx->h, "%s: flux_send", __FUNCTION__);
         goto cleanup;
     }
+
+    flux_log (ctx->h, LOG_DEBUG, "%s: namespace %s created (root->remove = %s)",
+              __FUNCTION__, ns, root->remove ? "remove" : "not remove");
 
     rv = 0;
 cleanup:
