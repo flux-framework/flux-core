@@ -10,7 +10,6 @@
 
 import errno
 
-import flux
 from flux.util import check_future_error
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
@@ -83,10 +82,13 @@ class Future(WrapperPimpl):
         return errmsg.decode("utf-8") if errmsg else None
 
     def get_flux(self):
+        # pylint: disable=cyclic-import
+        import flux.core.handle
+
         flux_handle = self.pimpl.get_flux()
         if flux_handle == ffi.NULL:
             return None
-        return flux.Flux(handle=flux_handle)
+        return flux.core.handle.Flux(handle=flux_handle)
 
     def get_reactor(self):
         return self.pimpl.get_reactor()
