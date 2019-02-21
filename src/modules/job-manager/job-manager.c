@@ -61,7 +61,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                       __FUNCTION__, (unsigned int)index);
             goto error;
         }
-        if (!(job = job_create (id, priority, userid, t_submit, 0)))
+        if (!(job = job_create (id, priority, userid, t_submit)))
             goto error;
         /* N.B. ignore EEXIST, in case restart_from_kvs() loaded a job
          * while its submit request was in still flight.

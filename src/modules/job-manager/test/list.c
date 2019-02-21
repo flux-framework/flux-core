@@ -30,7 +30,7 @@ struct queue *make_test_queue (int size)
 
     for (id = 0; id < size; id++) {
         struct job *j;
-        if (!(j = job_create (id, 0, 0, 0, 0)))
+        if (!(j = job_create (id, 0, 0, 0)))
             BAIL_OUT ("job_create failed");
         if (queue_insert (q, j, &j->queue_handle) < 0)
             BAIL_OUT ("queue_insert failed");

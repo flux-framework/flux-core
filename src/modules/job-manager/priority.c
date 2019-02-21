@@ -146,13 +146,8 @@ void priority_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
-    /* If job has requested resources/exec, don't allow adjustment.
+    /* TODO: If job has requested resources/exec, don't allow adjustment.
      */
-    if (job->flags != 0) {
-        errstr = "it is too late to reprioritize this job";
-        errno = EPERM;
-        goto error;
-    }
     /* Log KVS event and set KVS priority key asynchronously.
      * Upon successful completion, insert job in new queue position and
      * send response.

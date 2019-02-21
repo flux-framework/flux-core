@@ -11,19 +11,17 @@
 #ifndef _FLUX_JOB_MANAGER_JOB_H
 #define _FLUX_JOB_MANAGER_JOB_H
 
+#include <stdint.h>
 #include "src/common/libjob/job.h"
-
-enum job_status_flags {
-    JOB_EXCEPTION_PENDING = 1,  // exception not yet commited to eventlog
-};
 
 struct job {
     flux_jobid_t id;
     uint32_t userid;
     int priority;
     double t_submit;
-    int flags;
     flux_job_state_t state;
+
+    uint8_t exception_pending:1;
 
     void *aux_queue_handle;
     void *queue_handle; // primary queue handle (for listing all active jobs)
@@ -36,8 +34,7 @@ struct job *job_incref (struct job *job);
 struct job *job_create (flux_jobid_t id,
                         int priority,
                         uint32_t userid,
-                        double t_submit,
-                        int flags);
+                        double t_submit);
 
 /* (re-)create job by replaying its KVS eventlog.
  */

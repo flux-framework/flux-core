@@ -48,7 +48,7 @@ static struct job *job_create_uninit (flux_jobid_t id)
 }
 
 struct job *job_create (flux_jobid_t id, int priority, uint32_t userid,
-                        double t_submit, int flags)
+                        double t_submit)
 {
     struct job *job;
 
@@ -57,7 +57,6 @@ struct job *job_create (flux_jobid_t id, int priority, uint32_t userid,
     job->userid = userid;
     job->priority = priority;
     job->t_submit = t_submit;
-    job->flags = flags;
     job->state = FLUX_JOB_NEW;
     return job;
 }
