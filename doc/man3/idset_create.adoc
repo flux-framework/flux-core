@@ -43,7 +43,7 @@ numbered 'id' it can hold, plus one.  The size is fixed unless
 
 `idset_decode ()` creates an idset from a string 's'.  The string may
 have been produced by `idset_encode()`.  It must consist of comma-separated
-non-negative integer id's, and may also contain hyphenated ranges.
+non-negative integer ids, and may also contain hyphenated ranges.
 If enclosed in square brackets, the brackets are ignored.  Some examples
 of valid input strings are:
 
@@ -56,7 +56,7 @@ of valid input strings are:
   [99-101]
 
 `idset_encode()` creates a string from 'idset'.  The string contains
-a comma-separated list of id's, potentially modified by 'flags'
+a comma-separated list of ids, potentially modified by 'flags'
 (see FLAGS below).
 
 FLAGS
@@ -66,7 +66,7 @@ IDSET_FLAG_AUTOGROW::
 Valid for `idset_create()` only.  If set, the idset will grow to
 accommodate any id inserted into it. The internal vEB tree is doubled
 in size until until the new id can be inserted.  Resizing is a costly
-operation that requires all id's in the old tree to be inserted into
+operation that requires all ids in the old tree to be inserted into
 the new one.
 
 IDSET_FLAG_BRACKETS::
@@ -75,7 +75,7 @@ enclosed in brackets, unless the idset is a singleton (contains only
 one id).
 
 IDSET_FLAG_RANGE::
-Valid for `idset_encode()` only.  If set, any consecutive id's are
+Valid for `idset_encode()` only.  If set, any consecutive ids are
 compressed into hyphenated ranges in the encoded string.
 
 RETURN VALUE
