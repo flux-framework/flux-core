@@ -19,6 +19,7 @@ struct job {
     uint32_t userid;
     int priority;
     double t_submit;
+    int flags;
     flux_job_state_t state;
 
     uint8_t exception_pending:1;
@@ -37,7 +38,8 @@ struct job *job_incref (struct job *job);
 struct job *job_create (flux_jobid_t id,
                         int priority,
                         uint32_t userid,
-                        double t_submit);
+                        double t_submit,
+                        int flags);
 
 /* (re-)create job by replaying its KVS eventlog.
  */

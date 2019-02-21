@@ -51,14 +51,16 @@ zlist_t *enqueue_jobs (struct queue *queue, json_t *jobs)
         uint32_t userid;
         int priority;
         double t_submit;
+        int flags;
 
-        if (json_unpack (el, "{s:I s:i s:i s:f}", "id", &id,
-                                                  "priority", &priority,
-                                                  "userid", &userid,
-                                                  "t_submit", &t_submit) < 0) {
+        if (json_unpack (el, "{s:I s:i s:i s:f s:i}", "id", &id,
+                                                      "priority", &priority,
+                                                      "userid", &userid,
+                                                      "t_submit", &t_submit,
+                                                      "flags", &flags) < 0) {
             goto error;
         }
-        if (!(job = job_create (id, priority, userid, t_submit)))
+        if (!(job = job_create (id, priority, userid, t_submit, flags)))
             goto error;
         if (queue_insert (queue, job, &job->queue_handle) < 0) {
             job_decref (job);

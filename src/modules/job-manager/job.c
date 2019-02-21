@@ -48,7 +48,7 @@ static struct job *job_create_uninit (flux_jobid_t id)
 }
 
 struct job *job_create (flux_jobid_t id, int priority, uint32_t userid,
-                        double t_submit)
+                        double t_submit, int flags)
 {
     struct job *job;
 
@@ -57,6 +57,7 @@ struct job *job_create (flux_jobid_t id, int priority, uint32_t userid,
     job->userid = userid;
     job->priority = priority;
     job->t_submit = t_submit;
+    job->flags = flags;
     job->state = FLUX_JOB_NEW;
     return job;
 }
@@ -83,14 +84,17 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
                                    context, sizeof (context)) < 0)
             goto error;
         if (!strcmp (name, "submit")) {
-            int priority, userid;
+            int priority, userid, flags;
             if (util_int_from_context (context, "priority", &priority) < 0)
                 goto error;
             if (util_int_from_context (context, "userid", &userid) < 0)
                 goto error;
+            if (util_int_from_context (context, "flags", &flags) < 0)
+                goto error;
             job->t_submit = timestamp;
             job->userid = userid;
             job->priority = priority;
+            job->flags = flags;
             submit_valid = true;
         }
         else if (!strcmp (name, "priority")) {
