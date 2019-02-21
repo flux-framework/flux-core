@@ -426,9 +426,13 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
         VERS=$((VERS + 1)) &&
         echo "before kvs wait" &&
         flux kvs wait --namespace=$NAMESPACETMP-REMOVE-WAIT $VERS > wait_out 2>&1 &
+        echo "before waitpid" &&
         waitpid=$! &&
+        echo "before wait_syncers" &&
         wait_syncers_nonzero 1 $NAMESPACETMP-REMOVE-WAIT &&
+        echo "before remove-NS" &&
         flux kvs namespace remove $NAMESPACETMP-REMOVE-WAIT &&
+        echo "before wait for waitpid" &&
         ! wait $waitpid &&
         grep "flux_kvs_wait_version: Operation not supported" wait_out
 '
