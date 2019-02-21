@@ -417,8 +417,8 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;
-    n = snprintf (context, sizeof (context), "userid=%d priority=%d",
-                  job->userid, job->priority);
+    n = snprintf (context, sizeof (context), "userid=%d priority=%d flags=%d",
+                  job->userid, job->priority, job->flags);
     if (n < 0 || n >= sizeof (context)) {
         errno = EINVAL;
         goto error;
@@ -429,10 +429,12 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, event) < 0)
         goto error;
-    if (!(jobentry = json_pack ("{s:I s:i s:i s:f}", "id", job->id,
-                                                     "userid", job->userid,
-                                                     "priority", job->priority,
-                                                     "t_submit", t)))
+    if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i}",
+                                "id", job->id,
+                                "userid", job->userid,
+                                "priority", job->priority,
+                                "t_submit", t,
+                                "flags", job->flags)))
         goto nomem;
     if (json_array_append_new (batch->joblist, jobentry) < 0) {
         json_decref (jobentry);
@@ -513,7 +515,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     /* Validate submit flags.
      */
-    if (job->flags != 0) {
+    if (job->flags != 0 && job->flags != FLUX_JOB_DEBUG) {
         errno = EPROTO;
         goto error;
     }
