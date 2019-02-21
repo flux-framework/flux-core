@@ -424,7 +424,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
         VERS=$((VERS + 1)) &&
         flux kvs wait --namespace=$NAMESPACETMP-REMOVE-WAIT $VERS > wait_out 2>&1 &
         waitpid=$! &&
-        wait_syncers_nonzero $NAMESPACETMP-REMOVE-FENCE1 &&
+        wait_syncers_nonzero $NAMESPACETMP-REMOVE-WAIT &&
         flux kvs namespace remove $NAMESPACETMP-REMOVE-WAIT &&
         ! wait $waitpid &&
         grep "flux_kvs_wait_version: Operation not supported" wait_out
