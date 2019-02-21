@@ -21,6 +21,7 @@ extern "C" {
 
 enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
+    FLUX_JOB_DEBUG = 2,
 };
 
 enum job_priority {
