@@ -115,5 +115,5 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 --------
-flux-dmesg(1), flux-logger(1),
-https://tools.ietf.org/html/rfc5424[RFC 5424 The Syslog Protocol]
+
+https://github.com/flux-framework/rfc/blob/master/spec_22.adoc[RFC 22: Idset String Representation]
