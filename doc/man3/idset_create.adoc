@@ -5,20 +5,43 @@ idset_create(3)
 
 NAME
 ----
-idset_create, idset_destroy, idset_encode, idset_decode - Manipulate numerically sorted sets of non-negative integers
+idset_create, idset_destroy, idset_encode, idset_decode, idset_set, idset_clear, idset_first, idset_next, idset_count - Manipulate numerically sorted sets of non-negative integers
 
 
 SYNOPSIS
 --------
-#include <flux/idset.h>
+ #include <flux/idset.h>
 
-struct idset *idset_create (size_t slots, int flags);
+ struct idset *idset_create (size_t slots, int flags);
 
-void idset_destroy (struct idset *idset);
+ void idset_destroy (struct idset *idset);
 
-char *idset_encode (const struct idset *idset, int flags);
+ struct idset *idset_copy (const struct idset *idset);
 
-struct idset *idset_decode (const char *s);
+ struct idset *idset_decode (const char *s);
+
+ char *idset_encode (const struct idset *idset, int flags);
+
+ int idset_set (struct idset *idset, unsigned int id);
+
+ int idset_range_set (struct idset *idset,
+                      unsigned int lo, unsigned int hi);
+
+ int idset_clear (struct idset *idset, unsigned int id);
+
+ int idset_range_clear (struct idset *idset,
+                        unsigned int lo, unsigned int hi)
+
+ bool idset_test (const struct idset *idset, unsigned int id);
+
+ unsigned int idset_first (const struct idset *idset);
+
+ unsigned int idset_next (const struct idset *idset, unsigned int prev);
+
+ unsigned int idset_last (const struct idset *idset)
+
+ size_t idset_count (const struct idset *idset);
+
 
 USAGE
 -----
@@ -41,6 +64,8 @@ numbered 'id' it can hold, plus one.  The size is fixed unless
 
 `idset_destroy()` destroys an idset.
 
+`idset_copy()` copies an idset.
+
 `idset_decode ()` creates an idset from a string 's'.  The string may
 have been produced by `idset_encode()`.  It must consist of comma-separated
 non-negative integer ids, and may also contain hyphenated ranges.
@@ -58,6 +83,21 @@ of valid input strings are:
 `idset_encode()` creates a string from 'idset'.  The string contains
 a comma-separated list of ids, potentially modified by 'flags'
 (see FLAGS below).
+
+`idset_set()` and `idset_clear()` set or clear 'id'.
+
+`idset_range_set()` and `idset_range_clear()` set or clear an inclusive
+range of ids, from 'lo' to 'hi'.
+
+`idset_test()` returns true if 'id' is set, false if not.
+
+`idset_first()` and `idset_next()` can be used to iterate over ids
+in the set, returning IDSET_INVALID_ID at the end.  `idset_last()`
+returns the last (highest) id, or IDSET_INVALID_ID if the set is
+empty.
+
+`idset_count()` returns the number of ids in the set.
+
 
 FLAGS
 -----
@@ -81,12 +121,17 @@ compressed into hyphenated ranges in the encoded string.
 RETURN VALUE
 ------------
 
-`idset_create()` and `idset_encode()` return an idset on success
-which must be freed with `idset_destroy()`.  On error, NULL is
-returned with errno set.
+`idset_create()`, `idset_encode()`, and `idset_copy()` return an
+idset on success which must be freed with `idset_destroy()`.
+On error, NULL is returned with errno set.
 
 `idset_decode()` returns a string on success which must be freed
 with `free()`.  On error, NULL is returned with errno set.
+
+`idset_first()`, `idset_next()`, and `idset_last()` return an id,
+or IDSET_INVALID_ID if no id is available.
+
+Other functions return 0 on success, or -1 on error with errno set.
 
 ERRORS
 ------
