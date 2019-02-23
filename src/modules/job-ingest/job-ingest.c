@@ -415,14 +415,6 @@ static int batch_add_job (struct batch *batch, struct job *job)
     if (flux_kvs_txn_put_raw (batch->txn, 0, key,
                               job->jobspec, job->jobspecsz) < 0)
         goto error;
-    if (make_key (key, sizeof (key), job, "userid") < 0)
-        goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", job->userid) < 0)
-        goto error;
-    if (make_key (key, sizeof (key), job, "priority") < 0)
-        goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", job->priority) < 0)
-        goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;
     n = snprintf (context, sizeof (context), "userid=%d priority=%d",
