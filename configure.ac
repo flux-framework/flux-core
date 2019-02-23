@@ -419,6 +419,7 @@ AC_CONFIG_FILES( \
   src/modules/userdb/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
+  src/modules/sched-simple/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \

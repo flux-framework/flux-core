@@ -9,4 +9,5 @@ SUBDIRS = \
  userdb \
  pymod \
  job-ingest \
- job-manager
+ job-manager \
+ sched-simple
