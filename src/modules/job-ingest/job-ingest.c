@@ -406,7 +406,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
         errno = ENOMEM;
         return -1;
     }
-    if (make_key (key, sizeof (key), job, "J-signed") < 0)
+    if (make_key (key, sizeof (key), job, "J") < 0)
         goto error;
     if (flux_kvs_txn_put (batch->txn, 0, key, job->J) < 0)
         goto error;
