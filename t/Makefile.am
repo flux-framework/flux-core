@@ -62,6 +62,7 @@ TESTS = \
 	t0019-jobspec-schema.t \
 	t0020-emit-jobspec.t \
 	t0021-flux-jobspec.t \
+	t0022-jj-reader.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1003-kvs-stress.t \
@@ -154,6 +155,7 @@ check_SCRIPTS = \
 	t0019-jobspec-schema.t \
 	t0020-emit-jobspec.t \
 	t0021-flux-jobspec.t \
+	t0022-jj-reader.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1003-kvs-stress.t \
@@ -232,7 +234,8 @@ check_PROGRAMS = \
 	rexec/rexec \
 	rexec/rexec_signal \
 	rexec/rexec_ps \
-	ingest/submitbench
+	ingest/submitbench \
+	sched-simple/jj-reader
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -443,3 +446,9 @@ job_manager_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 job_manager_sched_dummy_la_LIBADD = \
         $(top_builddir)/src/common/libschedutil/libschedutil.la \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+sched_simple_jj_reader_SOURCES = sched-simple/jj-reader.c
+sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
+sched_simple_jj_reader_LDADD = \
+	$(top_builddir)/src/modules/sched-simple/libjj.la \
+	$(test_ldadd)
