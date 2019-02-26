@@ -220,6 +220,8 @@ int free_request (struct alloc_ctx *ctx, struct job *job)
         goto error;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto error;
+    if ((job->flags & FLUX_JOB_DEBUG))
+        eventlog_append (ctx, job, "debug.free-request", NULL);
 
     job->free_pending = 1;
 
@@ -334,6 +336,8 @@ int alloc_request (struct alloc_ctx *ctx, struct job *job)
         goto error;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto error;
+    if ((job->flags & FLUX_JOB_DEBUG))
+        eventlog_append (ctx, job, "debug.alloc-request", NULL);
 
     job->alloc_pending = 1;
     queue_delete (ctx->inqueue, job, job->aux_queue_handle);
