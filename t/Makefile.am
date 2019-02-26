@@ -83,6 +83,7 @@ TESTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
+	t2203-job-manager-dummysched.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -174,6 +175,7 @@ check_SCRIPTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
+	t2203-job-manager-dummysched.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -236,7 +238,8 @@ check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
 	request/req.la \
-	ingest/job-manager-dummy.la
+	ingest/job-manager-dummy.la \
+	job-manager/sched-dummy.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -433,3 +436,10 @@ ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
 ingest_submitbench_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+job_manager_sched_dummy_la_SOURCES = job-manager/sched-dummy.c
+job_manager_sched_dummy_la_CPPFLAGS = $(test_cppflags)
+job_manager_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+job_manager_sched_dummy_la_LIBADD = \
+        $(top_builddir)/src/common/libschedutil/libschedutil.la \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)

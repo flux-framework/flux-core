@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -21,13 +22,68 @@
 #include "raise.h"
 #include "list.h"
 #include "priority.h"
+#include "alloc.h"
 
 
 struct job_manager_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     struct queue *queue;
+    struct alloc_ctx *alloc_ctx;
 };
+
+/* Enqueue jobs from 'jobs' array in queue.
+ * On success, return a list of struct job's.
+ * On failure, return NULL with errno set (no jobs enqueued).
+ */
+zlist_t *enqueue_jobs (struct queue *queue, json_t *jobs)
+{
+    size_t index;
+    json_t *el;
+    zlist_t *newjobs;
+    struct job *job;
+    int saved_errno;
+
+    if (!(newjobs = zlist_new ()))
+        goto error;
+    json_array_foreach (jobs, index, el) {
+        flux_jobid_t id;
+        uint32_t userid;
+        int priority;
+        double t_submit;
+
+        if (json_unpack (el, "{s:I s:i s:i s:f}", "id", &id,
+                                                  "priority", &priority,
+                                                  "userid", &userid,
+                                                  "t_submit", &t_submit) < 0) {
+            goto error;
+        }
+        if (!(job = job_create (id, priority, userid, t_submit)))
+            goto error;
+        if (queue_insert (queue, job, &job->queue_handle) < 0) {
+            job_decref (job);
+            if (errno == EEXIST)
+                continue; // don't report error - might be a race with restart
+            goto error;
+        }
+        if (zlist_push (newjobs, job) < 0) {
+            queue_delete (queue, job, job->queue_handle);
+            job_decref (job);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    return newjobs;
+error:
+    saved_errno = errno;
+    while ((job = zlist_pop (newjobs))) {
+        queue_delete (queue, job, job->queue_handle);
+        job_decref (job);
+    }
+    zlist_destroy (&newjobs);
+    errno = saved_errno;
+    return NULL;
+}
 
 /* handle submit request (from job-ingest module)
  * This is a batched request for one or more jobs already validated
@@ -39,45 +95,32 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager_ctx *ctx = arg;
     json_t *jobs;
-    size_t index;
-    json_t *el;
+    zlist_t *newjobs;
+    struct job *job;
 
     if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0) {
         flux_log_error (h, "%s", __FUNCTION__);
         goto error;
     }
-    json_array_foreach (jobs, index, el) {
-        flux_jobid_t id;
-        uint32_t userid;
-        int priority;
-        double t_submit;
-        struct job *job = NULL;
-
-        if (json_unpack (el, "{s:I s:i s:i s:f}", "id", &id,
-                                                  "priority", &priority,
-                                                  "userid", &userid,
-                                                  "t_submit", &t_submit) < 0) {
-            flux_log (h, LOG_ERR, "%s: error decoding job index %u",
-                      __FUNCTION__, (unsigned int)index);
-            goto error;
-        }
-        if (!(job = job_create (id, priority, userid, t_submit, 0)))
-            goto error;
-        /* N.B. ignore EEXIST, in case restart_from_kvs() loaded a job
-         * while its submit request was in still flight.
-         */
-        if (queue_insert (ctx->queue, job) < 0 && errno != EEXIST) {
-            flux_log_error (h, "%s: queue_insert %llu",
-                            __FUNCTION__, (unsigned long long)id);
-            job_decref (job);
-            goto error;
-        }
-        job_decref (job);
+    if (!(newjobs = enqueue_jobs (ctx->queue, jobs))) {
+        flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
+        goto error;
     }
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    flux_log (h, LOG_DEBUG, "%s: added %u jobs", __FUNCTION__,
-                            (unsigned int)index);
+    flux_log (h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__,
+                            (int)zlist_size (newjobs));
+    /* Submitting user is being responded to with jobid's.
+     * Now walk the list of new jobs and advance their state.
+     */
+    while ((job = zlist_pop (newjobs))) {
+        job->state = FLUX_JOB_SCHED;
+        if (alloc_do_request (ctx->alloc_ctx, job) < 0)
+            flux_log_error (h, "%s: error notifying scheduler of new job %llu",
+                            __FUNCTION__, (unsigned long long)job->id);
+        job_decref (job);
+    }
+    zlist_destroy (&newjobs);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -100,7 +143,7 @@ static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    raise_handle_request (h, ctx->queue, msg);
+    raise_handle_request (h, ctx->queue, ctx->alloc_ctx, msg);
 }
 
 /* priority request handled in priority.c
@@ -121,8 +164,16 @@ static int restart_map_cb (struct job *job, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
 
-    if (queue_insert (ctx->queue, job) < 0)
+    if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
         return -1;
+    if (job->state == FLUX_JOB_NEW)
+        job->state = FLUX_JOB_SCHED;
+    if (job->state == FLUX_JOB_SCHED) {
+        if (alloc_do_request (ctx->alloc_ctx, job) < 0) {
+            flux_log_error (ctx->h, "%s: error notifying scheduler of job %llu",
+                __FUNCTION__, (unsigned long long)job->id);
+        }
+    }
     return 0;
 }
 
@@ -155,8 +206,12 @@ int mod_main (flux_t *h, int argc, char **argv)
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
 
-    if (!(ctx.queue = queue_create ())) {
+    if (!(ctx.queue = queue_create (true))) {
         flux_log_error (h, "error creating queue");
+        goto done;
+    }
+    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue))) {
+        flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
@@ -174,6 +229,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    alloc_ctx_destroy (ctx.alloc_ctx);
     queue_destroy (ctx.queue);
     return rc;
 }

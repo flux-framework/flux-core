@@ -8,14 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* queue - maintain job queue
- *
- * The queue is kept sorted first by priority, then by submission time.
- *
- * The list entries point to jobs stored in a hash, keyed by jobid.
- * Upon insertion into the hash, the job reference count is incremented;
- * upon deletion from the hash, the job reference count is decremented.
- * Invariant: job are either in both the hash and the list, or neither.
+/* queue - list of jobs sorted by priority, then t_submit order
  */
 
 #if HAVE_CONFIG_H
@@ -23,20 +16,21 @@
 #endif
 #include <czmq.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "src/common/libjob/job.h"
 #include "job.h"
 #include "queue.h"
 
 struct queue {
-    zhashx_t *active_jobs;
-    zlistx_t *active_jobs_list;
+    zhashx_t *h;
+    zlistx_t *l;
 };
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
 
-/* Hash numerical jobid in 'key' for 'active_jobs'.
+/* Hash numerical jobid in 'key'.
  * N.B. zhashx_hash_fn signature
  */
 static size_t job_hasher (const void *key)
@@ -45,7 +39,7 @@ static size_t job_hasher (const void *key)
     return *id;
 }
 
-/* Compare keys for sorting 'active_jobs'.
+/* Compare hash keys.
  * N.B. zhashx_comparator_fn signature
  */
 static int job_hash_key_cmp (const void *key1, const void *key2)
@@ -56,8 +50,8 @@ static int job_hash_key_cmp (const void *key1, const void *key2)
     return NUMCMP (*id1, *id2);
 }
 
-/* Destroy job entry in 'active_jobs'.
- * N.B. zhashx_destructor_fn signature.
+/* Destroy list entry.
+ * N.B. zlistx_destructor_fn signature.
  */
 static void job_destructor (void **item)
 {
@@ -65,7 +59,15 @@ static void job_destructor (void **item)
     *item = NULL;
 }
 
-/* Compare items for sorting 'active_jobs_list'.
+/* Duplicate list entry
+ * N.B. zlistx_duplicator_fn signature.
+ */
+static void *job_duplicator (const void *item)
+{
+    return job_incref ((void *)item);
+}
+
+/* Compare items for sorting in list.
  * N.B. zlistx_comparator_fn signature
  */
 static int job_list_cmp (const void *a1, const void *a2)
@@ -93,92 +95,109 @@ static bool search_direction (struct job *job)
         return false;
 }
 
-/* Insert 'job' into active_jobs hash and active_jobs_list (pri, id order).
+/* Insert 'job' into queue.
+ * If hash is defined, insert into hash also.
  */
-int queue_insert (struct queue *queue, struct job *job)
+int queue_insert (struct queue *queue, struct job *job, void **handle)
 {
-    if (zhashx_insert (queue->active_jobs, &job->id, job) < 0) {
-        errno = EEXIST;
-        return -1;
+    void *tmp;
+
+    if (queue->h) {
+        if (zhashx_insert (queue->h, &job->id, job) < 0) {
+            errno = EEXIST;
+            return -1;
+        }
     }
-    job_incref (job);
-    if (!(job->list_handle = zlistx_insert (queue->active_jobs_list,
-                                            job, search_direction (job)))) {
-        zhashx_delete (queue->active_jobs, &job->id); // implicit job_decref
+    if (!(tmp = zlistx_insert (queue->l, job, search_direction (job)))) {
+        if (queue->h)
+            zhashx_delete (queue->h, &job->id);
         errno = ENOMEM; // presumed
         return -1;
     }
+    *handle = tmp;
     return 0;
 }
 
-void queue_reorder (struct queue *queue, struct job *job)
+void queue_reorder (struct queue *queue, struct job *job, void *handle)
 {
-    zlistx_reorder (queue->active_jobs_list, job->list_handle,
-                    search_direction (job));
+    zlistx_reorder (queue->l, handle, search_direction (job));
 }
 
 struct job *queue_lookup_by_id  (struct queue *queue, flux_jobid_t id)
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (queue->active_jobs, &id))) {
-        errno = ENOENT;
-        return NULL;
+    if (queue->h) {
+        if ((job = zhashx_lookup (queue->h, &id)))
+            return job;
     }
-    return job;
+    else {
+        job = zlistx_first (queue->l);
+        while (job) {
+            if (job->id == id)
+                return job;
+            job = zlistx_next (queue->l);
+        }
+    }
+    errno = ENOENT;
+    return NULL;
 }
 
-void queue_delete (struct queue *queue, struct job *job)
+void queue_delete (struct queue *queue, struct job *job, void *handle)
 {
-    if (job->list_handle)
-        (void)zlistx_delete (queue->active_jobs_list, job->list_handle);
-    zhashx_delete (queue->active_jobs, &job->id); // implicit job_decref
+    int rc;
+
+    if (queue->h)
+        zhashx_delete (queue->h, &job->id);
+    rc = zlistx_delete (queue->l, handle); // calls job_decref ()
+    assert (rc == 0);
 }
 
 int queue_size (struct queue *queue)
 {
-    return zlistx_size (queue->active_jobs_list);
+    return zlistx_size (queue->l);
 }
 
 struct job *queue_first (struct queue *queue)
 {
-    return zlistx_first (queue->active_jobs_list); // deletion-safe
+    return zlistx_first (queue->l); // deletion-safe
 }
 
 struct job *queue_next (struct queue *queue)
 {
-    return zlistx_next (queue->active_jobs_list); // deletion-safe
+    return zlistx_next (queue->l); // deletion-safe
 }
 
 void queue_destroy (struct queue *queue)
 {
     if (queue) {
         int saved_errno = errno;
-        if (queue->active_jobs_list)
-            zlistx_destroy (&queue->active_jobs_list);
-        if (queue->active_jobs)
-            zhashx_destroy (&queue->active_jobs);
+        zlistx_destroy (&queue->l);
+        zhashx_destroy (&queue->h);
         free (queue);
         errno = saved_errno;
     }
 }
 
-struct queue *queue_create (void)
+struct queue *queue_create (bool lookup_hash)
 {
     struct queue *queue;
 
     if (!(queue = calloc (1, sizeof (*queue))))
         return NULL;
-    if (!(queue->active_jobs = zhashx_new ()))
+    if (!(queue->l = zlistx_new ()))
         goto error;
-    if (!(queue->active_jobs_list = zlistx_new ()))
-        goto error;
-    zhashx_set_key_hasher (queue->active_jobs, job_hasher);
-    zhashx_set_key_comparator (queue->active_jobs, job_hash_key_cmp);
-    zhashx_set_key_duplicator (queue->active_jobs, NULL);
-    zhashx_set_key_destructor (queue->active_jobs, NULL);
-    zhashx_set_destructor (queue->active_jobs, job_destructor);
-    zlistx_set_comparator (queue->active_jobs_list, job_list_cmp);
+    zlistx_set_destructor (queue->l, job_destructor);
+    zlistx_set_comparator (queue->l, job_list_cmp);
+    zlistx_set_duplicator (queue->l, job_duplicator);
+    if (lookup_hash) {
+        if (!(queue->h = zhashx_new ()))
+            goto error;
+        zhashx_set_key_hasher (queue->h, job_hasher);
+        zhashx_set_key_comparator (queue->h, job_hash_key_cmp);
+        zhashx_set_key_duplicator (queue->h, NULL);
+        zhashx_set_key_destructor (queue->h, NULL);
+    }
     return queue;
 error:
     queue_destroy (queue);

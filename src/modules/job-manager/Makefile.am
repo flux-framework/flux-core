@@ -24,6 +24,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 restart.c \
 			 raise.h \
 			 raise.c \
+			 alloc.h \
+			 alloc.c \
 			 list.h \
 			 list.c \
 			 priority.h \
@@ -37,6 +39,7 @@ job_manager_la_LIBADD = $(fluxmod_libadd) \
 		    $(ZMQ_LIBS)
 
 TESTS = \
+	test_job.t \
 	test_queue.t \
 	test_list.t \
 	test_raise.t \
@@ -61,6 +64,11 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
+test_job_t_SOURCES = test/job.c
+test_job_t_CPPFLAGS = $(test_cppflags)
+test_job_t_LDADD = \
+        $(test_ldadd)
+
 test_queue_t_SOURCES = test/queue.c
 test_queue_t_CPPFLAGS = $(test_cppflags)
 test_queue_t_LDADD = \
@@ -76,6 +84,7 @@ test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
+        $(top_builddir)/src/modules/job-manager/alloc.o \
         $(test_ldadd)
 
 test_util_t_SOURCES = test/util.c

@@ -4,16 +4,9 @@ test_description='Test flux job command'
 
 . $(dirname $0)/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 if flux job submit --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
 fi
-
-JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
-Y2J=${JOBSPEC}/y2j.py
 
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
@@ -28,8 +21,8 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'flux-job: convert basic.yaml to JSON' '
-	${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
+test_expect_success 'flux-job: generate jobspec for simple test job' '
+        flux jobspec srun -n1 hostname >basic.json
 '
 
 test_expect_success 'flux-job: submit one job to get one valid job in queue' '

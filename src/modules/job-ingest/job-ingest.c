@@ -406,7 +406,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
         errno = ENOMEM;
         return -1;
     }
-    if (make_key (key, sizeof (key), job, "J-signed") < 0)
+    if (make_key (key, sizeof (key), job, "J") < 0)
         goto error;
     if (flux_kvs_txn_put (batch->txn, 0, key, job->J) < 0)
         goto error;
@@ -414,14 +414,6 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (flux_kvs_txn_put_raw (batch->txn, 0, key,
                               job->jobspec, job->jobspecsz) < 0)
-        goto error;
-    if (make_key (key, sizeof (key), job, "userid") < 0)
-        goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", job->userid) < 0)
-        goto error;
-    if (make_key (key, sizeof (key), job, "priority") < 0)
-        goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "i", job->priority) < 0)
         goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;

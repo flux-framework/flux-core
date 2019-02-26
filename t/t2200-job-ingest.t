@@ -76,14 +76,6 @@ test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
 	test_cmp basic.json jobspec.out
 '
 
-test_expect_success 'job-ingest: submitter userid stored in KVS' '
-	myuserid=$(id -u) &&
-	jobid=$(flux job submit basic.json) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	jobuserid=$(flux kvs get --json ${kvsdir}.userid) &&
-	test $jobuserid -eq $myuserid
-'
-
 test_expect_success 'job-ingest: job announced to job manager' '
 	jobid=$(flux job submit --priority=10 basic.json) &&
 	flux kvs eventlog get ${DUMMY_EVENTLOG} \
@@ -92,24 +84,16 @@ test_expect_success 'job-ingest: job announced to job manager' '
 	grep -q userid=$(id -u) jobman.out
 '
 
-test_expect_success 'job-ingest: priority stored in KVS' '
-	jobid=$(flux job submit basic.json) &&
+test_expect_success 'job-ingest: submit event logged with userid, priority' '
+	jobid=$(flux job submit --priority=11 basic.json) &&
 	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	jobpri=$(flux kvs get --json ${kvsdir}.priority) &&
-	test $jobpri -eq 16
-'
-
-test_expect_success 'job-ingest: eventlog stored in KVS' '
-	jobid=$(flux job submit basic.json) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | grep submit
+	flux kvs eventlog get ${kvsdir}.eventlog |grep submit >eventlog.out &&
+	grep -q priority=11 eventlog.out &&
+	grep -q userid=$(id -u) eventlog.out
 '
 
 test_expect_success 'job-ingest: instance owner can submit priority=31' '
-	jobid=$(flux job submit --priority=31 basic.json) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	jobpri=$(flux kvs get --json ${kvsdir}.priority) &&
-	test $jobpri -eq 31
+	flux job submit --priority=31 basic.json
 '
 
 test_expect_success 'job-ingest: priority range is enforced' '
