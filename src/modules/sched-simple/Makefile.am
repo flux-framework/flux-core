@@ -11,6 +11,9 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS)
 
+fluxmod_LTLIBRARIES = \
+	sched-simple.la
+
 noinst_LTLIBRARIES = \
 	libjj.la
 
@@ -18,6 +21,25 @@ libjj_la_SOURCES = \
 	libjj.h \
 	libjj.c
 
+sched_simple_la_SOURCES = \
+	sched.c \
+	rnode.c \
+	rnode.h \
+	rlist.c \
+	rlist.h
+
+sched_simple_la_LDFLAGS = \
+	$(fluxmod_ldflags) \
+	-module
+
+sched_simple_la_LIBADD = \
+	$(fluxmod_ldadd) \
+	libjj.la \
+	$(top_builddir)/src/common/libschedutil/libschedutil.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-optparse.la \
+	$(ZMQ_LIBS)
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
