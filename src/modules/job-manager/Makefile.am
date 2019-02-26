@@ -39,6 +39,7 @@ job_manager_la_LIBADD = $(fluxmod_libadd) \
 		    $(ZMQ_LIBS)
 
 TESTS = \
+	test_job.t \
 	test_queue.t \
 	test_list.t \
 	test_raise.t \
@@ -62,6 +63,11 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
+
+test_job_t_SOURCES = test/job.c
+test_job_t_CPPFLAGS = $(test_cppflags)
+test_job_t_LDADD = \
+        $(test_ldadd)
 
 test_queue_t_SOURCES = test/queue.c
 test_queue_t_CPPFLAGS = $(test_cppflags)
