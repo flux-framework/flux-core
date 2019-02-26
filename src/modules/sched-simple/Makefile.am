@@ -17,6 +17,9 @@ fluxmod_LTLIBRARIES = \
 noinst_LTLIBRARIES = \
 	libjj.la
 
+noinst_PROGRAMS = \
+	rlist-query
+
 libjj_la_SOURCES = \
 	libjj.h \
 	libjj.c
@@ -55,7 +58,8 @@ TESTS = \
 	test_rlist.t
 
 check_PROGRAMS = \
-	$(TESTS)
+	$(TESTS) \
+	rlist-query
 
 test_rnode_t_SOURCES = \
 	rnode.c \
@@ -77,3 +81,15 @@ test_rlist_t_CPPFLAGS = \
 test_rlist_t_LDADD = \
 	$(test_ldadd)
 
+rlist_query_SOURCES = \
+	rnode.c \
+	rnode.h \
+	rlist.c \
+	rlist.h \
+	test/rlist-query.c
+rlist_query_CPPFLAGS = \
+	$(test_cppflags)
+rlist_query_LDADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(JANSSON_LIBS)
