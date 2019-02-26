@@ -162,6 +162,12 @@ class FunctionWrapper(object):
     def __call__(self, calling_object, *args_in):
         calling_object.ffi.errno = 0
         caller = calling_object.handle
+        if self.add_handle and caller is None:
+            raise ValueError(
+                "Attempting to call a cached, bound method that requires a "
+                "handle with a NULL handle"
+            )
+
         args = [caller] + list(args_in) if self.add_handle else list(args_in)
 
         if len(self.function_type.args) != len(args):

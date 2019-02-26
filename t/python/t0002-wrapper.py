@@ -38,6 +38,19 @@ class TestWrapper(unittest.TestCase):
         with self.assertRaises(flux.wrapper.InvalidArguments):
             f.request_encode(self, 15)
 
+    def test_null_handle_exception(self):
+        f = flux.Flux()
+        payload = {"seq": 1, "pad": "stuff"}
+        future = f.rpc("cmb.ping", payload)
+        resp = future.get()
+        future.pimpl.handle = None
+        with self.assertRaises(ValueError) as cm:
+            resp = future.get()
+        self.assertRegexpMatches(
+            cm.exception.message,
+            "Attempting to call a cached, " "bound method.*NULL handle",
+        )
+
     def test_automatic_unwrapping(self):
         flux.core.inner.raw.flux_log(flux.Flux("loop://"), 0, "stuff")
 
