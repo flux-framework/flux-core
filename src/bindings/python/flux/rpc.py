@@ -29,6 +29,8 @@ class RPC(Future):
         flags=0,
     ):
         if isinstance(flux_handle, Wrapper):
+            # keep the flux_handle alive for the lifetime of the RPC
+            self.flux_handle = flux_handle
             flux_handle = flux_handle.handle
 
         topic = encode_topic(topic)
