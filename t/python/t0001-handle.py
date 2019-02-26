@@ -46,32 +46,32 @@ class TestHandle(unittest.TestCase):
     def test_rpc_ping(self):
         """Sending a ping"""
         # python 3 json doesn't support bytes, but python 2 will treat them as str (i.e., bytes)
-        r = self.f.rpc_send(b"cmb.ping", {"seq": 1, "pad": "stuff"})
+        r = self.f.rpc(b"cmb.ping", {"seq": 1, "pad": "stuff"}).get()
         self.assertEqual(r["seq"], 1)
         self.assertEqual(r["pad"], u"stuff")
         self.assertTrue(isinstance(r["pad"], six.text_type))
 
     def test_rpc_ping_unicode(self):
         """Sending a ping"""
-        r = self.f.rpc_send(
+        r = self.f.rpc(
             u"cmb.ping", {u"\xa3": u"value", u"key": u"\u32db \u263a \u32e1"}
-        )
+        ).get()
         self.assertEqual(r[u"\xa3"], u"value")
         self.assertEqual(r["key"], u"\u32db \u263a \u32e1")
         self.assertTrue(isinstance(r["key"], six.text_type))
 
     def test_rpc_with(self):
         """Sending a ping"""
-        with self.f.rpc_create("cmb.ping", {"seq": 1, "pad": "stuff"}) as r:
+        with self.f.rpc("cmb.ping", {"seq": 1, "pad": "stuff"}) as r:
             j = r.get()
             self.assertEqual(j["seq"], 1)
             self.assertEqual(j["pad"], "stuff")
 
     def test_rpc_null_payload(self):
         """Sending a request that receives a NULL response"""
-        resp = self.f.rpc_send(
+        resp = self.f.rpc(
             "attr.set", {"name": "attr-that-doesnt-exist", "value": "foo"}
-        )
+        ).get()
         self.assertIsNone(resp)
 
     def test_get_rank(self):

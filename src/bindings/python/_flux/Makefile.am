@@ -1,5 +1,5 @@
 AM_CPPFLAGS = \
-	$(WARNING_CFLAGS) \
+	$(WARNING_CFLAGS) -Wno-error=missing-field-initializers \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libflux \
@@ -29,6 +29,7 @@ _core_build.py: $(MAKE_BINDING)
 		--package _flux \
 		--modname _core \
 		--add_sub '.*va_list.*|||' \
+		--additional_headers src/bindings/python/_flux/callbacks.h \
 		--ignore_header 'macros' \
 		src/include/flux/core.h
 
@@ -36,6 +37,7 @@ BUILT_SOURCES= _core.c
 fluxso_LTLIBRARIES = _core.la
 fluxso_PYTHON = __init__.py
 
+dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
 _core_la_DEPENDENCIES = _core_build.py

@@ -7,7 +7,8 @@ fluxpy_PYTHON=\
 	      constants.py\
 	      job.py \
 	      mrpc.py \
-	      util.py
+	      util.py \
+	      future.py
 
 if HAVE_FLUX_SECURITY
 fluxpy_PYTHON += security.py

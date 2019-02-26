@@ -122,7 +122,7 @@ class Message(WrapperPimpl):
 # Residing here to avoid cyclic references
 
 
-@ffi.callback("flux_msg_handler_f")
+@ffi.def_extern()
 def message_handler_wrapper(unused1, unused2, msg_handle, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
@@ -164,7 +164,10 @@ class MessageWatcher(Watcher):
         )
         super(MessageWatcher, self).__init__(
             raw.flux_msg_handler_create(
-                self.flux_handle.handle, match[0], message_handler_wrapper, self.wargs
+                self.flux_handle.handle,
+                match[0],
+                lib.message_handler_wrapper,
+                self.wargs,
             )
         )
 

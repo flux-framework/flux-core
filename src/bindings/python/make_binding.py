@@ -19,6 +19,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("header", help="C header file to parse", type=str)
 parser.add_argument("--include_header", help="Include base path", type=str, default="")
 parser.add_argument(
+    "--additional_headers", help="Additional headers to parse", nargs="*", default=[]
+)
+parser.add_argument(
     "--include_ffi", help="FFI module for inclusion", action="append", default=[]
 )
 parser.add_argument("--package", help="Package prefix for module import", default=None)
@@ -159,6 +162,9 @@ with open("{}_build.py".format(args.modname), "w") as modfile:
 
     process_header(absolute_head)
 
+    for header in args.additional_headers:
+        process_header(header)
+
     include_head = args.header
     if args.include_header != "":
         include_head = args.include_header
@@ -207,9 +213,7 @@ void * unpack_long(ptrdiff_t num);
 void free(void *ptr);
 typedef int... pid_t;
 
-
         {cdefs}
-
 
     """)
 if __name__ == "__main__":

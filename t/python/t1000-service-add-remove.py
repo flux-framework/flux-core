@@ -103,7 +103,7 @@ class TestServiceAddRemove(unittest.TestCase):
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
     def test_007_service_rpc_enosys(self):
-        fut = self.f.rpc_create("foo.echo")
+        fut = self.f.rpc("foo.echo")
         with self.assertRaises(EnvironmentError) as e:
             fut.get()
         self.assertEqual(e.exception.errno, errno.ENOSYS)
@@ -127,17 +127,17 @@ class TestServiceAddRemove(unittest.TestCase):
         self.assertEqual(p.exitcode, 0)
 
         #  Ensure no "baz" service remains
-        fut = self.f.rpc_create("baz.echo")
+        fut = self.f.rpc("baz.echo")
         with self.assertRaises(EnvironmentError) as e:
             fut.get()
         self.assertEqual(e.exception.errno, errno.ENOSYS)
 
     def test_009_service_add_remove_eproto(self):
-        fut = self.f.rpc_create("service.add")
+        fut = self.f.rpc("service.add")
         with self.assertRaises(EnvironmentError) as e:
             fut.get()
         self.assertEqual(e.exception.errno, errno.EPROTO)
-        fut = self.f.rpc_create("service.remove")
+        fut = self.f.rpc("service.remove")
         with self.assertRaises(EnvironmentError) as e:
             fut.get()
         self.assertEqual(e.exception.errno, errno.EPROTO)
