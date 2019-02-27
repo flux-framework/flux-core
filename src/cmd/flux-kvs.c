@@ -616,7 +616,9 @@ static void kv_printf (const char *key, int maxcol, const char *fmt, ...)
         }
         if ((p = strchr (kv, '\n'))) {
             *p = '\0';
-            overflow = true;
+            /* don't add ellipsis if there's nothing after the newline */
+            if (*(p + 1) != '\0')
+                overflow = true;
         }
         for (p = kv; *p != '\0'; p++) {
             if (!isprint (*p)) {
