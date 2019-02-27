@@ -683,11 +683,35 @@ static int hwloc_gpu_count (hwloc_topology_t topology)
     return (nobjs);
 }
 
+/*  Generate an allowed cpuset string for the current topology:
+ */
+static char *hwloc_cpuset_idset_string (hwloc_topology_t topo)
+{
+    int i;
+    char *result = NULL;
+    struct idset *ids = NULL;
+    hwloc_const_cpuset_t cset = hwloc_topology_get_allowed_cpuset (topo);
+
+    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || !(cset = hwloc_topology_get_allowed_cpuset (topo)))
+        goto out;
+    i = hwloc_bitmap_first (cset);
+    while (i >= 0) {
+        idset_set (ids, i);
+        i = hwloc_bitmap_next (cset, i);
+    }
+    result = idset_encode (ids, IDSET_FLAG_RANGE);
+out:
+    idset_destroy (ids);
+    return result;
+}
+
 /*  Emit a json object containing summary statistics for the topology argument.
  */
 static json_t *topo_tojson (hwloc_topology_t topology)
 {
     int nobj, i;
+    char *ids = NULL;
     json_t *o = NULL;
     json_t *v = NULL;
     int depth = hwloc_topology_get_depth (topology);
@@ -709,6 +733,12 @@ static json_t *topo_tojson (hwloc_topology_t topology)
         if (!(v = json_integer (nobj))
             || json_object_set_new (o, "GPU", v) < 0)
             goto error;
+    }
+    if ((ids = hwloc_cpuset_idset_string (topology))) {
+        if (!(v = json_string (ids))
+            || json_object_set_new (o, "cpuset", v) < 0)
+            goto error;
+        free (ids);
     }
     return (o);
 error:

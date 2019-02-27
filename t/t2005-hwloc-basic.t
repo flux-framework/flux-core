@@ -62,7 +62,10 @@ test_expect_success 'hwloc: internal aggregate-load cmd works' '
     cat <<-EOF | $jq -S . >aggregate.expected &&
 	{ "count": 2, "total": 2,
 	  "entries": {
-	    "[0-1]": { "Core": 8, "NUMANode": 1, "PU": 8, "Package": 1 }
+	    "0": { "Core": 8, "NUMANode": 1, "PU": 8, "Package": 1,
+                   "cpuset": "0-7" },
+	    "1": { "Core": 8, "NUMANode": 1, "PU": 8, "Package": 1,
+	           "cpuset": "8-15"}
 	  }
 	}
 	EOF
@@ -73,7 +76,12 @@ test_expect_success 'hwloc: internal aggregate-load cmd works' '
 test_expect_success HAVE_JQ 'hwloc: by_rank aggregate key exists after reload' '
     flux kvs get resource.hwloc.by_rank | $jq -S . >  by_rank.out &&
     cat <<-EOF | $jq -S . >by_rank.expected &&
-	{"[0-1]": {"NUMANode": 1, "Package": 1, "Core": 8, "PU": 8}}
+	{
+	  "0": { "Core": 8, "NUMANode": 1, "PU": 8, "Package": 1,
+                 "cpuset": "0-7" },
+	  "1": { "Core": 8, "NUMANode": 1, "PU": 8, "Package": 1,
+	         "cpuset": "8-15"}
+	}
 	EOF
     test_cmp by_rank.expected by_rank.out
 '
@@ -111,8 +119,10 @@ test_expect_success HAVE_JQ 'hwloc: only one rank reloads an xml file' '
     flux kvs get resource.hwloc.by_rank | $jq -S . > mixed.out &&
     cat <<-EOF | $jq -S . >mixed.expected &&
 	{
-	 "0": {"NUMANode": 1, "Package": 1, "Core": 8, "PU": 8},
-	 "1": {"NUMANode": 2, "Package": 2, "Core": 16, "PU": 16}
+	 "0": {"NUMANode": 1, "Package": 1, "Core": 8, "PU": 8,
+               "cpuset": "0-7" },
+	 "1": {"NUMANode": 2, "Package": 2, "Core": 16, "PU": 16,
+	       "cpuset": "0-15" }
 	}
 	EOF
     test_cmp mixed.expected mixed.out
@@ -123,7 +133,8 @@ test_expect_success HAVE_JQ 'hwloc: reload xml with GPU resources' '
     flux kvs get resource.hwloc.by_rank | $jq -S . > sierra.out &&
     cat <<-EOF | $jq -S . > sierra.expected &&
 	{"[0-1]":
-          {"NUMANode": 6, "Package": 2, "Core": 44, "PU": 176, "GPU": 4}
+          {"NUMANode": 6, "Package": 2, "Core": 44, "PU": 176, "GPU": 4,
+           "cpuset": "0-175" }
         }
 	EOF
     test_cmp sierra.expected sierra.out
