@@ -51,6 +51,13 @@ class TestHandle(unittest.TestCase):
         self.assertEqual(r["pad"], u"stuff")
         self.assertTrue(isinstance(r["pad"], six.text_type))
 
+    def test_anonymous_handle_rpc_ping(self):
+        """Send a ping using an anonymous/unnamed flux handle"""
+        r = flux.Flux().rpc(b"cmb.ping", {"seq": 1, "pad": "stuff"}).get()
+        self.assertIsNotNone(r)
+        self.assertEqual(r["seq"], 1)
+        self.assertEqual(r["pad"], u"stuff")
+
     def test_rpc_ping_unicode(self):
         """Sending a ping"""
         r = self.f.rpc(
