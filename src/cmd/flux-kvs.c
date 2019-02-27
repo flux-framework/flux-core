@@ -263,7 +263,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "get",
-      "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-f] [-c COUNT] key [key...]",
+      "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-f] [-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
