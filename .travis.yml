@@ -19,7 +19,7 @@ jobs:
       name: 'python lint'
       language: 'python'
       python: '3.6'
-      install: pip install --upgrade pylint
+      install: pip install 'pylint==2.2.2' --force-reinstall
       script: pylint --rcfile=src/bindings/python/.pylintrc src/bindings/python/flux
       before_deploy: skip
       deploy: skip
