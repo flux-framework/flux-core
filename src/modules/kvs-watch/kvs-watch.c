@@ -39,7 +39,7 @@ struct watcher {
     zlist_t *lookups;           // list of futures, in commit order
 
     struct ns_monitor *nsm;     // back pointer for removal
-    json_t *prev;               // previous watch value for KVS_WATCH_FULL
+    json_t *prev;               // previous watch value for KVS_WATCH_FULL/UNIQ
 };
 
 /* Current KVS root.
@@ -328,7 +328,7 @@ static int handle_normal_response (flux_t *h,
  * Send response to watcher using raw payload from lookup response.
  * Return 0 on success, -1 on error (caller should destroy watcher).
  *
- * Exception for FLUX_KVS_WATCH_FULL, must check if value is
+ * Exception for FLUX_KVS_WATCH_FULL/UNIQ, must check if value is
  * different than old value.
  */
 static void handle_lookup_response (flux_future_t *f,
