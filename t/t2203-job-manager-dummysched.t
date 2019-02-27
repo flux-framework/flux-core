@@ -33,11 +33,11 @@ test_expect_success 'job-manager: load job-ingest, job-manager' '
 '
 
 test_expect_success 'job-manager: submit 5 jobs' '
-	flux job submit basic.json >job1.id &&
-	flux job submit basic.json >job2.id &&
-	flux job submit basic.json >job3.id &&
-	flux job submit basic.json >job4.id &&
-	flux job submit basic.json >job5.id
+	flux job submit --flags=debug basic.json >job1.id &&
+	flux job submit --flags=debug basic.json >job2.id &&
+	flux job submit --flags=debug basic.json >job3.id &&
+	flux job submit --flags=debug basic.json >job4.id &&
+	flux job submit --flags=debug basic.json >job5.id
 '
 
 test_expect_success 'job-manager: job state SSSSS (no scheduler)' '
@@ -63,7 +63,8 @@ test_expect_success 'job-manager: job state RRSSS' '
 
 test_expect_success 'job-manager: running job has alloc event' '
 	kvsdir=$(flux job id --to=kvs-active $(cat job1.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | grep alloc
+	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev1.out &&
+	grep -q ^alloc ev1.out
 '
 
 test_expect_success 'job-manager: cancel 2' '
@@ -78,11 +79,20 @@ test_expect_success 'job-manager: job state RCRSS' '
 	check_state $(cat job5.id) S
 '
 
+test_expect_success 'job-manager: first S job sent alloc, second S did not' '
+	kvsdir=$(flux job id --to=kvs-active $(cat job4.id)) &&
+	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev4.out &&
+	kvsdir=$(flux job id --to=kvs-active $(cat job5.id)) &&
+	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev5.out &&
+	grep -q "^debug.alloc-request" ev4.out &&
+	! grep -q "^debug.alloc-request" ev5.out
+'
+
 test_expect_success 'job-manager: canceled job has exception, free events' '
 	kvsdir=$(flux job id --to=kvs-active $(cat job2.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog >eventlog.out &&
-	grep -q exception eventlog.out &&
-	grep -q free eventlog.out
+	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev2.out &&
+	grep -q ^exception ev2.out &&
+	grep -q ^free ev2.out
 '
 
 test_expect_success 'job-manager: reload sched-dummy --cores=4' '
@@ -126,13 +136,13 @@ test_expect_success 'job-manager: job state CCCCC' '
 
 test_expect_success 'job-manager: simulate alloc failure' '
 	flux module debug --setbit 0x1 sched-dummy &&
-	flux job submit basic.json >job6.id &&
+	flux job submit --flags=debug basic.json >job6.id &&
 	check_state $(cat job6.id) C &&
 	kvsdir=$(flux job id --to=kvs-active $(cat job6.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | grep exception >ex.out &&
-	grep -q type=alloc ex.out &&
-	grep -q severity=0 ex.out &&
-	grep -q DEBUG_FAIL_ALLOC ex.out
+	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev6.out &&
+	grep ^exception ev6.out | grep -q type=alloc &&
+	grep ^exception ev6.out | grep -q severity=0 &&
+	grep ^exception ev6.out | grep -q DEBUG_FAIL_ALLOC
 '
 
 test_expect_success 'job-manager: remove sched-dummy' '
