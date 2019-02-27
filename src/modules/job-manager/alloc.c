@@ -306,7 +306,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     job->has_resources = 1;
 
     eventlog_append (ctx, job, "alloc", note);
-    job->state = FLUX_JOB_RUN;
+    if (job->state == FLUX_JOB_SCHED)
+        job->state = FLUX_JOB_RUN;
+    else { /* state == FLUX_JOB_CLEANUP */
+        if (free_request (ctx, job) < 0)
+            goto teardown;
+    }
     return;
 teardown:
     interface_teardown (ctx, "alloc response error", errno);
