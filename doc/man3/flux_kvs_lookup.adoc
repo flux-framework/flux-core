@@ -131,6 +131,17 @@ the lookup is canceled with `flux_kvs_lookup_cancel()`, or an error
 occurs.  `flux_future_reset()` should be used to consume a response
 and prepare for the next one.
 
+FLUX_KVS_WATCH_UNIQ::
+Specified along with FLUX_KVS_WATCH, this flag will alter watch
+behavior to only respond when _key_ is mentioned verbatim in a
+committed transaction and the value of the key has changed.
+
+FLUX_KVS_WATCH_FULL::
+Specified along with FLUX_KVS_WATCH, this flag will alter watch
+behavior to respond when the value of the key being watched has
+changed.  Unlike FLUX_KVS_WATCH_UNIQ, the key being watched need not
+be mentioned in a transaction.  This may occur under several
+scenarios, such as a parent directory being altered.
 
 RETURN VALUE
 ------------
