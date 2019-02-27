@@ -22,8 +22,8 @@ job_wait_event() {
 	run_timeout 5 flux kvs eventlog get -w $(kvs_active $1).eventlog \
                                2>>eventlog.errors > eventlog.$1 &
 	pid=$!
-	maxtime=$(($(date +%S) + 2))
-	while test $(date +%S) -lt $maxtime; do # retry fifo up for up to 2s
+	maxtime=$(($(date +%s) + 2))
+	while test $(date +%s) -lt $maxtime; do # retry fifo up for up to 2s
 	  while read line; do
 		event=$(echo $line | awk '{print $2}')
 		if test "$event" = "$2"; then
