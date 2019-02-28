@@ -43,6 +43,10 @@ static struct optparse_option opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
       .usage = "Set job priority (0-31, default=16)",
     },
+    { .name = "flags", .key = 'F', .has_arg = 3,
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Set comma-separated flags (e.g. debug)",
+    },
 #if HAVE_FLUX_SECURITY
     { .name = "reuse-signature", .key = 'R', .has_arg = 0,
       .usage = "Sign jobspec once and reuse the result for multiple RPCs",
@@ -210,6 +214,15 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     if (optindex != argc - 1) {
         optparse_print_usage (p);
         exit (1);
+    }
+    if (optparse_hasopt (p, "flags")) {
+        const char *name;
+        while ((name = optparse_getopt_next (p, "flags"))) {
+            if (!strcmp (name, "debug"))
+                ctx.flags |= FLUX_JOB_DEBUG;
+            else
+                log_msg_exit ("unknown flag: %s", name);
+        }
     }
 #if HAVE_FLUX_SECURITY
     /* If any non-default security options are specified, create security

@@ -69,6 +69,10 @@ static struct optparse_option submit_opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
       .usage = "Set job priority (0-31, default=16)",
     },
+    { .name = "flags", .key = 'f', .has_arg = 3,
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Set submit comma-separated flags (e.g. debug)",
+    },
 #if HAVE_FLUX_SECURITY
     { .name = "security-config", .key = 'c', .has_arg = 1, .arginfo = "pattern",
       .usage = "Use non-default security config glob",
@@ -464,6 +468,15 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     }
     if (optindex < argc)
         input = argv[optindex++];
+    if (optparse_hasopt (p, "flags")) {
+        const char *name;
+        while ((name = optparse_getopt_next (p, "flags"))) {
+            if (!strcmp (name, "debug"))
+                flags |= FLUX_JOB_DEBUG;
+            else
+                log_msg_exit ("unknown flag: %s", name);
+        }
+    }
 #if HAVE_FLUX_SECURITY
     /* If any non-default security options are specified, create security
      * context so jobspec can be pre-signed before submission.

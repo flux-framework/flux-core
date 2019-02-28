@@ -21,7 +21,7 @@ void test_create (void)
 {
     struct job *job;
 
-    job = job_create (42, 1, FLUX_USERID_UNKNOWN, 2);
+    job = job_create (42, 1, FLUX_USERID_UNKNOWN, 2, 3);
     if (job == NULL)
         BAIL_OUT ("job_create failed");
     ok (job->refcount == 1,
@@ -29,6 +29,8 @@ void test_create (void)
     ok (job->id == 42 && job->priority == 1 && job->state == FLUX_JOB_NEW
         && job->userid == FLUX_USERID_UNKNOWN && job->t_submit == 2,
         "job_create set id, priority, userid, and t_submit to expected values");
+    ok (job->flags == 3,
+        "job_create set submit flags to expected value");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources
@@ -54,29 +56,29 @@ void test_create (void)
 
 const char *test_input[] = {
     /* 0 */
-    "42.2 submit userid=66 priority=16\n",
+    "42.2 submit userid=66 priority=16 flags=42\n",
 
     /* 1 */
-    "42.2 submit userid=66 priority=16\n"
+    "42.2 submit userid=66 priority=16 flags=42\n"
     "42.3 priority userid=42 priority=1\n",
 
     /* 2 */
-    "42.2 submit userid=66 priority=16\n"
+    "42.2 submit userid=66 priority=16 flags=42\n"
     "42.3 exception type=cancel severity=0 userid=42 free form notes...\n",
 
     /* 3 */
-    "42.2 submit userid=66 priority=16\n"
+    "42.2 submit userid=66 priority=16 flags=42\n"
     "42.3 exception type=meep severity=1 userid=42 this one is non-fatal\n",
 
     /* 4 */
-    "42.2 submit userid=66 priority=16\n"
+    "42.2 submit userid=66 priority=16 flags=42\n"
     "42.3 alloc\n",
 
     /* 5 */
     "42.3 alloc\n",
 
     /* 6 */
-    "42.2 submit userid=66 priority=16\n"
+    "42.2 submit userid=66 priority=16 flags=42\n"
     "42.3 alloc\n"
     "42.4 free\n",
 };
@@ -100,6 +102,8 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit)  set no internal flags");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit) set userid from submit");
+    ok (job->flags == 42,
+        "job_create_from_eventlog log=(submit) set flags from submit");
     ok (job->priority == 16,
         "job_create_from_eventlog log=(submit) set priority from submit");
     ok (job->t_submit == 42.2,
