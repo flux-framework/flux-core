@@ -2,6 +2,8 @@
 
 test_description='Test flux cron service'
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . $(dirname $0)/sharness.sh
 
 if test "$TEST_LONG" = "t"; then
@@ -218,16 +220,17 @@ test_expect_success 'flux-cron event --after works' '
     cron_entry_check ${id} stats.count 2
 '
 test_expect_success 'flux-cron event --min-interval works' '
-    id=$(flux_cron event --min-interval=.5s t.cron.trigger hostname) &&
+    id=$(flux_cron event --min-interval=1.1s t.cron.trigger hostname) &&
     test_when_finished "flux cron delete ${id}" &&
     dump=$(flux cron dump ${id}) &&
     contains "$dump" "type = \"event\"" &&
     contains "$dump" "stopped = false" &&
     contains "$dump" "stats.count = 0" &&
-    contains "$dump" "typedata.min_interval = 0.5" &&
+    contains "$dump" "typedata.min_interval = 1.1" &&
     flux event pub t.cron.trigger && flux event pub t.cron.trigger &&
-    cron_entry_check ${id} stats.count 1 &&
-    sleep 0.5 &&
+    sleep 1.1 &&
+    test_debug "flux dmesg | grep cron-${id}" &&
+    flux dmesg | grep "cron-${id}: delaying.*due to min interval" &&
     count=$(flux cron dump -k stats.count ${id}) &&
     test "$count" -gt "1"
 '
