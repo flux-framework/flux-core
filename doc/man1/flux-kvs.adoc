@@ -59,7 +59,7 @@ Remove a kvs namespace.
 *namespace list*::
 List all current namespaces and info on each namespace.
 
-*get* [-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-f] [-c count] 'key' ['key...']::
+*get* [-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] [-c count] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored
 under 'key', display an error message.  Specify an alternate namespace
 to retrieve 'key' from via '-N'.  If no options, value is displayed
@@ -73,6 +73,7 @@ been created.  If '-w', after the initial value, display the new value
 each time the key is written to until interrupted, or if '-c count' is
 specified, until 'count' values have been displayed.  If '-u' is
 specified, only writes that change the key value will be displayed.
+If '-A' is specified, only display appends that occur on a key.
 By default, only a direct write to a key is monitored, which may miss
 several unique situations, such as the replacement of an entire parent
 directory.  The '-f' option can be specified to monitor for many of
