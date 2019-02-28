@@ -1,5 +1,4 @@
-#!/bin/sh
-
+#!/bin/sh 
 test_description='Test flux job command'
 
 . $(dirname $0)/sharness.sh
@@ -28,6 +27,11 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
 test_expect_success 'flux-job: submit one job to get one valid job in queue' '
 	validjob=$(flux job submit basic.json) &&
 	echo Valid job is ${validjob}
+'
+
+test_expect_success 'flux-job: submit --flags=badflag fails with unknown flag' '
+	! flux job submit --flags=badflag basic.json 2>badflag.out &&
+	grep -q "unknown flag" badflag.out
 '
 
 test_expect_success 'flux-job: unknown sub-command fails with usage message' '
