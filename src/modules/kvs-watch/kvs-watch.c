@@ -39,7 +39,8 @@ struct watcher {
     zlist_t *lookups;           // list of futures, in commit order
 
     struct ns_monitor *nsm;     // back pointer for removal
-    json_t *prev;               // previous watch value for KVS_WATCH_FULL
+    json_t *prev;               // previous watch value for KVS_WATCH_FULL/UNIQ
+    int append_offset;          // offset for KVS_WATCH_APPEND
 };
 
 /* Current KVS root.
@@ -267,6 +268,15 @@ static int handle_initial_response (flux_t *h,
         || (w->flags & FLUX_KVS_WATCH_UNIQ))
         w->prev = json_incref (val);
 
+    if ((w->flags & FLUX_KVS_WATCH_APPEND)) {
+        if (treeobj_decode_val (val,
+                                NULL,
+                                &w->append_offset) < 0) {
+            flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
+            return -1;
+        }
+    }
+
     if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         return -1;
@@ -291,7 +301,9 @@ static int handle_compare_response (flux_t *h,
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             return -1;
         }
-     }
+
+        w->responded = true;
+    }
     else {
         /* not first response case, compare to previous to see if
          * respond should be done, update if necessary */
@@ -307,7 +319,72 @@ static int handle_compare_response (flux_t *h,
         }
     }
 
-    w->responded = true;
+    return 0;
+}
+
+static int handle_append_response (flux_t *h,
+                                    struct watcher *w,
+                                    json_t *val)
+{
+    if (!w->responded) {
+        /* this is the first response case, store the first response
+         * info.  This is here b/c initial response could have been
+         * ENOENT case */
+        if (treeobj_decode_val (val,
+                                NULL,
+                                &w->append_offset) < 0) {
+            flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
+            return -1;
+        }
+
+        if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            return -1;
+        }
+
+        w->responded = true;
+    }
+    else {
+        json_t *new_val = NULL;
+        void *new_data = NULL;
+        int new_offset;
+
+        if (treeobj_decode_val (val,
+                                &new_data,
+                                &new_offset) < 0) {
+            flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
+            return -1;
+        }
+
+        /* check length to determine if append actually happened, note
+         * that zero length append is legal
+         *
+         * Note that this check does not ensure that the key was not
+         * "fake" appended to.  i.e. the key overwritten with data
+         * longer than the original.
+         */
+        if (new_offset < w->append_offset) {
+            free (new_data);
+            errno = EINVAL;
+            return -1;
+        }
+
+        if (!(new_val = treeobj_create_val (new_data + w->append_offset,
+                                            new_offset - w->append_offset))) {
+            free (new_data);
+            return -1;
+        }
+
+        free (new_data);
+        w->append_offset = new_offset;
+
+        if (flux_respond_pack (h, w->request, "{ s:o }", "val", new_val) < 0) {
+            json_decref (new_val);
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -328,8 +405,8 @@ static int handle_normal_response (flux_t *h,
  * Send response to watcher using raw payload from lookup response.
  * Return 0 on success, -1 on error (caller should destroy watcher).
  *
- * Exception for FLUX_KVS_WATCH_FULL, must check if value is
- * different than old value.
+ * Special handling done for FLUX_KVS_WATCH_FULL/UNIQ/APPEND, must do
+ * some comparisons before returning.
  */
 static void handle_lookup_response (flux_future_t *f,
                                     struct watcher *w)
@@ -407,6 +484,10 @@ static void handle_lookup_response (flux_future_t *f,
             if ((w->flags & FLUX_KVS_WATCH_FULL)
                 || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
                 if (handle_compare_response (h, w, val) < 0)
+                    goto error;
+            }
+            else if (w->flags & FLUX_KVS_WATCH_APPEND) {
+                if (handle_append_response (h, w, val) < 0)
                     goto error;
             }
             else {

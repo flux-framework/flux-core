@@ -91,6 +91,9 @@ static struct optparse_option get_opts[] =  {
     { .name = "uniq", .key = 'u', .has_arg = 0,
       .usage = "Only monitor key writes if values have changed",
     },
+    { .name = "append", .key = 'A', .has_arg = 0,
+      .usage = "Only monitor key appends",
+    },
     { .name = "full", .key = 'f', .has_arg = 0,
       .usage = "Monitor key changes with more complete accuracy",
     },
@@ -263,7 +266,8 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "get",
-      "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-f] [-c COUNT] key [key...]",
+      "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] "
+        "[-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -616,7 +620,9 @@ static void kv_printf (const char *key, int maxcol, const char *fmt, ...)
         }
         if ((p = strchr (kv, '\n'))) {
             *p = '\0';
-            overflow = true;
+            /* don't add ellipsis if there's nothing after the newline */
+            if (*(p + 1) != '\0')
+                overflow = true;
         }
         for (p = kv; *p != '\0'; p++) {
             if (!isprint (*p)) {
@@ -764,6 +770,8 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
             flags |= FLUX_KVS_WATCH_FULL;
         if (optparse_hasopt (ctx->p, "uniq"))
             flags |= FLUX_KVS_WATCH_UNIQ;
+        if (optparse_hasopt (ctx->p, "append"))
+            flags |= FLUX_KVS_WATCH_APPEND;
     }
     if (optparse_hasopt (ctx->p, "waitcreate"))
         flags |= FLUX_KVS_WAITCREATE;

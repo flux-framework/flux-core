@@ -41,7 +41,8 @@ struct lookup_ctx {
 static const char *auxkey = "flux::lookup_ctx";
 
 #define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WATCH_FULL \
-                              | FLUX_KVS_WATCH_UNIQ)
+                              | FLUX_KVS_WATCH_UNIQ \
+                              | FLUX_KVS_WATCH_APPEND)
 
 static void free_ctx (struct lookup_ctx *ctx)
 {

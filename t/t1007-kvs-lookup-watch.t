@@ -238,6 +238,223 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt 
         grep "Operation not supported" waitcreate5.out
 '
 
+#
+# append tests
+#
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: basic --watch & --append works' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append1.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put --append test.append.test="f" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+f
+	EOF
+        test_cmp expected append1.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with empty string' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append2.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put --append test.append.test= &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+	EOF
+        test_cmp expected append2.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with --waitcreate' '
+        flux kvs unlink -Rf test &&
+        flux kvs get --watch --waitcreate --append --count=4 \
+                     test.append.test > append3.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put --append test.append.test="f" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+f
+	EOF
+        test_cmp expected append3.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works with multiple appends in a transaction' '
+        flux kvs unlink -Rf test &&
+        flux kvs get --watch --waitcreate --append --count=4 \
+                     test.append.test > append4.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs put --append test.append.test="d" test.append.test="e" &&
+        flux kvs put --append test.append.test="f" test.append.test="g" &&
+        flux kvs put --append test.append.test="h" test.append.test="i" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+de
+fg
+hi
+	EOF
+        test_cmp expected append4.out
+'
+
+test_expect_success 'flux kvs get: --append fails on non-value' '
+        flux kvs unlink -Rf test &&
+        flux kvs mkdir test.append &&
+        ! flux kvs get --watch --append --count=1 test.append
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append & --waitcreate fails on non-value' '
+        flux kvs unlink -Rf test &&
+        flux kvs get --watch --waitcreate --append --count=1 test.append &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs mkdir test.append &&
+        ! wait $pid
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on removed key' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append5.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs unlink test.append.test &&
+        ! wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+flux-kvs: test.append.test: No such file or directory
+	EOF
+        test_cmp expected append5.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on change to non-value' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append6.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs mkdir test.append.test &&
+        ! wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+flux-kvs: test.append.test: Is a directory
+	EOF
+        test_cmp expected append6.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake append' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append7.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put test.append.test="abcdef" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+f
+	EOF
+        test_cmp expected append7.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake append wiping data' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append8.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put test.append.test="foobar" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+r
+	EOF
+        test_cmp expected append8.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append works on fake zero length append' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append9.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put test.append.test="abcde" &&
+        wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+	EOF
+        test_cmp expected append9.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs get: --append fails on shortened write' '
+        flux kvs unlink -Rf test &&
+        flux kvs put test.append.test="abc" &&
+        flux kvs get --watch --append --count=4 \
+                     test.append.test > append10.out 2>&1 &
+        pid=$! &&
+        wait_watcherscount_nonzero primary &&
+        flux kvs put --append test.append.test="d" &&
+        flux kvs put --append test.append.test="e" &&
+        flux kvs put test.append.test="foo" &&
+        ! wait $pid &&
+	cat >expected <<-EOF &&
+abc
+d
+e
+flux-kvs: test.append.test: Invalid argument
+	EOF
+        test_cmp expected append10.out
+'
+
 # full checks
 
 # in full checks, we create a directory that we will use to
