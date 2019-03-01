@@ -129,7 +129,7 @@ test_expect_success 'test_under_flux works' '
         cd test-under-flux &&
 	SHARNESS_TEST_DIRECTORY=`pwd` &&
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
-	run_timeout 5 "$SHARNESS_TEST_SRCDIR"/test-under-flux/test.t --verbose --debug >out 2>err
+	run_timeout 10 "$SHARNESS_TEST_SRCDIR"/test-under-flux/test.t --verbose --debug >out 2>err
 	) &&
 	grep "size=2" test-under-flux/out
 '

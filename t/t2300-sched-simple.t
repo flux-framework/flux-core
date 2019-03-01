@@ -33,7 +33,7 @@ job_wait_event() {
 		fi
 	  done < eventlog.$1
 	done
-	kill -11 $pid
+	kill -2 $pid
 	rm -f eventlog.$1
 	return $rc
 }
