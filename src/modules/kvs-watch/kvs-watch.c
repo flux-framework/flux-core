@@ -291,7 +291,9 @@ static int handle_compare_response (flux_t *h,
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             return -1;
         }
-     }
+
+        w->responded = true;
+    }
     else {
         /* not first response case, compare to previous to see if
          * respond should be done, update if necessary */
@@ -307,7 +309,6 @@ static int handle_compare_response (flux_t *h,
         }
     }
 
-    w->responded = true;
     return 0;
 }
 
