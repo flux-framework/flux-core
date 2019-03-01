@@ -263,8 +263,16 @@ void test_set (void)
     if (!(idset = idset_create (100, 0)))
         BAIL_OUT ("idset_create failed");
 
+    ok (idset_count (idset) == 0,
+        "idset_count (idset) == 0");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 worked");
+    ok (idset_count (idset) == 1,
+        "idset_count (idset) == 1");
+    ok (idset_set (idset, 0) == 0,
+        "idset_set 0 again  succeeds");
+    ok (idset_count (idset) == 1,
+        "idset_count (idset) == 1");
     ok (idset_set (idset, 3) == 0,
         "idset_set 3 worked");
     ok (idset_set (idset, 99) == 0,
@@ -300,8 +308,16 @@ void test_range_set (void)
 
     ok (idset_range_set (idset, 0, 2) == 0,
         "idset_range_set 0-2 worked");
+    ok (idset_count (idset) == 3,
+        "idset_count == 3");
+    ok (idset_range_set (idset, 0, 2) == 0,
+        "idset_range_set 0-2 again worked");
+    ok (idset_count (idset) == 3,
+        "idset_count == 3");
     ok (idset_range_set (idset, 80, 79) == 0, // reversed
         "idset_set 80-79 worked");
+    ok (idset_count (idset) == 5,
+        "idset_count == 5");
 
     errno = 0;
     ok (idset_range_set (idset, 100, 101) < 0 && errno == EINVAL,
@@ -352,6 +368,8 @@ void test_clear (void)
 
     ok (idset_clear (idset, 100) == 0,
         "idset_clear idset=[8-10], id=100 works");
+    ok (idset_count (idset) == 3,
+        "idset_count still returns 3");
     errno = 0;
     ok (idset_clear (idset, UINT_MAX) < 0 && errno == EINVAL,
         "idset_clear idset=[8-10], id=UINT_MAX failed with EINVAL");
@@ -380,6 +398,12 @@ void test_range_clear (void)
 
     ok (idset_range_clear (idset, 2, 5) == 0,
         "idset_range_clear 2-5 works");
+    ok (idset_count (idset) == 6,
+        "idset_count == 6");
+    ok (idset_range_clear (idset, 2, 5) == 0,
+        "idset_range_clear 2-5 again succeeds");
+    ok (idset_count (idset) == 6,
+        "idset_count is still 6");
     ok (idset_range_clear (idset, 9, 6) == 0, // reversed
         "idset_range_clear 9-6 works");
     errno = 0;
