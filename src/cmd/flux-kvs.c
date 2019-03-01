@@ -1876,15 +1876,10 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
         return;
     }
 
-    /* Each KVS get response returns a new snapshot of the eventlog.
-     * Pass it to eventlog_update() which ensures the shapshot is consistent
-     * with any existing events in the log, and makes new events available to
-     * the iterator.
-     */
     if (flux_kvs_lookup_get (f, &s) < 0)
         log_err_exit ("flux_kvs_lookup_get");
-    if (flux_kvs_eventlog_update (ctx->log, s) < 0)
-        log_err_exit ("flux_kvs_eventlog_update");
+    if (flux_kvs_eventlog_append (ctx->log, s) < 0)
+        log_err_exit ("flux_kvs_eventlog_append");
 
     /* Display any new events.
      */
@@ -1927,8 +1922,10 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     key = argv[optindex++];
-    if (optparse_hasopt (p, "watch"))
+    if (optparse_hasopt (p, "watch")) {
         flags |= FLUX_KVS_WATCH;
+        flags |= FLUX_KVS_WATCH_APPEND;
+    }
 
     if (!(ctx.log = flux_kvs_eventlog_create()))
         log_err_exit ("flux_kvs_eventlog_create");
