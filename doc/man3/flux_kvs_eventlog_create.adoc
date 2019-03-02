@@ -5,7 +5,7 @@ flux_kvs_eventlog_create(3)
 
 NAME
 ----
-flux_kvs_eventlog_create, flux_kvs_eventlog_destroy, flux_kvs_eventlog_encode, flux_kvs_eventlog_decode, flux_kvs_eventlog_update, flux_kvs_eventlog_append, flux_kvs_eventlog_first, flux_kvs_eventlog_next - manipulate RFC 18 KVS eventlogs
+flux_kvs_eventlog_create, flux_kvs_eventlog_destroy, flux_kvs_eventlog_encode, flux_kvs_eventlog_decode, flux_kvs_eventlog_append, flux_kvs_eventlog_first, flux_kvs_eventlog_next - manipulate RFC 18 KVS eventlogs
 
 
 SYNOPSIS
@@ -18,9 +18,6 @@ SYNOPSIS
  char *flux_kvs_eventlog_encode (const struct flux_kvs_eventlog *eventlog);
 
  struct flux_kvs_eventlog *flux_kvs_eventlog_decode (const char *s);
-
- int flux_kvs_eventlog_update (struct flux_kvs_eventlog *eventlog,
-                               const char *s);
 
  int flux_kvs_eventlog_append (struct flux_kvs_eventlog *eventlog,
                                const char *s);
@@ -56,8 +53,10 @@ character.
 
 Raw event strings can be atomically appended to an eventlog stored in the KVS
 using `flux_kvs_txn_put()` with the the 'FLUX_KVS_APPEND' flag.
-The eventlog can be accessed with `flux_kvs_lookup()`, optionally with
-the 'FLUX_KVS_WATCH' flag.
+The eventlog can be accessed with `flux_kvs_lookup()`.  When watching
+an eventlog with the 'FLUX_KVS_WATCH' flag, it is recommended to also
+specify the 'FLUX_KVS_WATCH_APPEND' flag so only new events are seen
+in responses.
 
 `flux_kvs_eventlog_create()` creates an empty eventlog object in memory,
 and `flux_kvs_eventlog_destroy()` disposes of it.
@@ -68,11 +67,13 @@ eventlog data in string form, such as would be returned by
 `flux_kvs_eventlog_encode()` performs the opposite function; again, the
 caller must free the returned string.
 
-`flux_kvs_eventlog_update()` updates an eventlog object with a new snapshot
-of the raw log, such as might be returned from `flux_kvs_lookup_get()`.
-This function does not change the iterator cursor.
-
-`flux_kvs_eventlog_append()` appends a single raw event to the eventlog.
+`flux_kvs_eventlog_append()` appends raw event(s) to an eventlog
+object.  Multiple events can be appended using this call, such as
+initializing the eventlog object with the raw snapshot returned from a
+`flux_kvs_lookup()`.  It is also convenient to call
+`flux_kvs_eventlog_append()` with results from watching an eventlog
+with the 'FLUX_KVS_WATCH' and 'FLUX_KVS_WATCH_APPEND' flags.  This
+function does not change the iterator cursor.
 
 The events in an eventlog object may be accessed in raw form  with the
 iterators `flux_kvs_eventlog_first()` and `flux_kvs_eventlog_next()`.
@@ -104,9 +105,8 @@ an eventlog object on success, or NULL on failure with errno set.
 `flux_kvs_event_encode_timestamp()` return encoded strings on success,
 or NULL on failure with errno set.
 
-`flux_kvs_eventlog_update()`, `flux_kvs_eventlog_append()`, and
-`flux_kvs_event_decode()` return 0 on success, or -1 on failure
-with errno set.
+`flux_kvs_eventlog_append()`, and `flux_kvs_event_decode()` return 0
+on success, or -1 on failure with errno set.
 
 `flux_kvs_eventlog_first()` and `flux_kvs_eventlog_next()` return
 a const pointer to a raw event, or NULL if the internal cursor has

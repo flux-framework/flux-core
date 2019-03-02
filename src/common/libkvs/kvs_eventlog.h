@@ -35,12 +35,7 @@ void flux_kvs_eventlog_destroy (struct flux_kvs_eventlog *eventlog);
 char *flux_kvs_eventlog_encode (const struct flux_kvs_eventlog *eventlog);
 struct flux_kvs_eventlog *flux_kvs_eventlog_decode (const char *s);
 
-/* Update an eventlog with new encoded snapshot 's'.
- */
-int flux_kvs_eventlog_update (struct flux_kvs_eventlog *eventlog,
-                              const char *s);
-
-/* Append an encoded event to eventlog.
+/* Append encoded event(s) to eventlog.
  */
 int flux_kvs_eventlog_append (struct flux_kvs_eventlog *eventlog,
                               const char *s);

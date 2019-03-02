@@ -30,7 +30,6 @@ const char *badevent[] = {
     "1  \n",
     "\n",
     "1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
-    "",
     NULL,
 };
 
@@ -106,8 +105,8 @@ void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
 void basic (void)
 {
     const char *test1 = "42.123 foo\n44.0 bar quick brown fox\n";
-    const char *test2 = "42.123 foo\n44.0 bar quick brown fox\n50 meep\n";
-    const char *test3 = "999.2 duh baz\n";
+    const char *test2 = "50 meep\n";
+    const char *test3 = "60 mork mindy\n70 duh\n";
     struct flux_kvs_eventlog *log;
     char *s;
 
@@ -132,18 +131,15 @@ void basic (void)
         "flux_kvs_eventlog_encode output = decode input");
     free (s);
 
-    /* update and iterate */
-    ok (flux_kvs_eventlog_update (log, test2) == 0,
+    /* append and iterate */
+    ok (flux_kvs_eventlog_append (log, test2) == 0,
         "flux_kvs_eventlog_update works adding 1 entry: [foo, bar, meep]");
+    ok (flux_kvs_eventlog_append (log, test3) == 0,
+        "flux_kvs_eventlog_update works adding 2 entries: [foo, bar, meep, mork, duh]");
 
     basic_check (log, false, false, 50, "meep", "");
-    basic_check (log, false, true, 0, NULL, NULL);
-
-    /* append and iterate */
-    ok (flux_kvs_eventlog_append (log, test3) == 0,
-        "flux_kvs_eventlog_append works adding 1 entry: [foo, bar, meep, duh]");
-
-    basic_check (log, false, false, 999.2, "duh", "baz");
+    basic_check (log, false, false, 60, "mork", "mindy");
+    basic_check (log, false, false, 70, "duh", "");
     basic_check (log, false, true, 0, NULL, NULL);
 
     flux_kvs_eventlog_destroy (log);
@@ -167,11 +163,9 @@ void bad_input (void)
     ok (log != NULL && flux_kvs_eventlog_first (log) == NULL,
         "flux_kvs_eventlog_decode log=\"\" creates valid empty log");
     errno = 0;
-    ok (flux_kvs_eventlog_update (log, NULL) < 0 && errno == EINVAL,
-        "flux_kvs_eventlog_update s=NULL fails with EINVAL");
-    ok (flux_kvs_eventlog_update (log, "") == 0
+    ok (flux_kvs_eventlog_append (log, "") == 0
         && flux_kvs_eventlog_first (log) == NULL,
-        "flux_kvs_eventlog_update s=\"\" works, log still empty");
+        "flux_kvs_eventlog_append s=\"\" works, log still empty");
     s = flux_kvs_eventlog_encode (log);
     ok (s != NULL && !strcmp (s, ""),
         "flux_kvs_eventlog_encode returns \"\"");
@@ -213,6 +207,14 @@ void bad_input (void)
             "flux_kvs_eventlog_append event=\"%s\" fails with EINVAL",
             printable (buf, badevent[i]));
     }
+
+    /* decode additional bad event (doesn't apply to
+     * flux_kvs_eventlog_append() in loop above)
+     */
+    errno = 0;
+    ok (flux_kvs_event_decode ("", NULL, NULL, 0, NULL, 0) < 0
+        && errno == EINVAL,
+        "flux_kvs_event_decode event=\"\" fails with EINVAL");
 
     /* decode bad logs */
     for (i = 0; badlog[i] != NULL; i++) {

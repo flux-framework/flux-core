@@ -133,53 +133,13 @@ static bool event_validate (const char *tok, size_t toklen)
     return true;
 }
 
-int flux_kvs_eventlog_update (struct flux_kvs_eventlog *eventlog,
-                              const char *s)
-{
-    const char *input;
-    const char *tok;
-    size_t toklen;
-    char *event;
-
-    if (!eventlog || !s)
-        goto error_inval;
-    input = s;
-    event = zlist_first (eventlog->events);
-    while (eventlog_parse_next (&input, &tok, &toklen)) {
-        if (event) {
-            if (toklen != strlen (event) || strncmp (event, tok, toklen) != 0)
-                goto error_inval;
-            event = zlist_next (eventlog->events);
-        }
-        else {
-            char *cpy;
-            if (!event_validate (tok, toklen))
-                goto error_inval;
-            if (!(cpy = strndup (tok, toklen)))
-                goto error;
-            if (zlist_append (eventlog->events, cpy) < 0) {
-                free (cpy);
-                errno = ENOMEM;
-                goto error;
-            }
-        }
-    }
-    if (*input != '\0')
-        goto error_inval;
-    return 0;
-error_inval:
-    errno = EINVAL;
-error:
-    return -1;
-}
-
 struct flux_kvs_eventlog *flux_kvs_eventlog_decode (const char *s)
 {
     struct flux_kvs_eventlog *eventlog;
 
     if (!(eventlog = flux_kvs_eventlog_create ()))
         return NULL;
-    if (flux_kvs_eventlog_update (eventlog, s) < 0) {
+    if (flux_kvs_eventlog_append (eventlog, s) < 0) {
         flux_kvs_eventlog_destroy (eventlog);
         return NULL;
     }
@@ -222,20 +182,31 @@ const char *flux_kvs_eventlog_first (struct flux_kvs_eventlog *eventlog)
 int flux_kvs_eventlog_append (struct flux_kvs_eventlog *eventlog,
                               const char *s)
 {
-    char *cpy;
+    const char *input;
+    const char *tok;
+    size_t toklen;
 
-    if (!eventlog || !s || !event_validate (s, strlen (s))) {
-        errno = EINVAL;
-        return -1;
+    if (!eventlog || !s)
+        goto error_inval;
+    input = s;
+    while (eventlog_parse_next (&input, &tok, &toklen)) {
+        char *cpy;
+        if (!event_validate (tok, toklen))
+            goto error_inval;
+        if (!(cpy = strndup (tok, toklen)))
+            goto error;
+        if (zlist_append (eventlog->events, cpy) < 0) {
+            free (cpy);
+            errno = ENOMEM;
+            goto error;
+        }
     }
-    if (!(cpy = strdup (s)))
-        goto error_nomem;
-    if (zlist_append (eventlog->events, cpy) < 0)
-        goto error_nomem;
+    if (*input != '\0')
+        goto error_inval;
     return 0;
-error_nomem:
-    free (cpy);
-    errno = ENOMEM;
+error_inval:
+    errno = EINVAL;
+error:
     return -1;
 }
 
