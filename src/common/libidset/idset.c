@@ -48,6 +48,7 @@ struct idset *idset_create (size_t size, int flags)
         return NULL;
     }
     idset->flags = flags;
+    idset->count = 0;
     return idset;
 }
 
@@ -89,6 +90,7 @@ struct idset *idset_copy (const struct idset *idset)
         idset_destroy (cpy);
         return NULL;
     }
+    cpy->count = idset->count;
     return cpy;
 }
 
@@ -131,6 +133,24 @@ static int idset_grow (struct idset *idset, size_t size)
     return 0;
 }
 
+/* Wrapper for vebput() which increments idset count if needed
+ */
+static void idset_put (struct idset *idset, unsigned int id)
+{
+    if (!idset_test (idset, id))
+        idset->count++;
+    vebput (idset->T, id);
+}
+
+/* Wrapper for vebdel() which decrements idset count if needed
+ */
+static void idset_del (struct idset *idset, unsigned int id)
+{
+    if (idset_test (idset, id))
+        idset->count--;
+    vebdel (idset->T, id);
+}
+
 int idset_set (struct idset *idset, unsigned int id)
 {
     if (!idset || !valid_id (id)) {
@@ -139,7 +159,7 @@ int idset_set (struct idset *idset, unsigned int id)
     }
     if (idset_grow (idset, id + 1) < 0)
         return -1;
-    vebput (idset->T, id);
+    idset_put (idset, id);
     return 0;
 }
 
@@ -164,7 +184,7 @@ int idset_range_set (struct idset *idset, unsigned int lo, unsigned int hi)
     if (idset_grow (idset, hi + 1) < 0)
         return -1;
     for (id = lo; id <= hi; id++)
-        vebput (idset->T, id);
+        idset_put (idset, id);
     return 0;
 }
 
@@ -174,7 +194,7 @@ int idset_clear (struct idset *idset, unsigned int id)
         errno = EINVAL;
         return -1;
     }
-    vebdel (idset->T, id);
+    idset_del (idset, id);
     return 0;
 }
 
@@ -188,7 +208,7 @@ int idset_range_clear (struct idset *idset, unsigned int lo, unsigned int hi)
     }
     normalize_range (&lo, &hi);
     for (id = lo; id <= hi && id < idset->T.M; id++)
-        vebdel (idset->T, id);
+        idset_del (idset, id);
     return 0;
 }
 
@@ -238,17 +258,34 @@ unsigned int idset_last (const struct idset *idset)
 
 size_t idset_count (const struct idset *idset)
 {
-    unsigned int id;
-    size_t count = 0;
-
     if (!idset)
         return 0;
-    id = vebsucc (idset->T, 0);
-    while (id < idset->T.M) {
-        count++;
-        id = vebsucc (idset->T, id + 1);
+    return idset->count;
+}
+
+bool idset_equal (const struct idset *idset1,
+                  const struct idset *idset2)
+{
+    unsigned int id;
+
+    if (!idset1 || !idset2)
+        return false;
+    if (idset_count (idset1) != idset_count (idset2))
+        return false;
+
+    id = vebsucc (idset1->T, 0);
+    while (id < idset1->T.M) {
+        if (vebsucc (idset2->T, id) != id)
+            return false; // id in idset1 not set in idset2
+        id = vebsucc (idset1->T, id + 1);
     }
-    return count;
+    id = vebsucc (idset2->T, 0);
+    while (id < idset2->T.M) {
+        if (vebsucc (idset1->T, id) != id)
+            return false; // id in idset2 not set in idset1
+        id = vebsucc (idset2->T, id + 1);
+    }
+    return true;
 }
 
 /*

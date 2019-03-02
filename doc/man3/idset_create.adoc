@@ -5,8 +5,7 @@ idset_create(3)
 
 NAME
 ----
-idset_create, idset_destroy, idset_encode, idset_decode, idset_set, idset_clear, idset_first, idset_next, idset_count - Manipulate numerically sorted sets of non-negative integers
-
+idset_create, idset_destroy, idset_encode, idset_decode, idset_set, idset_clear, idset_first, idset_next, idset_count, idset_equal - Manipulate numerically sorted sets of non-negative integers
 
 SYNOPSIS
 --------
@@ -41,6 +40,8 @@ SYNOPSIS
  unsigned int idset_last (const struct idset *idset)
 
  size_t idset_count (const struct idset *idset);
+
+ bool idset_equal (const struct idset *set1, const struct idset *set2);
 
 
 USAGE
@@ -98,6 +99,9 @@ empty.
 
 `idset_count()` returns the number of ids in the set.
 
+`idset_equal()` returns true if the two idset objects 'set1' and 'set2'
+are equal sets, i.e. the sets contain the same set of integers.
+
 
 FLAGS
 -----
@@ -130,6 +134,9 @@ with `free()`.  On error, NULL is returned with errno set.
 
 `idset_first()`, `idset_next()`, and `idset_last()` return an id,
 or IDSET_INVALID_ID if no id is available.
+
+`idset_equal()` returns true if 'set1' and 'set2' are equal sets,
+or false if they are not equal, or either argument is 'NULL'.
 
 Other functions return 0 on success, or -1 on error with errno set.
 

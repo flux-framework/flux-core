@@ -17,6 +17,7 @@
 #include "idset.h"
 
 struct idset {
+    size_t count;
     Veb T;
     int flags;
 };

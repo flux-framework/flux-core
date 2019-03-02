@@ -263,8 +263,16 @@ void test_set (void)
     if (!(idset = idset_create (100, 0)))
         BAIL_OUT ("idset_create failed");
 
+    ok (idset_count (idset) == 0,
+        "idset_count (idset) == 0");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 worked");
+    ok (idset_count (idset) == 1,
+        "idset_count (idset) == 1");
+    ok (idset_set (idset, 0) == 0,
+        "idset_set 0 again  succeeds");
+    ok (idset_count (idset) == 1,
+        "idset_count (idset) == 1");
     ok (idset_set (idset, 3) == 0,
         "idset_set 3 worked");
     ok (idset_set (idset, 99) == 0,
@@ -300,8 +308,16 @@ void test_range_set (void)
 
     ok (idset_range_set (idset, 0, 2) == 0,
         "idset_range_set 0-2 worked");
+    ok (idset_count (idset) == 3,
+        "idset_count == 3");
+    ok (idset_range_set (idset, 0, 2) == 0,
+        "idset_range_set 0-2 again worked");
+    ok (idset_count (idset) == 3,
+        "idset_count == 3");
     ok (idset_range_set (idset, 80, 79) == 0, // reversed
         "idset_set 80-79 worked");
+    ok (idset_count (idset) == 5,
+        "idset_count == 5");
 
     errno = 0;
     ok (idset_range_set (idset, 100, 101) < 0 && errno == EINVAL,
@@ -352,6 +368,8 @@ void test_clear (void)
 
     ok (idset_clear (idset, 100) == 0,
         "idset_clear idset=[8-10], id=100 works");
+    ok (idset_count (idset) == 3,
+        "idset_count still returns 3");
     errno = 0;
     ok (idset_clear (idset, UINT_MAX) < 0 && errno == EINVAL,
         "idset_clear idset=[8-10], id=UINT_MAX failed with EINVAL");
@@ -380,6 +398,12 @@ void test_range_clear (void)
 
     ok (idset_range_clear (idset, 2, 5) == 0,
         "idset_range_clear 2-5 works");
+    ok (idset_count (idset) == 6,
+        "idset_count == 6");
+    ok (idset_range_clear (idset, 2, 5) == 0,
+        "idset_range_clear 2-5 again succeeds");
+    ok (idset_count (idset) == 6,
+        "idset_count is still 6");
     ok (idset_range_clear (idset, 9, 6) == 0, // reversed
         "idset_range_clear 9-6 works");
     errno = 0;
@@ -399,27 +423,42 @@ void test_range_clear (void)
     idset_destroy (idset);
 }
 
-bool compare_idset (const struct idset *idset1,
-                    const struct idset *idset2)
+void test_equal (void)
 {
-    unsigned int id;
+    struct idset *set1 = NULL;
+    struct idset *set2 = NULL;
 
-    if (!idset1 || !idset2)
-        return false;
+    ok (idset_equal (set1, set2) == false,
+        "idset_equal (NULL, NULL) == false");
 
-    id = vebsucc (idset1->T, 0);
-    while (id < idset1->T.M) {
-        if (vebsucc (idset2->T, id) != id)
-            return false; // id in idset1 not set in idset2
-        id = vebsucc (idset1->T, id + 1);
-    }
-    id = vebsucc (idset2->T, 0);
-    while (id < idset2->T.M) {
-        if (vebsucc (idset1->T, id) != id)
-            return false; // id in idset2 not set in idset1
-        id = vebsucc (idset2->T, id + 1);
-    }
-    return true;
+    if (!(set1 = idset_decode ("1-10")))
+        BAIL_OUT ("idset_decode [1-10] failed");
+    ok (idset_equal (set1, set2) == false,
+        "idset_equal (set1, NULL) == false");
+
+    if (!(set2 = idset_create (1024, 0)))
+        BAIL_OUT ("idset_create (1024, 0) failed");
+    ok (idset_equal (set1, set2) == false,
+        "idset_equal returns false");
+    ok (idset_range_set (set2, 0, 9) == 0,
+        "idset_range_set (set2, 0, 9) succeeds");
+    ok (idset_equal (set1, set2) == false,
+        "idset_equal of non-equal but equivalent size sets returns false");
+    ok (idset_set (set2, 10) == 0 && idset_clear (set2, 0) == 0,
+        "idset_set (set2, 10) && idset_clear (set2, 0)");
+    ok (idset_equal (set1, set2),
+        "idset_equal (set1, set2) == true");
+
+    ok (idset_range_clear (set1, 1, 10) == 0 &&
+        idset_range_clear (set2, 1, 10) == 0,
+        "idset_clear all entries from set1 and set2");
+    ok (idset_count (set1) == 0 && idset_count (set2) == 0,
+        "idset_count (set1) == idset_count (set2) == 0");
+    ok (idset_equal (set1, set2) == true,
+        "idset_equal returns true for two empty sets");
+
+    idset_destroy (set1);
+    idset_destroy (set2);
 }
 
 void test_copy (void)
@@ -436,7 +475,7 @@ void test_copy (void)
         "idset_copy made a copy");
     ok (idset_count (cpy) == 5000,
         "idset_count on copy returns 5000");
-    ok (compare_idset (idset, cpy) == true,
+    ok (idset_equal (idset, cpy) == true,
         "idset_copy made an accurate copy");
     ok (idset_clear (cpy, 100) == 0,
         "idset_clear 100 on copy");
@@ -509,6 +548,7 @@ int main (int argc, char *argv[])
     test_range_set ();
     test_clear ();
     test_range_clear ();
+    test_equal ();
     test_copy ();
     test_autogrow ();
     issue_1974 ();

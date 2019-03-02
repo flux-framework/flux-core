@@ -90,6 +90,11 @@ unsigned int idset_last (const struct idset *idset);
  */
 size_t idset_count (const struct idset *idset);
 
+/* Return true if the two idsets set1, set2 are equal, i.e. they both
+ * have the same integers set.
+ */
+bool idset_equal (const struct idset *set1, const struct idset *set2);
+
 #endif /* !FLUX_IDSET_H */
 
 /*
