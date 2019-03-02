@@ -85,15 +85,9 @@ static struct rnode *rlist_find_rank (struct rlist *rl, uint32_t rank)
 
 static int idset_cmp (struct idset *set1, struct idset *set2)
 {
-    int rc;
-    if ((rc = idset_count (set1) - idset_count (set2)) == 0) {
-        char *x = idset_encode (set1, IDSET_FLAG_RANGE);
-        char *y = idset_encode (set2, IDSET_FLAG_RANGE);
-        rc = strcmp (x, y);
-        free (x);
-        free (y);
-    }
-    return rc;
+    if (idset_equal (set1, set2))
+        return 0;
+    return idset_count (set1) - idset_count (set2);
 }
 
 static int idset_add_set (struct idset *set, struct idset *new)
