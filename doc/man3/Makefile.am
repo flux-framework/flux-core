@@ -325,6 +325,7 @@ idset_clear.3: idset_create.3
 idset_first.3: idset_create.3
 idset_next.3: idset_create.3
 idset_count.3: idset_create.3
+# N.B. exceeds max 8 stubs  idset_equal.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
