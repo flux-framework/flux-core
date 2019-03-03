@@ -20,6 +20,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 queue.h \
 			 util.h \
 			 util.c \
+			 event.h \
+			 event.c \
 			 restart.h \
 			 restart.c \
 			 raise.h \
