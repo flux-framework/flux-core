@@ -147,7 +147,7 @@ static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    raise_handle_request (h, ctx->queue, ctx->alloc_ctx, msg);
+    raise_handle_request (h, ctx->queue, ctx->event_ctx, ctx->alloc_ctx, msg);
 }
 
 /* priority request handled in priority.c
