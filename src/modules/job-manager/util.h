@@ -36,22 +36,6 @@ const char *util_note_from_context (const char *context);
 int util_jobkey (char *buf, int bufsz, bool active,
                  flux_jobid_t id, const char *key);
 
-/* Set 'key' within active job directory for job 'id'.
- */
-int util_attr_pack (flux_kvs_txn_t *txn,
-                    flux_jobid_t id,
-                    const char *key,
-                    const char *fmt, ...);
-
-/* Log an event to eventlog in active job directory for job 'id'.
- * The event consists of current wallclock, 'name', and optional context
- * formatted from (fmt, ...).  Set fmt="" to skip logging a context.
- */
-int util_eventlog_append (flux_kvs_txn_t *txn,
-                          flux_jobid_t id,
-                          const char *name,
-                          const char *fmt, ...);
-
 /* Look up 'key' relative to active/inactive job directory for job 'id'.
  */
 flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,

@@ -135,63 +135,6 @@ int util_jobkey (char *buf, int bufsz, bool active,
     return len;
 }
 
-int util_eventlog_append (flux_kvs_txn_t *txn,
-                          flux_jobid_t id,
-                          const char *name,
-                          const char *fmt, ...)
-{
-    va_list ap;
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-    int n;
-    char path[64];
-    char *event = NULL;
-    int saved_errno;
-
-    va_start (ap, fmt);
-    n = vsnprintf (context, sizeof (context), fmt, ap);
-    va_end (ap);
-    if (n >= sizeof (context))
-        goto error_inval;
-    if (util_jobkey (path, sizeof (path), true, id, "eventlog") < 0)
-        goto error_inval;
-    if (!(event = flux_kvs_event_encode (name, context)))
-        goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, path, event) < 0)
-        goto error;
-    free (event);
-    return 0;
-error_inval:
-    errno = EINVAL;
-error:
-    saved_errno = errno;
-    free (event);
-    errno = saved_errno;
-    return -1;
-}
-
-int util_attr_pack (flux_kvs_txn_t *txn,
-                    flux_jobid_t id,
-                    const char *key,
-                    const char *fmt, ...)
-{
-    va_list ap;
-    int n;
-    char path[64];
-
-    if (util_jobkey (path, sizeof (path), true, id, key) < 0)
-        goto error_inval;
-    va_start (ap, fmt);
-    n = flux_kvs_txn_vpack (txn, 0, path, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        goto error;
-    return 0;
-error_inval:
-    errno = EINVAL;
-error:
-    return -1;
-}
-
 flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,
                                  int flags, const char *key)
 {
