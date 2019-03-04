@@ -214,12 +214,12 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating queue");
         goto done;
     }
-    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue))) {
-        flux_log_error (h, "error creating scheduler interface");
-        goto done;
-    }
     if (!(ctx.event_ctx = event_ctx_create (h))) {
         flux_log_error (h, "error creating event batcher");
+        goto done;
+    }
+    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue, ctx.event_ctx))) {
+        flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {

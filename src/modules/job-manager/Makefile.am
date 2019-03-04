@@ -49,6 +49,7 @@ TESTS = \
 	test_restart.t
 
 test_ldadd = \
+        $(top_builddir)/src/modules/job-manager/event.o \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/util.o \
