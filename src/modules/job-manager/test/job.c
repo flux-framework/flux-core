@@ -33,8 +33,7 @@ void test_create (void)
         "job_create set submit flags to expected value");
     ok (!job->alloc_pending
         && !job->free_pending
-        && !job->has_resources
-        && !job->exception_pending,
+        && !job->has_resources,
         "job_create set no internal flags");
     ok (job->aux_queue_handle == NULL && job->queue_handle == NULL,
         "job_Create set queue handles to NULL");
@@ -97,8 +96,7 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit) set id from param");
     ok (!job->alloc_pending
         && !job->free_pending
-        && !job->has_resources
-        && !job->exception_pending,
+        && !job->has_resources,
         "job_create_from_eventlog log=(submit)  set no internal flags");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit) set userid from submit");
@@ -126,8 +124,7 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+pri) set t_submit from submit");
     ok (!job->alloc_pending
         && !job->free_pending
-        && !job->has_resources
-        && !job->exception_pending,
+        && !job->has_resources,
         "job_create_from_eventlog log=(submit+pri) set no internal flags");
     ok (job->state == FLUX_JOB_SCHED,
         "job_create_from_eventlog log=(submit+pri) set state=SCHED");
@@ -145,8 +142,7 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+ex0) set t_submit from submit");
     ok (!job->alloc_pending
         && !job->free_pending
-        && !job->has_resources
-        && !job->exception_pending,
+        && !job->has_resources,
         "job_create_from_eventlog log=(submit+ex0) set no internal flags");
     ok (job->state == FLUX_JOB_CLEANUP,
         "job_create_from_eventlog log=(submit+ex0) set state=CLEANUP");
@@ -160,8 +156,7 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+ex1) set state=SCHED");
     ok (!job->alloc_pending
         && !job->free_pending
-        && !job->has_resources
-        && !job->exception_pending,
+        && !job->has_resources,
         "job_create_from_eventlog log=(submit+ex1) set no internal flags");
     job_decref (job);
 
@@ -171,8 +166,7 @@ void test_create_from_eventlog (void)
         BAIL_OUT ("job_create_from_eventlog log=(submit+alloc) failed");
     ok (!job->alloc_pending
         && !job->free_pending
-        && job->has_resources
-        && !job->exception_pending,
+        && job->has_resources,
         "job_create_from_eventlog log=(submit+alloc) set has_resources flag");
     ok (job->state == FLUX_JOB_RUN,
         "job_create_from_eventlog log=(submit+alloc) set state=RUN");
@@ -190,8 +184,7 @@ void test_create_from_eventlog (void)
         BAIL_OUT ("job_create_from_eventlog log=(submit+alloc+free) failed");
     ok (!job->alloc_pending
         && !job->free_pending
-        && !job->has_resources
-        && !job->exception_pending,
+        && !job->has_resources,
         "job_create_from_eventlog log=(submit+alloc+free) set no internal flags");
     ok (job->state == FLUX_JOB_CLEANUP,
         "job_create_from_eventlog log=(submit+alloc+free) set state=CLEANUP");

@@ -290,7 +290,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                         note ? note : "");
         eventlog_append (ctx, job, "exception", context);
         job->state = FLUX_JOB_CLEANUP;
-        //job->exception_pending = 1;
         // FIXME: integrate with exception framework
         return;
     }

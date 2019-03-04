@@ -80,7 +80,6 @@ void raise_ctx_decref (struct raise_ctx *c)
 {
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
-        c->job->exception_pending = 0;
         if (c->request) {
             raise_respond (c);
             flux_msg_destroy (c->request);
@@ -318,7 +317,6 @@ void raise_handle_request (flux_t *h, struct queue *queue,
     if (!(c = raise_ctx_create (h, queue, alloc_ctx, job, msg, userid,
                                 severity, type, note)))
         goto error;
-    job->exception_pending = 1;
     raise_eventlog (c);
     raise_publish (c);
     raise_ctx_decref (c);
