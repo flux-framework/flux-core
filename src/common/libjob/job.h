@@ -32,6 +32,10 @@ enum job_priority {
     FLUX_JOB_PRIORITY_MAX = 31,
 };
 
+enum job_eventlog_flags {
+    FLUX_JOB_EVENTLOG_WATCH = 1,
+};
+
 typedef enum {
     FLUX_JOB_NEW                    = 1,
     FLUX_JOB_DEPEND                 = 2,
