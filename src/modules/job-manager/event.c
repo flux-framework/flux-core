@@ -170,6 +170,65 @@ int event_batch_start (struct event_ctx *ctx)
     return 0;
 }
 
+int event_job_update (struct job *job, const char *event)
+{
+    double timestamp;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+
+    if (flux_kvs_event_decode (event, &timestamp,
+                               name, sizeof (name),
+                               context, sizeof (context)) < 0)
+        goto error;
+    if (!strcmp (name, "submit")) {
+        int priority, userid, flags;
+        if (job->state != FLUX_JOB_NEW)
+            goto inval;
+        job->t_submit = timestamp;
+        if (util_int_from_context (context, "priority", &priority) == 0)
+            job->priority = priority;
+        if (util_int_from_context (context, "userid", &userid) == 0)
+            job->userid = userid;
+        if (util_int_from_context (context, "flags", &flags) == 0)
+            job->flags = flags;
+        job->state = FLUX_JOB_SCHED;
+    }
+    else if (!strcmp (name, "priority")) {
+        int priority;
+        if (util_int_from_context (context, "priority", &priority) < 0)
+            goto error;
+        job->priority = priority;
+    }
+    else if (!strcmp (name, "exception")) {
+        int severity;
+        if (job->state == FLUX_JOB_NEW || job->state == FLUX_JOB_INACTIVE)
+            goto inval;
+        if (util_int_from_context (context, "severity", &severity) < 0)
+            goto error;
+        if (severity == 0)
+            job->state = FLUX_JOB_CLEANUP;
+    }
+    else if (!strcmp (name, "alloc")) {
+        if (job->state != FLUX_JOB_SCHED && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        job->has_resources = 1;
+        if (job->state == FLUX_JOB_SCHED)
+            job->state = FLUX_JOB_RUN;
+    }
+    else if (!strcmp (name, "free")) {
+        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        job->has_resources = 0;
+        if (job->state == FLUX_JOB_RUN)
+            job->state = FLUX_JOB_CLEANUP;
+    }
+    return 0;
+inval:
+    errno = EINVAL;
+error:
+    return -1;
+}
+
 int event_log (struct event_ctx *ctx, flux_jobid_t id,
                event_completion_f cb, void *arg,
                const char *name, const char *context)

@@ -14,9 +14,15 @@
 #include <stdarg.h>
 #include <flux/core.h>
 
+#include "job.h"
+
 struct event_ctx;
 
 typedef void (*event_completion_f)(flux_future_t *f, void *arg);
+
+/* Call to update 'job' internal state based on 'event'.
+ */
+int event_job_update (struct job *job, const char *event);
 
 /* Log event (name, context) to jobs.active.<id>.eventlog.
  * Once event is committed, cb(f, arg) is invoked if cb != NULL.
