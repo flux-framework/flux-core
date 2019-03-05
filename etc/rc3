@@ -25,6 +25,7 @@ flux module remove -r 0 cron
 flux module remove -r all aggregator
 flux module remove -r all barrier
 
+flux module remove -r all job-info
 flux module remove -r all kvs-watch
 flux module remove -r all -x 0 kvs
 if test -n "$PERSISTDIR"; then
