@@ -15,11 +15,13 @@
 
 #include "queue.h"
 #include "job.h"
+#include "event.h"
 
 struct alloc_ctx;
 
 void alloc_ctx_destroy (struct alloc_ctx *ctx);
-struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue);
+struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
+                                    struct event_ctx *event_ctx);
 
 /* Call this from other parts of the job manager when the alloc
  * machinery might need to take action on 'job'.  The action taken

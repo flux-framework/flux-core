@@ -148,9 +148,9 @@ test_expect_success 'job-manager: flux job priority sets last job priority=31' '
 test_expect_success 'job-manager: priority was updated in KVS' '
 	jobid=$(tail -1 <list10_ids.out) &&
 	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux kvs get ${kvsdir}.priority >pri.out &&
-	echo 31 >pri.exp &&
-	test_cmp pri.exp pri.out
+	flux kvs eventlog get ${kvsdir}.eventlog \
+		| cut -d" " -f2- | grep ^priority >pri.out &&
+	grep -q priority=31 pri.out
 '
 
 test_expect_success 'job-manager: that job is now the first job' '

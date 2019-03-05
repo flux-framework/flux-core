@@ -37,6 +37,7 @@
 
 #include "job.h"
 #include "queue.h"
+#include "event.h"
 #include "util.h"
 #include "raise.h"
 
@@ -44,7 +45,6 @@ struct raise_ctx {
     flux_t *h;
     flux_msg_t *request;
     struct job *job;
-    flux_kvs_txn_t *txn;
     uint32_t userid;
     int severity;
     char *type;
@@ -53,6 +53,7 @@ struct raise_ctx {
     char *errstr;
 
     struct queue *queue;
+    struct event_ctx *event_ctx;
     struct alloc_ctx *alloc_ctx;
     int refcount;
 };
@@ -80,7 +81,6 @@ void raise_ctx_decref (struct raise_ctx *c)
 {
     if (c && --c->refcount == 0) {
         int saved_errno = errno;
-        c->job->exception_pending = 0;
         if (c->request) {
             raise_respond (c);
             flux_msg_destroy (c->request);
@@ -93,7 +93,6 @@ void raise_ctx_decref (struct raise_ctx *c)
                     __FUNCTION__, (unsigned long long)c->job->id);
             }
         }
-        flux_kvs_txn_destroy (c->txn);
         free (c->note);
         free (c->type);
         free (c->errstr);
@@ -111,6 +110,7 @@ struct raise_ctx *raise_ctx_incref (struct raise_ctx *c)
 
 struct raise_ctx *raise_ctx_create (flux_t *h,
                                     struct queue *queue,
+                                    struct event_ctx *event_ctx,
                                     struct alloc_ctx *alloc_ctx,
                                     struct job *job,
                                     const flux_msg_t *request,
@@ -125,6 +125,7 @@ struct raise_ctx *raise_ctx_create (flux_t *h,
         return NULL;
     c->queue = queue;
     c->alloc_ctx = alloc_ctx;
+    c->event_ctx = event_ctx;
     c->job = job;
     c->userid = userid;
     c->h = h;
@@ -133,8 +134,6 @@ struct raise_ctx *raise_ctx_create (flux_t *h,
     if (!(c->type = strdup (type)))
         goto error;
     if (note && !(c->note = strdup (note)))
-        goto error;
-    if (!(c->txn = flux_kvs_txn_create ()))
         goto error;
     if (!(c->request = flux_msg_copy (request, false)))
         goto error;
@@ -198,7 +197,7 @@ error:
                     (unsigned long long)c->job->id);
 }
 
-void raise_eventlog_continuation (flux_future_t *f, void *arg)
+void raise_eventlog_cb (flux_future_t *f, void *arg)
 {
     struct raise_ctx *c = arg;
     flux_t *h = flux_future_get_flux (f);
@@ -208,28 +207,19 @@ void raise_eventlog_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "eventlog_update id=%llu",
                         (unsigned long long)c->job->id);
     }
-    flux_future_destroy (f);
     raise_ctx_decref (c);
 }
 
 void raise_eventlog (struct raise_ctx *c)
 {
-    flux_future_t *f;
-
-    if (util_eventlog_append (c->txn, c->job->id, "exception",
-                              "type=%s severity=%d userid=%lu%s%s",
-                              c->type,
-                              c->severity,
-                              (unsigned long)c->userid,
-                              c->note ? " " : "",
-                              c->note ? c->note : "") < 0)
+    if (event_log_fmt (c->event_ctx, c->job->id, raise_eventlog_cb, c,
+                       "exception", "type=%s severity=%d userid=%lu%s%s",
+                       c->type,
+                       c->severity,
+                       (unsigned long)c->userid,
+                       c->note ? " " : "",
+                       c->note ? c->note : "") < 0)
         goto error;
-    if (!(f = flux_kvs_commit (c->h, NULL, 0, c->txn)))
-        goto error;
-    if (flux_future_then (f, -1, raise_eventlog_continuation, c) < 0) {
-        flux_future_destroy (f);
-        goto error;
-    }
     raise_ctx_incref (c);
     return;
 error:
@@ -265,6 +255,7 @@ int raise_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid)
 }
 
 void raise_handle_request (flux_t *h, struct queue *queue,
+                           struct event_ctx *event_ctx,
                            struct alloc_ctx *alloc_ctx,
                            const flux_msg_t *msg)
 {
@@ -315,10 +306,9 @@ void raise_handle_request (flux_t *h, struct queue *queue,
      * When the last one completes, 'c' is destroyed and
      * the user receives a response to the job-manager.raise request.
      */
-    if (!(c = raise_ctx_create (h, queue, alloc_ctx, job, msg, userid,
-                                severity, type, note)))
+    if (!(c = raise_ctx_create (h, queue, event_ctx, alloc_ctx,
+                                job, msg, userid, severity, type, note)))
         goto error;
-    job->exception_pending = 1;
     raise_eventlog (c);
     raise_publish (c);
     raise_ctx_decref (c);

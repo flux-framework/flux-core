@@ -23,6 +23,7 @@
 #include "list.h"
 #include "priority.h"
 #include "alloc.h"
+#include "event.h"
 
 
 struct job_manager_ctx {
@@ -30,6 +31,7 @@ struct job_manager_ctx {
     flux_msg_handler_t **handlers;
     struct queue *queue;
     struct alloc_ctx *alloc_ctx;
+    struct event_ctx *event_ctx;
 };
 
 /* Enqueue jobs from 'jobs' array in queue.
@@ -145,7 +147,7 @@ static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    raise_handle_request (h, ctx->queue, ctx->alloc_ctx, msg);
+    raise_handle_request (h, ctx->queue, ctx->event_ctx, ctx->alloc_ctx, msg);
 }
 
 /* priority request handled in priority.c
@@ -154,7 +156,7 @@ static void priority_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    priority_handle_request (h, ctx->queue, msg);
+    priority_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
 /* reload_map_f callback
@@ -212,7 +214,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating queue");
         goto done;
     }
-    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue))) {
+    if (!(ctx.event_ctx = event_ctx_create (h))) {
+        flux_log_error (h, "error creating event batcher");
+        goto done;
+    }
+    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue, ctx.event_ctx))) {
         flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
@@ -232,6 +238,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 done:
     flux_msg_handler_delvec (ctx.handlers);
     alloc_ctx_destroy (ctx.alloc_ctx);
+    event_ctx_destroy (ctx.event_ctx);
     queue_destroy (ctx.queue);
     return rc;
 }

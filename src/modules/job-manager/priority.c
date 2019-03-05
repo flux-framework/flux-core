@@ -31,11 +31,10 @@
 #endif
 #include <flux/core.h>
 
-#include "src/common/libjob/job.h"
-
 #include "job.h"
 #include "queue.h"
 #include "util.h"
+#include "event.h"
 #include "priority.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
@@ -43,10 +42,10 @@
 struct priority {
     flux_msg_t *request;
     struct job *job;
-    flux_kvs_txn_t *txn;
     int priority;
 
     struct queue *queue;
+    struct event_ctx *event_ctx;
 };
 
 static void priority_destroy (struct priority *p)
@@ -54,27 +53,26 @@ static void priority_destroy (struct priority *p)
     if (p) {
         int saved_errno = errno;
         flux_msg_destroy (p->request);
-        flux_kvs_txn_destroy (p->txn);
         free (p);
         errno = saved_errno;
     }
 }
 
 static struct priority *priority_create (struct queue *queue,
-                                   struct job *job,
-                                   const flux_msg_t *request,
-                                   int priority)
+                                         struct event_ctx *event_ctx,
+                                         struct job *job,
+                                         const flux_msg_t *request,
+                                         int priority)
 {
     struct priority *p;
 
     if (!(p = calloc (1, sizeof (*p))))
         return NULL;
     p->queue = queue;
+    p->event_ctx = event_ctx;
     p->job = job;
     p->priority = priority;
     if (!(p->request = flux_msg_copy (request, false)))
-        goto error;
-    if (!(p->txn = flux_kvs_txn_create ()))
         goto error;
     return p;
 error:
@@ -100,10 +98,10 @@ static void priority_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 done:
     priority_destroy (p);
-    flux_future_destroy (f);
 }
 
 void priority_handle_request (flux_t *h, struct queue *queue,
+                              struct event_ctx *event_ctx,
                               const flux_msg_t *msg)
 {
     uint32_t userid;
@@ -111,7 +109,6 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     flux_jobid_t id;
     struct job *job;
     struct priority *p = NULL;
-    flux_future_t *f;
     int priority;
     int rc;
     const char *errstr = NULL;
@@ -152,20 +149,12 @@ void priority_handle_request (flux_t *h, struct queue *queue,
      * Upon successful completion, insert job in new queue position and
      * send response.
      */
-    if (!(p = priority_create (queue, job, msg, priority)))
+    if (!(p = priority_create (queue, event_ctx, job, msg, priority)))
         goto error;
-    if (util_eventlog_append (p->txn, job->id, "priority",
-                              "userid=%lu priority=%d",
-                              (unsigned long)userid, priority) < 0)
+    if (event_log_fmt (p->event_ctx, job->id, priority_continuation, p,
+                       "priority", "userid=%lu priority=%d",
+                       (unsigned long)userid, priority) < 0)
         goto error;
-    if (util_attr_pack (p->txn, job->id, "priority", "i", priority) < 0)
-        goto error;
-    if (!(f = flux_kvs_commit (h, NULL, 0, p->txn)))
-        goto error;
-    if (flux_future_then (f, -1., priority_continuation, p) < 0) {
-        flux_future_destroy (f);
-        goto error;
-    }
     return;
 error:
     if (errstr)
