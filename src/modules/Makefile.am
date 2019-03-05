@@ -1,6 +1,7 @@
 SUBDIRS = \
  barrier \
  connector-local \
+ eventlog-proxy \
  kvs \
  kvs-watch \
  content-sqlite \
