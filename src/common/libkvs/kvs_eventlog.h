@@ -24,6 +24,9 @@ extern "C" {
 #define FLUX_KVS_MAX_EVENT_NAME      (64)
 #define FLUX_KVS_MAX_EVENT_CONTEXT   (256)
 
+enum kvs_eventlog_op {
+    FLUX_KVS_EVENTLOG_WATCH = 1
+};
 
 /* Create/destroy an eventlog
  */
@@ -59,6 +62,13 @@ char *flux_kvs_event_encode_timestamp (double timestamp,
                                        const char *name,
                                        const char *context);
 
+/* Eventlog streaming functions, return a single event per response.
+ * The flux_kvs_eventlog_lookup_cancel() function can be called
+ * to end the stream early.
+ */
+flux_future_t *flux_kvs_eventlog_lookup (flux_t *h, int flags, const char *key);
+int flux_kvs_eventlog_lookup_get (flux_future_t *f, const char **event);
+int flux_kvs_eventlog_lookup_cancel (flux_future_t *f);
 
 #ifdef __cplusplus
 }

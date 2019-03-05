@@ -189,6 +189,22 @@ void bad_input (void)
     ok (flux_kvs_eventlog_next (NULL) == NULL,
         "flux_kvs_eventlog_next log=NULL returns NULL");
 
+    /* lookup, lookup_get, lookup_cancel */
+    errno = EINVAL;
+    ok (!flux_kvs_eventlog_lookup (NULL, 0, NULL)
+        && errno == EINVAL,
+        "flux_kvs_eventlog_lookup fails with EINVAL on bad input");
+
+    errno = EINVAL;
+    ok (flux_kvs_eventlog_lookup_get (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_kvs_eventlog_lookup_get fails with EINVAL on bad input");
+
+    errno = EINVAL;
+    ok (flux_kvs_eventlog_lookup_cancel (NULL) < 0
+        && errno == EINVAL,
+        "flux_kvs_eventlog_lookup_cancel fails with EINVAL on bad input");
+
     errno = 0;
     ok (flux_kvs_event_decode (NULL, NULL, NULL, 0, NULL, 0) < 0
         && errno == EINVAL,
