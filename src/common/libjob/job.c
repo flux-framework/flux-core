@@ -20,6 +20,7 @@
 #include <jansson.h>
 
 #include "job.h"
+#include "job_eventlog.h"
 #include "sign_none.h"
 
 #if HAVE_FLUX_SECURITY

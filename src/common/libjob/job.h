@@ -16,6 +16,7 @@
 #include <flux/core.h>
 
 #include "job_types.h"
+#include "job_eventlog.h"
 
 #ifdef __cplusplus
 extern "C" {
