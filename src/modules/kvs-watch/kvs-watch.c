@@ -477,7 +477,7 @@ static void handle_lookup_response (flux_future_t *f,
 
         /* if we got some setroots before the initial rpc returned,
          * toss them */
-        if (root_seq < w->initial_rootseq)
+        if (root_seq <= w->initial_rootseq)
             return;
 
         if (!w->mute) {
