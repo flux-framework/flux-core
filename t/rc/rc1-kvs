@@ -4,3 +4,4 @@ flux module load -r 0  content-sqlite
 flux module load -r 0 kvs
 flux module load -r all -x 0 kvs
 flux module load -r all kvs-watch
+flux module load -r all eventlog-proxy

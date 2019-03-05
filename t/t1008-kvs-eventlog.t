@@ -21,6 +21,18 @@ test_expect_success 'flux kvs eventlog append works' '
 	grep -q foo get_b.out
 '
 
+test_expect_success 'flux kvs eventlog append multiple appends works' '
+	flux kvs eventlog append test.b foo &&
+	flux kvs eventlog append test.b bar &&
+	flux kvs eventlog get test.b >get_b.out &&
+	grep -q foo get_b.out &&
+	grep -q bar get_b.out
+'
+
+test_expect_success 'flux kvs eventlog get on invalid key fails' '
+	! flux kvs eventlog get test.bad
+'
+
 test_expect_success 'flux kvs eventlog get --watch --count=N works' '
 	flux kvs eventlog append --timestamp=42 test.c foo &&
 	flux kvs eventlog append --timestamp=43 test.c bar &&

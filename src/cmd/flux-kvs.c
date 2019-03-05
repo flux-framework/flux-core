@@ -1815,7 +1815,6 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
 }
 
 struct eventlog_get_ctx {
-    struct flux_kvs_eventlog *log;
     optparse_t *p;
     int maxcount;
     int count;
@@ -1863,49 +1862,35 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
 {
     struct eventlog_get_ctx *ctx = arg;
     const char *s;
-    const char *event;
-    bool limit_reached = false;
 
-    /* Handle cancelled lookup (FLUX_KVS_WATCH flag only).
-     * Destroy the future and return (reactor will then terminate).
-     * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
-     */
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
-        flux_future_destroy (f);
-        return;
+    if (flux_kvs_eventlog_lookup_get (f, &s) < 0) {
+        if (errno == ENODATA) {
+            flux_future_destroy (f);
+            return;
+        }
+        log_err_exit ("flux_kvs_eventlog_lookup_get");
     }
-
-    if (flux_kvs_lookup_get (f, &s) < 0)
-        log_err_exit ("flux_kvs_lookup_get");
-    if (flux_kvs_eventlog_append (ctx->log, s) < 0)
-        log_err_exit ("flux_kvs_eventlog_append");
 
     /* Display any new events.
      */
-    while ((event = flux_kvs_eventlog_next (ctx->log)) && !limit_reached) {
-        if (optparse_hasopt (ctx->p, "unformatted"))
-            printf ("%s", event);
-        else
-            eventlog_prettyprint (stdout, event);
-        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
-            limit_reached = true;
-    }
+    if (optparse_hasopt (ctx->p, "unformatted"))
+        printf ("%s", s);
+    else
+        eventlog_prettyprint (stdout, s);
     fflush (stdout);
 
-    /* If watching, re-arm future for next response.
-     * If --count limit has been reached, send a cancel request.
+    /* re-arm future for next event in stream */
+    flux_future_reset (f);
+
+    /* If --count limit has been reached, send a cancel request.
      * The resulting ENODATA error response is handled above.
      */
     if (optparse_hasopt (ctx->p, "watch")) {
-        flux_future_reset (f);
-        if (limit_reached) {
-            if (flux_kvs_lookup_cancel (f) < 0)
+        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount) {
+            if (flux_kvs_eventlog_lookup_cancel (f) < 0)
                 log_err_exit ("flux_kvs_lookup_cancel");
         }
     }
-    else
-        flux_future_destroy (f);
 }
 
 int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
@@ -1922,25 +1907,21 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     key = argv[optindex++];
+
     if (optparse_hasopt (p, "watch")) {
-        flags |= FLUX_KVS_WATCH;
-        flags |= FLUX_KVS_WATCH_APPEND;
+        ctx.maxcount = optparse_get_int (p, "count", 0);
+        flags |= FLUX_KVS_EVENTLOG_WATCH;
     }
 
-    if (!(ctx.log = flux_kvs_eventlog_create()))
-        log_err_exit ("flux_kvs_eventlog_create");
     ctx.p = p;
     ctx.count = 0;
-    ctx.maxcount = optparse_get_int (p, "count", 0);
 
-    if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
-        log_err_exit ("flux_kvs_lookup");
+    if (!(f = flux_kvs_eventlog_lookup (h, flags, key)))
+        log_err_exit ("flux_kvs_eventlog_lookup");
     if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
-
-    flux_kvs_eventlog_destroy (ctx.log);
 
     return (0);
 }
