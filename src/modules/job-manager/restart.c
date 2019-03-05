@@ -24,6 +24,17 @@
 #include "restart.h"
 #include "util.h"
 
+struct restart_ctx {
+    struct queue *queue;
+    struct alloc_ctx *alloc_ctx;
+    flux_t *h;
+};
+
+/* restart_map callback should return -1 on error to stop map with error,
+ * or 0 on success.  'job' is only valid for the duration of the callback.
+ */
+typedef int (*restart_map_f)(struct job *job, void *arg);
+
 int restart_count_char (const char *s, char c)
 {
     int count = 0;
@@ -113,11 +124,46 @@ done:
     return rc;
 }
 
-int restart_map (flux_t *h, restart_map_f cb, void *arg)
+/* reload_map_f callback
+ * The job state/flags has been recreated by replaying the job's eventlog.
+ * Enqueue the job and kick off actions appropriate for job's current state.
+ */
+static int restart_map_cb (struct job *job, void *arg)
+{
+    struct restart_ctx *ctx = arg;
+
+    if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
+        return -1;
+    if (job->state == FLUX_JOB_NEW)
+        job->state = FLUX_JOB_SCHED;
+    if (job->state == FLUX_JOB_SCHED) {
+        if (alloc_do_request (ctx->alloc_ctx, job) < 0) {
+            flux_log_error (ctx->h, "%s: error notifying scheduler of job %llu",
+                __FUNCTION__, (unsigned long long)job->id);
+        }
+    }
+    return 0;
+}
+
+/* Load any active jobs present in the KVS at startup.
+ */
+int restart_from_kvs (flux_t *h, struct queue *queue,
+                      struct alloc_ctx *alloc_ctx)
 {
     const char *dirname = "job.active";
+    int dirskip = strlen (dirname);
+    int count;
+    struct restart_ctx ctx;
 
-    return depthfirst_map (h, dirname, strlen (dirname), cb, arg);
+    ctx.h = h;
+    ctx.queue = queue;
+    ctx.alloc_ctx = alloc_ctx;
+
+    count = depthfirst_map (h, dirname, dirskip, restart_map_cb, &ctx);
+    if (count < 0)
+        return -1;
+    flux_log (h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__, count);
+    return 0;
 }
 
 /*

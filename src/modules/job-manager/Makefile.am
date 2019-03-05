@@ -103,4 +103,5 @@ test_restart_t_SOURCES = test/restart.c
 test_restart_t_CPPFLAGS = $(test_cppflags)
 test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
+        $(top_builddir)/src/modules/job-manager/alloc.o \
         $(test_ldadd)
