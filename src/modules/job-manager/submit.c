@@ -39,21 +39,17 @@ static zlist_t *enqueue_jobs (struct queue *queue, json_t *jobs)
     if (!(newjobs = zlist_new ()))
         goto error;
     json_array_foreach (jobs, index, el) {
-        flux_jobid_t id;
-        uint32_t userid;
-        int priority;
-        double t_submit;
-        int flags;
-
-        if (json_unpack (el, "{s:I s:i s:i s:f s:i}", "id", &id,
-                                                      "priority", &priority,
-                                                      "userid", &userid,
-                                                      "t_submit", &t_submit,
-                                                      "flags", &flags) < 0) {
+        if (!(job = job_create ()))
+            goto error;
+        if (json_unpack (el, "{s:I s:i s:i s:f s:i}",
+                             "id", &job->id,
+                             "priority", &job->priority,
+                             "userid", &job->userid,
+                             "t_submit", &job->t_submit,
+                             "flags", &job->flags) < 0) {
+            job_decref (job);
             goto error;
         }
-        if (!(job = job_create (id, priority, userid, t_submit, flags)))
-            goto error;
         if (queue_insert (queue, job, &job->queue_handle) < 0) {
             job_decref (job);
             if (errno == EEXIST)

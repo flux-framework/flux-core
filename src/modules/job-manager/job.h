@@ -34,11 +34,7 @@ struct job {
 void job_decref (struct job *job);
 struct job *job_incref (struct job *job);
 
-struct job *job_create (flux_jobid_t id,
-                        int priority,
-                        uint32_t userid,
-                        double t_submit,
-                        int flags);
+struct job *job_create (void);
 
 /* (re-)create job by replaying its KVS eventlog.
  */

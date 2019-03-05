@@ -21,22 +21,24 @@ void test_create (void)
 {
     struct job *job;
 
-    job = job_create (42, 1, FLUX_USERID_UNKNOWN, 2, 3);
+    job = job_create ();
     if (job == NULL)
         BAIL_OUT ("job_create failed");
     ok (job->refcount == 1,
         "job_create set refcount to 1");
-    ok (job->id == 42 && job->priority == 1 && job->state == FLUX_JOB_NEW
-        && job->userid == FLUX_USERID_UNKNOWN && job->t_submit == 2,
+    ok (job->id == 0
+        && job->priority == FLUX_JOB_PRIORITY_DEFAULT
+        && job->state == FLUX_JOB_NEW
+        && job->userid == FLUX_USERID_UNKNOWN
+        && job->t_submit == 0
+        && job->flags == 0,
         "job_create set id, priority, userid, and t_submit to expected values");
-    ok (job->flags == 3,
-        "job_create set submit flags to expected value");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
         "job_create set no internal flags");
     ok (job->aux_queue_handle == NULL && job->queue_handle == NULL,
-        "job_Create set queue handles to NULL");
+        "job_create set queue handles to NULL");
     ok (job_incref (job) == job && job->refcount == 2,
         "job_incref incremented refcount and returned original job pointer");
     job_decref (job);

@@ -33,31 +33,15 @@ struct job *job_incref (struct job *job)
     return job;
 }
 
-static struct job *job_create_uninit (flux_jobid_t id)
+struct job *job_create (void)
 {
     struct job *job;
 
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
     job->refcount = 1;
-    job->id = id;
     job->userid = FLUX_USERID_UNKNOWN;
     job->priority = FLUX_JOB_PRIORITY_DEFAULT;
-    job->state = FLUX_JOB_NEW;
-    return job;
-}
-
-struct job *job_create (flux_jobid_t id, int priority, uint32_t userid,
-                        double t_submit, int flags)
-{
-    struct job *job;
-
-    if (!(job = job_create_uninit (id)))
-        return NULL;
-    job->userid = userid;
-    job->priority = priority;
-    job->t_submit = t_submit;
-    job->flags = flags;
     job->state = FLUX_JOB_NEW;
     return job;
 }
@@ -72,8 +56,9 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
     bool submit_valid = false;
     struct job *job;
 
-    if (!(job = job_create_uninit (id)))
+    if (!(job = job_create ()))
         return NULL;
+    job->id = id;
     job->state = FLUX_JOB_SCHED;
     if (!(eventlog = flux_kvs_eventlog_decode (s)))
         goto error;
