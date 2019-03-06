@@ -1,6 +1,8 @@
 #!/bin/bash -e
 
 flux module remove -r 0 job-manager
+flux module remove -r all job-info
+flux module remove -r all kvs-watch
 flux module remove -r all job-ingest
 
 flux module remove -r all -x 0 kvs
