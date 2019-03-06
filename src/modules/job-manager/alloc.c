@@ -534,6 +534,7 @@ struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
     }
     flux_watcher_start (ctx->prep);
     flux_watcher_start (ctx->check);
+    event_ctx_set_alloc_ctx (event_ctx, ctx);
     return ctx;
 error:
     alloc_ctx_destroy (ctx);

@@ -17,12 +17,15 @@
 #include <flux/core.h>
 
 #include "util.h"
+#include "alloc.h"
+
 #include "event.h"
 
 const double batch_timeout = 0.01;
 
 struct event_ctx {
     flux_t *h;
+    struct alloc_ctx *alloc_ctx;
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
@@ -170,6 +173,30 @@ int event_batch_start (struct event_ctx *ctx)
     return 0;
 }
 
+int event_job_action (struct event_ctx *ctx, struct job *job)
+{
+    switch (job->state) {
+        case FLUX_JOB_NEW:
+        case FLUX_JOB_DEPEND:
+            break;
+        case FLUX_JOB_SCHED:
+            if (alloc_enqueue_alloc_request (ctx->alloc_ctx, job) < 0)
+                return -1;
+            break;
+        case FLUX_JOB_RUN:
+            break;
+        case FLUX_JOB_CLEANUP:
+            if (job->has_resources) {
+                if (alloc_send_free_request (ctx->alloc_ctx, job) < 0)
+                    return -1;
+            }
+            break;
+        case FLUX_JOB_INACTIVE:
+            break;
+    }
+    return 0;
+}
+
 int event_job_update (struct job *job, const char *event)
 {
     double timestamp;
@@ -270,6 +297,12 @@ int event_log_fmt (struct event_ctx *ctx, struct job *job,
         return -1;
     }
     return event_log (ctx, job, cb, arg, name, context);
+}
+
+void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
+                              struct alloc_ctx *alloc_ctx)
+{
+    ctx->alloc_ctx = alloc_ctx;
 }
 
 /* N.B. any in-flight batches are destroyed here.
