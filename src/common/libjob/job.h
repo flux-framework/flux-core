@@ -100,6 +100,15 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority);
 int flux_job_kvs_key (char *buf, int bufsz, bool active,
                       flux_jobid_t id, const char *key);
 
+/* Job eventlog lookup functions
+ */
+flux_future_t *flux_job_eventlog_lookup (flux_t *h, flux_jobid_t id);
+int flux_job_eventlog_lookup_get (flux_future_t *f, const char **event);
+
+flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id);
+int flux_job_event_watch_get (flux_future_t *f, const char **event);
+int flux_job_event_watch_cancel (flux_future_t *f);
+
 #ifdef __cplusplus
 }
 #endif
