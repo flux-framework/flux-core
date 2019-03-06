@@ -229,7 +229,7 @@ error:
     return -1;
 }
 
-int event_log (struct event_ctx *ctx, flux_jobid_t id,
+int event_log (struct event_ctx *ctx, struct job *job,
                event_completion_f cb, void *arg,
                const char *name, const char *context)
 {
@@ -237,7 +237,7 @@ int event_log (struct event_ctx *ctx, flux_jobid_t id,
     char *event = NULL;
     int saved_errno;
 
-    if (flux_job_kvs_key (key, sizeof (key), true, id, "eventlog") < 0)
+    if (flux_job_kvs_key (key, sizeof (key), true, job->id, "eventlog") < 0)
         return -1;
     if (!(event = flux_kvs_event_encode (name, context)))
         return -1;
@@ -254,7 +254,7 @@ error:
     return -1;
 }
 
-int event_log_fmt (struct event_ctx *ctx, flux_jobid_t id,
+int event_log_fmt (struct event_ctx *ctx, struct job *job,
                    event_completion_f cb, void *arg, const char *name,
                    const char *fmt, ...)
 {
@@ -269,7 +269,7 @@ int event_log_fmt (struct event_ctx *ctx, flux_jobid_t id,
         errno = EINVAL;
         return -1;
     }
-    return event_log (ctx, id, cb, arg, name, context);
+    return event_log (ctx, job, cb, arg, name, context);
 }
 
 /* N.B. any in-flight batches are destroyed here.

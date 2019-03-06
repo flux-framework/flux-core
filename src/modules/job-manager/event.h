@@ -24,18 +24,18 @@ typedef void (*event_completion_f)(flux_future_t *f, void *arg);
  */
 int event_job_update (struct job *job, const char *event);
 
-/* Log event (name, context) to jobs.active.<id>.eventlog.
+/* Log event (name, context) to jobs.active.<jobid>.eventlog.
  * Once event is committed, cb(f, arg) is invoked if cb != NULL.
  * The callback may call flux_future_get() to determine if the commit
  * succeeded.
  */
-int event_log (struct event_ctx *ctx, flux_jobid_t id,
+int event_log (struct event_ctx *ctx, struct job *job,
                event_completion_f cb, void *arg,
                const char *name, const char *context);
 
 /* Same as above except event context is constructed from (fmt, ...).
  */
-int event_log_fmt (struct event_ctx *ctx, flux_jobid_t id,
+int event_log_fmt (struct event_ctx *ctx, struct job *job,
                    event_completion_f cb, void *arg,
                    const char *name, const char *fmt, ...);
 

@@ -212,7 +212,7 @@ void raise_eventlog_cb (flux_future_t *f, void *arg)
 
 void raise_eventlog (struct raise_ctx *c)
 {
-    if (event_log_fmt (c->event_ctx, c->job->id, raise_eventlog_cb, c,
+    if (event_log_fmt (c->event_ctx, c->job, raise_eventlog_cb, c,
                        "exception", "type=%s severity=%d userid=%lu%s%s",
                        c->type,
                        c->severity,

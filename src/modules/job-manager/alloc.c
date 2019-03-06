@@ -179,7 +179,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     job->free_pending = 0;
     job->has_resources = 0;
-    if (event_log (ctx->event_ctx, job->id, event_cb, ctx, "free", NULL) < 0)
+    if (event_log (ctx->event_ctx, job, event_cb, ctx, "free", NULL) < 0)
         goto teardown;
     return;
 teardown:
@@ -200,7 +200,7 @@ int free_request (struct alloc_ctx *ctx, struct job *job)
     if (flux_send (ctx->h, msg, 0) < 0)
         goto error;
     if ((job->flags & FLUX_JOB_DEBUG))
-        (void)event_log (ctx->event_ctx, job->id, NULL, NULL,
+        (void)event_log (ctx->event_ctx, job, NULL, NULL,
                          "debug.free-request", NULL);
     job->free_pending = 1;
 
@@ -261,7 +261,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
      * Raise alloc exception and transition to CLEANUP state.
      */
     if (type == 2) { // error: alloc was rejected
-        if (event_log_fmt (ctx->event_ctx, job->id, event_cb, ctx,
+        if (event_log_fmt (ctx->event_ctx, job, event_cb, ctx,
                            "exception", "type=%s severity=%d userid=%u%s%s",
                            "alloc", 0, FLUX_USERID_UNKNOWN,
                            note ? " " : "",
@@ -284,7 +284,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     job->has_resources = 1;
 
-    if (event_log (ctx->event_ctx, job->id, event_cb, ctx, "alloc", note) < 0)
+    if (event_log (ctx->event_ctx, job, event_cb, ctx, "alloc", note) < 0)
         goto teardown;
     if (job->state == FLUX_JOB_SCHED)
         job->state = FLUX_JOB_RUN;
@@ -315,7 +315,7 @@ int alloc_request (struct alloc_ctx *ctx, struct job *job)
     if (flux_send (ctx->h, msg, 0) < 0)
         goto error;
     if ((job->flags & FLUX_JOB_DEBUG))
-        (void)event_log (ctx->event_ctx, job->id, NULL, NULL,
+        (void)event_log (ctx->event_ctx, job, NULL, NULL,
                          "debug.alloc-request", NULL);
     job->alloc_pending = 1;
     queue_delete (ctx->inqueue, job, job->aux_queue_handle);

@@ -151,7 +151,7 @@ void priority_handle_request (flux_t *h, struct queue *queue,
      */
     if (!(p = priority_create (queue, event_ctx, job, msg, priority)))
         goto error;
-    if (event_log_fmt (p->event_ctx, job->id, priority_continuation, p,
+    if (event_log_fmt (p->event_ctx, job, priority_continuation, p,
                        "priority", "userid=%lu priority=%d",
                        (unsigned long)userid, priority) < 0)
         goto error;
