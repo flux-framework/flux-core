@@ -40,6 +40,7 @@ int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
+int cmd_eventlog (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -96,6 +97,16 @@ static struct optparse_option id_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option eventlog_opts[] =  {
+    { .name = "watch", .key = 'w', .has_arg = 0,
+      .usage = "Monitor eventlog",
+    },
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
+      .usage = "Display at most COUNT events",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -138,6 +149,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_id,
       0,
       id_opts
+    },
+    { "eventlog",
+      "[-w] [-c COUNT] id",
+      "Display eventlog for a job",
+      cmd_eventlog,
+      0,
+      eventlog_opts
     },
     OPTPARSE_SUBCMD_END
 };
@@ -601,6 +619,112 @@ int cmd_id (optparse_t *p, int argc, char **argv)
         }
     }
     return 0;
+}
+
+struct eventlog_ctx {
+    optparse_t *p;
+    int maxcount;
+    int count;
+};
+
+/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
+ * with microsecond precision
+ */
+static int eventlog_timestr (double timestamp, char *buf, size_t size)
+{
+    time_t sec = timestamp;
+    unsigned long usec = (timestamp - sec)*1E6;
+    struct tm tm;
+
+    if (!gmtime_r (&sec, &tm))
+        return -1;
+    if (strftime (buf, size, "%FT%T", &tm) == 0)
+        return -1;
+    size -= strlen (buf);
+    buf += strlen (buf);
+    if (snprintf (buf, size, ".%.6luZ", usec) >= size)
+        return -1;
+    return 0;
+}
+
+void eventlog_continuation (flux_future_t *f, void *arg)
+{
+    struct eventlog_ctx *ctx = arg;
+    double timestamp;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+    char buf[64];
+    const char *event;
+
+    if (flux_job_eventlog_lookup_get (f, &event) < 0) {
+        if (errno == ENODATA) {
+            flux_future_destroy (f);
+            return;
+        }
+        log_err_exit ("flux_job_eventlog_lookup_get");
+    }
+
+    if (flux_kvs_event_decode (event, &timestamp, name, sizeof (name),
+                               context, sizeof (context)) < 0)
+        log_err_exit ("flux_kvs_event_decode");
+
+    if (eventlog_timestr (timestamp, buf, sizeof (buf)) < 0)
+        log_msg_exit ("error converting timestamp to ISO 8601");
+
+    printf ("%s %s%s%s\n", buf, name, *context ? " " : "", context);
+    fflush (stdout);
+
+    /* re-arm future for next event in stream */
+    flux_future_reset (f);
+
+    /* If --count limit has been reached, send a cancel request.
+     * The resulting ENODATA error response is handled above.
+     */
+    if (optparse_hasopt (ctx->p, "watch")) {
+        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount) {
+            if (flux_job_eventlog_lookup_cancel (f) < 0)
+                log_err_exit ("flux_kvs_lookup_cancel");
+        }
+    }
+}
+
+int cmd_eventlog (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_jobid_t id;
+    flux_future_t *f;
+    char *endptr;
+    int flags = 0;
+    struct eventlog_ctx ctx = {0};
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (argc - optindex != 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    id = strtoull (argv[optindex++], &endptr, 10);
+    if (*endptr != '\0')
+        log_err_exit ("id requires an unsigned integer argument");
+
+    ctx.p = p;
+
+    if (optparse_hasopt (p, "watch")) {
+        flags |= FLUX_JOB_EVENTLOG_WATCH;
+        ctx.maxcount = optparse_get_int (p, "count", 0);
+    }
+
+    if (!(f = flux_job_eventlog_lookup (h, flags, id)))
+        log_err_exit ("flux_job_eventlog_lookup");
+    if (flux_future_then (f, -1., eventlog_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_close (h);
+    return (0);
 }
 
 /*
