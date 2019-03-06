@@ -132,6 +132,7 @@ static void interface_teardown (struct alloc_ctx *ctx, char *s, int errnum)
                                                 &job->aux_queue_handle) < 0)
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
+                job->alloc_queued = 1;
             }
             /* jobs with free pending (much smaller window for this to be true)
              * need to be picked up again after 'hello'.
@@ -283,10 +284,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     if (job->state == FLUX_JOB_SCHED)
         job->state = FLUX_JOB_RUN;
-    else { /* state == FLUX_JOB_CLEANUP */
-        if (alloc_do_request (ctx, job) < 0)
-            goto teardown;
-    }
+    if (event_job_action (ctx->event_ctx, job) < 0)
+        goto teardown;
     return;
 teardown:
     interface_teardown (ctx, "alloc response error", errno);
@@ -347,14 +346,12 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_respond_pack (h, msg, "{s:O}", "alloc", o) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     /* Restart any free requests that might have been interrupted
-     * when scheduler was lsat unloaded.
+     * when scheduler was last unloaded.
      */
     job = queue_first (ctx->queue);
     while (job) {
-        if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
-            if (alloc_do_request (ctx, job) < 0)
-                flux_log_error (h, "%s: alloc_do_request", __FUNCTION__);
-        }
+        if (event_job_action (ctx->event_ctx, job) < 0)
+            flux_log_error (h, "%s: event_job_action", __FUNCTION__);
         job = queue_next (ctx->queue);
     }
     json_decref (o);
@@ -471,19 +468,6 @@ int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job)
         if (queue_insert (ctx->inqueue, job, &job->aux_queue_handle) < 0)
             return -1;
         job->alloc_queued = 1;
-    }
-    return 0;
-}
-
-int alloc_do_request (struct alloc_ctx *ctx, struct job *job)
-{
-    if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
-        if (alloc_send_free_request (ctx, job) < 0)
-            return -1;
-    }
-    else if (job->state == FLUX_JOB_SCHED) {
-        if (alloc_enqueue_alloc_request (ctx, job) < 0)
-            return -1;
     }
     return 0;
 }

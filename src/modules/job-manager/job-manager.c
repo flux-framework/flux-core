@@ -36,7 +36,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    submit_handle_request (h, ctx->queue, ctx->alloc_ctx, msg);
+    submit_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
 static void list_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -50,7 +50,7 @@ static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager_ctx *ctx = arg;
-    raise_handle_request (h, ctx->queue, ctx->event_ctx, ctx->alloc_ctx, msg);
+    raise_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
 static void priority_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -93,7 +93,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
-    if (restart_from_kvs (h, ctx.queue, ctx.alloc_ctx) < 0) {
+    if (restart_from_kvs (h, ctx.queue, ctx.event_ctx) < 0) {
         flux_log_error (h, "restart_from_kvs");
         goto done;
     }

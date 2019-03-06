@@ -55,6 +55,7 @@ test_ldadd = \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/util.o \
+        $(top_builddir)/src/modules/job-manager/alloc.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -89,7 +90,6 @@ test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
-        $(top_builddir)/src/modules/job-manager/alloc.o \
         $(test_ldadd)
 
 test_util_t_SOURCES = test/util.c
@@ -103,5 +103,4 @@ test_restart_t_SOURCES = test/restart.c
 test_restart_t_CPPFLAGS = $(test_cppflags)
 test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
-        $(top_builddir)/src/modules/job-manager/alloc.o \
         $(test_ldadd)

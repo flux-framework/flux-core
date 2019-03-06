@@ -16,17 +16,18 @@
 #include <stdlib.h>
 #include <argz.h>
 #include <envz.h>
+#include <flux/core.h>
 
-#include "src/common/libjob/job.h"
 #include "src/common/libutil/fluid.h"
 
 #include "job.h"
 #include "restart.h"
 #include "util.h"
+#include "event.h"
 
 struct restart_ctx {
     struct queue *queue;
-    struct alloc_ctx *alloc_ctx;
+    struct event_ctx *event_ctx;
     flux_t *h;
 };
 
@@ -134,13 +135,9 @@ static int restart_map_cb (struct job *job, void *arg)
 
     if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
         return -1;
-    if (job->state == FLUX_JOB_NEW)
-        job->state = FLUX_JOB_SCHED;
-    if (job->state == FLUX_JOB_SCHED) {
-        if (alloc_do_request (ctx->alloc_ctx, job) < 0) {
-            flux_log_error (ctx->h, "%s: error notifying scheduler of job %llu",
-                __FUNCTION__, (unsigned long long)job->id);
-        }
+    if (event_job_action (ctx->event_ctx, job) < 0) {
+        flux_log_error (ctx->h, "%s: event_job_action id=%llu",
+                        __FUNCTION__, (unsigned long long)job->id);
     }
     return 0;
 }
@@ -148,7 +145,7 @@ static int restart_map_cb (struct job *job, void *arg)
 /* Load any active jobs present in the KVS at startup.
  */
 int restart_from_kvs (flux_t *h, struct queue *queue,
-                      struct alloc_ctx *alloc_ctx)
+                      struct event_ctx *event_ctx)
 {
     const char *dirname = "job.active";
     int dirskip = strlen (dirname);
@@ -157,7 +154,7 @@ int restart_from_kvs (flux_t *h, struct queue *queue,
 
     ctx.h = h;
     ctx.queue = queue;
-    ctx.alloc_ctx = alloc_ctx;
+    ctx.event_ctx = event_ctx;
 
     count = depthfirst_map (h, dirname, dirskip, restart_map_cb, &ctx);
     if (count < 0)

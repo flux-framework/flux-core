@@ -82,7 +82,7 @@ error:
  */
 void submit_handle_request (flux_t *h,
                             struct queue *queue,
-                            struct alloc_ctx *alloc_ctx,
+                            struct event_ctx *event_ctx,
                             const flux_msg_t *msg)
 {
     json_t *jobs;
@@ -105,9 +105,13 @@ void submit_handle_request (flux_t *h,
      * Now walk the list of new jobs and advance their state.
      */
     while ((job = zlist_pop (newjobs))) {
-        job->state = FLUX_JOB_SCHED;
-        if (alloc_do_request (alloc_ctx, job) < 0)
-            flux_log_error (h, "%s: error notifying scheduler of new job %llu",
+        char event[64];
+        (void)snprintf (event, sizeof (event), "%.6f submit\n", job->t_submit);
+        if (event_job_update (job, event) < 0)
+            flux_log_error (h, "%s: event_job_update id=%llu",
+                            __FUNCTION__, (unsigned long long)job->id);
+        if (event_job_action (event_ctx, job) < 0)
+            flux_log_error (h, "%s: event_job_action id=%llu",
                             __FUNCTION__, (unsigned long long)job->id);
         job_decref (job);
     }

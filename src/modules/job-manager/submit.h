@@ -18,7 +18,7 @@
 
 void submit_handle_request (flux_t *h,
                             struct queue *queue,
-                            struct alloc_ctx *alloc_ctx,
+                            struct event_ctx *event_ctx,
                             const flux_msg_t *msg);
 
 
