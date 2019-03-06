@@ -13,7 +13,7 @@ AM_CPPFLAGS = \
 	$(LIBSODIUM_CFLAGS)
 
 noinst_LTLIBRARIES = libjob.la
-fluxcoreinclude_HEADERS = job.h
+fluxcoreinclude_HEADERS = job.h job_types.h
 
 libjob_la_SOURCES = \
 	job.c \

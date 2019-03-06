@@ -15,6 +15,8 @@
 #include <stdint.h>
 #include <flux/core.h>
 
+#include "job_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,8 +40,6 @@ typedef enum {
     FLUX_JOB_CLEANUP                = 16,
     FLUX_JOB_INACTIVE               = 32,   // captive end state
 } flux_job_state_t;
-
-typedef uint64_t flux_jobid_t;
 
 /* Submit a job to the system.
  * 'jobspec' should be RFC 14 jobspec.
