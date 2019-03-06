@@ -21,6 +21,7 @@
 
 #include "job.h"
 #include "sign_none.h"
+#include "src/common/libutil/fluid.h"
 
 #if HAVE_FLUX_SECURITY
 /* If a textual error message is available in flux-security,
@@ -203,6 +204,29 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
                              "priority", priority)))
         return NULL;
     return f;
+}
+
+int flux_job_kvs_key (char *buf, int bufsz, bool active,
+                      flux_jobid_t id, const char *key)
+{
+    char idstr[32];
+    int len;
+
+    if (!buf || !bufsz) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
+        return -1;
+    len = snprintf (buf, bufsz, "job.%s.%s%s%s",
+                    active ? "active" : "inactive",
+                    idstr,
+                    key ? "." : "",
+                    key ? key : "");
+    if (len >= bufsz)
+        return -1;
+    return len;
 }
 
 /*

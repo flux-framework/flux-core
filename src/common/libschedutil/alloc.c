@@ -14,7 +14,6 @@
 #include <flux/core.h>
 
 #include "alloc.h"
-#include "jobkey.h"
 
 int schedutil_alloc_request_decode (const flux_msg_t *msg,
                                     flux_jobid_t *id,
@@ -88,7 +87,7 @@ static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         return NULL;
-    if (schedutil_jobkey (key, sizeof (key), true, id, "R") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), true, id, "R") < 0) {
         errno = EINVAL;
         return NULL;
     }

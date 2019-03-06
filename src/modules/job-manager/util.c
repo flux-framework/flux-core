@@ -117,30 +117,12 @@ const char *util_note_from_context (const char *context)
     return context;
 }
 
-int util_jobkey (char *buf, int bufsz, bool active,
-                 flux_jobid_t id, const char *key)
-{
-    char idstr[32];
-    int len;
-
-    if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
-        return -1;
-    len = snprintf (buf, bufsz, "job.%s.%s%s%s",
-                    active ? "active" : "inactive",
-                    idstr,
-                    key ? "." : "",
-                    key ? key : "");
-    if (len >= bufsz)
-        return -1;
-    return len;
-}
-
 flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,
                                  int flags, const char *key)
 {
     char path[64];
 
-    if (util_jobkey (path, sizeof (path), active, id, key) < 0) {
+    if (flux_job_kvs_key (path, sizeof (path), active, id, key) < 0) {
         errno = EINVAL;
         return NULL;
     }

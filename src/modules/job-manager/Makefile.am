@@ -94,7 +94,7 @@ test_util_t_SOURCES = test/util.c
 test_util_t_CPPFLAGS = $(test_cppflags)
 # Test uses unexported KVS functions
 test_util_t_LDADD = \
-        $(top_builddir)/src/common/libkvs/libkvs.la \
+	$(top_builddir)/src/common/libkvs/libkvs.la \
         $(test_ldadd)
 
 test_restart_t_SOURCES = test/restart.c

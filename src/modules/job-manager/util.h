@@ -29,13 +29,6 @@ int util_str_from_context (const char *context, const char *key,
  */
 const char *util_note_from_context (const char *context);
 
-/* Write KVS path to 'key' relative to active job directory for job 'id'.
- * If key=NULL, write the job directory.
- * Returns string length on success, or -1 on failure.
- */
-int util_jobkey (char *buf, int bufsz, bool active,
-                 flux_jobid_t id, const char *key);
-
 /* Look up 'key' relative to active/inactive job directory for job 'id'.
  */
 flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,

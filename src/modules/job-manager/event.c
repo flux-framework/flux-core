@@ -178,7 +178,7 @@ int event_log (struct event_ctx *ctx, flux_jobid_t id,
     char *event = NULL;
     int saved_errno;
 
-    if (util_jobkey (key, sizeof (key), true, id, "eventlog") < 0)
+    if (flux_job_kvs_key (key, sizeof (key), true, id, "eventlog") < 0)
         return -1;
     if (!(event = flux_kvs_event_encode (name, context)))
         return -1;
