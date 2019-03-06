@@ -199,11 +199,6 @@ int free_request (struct alloc_ctx *ctx, struct job *job)
         goto error;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto error;
-    if ((job->flags & FLUX_JOB_DEBUG))
-        (void)event_log (ctx->event_ctx, job, NULL, NULL,
-                         "debug.free-request", NULL);
-    job->free_pending = 1;
-
     flux_msg_destroy (msg);
     return 0;
 error:
@@ -289,7 +284,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     if (job->state == FLUX_JOB_SCHED)
         job->state = FLUX_JOB_RUN;
     else { /* state == FLUX_JOB_CLEANUP */
-        if (free_request (ctx, job) < 0)
+        if (alloc_do_request (ctx, job) < 0)
             goto teardown;
     }
     return;
@@ -314,14 +309,6 @@ int alloc_request (struct alloc_ctx *ctx, struct job *job)
         goto error;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto error;
-    if ((job->flags & FLUX_JOB_DEBUG))
-        (void)event_log (ctx->event_ctx, job, NULL, NULL,
-                         "debug.alloc-request", NULL);
-    job->alloc_pending = 1;
-    queue_delete (ctx->inqueue, job, job->aux_queue_handle);
-    job->aux_queue_handle = NULL;
-    ctx->active_alloc_count++;
-
     flux_msg_destroy (msg);
     return 0;
 error:
@@ -365,9 +352,8 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     job = queue_first (ctx->queue);
     while (job) {
         if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
-            /* FIXME: check if exec is all done with resources first */
-            if (free_request (ctx, job) < 0)
-                flux_log_error (h, "%s: scheduler_free", __FUNCTION__);
+            if (alloc_do_request (ctx, job) < 0)
+                flux_log_error (h, "%s: alloc_do_request", __FUNCTION__);
         }
         job = queue_next (ctx->queue);
     }
@@ -451,21 +437,52 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
             return;
         }
+        queue_delete (ctx->inqueue, job, job->aux_queue_handle);
+        job->aux_queue_handle = NULL;
+        job->alloc_pending = 1;
+        job->alloc_queued = 0;
+        ctx->active_alloc_count++;
+        if ((job->flags & FLUX_JOB_DEBUG))
+            (void)event_log (ctx->event_ctx, job, NULL, NULL,
+                             "debug.alloc-request", NULL);
+
     }
+}
+
+int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job)
+{
+    assert (job->state == FLUX_JOB_CLEANUP);
+    if (!job->free_pending) {
+        if (free_request (ctx, job) < 0)
+            return -1;
+        job->free_pending = 1;
+        if ((job->flags & FLUX_JOB_DEBUG))
+            (void)event_log (ctx->event_ctx, job, NULL, NULL,
+                         "debug.free-request", NULL);
+    }
+    return 0;
+}
+
+int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job)
+{
+    assert (job->state == FLUX_JOB_SCHED);
+    if (!job->alloc_queued && !job->alloc_pending) {
+        assert (job->aux_queue_handle == NULL);
+        if (queue_insert (ctx->inqueue, job, &job->aux_queue_handle) < 0)
+            return -1;
+        job->alloc_queued = 1;
+    }
+    return 0;
 }
 
 int alloc_do_request (struct alloc_ctx *ctx, struct job *job)
 {
-    if (job->state == FLUX_JOB_CLEANUP && job->has_resources
-                                       && !job->free_pending) {
-        /* FIXME: check if exec is all done with resources first */
-        if (free_request (ctx, job) < 0)
+    if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
+        if (alloc_send_free_request (ctx, job) < 0)
             return -1;
     }
-    else if (job->state == FLUX_JOB_SCHED && !job->has_resources
-                                          && !job->alloc_pending) {
-        assert (job->aux_queue_handle == NULL);
-        if (queue_insert (ctx->inqueue, job, &job->aux_queue_handle) < 0)
+    else if (job->state == FLUX_JOB_SCHED) {
+        if (alloc_enqueue_alloc_request (ctx, job) < 0)
             return -1;
     }
     return 0;

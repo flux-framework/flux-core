@@ -18,10 +18,14 @@
 #include "event.h"
 
 struct alloc_ctx;
+struct event_ctx;
 
 void alloc_ctx_destroy (struct alloc_ctx *ctx);
 struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
                                     struct event_ctx *event_ctx);
+
+int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job);
+int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job);
 
 /* Call this from other parts of the job manager when the alloc
  * machinery might need to take action on 'job'.  The action taken
