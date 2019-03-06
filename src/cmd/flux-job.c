@@ -40,6 +40,8 @@ int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
+int cmd_eventlog (optparse_t *p, int argc, char **argv);
+int cmd_wait_event (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -96,6 +98,19 @@ static struct optparse_option id_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option wait_event_opts[] =  {
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "SECONDS",
+      .usage = "Timeout in seconds to give up waiting",
+    },
+    { .name = "quiet", .key = 'q', .has_arg = 0,
+      .usage = "Do not output matched event",
+    },
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Output all events before matched event",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -138,6 +153,20 @@ static struct optparse_subcommand subcommands[] = {
       cmd_id,
       0,
       id_opts
+    },
+    { "eventlog",
+      "id",
+      "Display eventlog for a job",
+      cmd_eventlog,
+      0,
+      NULL
+    },
+    { "wait-event",
+      "[-t seconds] id event",
+      "Wait for an event ",
+      cmd_wait_event,
+      0,
+      wait_event_opts
     },
     OPTPARSE_SUBCMD_END
 };
@@ -601,6 +630,170 @@ int cmd_id (optparse_t *p, int argc, char **argv)
         }
     }
     return 0;
+}
+
+struct eventlog_ctx {
+    struct flux_kvs_eventlog *log;
+    optparse_t *p;
+    flux_jobid_t id;
+};
+
+void output_event (const char *event)
+{
+    double timestamp;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+
+    if (flux_kvs_event_decode (event, &timestamp, name, sizeof (name),
+                               context, sizeof (context)) < 0)
+        log_err_exit ("flux_kvs_event_decode");
+
+    printf ("%lf %s%s%s\n", timestamp, name, *context ? " " : "", context);
+}
+
+void eventlog_continuation (flux_future_t *f, void *arg)
+{
+    struct eventlog_ctx *ctx = arg;
+    const char *s;
+    const char *event;
+
+    if (flux_job_eventlog_lookup_get (f, &s) < 0) {
+        if (errno == ENOENT) {
+            flux_future_destroy (f);
+            log_msg_exit ("job %lu not found", ctx->id);
+        }
+        else
+            log_err_exit ("flux_job_eventlog_lookup_get");
+    }
+
+    if (flux_kvs_eventlog_append (ctx->log, s) < 0)
+        log_err_exit ("flux_kvs_eventlog_append");
+
+    while ((event = flux_kvs_eventlog_next (ctx->log)))
+        output_event (event);
+    fflush (stdout);
+    flux_future_destroy (f);
+}
+
+int cmd_eventlog (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    struct eventlog_ctx ctx = {0};
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (argc - optindex != 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+
+    if (!(ctx.log = flux_kvs_eventlog_create()))
+        log_err_exit ("flux_kvs_eventlog_create");
+    ctx.p = p;
+
+    if (!(f = flux_job_eventlog_lookup (h, ctx.id)))
+        log_err_exit ("flux_job_eventlog_lookup");
+    if (flux_future_then (f, -1., eventlog_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_kvs_eventlog_destroy (ctx.log);
+    flux_close (h);
+    return (0);
+}
+
+struct wait_event_ctx {
+    optparse_t *p;
+    const char *wait_event;
+    double timeout;
+    flux_jobid_t id;
+    bool got_event;
+};
+
+void wait_event_continuation (flux_future_t *f, void *arg)
+{
+    struct wait_event_ctx *ctx = arg;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    const char *event;
+
+    if (flux_rpc_get (f, NULL) < 0) {
+        if (errno == ENOENT) {
+            flux_future_destroy (f);
+            log_msg_exit ("job %lu not found", ctx->id);
+        }
+        else if (errno == ETIMEDOUT) {
+            flux_future_destroy (f);
+            log_msg_exit ("wait-event timeout on event '%s'\n",
+                          ctx->wait_event);
+        } else if (errno == ENODATA) {
+            flux_future_destroy (f);
+            if (!ctx->got_event)
+                log_msg_exit ("event '%s' never received",
+                              ctx->wait_event);
+            return;
+        }
+        /* else fallthrough and have `flux_job_event_watch_get'
+         * handle error */
+    }
+
+    if (flux_job_event_watch_get (f, &event) < 0)
+        log_err_exit ("flux_job_event_watch_get");
+
+    if (flux_kvs_event_decode (event, NULL, name, sizeof (name), NULL, 0) < 0)
+        log_err_exit ("flux_kvs_event_decode");
+
+    if (!strcmp (name, ctx->wait_event)) {
+        ctx->got_event = true;
+        if (!optparse_hasopt (ctx->p, "quiet"))
+            output_event (event);
+        if (flux_job_event_watch_cancel (f) < 0)
+            log_err_exit ("flux_job_event_watch_cancel");
+    } else if (optparse_hasopt (ctx->p, "verbose")) {
+        if (!ctx->got_event)
+            output_event (event);
+    }
+
+    flux_future_reset (f);
+
+    /* re-call to set timeout */
+    if (flux_future_then (f, ctx->timeout, wait_event_continuation, arg) < 0)
+        log_err_exit ("flux_future_then");
+}
+
+int cmd_wait_event (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    struct wait_event_ctx ctx = {0};
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (argc - optindex != 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.p = p;
+    ctx.wait_event = argv[optindex++];
+    ctx.timeout = optparse_get_double (p, "timeout", -1.0);
+
+    if (!(f = flux_job_event_watch (h, ctx.id)))
+        log_err_exit ("flux_job_event_watch");
+    if (flux_future_then (f, ctx.timeout, wait_event_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_close (h);
+    return (0);
 }
 
 /*
