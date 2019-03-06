@@ -18,6 +18,7 @@
 
 #include "util.h"
 #include "event.h"
+#include "src/common/libjob/job_util_private.h"
 
 const double batch_timeout = 0.01;
 
@@ -178,7 +179,7 @@ int event_log (struct event_ctx *ctx, flux_jobid_t id,
     char *event = NULL;
     int saved_errno;
 
-    if (util_jobkey (key, sizeof (key), true, id, "eventlog") < 0)
+    if (job_util_jobkey (key, sizeof (key), true, id, "eventlog") < 0)
         return -1;
     if (!(event = flux_kvs_event_encode (name, context)))
         return -1;

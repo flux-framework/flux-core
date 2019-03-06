@@ -17,11 +17,14 @@ fluxcoreinclude_HEADERS = job.h job_types.h
 
 libjob_la_SOURCES = \
 	job.c \
+	job_util.c \
+	job_util_private.h \
 	sign_none.c \
 	sign_none.h
 
 TESTS = \
 	test_job.t \
+	test_job_util.t \
 	test_sign_none.t
 
 check_PROGRAMS = \
@@ -46,6 +49,10 @@ test_cppflags = \
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
 test_job_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_job_util_t_SOURCES = test/job_util.c
+test_job_util_t_CPPFLAGS = $(test_cppflags)
+test_job_util_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_sign_none_t_SOURCES = test/sign_none.c
 test_sign_none_t_CPPFLAGS = $(test_cppflags)

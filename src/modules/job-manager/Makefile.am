@@ -35,6 +35,7 @@ job_manager_la_SOURCES = job-manager.c \
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = $(fluxmod_libadd) \
+		    $(top_builddir)/src/common/libjob/libjob.la \
 		    $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la \
 		    $(top_builddir)/src/common/libflux-optparse.la \
@@ -53,6 +54,7 @@ test_ldadd = \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/util.o \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -94,7 +96,7 @@ test_util_t_SOURCES = test/util.c
 test_util_t_CPPFLAGS = $(test_cppflags)
 # Test uses unexported KVS functions
 test_util_t_LDADD = \
-        $(top_builddir)/src/common/libkvs/libkvs.la \
+	$(top_builddir)/src/common/libkvs/libkvs.la \
         $(test_ldadd)
 
 test_restart_t_SOURCES = test/restart.c
