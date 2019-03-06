@@ -55,4 +55,9 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --watch returns append 
 	wait $pid &&
 	test_cmp get_d.exp get_d.out
 '
+
+test_expect_success 'eventlog proxy stats works' '
+        flux module stats eventlog-proxy | grep "lookups"
+'
+
 test_done
