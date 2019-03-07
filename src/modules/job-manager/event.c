@@ -47,6 +47,7 @@ struct event_batch *event_batch_create (struct event_ctx *ctx);
 void event_batch_destroy (struct event_batch *batch);
 
 /* Batch commit has completed.
+ * If there was a commit error, log it and stop the reactor.
  * Destroy 'batch', which notifies any registered callbacks.
  */
 void commit_continuation (flux_future_t *f, void *arg)
@@ -54,6 +55,10 @@ void commit_continuation (flux_future_t *f, void *arg)
     struct event_batch *batch = arg;
     struct event_ctx *ctx = batch->ctx;
 
+    if (flux_future_get (batch->f, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: event_log failed", __FUNCTION__);
+        flux_reactor_stop_error (flux_get_reactor (ctx->h));
+    }
     zlist_remove (ctx->pending, batch);
     event_batch_destroy (batch);
 }

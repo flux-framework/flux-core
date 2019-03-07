@@ -31,9 +31,9 @@ int event_job_action (struct event_ctx *ctx, struct job *job);
 int event_job_update (struct job *job, const char *event);
 
 /* Log event (name, context) to jobs.active.<jobid>.eventlog.
- * Once event is committed, cb(f, arg) is invoked if cb != NULL.
- * The callback may call flux_future_get() to determine if the commit
- * succeeded.
+ * Commit is delayed briefly and possibly batched with others.
+ * Upon completion, 'cb' is called with 'arg', if cb != NULL.
+ * On failure, the error is logged and reactor is stopped.
  */
 int event_log (struct event_ctx *ctx, struct job *job,
                event_completion_f cb, void *arg,

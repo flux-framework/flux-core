@@ -72,7 +72,6 @@
  *
  * TODO:
  * - handle type=1 annotation for queue listing (currently ignored)
- * - handle type=2 alloc failure, which should raise exception for job
  * - implement flow control (credit based?) interface mode
  * - handle post alloc request job priority change
  */
@@ -145,15 +144,6 @@ static void interface_teardown (struct alloc_ctx *ctx, char *s, int errnum)
     }
 }
 
-static void event_cb (flux_future_t *f, void *arg)
-{
-    struct alloc_ctx *ctx = arg;
-
-    if (flux_future_get (f, NULL) < 0)
-        flux_log_error (ctx->h, "alloc eventlog commit");
-}
-
-
 /* Handle a sched.free response.
  */
 static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -180,7 +170,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     job->free_pending = 0;
     job->has_resources = 0;
-    if (event_log (ctx->event_ctx, job, event_cb, ctx, "free", NULL) < 0)
+    if (event_log (ctx->event_ctx, job, NULL, NULL, "free", NULL) < 0)
         goto teardown;
     return;
 teardown:
@@ -257,7 +247,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
      * Raise alloc exception and transition to CLEANUP state.
      */
     if (type == 2) { // error: alloc was rejected
-        if (event_log_fmt (ctx->event_ctx, job, event_cb, ctx,
+        if (event_log_fmt (ctx->event_ctx, job, NULL, NULL,
                            "exception", "type=%s severity=%d userid=%u%s%s",
                            "alloc", 0, FLUX_USERID_UNKNOWN,
                            note ? " " : "",
@@ -280,7 +270,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     job->has_resources = 1;
 
-    if (event_log (ctx->event_ctx, job, event_cb, ctx, "alloc", note) < 0)
+    if (event_log (ctx->event_ctx, job, NULL, NULL, "alloc", note) < 0)
         goto teardown;
     if (job->state == FLUX_JOB_SCHED)
         job->state = FLUX_JOB_RUN;
