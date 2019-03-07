@@ -109,20 +109,13 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPROTO;
         goto error;
     }
-    if (event_log_fmt (event_ctx, job, NULL, NULL,
-                       "exception", "type=%s severity=%d userid=%lu%s%s",
-                       type,
-                       severity,
-                       (unsigned long)userid,
-                       note ? " " : "",
-                       note ? note : "") < 0)
-        goto error;
-    char event[64];
-    (void)snprintf (event, sizeof (event),
-                    "%.6f exception severity=%d\n", 1., severity);
-    if (event_job_update (job, event) < 0)
-        goto error;
-    if (event_job_action (event_ctx, job) < 0)
+    if (event_job_post_fmt (event_ctx, job, NULL, NULL,
+                            "exception", "type=%s severity=%d userid=%lu%s%s",
+                            type,
+                            severity,
+                            (unsigned long)userid,
+                            note ? " " : "",
+                            note ? note : "") < 0)
         goto error;
     if (!(f = flux_event_publish_pack (h, "job-exception",
                                        FLUX_MSGFLAG_PRIVATE,

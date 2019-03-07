@@ -80,13 +80,12 @@ void priority_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
-    /* Log event, change job's queue position, and respond.
+    /* Post event, change job's queue position, and respond.
      */
-    if (event_log_fmt (event_ctx, job, NULL, NULL,
-                       "priority", "userid=%lu priority=%d",
-                       (unsigned long)userid, priority) < 0)
+    if (event_job_post_fmt (event_ctx, job, NULL, NULL,
+                            "priority", "userid=%lu priority=%d",
+                            (unsigned long)userid, priority) < 0)
         goto error;
-    job->priority = priority;
     queue_reorder (queue, job, job->queue_handle);
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);

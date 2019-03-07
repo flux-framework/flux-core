@@ -20,30 +20,33 @@
 struct event_ctx;
 struct alloc_ctx;
 
-typedef void (*event_completion_f)(flux_future_t *f, void *arg);
-
 /* Take any action for 'job' currently needed based on its internal state.
+ * Returns 0 on success, -1 on failure with errno set.
+ * This function is idempotent.
  */
 int event_job_action (struct event_ctx *ctx, struct job *job);
 
 /* Call to update 'job' internal state based on 'event'.
+ * Returns 0 on success, -1 on failure with errno set.
  */
 int event_job_update (struct job *job, const char *event);
 
-/* Log event (name, context) to jobs.active.<jobid>.eventlog.
- * Commit is delayed briefly and possibly batched with others.
- * Upon completion, 'cb' is called with 'arg', if cb != NULL.
- * On failure, the error is logged and reactor is stopped.
+/* Post event 'name' and optionally 'context' to 'job'.
+ * Internally, calls event_job_update(), then event_job_action(), then commits
+ * the event to job KVS eventlog.  The KVS commit completes asynchronously.
+ * If 'cb' is non-NULL, it is called with 'arg' upon commit completion.
+ * The future passed in as an argument should not be destroyed.
+ * Returns 0 on success, -1 on failure with errno set.
  */
-int event_log (struct event_ctx *ctx, struct job *job,
-               event_completion_f cb, void *arg,
-               const char *name, const char *context);
+int event_job_post (struct event_ctx *ctx, struct job *job,
+                    flux_continuation_f cb, void *arg,
+                    const char *name, const char *context);
 
 /* Same as above except event context is constructed from (fmt, ...).
  */
-int event_log_fmt (struct event_ctx *ctx, struct job *job,
-                   event_completion_f cb, void *arg,
-                   const char *name, const char *fmt, ...);
+int event_job_post_fmt (struct event_ctx *ctx, struct job *job,
+                        flux_continuation_f cb, void *arg,
+                        const char *name, const char *fmt, ...);
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
                               struct alloc_ctx *alloc_ctx);
