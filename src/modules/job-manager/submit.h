@@ -11,6 +11,8 @@
 #ifndef _FLUX_JOB_MANAGER_SUBMIT_H
 #define _FLUX_JOB_MANAGER_SUBMIT_H
 
+#include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "queue.h"
@@ -21,6 +23,11 @@ void submit_handle_request (flux_t *h,
                             struct event_ctx *event_ctx,
                             const flux_msg_t *msg);
 
+/* exposed for unit testing only */
+int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o);
+void submit_enqueue_jobs_cleanup (struct queue *queue, zlist_t *newjobs);
+zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs);
+int submit_post_event (struct event_ctx *event_ctx, struct job *job);
 
 #endif /* ! _FLUX_JOB_MANAGER_SUBMIT_H */
 
