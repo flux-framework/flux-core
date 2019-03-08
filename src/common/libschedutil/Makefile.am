@@ -25,6 +25,4 @@ libschedutil_la_SOURCES = \
 	alloc.h \
 	alloc.c \
 	free.h \
-	free.c \
-	jobkey.h \
-	jobkey.c
+	free.c
