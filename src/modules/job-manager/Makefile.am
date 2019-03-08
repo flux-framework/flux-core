@@ -48,7 +48,8 @@ TESTS = \
 	test_list.t \
 	test_raise.t \
 	test_util.t \
-	test_restart.t
+	test_restart.t \
+	test_submit.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/job-manager/event.o \
@@ -103,4 +104,10 @@ test_restart_t_SOURCES = test/restart.c
 test_restart_t_CPPFLAGS = $(test_cppflags)
 test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
+        $(test_ldadd)
+
+test_submit_t_SOURCES = test/submit.c
+test_submit_t_CPPFLAGS = $(test_cppflags)
+test_submit_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/submit.o \
         $(test_ldadd)
