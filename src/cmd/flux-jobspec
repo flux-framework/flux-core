@@ -89,6 +89,49 @@ def validate_slurm_args(args):
     # IDEA: print a warning if the file already exists or if the parent dir doesn't exist
 
 
+#  Convert floating point "time" in seconds to duration string with suffix
+#   's' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
+def sec_to_duration(time):
+    if time < 2 * 60.0:
+        return "%ss" % str(time)
+    elif time < 2 * 60 * 60:
+        return "%sm" % str(time / 60.0)
+    elif time < 60 * 60 * 24:
+        return "%sh" % str(time / (60 * 60))
+    else:
+        return "%sd" % str(time / (60 * 60 * 24))
+
+
+#  Convert slurm walltime string to Flux duration string
+def slurm_walltime_to_duration(time):
+    if not time:
+        return None
+    p1 = re.compile(
+        r"^((?P<days>\d+)-)?"
+        r"(?P<hours>\d+):"
+        r"(?P<minutes>\d+):"
+        r"(?P<seconds>\d+)$"
+    )
+    p2 = re.compile(r"^(?P<minutes>\d+)(:(?P<seconds>\d+))?$")
+
+    t = 0.0
+    m = p2.search(time) or p1.search(time)
+    if m is None:
+        return None
+    vals = {k: float(v) for k, v in m.groupdict().items() if v is not None}
+    if "days" in vals:
+        t = t + vals["days"] * 60 * 60 * 24
+    if "hours" in vals:
+        t = t + vals["hours"] * 60 * 60
+    if "minutes" in vals:
+        t = t + vals["minutes"] * 60
+    if "seconds" in vals:
+        t = t + vals["seconds"]
+    if t == 0.0:
+        return None
+    return sec_to_duration(t)
+
+
 def slurm_jobspec(args):
     if args.ntasks is None:
         args.ntasks = max(args.nodes, 1)
@@ -98,8 +141,9 @@ def slurm_jobspec(args):
     except ValueError as e:
         logger.error(e.message)
         sys.exit(1)
+    t = slurm_walltime_to_duration(args.time)
     return create_slurm_style_jobspec(
-        args.command, args.ntasks, args.cpus_per_task, args.nodes, args.time
+        args.command, args.ntasks, args.cpus_per_task, args.nodes, t
     )
 
 
