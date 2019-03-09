@@ -18,8 +18,10 @@
 struct job *job_create_test (flux_jobid_t id, int priority)
 {
     struct job *j;
-    if (!(j = job_create (id, priority, 1, 0, 2)))
+    if (!(j = job_create ()))
         BAIL_OUT ("job_create failed");
+    j->id = id;
+    j->priority = priority;
     return j;
 }
 

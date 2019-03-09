@@ -16,6 +16,8 @@ fluxmod_LTLIBRARIES = job-manager.la
 job_manager_la_SOURCES = job-manager.c \
 			 job.c \
 			 job.h \
+			 submit.c \
+			 submit.h \
 			 queue.c \
 			 queue.h \
 			 util.h \
@@ -46,13 +48,15 @@ TESTS = \
 	test_list.t \
 	test_raise.t \
 	test_util.t \
-	test_restart.t
+	test_restart.t \
+	test_submit.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/job-manager/event.o \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/util.o \
+        $(top_builddir)/src/modules/job-manager/alloc.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -87,7 +91,6 @@ test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
-        $(top_builddir)/src/modules/job-manager/alloc.o \
         $(test_ldadd)
 
 test_util_t_SOURCES = test/util.c
@@ -101,4 +104,10 @@ test_restart_t_SOURCES = test/restart.c
 test_restart_t_CPPFLAGS = $(test_cppflags)
 test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
+        $(test_ldadd)
+
+test_submit_t_SOURCES = test/submit.c
+test_submit_t_CPPFLAGS = $(test_cppflags)
+test_submit_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/submit.o \
         $(test_ldadd)

@@ -22,6 +22,7 @@ struct job {
     int flags;
     flux_job_state_t state;
 
+    uint8_t alloc_queued:1;
     uint8_t alloc_pending:1;
     uint8_t free_pending:1;
     uint8_t has_resources:1;
@@ -34,14 +35,8 @@ struct job {
 void job_decref (struct job *job);
 struct job *job_incref (struct job *job);
 
-struct job *job_create (flux_jobid_t id,
-                        int priority,
-                        uint32_t userid,
-                        double t_submit,
-                        int flags);
+struct job *job_create (void);
 
-/* (re-)create job by replaying its KVS eventlog.
- */
 struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */

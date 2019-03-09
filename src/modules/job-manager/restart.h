@@ -12,20 +12,17 @@
 #define _FLUX_JOB_MANAGER_RESTART_H
 
 #include <flux/core.h>
+
+#include "event.h"
 #include "job.h"
-
-/* restart_map callback should return -1 on error to stop map with error,
- * or 0 on success.  'job' is only valid for the duration of the callback.
- */
-typedef int (*restart_map_f)(struct job *job, void *arg);
-
-/* call 'cb' once for each job found in active job directory.
- * Returns number of jobs mapped, or -1 on error.
- */
-int restart_map (flux_t *h, restart_map_f cb, void *arg);
+#include "queue.h"
 
 /* exposed for unit testing only */
 int restart_count_char (const char *s, char c);
+
+int restart_from_kvs (flux_t *h,
+                      struct queue *queue,
+                      struct event_ctx *event_ctx);
 
 #endif /* _FLUX_JOB_MANAGER_RESTART_H */
 

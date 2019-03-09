@@ -11,7 +11,7 @@
 /* priority - adjust job priority
  *
  * Purpose:
- *   Support flux job set-priority command for adjusting job priority
+ *   Support flux job priority command for adjusting job priority
  *   after submission.  Guests can reduce their jobs' priority, or increase
  *   up to the default priority.
  *
@@ -33,72 +33,10 @@
 
 #include "job.h"
 #include "queue.h"
-#include "util.h"
 #include "event.h"
 #include "priority.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
-
-struct priority {
-    flux_msg_t *request;
-    struct job *job;
-    int priority;
-
-    struct queue *queue;
-    struct event_ctx *event_ctx;
-};
-
-static void priority_destroy (struct priority *p)
-{
-    if (p) {
-        int saved_errno = errno;
-        flux_msg_destroy (p->request);
-        free (p);
-        errno = saved_errno;
-    }
-}
-
-static struct priority *priority_create (struct queue *queue,
-                                         struct event_ctx *event_ctx,
-                                         struct job *job,
-                                         const flux_msg_t *request,
-                                         int priority)
-{
-    struct priority *p;
-
-    if (!(p = calloc (1, sizeof (*p))))
-        return NULL;
-    p->queue = queue;
-    p->event_ctx = event_ctx;
-    p->job = job;
-    p->priority = priority;
-    if (!(p->request = flux_msg_copy (request, false)))
-        goto error;
-    return p;
-error:
-    priority_destroy (p);
-    return NULL;
-}
-
-/* KVS update completed.  Remove job from queue and reinsert.
- */
-static void priority_continuation (flux_future_t *f, void *arg)
-{
-    flux_t *h = flux_future_get_flux (f);
-    struct priority *p = arg;
-
-    if (flux_rpc_get (f, NULL) < 0) {
-        if (flux_respond_error (h, p->request, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-        goto done;
-    }
-    p->job->priority = p->priority;
-    queue_reorder (p->queue, p->job, p->job->queue_handle);
-    if (flux_respond (h, p->request, 0, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-done:
-    priority_destroy (p);
-}
 
 void priority_handle_request (flux_t *h, struct queue *queue,
                               struct event_ctx *event_ctx,
@@ -108,7 +46,6 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     uint32_t rolemask;
     flux_jobid_t id;
     struct job *job;
-    struct priority *p = NULL;
     int priority;
     int rc;
     const char *errstr = NULL;
@@ -143,18 +80,15 @@ void priority_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
-    /* TODO: If job has requested resources/exec, don't allow adjustment.
+    /* Post event, change job's queue position, and respond.
      */
-    /* Log KVS event and set KVS priority key asynchronously.
-     * Upon successful completion, insert job in new queue position and
-     * send response.
-     */
-    if (!(p = priority_create (queue, event_ctx, job, msg, priority)))
+    if (event_job_post_fmt (event_ctx, job, NULL, NULL,
+                            "priority", "userid=%lu priority=%d",
+                            (unsigned long)userid, priority) < 0)
         goto error;
-    if (event_log_fmt (p->event_ctx, job->id, priority_continuation, p,
-                       "priority", "userid=%lu priority=%d",
-                       (unsigned long)userid, priority) < 0)
-        goto error;
+    queue_reorder (queue, job, job->queue_handle);
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
     if (errstr)
@@ -163,7 +97,6 @@ error:
         rc = flux_respond_error (h, msg, errno, NULL);
     if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    priority_destroy (p);
 }
 
 /*

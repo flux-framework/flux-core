@@ -19,7 +19,6 @@
  */
 void raise_handle_request (flux_t *h, struct queue *queue,
                            struct event_ctx *event_ctx,
-                           struct alloc_ctx *alloc_ctx,
                            const flux_msg_t *msg);
 
 /* exposed for unit testing only */

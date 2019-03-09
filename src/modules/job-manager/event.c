@@ -8,7 +8,30 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* event.c - batch up eventlog updates into a timed commit */
+/* event.c - job state machine and eventlog commit batching
+ *
+ * event_job_update() implements the job state machine described
+ * in RFC 21.  This function is called when an event occurs for a job,
+ * to drive changes to job state and flags.  For example, an "alloc"
+ * event transitions a job from SCHED to RUN state.
+ *
+ * event_job_action() is called after event_job_update().  It takes actions
+ * appropriate for job state and flags.  flags.  For example, in RUN state,
+ * job shells are started.
+ *
+ * Events are logged in the job eventlog in the KVS.  For performance,
+ * multiple updates may be combined into one commit.  The location of
+ * the job eventlog and its contents are described in RFC 16 and RFC 18.
+ *
+ * The functions event_job_post() and event_job_post_fmt() post an event to a
+ * job, running event_job_update(), event_job_action(), and committing the
+ * event to the job eventlog, in a delayed batch.
+ *
+ * Notes:
+ * - A KVS commit failure is handled as fatal to the job-manager
+ * - event_job_action() is idempotent
+ * - event_ctx_destroy() flushes batched eventlog updates before returning
+ */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -17,12 +40,15 @@
 #include <flux/core.h>
 
 #include "util.h"
+#include "alloc.h"
+
 #include "event.h"
 
 const double batch_timeout = 0.01;
 
 struct event_ctx {
     flux_t *h;
+    struct alloc_ctx *alloc_ctx;
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
@@ -36,7 +62,7 @@ struct event_batch {
 };
 
 struct event_callback {
-    event_completion_f cb;
+    flux_continuation_f cb;
     void *arg;
 };
 
@@ -44,6 +70,7 @@ struct event_batch *event_batch_create (struct event_ctx *ctx);
 void event_batch_destroy (struct event_batch *batch);
 
 /* Batch commit has completed.
+ * If there was a commit error, log it and stop the reactor.
  * Destroy 'batch', which notifies any registered callbacks.
  */
 void commit_continuation (flux_future_t *f, void *arg)
@@ -51,6 +78,10 @@ void commit_continuation (flux_future_t *f, void *arg)
     struct event_batch *batch = arg;
     struct event_ctx *ctx = batch->ctx;
 
+    if (flux_future_get (batch->f, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: eventlog update failed", __FUNCTION__);
+        flux_reactor_stop_error (flux_get_reactor (ctx->h));
+    }
     zlist_remove (ctx->pending, batch);
     event_batch_destroy (batch);
 }
@@ -129,7 +160,7 @@ error:
  */
 int event_batch_append (struct event_batch *batch,
                         const char *key, const char *event,
-                        event_completion_f cb, void *arg)
+                        flux_continuation_f cb, void *arg)
 {
     if (cb) {
         struct event_callback *ec;
@@ -170,18 +201,105 @@ int event_batch_start (struct event_ctx *ctx)
     return 0;
 }
 
-int event_log (struct event_ctx *ctx, flux_jobid_t id,
-               event_completion_f cb, void *arg,
-               const char *name, const char *context)
+int event_job_action (struct event_ctx *ctx, struct job *job)
+{
+    switch (job->state) {
+        case FLUX_JOB_NEW:
+        case FLUX_JOB_DEPEND:
+            break;
+        case FLUX_JOB_SCHED:
+            if (alloc_enqueue_alloc_request (ctx->alloc_ctx, job) < 0)
+                return -1;
+            break;
+        case FLUX_JOB_RUN:
+            break;
+        case FLUX_JOB_CLEANUP:
+            if (job->has_resources) {
+                if (alloc_send_free_request (ctx->alloc_ctx, job) < 0)
+                    return -1;
+            }
+            break;
+        case FLUX_JOB_INACTIVE:
+            break;
+    }
+    return 0;
+}
+
+int event_job_update (struct job *job, const char *event)
+{
+    double timestamp;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+
+    if (flux_kvs_event_decode (event, &timestamp,
+                               name, sizeof (name),
+                               context, sizeof (context)) < 0)
+        goto error;
+    if (!strcmp (name, "submit")) {
+        int priority, userid, flags;
+        if (job->state != FLUX_JOB_NEW)
+            goto inval;
+        job->t_submit = timestamp;
+        if (util_int_from_context (context, "priority", &priority) == 0)
+            job->priority = priority;
+        if (util_int_from_context (context, "userid", &userid) == 0)
+            job->userid = userid;
+        if (util_int_from_context (context, "flags", &flags) == 0)
+            job->flags = flags;
+        job->state = FLUX_JOB_SCHED;
+    }
+    else if (!strcmp (name, "priority")) {
+        int priority;
+        if (util_int_from_context (context, "priority", &priority) < 0)
+            goto error;
+        job->priority = priority;
+    }
+    else if (!strcmp (name, "exception")) {
+        int severity;
+        if (job->state == FLUX_JOB_NEW || job->state == FLUX_JOB_INACTIVE)
+            goto inval;
+        if (util_int_from_context (context, "severity", &severity) < 0)
+            goto error;
+        if (severity == 0)
+            job->state = FLUX_JOB_CLEANUP;
+    }
+    else if (!strcmp (name, "alloc")) {
+        if (job->state != FLUX_JOB_SCHED && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        job->has_resources = 1;
+        if (job->state == FLUX_JOB_SCHED)
+            job->state = FLUX_JOB_RUN;
+    }
+    else if (!strcmp (name, "free")) {
+        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        job->has_resources = 0;
+        if (job->state == FLUX_JOB_RUN)
+            job->state = FLUX_JOB_CLEANUP;
+    }
+    return 0;
+inval:
+    errno = EINVAL;
+error:
+    return -1;
+}
+
+int event_job_post (struct event_ctx *ctx, struct job *job,
+                    flux_continuation_f cb, void *arg,
+                    const char *name, const char *context)
 {
     char key[64];
     char *event = NULL;
     int saved_errno;
 
-    if (flux_job_kvs_key (key, sizeof (key), true, id, "eventlog") < 0)
+    if (flux_job_kvs_key (key, sizeof (key), true, job->id, "eventlog") < 0)
         return -1;
     if (!(event = flux_kvs_event_encode (name, context)))
         return -1;
+    if (event_job_update (job, event) < 0)
+        goto error;
+    if (event_job_action (ctx, job) < 0)
+        goto error;
     if (event_batch_start (ctx) < 0)
         goto error;
     if (event_batch_append (ctx->batch, key, event, cb, arg) < 0)
@@ -195,9 +313,9 @@ error:
     return -1;
 }
 
-int event_log_fmt (struct event_ctx *ctx, flux_jobid_t id,
-                   event_completion_f cb, void *arg, const char *name,
-                   const char *fmt, ...)
+int event_job_post_fmt (struct event_ctx *ctx, struct job *job,
+                        flux_continuation_f cb, void *arg, const char *name,
+                        const char *fmt, ...)
 {
     va_list ap;
     char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
@@ -210,7 +328,13 @@ int event_log_fmt (struct event_ctx *ctx, flux_jobid_t id,
         errno = EINVAL;
         return -1;
     }
-    return event_log (ctx, id, cb, arg, name, context);
+    return event_job_post (ctx, job, cb, arg, name, context);
+}
+
+void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
+                              struct alloc_ctx *alloc_ctx)
+{
+    ctx->alloc_ctx = alloc_ctx;
 }
 
 /* N.B. any in-flight batches are destroyed here.

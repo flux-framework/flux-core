@@ -15,7 +15,35 @@ list_jobs() {
 	flux job list -s | awk '$2 != "C"'
 }
 
-test_expect_success 'flux-job: generate jobspec for simple test job' '
+kvs_active() {
+        flux job id --to=kvs-active $1
+}
+
+# Borrowed from t2300-sched-simple.t
+# Usage: job_wait_event id event
+job_wait_event() {
+        rc=1
+        mkfifo eventlog.$1
+        run_timeout 5 flux kvs eventlog get -w $(kvs_active $1).eventlog \
+                               2>>eventlog.errors > eventlog.$1 &
+        pid=$!
+        maxtime=$(($(date +%s) + 2))
+        while test $(date +%s) -lt $maxtime; do # retry fifo up for up to 2s
+          while read line; do
+                event=$(echo $line | awk '{print $2}')
+                if test "$event" = "$2"; then
+                        echo "# id=$1 $line" >&2
+                        rc=0
+                        break 2
+                fi
+          done < eventlog.$1
+        done
+        kill -2 $pid
+        rm -f eventlog.$1
+        return $rc
+}
+
+test_expect_success 'job-manager: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
@@ -60,6 +88,7 @@ test_expect_success 'job-manager: raise non-fatal exception on job' '
 	jobid=$(cat list1_jobid.out) &&
 	kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
+	job_wait_event ${jobid} exception &&
 	flux kvs eventlog get ${kvsdir}.eventlog \
 		| grep exception >list1_exception.out &&
 	grep -q type=testing list1_exception.out &&
@@ -79,6 +108,7 @@ test_expect_success 'job-manager: queue contains 1 jobs' '
 test_expect_success 'job-manager: cancel job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job cancel ${jobid} &&
+	job_wait_event ${jobid} exception &&
 	flux kvs eventlog get ${kvsdir}.eventlog | grep exception \
 		| grep severity=0 | grep type=cancel
 '
