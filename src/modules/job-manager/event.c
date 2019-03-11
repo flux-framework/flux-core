@@ -359,11 +359,11 @@ int event_job_post (struct event_ctx *ctx, struct job *job,
         return -1;
     if (event_job_update (job, event) < 0)
         goto error;
-    if (event_job_action (ctx, job) < 0)
-        goto error;
     if (event_batch_start (ctx) < 0)
         goto error;
     if (event_batch_append (ctx->batch, key, event, cb, arg) < 0)
+        goto error;
+    if (event_job_action (ctx, job) < 0)
         goto error;
     free (event);
     return 0;
