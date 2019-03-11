@@ -19,36 +19,13 @@ kvs_active() {
         flux job id --to=kvs-active $1
 }
 
-# Borrowed from t2300-sched-simple.t
-# Usage: job_wait_event id event
-job_wait_event() {
-        rc=1
-        mkfifo eventlog.$1
-        run_timeout 5 flux kvs eventlog get -w $(kvs_active $1).eventlog \
-                               2>>eventlog.errors > eventlog.$1 &
-        pid=$!
-        maxtime=$(($(date +%s) + 2))
-        while test $(date +%s) -lt $maxtime; do # retry fifo up for up to 2s
-          while read line; do
-                event=$(echo $line | awk '{print $2}')
-                if test "$event" = "$2"; then
-                        echo "# id=$1 $line" >&2
-                        rc=0
-                        break 2
-                fi
-          done < eventlog.$1
-        done
-        kill -2 $pid
-        rm -f eventlog.$1
-        return $rc
-}
-
 test_expect_success 'job-manager: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
 test_expect_success 'job-manager: load job-ingest, job-manager' '
 	flux module load -r all job-ingest &&
+	flux module load -r all job-info &&
 	flux module load -r 0 job-manager
 '
 
@@ -86,10 +63,9 @@ test_expect_success 'job-manager: queue list job with correct priority' '
 
 test_expect_success 'job-manager: raise non-fatal exception on job' '
 	jobid=$(cat list1_jobid.out) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
-	job_wait_event ${jobid} exception &&
-	flux kvs eventlog get ${kvsdir}.eventlog \
+        flux job wait-event --timeout=5.0 ${jobid} exception &&
+	flux job eventlog $jobid \
 		| grep exception >list1_exception.out &&
 	grep -q type=testing list1_exception.out &&
 	grep -q severity=1 list1_exception.out &&
@@ -108,8 +84,8 @@ test_expect_success 'job-manager: queue contains 1 jobs' '
 test_expect_success 'job-manager: cancel job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job cancel ${jobid} &&
-	job_wait_event ${jobid} exception &&
-	flux kvs eventlog get ${kvsdir}.eventlog | grep exception \
+        flux job wait-event --timeout=5.0 ${jobid} exception &&
+	flux job eventlog $jobid | grep exception \
 		| grep severity=0 | grep type=cancel
 '
 
@@ -177,8 +153,7 @@ test_expect_success 'job-manager: flux job priority sets last job priority=31' '
 
 test_expect_success 'job-manager: priority was updated in KVS' '
 	jobid=$(tail -1 <list10_ids.out) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux kvs eventlog get ${kvsdir}.eventlog \
+	flux job eventlog $jobid \
 		| cut -d" " -f2- | grep ^priority >pri.out &&
 	grep -q priority=31 pri.out
 '
@@ -270,6 +245,7 @@ test_expect_success 'job-manager: still no jobs in the queue' '
 
 test_expect_success 'job-manager: remove job-manager, job-ingest' '
 	flux module remove -r 0 job-manager && \
+	flux module remove -r all job-info &&
 	flux module remove -r all job-ingest
 '
 

@@ -89,13 +89,13 @@ test_expect_success 'flux job eventlog fails on bad id' '
 #
 
 test_expect_success 'flux job wait-event works (active)' '
-        jobid=$(flux job submit test.json)
+        jobid=$(flux job submit test.json) &&
         flux job wait-event $jobid submit > wait_event1.out &&
         grep submit wait_event1.out
 '
 
 test_expect_success 'flux job wait-event works (inactive)' '
-        jobid=$(flux job submit test.json)
+        jobid=$(flux job submit test.json) &&
         activekvsdir=$(flux job id --to=kvs-active $jobid) &&
         inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/') &&
         flux kvs move ${activekvsdir}.eventlog ${inactivekvsdir}.eventlog &&
@@ -138,7 +138,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later (ac
 '
 
 test_expect_success 'flux job wait-event exits if never receives event (inactive) ' '
-        jobid=$(flux job submit test.json)
+        jobid=$(flux job submit test.json) &&
         activekvsdir=$(flux job id --to=kvs-active $jobid) &&
         inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/') &&
         flux kvs move ${activekvsdir}.eventlog ${inactivekvsdir}.eventlog &&
@@ -166,13 +166,13 @@ test_expect_success 'flux job wait-event fails on bad id' '
 '
 
 test_expect_success 'flux job wait-event --quiet works' '
-        jobid=$(flux job submit test.json)
+        jobid=$(flux job submit test.json) &&
         flux job wait-event --quiet $jobid submit > wait_event7.out &&
         ! test -s wait_event7.out
 '
 
 test_expect_success 'flux job wait-event --verbose works' '
-        jobid=$(flux job submit test.json)
+        jobid=$(flux job submit test.json) &&
         kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobaz &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
@@ -184,21 +184,21 @@ test_expect_success 'flux job wait-event --verbose works' '
 
 test_expect_success 'flux job wait-event --verbose doesnt show events after wait event' '
         jobid=$(flux job submit test.json) &&
-        kvsdir=$(flux job id --to=kvs-active $jobid)
+        kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
         flux job wait-event --verbose $jobid submit > wait_event9.out &&
         grep submit wait_event9.out &&
         ! grep foobar wait_event9.out
 '
 
-test_expect_success NO_CHAIN_LINT 'flux job wait-event --timeout works' '
-        jobid=$(flux job submit test.json)
+test_expect_success 'flux job wait-event --timeout works' '
+        jobid=$(flux job submit test.json) &&
         ! flux job wait-event --timeout=0.2 $jobid foobar 2> wait_event8.err &&
         grep "wait-event timeout" wait_event8.err
 '
 
-test_expect_success NO_CHAIN_LINT 'flux job wait-event hangs on no event' '
-        jobid=$(flux job submit test.json)
+test_expect_success 'flux job wait-event hangs on no event' '
+        jobid=$(flux job submit test.json) &&
         ! run_timeout 0.2 flux job wait-event $jobid foobar
 '
 
