@@ -81,7 +81,8 @@ const char *test_input[] = {
     /* 6 */
     "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
     "42.3 alloc\n"
-    "42.4 free\n",
+    "42.4 exception {\"type\":\"gasp\",\"severity\":0,\"userid\":42}\n"
+    "42.5 free\n",
 };
 
 void test_create_from_eventlog (void)
@@ -180,16 +181,16 @@ void test_create_from_eventlog (void)
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(alloc) fails with EINVAL");
 
-    /* 6 - submit + alloc + free */
+    /* 6 - submit + alloc + ex0 + free */
     job = job_create_from_eventlog (3, test_input[6]);
     if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+alloc+free) failed");
+        BAIL_OUT ("job_create_from_eventlog log=(submit+alloc+ex0+free) failed");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
-        "job_create_from_eventlog log=(submit+alloc+free) set no internal flags");
+        "job_create_from_eventlog log=(submit+alloc+ex0+free) set no internal flags");
     ok (job->state == FLUX_JOB_CLEANUP,
-        "job_create_from_eventlog log=(submit+alloc+free) set state=CLEANUP");
+        "job_create_from_eventlog log=(submit+alloc+ex0+free) set state=CLEANUP");
     job_decref (job);
 
 }

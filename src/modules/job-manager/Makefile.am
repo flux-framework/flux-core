@@ -28,6 +28,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 raise.c \
 			 alloc.h \
 			 alloc.c \
+			 start.h \
+			 start.c \
 			 list.h \
 			 list.c \
 			 priority.h \
@@ -53,6 +55,7 @@ test_ldadd = \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/alloc.o \
+        $(top_builddir)/src/modules/job-manager/start.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

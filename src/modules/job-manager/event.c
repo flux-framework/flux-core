@@ -41,6 +41,7 @@
 #include <flux/core.h>
 
 #include "alloc.h"
+#include "start.h"
 
 #include "event.h"
 
@@ -49,6 +50,7 @@ const double batch_timeout = 0.01;
 struct event_ctx {
     flux_t *h;
     struct alloc_ctx *alloc_ctx;
+    struct start_ctx *start_ctx;
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
@@ -212,9 +214,16 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_RUN:
+            if (start_send_request (ctx->start_ctx, job) < 0)
+                return -1;
             break;
         case FLUX_JOB_CLEANUP:
-            if (job->has_resources) {
+            /* N.B. start_pending indicates that the start request is still
+             * expecting responses.  The final response is the 'release'
+             * response with final=true.  Thus once the flag is clear,
+             * it is safe to release all resources to the scheduler.
+             */
+            if (job->has_resources && !job->start_pending) {
                 if (alloc_send_free_request (ctx->alloc_ctx, job) < 0)
                     return -1;
             }
@@ -290,6 +299,27 @@ eproto:
     return -1;
 }
 
+int event_release_context_decode (const char *context,
+                                 int *final)
+{
+    json_t *o = NULL;
+    *final = 0;
+
+    if (!(o = json_loads (context, 0, NULL)))
+        goto eproto;
+
+    if (json_unpack (o, "{ s:b }", "final", &final) < 0)
+        goto eproto;
+
+    json_decref (o);
+    return 0;
+
+eproto:
+    json_decref (o);
+    errno = EPROTO;
+    return -1;
+}
+
 int event_job_update (struct job *job, const char *event)
 {
     double timestamp;
@@ -332,11 +362,25 @@ int event_job_update (struct job *job, const char *event)
             job->state = FLUX_JOB_RUN;
     }
     else if (!strcmp (name, "free")) {
-        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_CLEANUP)
             goto inval;
         job->has_resources = 0;
+        //job->state = FLUX_JOB_INACTIVE;
+    }
+    else if (!strcmp (name, "finish")) {
+        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
         if (job->state == FLUX_JOB_RUN)
             job->state = FLUX_JOB_CLEANUP;
+    }
+    else if (!strcmp (name, "release")) {
+        int final;
+        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        if (event_release_context_decode (context, &final) < 0)
+            goto error;
+        if (final && job->state == FLUX_JOB_RUN)
+            goto inval;
     }
     return 0;
 inval:
@@ -405,6 +449,12 @@ void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
                               struct alloc_ctx *alloc_ctx)
 {
     ctx->alloc_ctx = alloc_ctx;
+}
+
+void event_ctx_set_start_ctx (struct event_ctx *ctx,
+                              struct start_ctx *start_ctx)
+{
+    ctx->start_ctx = start_ctx;
 }
 
 /* N.B. any in-flight batches are destroyed here.
