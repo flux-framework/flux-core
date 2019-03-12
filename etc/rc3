@@ -12,6 +12,8 @@ for rcdir in $all_dirs; do
 done
 shopt -u nullglob
 
+flux module remove -r 0 sched-simple
+flux module remove -r 0 job-exec
 flux module remove -r 0 job-manager
 flux module remove -r all job-ingest
 
