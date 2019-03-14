@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job eventlog service'
+test_description='Test flux job info service'
 
 . `dirname $0`/kvs/kvs-helper.sh
 
