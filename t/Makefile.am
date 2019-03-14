@@ -90,6 +90,7 @@ TESTSCRIPTS = \
 	t2202-job-manager.t \
 	t2203-job-manager-dummysched.t \
 	t2204-job-info.t \
+	t2205-job-info-security.t \
 	t2300-sched-simple.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
