@@ -85,6 +85,7 @@ TESTS = \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-dummysched.t \
+	t2204-job-info.t \
 	t2300-sched-simple.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
@@ -179,6 +180,7 @@ check_SCRIPTS = \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-dummysched.t \
+	t2204-job-info.t \
 	t2300-sched-simple.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \

@@ -52,8 +52,9 @@ test_expect_success 'job-ingest: submit fails without job-ingest' '
 	test_must_fail flux job submit basic.json 2>nosys.out
 '
 
-test_expect_success 'job-ingest: load job-ingest' '
-	flux module load -r all job-ingest
+test_expect_success 'job-ingest: load job-ingest && job-info' '
+	flux module load -r all job-ingest &&
+	flux module load -r all job-info
 '
 
 test_expect_success 'job-ingest: submit fails without job-manager' '
@@ -86,8 +87,7 @@ test_expect_success 'job-ingest: job announced to job manager' '
 
 test_expect_success 'job-ingest: submit event logged with userid, priority' '
 	jobid=$(flux job submit --priority=11 basic.json) &&
-	kvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux kvs eventlog get ${kvsdir}.eventlog |grep submit >eventlog.out &&
+	flux job eventlog $jobid |grep submit >eventlog.out &&
 	grep -q priority=11 eventlog.out &&
 	grep -q userid=$(id -u) eventlog.out
 '
@@ -134,6 +134,7 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 
 test_expect_success 'job-ingest: remove modules' '
 	flux module remove -r 0 job-manager &&
+	flux module remove -r all job-info &&
 	flux module remove -r all job-ingest
 '
 

@@ -29,6 +29,7 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
 
 test_expect_success 'job-manager: load job-ingest, job-manager' '
 	flux module load -r all job-ingest &&
+	flux module load -r all job-info &&
 	flux module load -r 0 job-manager
 '
 
@@ -62,8 +63,7 @@ test_expect_success 'job-manager: job state RRSSS' '
 '
 
 test_expect_success 'job-manager: running job has alloc event' '
-	kvsdir=$(flux job id --to=kvs-active $(cat job1.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev1.out &&
+	flux job eventlog $(cat job1.id) | cut -d" " -f2- >ev1.out &&
 	grep -q ^alloc ev1.out
 '
 
@@ -80,17 +80,14 @@ test_expect_success 'job-manager: job state RCRSS' '
 '
 
 test_expect_success 'job-manager: first S job sent alloc, second S did not' '
-	kvsdir=$(flux job id --to=kvs-active $(cat job4.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev4.out &&
-	kvsdir=$(flux job id --to=kvs-active $(cat job5.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev5.out &&
+	flux job eventlog $(cat job4.id) | cut -d" " -f2- >ev4.out &&
+	flux job eventlog $(cat job5.id) | cut -d" " -f2- >ev5.out &&
 	grep -q "^debug.alloc-request" ev4.out &&
 	! grep -q "^debug.alloc-request" ev5.out
 '
 
 test_expect_success 'job-manager: canceled job has exception, free events' '
-	kvsdir=$(flux job id --to=kvs-active $(cat job2.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev2.out &&
+	flux job eventlog $(cat job2.id) | cut -d" " -f2- >ev2.out &&
 	grep -q ^exception ev2.out &&
 	grep -q ^free ev2.out
 '
@@ -138,8 +135,7 @@ test_expect_success 'job-manager: simulate alloc failure' '
 	flux module debug --setbit 0x1 sched-dummy &&
 	flux job submit --flags=debug basic.json >job6.id &&
 	check_state $(cat job6.id) C &&
-	kvsdir=$(flux job id --to=kvs-active $(cat job6.id)) &&
-	flux kvs eventlog get ${kvsdir}.eventlog | cut -d" " -f2- >ev6.out &&
+	flux job eventlog $(cat job6.id) | cut -d" " -f2- >ev6.out &&
 	grep ^exception ev6.out | grep -q type=alloc &&
 	grep ^exception ev6.out | grep -q severity=0 &&
 	grep ^exception ev6.out | grep -q DEBUG_FAIL_ALLOC
@@ -151,6 +147,7 @@ test_expect_success 'job-manager: remove sched-dummy' '
 
 test_expect_success 'job-manager: remove job-manager, job-ingest' '
 	flux module remove -r 0 job-manager &&
+	flux module remove -r all job-info &&
 	flux module remove -r all job-ingest
 '
 

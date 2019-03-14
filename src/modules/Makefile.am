@@ -10,4 +10,5 @@ SUBDIRS = \
  pymod \
  job-ingest \
  job-manager \
+ job-info \
  sched-simple

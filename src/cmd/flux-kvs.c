@@ -457,7 +457,7 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
         char *endptr;
         owner = strtoul (str, &endptr, 10);
         if (*endptr != '\0')
-            log_err_exit ("--owner requires an unsigned integer argument");
+            log_msg_exit ("--owner requires an unsigned integer argument");
     }
 
     for (i = optindex; i < argc; i++) {

@@ -138,6 +138,33 @@ void check_corner_case (void)
     ok (flux_job_kvs_key (NULL, 0, false, 0, NULL) < 0
         && errno == EINVAL,
         "flux_job_kvs_key fails with errno == EINVAL");
+
+    /* flux_job_eventlog_lookup */
+
+    errno = EINVAL;
+    ok (!flux_job_eventlog_lookup (NULL, 0)
+        && errno == EINVAL,
+        "flux_job_eventlog_lookup fails with EINVAL on bad input");
+
+    errno = EINVAL;
+    ok (flux_job_eventlog_lookup_get (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_job_eventlog_lookup_get fails with EINVAL on bad input");
+
+    errno = EINVAL;
+    ok (!flux_job_event_watch (NULL, 0)
+        && errno == EINVAL,
+        "flux_job_event_watch fails with EINVAL on bad input");
+
+    errno = EINVAL;
+    ok (flux_job_event_watch_get (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_job_event_watch_get fails with EINVAL on bad input");
+
+    errno = EINVAL;
+    ok (flux_job_event_watch_cancel (NULL) < 0
+        && errno == EINVAL,
+        "flux_job_event_watch_cancel fails with EINVAL on bad input");
 }
 
 int main (int argc, char *argv[])
