@@ -11,4 +11,5 @@ SUBDIRS = \
  job-ingest \
  job-manager \
  job-info \
+ job-exec \
  sched-simple
