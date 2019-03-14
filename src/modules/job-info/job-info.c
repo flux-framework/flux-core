@@ -88,7 +88,7 @@ error:
  * Set 'tok' to next \n-terminated token, and 'toklen' to its length.
  * Advance 'pp' past token.  Returns false when input is exhausted.
  */
-static bool info_parse_next (const char **pp, const char **tok,
+static bool eventlog_parse_next (const char **pp, const char **tok,
                                  size_t *toklen)
 {
     char *term;
@@ -164,7 +164,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         const char *input = s;
         const char *tok;
         size_t toklen;
-        while (info_parse_next (&input, &tok, &toklen)) {
+        while (eventlog_parse_next (&input, &tok, &toklen)) {
             if (l->active)
                 l->offset += toklen;
 
