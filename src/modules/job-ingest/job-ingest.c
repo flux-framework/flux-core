@@ -82,7 +82,6 @@ struct job_ingest_ctx {
 
 struct job {
     fluid_t id;         // jobid
-    char idstr[32];     // DOTHEX rendition of jobid
 
     flux_msg_t *msg;    // copy of submit request message
     const char *J;      // signed jobspec
@@ -150,19 +149,6 @@ static struct job *job_create (const flux_msg_t *msg,
 error:
     job_destroy (job);
     return NULL;
-}
-
-static int job_assign_id (struct job *job, struct fluid_generator *gen)
-{
-    if (fluid_generate (gen, &job->id) < 0)
-        goto error;
-    if (fluid_encode (job->idstr, sizeof (job->idstr), job->id,
-                      FLUID_STRING_DOTHEX) < 0)
-        goto error;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
 }
 
 static void batch_destroy (struct batch *batch)
@@ -371,8 +357,7 @@ error:
  */
 static int make_key (char *buf, int bufsz, struct job *job, const char *name)
 {
-    int n = snprintf (buf, bufsz, "job.active.%s%s%s", job->idstr,
-                      (name ? "." : ""), (name ? name : ""));
+    int n = flux_job_kvs_key (buf, bufsz, true, job->id, name ? name : NULL);
     if (n < 0 || n >= bufsz) {
         errno = EINVAL;
         return -1;
@@ -469,7 +454,7 @@ void validate_continuation (flux_future_t *f, void *arg)
         errmsg = flux_future_error_string (f);
         goto error;
     }
-    if (job_assign_id (job, &ctx->gen) < 0)
+    if (fluid_generate (&ctx->gen, &job->id) < 0)
         goto error;
     /* Add job to the current "batch" of new jobs, creating the batch if
      * one doesn't exist already.  Submit is finalized upon timer expiration.
