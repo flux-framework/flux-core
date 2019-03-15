@@ -83,7 +83,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating queue");
         goto done;
     }
-    if (!(ctx.event_ctx = event_ctx_create (h))) {
+    if (!(ctx.event_ctx = event_ctx_create (h, ctx.queue))) {
         flux_log_error (h, "error creating event batcher");
         goto done;
     }

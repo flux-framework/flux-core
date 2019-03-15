@@ -12,7 +12,11 @@ flux setattr log-stderr-level 1
 
 get_state() {
 	local id=$1
-	flux job list -s | awk '$1 == "'${id}'" { print $2; }'
+	local state=$(flux job list -s | awk '$1 == "'${id}'" { print $2; }')
+	test -z "$state" \
+		&& flux job wait-event --timeout=5 ${id} clean >/dev/null \
+		&& state=I
+	echo $state
 }
 check_state() {
 	local id=$1
@@ -63,33 +67,29 @@ test_expect_success 'job-manager: job state RRSSS' '
 '
 
 test_expect_success 'job-manager: running job has alloc event' '
-	flux job eventlog $(cat job1.id) | cut -d" " -f2- >ev1.out &&
-	grep -q ^alloc ev1.out
+	flux job wait-event --timeout=5.0 $(cat job1.id) alloc
 '
 
 test_expect_success 'job-manager: cancel 2' '
 	flux job cancel $(cat job2.id)
 '
 
-test_expect_success 'job-manager: job state RCRSS' '
+test_expect_success 'job-manager: job state RIRSS' '
 	check_state $(cat job1.id) R &&
-	check_state $(cat job2.id) C &&
+	check_state $(cat job2.id) I &&
 	check_state $(cat job3.id) R &&
 	check_state $(cat job4.id) S &&
 	check_state $(cat job5.id) S
 '
 
 test_expect_success 'job-manager: first S job sent alloc, second S did not' '
-	flux job eventlog $(cat job4.id) | cut -d" " -f2- >ev4.out &&
-	flux job eventlog $(cat job5.id) | cut -d" " -f2- >ev5.out &&
-	grep -q "^debug.alloc-request" ev4.out &&
-	! grep -q "^debug.alloc-request" ev5.out
+	flux job wait-event --timeout=5.0 $(cat job4.id) debug.alloc-request &&
+	! flux job wait-event --timeout=0.1 $(cat job5.id) debug.alloc-request
 '
 
 test_expect_success 'job-manager: canceled job has exception, free events' '
-	flux job eventlog $(cat job2.id) | cut -d" " -f2- >ev2.out &&
-	grep -q ^exception ev2.out &&
-	grep -q ^free ev2.out
+	flux job wait-event --timeout=5.0 $(cat job2.id) exception &&
+	flux job wait-event --timeout=5.0 $(cat job2.id) free
 '
 
 test_expect_success 'job-manager: reload sched-dummy --cores=4' '
@@ -97,9 +97,9 @@ test_expect_success 'job-manager: reload sched-dummy --cores=4' '
 	flux module load -r 0 ${SCHED_DUMMY} --cores=4
 '
 
-test_expect_success 'job-manager: job state RCRRR' '
+test_expect_success 'job-manager: job state RIRRR' '
 	check_state $(cat job1.id) R &&
-	check_state $(cat job2.id) C &&
+	check_state $(cat job2.id) I &&
 	check_state $(cat job3.id) R &&
 	check_state $(cat job4.id) R &&
 	check_state $(cat job5.id) R
@@ -109,9 +109,9 @@ test_expect_success 'job-manager: cancel 1' '
 	flux job cancel $(cat job1.id)
 '
 
-test_expect_success 'job-manager: job state CCRRR' '
-	check_state $(cat job1.id) C &&
-	check_state $(cat job2.id) C &&
+test_expect_success 'job-manager: job state IIRRR' '
+	check_state $(cat job1.id) I &&
+	check_state $(cat job2.id) I &&
 	check_state $(cat job3.id) R &&
 	check_state $(cat job4.id) R &&
 	check_state $(cat job5.id) R
@@ -123,22 +123,21 @@ test_expect_success 'job-manager: cancel all jobs' '
 	flux job cancel $(cat job5.id)
 '
 
-test_expect_success 'job-manager: job state CCCCC' '
-	check_state $(cat job1.id) C &&
-	check_state $(cat job2.id) C &&
-	check_state $(cat job3.id) C &&
-	check_state $(cat job4.id) C &&
-	check_state $(cat job5.id) C
+test_expect_success 'job-manager: job state IIIII' '
+	check_state $(cat job1.id) I &&
+	check_state $(cat job2.id) I &&
+	check_state $(cat job3.id) I &&
+	check_state $(cat job4.id) I &&
+	check_state $(cat job5.id) I
 '
 
 test_expect_success 'job-manager: simulate alloc failure' '
 	flux module debug --setbit 0x1 sched-dummy &&
 	flux job submit --flags=debug basic.json >job6.id &&
-	check_state $(cat job6.id) C &&
-	flux job eventlog $(cat job6.id) | cut -d" " -f2- >ev6.out &&
-	grep ^exception ev6.out | grep -q "type=\"alloc\"" &&
-	grep ^exception ev6.out | grep -q severity=0 &&
-	grep ^exception ev6.out | grep -q DEBUG_FAIL_ALLOC
+	flux job wait-event --timeout=5 $(cat job6.id) exception >ev6.out &&
+	grep -q "type=\"alloc\"" ev6.out &&
+	grep -q severity=0 ev6.out &&
+	grep -q DEBUG_FAIL_ALLOC ev6.out
 '
 
 test_expect_success 'job-manager: remove sched-dummy' '

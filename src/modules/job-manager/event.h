@@ -56,7 +56,7 @@ void event_ctx_set_start_ctx (struct event_ctx *ctx,
                               struct start_ctx *start_ctx);
 
 void event_ctx_destroy (struct event_ctx *ctx);
-struct event_ctx *event_ctx_create (flux_t *h);
+struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue);
 
 #endif /* _FLUX_JOB_MANAGER_EVENT_H */
 
