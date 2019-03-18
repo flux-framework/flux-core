@@ -82,9 +82,11 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     }
     /* Post event, change job's queue position, and respond.
      */
-    if (event_job_post_fmt (event_ctx, job, NULL, NULL,
-                            "priority", "userid=%lu priority=%d",
-                            (unsigned long)userid, priority) < 0)
+    if (event_job_post_pack (event_ctx, job, NULL, NULL,
+                             "priority",
+                             "{ s:i s:i }",
+                             "userid", userid,
+                             "priority", priority) < 0)
         goto error;
     queue_reorder (queue, job, job->queue_handle);
     if (flux_respond (h, msg, 0, NULL) < 0)

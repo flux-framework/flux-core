@@ -246,11 +246,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
      * Raise alloc exception and transition to CLEANUP state.
      */
     if (type == 2) { // error: alloc was rejected
-        if (event_job_post_fmt (ctx->event_ctx, job, NULL, NULL, "exception",
-                                "type=alloc severity=%d userid=%u%s%s",
-                                0, FLUX_USERID_UNKNOWN,
-                                note ? " " : "",
-                                note ? note : "") < 0)
+        if (event_job_post_pack (ctx->event_ctx, job, NULL, NULL, "exception",
+                                 "{ s:s s:i s:i s:s }",
+                                 "type", "alloc",
+                                 "severity", 0,
+                                 "userid", FLUX_USERID_UNKNOWN,
+                                 "note", note ? note : "") < 0)
             goto teardown;
         return;
     }
@@ -267,7 +268,9 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     job->has_resources = 1;
 
-    if (event_job_post (ctx->event_ctx, job, NULL, NULL, "alloc", note) < 0)
+    if (event_job_post_pack (ctx->event_ctx, job, NULL, NULL, "alloc",
+                             "{ s:s }",
+                             "note", note ? note : "") < 0)
         goto teardown;
     return;
 teardown:

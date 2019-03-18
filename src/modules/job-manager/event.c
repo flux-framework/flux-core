@@ -23,7 +23,7 @@
  * multiple updates may be combined into one commit.  The location of
  * the job eventlog and its contents are described in RFC 16 and RFC 18.
  *
- * The functions event_job_post() and event_job_post_fmt() post an event to a
+ * The functions event_job_post() and event_job_post_pack() post an event to a
  * job, running event_job_update(), event_job_action(), and committing the
  * event to the job eventlog, in a delayed batch.
  *
@@ -37,6 +37,7 @@
 #include "config.h"
 #endif
 #include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "util.h"
@@ -225,6 +226,71 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
     return 0;
 }
 
+int event_submit_context_decode (const char *context,
+                                 int *priority,
+                                 uint32_t *userid,
+                                 int *flags)
+{
+    json_t *o = NULL;
+
+    if (!(o = json_loads (context, 0, NULL)))
+        goto eproto;
+
+    if (json_unpack (o, "{ s:i s:i s:i }",
+                     "priority", priority,
+                     "userid", userid,
+                     "flags", flags) < 0)
+        goto eproto;
+
+    json_decref (o);
+    return 0;
+
+eproto:
+    json_decref (o);
+    errno = EPROTO;
+    return -1;
+}
+
+int event_priority_context_decode (const char *context,
+                                   int *priority)
+{
+    json_t *o = NULL;
+
+    if (!(o = json_loads (context, 0, NULL)))
+        goto eproto;
+
+    if (json_unpack (o, "{ s:i }", "priority", priority) < 0)
+        goto eproto;
+
+    json_decref (o);
+    return 0;
+
+eproto:
+    json_decref (o);
+    errno = EPROTO;
+    return -1;
+}
+
+int event_exception_context_decode (const char *context,
+                                    int *severity)
+{
+    json_t *o = NULL;
+
+    if (!(o = json_loads (context, 0, NULL)))
+        goto eproto;
+
+    if (json_unpack (o, "{ s:i }", "severity", severity) < 0)
+        goto eproto;
+
+    json_decref (o);
+    return 0;
+
+eproto:
+    json_decref (o);
+    errno = EPROTO;
+    return -1;
+}
+
 int event_job_update (struct job *job, const char *event)
 {
     double timestamp;
@@ -236,32 +302,25 @@ int event_job_update (struct job *job, const char *event)
                                context, sizeof (context)) < 0)
         goto error;
     if (!strcmp (name, "submit")) {
-        int priority, userid, flags;
         if (job->state != FLUX_JOB_NEW)
             goto inval;
         job->t_submit = timestamp;
-        if (util_int_from_context (context, "priority", &priority) < 0)
+        if (event_submit_context_decode (context,
+                                         &job->priority,
+                                         &job->userid,
+                                         &job->flags) < 0)
             goto error;
-        job->priority = priority;
-        if (util_int_from_context (context, "userid", &userid) < 0)
-            goto error;
-        job->userid = userid;
-        if (util_int_from_context (context, "flags", &flags) < 0)
-            goto error;
-        job->flags = flags;
         job->state = FLUX_JOB_SCHED;
     }
     else if (!strcmp (name, "priority")) {
-        int priority;
-        if (util_int_from_context (context, "priority", &priority) < 0)
+        if (event_priority_context_decode (context, &job->priority) < 0)
             goto error;
-        job->priority = priority;
     }
     else if (!strcmp (name, "exception")) {
         int severity;
         if (job->state == FLUX_JOB_NEW || job->state == FLUX_JOB_INACTIVE)
             goto inval;
-        if (util_int_from_context (context, "severity", &severity) < 0)
+        if (event_exception_context_decode (context, &severity) < 0)
             goto error;
         if (severity == 0)
             job->state = FLUX_JOB_CLEANUP;
@@ -316,22 +375,31 @@ error:
     return -1;
 }
 
-int event_job_post_fmt (struct event_ctx *ctx, struct job *job,
-                        flux_continuation_f cb, void *arg, const char *name,
-                        const char *fmt, ...)
+int event_job_post_pack (struct event_ctx *ctx, struct job *job,
+                         flux_continuation_f cb, void *arg, const char *name,
+                         const char *fmt, ...)
 {
     va_list ap;
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-    int n;
+    json_t *o = NULL;
+    char *context = NULL;
+    int rv = -1;
 
     va_start (ap, fmt);
-    n = vsnprintf (context, sizeof (context), fmt, ap);
-    va_end (ap);
-    if (n < 0 || n >= sizeof (context)) {
+    if (!(o = json_vpack_ex (NULL, 0, fmt, ap))) {
         errno = EINVAL;
-        return -1;
+        goto error;
     }
-    return event_job_post (ctx, job, cb, arg, name, context);
+    if (!(context = json_dumps (o, JSON_COMPACT))) {
+        errno = EINVAL;
+        goto error;
+    }
+    /* context length will be checked in event_job_post() */
+    rv = event_job_post (ctx, job, cb, arg, name, context);
+error:
+    json_decref (o);
+    free (context);
+    va_end (ap);
+    return rv;
 }
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
