@@ -99,12 +99,10 @@
           "type": "object",
           "properties": {
             "duration": { "type": "string" }
-          },
-          "additonalProperties": { "type": "string" }
+          }
         },
         "user": {
-          "type": "object",
-          "additonalProperties": { "type": "string" }
+          "type": "object"
         }
       },
       "additionalProperties": false
