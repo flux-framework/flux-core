@@ -84,6 +84,23 @@ test_expect_success 'flux job eventlog fails on bad id' '
 	! flux job eventlog 12345
 '
 
+test_expect_success 'flux job eventlog --context-format=json works' '
+        jobid=$(flux job submit test.json) &&
+	flux job eventlog --context-format=json $jobid > eventlog_format1.out &&
+        grep -q "\"userid\":$(id -u)" eventlog_format1.out
+'
+
+test_expect_success 'flux job eventlog --context-format=text works' '
+        jobid=$(flux job submit test.json) &&
+	flux job eventlog --context-format=text $jobid > eventlog_format2.out &&
+        grep -q "userid=$(id -u)" eventlog_format2.out
+'
+
+test_expect_success 'flux job eventlog --context-format=invalid fails' '
+        jobid=$(flux job submit test.json) &&
+	! flux job eventlog --context-format=invalid $jobid
+'
+
 #
 # job wait-event tests
 #
