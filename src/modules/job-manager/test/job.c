@@ -57,29 +57,29 @@ void test_create (void)
 
 const char *test_input[] = {
     /* 0 */
-    "42.2 submit userid=66 priority=16 flags=42\n",
+    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n",
 
     /* 1 */
-    "42.2 submit userid=66 priority=16 flags=42\n"
-    "42.3 priority userid=42 priority=1\n",
+    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
+    "42.3 priority {\"userid\":42,\"priority\":1}\n",
 
     /* 2 */
-    "42.2 submit userid=66 priority=16 flags=42\n"
-    "42.3 exception type=cancel severity=0 userid=42 free form notes...\n",
+    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
+    "42.3 exception {\"type\":\"cancel\",\"severity\":0,\"userid\":42}\n",
 
     /* 3 */
-    "42.2 submit userid=66 priority=16 flags=42\n"
-    "42.3 exception type=meep severity=1 userid=42 this one is non-fatal\n",
+    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
+    "42.3 exception {\"type\":\"meep\",\"severity\":1,\"userid\":42}\n",
 
     /* 4 */
-    "42.2 submit userid=66 priority=16 flags=42\n"
+    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
     "42.3 alloc\n",
 
     /* 5 */
     "42.3 alloc\n",
 
     /* 6 */
-    "42.2 submit userid=66 priority=16 flags=42\n"
+    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
     "42.3 alloc\n"
     "42.4 free\n",
 };
