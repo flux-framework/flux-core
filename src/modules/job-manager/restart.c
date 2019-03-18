@@ -53,6 +53,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     flux_future_t *f;
     const char *eventlog;
     struct job *job = NULL;
+    char path[64];
     int rc = -1;
 
     if (strlen (key) <= dirskip) {
@@ -61,7 +62,11 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     }
     if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    if (!(f = util_attr_lookup (h, id, true, 0, "eventlog")))
+    if (flux_job_kvs_key (path, sizeof (path), true, id, "eventlog") < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f = flux_kvs_lookup (h, NULL, 0, path)))
         goto done;
     if (flux_kvs_lookup_get (f, &eventlog) < 0)
         goto done;
