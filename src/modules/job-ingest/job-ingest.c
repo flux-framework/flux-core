@@ -384,8 +384,8 @@ static int batch_add_job (struct batch *batch, struct job *job)
     json_t *jobentry;
     char *event = NULL;
     double t;
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-    int n;
+    json_t *context = NULL;
+    char *context_str = NULL;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -402,13 +402,14 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;
-    n = snprintf (context, sizeof (context), "userid=%d priority=%d flags=%d",
-                  job->userid, job->priority, job->flags);
-    if (n < 0 || n >= sizeof (context)) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (!(event = flux_kvs_event_encode_timestamp (t, "submit", context)))
+    if (!(context = json_pack ("{ s:i s:i s:i }",
+                               "userid", job->userid,
+                               "priority", job->priority,
+                               "flags", job->flags)))
+        goto nomem;
+    if (!(context_str = json_dumps (context, JSON_COMPACT)))
+        goto nomem;
+    if (!(event = flux_kvs_event_encode_timestamp (t, "submit", context_str)))
         goto error;
     if (make_key (key, sizeof (key), job, "eventlog") < 0)
         goto error;
@@ -425,6 +426,8 @@ static int batch_add_job (struct batch *batch, struct job *job)
         json_decref (jobentry);
         goto nomem;
     }
+    json_decref (context);
+    free (context_str);
     free (event);
     job_clean (job); // batch->txn now holds this info
     return 0;
@@ -432,6 +435,8 @@ nomem:
     errno = ENOMEM;
 error:
     saved_errno = errno;
+    json_decref (context);
+    free (context_str);
     free (event);
     zlist_remove (batch->jobs, job);
     if (make_key (key, sizeof (key), job, NULL) == 0)
