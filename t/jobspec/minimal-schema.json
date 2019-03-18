@@ -91,9 +91,11 @@
           "type": "object",
           "properties": {
             "duration": { "type": "string" }
-          },
-          "additonalProperties": { "type": "string" }
-        }
+          }
+        },
+	"user": {
+          "type": "object"
+	}
       },
       "additionalProperties": false
     },

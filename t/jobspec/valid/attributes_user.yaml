@@ -1,0 +1,20 @@
+version: 1
+resources:
+  - type: slot
+    count: 1
+    label: foo
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: app
+    slot: foo
+    count:
+      per_slot: 1
+attributes:
+  user:
+    a: "string"
+    b: 42
+    c: [ 1, 2, 3 ]
+    d:
+    foo: "string"

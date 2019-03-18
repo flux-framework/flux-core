@@ -26,7 +26,7 @@ test_valid ()
 {
     local rc=0
     for job in $*; do
-        cat ${job} | ${Y2J} | ${SUBMITBENCH} -
+        cat ${job} | ${Y2J} | ${SUBMITBENCH} - || rc=1
     done
     return ${rc}
 }
