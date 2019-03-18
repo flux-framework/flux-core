@@ -98,7 +98,17 @@ static struct optparse_option id_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option eventlog_opts[] =  {
+    { .name = "context-format", .key = 'c', .has_arg = 1, .arginfo = "FORMAT",
+      .usage = "Specify context format: text, json",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option wait_event_opts[] =  {
+    { .name = "context-format", .key = 'c', .has_arg = 1, .arginfo = "FORMAT",
+      .usage = "Specify context format: text, json",
+    },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "Timeout in seconds to give up waiting",
     },
@@ -155,14 +165,14 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "id",
+      "[-c text|json] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
-      NULL
+      eventlog_opts
     },
     { "wait-event",
-      "[-t seconds] id event",
+      "[-c text|json] [-t seconds] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
@@ -636,9 +646,47 @@ struct eventlog_ctx {
     struct flux_kvs_eventlog *log;
     optparse_t *p;
     flux_jobid_t id;
+    const char *format;
 };
 
-void output_event (const char *event)
+void output_event_text (double timestamp,
+                        const char *name,
+                        const char *context)
+{
+    json_error_t error;
+    const char *key;
+    json_t *value;
+    json_t *o;
+
+    printf ("%lf %s", timestamp, name);
+
+    if (*context) {
+        if (!(o = json_loads (context, 0, &error))) {
+            log_msg ("error parsing context '%s': %s (line %d column %d)",
+                     context, error.text, error.line, error.column);
+            return;
+        }
+
+        json_object_foreach (o, key, value) {
+            char *sval;
+            sval = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
+            printf (" %s=%s", key, sval);
+            free (sval);
+        }
+        json_decref (o);
+    }
+    printf ("\n");
+    fflush (stdout);
+}
+
+void output_event_json (double timestamp,
+                        const char *name,
+                        const char *context)
+{
+    printf ("%lf %s%s%s\n", timestamp, name, *context ? " " : "", context);
+}
+
+void output_event (const char *event, const char *format)
 {
     double timestamp;
     char name[FLUX_KVS_MAX_EVENT_NAME + 1];
@@ -648,7 +696,10 @@ void output_event (const char *event)
                                context, sizeof (context)) < 0)
         log_err_exit ("flux_kvs_event_decode");
 
-    printf ("%lf %s%s%s\n", timestamp, name, *context ? " " : "", context);
+    if (!strcasecmp (format, "text"))
+        output_event_text (timestamp, name, context);
+    else if (!strcasecmp (format, "json"))
+        output_event_json (timestamp, name, context);
 }
 
 void eventlog_continuation (flux_future_t *f, void *arg)
@@ -670,7 +721,7 @@ void eventlog_continuation (flux_future_t *f, void *arg)
         log_err_exit ("flux_kvs_eventlog_append");
 
     while ((event = flux_kvs_eventlog_next (ctx->log)))
-        output_event (event);
+        output_event (event, ctx->format);
     fflush (stdout);
     flux_future_destroy (f);
 }
@@ -695,6 +746,10 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     if (!(ctx.log = flux_kvs_eventlog_create()))
         log_err_exit ("flux_kvs_eventlog_create");
     ctx.p = p;
+    ctx.format = optparse_get_str (p, "context-format", "text");
+    if (strcasecmp (ctx.format, "text")
+        && strcasecmp (ctx.format, "json"))
+        log_msg_exit ("invalid context-format type");
 
     if (!(f = flux_job_eventlog_lookup (h, ctx.id)))
         log_err_exit ("flux_job_eventlog_lookup");
@@ -714,6 +769,7 @@ struct wait_event_ctx {
     double timeout;
     flux_jobid_t id;
     bool got_event;
+    const char *format;
 };
 
 void wait_event_continuation (flux_future_t *f, void *arg)
@@ -751,12 +807,12 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     if (!strcmp (name, ctx->wait_event)) {
         ctx->got_event = true;
         if (!optparse_hasopt (ctx->p, "quiet"))
-            output_event (event);
+            output_event (event, ctx->format);
         if (flux_job_event_watch_cancel (f) < 0)
             log_err_exit ("flux_job_event_watch_cancel");
     } else if (optparse_hasopt (ctx->p, "verbose")) {
         if (!ctx->got_event)
-            output_event (event);
+            output_event (event, ctx->format);
     }
 
     flux_future_reset (f);
@@ -784,6 +840,10 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
     ctx.timeout = optparse_get_double (p, "timeout", -1.0);
+    ctx.format = optparse_get_str (p, "context-format", "text");
+    if (strcasecmp (ctx.format, "text")
+        && strcasecmp (ctx.format, "json"))
+        log_msg_exit ("invalid context-format type");
 
     if (!(f = flux_job_event_watch (h, ctx.id)))
         log_err_exit ("flux_job_event_watch");
