@@ -40,7 +40,6 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "util.h"
 #include "alloc.h"
 
 #include "event.h"

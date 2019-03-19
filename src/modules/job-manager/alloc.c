@@ -87,7 +87,6 @@
 #include "job.h"
 #include "alloc.h"
 #include "queue.h"
-#include "util.h"
 #include "event.h"
 
 typedef enum {
