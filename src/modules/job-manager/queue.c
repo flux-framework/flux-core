@@ -25,6 +25,8 @@
 struct queue {
     zhashx_t *h;
     zlistx_t *l;
+    queue_notify_f empty_cb;
+    void *empty_arg;
 };
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
@@ -151,11 +153,22 @@ void queue_delete (struct queue *queue, struct job *job, void *handle)
         zhashx_delete (queue->h, &job->id);
     rc = zlistx_delete (queue->l, handle); // calls job_decref ()
     assert (rc == 0);
+    if (queue->empty_cb && zlistx_size (queue->l) == 0)
+        queue->empty_cb (queue, queue->empty_arg);
 }
 
 int queue_size (struct queue *queue)
 {
     return zlistx_size (queue->l);
+}
+
+void queue_set_notify_empty (struct queue *queue,
+                             queue_notify_f cb, void *arg)
+{
+    queue->empty_cb = cb;
+    queue->empty_arg = arg;
+    if (queue->empty_cb && zlistx_size (queue->l) == 0)
+        queue->empty_cb (queue, queue->empty_arg);
 }
 
 struct job *queue_first (struct queue *queue)
