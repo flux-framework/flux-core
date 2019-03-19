@@ -102,13 +102,18 @@ error:
 /* Submit event requires special handling.  It cannot go through
  * event_job_post() because job-ingest already logged it.
  * However, we want to let the state machine choose the next state and action,
- * So we create a "dummy" event here and run it directly through
+ * We instead re-create the event and run it directly through
  * event_job_update() and event_job_action().
  */
 int submit_post_event (struct event_ctx *event_ctx, struct job *job)
 {
         char event[64];
-        (void)snprintf (event, sizeof (event), "%.6f submit\n", job->t_submit);
+        (void)snprintf (event, sizeof (event),
+                        "%.6f submit userid=%lu priority=%d flags=%d\n",
+                        job->t_submit,
+                        (unsigned long)job->userid,
+                        job->priority,
+                        job->flags);
         if (event_job_update (job, event) < 0)
             return -1;
         if (event_job_action (event_ctx, job) < 0)
