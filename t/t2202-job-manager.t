@@ -8,22 +8,19 @@ test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
 
-# List jobs without header
-# N.B. cancellation only advances job to CLEANUP state at the moment
-# so omit jobs in CLEANUP state
-list_jobs() {
-	flux job list -s | awk '$2 != "C"'
-}
+DRAIN_UNDRAIN=${FLUX_SOURCE_DIR}/t/job-manager/drain-undrain.py
+DRAIN_CANCEL=${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py
 
-kvs_active() {
-        flux job id --to=kvs-active $1
+# List jobs without header
+list_jobs() {
+	flux job list -s
 }
 
 test_expect_success 'job-manager: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: load job-ingest, job-manager' '
+test_expect_success 'job-manager: load job-ingest, job-info, job-manager' '
 	flux module load -r all job-ingest &&
 	flux module load -r all job-info &&
 	flux module load -r 0 job-manager
@@ -244,8 +241,55 @@ test_expect_success 'job-manager: still no jobs in the queue' '
 	test $(list_jobs | wc -l) -eq 0
 '
 
-test_expect_success 'job-manager: remove job-manager, job-ingest' '
-	flux module remove -r 0 job-manager && \
+test_expect_success 'job-manager: flux job drain works' '
+	run_timeout 5 flux job drain
+'
+
+test_expect_success 'job-manager: flux job drain (3x) works' '
+	flux job drain &&
+	flux job drain &&
+	flux job drain
+'
+
+test_expect_success 'job-manager: flux job submit receives disabled error' '
+	! flux job submit basic.json 2>drain_submit.err &&
+	grep disabled drain_submit.err
+'
+
+test_expect_success 'job-manager: flux job undrain works' '
+	flux job undrain
+'
+
+test_expect_success 'job-manager: flux job submit works after undrain' '
+	flux job submit basic.json
+'
+
+test_expect_success 'job-manager: flux job drain -t 0.01 receives timeout error' '
+	! flux job drain -t 0.01 2>drain.err &&
+	grep timeout drain.err
+'
+
+test_expect_success 'job-manager: flux job submit fails while drained' '
+	! flux job submit basic.json
+'
+
+test_expect_success 'job-manager: flux job drain canceled by undrain' '
+	${DRAIN_UNDRAIN} >drain_undrain.out &&
+	grep re-enabled drain_undrain.out
+'
+
+test_expect_success 'job-manager: there is still one job in the queue' '
+	list_jobs >list.out &&
+	test $(wc -l <list.out) -eq 1
+'
+
+test_expect_success 'job-manager: drain unblocks when last job is canceld' '
+	jobid=$(cut -f1 <list.out) &&
+	run_timeout 5 ${DRAIN_CANCEL} ${jobid}
+'
+
+test_expect_success 'job-manager: remove job-manager, job-info, job-ingest' '
+	flux module remove -r 0 job-manager &&
 	flux module remove -r all job-info &&
 	flux module remove -r all job-ingest
 '

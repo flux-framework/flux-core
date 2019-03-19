@@ -158,7 +158,9 @@ dist_check_SCRIPTS = \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
-	job-manager/exec-service.lua
+	job-manager/exec-service.lua \
+	job-manager/drain-cancel.py \
+	job-manager/drain-undrain.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
