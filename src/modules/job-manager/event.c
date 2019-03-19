@@ -240,12 +240,15 @@ int event_job_update (struct job *job, const char *event)
         if (job->state != FLUX_JOB_NEW)
             goto inval;
         job->t_submit = timestamp;
-        if (util_int_from_context (context, "priority", &priority) == 0)
-            job->priority = priority;
-        if (util_int_from_context (context, "userid", &userid) == 0)
-            job->userid = userid;
-        if (util_int_from_context (context, "flags", &flags) == 0)
-            job->flags = flags;
+        if (util_int_from_context (context, "priority", &priority) < 0)
+            goto error;
+        job->priority = priority;
+        if (util_int_from_context (context, "userid", &userid) < 0)
+            goto error;
+        job->userid = userid;
+        if (util_int_from_context (context, "flags", &flags) < 0)
+            goto error;
+        job->flags = flags;
         job->state = FLUX_JOB_SCHED;
     }
     else if (!strcmp (name, "priority")) {

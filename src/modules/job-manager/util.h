@@ -29,11 +29,6 @@ int util_str_from_context (const char *context, const char *key,
  */
 const char *util_note_from_context (const char *context);
 
-/* Look up 'key' relative to active/inactive job directory for job 'id'.
- */
-flux_future_t *util_attr_lookup (flux_t *h, flux_jobid_t id, bool active,
-                                 int flags, const char *key);
-
 #endif /* _FLUX_JOB_MANAGER_UTIL_H */
 
 /*
