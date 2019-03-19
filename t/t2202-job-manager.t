@@ -67,7 +67,7 @@ test_expect_success 'job-manager: raise non-fatal exception on job' '
         flux job wait-event --timeout=5.0 ${jobid} exception &&
 	flux job eventlog $jobid \
 		| grep exception >list1_exception.out &&
-	grep -q type=testing list1_exception.out &&
+	grep -q "type=\"testing\"" list1_exception.out &&
 	grep -q severity=1 list1_exception.out &&
 	grep -q "Mumble grumble" list1_exception.out
 '
@@ -86,7 +86,7 @@ test_expect_success 'job-manager: cancel job' '
 	flux job cancel ${jobid} &&
         flux job wait-event --timeout=5.0 ${jobid} exception &&
 	flux job eventlog $jobid | grep exception \
-		| grep severity=0 | grep type=cancel
+		| grep severity=0 | grep "type=\"cancel\""
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
