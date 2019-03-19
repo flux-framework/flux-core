@@ -18,6 +18,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 job.h \
 			 submit.c \
 			 submit.h \
+			 drain.c \
+			 drain.h \
 			 queue.c \
 			 queue.h \
 			 event.h \
