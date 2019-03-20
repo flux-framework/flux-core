@@ -824,14 +824,25 @@ void test_error_string (void)
     flux_future_t *f;
     const char *str;
 
+    ok ((str = flux_future_error_string (NULL)) != NULL
+        && !strcmp (str, "future NULL"),
+        "flux_future_error_string returns \"future NULL\" on NULL input");
+
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
+
+    ok ((str = flux_future_error_string (f)) != NULL
+        && !strcmp (str, "future not fulfilled"),
+        "flux_future_error_string returns \"future not fulfilled\" on "
+        "unfulfilled future");
 
     flux_future_fulfill (f, "Hello", NULL);
 
     ok (flux_future_get (f, NULL) == 0
-        && flux_future_error_string (f) == NULL,
-        "flux_future_error_string returns NULL when future fulfilled");
+        && (str = flux_future_error_string (f)) != NULL
+        && !strcmp (str, "Success"),
+        "flux_future_error_string returns \"Success\" when future fulfilled "
+        "with non-error result");
 
     flux_future_destroy (f);
 
@@ -842,8 +853,9 @@ void test_error_string (void)
 
     ok (flux_future_get (f, NULL) < 0
         && errno == ENOENT
-        && flux_future_error_string (f) == NULL,
-        "flux_future_error_string returns NULL when no error string set");
+        && (str = flux_future_error_string (f)) != NULL
+        && !strcmp (str, "No such file or directory"),
+        "flux_future_error_string returns ENOENT strerror string");
 
     flux_future_destroy (f);
 
@@ -867,8 +879,9 @@ void test_error_string (void)
 
     ok (flux_future_get (f, NULL) < 0
         && errno == ENOENT
-        && flux_future_error_string (f) == NULL,
-        "flux_future_error_string returns NULL when no fatal error string set");
+        && (str = flux_future_error_string (f)) != NULL
+        && !strcmp (str, "No such file or directory"),
+        "flux_future_error_string returns ENOENT strerror string");
 
     flux_future_destroy (f);
 
@@ -881,7 +894,8 @@ void test_error_string (void)
         && errno == ENOENT
         && (str = flux_future_error_string (f)) != NULL
         && !strcmp (str, "boobaz"),
-        "flux_future_error_string returns correct fatal error string when error string set");
+        "flux_future_error_string returns correct fatal error string "
+        "when error string set");
 
     flux_future_destroy (f);
 }

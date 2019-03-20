@@ -368,8 +368,8 @@ void test_error (flux_t *h)
     ok (flux_rpc_get (f, NULL) < 0 && errno == ENOTDIR,
         "flux_rpc_get failed with expected errno");
     errstr = flux_future_error_string (f);
-    ok (errstr == NULL,
-        "flux_future_error_string returned NULL, no error string set");
+    ok (errstr != NULL && !strcmp (errstr, "Not a directory"),
+        "flux_future_error_string returned ENOTDIR strerror string");
     flux_future_destroy (f);
 }
 
