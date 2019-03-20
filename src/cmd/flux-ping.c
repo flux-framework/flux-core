@@ -100,7 +100,7 @@ void ping_continuation (flux_mrpc_t *mrpc, void *arg)
                               "route", &route,
                               "userid", &userid,
                               "rolemask", &rolemask) < 0) {
-        log_err ("%s!%s", ctx->rank, ctx->topic);
+        log_err_exit ("%s!%s", ctx->rank, ctx->topic);
         goto done;
     }
 

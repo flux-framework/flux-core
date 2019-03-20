@@ -61,23 +61,22 @@ test_expect_success 'ping all works with 64K payload' '
 '
 
 test_expect_success 'ping fails on invalid rank (specified as target)' '
-	run_timeout 5 flux ping --count 1 $(invalid_rank) 2>stderr &&
+	! run_timeout 5 flux ping --count 1 $(invalid_rank) 2>stderr &&
 	grep -q "No route to host" stderr
 '
 
 test_expect_success 'ping fails on invalid rank (specified in option)' '
-	run_timeout 5 flux ping --count 1 --rank $(invalid_rank) cmb 2>stderr &&
+	! run_timeout 5 flux ping --count 1 --rank $(invalid_rank) cmb 2>stderr &&
 	grep -q "No route to host" stderr
 '
 
-test_expect_success 'ping works on valid and invalid rank' '
-	run_timeout 5 flux ping --count 1 --rank 0,$(invalid_rank) cmb 1>stdout 2>stderr &&
-	grep -q "No route to host" stderr &&
-	grep -q "0,$(invalid_rank)!cmb.ping" stdout
+test_expect_success 'ping fails on valid and invalid rank' '
+	! run_timeout 5 flux ping --count 1 --rank 0,$(invalid_rank) cmb 1>stdout 2>stderr &&
+	grep -q "No route to host" stderr
 '
 
 test_expect_success 'ping fails on invalid target' '
-	run_timeout 5 flux ping --count 1 --rank 0 nosuchtarget 2>stderr &&
+	! run_timeout 5 flux ping --count 1 --rank 0 nosuchtarget 2>stderr &&
 	grep -q "Function not implemented" stderr
 '
 
@@ -164,7 +163,7 @@ test_expect_success 'ping output format for all ranks is correct (format 3)' '
 # rank 1 should work
 
 test_expect_success 'ping with "upstream" fails on rank 0' '
-        run_timeout 5 flux exec -n --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr &&
+        ! run_timeout 5 flux exec -n --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr &&
 	grep -q "No route to host" stderr
 '
 
