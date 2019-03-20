@@ -20,8 +20,6 @@ job_manager_la_SOURCES = job-manager.c \
 			 submit.h \
 			 queue.c \
 			 queue.h \
-			 util.h \
-			 util.c \
 			 event.h \
 			 event.c \
 			 restart.h \
@@ -47,7 +45,6 @@ TESTS = \
 	test_queue.t \
 	test_list.t \
 	test_raise.t \
-	test_util.t \
 	test_restart.t \
 	test_submit.t
 
@@ -55,7 +52,6 @@ test_ldadd = \
         $(top_builddir)/src/modules/job-manager/event.o \
         $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
-        $(top_builddir)/src/modules/job-manager/util.o \
         $(top_builddir)/src/modules/job-manager/alloc.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
@@ -91,13 +87,6 @@ test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
-        $(test_ldadd)
-
-test_util_t_SOURCES = test/util.c
-test_util_t_CPPFLAGS = $(test_cppflags)
-# Test uses unexported KVS functions
-test_util_t_LDADD = \
-	$(top_builddir)/src/common/libkvs/libkvs.la \
         $(test_ldadd)
 
 test_restart_t_SOURCES = test/restart.c

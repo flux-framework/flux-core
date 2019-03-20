@@ -17,7 +17,6 @@
 
 #include "src/modules/job-manager/queue.h"
 #include "src/modules/job-manager/job.h"
-#include "src/modules/job-manager/util.h"
 #include "src/modules/job-manager/raise.h"
 
 int main (int argc, char **argv)

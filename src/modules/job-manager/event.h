@@ -42,11 +42,12 @@ int event_job_post (struct event_ctx *ctx, struct job *job,
                     flux_continuation_f cb, void *arg,
                     const char *name, const char *context);
 
-/* Same as above except event context is constructed from (fmt, ...).
+/* Same as above except event context is constructed from (fmt, ...)
+ * using style of jansson's json_pack().
  */
-int event_job_post_fmt (struct event_ctx *ctx, struct job *job,
-                        flux_continuation_f cb, void *arg,
-                        const char *name, const char *fmt, ...);
+int event_job_post_pack (struct event_ctx *ctx, struct job *job,
+                         flux_continuation_f cb, void *arg,
+                         const char *name, const char *fmt, ...);
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
                               struct alloc_ctx *alloc_ctx);

@@ -61,10 +61,10 @@ test_expect_success 'sched-simple: submit 5 jobs' '
 test_expect_success 'sched-simple: check allocations for running jobs' '
 	list_R $(cat job1.id job2.id job3.id job4.id) > allocs.out &&
 	cat <<-EOF >allocs.expected &&
-	rank0/core0
-	rank1/core0
-	rank0/core1
-	rank1/core1
+	note="rank0/core0"
+	note="rank1/core0"
+	note="rank0/core1"
+	note="rank1/core1"
 	EOF
 	test_cmp allocs.expected allocs.out
 '
@@ -78,7 +78,7 @@ test_expect_success 'sched-simple: cancel one job' '
 '
 test_expect_success 'sched-simple: waiting job now has alloc event' '
         flux job wait-event --timeout=5.0 $(cat job5.id) alloc &&
-	test "$(list_R $(cat job5.id))" = "rank0/core1"
+	test "$(list_R $(cat job5.id))" = "note=\"rank0/core1\""
 '
 test_expect_success 'sched-simple: cancel all jobs' '
 	flux job cancel $(cat job5.id) &&
@@ -105,10 +105,10 @@ test_expect_success 'sched-simple: submit 5 more jobs' '
 test_expect_success 'sched-simple: check allocations for running jobs' '
 	list_R $(cat job6.id job7.id job8.id job9.id) > best-fit-allocs.out &&
 	cat <<-EOF >best-fit-allocs.expected &&
-	rank0/core0
-	rank0/core1
-	rank1/core0
-	rank1/core1
+	note="rank0/core0"
+	note="rank0/core1"
+	note="rank1/core0"
+	note="rank1/core1"
 	EOF
 	test_cmp best-fit-allocs.expected best-fit-allocs.out
 '
@@ -141,9 +141,9 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 	list_R $(cat job11.id job12.id job13.id ) \
 		 > first-fit-allocs.out &&
 	cat <<-EOF >first-fit-allocs.expected &&
-	rank0/core0
-	rank0/core1
-	rank1/core0
+	note="rank0/core0"
+	note="rank0/core1"
+	note="rank1/core0"
 	EOF
 	test_cmp first-fit-allocs.expected first-fit-allocs.out
 '

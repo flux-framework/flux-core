@@ -99,6 +99,42 @@ error:
     return NULL;
 }
 
+char *create_submit_event (struct job *job)
+{
+    json_t *o = NULL;
+    char *context = NULL;
+    char *event = NULL;
+    int save_errno;
+
+    if (!(o = json_pack ("{ s:i s:i s:i }",
+                         "userid", job->userid,
+                         "priority", job->priority,
+                         "flags", job->flags)))
+        goto nomem;
+
+    if (!(context = json_dumps (o, JSON_COMPACT)))
+        goto nomem;
+
+    if (!(event = flux_kvs_event_encode_timestamp (job->t_submit,
+                                                   "submit",
+                                                   context)))
+        goto error;
+
+    json_decref (o);
+    free (context);
+    return event;
+
+nomem:
+    errno = ENOMEM;
+error:
+    save_errno = errno;
+    json_decref (o);
+    free (context);
+    free (event);
+    errno = save_errno;
+    return NULL;
+}
+
 /* Submit event requires special handling.  It cannot go through
  * event_job_post() because job-ingest already logged it.
  * However, we want to let the state machine choose the next state and action,
@@ -107,19 +143,20 @@ error:
  */
 int submit_post_event (struct event_ctx *event_ctx, struct job *job)
 {
-        char event[64];
-        (void)snprintf (event, sizeof (event),
-                        "%.6f submit userid=%lu priority=%d flags=%d\n",
-                        job->t_submit,
-                        (unsigned long)job->userid,
-                        job->priority,
-                        job->flags);
-        if (event_job_update (job, event) < 0)
-            return -1;
-        if (event_job_action (event_ctx, job) < 0)
-            return -1;
-        return 0;
-};
+    char *event;
+    int rv = -1;
+
+    if (!(event = create_submit_event (job)))
+        goto error;
+    if (event_job_update (job, event) < 0)
+        goto error;
+    if (event_job_action (event_ctx, job) < 0)
+        goto error;
+    rv = 0;
+ error:
+    free (event);
+    return rv;
+}
 
 /* handle submit request (from job-ingest module)
  * This is a batched request for one or more jobs already validated

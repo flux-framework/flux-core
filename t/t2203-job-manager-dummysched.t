@@ -136,7 +136,7 @@ test_expect_success 'job-manager: simulate alloc failure' '
 	flux job submit --flags=debug basic.json >job6.id &&
 	check_state $(cat job6.id) C &&
 	flux job eventlog $(cat job6.id) | cut -d" " -f2- >ev6.out &&
-	grep ^exception ev6.out | grep -q type=alloc &&
+	grep ^exception ev6.out | grep -q "type=\"alloc\"" &&
 	grep ^exception ev6.out | grep -q severity=0 &&
 	grep ^exception ev6.out | grep -q DEBUG_FAIL_ALLOC
 '

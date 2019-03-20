@@ -22,7 +22,6 @@
 
 #include "job.h"
 #include "restart.h"
-#include "util.h"
 #include "event.h"
 
 struct restart_ctx {
