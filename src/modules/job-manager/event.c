@@ -16,7 +16,7 @@
  * event transitions a job from SCHED to RUN state.
  *
  * event_job_action() is called after event_job_update().  It takes actions
- * appropriate for job state and flags.  flags.  For example, in RUN state,
+ * appropriate for job state and flags.  For example, in RUN state,
  * job shells are started.
  *
  * Events are logged in the job eventlog in the KVS.  For performance,
