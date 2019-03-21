@@ -85,6 +85,8 @@ libutil_la_SOURCES = \
 	aux.h \
 	fdutils.c \
 	fdutils.h \
+	fsd.c \
+	fsd.h \
 	zsecurity.c \
 	zsecurity.h
 
