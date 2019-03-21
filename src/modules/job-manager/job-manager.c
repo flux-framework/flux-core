@@ -21,6 +21,7 @@
 #include "list.h"
 #include "priority.h"
 #include "alloc.h"
+#include "start.h"
 #include "event.h"
 
 
@@ -28,6 +29,7 @@ struct job_manager_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     struct queue *queue;
+    struct start_ctx *start_ctx;
     struct alloc_ctx *alloc_ctx;
     struct event_ctx *event_ctx;
 };
@@ -81,12 +83,16 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating queue");
         goto done;
     }
-    if (!(ctx.event_ctx = event_ctx_create (h))) {
+    if (!(ctx.event_ctx = event_ctx_create (h, ctx.queue))) {
         flux_log_error (h, "error creating event batcher");
         goto done;
     }
     if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue, ctx.event_ctx))) {
         flux_log_error (h, "error creating scheduler interface");
+        goto done;
+    }
+    if (!(ctx.start_ctx = start_ctx_create (h, ctx.queue, ctx.event_ctx))) {
+        flux_log_error (h, "error creating exec interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
@@ -104,6 +110,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    start_ctx_destroy (ctx.start_ctx);
     alloc_ctx_destroy (ctx.alloc_ctx);
     event_ctx_destroy (ctx.event_ctx);
     queue_destroy (ctx.queue);

@@ -420,6 +420,7 @@ AC_CONFIG_FILES( \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
   src/modules/job-info/Makefile \
+  src/modules/job-exec/Makefile \
   src/modules/sched-simple/Makefile \
   src/test/Makefile \
   etc/Makefile \

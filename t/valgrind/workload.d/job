@@ -1,15 +1,29 @@
 #!/bin/bash
 
-runjob() {
-    local size=$1
-    flux job submit <<EOT
-{"attributes":null,"tasks":[{"slot":"foo","count":{"per_slot":1},"command":"/bin/true"}],"version":1,"resources":[{"count":1,"type":"slot","with":[{"count":${size},"type":"node"}],"label":"foo"}]}
-EOT
-}
+NJOBS=${NJOBS:-10}
 
-NJOBS=10
-NTASKS_PER_JOB=1
+#  Reconfigure sched-simple with only 1 core so that only a single job is
+#   run at a time (and we can wait for the
+#   last job to determine we're done without a race.)
+#
+#  XXX: Remove and replace final synchronization with flux job drain
+#   when ready.
+#
+flux module remove sched-simple
+flux kvs put resource.hwloc.by_rank="{\"0\":{\"Core\":1}}"
+flux module load sched-simple
 
+flux jobspec srun -n 1 /bin/true > job.json
 for i in `seq 1 $NJOBS`; do
-     runjob ${NTASKS_PER_JOB}
+     id=$(flux job submit < job.json)
+     echo id=$id
 done
+
+flux job wait-event -v ${id} clean
+
+#  Test job cancelation
+set -x
+id=$(flux jobspec srun -t 1 -n 1 /bin/true | flux job submit)
+flux job wait-event ${id} start
+flux job cancel ${id}
+flux job wait-event ${id} clean

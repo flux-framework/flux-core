@@ -41,6 +41,7 @@
 #include <flux/core.h>
 
 #include "alloc.h"
+#include "start.h"
 
 #include "event.h"
 
@@ -48,7 +49,9 @@ const double batch_timeout = 0.01;
 
 struct event_ctx {
     flux_t *h;
+    struct queue *queue;
     struct alloc_ctx *alloc_ctx;
+    struct start_ctx *start_ctx;
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
@@ -212,14 +215,32 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_RUN:
+            if (start_send_request (ctx->start_ctx, job) < 0)
+                return -1;
             break;
         case FLUX_JOB_CLEANUP:
-            if (job->has_resources) {
+            /* N.B. start_pending indicates that the start request is still
+             * expecting responses.  The final response is the 'release'
+             * response with final=true.  Thus once the flag is clear,
+             * it is safe to release all resources to the scheduler.
+             */
+            if (job->has_resources && !job->start_pending) {
                 if (alloc_send_free_request (ctx->alloc_ctx, job) < 0)
+                    return -1;
+            }
+            /* Post cleanup event when cleanup is complete.
+             */
+            if (!job->alloc_queued && !job->alloc_pending
+                                   && !job->free_pending
+                                   && !job->start_pending
+                                   && !job->has_resources) {
+
+                if (event_job_post (ctx, job, NULL, NULL, "clean", NULL) < 0)
                     return -1;
             }
             break;
         case FLUX_JOB_INACTIVE:
+            queue_delete (ctx->queue, job, job->queue_handle);
             break;
     }
     return 0;
@@ -290,6 +311,27 @@ eproto:
     return -1;
 }
 
+int event_release_context_decode (const char *context,
+                                 int *final)
+{
+    json_t *o = NULL;
+    *final = 0;
+
+    if (!(o = json_loads (context, 0, NULL)))
+        goto eproto;
+
+    if (json_unpack (o, "{ s:b }", "final", &final) < 0)
+        goto eproto;
+
+    json_decref (o);
+    return 0;
+
+eproto:
+    json_decref (o);
+    errno = EPROTO;
+    return -1;
+}
+
 int event_job_update (struct job *job, const char *event)
 {
     double timestamp;
@@ -332,11 +374,29 @@ int event_job_update (struct job *job, const char *event)
             job->state = FLUX_JOB_RUN;
     }
     else if (!strcmp (name, "free")) {
-        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_CLEANUP)
             goto inval;
         job->has_resources = 0;
+    }
+    else if (!strcmp (name, "finish")) {
+        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
         if (job->state == FLUX_JOB_RUN)
             job->state = FLUX_JOB_CLEANUP;
+    }
+    else if (!strcmp (name, "release")) {
+        int final;
+        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        if (event_release_context_decode (context, &final) < 0)
+            goto error;
+        if (final && job->state == FLUX_JOB_RUN)
+            goto inval;
+    }
+    else if (!strcmp (name, "clean")) {
+        if (job->state != FLUX_JOB_CLEANUP)
+            goto inval;
+        job->state = FLUX_JOB_INACTIVE;
     }
     return 0;
 inval:
@@ -359,11 +419,11 @@ int event_job_post (struct event_ctx *ctx, struct job *job,
         return -1;
     if (event_job_update (job, event) < 0)
         goto error;
-    if (event_job_action (ctx, job) < 0)
-        goto error;
     if (event_batch_start (ctx) < 0)
         goto error;
     if (event_batch_append (ctx->batch, key, event, cb, arg) < 0)
+        goto error;
+    if (event_job_action (ctx, job) < 0)
         goto error;
     free (event);
     return 0;
@@ -407,6 +467,12 @@ void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
     ctx->alloc_ctx = alloc_ctx;
 }
 
+void event_ctx_set_start_ctx (struct event_ctx *ctx,
+                              struct start_ctx *start_ctx)
+{
+    ctx->start_ctx = start_ctx;
+}
+
 /* N.B. any in-flight batches are destroyed here.
  * If they are not yet fulfilled, user callbacks may synchronously block on
  * flux_future_get().
@@ -428,13 +494,14 @@ void event_ctx_destroy (struct event_ctx *ctx)
     }
 }
 
-struct event_ctx *event_ctx_create (flux_t *h)
+struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue)
 {
     struct event_ctx *ctx;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
     ctx->h = h;
+    ctx->queue = queue;
     if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
                                                   0., 0., timer_cb, ctx)))
         goto error;

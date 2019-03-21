@@ -265,8 +265,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
 
-    job->has_resources = 1;
-
     if (event_job_post_pack (ctx->event_ctx, job, NULL, NULL, "alloc",
                              "{ s:s }",
                              "note", note ? note : "") < 0)

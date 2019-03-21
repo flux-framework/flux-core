@@ -87,6 +87,8 @@ TESTS = \
 	t2203-job-manager-dummysched.t \
 	t2204-job-info.t \
 	t2300-sched-simple.t \
+	t2400-job-exec-test.t \
+	t2401-job-exec-hello.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -182,6 +184,8 @@ check_SCRIPTS = \
 	t2203-job-manager-dummysched.t \
 	t2204-job-info.t \
 	t2300-sched-simple.t \
+	t2400-job-exec-test.t \
+	t2401-job-exec-hello.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -279,7 +283,8 @@ dist_check_SCRIPTS = \
 	scripts/tssh \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
-	kvs/kvs-helper.sh
+	kvs/kvs-helper.sh \
+	job-manager/exec-service.lua
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
