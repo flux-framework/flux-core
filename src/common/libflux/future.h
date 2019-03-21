@@ -110,9 +110,10 @@ flux_future_t *flux_future_or_then (flux_future_t *f,
 int flux_future_continue (flux_future_t *prev, flux_future_t *f);
 
 /*  Set the next future for the chained future `prev` to be fulfilled
- *   with an error `errnum`.
+ *   with an error `errnum` and an optional error string.
  */
-void flux_future_continue_error (flux_future_t *prev, int errnum);
+void flux_future_continue_error (flux_future_t *prev, int errnum,
+                                 const char *errstr);
 
 #ifdef __cplusplus
 }

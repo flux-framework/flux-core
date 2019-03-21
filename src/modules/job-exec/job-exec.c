@@ -512,7 +512,7 @@ static void namespace_delete (flux_future_t *f, void *arg)
     flux_t *h = job->ctx->h;
     flux_future_t *fnext = flux_kvs_namespace_remove (h, job->ns);
     if (!fnext)
-        flux_future_continue_error (f, errno);
+        flux_future_continue_error (f, errno, NULL);
     else
         flux_future_continue (f, fnext);
     flux_future_destroy (f);
@@ -535,7 +535,7 @@ done:
     if (fnext)
         flux_future_continue (f, fnext);
     else
-        flux_future_continue_error (f, errno);
+        flux_future_continue_error (f, errno, NULL);
     flux_future_destroy (f);
 }
 
@@ -567,7 +567,7 @@ static void namespace_move (flux_future_t *fprev, void *arg)
     flux_future_destroy (fprev);
     return;
 error:
-    flux_future_continue_error (fprev, errno);
+    flux_future_continue_error (fprev, errno, NULL);
     flux_future_destroy (f);
     flux_future_destroy (fnext);
     flux_future_destroy (fprev);
@@ -605,7 +605,7 @@ static void jobinfo_cleanup (flux_future_t *fprev, void *arg)
     flux_future_destroy (fprev);
     return;
 error:
-    flux_future_continue_error (fprev, errno);
+    flux_future_continue_error (fprev, errno, NULL);
     flux_future_destroy (fprev);
 }
 
@@ -624,7 +624,7 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
                                        "rc=%d%s%s", rc,
                                         rc < 0 ? " " : "",
                                         rc < 0 ? strerror (errno) : "")))
-        flux_future_continue_error (prev, errno);
+        flux_future_continue_error (prev, errno, NULL);
     else
         flux_future_continue (prev, f);
     flux_future_destroy (prev);
@@ -930,7 +930,7 @@ static void namespace_link (flux_future_t *fprev, void *arg)
 error:
     saved_errno = errno;
     flux_future_destroy (cf);
-    flux_future_continue_error (fprev, saved_errno);
+    flux_future_continue_error (fprev, saved_errno, NULL);
     flux_future_destroy (fprev);
 }
 

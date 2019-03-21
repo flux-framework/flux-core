@@ -99,7 +99,7 @@ static void copy_continuation (flux_future_t *f, void *arg)
     }
     goto done;
 error:
-    flux_future_continue_error (f, errno);
+    flux_future_continue_error (f, errno, NULL);
 done:
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -139,7 +139,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     }
     goto done;
 error:
-    flux_future_continue_error (f, errno);
+    flux_future_continue_error (f, errno, NULL);
 done:
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);

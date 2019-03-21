@@ -121,7 +121,7 @@ void incr2_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     return;
 error:
-    flux_future_continue_error (f, errno);
+    flux_future_continue_error (f, errno, NULL);
     flux_future_destroy (f);
 }
 
@@ -259,7 +259,7 @@ void or_then_cb (flux_future_t *f, void *arg)
     int rc = flux_future_get (f, NULL);
     cmp_ok (rc, "<", 0, "or-then: callback: flux_future_get returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: callback: errno is expected");
-    flux_future_continue_error (f, errno);
+    flux_future_continue_error (f, errno, NULL);
     flux_future_destroy (f);
 }
 
@@ -272,6 +272,7 @@ void test_or_then (flux_t *h)
 {
     int rc;
     flux_future_t *f, *f2, *f3;
+    const char *errmsg;
 
     /* Send malformed message to force EPROTO */
     if (!(f = flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0, "{}"))) {
@@ -295,6 +296,45 @@ void test_or_then (flux_t *h)
 
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
+    errmsg = flux_future_error_string (f2);
+    ok (!strcmp (errmsg, "Protocol error"),
+        "or-then: error string reported correctly");
+    flux_future_destroy (f2);
+}
+
+void or_then_error_string_cb (flux_future_t *f, void *arg)
+{
+    int rc = flux_future_get (f, NULL);
+    cmp_ok (rc, "<", 0, "or-then: callback: flux_future_get returns < 0");
+    cmp_ok (errno, "==", EPROTO, "or-then: callback: errno is expected");
+    flux_future_continue_error (f, errno, "my errstr");
+    flux_future_destroy (f);
+}
+
+void test_or_then_error_string (flux_t *h)
+{
+    int rc;
+    flux_future_t *f, *f2;
+    const char *errmsg;
+
+    /* Send malformed message to force EPROTO */
+    if (!(f = flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0, "{}"))) {
+        fail ("or-then: failed to create initial future");
+        return;
+    }
+    if (!(f2 = flux_future_or_then (f, or_then_error_string_cb, NULL))) {
+        fail ("or-then: failed to create or-then future");
+        flux_future_destroy (f);
+        return;
+    }
+
+    /*  Call get() in blocking "now" context */
+    rc = flux_future_get (f2, NULL);
+    cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
+    cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
+    errmsg = flux_future_error_string (f2);
+    ok (!strcmp (errmsg, "my errstr"),
+        "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }
 
@@ -320,6 +360,7 @@ int main (int argc, char *argv[])
     test_chained_then_harder (h);
     test_chained_now_harder (h);
     test_or_then (h);
+    test_or_then_error_string (h);
 
     ok (test_server_stop (h) == 0,
         "stopped test server thread");
