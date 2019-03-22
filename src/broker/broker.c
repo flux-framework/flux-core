@@ -54,6 +54,7 @@
 #include "src/common/libutil/zsecurity.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
+#include "src/common/libutil/fsd.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -237,12 +238,10 @@ void parse_command_line_arguments(int argc, char *argv[],
                 log_err_exit ("heartrate `%s'", optarg);
             break;
         case 'g':   /* --shutdown-grace SECS */
-            errno = 0;
-            ctx->shutdown_grace = strtod (optarg, &endptr);
-            if (errno || *endptr != '\0')
+            if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
                 log_err_exit ("shutdown-grace '%s'", optarg);
-            if (ctx->shutdown_grace < 0)
                 usage ();
+            }
             break;
         case 'S': { /* --setattr ATTR=VAL */
             char *val, *attr = xstrdup (optarg);

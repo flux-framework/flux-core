@@ -109,8 +109,8 @@ static struct optparse_option wait_event_opts[] =  {
     { .name = "context-format", .key = 'c', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify context format: text, json",
     },
-    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "SECONDS",
-      .usage = "Timeout in seconds to give up waiting",
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
+      .usage = "timeout after DURATION",
     },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Do not output matched event",
@@ -827,7 +827,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
-    ctx.timeout = optparse_get_double (p, "timeout", -1.0);
+    ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
     ctx.format = optparse_get_str (p, "context-format", "text");
     if (strcasecmp (ctx.format, "text")
         && strcasecmp (ctx.format, "json"))

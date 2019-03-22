@@ -339,11 +339,12 @@ void test_convenience_accessors (void)
 { .name = "neg", .key = 6, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "dub", .key = 7, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "ndb", .key = 8, .has_arg = 1, .arginfo = "", .usage = "" },
+{ .name = "dur", .key = 9, .has_arg = 1, .arginfo = "", .usage = "" },
         OPTPARSE_TABLE_END,
     };
 
     char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4",
-                   "--dub=5.7", "--ndb=-3.2", NULL };
+                   "--dub=5.7", "--ndb=-3.2", "--dur=1.5m", NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
     int rc, optindex;
 
@@ -408,6 +409,25 @@ void test_convenience_accessors (void)
             "get_double returns arg when present");
     ok (optparse_get_double (p, "ndb", 42) == -3.2,
             "get_double returns negative arg when present");
+
+    /* get duration
+     */
+    dies_ok ({optparse_get_duration (p, "no-exist", 0); },
+            "get_duration exits on unknown arg");
+    dies_ok ({optparse_get_duration (p, "foo", 0); },
+            "get_duration exits on option with no argument");
+    dies_ok ({optparse_get_duration (p, "baz", 0); },
+            "get_duration exits on option with wrong type argument (string)");
+    dies_ok ({optparse_get_duration (p, "neg", 42); },
+            "get_duration exits on negative arg");
+    lives_ok ({optparse_get_duration (p, "bar", 0); },
+            "get_duration lives on known arg");
+    ok (optparse_get_duration (p, "bar", 42.0) == 42.0,
+            "get_duration returns default argument when arg not present");
+    ok (optparse_get_duration (p, "mnf", 42) == 7.0,
+            "get_duration returns arg when present");
+    ok (optparse_get_duration (p, "dur", 42) == 90.,
+            "get_duration returns duration arg when present");
 
     /* get_str
      */
@@ -1114,7 +1134,7 @@ void test_non_option_arguments (void)
 int main (int argc, char *argv[])
 {
 
-    plan (251);
+    plan (259);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */

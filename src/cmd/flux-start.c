@@ -88,8 +88,8 @@ static struct optparse_option opts[] = {
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
-    { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
-      .usage = "After a broker exits, kill other brokers after SECONDS", },
+    { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "DURATION",
+      .usage = "After a broker exits, kill other brokers after DURATION", },
     { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
       .usage = "Trace pmi simple server protocol exchange", },
     { .name = "scratchdir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
@@ -162,8 +162,8 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_set usage");
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
-    ctx.killer_timeout = optparse_get_double (ctx.opts, "killer-timeout",
-                                              DEFAULT_KILLER_TIMEOUT);
+    ctx.killer_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
+                                                DEFAULT_KILLER_TIMEOUT);
     if (ctx.killer_timeout < 0.)
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optindex < argc) {

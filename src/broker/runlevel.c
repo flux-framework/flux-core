@@ -22,6 +22,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/fsd.h"
 
 #include "runlevel.h"
 
@@ -125,7 +126,7 @@ static int runlevel_attr_set (const char *name, const char *val, void *arg)
         if (runlevel_set_mode (r, val) < 0)
             goto error;
     } else if (!strcmp (name, "init.rc2_timeout")) {
-        if ((r->rc[2].timeout = strtod (val, NULL)) < 0.) {
+        if (fsd_parse_duration (val, &r->rc[2].timeout) < 0) {
             errno = EINVAL;
             goto error;
         }
@@ -158,8 +159,7 @@ int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
         return -1;
 
     if (attr_get (attrs, "init.rc2_timeout", &val, NULL) == 0) {
-
-        if ((r->rc[2].timeout = strtod (val, NULL)) < 0.
+        if ((fsd_parse_duration (val, &r->rc[2].timeout) < 0)
                 || attr_delete (attrs, "init.rc2_timeout", true) < 0)
             return -1;
     }

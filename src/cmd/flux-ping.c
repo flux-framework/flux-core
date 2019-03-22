@@ -217,7 +217,7 @@ int main (int argc, char *argv[])
 
     ctx.rank = optparse_get_str (opts, "rank", NULL);
 
-    ctx.interval = optparse_get_double (opts, "interval", 1.0);
+    ctx.interval = optparse_get_duration (opts, "interval", 1.0);
     if (ctx.interval < 0.)
         log_msg_exit ("interval must be >= 0");
 
