@@ -786,7 +786,7 @@ static void aggregate_load_wait (optparse_t *p, flux_t *h, const char *key)
     double timeout;
     flux_future_t *f = NULL;
 
-    timeout = optparse_get_double (p, "timeout", 15.);
+    timeout = optparse_get_duration (p, "timeout", 15.);
 
     if (!(f = aggregate_wait (h, key))
        || flux_future_wait_for (f, timeout) < 0)
@@ -950,7 +950,7 @@ static struct optparse_option aggregate_load_opts[] = {
       .usage = "Increase verbosity (only affects rank 0)",
     },
     { .name = "timeout", .key = 't', .has_arg = 1,
-      .usage = "Time to wait for aggregate completion (default 15.0s)",
+      .usage = "Duration to wait for aggregate completion (default 15.0s)",
     },
     { .name = "rank", .key = 'r', .has_arg = 1,
       .usage = "ranks on which to perform a local topology reload",

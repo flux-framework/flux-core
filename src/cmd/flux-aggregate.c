@@ -226,7 +226,7 @@ int main (int argc, char *argv[])
 
     args.verbose = optparse_hasopt (p, "verbose");
     args.fwd_count = optparse_get_int (p, "fwd-count", 0);
-    args.timeout = optparse_get_double (p, "timeout", -1.);
+    args.timeout = optparse_get_duration (p, "timeout", -1.);
 
     if (!(args.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
