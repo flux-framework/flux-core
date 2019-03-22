@@ -33,6 +33,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/fsd.h"
 
 #include "task.h"
 #include "entry.h"
@@ -883,12 +884,8 @@ static void process_args (cron_ctx_t *ctx, int ac, char **av)
             cron_ctx_sync_event_init (ctx, (av[i])+5);
         else if (strncmp (av[i], "sync_epsilon=", 13) == 0) {
             char *s = (av[i])+13;
-            char *endptr;
-            double d = strtod (s, &endptr);
-            if (d == 0 && endptr == s)
+            if (fsd_parse_duration (s, &ctx->sync_epsilon) < 0)
                 flux_log_error (ctx->h, "option %s ignored", av[i]);
-            else
-                ctx->sync_epsilon = d;
         }
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
