@@ -135,15 +135,12 @@ void submitbench_continuation (flux_future_t *f, void *arg)
 {
     struct submitbench_ctx *ctx = arg;
     flux_jobid_t id;
-    const char *errmsg;
 
     if (flux_job_submit_get_id (f, &id) < 0) {
-        if ((errmsg = flux_future_error_string (f)))
-            log_msg_exit ("submit: %s", errmsg);
-        else if (errno == ENOSYS)
+        if (errno == ENOSYS)
             log_msg_exit ("submit: job-ingest module is not loaded");
         else
-            log_err_exit ("submit");
+            log_msg_exit ("submit: %s", flux_future_error_string (f));
     }
     printf ("%llu\n", (unsigned long long)id);
     flux_future_destroy (f);

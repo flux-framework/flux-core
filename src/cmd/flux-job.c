@@ -292,13 +292,9 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
 
     if (!(f = flux_job_set_priority (h, id, priority)))
         log_err_exit ("flux_job_set_priority");
-    if (flux_rpc_get (f, NULL) < 0) {
-        const char *errmsg;
-        if ((errmsg = flux_future_error_string (f)))
-            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
-        else
-            log_err_exit ("%llu", (unsigned long long)id);
-    }
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("%llu: %s", (unsigned long long)id,
+                      flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     return 0;
@@ -327,12 +323,9 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (!(f = flux_job_raise (h, id, type, severity, note)))
         log_err_exit ("flux_job_raise");
-    if (flux_rpc_get (f, NULL) < 0) {
-        const char *errmsg;
-        if ((errmsg = flux_future_error_string (f)))
-            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
-        log_err_exit ("%llu", (unsigned long long)id);
-    }
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("%llu: %s", (unsigned long long)id,
+                      flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -360,12 +353,9 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (!(f = flux_job_cancel (h, id, note)))
         log_err_exit ("flux_job_cancel");
-    if (flux_rpc_get (f, NULL) < 0) {
-        const char *errmsg;
-        if ((errmsg = flux_future_error_string (f)))
-            log_msg_exit ("%llu: %s", (unsigned long long)id, errmsg);
-        log_err_exit ("%llu", (unsigned long long)id);
-    }
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("%llu: %s", (unsigned long long)id,
+                      flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -498,7 +488,6 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_future_t *f;
     flux_jobid_t id;
-    const char *errmsg;
     const char *input = "-";
 
     if (optindex != argc - 1 && optindex != argc) {
@@ -546,12 +535,11 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_submit (h, J ? J : jobspec, priority, flags)))
         log_err_exit ("flux_job_submit");
     if (flux_job_submit_get_id (f, &id) < 0) {
-        if ((errmsg = flux_future_error_string (f)))
-            log_msg_exit ("submit: %s", errmsg);
-        else if (errno == ENOSYS)
+        if (errno == ENOSYS)
             log_msg_exit ("submit: job-ingest module is not loaded");
         else
-            log_err_exit ("submit");
+            log_msg_exit ("%llu: %s", (unsigned long long)id,
+                          flux_future_error_string (f));
     }
     printf ("%llu\n", (unsigned long long)id);
     flux_future_destroy (f);

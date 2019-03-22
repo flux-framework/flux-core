@@ -20,6 +20,7 @@
 #include "src/common/libutil/aux.h"
 
 #include "future.h"
+#include "flog.h"
 
 struct now_context {
     flux_t *h;              // (optional) cloned flux_t handle
@@ -673,12 +674,25 @@ void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr)
 const char *flux_future_error_string (flux_future_t *f)
 {
     if (f) {
-        if (f->fatal_errnum_valid)
-            return f->fatal_errnum_string;
-        if (f->result_valid)
-            return f->result.errnum_string;
+        /* fatal errnum take precedence over any future
+         * fulfillments */
+        if (f->fatal_errnum_valid) {
+            if (f->fatal_errnum_string)
+                return f->fatal_errnum_string;
+            return flux_strerror (f->fatal_errnum);
+        }
+        else if (f->result_valid) {
+            /* future contains a valid fulfillment.  The fulfillment
+             * may be a valid error (with or without optional string) or
+             * non-error (errnum == 0 passed to flux_strerror())
+             */
+            if (f->result.errnum_string)
+                return f->result.errnum_string;
+            return flux_strerror (f->result.errnum);
+        }
+        return "future not fulfilled";
     }
-    return NULL;
+    return "future NULL";
 }
 
 /* timer - for flux_future_then() timeout
