@@ -23,6 +23,7 @@
 #include <czmq.h>
 
 #include "src/common/liblsd/list.h"
+#include "src/common/libutil/fsd.h"
 #include "optparse.h"
 #include "getopt.h"
 #include "getopt_int.h"
@@ -872,6 +873,29 @@ badarg:
                        "%s: Option '%s' requires a floating point argument\n",
                        p->program_name, name);
     return -1;
+}
+
+double optparse_get_duration (optparse_t *p, const char *name,
+                              double default_value)
+{
+    int n;
+    double d;
+    const char *s = NULL;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+    }
+    if (n == 0)
+        return default_value;
+    if (fsd_parse_duration (s, &d) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: Invalid argument for option '%s': '%s'",
+                           p->program_name, name, s);
+        return -1;
+    }
+    return d;
 }
 
 const char *optparse_get_str (optparse_t *p, const char *name,

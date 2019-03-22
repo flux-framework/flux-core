@@ -363,6 +363,16 @@ bool optparse_hasopt (optparse_t *p, const char *name);
 int optparse_get_int (optparse_t *p, const char *name, int default_value);
 
 /*
+ *   Return the option argument parsed as a duration in floating-point
+ *   'seconds[suffix]', where optional suffix is one of s,m,h,d for seconds
+ *   hours, minutes, or days. If 'name' was not used, returns the provided
+ *   default_value. If there was an error parsing the duration string,
+ *   call the fatal error function.
+ */
+double optparse_get_duration (optparse_t *p, const char *name,
+                              double default_value);
+
+/*
  *   Return the option argument as a double if 'name' was used,
  *    'default_value' if not.  If the option is unknown, or the argument
  *    could not be converted to a double, call the fatal error function.

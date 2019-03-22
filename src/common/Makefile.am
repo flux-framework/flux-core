@@ -51,6 +51,7 @@ libflux_optparse_la_SOURCES =
 libflux_optparse_la_LIBADD = \
 	$(builddir)/liboptparse/liboptparse.la \
 	$(builddir)/liblsd/liblsd.la \
+	$(builddir)/libutil/fsd.lo \
 	$(ZMQ_LIBS) $(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-optparse.map \
