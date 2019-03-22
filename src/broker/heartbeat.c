@@ -17,6 +17,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/fsd.h"
 
 #include "heartbeat.h"
 
@@ -76,15 +77,8 @@ error:
 
 int heartbeat_set_ratestr (heartbeat_t *hb, const char *s)
 {
-    char *endptr;
-    double rate = strtod (s, &endptr);
-    if (rate == HUGE_VAL || endptr == optarg)
-        goto error;
-    if (!strcasecmp (endptr, "s") || *endptr == '\0')
-        ;
-    else if (!strcasecmp (endptr, "ms"))
-        rate /= 1000.0;
-    else
+    double rate;
+    if (fsd_parse_duration (s, &rate) < 0)
         goto error;
     return heartbeat_set_rate (hb, rate);
 error:
