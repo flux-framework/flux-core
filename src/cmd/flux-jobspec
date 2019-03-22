@@ -89,20 +89,7 @@ def validate_slurm_args(args):
     # IDEA: print a warning if the file already exists or if the parent dir doesn't exist
 
 
-#  Convert floating point "time" in seconds to duration string with suffix
-#   's' for seconds, 'm' for minutes, 'h' for hours, and 'd' for days.
-def sec_to_duration(time):
-    if time < 2 * 60.0:
-        return "%ss" % str(time)
-    elif time < 2 * 60 * 60:
-        return "%sm" % str(time / 60.0)
-    elif time < 60 * 60 * 24:
-        return "%sh" % str(time / (60 * 60))
-    else:
-        return "%sd" % str(time / (60 * 60 * 24))
-
-
-#  Convert slurm walltime string to Flux duration string
+#  Convert slurm walltime string to floating point seconds
 def slurm_walltime_to_duration(time):
     if not time:
         return None
@@ -129,7 +116,7 @@ def slurm_walltime_to_duration(time):
         t = t + vals["seconds"]
     if t == 0.0:
         return None
-    return sec_to_duration(t)
+    return t
 
 
 def slurm_jobspec(args):

@@ -419,16 +419,11 @@ static void jobinfo_fatal_error (struct jobinfo *job, int errnum,
 
 static double jobspec_duration (flux_t *h, json_t *jobspec)
 {
-    const char *s;
     double duration = 0.;
-    if (json_unpack (jobspec, "{s:{s:{s:s}}}",
+    if (json_unpack (jobspec, "{s:{s:{s:F}}}",
                               "attributes", "system",
-                              "duration", &s) < 0)
+                              "duration", &duration) < 0)
         return -1.;
-    if (fsd_parse_duration (s, &duration) < 0) {
-        flux_log (h, LOG_ERR, "Unable to parse jobspec duration %s", s);
-        return -1.;
-    }
     return duration;
 }
 

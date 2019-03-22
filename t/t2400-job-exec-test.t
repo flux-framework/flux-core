@@ -64,30 +64,6 @@ test_expect_success 'job-exec: canceling job during execution works' '
 	flux job wait-event -t 2.5 ${jobid} clean &&
 	exec_eventlog $jobid | grep "complete status=9"
 '
-test_expect_success HAVE_JQ 'job-exec: supports duration in minutes' '
-	flux jobspec srun hostname | \
-	  jq ".attributes.system.duration = \"0.5m\"" > 0.5m.json &&
-	jobid=$(flux job submit 0.5m.json) &&
-	flux job wait-event ${jobid} start &&
-	exec_eventlog ${jobid} | grep timer=30.000000s &&
-	flux job cancel ${jobid}
-'
-test_expect_success HAVE_JQ 'job-exec: supports duration in hours' '
-	flux jobspec srun hostname | \
-	  jq ".attributes.system.duration = \"0.5h\"" > 0.5h.json &&
-	jobid=$(flux job submit 0.5h.json) &&
-	flux job wait-event ${jobid} start &&
-	exec_eventlog ${jobid} | grep timer=1800.000000s &&
-	flux job cancel ${jobid}
-'
-test_expect_success HAVE_JQ 'job-exec: supports duration in days' '
-	flux jobspec srun hostname | \
-	  jq ".attributes.system.duration = \"0.5d\"" > 0.5d.json &&
-	jobid=$(flux job submit 0.5d.json) &&
-	flux job wait-event ${jobid} start &&
-	exec_eventlog ${jobid} | grep timer=43200.000000s &&
-	flux job cancel ${jobid}
-'
 test_expect_success HAVE_JQ 'job-exec: mock exception during initialization' '
 	flux jobspec srun hostname | \
 	  exec_testattr mock_exception init > ex1.json &&
