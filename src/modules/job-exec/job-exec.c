@@ -87,6 +87,7 @@
 #include <flux/idset.h>
 
 #include "src/common/libutil/fluid.h"
+#include "src/common/libutil/fsd.h"
 #include "rset.h"
 
 struct job_exec_ctx {
@@ -416,39 +417,6 @@ static void jobinfo_fatal_error (struct jobinfo *job, int errnum,
     errno = saved_errno;
 }
 
-int parse_duration (const char *s, double *dp)
-{
-    double d;
-    char *p;
-    d = strtod (s, &p);
-    if ((d < 0.) || (*p && *(p+1)))
-        return -1;
-
-    if (*p != '\0') {
-        unsigned int multiplier = 0;
-        switch (*p) {
-            case 0:
-            case 's':
-                multiplier = 1;
-                break;
-            case 'm':
-                multiplier = 60;
-                break;
-            case 'h':
-                multiplier = 60 * 60;
-                break;
-            case 'd':
-                multiplier = 60 * 60 * 24;
-                break;
-        }
-        if (multiplier == 0)
-            return -1;
-        d *= multiplier;
-    }
-    *dp = d;
-    return (0);
-}
-
 static double jobspec_duration (flux_t *h, json_t *jobspec)
 {
     const char *s;
@@ -457,7 +425,7 @@ static double jobspec_duration (flux_t *h, json_t *jobspec)
                               "attributes", "system",
                               "duration", &s) < 0)
         return -1.;
-    if (parse_duration (s, &duration) < 0) {
+    if (fsd_parse_duration (s, &duration) < 0) {
         flux_log (h, LOG_ERR, "Unable to parse jobspec duration %s", s);
         return -1.;
     }
@@ -491,9 +459,9 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
         flux_log (h, LOG_ERR, "init_testconf: %s", err.text);
         return -1;
     }
-    if (trun && parse_duration (trun, &conf->run_duration) < 0)
+    if (trun && fsd_parse_duration (trun, &conf->run_duration) < 0)
         flux_log (h, LOG_ERR, "Unable to parse run duration: %s", trun);
-    if (tclean && parse_duration (tclean, &conf->cleanup_duration) < 0)
+    if (tclean && fsd_parse_duration (tclean, &conf->cleanup_duration) < 0)
         flux_log (h, LOG_ERR, "Unable to parse cleanup duration: %s", tclean);
     return 0;
 }
