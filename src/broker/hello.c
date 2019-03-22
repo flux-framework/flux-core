@@ -16,6 +16,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/fsd.h"
 
 #include "hello.h"
 #include "reduce.h"
@@ -93,7 +94,10 @@ int hello_register_attrs (hello_t *hello, attr_t *attrs)
 
     hello->attrs = attrs;
     if (attr_get (attrs, "hello.timeout", &s, NULL) == 0) {
-        timeout = strtod (s, NULL);
+        if (fsd_parse_duration (s, &timeout) < 0) {
+            log_err ("hello: invalid hello.timeout: %s", s);
+            return -1;
+        }
         if (attr_delete (attrs, "hello.timeout", true) < 0)
             return -1;
     }
@@ -172,7 +176,8 @@ int hello_start (hello_t *hello)
             log_err ("hello: reading hello.timeout attribute");
             goto done;
         }
-        timeout = strtod (s, NULL);
+        if (fsd_parse_duration (s, &timeout) < 0)
+            log_err ("hello: invalid hello.timeout attribute");
     }
     if (timeout > 0.)
         flags |= FLUX_REDUCE_TIMEDFLUSH;
