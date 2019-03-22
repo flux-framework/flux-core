@@ -44,7 +44,7 @@ def main():
                 "count": {"total": args.num_tasks},
             }
         ],
-        "attributes": {"system": {"duration": "{} seconds".format(args.walltime)}},
+        "attributes": {"system": {"duration": args.walltime}},
     }
 
     if args.pretty:

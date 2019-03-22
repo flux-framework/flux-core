@@ -38,4 +38,4 @@ tasks:
       per_slot: 1
 attributes:
   system:
-    duration: 4 hours
+    duration: 14400.

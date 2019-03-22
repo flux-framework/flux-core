@@ -13,4 +13,4 @@ tasks:
       total: 5
 attributes:
   system:
-    duration: 1 hour
+    duration: 3600.

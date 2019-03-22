@@ -13,5 +13,5 @@ tasks:
       per_slot: 1
 attributes:
   system:
-    duration: 1
+    duration: 1h
   foo: 1
