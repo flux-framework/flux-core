@@ -190,7 +190,7 @@ static void step2_err (flux_future_t *f, void *arg)
     ok (flux_future_get (f, (const void **)&result) == 0,
         "chained: step2: flux_future_get returns success");
     strcat (str, "-step2_err");
-    flux_future_continue_error (f, 123);
+    flux_future_continue_error (f, 123, NULL);
     flux_future_destroy (f);
 }
 
