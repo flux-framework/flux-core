@@ -57,7 +57,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: paused job now has start event' '
 	grep "test-exec3: start: ${id}" server3.log
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: hello now returns error due to running job' '
-	run_timeout 5 test_must_fail ${execservice} testexecfoo
+	test_expect_code 1 run_timeout 5 ${execservice} testexecfoo
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: terminate all jobs and servers' '
 	flux job cancel ${id} &&
