@@ -120,14 +120,20 @@ AS_IF([test "x$enable_docs" != "xno"], [
 	AC_SUBST([ADOC_FORMAT_OPT])
   ])
   AS_IF([test "$ADOC" == "asciidoctor"], [
-	ASCIIDOCTOR_VERSION=$(asciidoctor --version | sed -n 's/^Asciidoctor \([^ ]*\) .*$/\1/p')
-	AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
-	  ADOC_FORMAT_OPT="--backend"
-	  AC_SUBST([ADOC_FORMAT_OPT])
-  	  ], [
-	  ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required"
-	  AC_MSG_WARN([$ADOC_ERROR_MSG])
-	  ADOC=""])
+        AC_MSG_CHECKING([Asciidoctor version])
+        ASCIIDOCTOR_VERSION=$(asciidoctor --version|sed -n 's/Asciidoctor \(.*\) .*/\1/p')
+        AC_MSG_RESULT([$ASCIIDOCTOR_VERSION])
+        AS_IF([test -z "$ASCIIDOCTOR_VERSION"],[
+              AC_MSG_ERROR([Failed to read asciidoctor version])
+        ])
+        AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
+          ADOC_FORMAT_OPT="--backend"
+          AC_SUBST([ADOC_FORMAT_OPT])
+        ],[
+          ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required, got $ASCIIDOCTOR_VERSION"
+          AC_MSG_WARN([$ADOC_ERROR_MSG])
+          ADOC=""
+        ])
   ])
 ])
 AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
