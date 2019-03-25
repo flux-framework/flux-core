@@ -116,8 +116,8 @@ AC_ARG_ENABLE([docs],
 AS_IF([test "x$enable_docs" != "xno"], [
   AC_CHECK_PROGS(ADOC, [a2x asciidoctor])
   AS_IF([test "$ADOC" == "a2x"], [
-	ADOC_FORMAT_OPT="--format"
-	AC_SUBST([ADOC_FORMAT_OPT])
+        ADOC_FORMAT_OPT="--format"
+        AC_SUBST([ADOC_FORMAT_OPT])
   ])
   AS_IF([test "$ADOC" == "asciidoctor"], [
         AC_MSG_CHECKING([Asciidoctor version])
@@ -135,6 +135,13 @@ AS_IF([test "x$enable_docs" != "xno"], [
           ADOC=""
         ])
   ])
+])
+#
+#  If --enable-docs=yes, but no doc generator found,
+#   then error immediately:
+#
+AS_IF([test "x$enable_docs" = "xyes" -a -z "$ADOC"],[
+  AC_MSG_ERROR([--enable-docs used but no document generator found!])
 ])
 AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])
