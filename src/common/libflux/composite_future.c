@@ -53,15 +53,36 @@ static struct composite_future * composite_get (flux_future_t *f)
 /*
  *  Return true if all futures in this composite are ready
  */
-static bool wait_all_is_ready (struct composite_future *cf)
+static bool wait_all_is_ready (struct composite_future *cf, int *errnum)
 {
+    int err = 0;
     flux_future_t *f = zhash_first (cf->children);
     while (f) {
         if (!flux_future_is_ready (f))
             return (false);
+        if (flux_future_get (f, NULL) < 0)
+            err = errno;
         f = zhash_next (cf->children);
     }
+    *errnum = err;
     return (true);
+}
+
+/*
+ *  Return true if cf->any or if all futures are fulfilled.
+ *  Sets *errp to returned errno if any future failed for wait_all
+ *   case, or if 'f', the current future, has error set for
+ *   wait_any case.
+ */
+static bool composite_is_ready (struct composite_future *cf,
+                                flux_future_t *f,
+                                int *errp)
+{
+    if (cf->any) {
+        *errp = flux_future_get (f, NULL) < 0 ? errno : 0;
+        return true;
+    }
+    return wait_all_is_ready (cf, errp);
 }
 
 /*  Continuation for children of a composition future -- simply check
@@ -69,18 +90,18 @@ static bool wait_all_is_ready (struct composite_future *cf)
  */
 static void child_cb (flux_future_t *f, void *arg)
 {
+    int errnum;
     flux_future_t *parent = arg;
     struct composite_future *cf = composite_get (parent);
     if (!arg || !cf)
         return;
-    /*
-     *  Fulfill the composite future if "wait any" is set, or all child
-     *   futures are fulfilled:
-     */
-    if (cf->any || wait_all_is_ready (cf))
-        flux_future_fulfill (parent, NULL, NULL);
+    if (composite_is_ready (cf, f, &errnum)) {
+        if (errnum)
+            flux_future_fulfill_error (parent, errnum, NULL);
+        else
+            flux_future_fulfill (parent, NULL, NULL);
+    }
 }
-
 
 /*  Propagate the current reactor *and* flux_t handle context from
  *   future `f` to another future `next`.
