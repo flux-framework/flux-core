@@ -29,6 +29,11 @@ struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
  */
 int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job);
 
+/* Dequeue job from sched inqueue, e.g. on exception.
+ * This function is a no-op if job->alloc_queued is not set.
+ */
+void alloc_dequeue_alloc_request (struct alloc_ctx *ctx, struct job *job);
+
 /* Call from CLEANUP state to release resources.
  * This function is a no-op if job->free_pending is set.
  */

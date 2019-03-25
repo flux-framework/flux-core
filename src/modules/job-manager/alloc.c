@@ -455,6 +455,16 @@ int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job)
     return 0;
 }
 
+void alloc_dequeue_alloc_request (struct alloc_ctx *ctx, struct job *job)
+{
+    if (job->alloc_queued) {
+        queue_delete (ctx->inqueue, job, job->aux_queue_handle);
+        job->aux_queue_handle = NULL;
+        job->alloc_queued = 0;
+        ctx->active_alloc_count--;
+    }
+}
+
 void alloc_ctx_destroy (struct alloc_ctx *ctx)
 {
     if (ctx) {
