@@ -21,6 +21,9 @@ test_expect_success 'run_timeout works' '
 test_expect_success 'test run_timeout with success' '
 	run_timeout 0.01 /bin/true
 '
+test_expect_success 'run_timeout fails if exec fails' '
+	test_must_fail run_timeout 0.01 /nonexistent/executable
+'
 test_expect_success 'we can find a flux binary' '
 	flux --help >/dev/null
 '

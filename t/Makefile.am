@@ -39,8 +39,12 @@ install-data-local:
 uninstall-local:
 	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
 
-TESTS = \
-	shmem/backtoback.t \
+clean-local:
+	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__
+
+
+# This list is included in both TESTS and dist_check_SCRIPTS.
+TESTSCRIPTS = \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
@@ -112,13 +116,16 @@ TESTS = \
 	python/t0012-futures.py \
 	python/t1000-service-add-remove.py
 
-
 if HAVE_FLUX_SECURITY
-TESTS += python/t0009-security.py
+TESTSCRIPTS += python/t0009-security.py
 endif
 
+# make check runs these TAP tests directly (both scripts and programs)
+TESTS = \
+	shmem/backtoback.t \
+	$(TESTSCRIPTS)
+
 EXTRA_DIST= \
-	$(check_SCRIPTS) \
 	aggregate-results.sh \
 	sharness.sh \
 	sharness.d \
@@ -134,88 +141,24 @@ EXTRA_DIST= \
 	rc/rc3-job \
 	jobspec
 
-clean-local:
-	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__
-
-check_SCRIPTS = \
-	t0000-sharness.t \
-	t0001-basic.t \
-	t0002-request.t \
-	t0003-module.t \
-	t0004-event.t \
-	t0005-exec.t \
-	t0005-rexec.t \
-	t0007-ping.t \
-	t0008-attr.t \
-	t0009-dmesg.t \
-	t0010-generic-utils.t \
-	t0011-content-cache.t \
-	t0012-content-sqlite.t \
-	t0013-config-file.t \
-	t0014-runlevel.t \
-	t0015-cron.t \
-	t0016-cron-faketime.t \
-	t0017-security.t \
-	t0019-jobspec-schema.t \
-	t0020-emit-jobspec.t \
-	t0021-flux-jobspec.t \
-	t0022-jj-reader.t \
-	t1000-kvs.t \
-	t1001-kvs-internals.t \
-	t1003-kvs-stress.t \
-	t1004-kvs-namespace.t \
-	t1005-kvs-security.t \
-	t1007-kvs-lookup-watch.t \
-	t1008-kvs-eventlog.t \
-	t1009-kvs-copy.t \
-	t1101-barrier-basic.t \
-	t1102-cmddriver.t \
-	t1103-apidisconnect.t \
-	t1105-proxy.t \
-	t2004-hydra.t \
-	t2005-hwloc-basic.t \
-	t2007-caliper.t \
-	t2008-althash.t \
-	t2010-kvs-snapshot-restore.t \
-	t2100-aggregate.t \
-	t2200-job-ingest.t \
-	t2201-job-cmd.t \
-	t2202-job-manager.t \
-	t2203-job-manager-dummysched.t \
-	t2204-job-info.t \
-	t2300-sched-simple.t \
-	t2400-job-exec-test.t \
-	t2401-job-exec-hello.t \
-	t4000-issues-test-driver.t \
-	t5000-valgrind.t \
-	t9001-pymod.t \
+dist_check_SCRIPTS = \
+	$(TESTSCRIPTS) \
         issues/t0441-kvs-put-get.sh \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
 	issues/t1760-kvs-use-after-free.sh \
-	lua/t0001-send-recv.t \
-	lua/t0002-rpc.t \
-	lua/t0003-events.t \
-	lua/t0004-getattr.t \
-	lua/t0007-alarm.t \
-	lua/t1000-reactor.t \
-	lua/t1001-timeouts.t \
-	lua/t1004-statwatcher.t \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
-	python/t0001-handle.py \
-	python/t0002-wrapper.py \
-	python/t0003-barrier.py \
-	python/t0004-event.py \
-	python/t0005-kvs.py \
-	python/t0006-request.py \
-	python/t0007-watchers.py \
-	python/t0009-security.py \
-	python/t0010-job.py \
-	python/t0011-mrpc.py \
-	python/t0012-futures.py \
-	python/t1000-service-add-remove.py
+	scripts/event-trace.lua \
+	scripts/event-trace-bypass.lua \
+	scripts/waitfile.lua \
+	scripts/t0004-event-helper.sh \
+	scripts/tssh \
+	valgrind/valgrind-workload.sh \
+	valgrind/workload.d/job \
+	kvs/kvs-helper.sh \
+	job-manager/exec-service.lua
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
@@ -245,17 +188,17 @@ check_PROGRAMS = \
 	ingest/submitbench \
 	sched-simple/jj-reader
 
+if HAVE_MPI
+check_PROGRAMS += \
+	mpi/hello
+endif
+
 check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
 	request/req.la \
 	ingest/job-manager-dummy.la \
 	job-manager/sched-dummy.la
-
-if HAVE_MPI
-check_PROGRAMS += \
-	mpi/hello
-endif
 
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
@@ -274,17 +217,6 @@ dist_check_DATA = \
 	conf.d/bad-rank.conf \
 	conf.d/priv2.0.conf \
 	conf.d/priv2.1.conf
-
-dist_check_SCRIPTS = \
-	scripts/event-trace.lua \
-	scripts/event-trace-bypass.lua \
-	scripts/waitfile.lua \
-	scripts/t0004-event-helper.sh \
-	scripts/tssh \
-	valgrind/valgrind-workload.sh \
-	valgrind/workload.d/job \
-	kvs/kvs-helper.sh \
-	job-manager/exec-service.lua
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \

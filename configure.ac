@@ -116,19 +116,32 @@ AC_ARG_ENABLE([docs],
 AS_IF([test "x$enable_docs" != "xno"], [
   AC_CHECK_PROGS(ADOC, [a2x asciidoctor])
   AS_IF([test "$ADOC" == "a2x"], [
-	ADOC_FORMAT_OPT="--format"
-	AC_SUBST([ADOC_FORMAT_OPT])
+        ADOC_FORMAT_OPT="--format"
+        AC_SUBST([ADOC_FORMAT_OPT])
   ])
   AS_IF([test "$ADOC" == "asciidoctor"], [
-	ASCIIDOCTOR_VERSION=$(asciidoctor --version | sed -n 's/^Asciidoctor \([^ ]*\) .*$/\1/p')
-	AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
-	  ADOC_FORMAT_OPT="--backend"
-	  AC_SUBST([ADOC_FORMAT_OPT])
-  	  ], [
-	  ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required"
-	  AC_MSG_WARN([$ADOC_ERROR_MSG])
-	  ADOC=""])
+        AC_MSG_CHECKING([Asciidoctor version])
+        ASCIIDOCTOR_VERSION=$(asciidoctor --version|sed -n 's/Asciidoctor \(.*\) .*/\1/p')
+        AC_MSG_RESULT([$ASCIIDOCTOR_VERSION])
+        AS_IF([test -z "$ASCIIDOCTOR_VERSION"],[
+              AC_MSG_ERROR([Failed to read asciidoctor version])
+        ])
+        AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
+          ADOC_FORMAT_OPT="--backend"
+          AC_SUBST([ADOC_FORMAT_OPT])
+        ],[
+          ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required, got $ASCIIDOCTOR_VERSION"
+          AC_MSG_WARN([$ADOC_ERROR_MSG])
+          ADOC=""
+        ])
   ])
+])
+#
+#  If --enable-docs=yes, but no doc generator found,
+#   then error immediately:
+#
+AS_IF([test "x$enable_docs" = "xyes" -a -z "$ADOC"],[
+  AC_MSG_ERROR([--enable-docs used but no document generator found!])
 ])
 AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])

@@ -129,7 +129,7 @@ script:
   src/test/docker/docker-run-checks.sh -j2 \
     --image=${IMG} \
     ${TAGNAME:+--tag=${TAGNAME}} \
-    -- ${ARGS}
+    -- --enable-docs ${ARGS}
 
 after_success:
  - ccache -s

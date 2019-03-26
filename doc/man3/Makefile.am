@@ -171,7 +171,6 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_eventlog_destroy.3 \
 	flux_kvs_eventlog_encode.3 \
 	flux_kvs_eventlog_decode.3 \
-	flux_kvs_eventlog_update.3 \
 	flux_kvs_eventlog_append.3 \
 	flux_kvs_eventlog_first.3 \
 	flux_kvs_eventlog_next.3 \
@@ -311,7 +310,6 @@ flux_kvs_namespace_remove.3: flux_kvs_namespace_create.3
 flux_kvs_eventlog_destroy.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_encode.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_decode.3: flux_kvs_eventlog_create.3
-flux_kvs_eventlog_update.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_append.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_first.3: flux_kvs_eventlog_create.3
 flux_kvs_eventlog_next.3: flux_kvs_eventlog_create.3
