@@ -23,7 +23,7 @@
 #include "alloc.h"
 #include "start.h"
 #include "event.h"
-
+#include "drain.h"
 
 struct job_manager_ctx {
     flux_t *h;
@@ -32,14 +32,9 @@ struct job_manager_ctx {
     struct start_ctx *start_ctx;
     struct alloc_ctx *alloc_ctx;
     struct event_ctx *event_ctx;
+    struct submit_ctx *submit_ctx;
+    struct drain_ctx *drain_ctx;
 };
-
-static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
-{
-    struct job_manager_ctx *ctx = arg;
-    submit_handle_request (h, ctx->queue, ctx->event_ctx, msg);
-}
 
 static void list_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
@@ -63,7 +58,6 @@ static void priority_cb (flux_t *h, flux_msg_handler_t *mh,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
     { FLUX_MSGTYPE_REQUEST, "job-manager.list", list_cb, FLUX_ROLE_USER},
     { FLUX_MSGTYPE_REQUEST, "job-manager.raise", raise_cb, FLUX_ROLE_USER},
     { FLUX_MSGTYPE_REQUEST, "job-manager.priority", priority_cb, FLUX_ROLE_USER},
@@ -87,12 +81,20 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating event batcher");
         goto done;
     }
+    if (!(ctx.submit_ctx = submit_ctx_create (h, ctx.queue, ctx.event_ctx))) {
+        flux_log_error (h, "error creating submit interface");
+        goto done;
+    }
     if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue, ctx.event_ctx))) {
         flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
     if (!(ctx.start_ctx = start_ctx_create (h, ctx.queue, ctx.event_ctx))) {
         flux_log_error (h, "error creating exec interface");
+        goto done;
+    }
+    if (!(ctx.drain_ctx = drain_ctx_create (h, ctx.queue, ctx.submit_ctx))) {
+        flux_log_error (h, "error creating drain interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
@@ -110,8 +112,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    drain_ctx_destroy (ctx.drain_ctx);
     start_ctx_destroy (ctx.start_ctx);
     alloc_ctx_destroy (ctx.alloc_ctx);
+    submit_ctx_destroy (ctx.submit_ctx);
     event_ctx_destroy (ctx.event_ctx);
     queue_destroy (ctx.queue);
     return rc;

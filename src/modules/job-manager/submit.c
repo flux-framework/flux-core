@@ -24,6 +24,14 @@
 
 #include "submit.h"
 
+struct submit_ctx {
+    flux_t *h;
+    bool submit_disable;
+    flux_msg_handler_t **handlers;
+    struct queue *queue;
+    struct event_ctx *event_ctx;
+};
+
 /* Decode 'o' into a struct job, then add it to the queue.
  * Also record the job in 'newjobs'.
  */
@@ -163,20 +171,26 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
  * by the ingest module, and already instantiated in the KVS.
  * The user isn't handed the jobid though until we accept the job here.
  */
-void submit_handle_request (flux_t *h,
-                            struct queue *queue,
-                            struct event_ctx *event_ctx,
-                            const flux_msg_t *msg)
+static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
 {
+    struct submit_ctx *ctx = arg;
     json_t *jobs;
     zlist_t *newjobs;
     struct job *job;
+    const char *errmsg = NULL;
+    int rc;
 
     if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0) {
         flux_log_error (h, "%s", __FUNCTION__);
         goto error;
     }
-    if (!(newjobs = submit_enqueue_jobs (queue, jobs))) {
+    if (ctx->submit_disable) {
+        errno = EINVAL;
+        errmsg = "job submission is disabled";
+        goto error;
+    }
+    if (!(newjobs = submit_enqueue_jobs (ctx->queue, jobs))) {
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
@@ -189,7 +203,7 @@ void submit_handle_request (flux_t *h,
      * Now walk the list of new jobs and advance their state.
      */
     while ((job = zlist_pop (newjobs))) {
-        if (submit_post_event (event_ctx, job) < 0)
+        if (submit_post_event (ctx->event_ctx, job) < 0)
             flux_log_error (h, "%s: submit_post_event id=%llu",
                             __FUNCTION__, (unsigned long long)job->id);
         job_decref (job);
@@ -197,8 +211,56 @@ void submit_handle_request (flux_t *h,
     zlist_destroy (&newjobs);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (errmsg)
+        rc = flux_respond_error (h, msg, errno, "%s", errmsg);
+    else
+        rc = flux_respond_error (h, msg, errno, NULL);
+    if (rc < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+void submit_enable (struct submit_ctx *ctx)
+{
+    ctx->submit_disable = false;
+}
+
+void submit_disable (struct submit_ctx *ctx)
+{
+    ctx->submit_disable = true;
+}
+
+void submit_ctx_destroy (struct submit_ctx *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (ctx->handlers);
+        free (ctx);
+        errno = saved_errno;
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct submit_ctx *submit_ctx_create (flux_t *h,
+                                      struct queue *queue,
+                                      struct event_ctx *event_ctx)
+{
+    struct submit_ctx *ctx;
+
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    ctx->h = h;
+    ctx->queue = queue;
+    ctx->event_ctx = event_ctx;
+    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+        goto error;
+    return ctx;
+error:
+    submit_ctx_destroy (ctx);
+    return NULL;
 }
 
 /*

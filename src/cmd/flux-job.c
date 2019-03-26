@@ -42,6 +42,8 @@ int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
 int cmd_eventlog (optparse_t *p, int argc, char **argv);
 int cmd_wait_event (optparse_t *p, int argc, char **argv);
+int cmd_drain (optparse_t *p, int argc, char **argv);
+int cmd_undrain (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -121,6 +123,13 @@ static struct optparse_option wait_event_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option drain_opts[] =  {
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
+      .usage = "timeout after DURATION",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -177,6 +186,20 @@ static struct optparse_subcommand subcommands[] = {
       cmd_wait_event,
       0,
       wait_event_opts
+    },
+    { "drain",
+      "[-t seconds]",
+      "Disable job submissions and wait for queue to empty.",
+      cmd_drain,
+      0,
+      drain_opts
+    },
+    { "undrain",
+      NULL,
+      "Re-enable job submissions after drain.",
+      cmd_undrain,
+      0,
+      NULL
     },
     OPTPARSE_SUBCMD_END
 };
@@ -840,6 +863,50 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    flux_close (h);
+    return (0);
+}
+
+int cmd_drain (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    double timeout = optparse_get_duration (p, "timeout", -1.);
+    flux_future_t *f;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (argc - optindex != 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(f = flux_rpc (h, "job-manager.drain", NULL, FLUX_NODEID_ANY, 0)))
+        log_err_exit ("flux_rpc");
+    if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("drain: %s", errno == ETIMEDOUT
+                                   ? "timeout" : flux_future_error_string (f));
+    flux_future_destroy (f);
+    flux_close (h);
+    return (0);
+}
+
+int cmd_undrain (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (argc - optindex != 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(f = flux_rpc (h, "job-manager.undrain", NULL, FLUX_NODEID_ANY, 0)))
+        log_err_exit ("flux_rpc");
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("undrain: %s", flux_future_error_string (f));
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }

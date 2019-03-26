@@ -16,7 +16,7 @@
  * event transitions a job from SCHED to RUN state.
  *
  * event_job_action() is called after event_job_update().  It takes actions
- * appropriate for job state and flags.  flags.  For example, in RUN state,
+ * appropriate for job state and flags.  For example, in RUN state,
  * job shells are started.
  *
  * Events are logged in the job eventlog in the KVS.  For performance,
@@ -219,6 +219,9 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_CLEANUP:
+            if (job->alloc_queued)
+                alloc_dequeue_alloc_request (ctx->alloc_ctx, job);
+
             /* N.B. start_pending indicates that the start request is still
              * expecting responses.  The final response is the 'release'
              * response with final=true.  Thus once the flag is clear,

@@ -15,6 +15,10 @@
 #include "src/common/libjob/job.h"
 #include "job.h"
 
+struct queue;
+
+typedef void (*queue_notify_f) (struct queue *queue, void *arg);
+
 /* Create a job queue, sorted by priority, then t_submit.
  * If lookup_hash=true, create a hash to speed up queue_lookup_by_id().
  */
@@ -50,6 +54,11 @@ struct job *queue_next (struct queue *queue);
 /* Return the number of jobs in the queue
  */
 int queue_size (struct queue *queue);
+
+/* Arrange to be notified when queue size decreases to zero.
+ */
+void queue_set_notify_empty (struct queue *queue,
+                             queue_notify_f cb, void *arg);
 
 #endif /* _FLUX_JOB_MANAGER_QUEUE_H */
 

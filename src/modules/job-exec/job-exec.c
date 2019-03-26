@@ -22,7 +22,7 @@
  *
  * OPERATION
  *
- * For deatils of startup protocol, see job-manager/start.c.
+ * For details of startup protocol, see job-manager/start.c.
  *
  * JOB INIT:
  *
@@ -34,7 +34,7 @@
  *
  * Jobspec and R are parsed as soon as asynchronous initialization tasks
  * complete. If any of these steps fail, or a mock exception is configured
- * for "init", an exec initialization exception * is thrown.
+ * for "init", an exec initialization exception is thrown.
  *
  * JOB STARTING/RUNNING:
  *
@@ -60,7 +60,7 @@
  *  - terminating "done" event is posted to the exec.eventlog
  *  - the guest namespace, now quiesced, is copied to the primary namespace
  *  - the guest namespace is removed
- *  - the final "release final=1" response is sent to the job manager
+ *  - the final "release final=true" response is sent to the job manager
  *  - the local job object is destroyed
  *
  * TEST CONFIGURATION
