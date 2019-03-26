@@ -34,6 +34,7 @@ struct lookup_ctx {
     bool active;
     flux_future_t *f;
     int offset;
+    bool allow;
     bool cancel;
 };
 
@@ -128,6 +129,81 @@ static int lookup_key (struct lookup_ctx *l)
     return 0;
 }
 
+/* Parse the submit userid from the event log.
+ * Assume "submit" is the first event.
+ */
+static int eventlog_get_userid (struct lookup_ctx *l,
+                                const char *s, int *useridp)
+{
+    const char *input = s;
+    const char *tok;
+    size_t toklen;
+    char *event = NULL;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+    json_t *o = NULL;
+    int save_errno;
+
+    if (!eventlog_parse_next (&input, &tok, &toklen)) {
+        flux_log_error (l->ctx->h, "%s: invalid event", __FUNCTION__);
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(event = strndup (tok, toklen)))
+        goto error;
+    if (flux_kvs_event_decode (event, NULL, name, sizeof (name),
+                               context, sizeof (context)) < 0)
+        goto error;
+    if (strcmp (name, "submit") != 0) {
+        flux_log_error (l->ctx->h, "%s: invalid event", __FUNCTION__);
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(o = json_loads (context, 0, NULL))) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (json_unpack (o, "{ s:i }", "userid", useridp) < 0) {
+        errno = EPROTO;
+        goto error;
+    }
+    free (event);
+    json_decref (o);
+    return 0;
+ error:
+    save_errno = errno;
+    free (event);
+    json_decref (o);
+    errno = save_errno;
+    return -1;
+}
+
+
+/* Determine if user who sent request 'msg' is allowed to
+ * access job eventlog 's'.  Assume first event is the "submit"
+ * event which records the job owner.
+ */
+static int lookup_allow (struct lookup_ctx *l, const char *s)
+{
+    uint32_t userid;
+    uint32_t rolemask;
+    int job_user;
+
+    if (flux_msg_get_rolemask (l->msg, &rolemask) < 0)
+        return -1;
+    if (!(rolemask & FLUX_ROLE_OWNER)) {
+        if (flux_msg_get_userid (l->msg, &userid) < 0)
+            return -1;
+        if (eventlog_get_userid (l, s, &job_user) < 0)
+            return -1;
+        if (userid != job_user) {
+            errno = EPERM;
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static void lookup_continuation (flux_future_t *f, void *arg)
 {
     struct lookup_ctx *l = arg;
@@ -158,6 +234,12 @@ static void lookup_continuation (flux_future_t *f, void *arg)
                 flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         }
         goto done;
+    }
+
+    if (!l->allow) {
+        if (lookup_allow (l, s) < 0)
+            goto error;
+        l->allow = true;
     }
 
     if ((l->flags & FLUX_JOB_INFO_WATCH)) {
@@ -343,12 +425,12 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.eventlog-lookup",
       .cb           = lookup_cb,
-      .rolemask     = 0
+      .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.eventlog-cancel",
       .cb           = cancel_cb,
-      .rolemask     = 0
+      .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.disconnect",
