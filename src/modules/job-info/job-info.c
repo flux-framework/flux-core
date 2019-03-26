@@ -30,6 +30,7 @@ struct lookup_ctx {
     flux_msg_t *msg;
     flux_jobid_t id;
     int flags;
+    bool watch;
     int lookup_flags;
     bool active;
     flux_future_t *f;
@@ -53,7 +54,8 @@ static void lookup_continuation (flux_future_t *f, void *arg);
 struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
                                       const flux_msg_t *msg,
                                       flux_jobid_t id,
-                                      int flags)
+                                      int flags,
+                                      bool watch)
 {
     struct lookup_ctx *l = calloc (1, sizeof (*l));
     int saved_errno;
@@ -64,9 +66,10 @@ struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
     l->ctx = ctx;
     l->id = id;
     l->flags = flags;
+    l->watch = watch;
     l->active = true;
 
-    if (l->flags & FLUX_JOB_INFO_WATCH) {
+    if (l->watch) {
         l->lookup_flags |= FLUX_KVS_WATCH;
         l->lookup_flags |= FLUX_KVS_WATCH_APPEND;
     }
@@ -218,7 +221,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
                 goto error;
             return;
         }
-        else if (errno == ENODATA && (l->flags & FLUX_JOB_INFO_WATCH)) {
+        else if (errno == ENODATA && l->watch) {
             if (flux_respond_error (ctx->h, l->msg, ENODATA, NULL) < 0)
                 flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
             goto done;
@@ -229,7 +232,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     }
 
     if (l->cancel) {
-        if ((l->flags & FLUX_JOB_INFO_WATCH)) {
+        if (l->watch) {
             if (flux_respond_error (ctx->h, l->msg, ENODATA, NULL) < 0)
                 flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         }
@@ -242,7 +245,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         l->allow = true;
     }
 
-    if ((l->flags & FLUX_JOB_INFO_WATCH)) {
+    if (l->watch) {
         const char *input = s;
         const char *tok;
         size_t toklen;
@@ -274,7 +277,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         }
     }
     else {
-        if (flux_respond_pack (ctx->h, l->msg, "{s:s}", "event", s) < 0) {
+        if (flux_respond_pack (ctx->h, l->msg, "{s:s}", "eventlog", s) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -307,7 +310,40 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(l = lookup_ctx_create (ctx, msg, id, flags)))
+    if (!(l = lookup_ctx_create (ctx, msg, id, flags, false)))
+        goto error;
+
+    if (lookup_key (l) < 0)
+        goto error;
+
+    if (zlist_append (ctx->lookups, l) < 0) {
+        flux_log_error (h, "%s: zlist_append", __FUNCTION__);
+        goto error;
+    }
+    zlist_freefn (ctx->lookups, l, lookup_ctx_destroy, true);
+    l = NULL;
+
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    lookup_ctx_destroy (l);
+}
+
+static void watch_cb (flux_t *h, flux_msg_handler_t *mh,
+                      const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    struct lookup_ctx *l = NULL;
+    flux_jobid_t id;
+
+    if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+
+    if (!(l = lookup_ctx_create (ctx, msg, id, 0, true)))
         goto error;
 
     if (lookup_key (l) < 0)
@@ -344,7 +380,7 @@ static void lookup_cancel (struct info_ctx *ctx,
     if (flux_msg_get_route_first (l->msg, &s) < 0)
         return;
     if (!strcmp (sender, s)) {
-        if ((l->flags & FLUX_JOB_INFO_WATCH)) {
+        if (l->watch) {
             if (flux_kvs_lookup_cancel (l->f) < 0)
                 flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
                                 __FUNCTION__);
@@ -367,8 +403,8 @@ static void lookups_cancel (struct info_ctx *ctx,
     }
 }
 
-static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
+                             const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
     uint32_t matchtag;
@@ -428,8 +464,13 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.eventlog-cancel",
-      .cb           = cancel_cb,
+      .topic_glob   = "job-info.eventlog-watch",
+      .cb           = watch_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.eventlog-watch-cancel",
+      .cb           = watch_cancel_cb,
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
@@ -454,7 +495,7 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             struct lookup_ctx *l;
 
             while ((l = zlist_pop (ctx->lookups))) {
-                if ((l->flags & FLUX_JOB_INFO_WATCH)) {
+                if (l->watch) {
                     if (flux_kvs_lookup_cancel (l->f) < 0)
                         flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
                                         __FUNCTION__);
