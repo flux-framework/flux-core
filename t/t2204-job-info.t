@@ -18,10 +18,10 @@ submit_job() {
         echo $jobid
 }
 
-wait_lookups_nonzero() {
+wait_watchers_nonzero() {
         i=0
-        while (! flux module stats --parse lookups job-info > /dev/null 2>&1 \
-               || [ "$(flux module stats --parse lookups job-info 2> /dev/null)" = "0" ]) \
+        while (! flux module stats --parse watchers job-info > /dev/null 2>&1 \
+               || [ "$(flux module stats --parse watchers job-info 2> /dev/null)" = "0" ]) \
               && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -134,7 +134,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later (ac
         jobid=$(submit_job)
         flux job wait-event $jobid foobar > wait_event3.out &
         waitpid=$! &&
-        wait_lookups_nonzero &&
+        wait_watchers_nonzero &&
         wait_watcherscount_nonzero primary &&
         kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
@@ -151,7 +151,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later (ac
         jobid=$(submit_job)
         flux job wait-event $jobid foobar > wait_event4.out &
         waitpid=$! &&
-        wait_lookups_nonzero &&
+        wait_watchers_nonzero &&
         wait_watcherscount_nonzero primary &&
         activekvsdir=$(flux job id --to=kvs-active $jobid) &&
         flux kvs eventlog append ${activekvsdir}.eventlog foobaz &&
@@ -178,7 +178,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event exits if never receives e
         jobid=$(submit_job)
         flux job wait-event $jobid foobar > wait_event6.out 2> wait_event6.err &
         waitpid=$! &&
-        wait_lookups_nonzero &&
+        wait_watchers_nonzero &&
         wait_watcherscount_nonzero primary &&
         activekvsdir=$(flux job id --to=kvs-active $jobid) &&
         inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/') &&
@@ -230,7 +230,8 @@ test_expect_success 'flux job wait-event hangs on no event' '
 '
 
 test_expect_success 'job-info stats works' '
-        flux module stats job-info | grep "lookups"
+        flux module stats job-info | grep "lookups" &&
+        flux module stats job-info | grep "watchers"
 '
 
 test_done
