@@ -220,6 +220,48 @@ test_expect_success 'flux job wait-event hangs on no event' '
         ! run_timeout 0.2 flux job wait-event $jobid foobar
 '
 
+#
+# job info tests
+#
+
+test_expect_success 'flux job info eventlog works (active)' '
+        jobid=$(flux job submit test.json) &&
+	flux job info $jobid eventlog > eventlog_info_a.out &&
+        grep submit eventlog_info_a.out
+'
+
+test_expect_success 'flux job info eventlog works (inactive)' '
+        jobid=$(flux job submit test.json) &&
+        move_inactive $jobid &&
+	flux job info $jobid eventlog > eventlog_info_b.out &&
+        grep submit eventlog_info_b.out
+'
+
+test_expect_success 'flux job info eventlog fails on bad id' '
+	! flux job info 12345 eventlog
+'
+
+test_expect_success 'flux job info jobspec works (active)' '
+        jobid=$(flux job submit test.json) &&
+	flux job info $jobid jobspec > jobspec_a.out &&
+        grep hostname jobspec_a.out
+'
+
+test_expect_success 'flux job info jobspec works (inactive)' '
+        jobid=$(flux job submit test.json) &&
+        move_inactive $jobid &&
+	flux job info $jobid jobspec > jobspec_b.out &&
+        grep hostname jobspec_b.out
+'
+
+test_expect_success 'flux job info jobspec fails on bad id' '
+	! flux job info 12345 jobspec
+'
+
+#
+# stats
+#
+
 test_expect_success 'job-info stats works' '
         flux module stats job-info | grep "lookups" &&
         flux module stats job-info | grep "watchers"

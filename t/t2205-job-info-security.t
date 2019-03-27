@@ -156,4 +156,109 @@ test_expect_success 'flux job wait-event fails (wrong user, inactive)' '
         unset_userid
 '
 
+#
+# job info
+#
+
+test_expect_success 'flux job info eventlog works (owner)' '
+        jobid=$(submit_job) &&
+        flux job info $jobid eventlog
+'
+
+test_expect_success 'flux job info eventlog works (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job info $jobid eventlog &&
+        unset_userid
+'
+
+test_expect_success 'flux job info eventlog fails (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job info $jobid eventlog &&
+        unset_userid
+'
+
+test_expect_success 'flux job info eventlog works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job info $jobid eventlog
+'
+
+test_expect_success 'flux job info eventlog works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job info $jobid eventlog &&
+        unset_userid
+'
+
+test_expect_success 'flux job info eventlog fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job info $jobid eventlog &&
+        unset_userid
+'
+
+test_expect_success 'flux job info jobspec works (owner)' '
+        jobid=$(submit_job) &&
+        flux job info $jobid jobspec
+'
+
+test_expect_success 'flux job info jobspec works (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job info $jobid jobspec &&
+        unset_userid
+'
+
+test_expect_success 'flux job info jobspec fails (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job info $jobid jobspec &&
+        unset_userid
+'
+
+test_expect_success 'flux job info jobspec works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job info $jobid jobspec
+'
+
+test_expect_success 'flux job info jobspec works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job info $jobid jobspec &&
+        unset_userid
+'
+
+test_expect_success 'flux job info jobspec fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job info $jobid jobspec &&
+        unset_userid
+'
+
+test_expect_success 'flux job info foobar fails (owner)' '
+        jobid=$(submit_job) &&
+        ! flux job info $jobid foobar
+'
+
+test_expect_success 'flux job info foobar fails (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        ! flux job info $jobid foobar &&
+        unset_userid
+'
+
+test_expect_success 'flux job info foobar fails (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job info $jobid foobar &&
+        unset_userid
+'
+
 test_done
