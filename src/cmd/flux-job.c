@@ -42,6 +42,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
 int cmd_eventlog (optparse_t *p, int argc, char **argv);
 int cmd_wait_event (optparse_t *p, int argc, char **argv);
+int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_drain (optparse_t *p, int argc, char **argv);
 int cmd_undrain (optparse_t *p, int argc, char **argv);
 
@@ -186,6 +187,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_wait_event,
       0,
       wait_event_opts
+    },
+    { "info",
+      "id key",
+      "Display info for a job",
+      cmd_info,
+      0,
+      NULL
     },
     { "drain",
       "[-t seconds]",
@@ -840,6 +848,67 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_event_watch (h, ctx.id)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, ctx.timeout, wait_event_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_close (h);
+    return (0);
+}
+
+struct info_ctx {
+    optparse_t *p;
+    flux_jobid_t id;
+    const char *key;
+};
+
+void info_continuation (flux_future_t *f, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    const char *s;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", ctx->key, &s) < 0) {
+        if (errno == ENOENT) {
+            flux_future_destroy (f);
+            log_msg_exit ("job %lu.%s not found", ctx->id, ctx->key);
+        }
+        else
+            log_err_exit ("flux_rpc_get_unpack");
+    }
+
+    /* XXX - prettier output later */
+    printf ("%s\n", s);
+    flux_future_destroy (f);
+}
+
+int cmd_info (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    const char *topic = "job-info.lookup";
+    struct info_ctx ctx = {0};
+    int flags = 0;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (argc - optindex != 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.key = argv[optindex++];
+    ctx.p = p;
+
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+                             "{s:I s:s s:i}",
+                             "id", ctx.id,
+                             "key", ctx.key,
+                             "flags", flags)))
+        log_err_exit ("flux_rpc_pack");
+    if (flux_future_then (f, -1., info_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
