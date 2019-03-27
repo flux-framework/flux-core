@@ -45,6 +45,10 @@ typedef enum {
 
 typedef uint64_t flux_jobid_t;
 
+const char *flux_job_statetostr (flux_job_state_t state, bool single_char);
+
+int flux_job_strtostate (const char *s, flux_job_state_t *state);
+
 /* Submit a job to the system.
  * 'jobspec' should be RFC 14 jobspec.
  * 'priority' should be a value from 0 to 31 (16 if not instance owner).

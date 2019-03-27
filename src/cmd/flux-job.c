@@ -400,25 +400,6 @@ static int iso_timestr (double timestamp, char *buf, size_t size)
     return 0;
 }
 
-char statechar (flux_job_state_t state)
-{
-    switch (state) {
-        case FLUX_JOB_NEW:
-            return 'N';
-        case FLUX_JOB_DEPEND:
-            return 'D';
-        case FLUX_JOB_SCHED:
-            return 'S';
-        case FLUX_JOB_RUN:
-            return 'R';
-        case FLUX_JOB_CLEANUP:
-            return 'C';
-        case FLUX_JOB_INACTIVE:
-            return 'I';
-    }
-    return '?';
-}
-
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -461,8 +442,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
             log_msg_exit ("error parsing job data");
         if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
             log_err_exit ("time conversion error");
-        printf ("%llu\t%c\t%lu\t%d\t%s\n", (unsigned long long)id,
-                                       statechar (state),
+        printf ("%llu\t%s\t%lu\t%d\t%s\n", (unsigned long long)id,
+                                       flux_job_statetostr (state, true),
                                        (unsigned long)userid,
                                        priority,
                                        timestr);
