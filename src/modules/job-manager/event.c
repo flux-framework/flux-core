@@ -60,13 +60,7 @@ struct event_ctx {
 struct event_batch {
     struct event_ctx *ctx;
     flux_kvs_txn_t *txn;
-    zlist_t *callbacks;
     flux_future_t *f;
-};
-
-struct event_callback {
-    flux_continuation_f cb;
-    void *arg;
 };
 
 struct event_batch *event_batch_create (struct event_ctx *ctx);
@@ -74,7 +68,7 @@ void event_batch_destroy (struct event_batch *batch);
 
 /* Batch commit has completed.
  * If there was a commit error, log it and stop the reactor.
- * Destroy 'batch', which notifies any registered callbacks.
+ * Destroy 'batch'.
  */
 void commit_continuation (flux_future_t *f, void *arg)
 {
@@ -122,18 +116,10 @@ void event_batch_destroy (struct event_batch *batch)
 {
     if (batch) {
         int saved_errno = errno;
-        struct event_callback *ec;
 
         flux_kvs_txn_destroy (batch->txn);
         if (batch->f)
             (void)flux_future_wait_for (batch->f, -1);
-        if (batch->callbacks) {
-            while ((ec = zlist_pop (batch->callbacks))) {
-                ec->cb (batch->f, ec->arg);
-                free (ec);
-            }
-            zlist_destroy (&batch->callbacks);
-        }
         flux_future_destroy (batch->f);
         free (batch);
         errno = saved_errno;
@@ -148,8 +134,6 @@ struct event_batch *event_batch_create (struct event_ctx *ctx)
         return NULL;
     if (!(batch->txn = flux_kvs_txn_create ()))
         goto error;
-    if (!(batch->callbacks = zlist_new ()))
-        goto nomem;
     batch->ctx = ctx;
     return batch;
 nomem:
@@ -159,36 +143,6 @@ error:
     return NULL;
 }
 
-/* Append event to batch, registering callback 'cb' if non-NULL.
- */
-int event_batch_append (struct event_batch *batch,
-                        const char *key, const char *event,
-                        flux_continuation_f cb, void *arg)
-{
-    if (cb) {
-        struct event_callback *ec;
-        if (!(ec = calloc (1, sizeof (*ec))))
-            return -1;
-        ec->cb = cb;
-        ec->arg = arg;
-        if (zlist_push (batch->callbacks, ec) < 0) {
-            free (ec);
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, event) < 0) {
-        if (cb) {
-            struct event_callback *ec;
-            int saved_errno = errno;
-            ec = zlist_pop (batch->callbacks);
-            free (ec);
-            errno = saved_errno;
-        }
-        return -1;
-    }
-    return 0;
-}
 
 /* Create a new "batch" if there is none.
  * No-op if batch already started.
@@ -238,7 +192,7 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
                                    && !job->start_pending
                                    && !job->has_resources) {
 
-                if (event_job_post (ctx, job, NULL, NULL, "clean", NULL) < 0)
+                if (event_job_post (ctx, job, "clean", NULL) < 0)
                     return -1;
             }
             break;
@@ -409,7 +363,6 @@ error:
 }
 
 int event_job_post (struct event_ctx *ctx, struct job *job,
-                    flux_continuation_f cb, void *arg,
                     const char *name, const char *context)
 {
     char key[64];
@@ -424,8 +377,8 @@ int event_job_post (struct event_ctx *ctx, struct job *job,
         goto error;
     if (event_batch_start (ctx) < 0)
         goto error;
-    if (event_batch_append (ctx->batch, key, event, cb, arg) < 0)
-        goto error;
+    if (flux_kvs_txn_put (ctx->batch->txn, FLUX_KVS_APPEND, key, event) < 0)
+        return -1;
     if (event_job_action (ctx, job) < 0)
         goto error;
     free (event);
@@ -438,8 +391,7 @@ error:
 }
 
 int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         flux_continuation_f cb, void *arg, const char *name,
-                         const char *fmt, ...)
+                         const char *name, const char *fmt, ...)
 {
     va_list ap;
     json_t *o = NULL;
@@ -456,7 +408,7 @@ int event_job_post_pack (struct event_ctx *ctx, struct job *job,
         goto error;
     }
     /* context length will be checked in event_job_post() */
-    rv = event_job_post (ctx, job, cb, arg, name, context);
+    rv = event_job_post (ctx, job, name, context);
 error:
     json_decref (o);
     free (context);
