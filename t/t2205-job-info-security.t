@@ -6,33 +6,33 @@ test_description='Test flux job info service security'
 
 test_under_flux 4 job
 
-# we have to fake a job submission by a guest into the KVS.
+# We have to fake a job submission by a guest into the KVS.
+# This method of editing the eventlog preserves newline separators.
 
-# it is not 100% clear the most portable way to add a newline to a
-# string, so I do a classic trick of adding an extra char at the end
-# to avoid newline stripping, then strip the extra char.
-
+# Usage: submit_job [userid]
+# Wait for job eventlog to include 'depend' event, then edit the userid
 submit_job() {
         userid=$1
         jobid=$(flux job submit test.json)
-        eventlog=$(flux job eventlog --context-format=json $jobid)
-        eventlogsub=$(echo $eventlog | sed -e "s/\(\"userid\":\)[0-9]*/\1${userid}/")
-        eventlognew=$(printf "${eventlogsub}"'\n'"X")
-        eventlognew=${eventlognew%?}
-        kvsdir=$(flux job id --to=kvs-active $jobid)
-        flux kvs put ${kvsdir}.eventlog="${eventlognew}"
+        flux job wait-event $jobid depend >/dev/null
+        if test -n "$userid"; then
+            kvsdir=$(flux job id --to=kvs-active $jobid)
+            flux kvs get --raw ${kvsdir}.eventlog \
+                | sed -e 's/\("userid":\)[0-9]*/\1'${userid}/ \
+                | flux kvs put --raw ${kvsdir}.eventlog=-
+        fi
         echo $jobid
 }
 
+# Usage: bad_first_event
+# Wait for job eventlog to include 'depend' event, then mangle submit event name
 bad_first_event() {
-        userid=$1
         jobid=$(flux job submit test.json)
-        eventlog=$(flux job eventlog --context-format=json $jobid)
-        eventlogsub=$(echo $eventlog | sed -e "s/submit/foobar/")
-        eventlognew=$(printf "${eventlogsub}"'\n'"X")
-        eventlognew=${eventlognew%?}
+        flux job wait-event $jobid depend >/dev/null
         kvsdir=$(flux job id --to=kvs-active $jobid)
-        flux kvs put ${kvsdir}.eventlog="${eventlognew}"
+        flux kvs get --raw ${kvsdir}.eventlog \
+            | sed -e s/submit/foobar/ \
+            | flux kvs put --raw ${kvsdir}.eventlog=-
         echo $jobid
 }
 
@@ -51,7 +51,7 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 '
 
 test_expect_success 'flux job eventlog works (owner)' '
-        jobid=$(submit_job $(id -u)) &&
+        jobid=$(submit_job) &&
         flux job eventlog $jobid
 '
 

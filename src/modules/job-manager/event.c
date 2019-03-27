@@ -210,7 +210,10 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
 {
     switch (job->state) {
         case FLUX_JOB_NEW:
+            break;
         case FLUX_JOB_DEPEND:
+            if (event_job_post (ctx, job, "depend", NULL) < 0)
+                return -1;
             break;
         case FLUX_JOB_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc_ctx, job) < 0)
@@ -356,6 +359,11 @@ int event_job_update (struct job *job, const char *event)
                                          &job->userid,
                                          &job->flags) < 0)
             goto error;
+        job->state = FLUX_JOB_DEPEND;
+    }
+    if (!strcmp (name, "depend")) {
+        if (job->state != FLUX_JOB_DEPEND)
+            goto inval;
         job->state = FLUX_JOB_SCHED;
     }
     else if (!strcmp (name, "priority")) {
