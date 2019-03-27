@@ -323,9 +323,9 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    lookup_ctx_destroy (l);
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    lookup_ctx_destroy (l);
 }
 
 /* Cancel lookup 'l' if it matches (sender, matchtag).
