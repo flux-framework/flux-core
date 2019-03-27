@@ -32,6 +32,11 @@ int event_job_action (struct event_ctx *ctx, struct job *job);
  */
 int event_job_update (struct job *job, const char *event);
 
+/* Add notification of job's state transition to its current state
+ * to batch for publication.
+ */
+int event_batch_pub_state (struct event_ctx *ctx, struct job *job);
+
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
  * the event to job KVS eventlog.  The KVS commit completes asynchronously.
