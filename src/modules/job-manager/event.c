@@ -55,12 +55,14 @@ struct event_ctx {
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
+    zlist_t *pub_futures;
 };
 
 struct event_batch {
     struct event_ctx *ctx;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
+    json_t *state_trans;
 };
 
 struct event_batch *event_batch_create (struct event_ctx *ctx);
@@ -81,6 +83,22 @@ void commit_continuation (flux_future_t *f, void *arg)
     }
     zlist_remove (ctx->pending, batch);
     event_batch_destroy (batch);
+}
+
+/* job-state event publish has completed.
+ * If there was a publish error, log it and stop the reactor.
+ * Destroy 'f'.
+ */
+void publish_continuation (flux_future_t *f, void *arg)
+{
+    struct event_ctx *ctx = arg;
+
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: event publish failed", __FUNCTION__);
+        flux_reactor_stop_error (flux_get_reactor (ctx->h));
+    }
+    zlist_remove (ctx->pub_futures, f);
+    flux_future_destroy (f);
 }
 
 /* Close the current batch, if any, and commit it.
@@ -112,6 +130,30 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     event_batch_commit (ctx);
 }
 
+void event_publish_state (struct event_ctx *ctx, json_t *state_trans)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_event_publish_pack (ctx->h, "job-state", 0, "{s:O}",
+                                               "transitions", state_trans))) {
+        flux_log_error (ctx->h, "%s: flux_event_publish_pack", __FUNCTION__);
+        goto error;
+    }
+    if (flux_future_then (f, -1., publish_continuation, ctx) < 0) {
+        flux_future_destroy (f);
+        flux_log_error (ctx->h, "%s: flux_future_then", __FUNCTION__);
+        goto error;
+    }
+    if (zlist_append (ctx->pub_futures, f) < 0) {
+        flux_future_destroy (f);
+        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+        goto error;
+    }
+    return;
+error:
+    flux_reactor_stop_error (flux_get_reactor (ctx->h));
+}
+
 void event_batch_destroy (struct event_batch *batch)
 {
     if (batch) {
@@ -120,6 +162,10 @@ void event_batch_destroy (struct event_batch *batch)
         flux_kvs_txn_destroy (batch->txn);
         if (batch->f)
             (void)flux_future_wait_for (batch->f, -1);
+        if (batch->state_trans) {
+            event_publish_state (batch->ctx, batch->state_trans);
+            json_decref (batch->state_trans);
+        }
         flux_future_destroy (batch->f);
         free (batch);
         errno = saved_errno;
@@ -134,6 +180,8 @@ struct event_batch *event_batch_create (struct event_ctx *ctx)
         return NULL;
     if (!(batch->txn = flux_kvs_txn_create ()))
         goto error;
+    if (!(batch->state_trans = json_array ()))
+        goto nomem;
     batch->ctx = ctx;
     return batch;
 nomem:
@@ -368,21 +416,34 @@ int event_job_post (struct event_ctx *ctx, struct job *job,
     char key[64];
     char *event = NULL;
     int saved_errno;
+    flux_job_state_t old_state = job->state;
 
     if (flux_job_kvs_key (key, sizeof (key), true, job->id, "eventlog") < 0)
         return -1;
     if (!(event = flux_kvs_event_encode (name, context)))
         return -1;
-    if (event_job_update (job, event) < 0)
+    if (event_job_update (job, event) < 0) // modifies job->state
         goto error;
     if (event_batch_start (ctx) < 0)
         goto error;
     if (flux_kvs_txn_put (ctx->batch->txn, FLUX_KVS_APPEND, key, event) < 0)
         return -1;
+    if (job->state != old_state || job->state == FLUX_JOB_NEW) {
+        json_t *o;
+        if (!(o = json_pack ("[I,s]", job->id,
+                             flux_job_statetostr (job->state, false))))
+            goto nomem;
+        if (json_array_append_new (ctx->batch->state_trans, o)) {
+            json_decref (o);
+            goto nomem;
+        }
+    }
     if (event_job_action (ctx, job) < 0)
         goto error;
     free (event);
     return 0;
+nomem:
+    errno = ENOMEM;
 error:
     saved_errno = errno;
     free (event);
@@ -428,9 +489,8 @@ void event_ctx_set_start_ctx (struct event_ctx *ctx,
     ctx->start_ctx = start_ctx;
 }
 
-/* N.B. any in-flight batches are destroyed here.
- * If they are not yet fulfilled, user callbacks may synchronously block on
- * flux_future_get().
+/* Any in-flight KVS batche commits and their follow-on job-state.STATE event
+ * publish requests are synchronously waited for here, then destroyed.
  */
 void event_ctx_destroy (struct event_ctx *ctx)
 {
@@ -441,9 +501,18 @@ void event_ctx_destroy (struct event_ctx *ctx)
         if (ctx->pending) {
             struct event_batch *batch;
             while ((batch = zlist_pop (ctx->pending)))
-                event_batch_destroy (batch);
+                event_batch_destroy (batch); // N.B. can append to pub_futures
         }
         zlist_destroy (&ctx->pending);
+        if (ctx->pub_futures) {
+            flux_future_t *f;
+            while ((f = zlist_pop (ctx->pub_futures))) {
+                if (flux_future_get (f, NULL) < 0)
+                    flux_log_error (ctx->h, "error publishing job-state event");
+                flux_future_destroy (f);
+            }
+        }
+        zlist_destroy (&ctx->pub_futures);
         free (ctx);
         errno = saved_errno;
     }
@@ -461,6 +530,8 @@ struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue)
                                                   0., 0., timer_cb, ctx)))
         goto error;
     if (!(ctx->pending = zlist_new ()))
+        goto nomem;
+    if (!(ctx->pub_futures = zlist_new ()))
         goto nomem;
     return ctx;
 nomem:
