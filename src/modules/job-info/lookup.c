@@ -106,7 +106,46 @@ static int lookup_key (struct lookup_ctx *l, const char *key,
     return 0;
 }
 
-static void lookup_continuation (flux_future_t *f, void *arg)
+static void info_lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct lookup_ctx *l = arg;
+    struct info_ctx *ctx = l->ctx;
+    const char *s;
+
+    /* must be done beforehand */
+    assert (l->allow);
+
+    if (flux_kvs_lookup_get (f, &s) < 0) {
+        if (errno == ENOENT && l->active) {
+            /* transition / try the inactive key */
+            l->active = false;
+            if (lookup_key (l, l->key, info_lookup_continuation) < 0)
+                goto error;
+            return;
+        }
+        else if (errno != ENOENT)
+            flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+        goto error;
+    }
+
+    if (flux_respond_pack (ctx->h, l->msg, "{s:s}", l->key, s) < 0) {
+        flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    goto done;
+
+error:
+    if (flux_respond_error (ctx->h, l->msg, errno, NULL) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+
+done:
+    /* flux future destroyed in lookup_ctx_destroy, which is called
+     * via zlist_remove() */
+    zlist_remove (ctx->lookups, l);
+}
+
+static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct lookup_ctx *l = arg;
     struct info_ctx *ctx = l->ctx;
@@ -116,7 +155,8 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         if (errno == ENOENT && l->active) {
             /* transition / try the inactive key */
             l->active = false;
-            if (lookup_key (l, l->key, lookup_continuation) < 0)
+            if (lookup_key (l, "eventlog",
+                            eventlog_lookup_continuation) < 0)
                 goto error;
             return;
         }
@@ -131,20 +171,28 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         l->allow = true;
     }
 
-    if (flux_respond_pack (ctx->h, l->msg, "{s:s}", l->key, s) < 0) {
-        flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
+    /* if user requested eventlog, we can return this data, no need to
+     * go through the "info" request path.
+     */
+    if (!strcmp (l->key, "eventlog")) {
+        if (flux_respond_pack (ctx->h, l->msg, "{s:s}", l->key, s) < 0) {
+            flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+            goto error;
+        }
+
+        goto done;
+    }
+    else {
+        if (lookup_key (l, l->key, info_lookup_continuation) < 0)
+            goto error;
     }
 
-    /* flux future destroyed in lookup_ctx_destroy, which is called
-     * via zlist_remove() */
-    zlist_remove (ctx->lookups, l);
     return;
 
 error:
     if (flux_respond_error (ctx->h, l->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-
+done:
     /* flux future destroyed in lookup_ctx_destroy, which is called
      * via zlist_remove() */
     zlist_remove (ctx->lookups, l);
@@ -178,8 +226,16 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     if ((rolemask & FLUX_ROLE_OWNER))
         l->allow = true;
 
-    if (lookup_key (l, l->key, lookup_continuation) < 0)
-        goto error;
+    if (l->allow) {
+        if (lookup_key (l, l->key, info_lookup_continuation) < 0)
+            goto error;
+    }
+    else {
+        /* must lookup eventlog first to do access check */
+        if (lookup_key (l, "eventlog",
+                        eventlog_lookup_continuation) < 0)
+            goto error;
+    }
 
     if (zlist_append (ctx->lookups, l) < 0) {
         flux_log_error (h, "%s: zlist_append", __FUNCTION__);
