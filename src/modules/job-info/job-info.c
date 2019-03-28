@@ -57,7 +57,7 @@ error:
 
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.eventlog-lookup",
+      .topic_glob   = "job-info.lookup",
       .cb           = lookup_cb,
       .rolemask     = FLUX_ROLE_USER
     },

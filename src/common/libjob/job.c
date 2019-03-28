@@ -232,15 +232,16 @@ int flux_job_kvs_key (char *buf, int bufsz, bool active,
 flux_future_t *flux_job_eventlog_lookup (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;
-    const char *topic = "job-info.eventlog-lookup";
+    const char *topic = "job-info.lookup";
 
     if (!h) {
         errno = EINVAL;
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:i}",
+                             "{s:I s:s s:i}",
                              "id", id,
+                             "key", "eventlog",
                              "flags", 0)))
         return NULL;
     return f;
