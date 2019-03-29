@@ -242,6 +242,47 @@ test_expect_success 'flux job info jobspec fails (wrong user, inactive)' '
         unset_userid
 '
 
+test_expect_success 'flux job info eventlog jobspec J works (owner)' '
+        jobid=$(submit_job) &&
+        flux job info $jobid eventlog jobspec J
+'
+
+test_expect_success 'flux job info eventlog jobspec J works (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info eventlog jobspec J fails (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info eventlog jobspec J works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job info $jobid eventlog jobspec J
+'
+
+test_expect_success 'flux job info eventlog jobspec J works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info eventlog jobspec J fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
 test_expect_success 'flux job info foobar fails (owner)' '
         jobid=$(submit_job) &&
         ! flux job info $jobid foobar

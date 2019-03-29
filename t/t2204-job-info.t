@@ -259,6 +259,36 @@ test_expect_success 'flux job info jobspec fails on bad id' '
 '
 
 #
+# job info tests (multiple info requests)
+#
+
+test_expect_success 'flux job info eventlog jobspec J works (active)' '
+        jobid=$(flux job submit test.json) &&
+	flux job info $jobid eventlog jobspec J > all_info_a.out &&
+        grep submit all_info_a.out &&
+        grep hostname all_info_a.out
+'
+
+test_expect_success 'flux job info eventlog jobspec J works (inactive)' '
+        jobid=$(flux job submit test.json) &&
+        move_inactive $jobid &&
+	flux job info $jobid eventlog jobspec J > all_info_b.out &&
+        grep submit all_info_b.out &&
+        grep hostname all_info_a.out
+'
+
+test_expect_success 'flux job info eventlog jobspec J fails on bad id' '
+	! flux job info 12345 eventlog jobspec J
+'
+
+test_expect_success 'flux job info eventlog jobspec J fails on 1 bad entry' '
+        jobid=$(flux job submit test.json) &&
+        activekvsdir=$(flux job id --to=kvs-active $jobid) &&
+        flux kvs unlink ${activekvsdir}.jobspec &&
+	! flux job info $jobid eventlog jobspec J > all_info_b.out
+'
+
+#
 # stats
 #
 
