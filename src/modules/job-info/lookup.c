@@ -14,6 +14,7 @@
 #include "config.h"
 #endif
 #include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "info.h"
@@ -25,7 +26,7 @@ struct lookup_ctx {
     struct info_ctx *ctx;
     flux_msg_t *msg;
     flux_jobid_t id;
-    char *key;
+    json_t *keys;
     int flags;
     bool active;
     flux_future_t *f;
@@ -37,6 +38,7 @@ static void lookup_ctx_destroy (void *data)
     if (data) {
         struct lookup_ctx *ctx = data;
         flux_msg_destroy (ctx->msg);
+        json_decref (ctx->keys);
         flux_future_destroy (ctx->f);
         free (ctx);
     }
@@ -45,7 +47,7 @@ static void lookup_ctx_destroy (void *data)
 static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
                                              const flux_msg_t *msg,
                                              flux_jobid_t id,
-                                             const char *key,
+                                             json_t *keys,
                                              int flags)
 {
     struct lookup_ctx *l = calloc (1, sizeof (*l));
@@ -56,13 +58,9 @@ static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
 
     l->ctx = ctx;
     l->id = id;
+    l->keys = json_incref (keys);
     l->flags = flags;
     l->active = true;
-
-    if (!(l->key = strdup (key))) {
-        errno = ENOMEM;
-        goto error;
-    }
 
     if (!(l->msg = flux_msg_copy (msg, true))) {
         flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
@@ -101,9 +99,11 @@ static flux_future_t *lookup_key (struct lookup_ctx *l, const char *key,
         goto error;
     }
 
-    if (flux_future_then (f, -1, c, l) < 0) {
-        flux_log_error (l->ctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
+    if (c) {
+        if (flux_future_then (f, -1, c, l) < 0) {
+            flux_log_error (l->ctx->h, "%s: flux_future_then", __FUNCTION__);
+            goto error;
+        }
     }
 
     return f;
@@ -113,37 +113,109 @@ error:
     return NULL;
 }
 
-static void info_lookup_continuation (flux_future_t *f, void *arg)
+static flux_future_t *lookup_keys (struct lookup_ctx *l, flux_continuation_f c)
+{
+    flux_future_t *fall = NULL;
+    flux_future_t *f = NULL;
+    size_t index;
+    json_t *key;
+
+    if (!(fall = flux_future_wait_all_create ())) {
+        flux_log_error (l->ctx->h, "%s: flux_wait_all_create", __FUNCTION__);
+        goto error;
+    }
+    flux_future_set_flux (fall, l->ctx->h);
+
+    json_array_foreach(l->keys, index, key) {
+        const char *keystr;
+        if (!(keystr = json_string_value (key))) {
+            errno = EINVAL;
+            goto error;
+        }
+        if (!(f = lookup_key (l, keystr, NULL)))
+            goto error;
+        if (flux_future_push (fall, keystr, f) < 0) {
+            flux_future_destroy (f);
+            flux_log_error (l->ctx->h, "%s: flux_future_push", __FUNCTION__);
+            goto error;
+        }
+    }
+
+    if (flux_future_then (fall, -1, c, l) < 0) {
+        flux_log_error (l->ctx->h, "%s: flux_future_then", __FUNCTION__);
+        goto error;
+    }
+
+    return fall;
+
+error:
+    flux_future_destroy (fall);
+    return NULL;
+}
+
+static void info_lookup_continuation (flux_future_t *fall, void *arg)
 {
     struct lookup_ctx *l = arg;
     struct info_ctx *ctx = l->ctx;
-    flux_future_t *fnext;
+    const char *name;
     const char *s;
+    json_t *o = NULL;
+    char *data = NULL;
 
     /* must be done beforehand */
     assert (l->allow);
 
-    if (flux_kvs_lookup_get (f, &s) < 0) {
-        if (errno == ENOENT && l->active) {
-            /* transition / try the inactive key */
-            l->active = false;
-            if (!(fnext = lookup_key (l, l->key, info_lookup_continuation)))
-                goto error;
-            lookup_ctx_set_future (l, fnext);
-            return;
+    name = flux_future_first_child (fall);
+    while (name) {
+        flux_future_t *f;
+        json_t *str = NULL;
+
+        if (!(f = flux_future_get_child (fall, name))) {
+            flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
+            goto error;
         }
-        else if (errno != ENOENT)
-            flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
-        goto error;
+
+        if (flux_kvs_lookup_get (f, &s) < 0) {
+            if (errno == ENOENT && l->active) {
+                flux_future_t *fnext;
+                /* transition / try the inactive key */
+                l->active = false;
+                if (!(fnext = lookup_keys (l, info_lookup_continuation)))
+                    goto error;
+                lookup_ctx_set_future (l, fnext);
+                return;
+            }
+            else if (errno != ENOENT)
+                flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+            goto error;
+        }
+
+        if (!o && !(o = json_object ()))
+            goto enomem;
+
+        if (!(str = json_string (s)))
+            goto enomem;
+
+        if (json_object_set_new (o, name, str) < 0) {
+            json_decref (str);
+            goto enomem;
+        }
+
+        name = flux_future_next_child (fall);
     }
 
-    if (flux_respond_pack (ctx->h, l->msg, "{s:s}", l->key, s) < 0) {
-        flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+    if (!(data = json_dumps (o, JSON_COMPACT)))
+        goto enomem;
+
+    if (flux_respond (ctx->h, l->msg, 0, data) < 0) {
+        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
         goto error;
     }
 
     goto done;
 
+enomem:
+    errno = ENOMEM;
 error:
     if (flux_respond_error (ctx->h, l->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
@@ -151,6 +223,8 @@ error:
 done:
     /* flux future destroyed in lookup_ctx_destroy, which is called
      * via zlist_remove() */
+    json_decref (o);
+    free (data);
     zlist_remove (ctx->lookups, l);
 }
 
@@ -159,7 +233,8 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
     struct lookup_ctx *l = arg;
     struct info_ctx *ctx = l->ctx;
     flux_future_t *fnext;
-    const char *s;
+    const char *s, *strval;
+    json_t *str;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
         if (errno == ENOENT && l->active) {
@@ -182,11 +257,14 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
         l->allow = true;
     }
 
-    /* if user requested eventlog, we can return this data, no need to
-     * go through the "info" request path.
+    /* if user requested only eventlog, we can return this data, no
+     * need to go through the "info" request path.
      */
-    if (!strcmp (l->key, "eventlog")) {
-        if (flux_respond_pack (ctx->h, l->msg, "{s:s}", l->key, s) < 0) {
+    if (json_array_size (l->keys) == 1
+        && (str = json_array_get (l->keys, 0))
+        && (strval = json_string_value (str))
+        && !strcmp (strval, "eventlog")) {
+        if (flux_respond_pack (ctx->h, l->msg, "{s:s}", "eventlog", s) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -194,7 +272,7 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
         goto done;
     }
     else {
-        if (!(fnext = lookup_key (l, l->key, info_lookup_continuation)))
+        if (!(fnext = lookup_keys (l, info_lookup_continuation)))
             goto error;
         lookup_ctx_set_future (l, fnext);
     }
@@ -215,21 +293,21 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct info_ctx *ctx = arg;
     struct lookup_ctx *l = NULL;
-    const char *key;
+    json_t *keys;
     flux_future_t *f;
     flux_jobid_t id;
     uint32_t rolemask;
     int flags;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:o s:i}",
                              "id", &id,
-                             "key", &key,
+                             "keys", &keys,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (!(l = lookup_ctx_create (ctx, msg, id, key, flags)))
+    if (!(l = lookup_ctx_create (ctx, msg, id, keys, flags)))
         goto error;
 
     if (flux_msg_get_rolemask (msg, &rolemask) < 0)
@@ -240,7 +318,7 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         l->allow = true;
 
     if (l->allow) {
-        if (!(f = lookup_key (l, l->key, info_lookup_continuation)))
+        if (!(f = lookup_keys (l, info_lookup_continuation)))
             goto error;
         lookup_ctx_set_future (l, f);
     }

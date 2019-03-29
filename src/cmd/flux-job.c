@@ -888,7 +888,6 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     const char *topic = "job-info.lookup";
     struct info_ctx ctx = {0};
-    int flags = 0;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -903,10 +902,10 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     ctx.p = p;
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:s s:i}",
+                             "{s:I s:[s] s:i}",
                              "id", ctx.id,
-                             "key", ctx.key,
-                             "flags", flags)))
+                             "keys", ctx.key,
+                             "flags", 0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., info_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");

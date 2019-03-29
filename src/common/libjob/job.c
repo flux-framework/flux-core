@@ -239,9 +239,9 @@ flux_future_t *flux_job_eventlog_lookup (flux_t *h, flux_jobid_t id)
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:s s:i}",
+                             "{s:I s:[s] s:i}",
                              "id", id,
-                             "key", "eventlog",
+                             "keys", "eventlog",
                              "flags", 0)))
         return NULL;
     return f;
