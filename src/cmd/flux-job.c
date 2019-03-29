@@ -189,7 +189,7 @@ static struct optparse_subcommand subcommands[] = {
       wait_event_opts
     },
     { "info",
-      "id key",
+      "id key ...",
       "Display info for a job",
       cmd_info,
       0,
@@ -857,20 +857,18 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
 }
 
 struct info_ctx {
-    optparse_t *p;
     flux_jobid_t id;
-    const char *key;
+    json_t *keys;
 };
 
-void info_continuation (flux_future_t *f, void *arg)
+void info_output (flux_future_t *f, const char *suffix, flux_jobid_t id)
 {
-    struct info_ctx *ctx = arg;
     const char *s;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", ctx->key, &s) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:s}", suffix, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %lu.%s not found", ctx->id, ctx->key);
+            log_msg_exit ("job %lu id or key not found", id);
         }
         else
             log_err_exit ("flux_rpc_get_unpack");
@@ -878,6 +876,19 @@ void info_continuation (flux_future_t *f, void *arg)
 
     /* XXX - prettier output later */
     printf ("%s\n", s);
+}
+
+void info_continuation (flux_future_t *f, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    size_t index;
+    json_t *key;
+
+    json_array_foreach (ctx->keys, index, key) {
+        const char *s = json_string_value (key);
+        info_output (f, s, ctx->id);
+    }
+
     flux_future_destroy (f);
 }
 
@@ -892,19 +903,29 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (argc - optindex != 2) {
+    if ((argc - optindex) < 2) {
         optparse_print_usage (p);
         exit (1);
     }
 
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
-    ctx.key = argv[optindex++];
-    ctx.p = p;
+
+    if (!(ctx.keys = json_array ()))
+        log_msg_exit ("json_array");
+
+    while (optindex < argc) {
+        json_t *s;
+        if (!(s = json_string (argv[optindex])))
+            log_msg_exit ("json_string");
+        if (json_array_append_new (ctx.keys, s) < 0)
+            log_msg_exit ("json_array_append");
+        optindex++;
+    }
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:[s] s:i}",
+                             "{s:I s:O s:i}",
                              "id", ctx.id,
-                             "keys", ctx.key,
+                             "keys", ctx.keys,
                              "flags", 0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., info_continuation, &ctx) < 0)
@@ -912,6 +933,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    json_decref (ctx.keys);
     flux_close (h);
     return (0);
 }
