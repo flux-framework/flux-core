@@ -78,38 +78,46 @@ error:
     return NULL;
 }
 
-static int lookup_key (struct lookup_ctx *l, const char *key,
-                       flux_continuation_f c)
+static void lookup_ctx_set_future (struct lookup_ctx *l, flux_future_t *f)
 {
-    char path[64];
-
-    if (l->f) {
+    if (l->f)
         flux_future_destroy (l->f);
-        l->f = NULL;
-    }
+    l->f = f;
+}
+
+static flux_future_t *lookup_key (struct lookup_ctx *l, const char *key,
+                                  flux_continuation_f c)
+{
+    flux_future_t *f = NULL;
+    char path[64];
 
     if (flux_job_kvs_key (path, sizeof (path), l->active, l->id, key) < 0) {
         flux_log_error (l->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
-        return -1;
+        goto error;
     }
 
-    if (!(l->f = flux_kvs_lookup (l->ctx->h, NULL, 0, path))) {
+    if (!(f = flux_kvs_lookup (l->ctx->h, NULL, 0, path))) {
         flux_log_error (l->ctx->h, "%s: flux_kvs_lookup", __FUNCTION__);
-        return -1;
+        goto error;
     }
 
-    if (flux_future_then (l->f, -1, c, l) < 0) {
+    if (flux_future_then (f, -1, c, l) < 0) {
         flux_log_error (l->ctx->h, "%s: flux_future_then", __FUNCTION__);
-        return -1;
+        goto error;
     }
 
-    return 0;
+    return f;
+
+error:
+    flux_future_destroy (f);
+    return NULL;
 }
 
 static void info_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct lookup_ctx *l = arg;
     struct info_ctx *ctx = l->ctx;
+    flux_future_t *fnext;
     const char *s;
 
     /* must be done beforehand */
@@ -119,8 +127,9 @@ static void info_lookup_continuation (flux_future_t *f, void *arg)
         if (errno == ENOENT && l->active) {
             /* transition / try the inactive key */
             l->active = false;
-            if (lookup_key (l, l->key, info_lookup_continuation) < 0)
+            if (!(fnext = lookup_key (l, l->key, info_lookup_continuation)))
                 goto error;
+            lookup_ctx_set_future (l, fnext);
             return;
         }
         else if (errno != ENOENT)
@@ -149,15 +158,17 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct lookup_ctx *l = arg;
     struct info_ctx *ctx = l->ctx;
+    flux_future_t *fnext;
     const char *s;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
         if (errno == ENOENT && l->active) {
             /* transition / try the inactive key */
             l->active = false;
-            if (lookup_key (l, "eventlog",
-                            eventlog_lookup_continuation) < 0)
+            if (!(fnext = lookup_key (l, "eventlog",
+                                      eventlog_lookup_continuation)))
                 goto error;
+            lookup_ctx_set_future (l, fnext);
             return;
         }
         else if (errno != ENOENT)
@@ -183,8 +194,9 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
         goto done;
     }
     else {
-        if (lookup_key (l, l->key, info_lookup_continuation) < 0)
+        if (!(fnext = lookup_key (l, l->key, info_lookup_continuation)))
             goto error;
+        lookup_ctx_set_future (l, fnext);
     }
 
     return;
@@ -204,6 +216,7 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     struct lookup_ctx *l = NULL;
     const char *key;
+    flux_future_t *f;
     flux_jobid_t id;
     uint32_t rolemask;
     int flags;
@@ -227,14 +240,16 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         l->allow = true;
 
     if (l->allow) {
-        if (lookup_key (l, l->key, info_lookup_continuation) < 0)
+        if (!(f = lookup_key (l, l->key, info_lookup_continuation)))
             goto error;
+        lookup_ctx_set_future (l, f);
     }
     else {
         /* must lookup eventlog first to do access check */
-        if (lookup_key (l, "eventlog",
-                        eventlog_lookup_continuation) < 0)
+        if (!(f = lookup_key (l, "eventlog",
+                              eventlog_lookup_continuation)))
             goto error;
+        lookup_ctx_set_future (l, f);
     }
 
     if (zlist_append (ctx->lookups, l) < 0) {
