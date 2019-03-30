@@ -91,6 +91,7 @@ TESTSCRIPTS = \
 	t2203-job-manager-dummysched.t \
 	t2204-job-info.t \
 	t2205-job-info-security.t \
+	t2206-job-manager-bulk-state.t \
 	t2300-sched-simple.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
@@ -161,7 +162,8 @@ dist_check_SCRIPTS = \
 	kvs/kvs-helper.sh \
 	job-manager/exec-service.lua \
 	job-manager/drain-cancel.py \
-	job-manager/drain-undrain.py
+	job-manager/drain-undrain.py \
+	job-manager/bulk-state.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
