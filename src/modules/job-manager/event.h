@@ -32,22 +32,24 @@ int event_job_action (struct event_ctx *ctx, struct job *job);
  */
 int event_job_update (struct job *job, const char *event);
 
+/* Add notification of job's state transition to its current state
+ * to batch for publication.
+ */
+int event_batch_pub_state (struct event_ctx *ctx, struct job *job);
+
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
  * the event to job KVS eventlog.  The KVS commit completes asynchronously.
- * If 'cb' is non-NULL, it is called with 'arg' upon commit completion.
  * The future passed in as an argument should not be destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
 int event_job_post (struct event_ctx *ctx, struct job *job,
-                    flux_continuation_f cb, void *arg,
                     const char *name, const char *context);
 
 /* Same as above except event context is constructed from (fmt, ...)
  * using style of jansson's json_pack().
  */
 int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         flux_continuation_f cb, void *arg,
                          const char *name, const char *fmt, ...);
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,

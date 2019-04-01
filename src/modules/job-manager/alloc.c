@@ -168,7 +168,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     job->free_pending = 0;
-    if (event_job_post (ctx->event_ctx, job, NULL, NULL, "free", NULL) < 0)
+    if (event_job_post (ctx->event_ctx, job, "free", NULL) < 0)
         goto teardown;
     return;
 teardown:
@@ -245,7 +245,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
      * Raise alloc exception and transition to CLEANUP state.
      */
     if (type == 2) { // error: alloc was rejected
-        if (event_job_post_pack (ctx->event_ctx, job, NULL, NULL, "exception",
+        if (event_job_post_pack (ctx->event_ctx, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
                                  "severity", 0,
@@ -265,7 +265,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
 
-    if (event_job_post_pack (ctx->event_ctx, job, NULL, NULL, "alloc",
+    if (event_job_post_pack (ctx->event_ctx, job, "alloc",
                              "{ s:s }",
                              "note", note ? note : "") < 0)
         goto teardown;
@@ -423,7 +423,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         job->alloc_queued = 0;
         ctx->active_alloc_count++;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post (ctx->event_ctx, job, NULL, NULL,
+            (void)event_job_post (ctx->event_ctx, job,
                                  "debug.alloc-request", NULL);
 
     }
@@ -437,7 +437,7 @@ int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job)
             return -1;
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post (ctx->event_ctx, job, NULL, NULL,
+            (void)event_job_post (ctx->event_ctx, job,
                                   "debug.free-request", NULL);
     }
     return 0;

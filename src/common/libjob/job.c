@@ -305,6 +305,51 @@ int flux_job_event_watch_cancel (flux_future_t *f)
     return 0;
 }
 
+const char *flux_job_statetostr (flux_job_state_t state, bool single_char)
+{
+    switch (state) {
+        case FLUX_JOB_NEW:
+            return single_char ? "N" : "NEW";
+        case FLUX_JOB_DEPEND:
+            return single_char ? "D" : "DEPEND";
+        case FLUX_JOB_SCHED:
+            return single_char ? "S" : "SCHED";
+        case FLUX_JOB_RUN:
+            return single_char ? "R" : "RUN";
+        case FLUX_JOB_CLEANUP:
+            return single_char ? "C" : "CLEANUP";
+        case FLUX_JOB_INACTIVE:
+            return single_char ? "I" : "INACTIVE";
+    }
+    return single_char ? "?" : "(unknown)";
+}
+
+int flux_job_strtostate (const char *s, flux_job_state_t *state)
+{
+    if (!s || !state)
+        goto inval;
+    if (!strcasecmp (s, "N") || !strcasecmp (s, "NEW"))
+        *state = FLUX_JOB_NEW;
+    else if (!strcasecmp (s, "D") || !strcasecmp (s, "DEPEND"))
+        *state = FLUX_JOB_DEPEND;
+    else if (!strcasecmp (s, "S") || !strcasecmp (s, "SCHED"))
+        *state = FLUX_JOB_SCHED;
+    else if (!strcasecmp (s, "R") || !strcasecmp (s, "RUN"))
+        *state = FLUX_JOB_RUN;
+    else if (!strcasecmp (s, "C") || !strcasecmp (s, "CLEANUP"))
+        *state = FLUX_JOB_CLEANUP;
+    else if (!strcasecmp (s, "I") || !strcasecmp (s, "INACTIVE"))
+        *state = FLUX_JOB_INACTIVE;
+    else
+        goto inval;
+
+    return 0;
+inval:
+    errno = EINVAL;
+    return -1;
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

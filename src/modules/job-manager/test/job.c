@@ -73,13 +73,15 @@ const char *test_input[] = {
 
     /* 4 */
     "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
-    "42.3 alloc\n",
+    "42.3 depend\n"
+    "42.4 alloc\n",
 
     /* 5 */
     "42.3 alloc\n",
 
     /* 6 */
     "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
+    "42.3 depend\n"
     "42.3 alloc\n"
     "42.4 exception {\"type\":\"gasp\",\"severity\":0,\"userid\":42}\n"
     "42.5 free\n",
@@ -109,8 +111,8 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit) set priority from submit");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit) set t_submit from submit");
-    ok (job->state == FLUX_JOB_SCHED,
-        "job_create_from_eventlog log=(submit) set state=SCHED");
+    ok (job->state == FLUX_JOB_DEPEND,
+        "job_create_from_eventlog log=(submit) set state=DEPEND");
     job_decref (job);
 
     /* 1 - submit + priority */
@@ -129,8 +131,8 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && !job->has_resources,
         "job_create_from_eventlog log=(submit+pri) set no internal flags");
-    ok (job->state == FLUX_JOB_SCHED,
-        "job_create_from_eventlog log=(submit+pri) set state=SCHED");
+    ok (job->state == FLUX_JOB_DEPEND,
+        "job_create_from_eventlog log=(submit+pri) set state=DEPEND");
     job_decref (job);
 
     /* 2 - submit + exception severity 0 */
@@ -155,24 +157,24 @@ void test_create_from_eventlog (void)
     job = job_create_from_eventlog (3, test_input[3]);
     if (job == NULL)
         BAIL_OUT ("job_create_from_eventlog log=(submit+ex1) failed");
-    ok (job->state == FLUX_JOB_SCHED,
-        "job_create_from_eventlog log=(submit+ex1) set state=SCHED");
+    ok (job->state == FLUX_JOB_DEPEND,
+        "job_create_from_eventlog log=(submit+ex1) set state=DEPEND");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
         "job_create_from_eventlog log=(submit+ex1) set no internal flags");
     job_decref (job);
 
-    /* 4 - submit + alloc */
+    /* 4 - submit + depend + alloc */
     job = job_create_from_eventlog (3, test_input[4]);
     if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+alloc) failed");
+        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+alloc) failed");
     ok (!job->alloc_pending
         && !job->free_pending
         && job->has_resources,
-        "job_create_from_eventlog log=(submit+alloc) set has_resources flag");
+        "job_create_from_eventlog log=(submit+depend+alloc) set has_resources flag");
     ok (job->state == FLUX_JOB_RUN,
-        "job_create_from_eventlog log=(submit+alloc) set state=RUN");
+        "job_create_from_eventlog log=(submit+depend+alloc) set state=RUN");
     job_decref (job);
 
     /* 5 - missing submit */
@@ -181,16 +183,16 @@ void test_create_from_eventlog (void)
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(alloc) fails with EINVAL");
 
-    /* 6 - submit + alloc + ex0 + free */
+    /* 6 - submit + depend + alloc + ex0 + free */
     job = job_create_from_eventlog (3, test_input[6]);
     if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+alloc+ex0+free) failed");
+        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+alloc+ex0+free) failed");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
-        "job_create_from_eventlog log=(submit+alloc+ex0+free) set no internal flags");
+        "job_create_from_eventlog log=(submit+depend+alloc+ex0+free) set no internal flags");
     ok (job->state == FLUX_JOB_CLEANUP,
-        "job_create_from_eventlog log=(submit+alloc+ex0+free) set state=CLEANUP");
+        "job_create_from_eventlog log=(submit+depend+alloc+ex0+free) set state=CLEANUP");
     job_decref (job);
 
 }

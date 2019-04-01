@@ -64,7 +64,7 @@ log "broker.pid=$(flux getattr broker.pid)\n"
 flux module remove sched-simple
 flux kvs put --json \
     resource.hwloc.by_rank="{\"[1-$NNODES]\":{\"Core\":$CPN}}"
-flux jobspec srun hostname | jq '.attributes.system.duration = ".0001s"' > job.json
+flux jobspec srun hostname | jq '.attributes.system.duration = .0001' > job.json
 flux module load sched-simple
 
 #  If not testing exec system, remove the job-exec module

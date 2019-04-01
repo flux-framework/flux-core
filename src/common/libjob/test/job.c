@@ -15,7 +15,6 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libjob/job.h"
 
 struct jobkey_input {
     flux_jobid_t id;
@@ -167,6 +166,48 @@ void check_corner_case (void)
         "flux_job_event_watch_cancel fails with EINVAL on bad input");
 }
 
+struct ss {
+    flux_job_state_t state;
+    const char *s;
+    const char *s_long;
+};
+
+struct ss sstab[] = {
+    { FLUX_JOB_NEW,     "N", "NEW" },
+    { FLUX_JOB_DEPEND,  "D", "DEPEND" },
+    { FLUX_JOB_SCHED,   "S", "SCHED" },
+    { FLUX_JOB_RUN,     "R", "RUN" },
+    { FLUX_JOB_CLEANUP, "C", "CLEANUP" },
+    { FLUX_JOB_INACTIVE,"I", "INACTIVE" },
+    { -1, NULL, NULL },
+};
+
+void check_statestr(void)
+{
+    struct ss *ss;
+
+    for (ss = &sstab[0]; ss->s != NULL; ss++) {
+        const char *s = flux_job_statetostr (ss->state, true);
+        const char *s_long = flux_job_statetostr (ss->state, false);
+        ok (s && !strcmp (s, ss->s),
+            "flux_job_statetostr (%d, true) = %s", ss->state, ss->s);
+        ok (s_long && !strcmp (s_long, ss->s_long),
+            "flux_job_statetostr (%d, false) = %s", ss->state, ss->s_long);
+    }
+    for (ss = &sstab[0]; ss->s != NULL; ss++) {
+        flux_job_state_t state;
+        ok (flux_job_strtostate (ss->s, &state) == 0 && state == ss->state,
+            "flux_job_strtostate (%s) = %d", ss->s, ss->state);
+        ok (flux_job_strtostate (ss->s_long, &state) == 0 && state == ss->state,
+            "flux_job_strtostate (%s) = %d", ss->s_long, ss->state);
+    }
+    ok (flux_job_statetostr (0, true) != NULL,
+        "flux_job_statetostr (0, true) returned non-NULL");
+    ok (flux_job_statetostr (0, false) != NULL,
+        "flux_job_statetostr (0, false) returned non-NULL");
+}
+
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -174,6 +215,8 @@ int main (int argc, char *argv[])
     check_jobkey ();
 
     check_corner_case ();
+
+    check_statestr ();
 
     done_testing ();
     return 0;
