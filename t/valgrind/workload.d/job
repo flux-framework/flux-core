@@ -15,4 +15,7 @@ flux job wait-event ${id} start
 flux job cancel ${id}
 flux job wait-event ${id} clean
 
+# Test info fetch
+flux job info ${id} eventlog jobspec R
+
 flux job drain
