@@ -59,6 +59,10 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
         flux jobspec --format json srun -N1 hostname > test.json
 '
 
+#
+# job eventlog
+#
+
 test_expect_success 'flux job eventlog works (owner)' '
         jobid=$(submit_job) &&
         flux job eventlog $jobid
@@ -104,6 +108,51 @@ test_expect_success 'flux job eventlog fails on bad first event (user)' '
         jobid=$(bad_first_event 9000) &&
         set_userid 9999 &&
         ! flux job eventlog $jobid &&
+        unset_userid
+'
+
+#
+# job wait-event
+#
+
+test_expect_success 'flux job wait-event works (owner)' '
+        jobid=$(submit_job) &&
+        flux job wait-event $jobid submit
+'
+
+test_expect_success 'flux job wait-event works (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job wait-event $jobid submit &&
+        unset_userid
+'
+
+test_expect_success 'flux job wait-event fails (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job wait-event $jobid submit &&
+        unset_userid
+'
+
+test_expect_success 'flux job wait-event works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job wait-event $jobid submit
+'
+
+test_expect_success 'flux job wait-event works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job wait-event $jobid submit &&
+        unset_userid
+'
+
+test_expect_success 'flux job wait-event fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job wait-event $jobid submit &&
         unset_userid
 '
 
