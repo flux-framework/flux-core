@@ -36,6 +36,15 @@ bad_first_event() {
         echo $jobid
 }
 
+# we cheat and manually move active to inactive in these tests
+
+move_inactive() {
+        activekvsdir=$(flux job id --to=kvs-active $1)
+        inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/')
+        flux kvs move ${activekvsdir} ${inactivekvsdir}
+        return 0
+}
+
 set_userid() {
         export FLUX_HANDLE_USERID=$1
         export FLUX_HANDLE_ROLEMASK=0x2
@@ -64,6 +73,28 @@ test_expect_success 'flux job eventlog works (user)' '
 
 test_expect_success 'flux job eventlog fails (wrong user)' '
         jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job eventlog $jobid &&
+        unset_userid
+'
+
+test_expect_success 'flux job eventlog works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job eventlog $jobid
+'
+
+test_expect_success 'flux job eventlog works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job eventlog $jobid &&
+        unset_userid
+'
+
+test_expect_success 'flux job eventlog fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
         set_userid 9999 &&
         ! flux job eventlog $jobid &&
         unset_userid
