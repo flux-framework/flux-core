@@ -27,11 +27,14 @@ struct lookup_ctx {
     flux_msg_t *msg;
     flux_jobid_t id;
     json_t *keys;
+    bool check_eventlog;
     int flags;
     bool active;
     flux_future_t *f;
     bool allow;
 };
+
+static void info_lookup_continuation (flux_future_t *fall, void *arg);
 
 static void lookup_ctx_destroy (void *data)
 {
@@ -58,9 +61,13 @@ static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
 
     l->ctx = ctx;
     l->id = id;
-    l->keys = json_incref (keys);
     l->flags = flags;
     l->active = true;
+
+    if (!(l->keys = json_copy (keys))) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     if (!(l->msg = flux_msg_copy (msg, true))) {
         flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
@@ -126,6 +133,16 @@ static flux_future_t *lookup_keys (struct lookup_ctx *l, flux_continuation_f c)
     }
     flux_future_set_flux (fall, l->ctx->h);
 
+    if (l->check_eventlog) {
+        if (!(f = lookup_key (l, "eventlog", NULL)))
+            goto error;
+        if (flux_future_push (fall, "eventlog", f) < 0) {
+            flux_future_destroy (f);
+            flux_log_error (l->ctx->h, "%s: flux_future_push", __FUNCTION__);
+            goto error;
+        }
+    }
+
     json_array_foreach(l->keys, index, key) {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
@@ -153,56 +170,87 @@ error:
     return NULL;
 }
 
+static int check_lookup_error (struct lookup_ctx *l)
+{
+    if (errno == ENOENT && l->active) {
+        flux_future_t *fnext;
+        /* transition / try the inactive key */
+        l->active = false;
+        if (!(fnext = lookup_keys (l, info_lookup_continuation)))
+            return -1;
+        lookup_ctx_set_future (l, fnext);
+        return 0;
+    }
+    else if (errno != ENOENT)
+        flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+    return -1;
+}
+
 static void info_lookup_continuation (flux_future_t *fall, void *arg)
 {
     struct lookup_ctx *l = arg;
     struct info_ctx *ctx = l->ctx;
-    const char *name;
     const char *s;
+    size_t index;
+    json_t *key;
     json_t *o = NULL;
     char *data = NULL;
 
-    /* must be done beforehand */
-    assert (l->allow);
-
-    name = flux_future_first_child (fall);
-    while (name) {
+    if (!l->allow) {
         flux_future_t *f;
-        json_t *str = NULL;
 
-        if (!(f = flux_future_get_child (fall, name))) {
+        if (!(f = flux_future_get_child (fall, "eventlog"))) {
             flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
             goto error;
         }
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
-            if (errno == ENOENT && l->active) {
-                flux_future_t *fnext;
-                /* transition / try the inactive key */
-                l->active = false;
-                if (!(fnext = lookup_keys (l, info_lookup_continuation)))
-                    goto error;
-                lookup_ctx_set_future (l, fnext);
-                return;
-            }
-            else if (errno != ENOENT)
-                flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+            if (check_lookup_error (l) < 0)
+                goto error;
+            return;
+        }
+
+        if (eventlog_allow (ctx, l->msg, s) < 0)
+            goto error;
+        l->allow = true;
+    }
+
+    if (!(o = json_object ()))
+        goto enomem;
+
+    json_array_foreach(l->keys, index, key) {
+        flux_future_t *f;
+        const char *keystr;
+        json_t *str = NULL;
+
+        if (!(keystr = json_string_value (key))) {
+            errno = EINVAL;
             goto error;
         }
 
-        if (!o && !(o = json_object ()))
-            goto enomem;
+        if (!(f = flux_future_get_child (fall, keystr))) {
+            flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
+            goto error;
+        }
+
+        if (flux_kvs_lookup_get (f, &s) < 0) {
+            if (check_lookup_error (l) < 0)
+                goto error;
+            return;
+        }
 
         if (!(str = json_string (s)))
             goto enomem;
 
-        if (json_object_set_new (o, name, str) < 0) {
+        if (json_object_set_new (o, keystr, str) < 0) {
             json_decref (str);
             goto enomem;
         }
-
-        name = flux_future_next_child (fall);
     }
+
+    /* must have been allowed earlier or above, otherwise should have
+     * taken error path */
+    assert (l->allow);
 
     if (!(data = json_dumps (o, JSON_COMPACT)))
         goto enomem;
@@ -228,64 +276,26 @@ done:
     zlist_remove (ctx->lookups, l);
 }
 
-static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
+/* If keys array doesn't contain eventlog, flag that we'll need to do
+ * an eventlog check.
+ */
+static int check_keys_for_eventlog (struct lookup_ctx *l)
 {
-    struct lookup_ctx *l = arg;
-    struct info_ctx *ctx = l->ctx;
-    flux_future_t *fnext;
-    const char *s, *strval;
-    json_t *str;
+    size_t index;
+    json_t *key;
 
-    if (flux_kvs_lookup_get (f, &s) < 0) {
-        if (errno == ENOENT && l->active) {
-            /* transition / try the inactive key */
-            l->active = false;
-            if (!(fnext = lookup_key (l, "eventlog",
-                                      eventlog_lookup_continuation)))
-                goto error;
-            lookup_ctx_set_future (l, fnext);
-            return;
+    json_array_foreach(l->keys, index, key) {
+        const char *keystr;
+        if (!(keystr = json_string_value (key))) {
+            errno = EINVAL;
+            return -1;
         }
-        else if (errno != ENOENT)
-            flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
-        goto error;
+        if (!strcmp (keystr, "eventlog"))
+            return 0;
     }
 
-    if (!l->allow) {
-        if (eventlog_allow (ctx, l->msg, s) < 0)
-            goto error;
-        l->allow = true;
-    }
-
-    /* if user requested only eventlog, we can return this data, no
-     * need to go through the "info" request path.
-     */
-    if (json_array_size (l->keys) == 1
-        && (str = json_array_get (l->keys, 0))
-        && (strval = json_string_value (str))
-        && !strcmp (strval, "eventlog")) {
-        if (flux_respond_pack (ctx->h, l->msg, "{s:s}", "eventlog", s) < 0) {
-            flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
-            goto error;
-        }
-
-        goto done;
-    }
-    else {
-        if (!(fnext = lookup_keys (l, info_lookup_continuation)))
-            goto error;
-        lookup_ctx_set_future (l, fnext);
-    }
-
-    return;
-
-error:
-    if (flux_respond_error (ctx->h, l->msg, errno, NULL) < 0)
-        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-done:
-    /* flux future destroyed in lookup_ctx_destroy, which is called
-     * via zlist_remove() */
-    zlist_remove (ctx->lookups, l);
+    l->check_eventlog = true;
+    return 0;
 }
 
 void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -316,19 +326,14 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     /* if rpc from owner, no need to do guest access check */
     if ((rolemask & FLUX_ROLE_OWNER))
         l->allow = true;
-
-    if (l->allow) {
-        if (!(f = lookup_keys (l, info_lookup_continuation)))
-            goto error;
-        lookup_ctx_set_future (l, f);
-    }
     else {
-        /* must lookup eventlog first to do access check */
-        if (!(f = lookup_key (l, "eventlog",
-                              eventlog_lookup_continuation)))
+        if (check_keys_for_eventlog (l) < 0)
             goto error;
-        lookup_ctx_set_future (l, f);
     }
+
+    if (!(f = lookup_keys (l, info_lookup_continuation)))
+        goto error;
+    lookup_ctx_set_future (l, f);
 
     if (zlist_append (ctx->lookups, l) < 0) {
         flux_log_error (h, "%s: zlist_append", __FUNCTION__);
