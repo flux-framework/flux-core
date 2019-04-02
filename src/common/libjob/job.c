@@ -229,35 +229,6 @@ int flux_job_kvs_key (char *buf, int bufsz, bool active,
     return len;
 }
 
-flux_future_t *flux_job_eventlog_lookup (flux_t *h, flux_jobid_t id)
-{
-    flux_future_t *f;
-    const char *topic = "job-info.lookup";
-
-    if (!h) {
-        errno = EINVAL;
-        return NULL;
-    }
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:[s] s:i}",
-                             "id", id,
-                             "keys", "eventlog",
-                             "flags", 0)))
-        return NULL;
-    return f;
-}
-
-int flux_job_eventlog_lookup_get (flux_future_t *f, const char **event)
-{
-    const char *s;
-
-    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0)
-        return -1;
-    if (event)
-        *event = s;
-    return 0;
-}
-
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;

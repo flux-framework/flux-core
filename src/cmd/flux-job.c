@@ -708,7 +708,7 @@ void eventlog_continuation (flux_future_t *f, void *arg)
     const char *s;
     const char *event;
 
-    if (flux_job_eventlog_lookup_get (f, &s) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %lu not found", ctx->id);
@@ -731,6 +731,7 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
+    const char *topic = "job-info.lookup";
     struct eventlog_ctx ctx = {0};
 
     if (!(h = flux_open (NULL, 0)))
@@ -751,8 +752,12 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
         && strcasecmp (ctx.format, "json"))
         log_msg_exit ("invalid context-format type");
 
-    if (!(f = flux_job_eventlog_lookup (h, ctx.id)))
-        log_err_exit ("flux_job_eventlog_lookup");
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+                             "{s:I s:[s] s:i}",
+                             "id", ctx.id,
+                             "keys", "eventlog",
+                             "flags", 0)))
+        log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., eventlog_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
