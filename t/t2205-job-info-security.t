@@ -10,11 +10,14 @@ test_under_flux 4 job
 # This method of editing the eventlog preserves newline separators.
 
 # Usage: submit_job [userid]
-# Wait for job eventlog to include 'depend' event, then edit the userid
+# To ensure robustness of tests despite future job manager changes,
+# cancel the job, and wait for clean event.  Optionally, edit the
+# userid
 submit_job() {
         userid=$1
         jobid=$(flux job submit test.json)
-        flux job wait-event $jobid depend >/dev/null
+        flux job cancel $jobid
+        flux job wait-event $jobid clean >/dev/null
         if test -n "$userid"; then
             kvsdir=$(flux job id --to=kvs-active $jobid)
             flux kvs get --raw ${kvsdir}.eventlog \
