@@ -232,15 +232,16 @@ int flux_job_kvs_key (char *buf, int bufsz, bool active,
 flux_future_t *flux_job_eventlog_lookup (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;
-    const char *topic = "job-info.eventlog-lookup";
+    const char *topic = "job-info.lookup";
 
     if (!h) {
         errno = EINVAL;
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:i}",
+                             "{s:I s:s s:i}",
                              "id", id,
+                             "key", "eventlog",
                              "flags", 0)))
         return NULL;
     return f;
@@ -250,7 +251,7 @@ int flux_job_eventlog_lookup_get (flux_future_t *f, const char **event)
 {
     const char *s;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "event", &s) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0)
         return -1;
     if (event)
         *event = s;
@@ -260,7 +261,7 @@ int flux_job_eventlog_lookup_get (flux_future_t *f, const char **event)
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;
-    const char *topic = "job-info.eventlog-lookup";
+    const char *topic = "job-info.eventlog-watch";
     int rpc_flags = FLUX_RPC_STREAMING;
 
     if (!h) {
@@ -268,9 +269,8 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
-                             "{s:I s:i}",
-                             "id", id,
-                             "flags", FLUX_JOB_INFO_WATCH)))
+                             "{s:I}",
+                             "id", id)))
         return NULL;
     return f;
 }
@@ -295,7 +295,7 @@ int flux_job_event_watch_cancel (flux_future_t *f)
         return -1;
     }
     if (!(f2 = flux_rpc_pack (flux_future_get_flux (f),
-                              "job-info.eventlog-cancel",
+                              "job-info.eventlog-watch-cancel",
                               FLUX_NODEID_ANY,
                               FLUX_RPC_NORESPONSE,
                               "{s:i}",

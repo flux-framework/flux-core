@@ -14,8 +14,16 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = job-info.la
 
 job_info_la_SOURCES = \
-	job-info.c
-
+	job-info.c \
+	info.h \
+	allow.h \
+	allow.c \
+	lookup.h \
+	lookup.c \
+	util.h \
+	util.c \
+	watch.h \
+	watch.c
 
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_info_la_LIBADD = $(fluxmod_libadd) \

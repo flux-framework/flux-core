@@ -10,11 +10,14 @@ test_under_flux 4 job
 # This method of editing the eventlog preserves newline separators.
 
 # Usage: submit_job [userid]
-# Wait for job eventlog to include 'depend' event, then edit the userid
+# To ensure robustness of tests despite future job manager changes,
+# cancel the job, and wait for clean event.  Optionally, edit the
+# userid
 submit_job() {
         userid=$1
         jobid=$(flux job submit test.json)
-        flux job wait-event $jobid depend >/dev/null
+        flux job cancel $jobid
+        flux job wait-event $jobid clean >/dev/null
         if test -n "$userid"; then
             kvsdir=$(flux job id --to=kvs-active $jobid)
             flux kvs get --raw ${kvsdir}.eventlog \
@@ -36,6 +39,14 @@ bad_first_event() {
         echo $jobid
 }
 
+# We cheat and manually move active to inactive in these tests.
+move_inactive() {
+        activekvsdir=$(flux job id --to=kvs-active $1)
+        inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/')
+        flux kvs move ${activekvsdir} ${inactivekvsdir}
+        return 0
+}
+
 set_userid() {
         export FLUX_HANDLE_USERID=$1
         export FLUX_HANDLE_ROLEMASK=0x2
@@ -49,6 +60,10 @@ unset_userid() {
 test_expect_success 'job-info: generate jobspec for simple test job' '
         flux jobspec --format json srun -N1 hostname > test.json
 '
+
+#
+# job eventlog
+#
 
 test_expect_success 'flux job eventlog works (owner)' '
         jobid=$(submit_job) &&
@@ -69,10 +84,77 @@ test_expect_success 'flux job eventlog fails (wrong user)' '
         unset_userid
 '
 
+test_expect_success 'flux job eventlog works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job eventlog $jobid
+'
+
+test_expect_success 'flux job eventlog works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job eventlog $jobid &&
+        unset_userid
+'
+
+test_expect_success 'flux job eventlog fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job eventlog $jobid &&
+        unset_userid
+'
+
 test_expect_success 'flux job eventlog fails on bad first event (user)' '
         jobid=$(bad_first_event 9000) &&
         set_userid 9999 &&
         ! flux job eventlog $jobid &&
+        unset_userid
+'
+
+#
+# job wait-event
+#
+
+test_expect_success 'flux job wait-event works (owner)' '
+        jobid=$(submit_job) &&
+        flux job wait-event $jobid submit
+'
+
+test_expect_success 'flux job wait-event works (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job wait-event $jobid submit &&
+        unset_userid
+'
+
+test_expect_success 'flux job wait-event fails (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job wait-event $jobid submit &&
+        unset_userid
+'
+
+test_expect_success 'flux job wait-event works (owner, inactive)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job wait-event $jobid submit
+'
+
+test_expect_success 'flux job wait-event works (user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job wait-event $jobid submit &&
+        unset_userid
+'
+
+test_expect_success 'flux job wait-event fails (wrong user, inactive)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job wait-event $jobid submit &&
         unset_userid
 '
 
