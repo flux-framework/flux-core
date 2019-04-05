@@ -244,6 +244,88 @@ test_expect_success 'flux job info jobspec fails (wrong user, inactive)' '
         unset_userid
 '
 
+test_expect_success 'flux job info multiple keys works (owner, include eventlog)' '
+        jobid=$(submit_job) &&
+        flux job info $jobid eventlog jobspec J
+'
+
+test_expect_success 'flux job info multiple keys works (user, include eventlog)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys fails (wrong user, include eventlog)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys works (owner, inactive, include eventlog)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job info $jobid eventlog jobspec J
+'
+
+test_expect_success 'flux job info multiple keys works (user, inactive, include eventlog)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job info $jobid eventlog jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys fails (wrong user, inactive, include eventlog)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job info $jobid jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys works (owner, no eventlog)' '
+        jobid=$(submit_job) &&
+        flux job info $jobid jobspec J
+'
+
+test_expect_success 'flux job info multiple keys works (user, no eventlog)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job info $jobid jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys fails (wrong user, no eventlog)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job info $jobid jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys works (owner, inactive, no eventlog)' '
+        jobid=$(submit_job) &&
+        move_inactive $jobid &&
+        flux job info $jobid jobspec J
+'
+
+test_expect_success 'flux job info multiple keys works (user, inactive, no eventlog)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9000 &&
+        flux job info $jobid jobspec J &&
+        unset_userid
+'
+
+test_expect_success 'flux job info multiple keys fails (wrong user, inactive, no eventlog)' '
+        jobid=$(submit_job 9000) &&
+        move_inactive $jobid &&
+        set_userid 9999 &&
+        ! flux job info $jobid jobspec J &&
+        unset_userid
+'
+
 test_expect_success 'flux job info foobar fails (owner)' '
         jobid=$(submit_job) &&
         ! flux job info $jobid foobar
