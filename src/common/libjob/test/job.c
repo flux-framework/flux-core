@@ -140,17 +140,17 @@ void check_corner_case (void)
 
     /* flux_job_eventlog_watch */
 
-    errno = EINVAL;
+    errno = 0;
     ok (!flux_job_event_watch (NULL, 0)
         && errno == EINVAL,
         "flux_job_event_watch fails with EINVAL on bad input");
 
-    errno = EINVAL;
+    errno = 0;
     ok (flux_job_event_watch_get (NULL, NULL) < 0
         && errno == EINVAL,
         "flux_job_event_watch_get fails with EINVAL on bad input");
 
-    errno = EINVAL;
+    errno = 0;
     ok (flux_job_event_watch_cancel (NULL) < 0
         && errno == EINVAL,
         "flux_job_event_watch_cancel fails with EINVAL on bad input");
