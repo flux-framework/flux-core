@@ -16,6 +16,8 @@
 #include "src/common/libtap/tap.h"
 
 const char *badevent[] = {
+    "\n",
+    /* old non-JSON format */
     "1 foo",
     "1 foo bar",
     "1 foo bar bar",
@@ -28,17 +30,32 @@ const char *badevent[] = {
     "1\n",
     "1 \n",
     "1  \n",
-    "\n",
     "1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+    /* new JSON format */
+    "{\"timestamp\":1552593348.089787,\"name\":\"foo\"}",
+    "{\"timestamp\":1552593348.089787,\"name\":\"foo\",\"context\":{\"bar\":16}}",
+    "{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
+    "{\"timestamp\":1552593348.089787}\n",
+    "{\"name\":\"foo\"}\n",
+    "{\"timestamp\":\"foo\",\"name\":\"foo\"}\n{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
+    "{\"timestamp\":\"foo\",\"name\":\"foo\"}{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
+    "\n{\"timestamp\":1552593348.089787,\"name\":\"foo\"}",
+    "{\"timestamp\":1552593348.089787,\"name\":\"foo\",\"context\":\"bar\"}\n",
     NULL,
 };
 
 const char *badlog[] = {
     "\n",
+    "\n\n",
+    /* old non-JSON format */
     "1 foo",
     "1 foo\n\n",
     "\n1 foo\n",
     "1\n1\n",
+    /* new JSON format */
+    "{\"timestamp\":1552593348.089787,\"name\":\"foo\"}",
+    "{\"timestamp\":1552593348.089787,\"name\":\"foo\"}\n\n",
+    "\n{\"timestamp\":1552593348.089787,\"name\":\"foo\"}\n",
     NULL,
 };
 
@@ -110,9 +127,15 @@ void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
 
 void basic (void)
 {
-    const char *test1 = "42.123 foo\n44.0 bar quick brown fox\n";
-    const char *test2 = "50 meep\n";
-    const char *test3 = "60 mork mindy\n70 duh\n";
+    const char *test1 ="{\"timestamp\":42.123,\"name\":\"foo\"}\n"
+                       "{\"timestamp\":44.0,\"name\":\"bar\","
+                        "\"context\":{\"data\":\"quick brown fox\"}}\n";
+    const char *test2 ="{\"timestamp\":50,\"name\":\"meep\"}\n";
+    const char *test3 ="{\"timestamp\":60,\"name\":\"mork\","
+                        "\"context\":{\"data\":\"mindy\"}}\n"
+                       "{\"timestamp\":70,\"name\":\"duh\"}\n";
+    const char *test4 ="{\"timestamp\":80,\"name\":\"doh\","
+                        "\"context\":{\"userid\":88}}\n";
     struct flux_kvs_eventlog *log;
     char *s;
 
@@ -128,7 +151,7 @@ void basic (void)
         "flux_kvs_eventlog_decode works on 2 entry log: [foo, bar]");
 
     basic_check (log, true, false, 42.123, "foo", "");
-    basic_check (log, false, false, 44.0, "bar", "quick brown fox");
+    basic_check (log, false, false, 44.0, "bar", "{\"data\":\"quick brown fox\"}");
     basic_check (log, false, true, 0, NULL, NULL);
 
     /* encode and compare to input */
@@ -144,8 +167,14 @@ void basic (void)
         "flux_kvs_eventlog_append works adding 2 entries: [foo, bar, meep, mork, duh]");
 
     basic_check (log, false, false, 50, "meep", "");
-    basic_check (log, false, false, 60, "mork", "mindy");
+    basic_check (log, false, false, 60, "mork", "{\"data\":\"mindy\"}");
     basic_check (log, false, false, 70, "duh", "");
+    basic_check (log, false, true, 0, NULL, NULL);
+
+    ok (flux_kvs_eventlog_append (log, test4) == 0,
+        "flux_kvs_eventlog_append works adding 1 entry: [foo, bar, meep, mork, duh, doh]");
+
+    basic_check (log, false, false, 80, "doh", "{\"userid\":88}");
     basic_check (log, false, true, 0, NULL, NULL);
 
     flux_kvs_eventlog_destroy (log);
@@ -183,7 +212,9 @@ void bad_input (void)
     if (!log)
         BAIL_OUT ("flux_kvs_eventlog_create failed");
     errno = 0;
-    ok (flux_kvs_eventlog_append (NULL, "0 foo\n") < 0 && errno == EINVAL,
+    ok (flux_kvs_eventlog_append (NULL,
+                                  "{\"timestamp\":1.0,\"name\":\"foo\"}\n") < 0
+        && errno == EINVAL,
         "flux_kvs_eventlog_append log=NULL fails with EINVAL");
     errno = 0;
     ok (flux_kvs_eventlog_append (log, NULL) < 0 && errno == EINVAL,
@@ -245,13 +276,29 @@ void event (void)
     event_check (s, 1., "foo", NULL);
     free (s);
 
-    s = flux_kvs_event_encode_timestamp (1., "foo", "foo");
+    s = flux_kvs_event_encode_timestamp (1., "foo", "");
     ok (s != NULL,
-        "flux_kvs_event_encode_timestamp context=\"foo\" works");
-    event_check (s, 1., "foo", "foo");
+        "flux_kvs_event_encode_timestamp context=\"\" works");
+    event_check (s, 1., "foo", NULL);
     free (s);
 
-    s = flux_kvs_event_encode ("foo", "foo");
+    s = flux_kvs_event_encode_timestamp (1., "foo", "{\"data\":\"foo\"}");
+    ok (s != NULL,
+        "flux_kvs_event_encode_timestamp context=\"{\"data\":\"foo\"}\" works");
+    event_check (s, 1., "foo", "{\"data\":\"foo\"}");
+    free (s);
+
+    errno = 0;
+    ok (flux_kvs_event_encode_timestamp (1., "foo", "foo") == NULL
+        && errno == EINVAL,
+        "flux_kvs_event_encode_timestamp context=\"foo\" FAILS with EINVAL");
+
+    errno = 0;
+    ok (flux_kvs_event_encode_timestamp (1., "foo", "[\"foo\"]") == NULL
+        && errno == EINVAL,
+        "flux_kvs_event_encode_timestamp context=\"[\"foo\"]\" FAILS with EINVAL");
+
+    s = flux_kvs_event_encode ("foo", "{\"data\":\"foo\"}");
     ok (s != NULL,
         "flux_kvs_event_encode works");
     // no event_check(), can't predict timestamp

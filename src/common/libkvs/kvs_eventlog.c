@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <jansson.h>
 #include <czmq.h>
 #include <argz.h>
 
@@ -210,86 +211,83 @@ error:
     return -1;
 }
 
-static const char *strnchr (const char *s, int c, size_t size)
-{
-    int i;
-    for (i = 0; i < size; i++)
-        if (s[i] == c)
-            return &s[i];
-    return NULL;
-}
-
 int flux_kvs_event_decode (const char *s,
                            double *timestamp,
                            char *name, int name_size,
                            char *context, int context_size)
 {
-    const char *input;
+    json_t *o = NULL;
+    int len;
     double t;
-    char *cp;
-    size_t toklen;
+    const char *n;
+    json_t *c;
+    char *cstr = NULL;
+    int rv = -1;
 
     if (!s)
         goto error_inval;
-    input = s;
 
-    /* time */
-    if (!isdigit (*input))
+    if (!(len = strlen (s)))
         goto error_inval;
-    errno = 0;
-    t = strtod (input, &cp);
-    if (errno != 0 || *cp != ' ' || t <= 0)
+
+    if (s[len - 1] != '\n')
         goto error_inval;
+
+    if (!(o = json_loads (s, 0, NULL)))
+        goto error_inval;
+
+    if (json_unpack (o, "{ s:F s:s }",
+                     "timestamp", &t,
+                     "name", &n) < 0)
+        goto error_inval;
+
     if (timestamp)
         *timestamp = t;
-    input = cp + 1;
-
-    /* name */
-    if (!(cp = strchr (input, ' ')) && !(cp = strchr (input, '\n')))
-        goto error_inval;
-    if ((toklen = cp - input) > FLUX_KVS_MAX_EVENT_NAME || toklen == 0)
-        goto error_inval;
-    if (strnchr (input, '\n', toklen))
-        goto error_inval;
     if (name) {
-        if (name_size < toklen + 1)
+        int name_len = strlen (n);
+        if (name_len > FLUX_KVS_MAX_EVENT_NAME)
             goto error_inval;
-        memcpy (name, input, toklen);
-        name[toklen] = '\0';
+        if (name_size <= name_len)
+            goto error_inval;
+        strcpy (name, n);
     }
-    input = cp + 1;
 
-    /* context (optional) */
-    if (*cp == '\n') {
+    if (!json_unpack (o, "{ s:o }", "context", &c)) {
+        int context_len;
+        if (!(cstr = json_dumps (c, JSON_COMPACT)))
+            goto error_inval;
+        context_len = strlen (cstr);
+        if (context_len > FLUX_KVS_MAX_EVENT_CONTEXT)
+            goto error_inval;
+        if (context) {
+            if (context_size <= context_len)
+                goto error_inval;
+            strcpy (context, cstr);
+        }
+    }
+    else {
         if (context)
             context[0] = '\0';
     }
-    else {
-        if (!(cp = strchr (input, '\n')))
-            goto error_inval;
-        if ((toklen = cp - input) > FLUX_KVS_MAX_EVENT_CONTEXT)
-            goto error_inval;
-        if (context) {
-            if (context_size < toklen + 1)
-                goto error_inval;
-            memcpy (context, input, toklen);
-            context[toklen] = '\0';
-        }
-        input = cp + 1;
-    }
 
-    if (*input != '\0')
-        goto error_inval;
-    return 0;
+    rv = 0;
+    goto out;
+
 error_inval:
     errno = EINVAL;
-    return -1;
+out:
+    json_decref (o);
+    free (cstr);
+    return rv;
 }
 
 char *flux_kvs_event_encode_timestamp (double timestamp, const char *name,
                                        const char *context)
 {
-    char *s;
+    json_t *o = NULL;
+    char *s = NULL;
+    char *rv = NULL;
+    json_t *c = NULL;
     int namelen;
 
     if (!name || timestamp <= 0.
@@ -302,13 +300,45 @@ char *flux_kvs_event_encode_timestamp (double timestamp, const char *name,
         errno = EINVAL;
         return NULL;
     }
-    if (asprintf (&s, "%.6f %s%s%s\n",
-                  timestamp,
-                  name,
-                  context ? " " : "",
-                  context ? context : "") < 0)
-        return NULL;
-    return s;
+    if (!context || !strlen (context)) {
+        if (!(o = json_pack ("{ s:f s:s }",
+                             "timestamp", timestamp,
+                             "name", name))) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    else {
+        /* verify context is a json object */
+        if (!(c = json_loads (context, 0, NULL))) {
+            errno = EINVAL;
+            goto error;
+        }
+        if (!json_is_object (c)) {
+            errno = EINVAL;
+            goto error;
+        }
+        if (!(o = json_pack ("{ s:f s:s s:O }",
+                             "timestamp", timestamp,
+                             "name", name,
+                             "context", c))) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    if (!(s = json_dumps (o, JSON_COMPACT))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (asprintf (&rv, "%s\n", s) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
+error:
+    json_decref (c);
+    json_decref (o);
+    free (s);
+    return rv;
 }
 
 static int get_timestamp_now (double *timestamp)
