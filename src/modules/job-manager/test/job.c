@@ -57,34 +57,44 @@ void test_create (void)
 
 const char *test_input[] = {
     /* 0 */
-    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n",
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n",
 
     /* 1 */
-    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
-    "42.3 priority {\"userid\":42,\"priority\":1}\n",
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"priority\","
+     "\"context\":{\"userid\":42,\"priority\":1}}\n",
 
     /* 2 */
-    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
-    "42.3 exception {\"type\":\"cancel\",\"severity\":0,\"userid\":42}\n",
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"exception\","
+     "\"context\":{\"type\":\"cancel\",\"severity\":0,\"userid\":42}}\n",
 
     /* 3 */
-    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
-    "42.3 exception {\"type\":\"meep\",\"severity\":1,\"userid\":42}\n",
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"exception\","
+     "\"context\":{\"type\":\"meep\",\"severity\":1,\"userid\":42}}\n",
 
     /* 4 */
-    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
-    "42.3 depend\n"
-    "42.4 alloc\n",
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
+    "{\"timestamp\":42.4,\"name\":\"alloc\"}\n",
 
     /* 5 */
-    "42.3 alloc\n",
+    "{\"timestamp\":42.3,\"name\":\"alloc\"}\n",
 
     /* 6 */
-    "42.2 submit {\"userid\":66,\"priority\":16,\"flags\":42}\n"
-    "42.3 depend\n"
-    "42.3 alloc\n"
-    "42.4 exception {\"type\":\"gasp\",\"severity\":0,\"userid\":42}\n"
-    "42.5 free\n",
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
+    "{\"timestamp\":42.3,\"name\":\"alloc\"}\n"
+    "{\"timestamp\":42.4,\"name\":\"exception\","
+     "\"context\":{\"type\":\"gasp\",\"severity\":0,\"userid\":42}}\n"
+    "{\"timestamp\":42.5,\"name\":\"free\"}\n",
 };
 
 void test_create_from_eventlog (void)
