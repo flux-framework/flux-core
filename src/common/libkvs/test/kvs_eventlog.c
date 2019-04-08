@@ -133,9 +133,9 @@ void basic (void)
 
     /* append and iterate */
     ok (flux_kvs_eventlog_append (log, test2) == 0,
-        "flux_kvs_eventlog_update works adding 1 entry: [foo, bar, meep]");
+        "flux_kvs_eventlog_append works adding 1 entry: [foo, bar, meep]");
     ok (flux_kvs_eventlog_append (log, test3) == 0,
-        "flux_kvs_eventlog_update works adding 2 entries: [foo, bar, meep, mork, duh]");
+        "flux_kvs_eventlog_append works adding 2 entries: [foo, bar, meep, mork, duh]");
 
     basic_check (log, false, false, 50, "meep", "");
     basic_check (log, false, false, 60, "mork", "mindy");
@@ -245,7 +245,7 @@ void event (void)
 
     s = flux_kvs_event_encode ("foo", "foo");
     ok (s != NULL,
-        "flux_kvs_event_encode_timestamp works");
+        "flux_kvs_event_encode works");
     free (s);
 
     errno = 0;
