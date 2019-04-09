@@ -57,7 +57,7 @@ static char *create_eventlog_entry (json_t *job)
                                                "t_submit", &t_submit) < 0)
         goto error_inval;
     n = snprintf (context, sizeof (context),
-                  "id=%llu priority=%d userid=%lu t_submit=%lf",
+                  "{\"id\":%llu,\"priority\":%d,\"userid\":%lu,\"t_submit\":%lf}",
                   (unsigned long long)id,
                   priority,
                   (unsigned long)userid,
