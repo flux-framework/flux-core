@@ -173,12 +173,9 @@ static int ev_context_vsprintf (char *context, size_t len,
     int n;
     if (fmt == NULL)
         context[0] = '\0';
-    else if ((n = vsnprintf (context, len, fmt, ap)) < 0)
+    else if ((n = vsnprintf (context, len, fmt, ap)) < 0
+             || (n >= len))
         return -1;
-    else if (n >= len) {
-        context [len-2] = '+';
-        context [len-1] = '\0';
-    }
     return 0;
 }
 
@@ -335,7 +332,7 @@ static void jobinfo_complete (struct jobinfo *job)
     flux_t *h = job->ctx->h;
     if (h && job->req) {
         jobinfo_emit_event_nowait (job, "complete",
-                                        "status=%d",
+                                        "{\"status\":%d}",
                                         job->wait_status);
         if (flux_respond_pack (h, job->req, "{s:I s:s s:{s:i}}",
                                             "id", job->id,
@@ -385,7 +382,7 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
         msg [msglen-2] = '+';
         msg [msglen-1] = '\0';
     }
-    jobinfo_emit_event_nowait (job, "exception", msg);
+    jobinfo_emit_event_nowait (job, "exception", "{\"note\":\"%s\"}", msg);
     /* If exception_in_progress set, then no need to respond with another
      *  exception back to job manager. O/w, DO respond to job-manager
      *  and set exception-in-progress.
@@ -584,9 +581,10 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
      *   but do not generate an exception.
      */
     if (!(f = jobinfo_emit_event (job, "cleanup.finish",
-                                       "rc=%d%s%s", rc,
-                                        rc < 0 ? " " : "",
-                                        rc < 0 ? strerror (errno) : "")))
+                                       "{\"rc\":%d%s%s%s}", rc,
+                                        rc < 0 ? ",\"note\":\"" : "",
+                                        rc < 0 ? strerror (errno) : "",
+                                        rc < 0 ? "\"" : "")))
         flux_future_continue_error (prev, errno, NULL);
     else
         flux_future_continue (prev, f);
@@ -709,7 +707,7 @@ static int jobinfo_start_timer (struct jobinfo *job)
             return -1;
         }
         flux_watcher_start (job->timer);
-        jobinfo_emit_event_nowait (job, "running", "timer=%.6fs", t);
+        jobinfo_emit_event_nowait (job, "running", "{\"timer\"=\"%.6fs\"}", t);
         job->running = 1;
     }
     else
