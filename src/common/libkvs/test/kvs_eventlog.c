@@ -68,10 +68,8 @@ char *printable (char *output, const char *input)
     return output;
 }
 
-void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
-                  double xtimestamp, const char *xname, const char *xcontext)
+void event_check (const char *s, double xtimestamp, const char *xname, const char *xcontext)
 {
-    const char *s;
     int rc;
     double timestamp;
     char name[FLUX_KVS_MAX_EVENT_NAME + 1];
@@ -79,6 +77,21 @@ void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
 
     name[0] = '\0';
     context[0] = '\0';
+
+    rc = flux_kvs_event_decode (s, &timestamp, name, sizeof (name),
+                                context, sizeof (context));
+    ok (rc == 0
+        && timestamp == xtimestamp
+        && (!xname || !strcmp (name, xname))
+        && (!xcontext || !strcmp (context, xcontext)),
+        "flux_kvs_event_decode time=%llu name=%s context=%s",
+        (unsigned long long)xtimestamp, xname, xcontext);
+}
+
+void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
+                  double xtimestamp, const char *xname, const char *xcontext)
+{
+    const char *s;
 
     if (first)
         s = flux_kvs_eventlog_first (log);
@@ -91,14 +104,7 @@ void basic_check (struct flux_kvs_eventlog *log, bool first, bool xeof,
     else {
         ok (s != NULL,
             "flux_kvs_eventlog_%s != NULL", first ? "first" : "next");
-        rc = flux_kvs_event_decode (s, &timestamp, name, sizeof (name),
-                                                   context, sizeof (context));
-        ok (rc == 0
-            && timestamp == xtimestamp
-            && (!xname || !strcmp (name, xname))
-            && (!xcontext || !strcmp (context, xcontext)),
-            "flux_kvs_event_decode time=%llu name=%s context=%s",
-            (unsigned long long)xtimestamp, xname, xcontext);
+        event_check (s, xtimestamp, xname, xcontext);
     }
 }
 
@@ -236,16 +242,19 @@ void event (void)
     s = flux_kvs_event_encode_timestamp (1., "foo", NULL);
     ok (s != NULL,
         "flux_kvs_event_encode_timestamp context=NULL works");
+    event_check (s, 1., "foo", NULL);
     free (s);
 
     s = flux_kvs_event_encode_timestamp (1., "foo", "foo");
     ok (s != NULL,
         "flux_kvs_event_encode_timestamp context=\"foo\" works");
+    event_check (s, 1., "foo", "foo");
     free (s);
 
     s = flux_kvs_event_encode ("foo", "foo");
     ok (s != NULL,
         "flux_kvs_event_encode works");
+    // no event_check(), can't predict timestamp
     free (s);
 
     errno = 0;
