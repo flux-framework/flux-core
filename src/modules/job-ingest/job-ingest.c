@@ -21,6 +21,7 @@
 
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/sign_none.h"
+#include "src/common/libeventlog/eventlog.h"
 
 #include "validate.h"
 
@@ -383,10 +384,9 @@ static int batch_add_job (struct batch *batch, struct job *job)
     char key[64];
     int saved_errno;
     json_t *jobentry;
-    char *event = NULL;
+    json_t *entry = NULL;
+    char *entrystr = NULL;
     double t;
-    json_t *context = NULL;
-    char *context_str = NULL;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -403,18 +403,18 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (get_timestamp_now (&t) < 0)
         goto error;
-    if (!(context = json_pack ("{ s:i s:i s:i }",
-                               "userid", job->userid,
-                               "priority", job->priority,
-                               "flags", job->flags)))
-        goto nomem;
-    if (!(context_str = json_dumps (context, JSON_COMPACT)))
-        goto nomem;
-    if (!(event = flux_kvs_event_encode_timestamp (t, "submit", context_str)))
+    entry = eventlog_entry_pack (t, "submit",
+                                 "{ s:i s:i s:i }",
+                                 "userid", job->userid,
+                                 "priority", job->priority,
+                                 "flags", job->flags);
+    if (!entry)
+        goto error;
+    if (!(entrystr = eventlog_entry_encode (entry)))
         goto error;
     if (make_key (key, sizeof (key), job, "eventlog") < 0)
         goto error;
-    if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, event) < 0)
+    if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, entrystr) < 0)
         goto error;
     if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i}",
                                 "id", job->id,
@@ -427,18 +427,16 @@ static int batch_add_job (struct batch *batch, struct job *job)
         json_decref (jobentry);
         goto nomem;
     }
-    json_decref (context);
-    free (context_str);
-    free (event);
+    free (entrystr);
+    json_decref (entry);
     job_clean (job); // batch->txn now holds this info
     return 0;
 nomem:
     errno = ENOMEM;
 error:
     saved_errno = errno;
-    json_decref (context);
-    free (context_str);
-    free (event);
+    free (entrystr);
+    json_decref (entry);
     zlist_remove (batch->jobs, job);
     if (make_key (key, sizeof (key), job, NULL) == 0)
         (void)flux_kvs_txn_unlink (batch->txn, 0, key);
