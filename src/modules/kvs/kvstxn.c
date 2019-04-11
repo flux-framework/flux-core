@@ -749,23 +749,37 @@ err:
     return -1;
 }
 
-/* normalize key for setroot */
-static json_t *get_key_for_setroot (json_t *o)
+/* normalize key for setroot, and add it to keys array, if unique */
+static int normalize_and_append_unique (json_t *keys, const char *key)
 {
-    const char *key = json_string_value (o);
-    char *ncpy = NULL;
-    json_t *rv = NULL;
+    char *key_norm;
+    size_t index;
+    json_t *value;
+    bool unique = true;
 
-    /* how did we get to this point if this wasn't a string? */
-    assert (key);
-
-    if ((ncpy = kvs_util_normalize_key (key, NULL)) == NULL)
-        goto error;
-
-    rv = json_string (ncpy);
+    if ((key_norm = kvs_util_normalize_key (key, NULL)) == NULL)
+        return -1;
+    json_array_foreach (keys, index, value) {
+        const char *s = json_string_value (value);
+        if (s && !strcmp (s, key_norm)) {
+            unique = false;
+            break;
+        }
+    }
+    if (unique) {
+        json_t *o;
+        if (!(o = json_string (key_norm)))
+            goto error;
+        if (json_array_append_new (keys, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+    }
+    free (key_norm);
+    return 0;
 error:
-    free (ncpy);
-    return rv;
+    free (key_norm);
+    return -1;
 }
 
 /* Create array of keys (strings) from array of operations ({ "key":s ... })
@@ -781,13 +795,10 @@ static json_t *keys_from_ops (json_t *ops)
     if (!(keys = json_array ()))
         return NULL;
     json_array_foreach (ops, index, op) {
-        json_t *o = json_object_get (op, "key");
-        json_t *s;
-        if (!o)
+        const char *key;
+        if (json_unpack (op, "{s:s}", "key", &key) < 0)
             goto error;
-        if (!(s = get_key_for_setroot (o)))
-            goto error;
-        if (json_array_append_new (keys, s) < 0)
+        if (normalize_and_append_unique (keys, key) < 0)
             goto error;
     }
     return keys;
