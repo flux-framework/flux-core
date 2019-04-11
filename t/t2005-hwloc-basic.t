@@ -54,7 +54,7 @@ test_expect_success 'hwloc: each rank reloads a non-overlapping set of a node ' 
     flux hwloc reload $exclu2
 '
 
-test_expect_success 'hwloc: internal aggregate-load cmd works' '
+test_expect_success HAVE_JQ 'hwloc: internal aggregate-load cmd works' '
     flux exec -r all \
         flux hwloc aggregate-load --key=foo --unpack=bar --print-result | \
 	$jq -S . >aggregate.out &&
