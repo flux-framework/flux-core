@@ -270,9 +270,7 @@ static void batch_announce_continuation (flux_future_t *f, void *arg)
     flux_t *h = batch->ctx->h;
 
     if (flux_future_get (f, NULL) < 0) {
-        const char *errstr = flux_future_error_string (f);
-        batch_respond_error (batch, errno,
-                             errstr ? errstr : "job-manager request failed");
+        batch_respond_error (batch, errno, flux_future_error_string (f));
         if (batch_cleanup (batch) < 0)
             flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
     }
