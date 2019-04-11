@@ -16,6 +16,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libeventlog/eventlog.h"
+
 const char *eventlog_path = "test.ingest.eventlog";
 
 /* KVS commit completed.
@@ -43,33 +45,36 @@ static void commit_continuation (flux_future_t *f, void *arg)
  */
 static char *create_eventlog_entry (json_t *job)
 {
-    char context[128];
     int priority;
     flux_jobid_t id;
     uint32_t userid;
     double t_submit;
-    int n;
-    char *event;
+    json_t *entry = NULL;
+    char *entrystr;
+    int save_errno;
 
     if (json_unpack (job, "{s:I s:i s:i s:f}", "id", &id,
                                                "userid", &userid,
                                                "priority", &priority,
                                                "t_submit", &t_submit) < 0)
         goto error_inval;
-    n = snprintf (context, sizeof (context),
-                  "{\"id\":%llu,\"priority\":%d,\"userid\":%lu,\"t_submit\":%lf}",
-                  (unsigned long long)id,
-                  priority,
-                  (unsigned long)userid,
-                  t_submit);
-    if (n >= sizeof (context))
-        goto error_inval;
-    if (!(event = flux_kvs_event_encode ("submit", context)))
+    if (!(entry = eventlog_entry_pack (0., "submit", "{ s:I s:i s:i s:f }",
+                                       "id", id,
+                                       "priority", priority,
+                                       "userid", userid,
+                                       "t_submit", t_submit)))
         goto error;
-    return event;
+    if (!(entrystr = eventlog_entry_encode (entry)))
+        goto error;
+    json_decref (entry);
+    return entrystr;
+
 error_inval:
     errno = EINVAL;
 error:
+    save_errno = errno;
+    json_decref (entry);
+    errno = save_errno;
     return NULL;
 }
 
