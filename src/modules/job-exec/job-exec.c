@@ -88,6 +88,7 @@
 
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libeventlog/eventlog.h"
 #include "rset.h"
 
 struct job_exec_ctx {
@@ -167,47 +168,35 @@ static struct jobinfo * jobinfo_new (void)
     return job;
 }
 
-static int ev_context_vsprintf (char *context, size_t len,
-                                const char *fmt, va_list ap)
-{
-    int n;
-    if (fmt == NULL)
-        context[0] = '\0';
-    else if ((n = vsnprintf (context, len, fmt, ap)) < 0
-             || (n >= len))
-        return -1;
-    return 0;
-}
-
 /*  Emit an event to the exec system eventlog and return a future from
  *   flux_kvs_commit().
  */
-static flux_future_t * jobinfo_emit_eventv (struct jobinfo *job,
-                                            const char *name,
-                                            const char *fmt,
-                                            va_list ap)
+static flux_future_t * jobinfo_emit_event_vpack (struct jobinfo *job,
+                                                 const char *name,
+                                                 const char *fmt,
+                                                 va_list ap)
 {
     int saved_errno;
     flux_t *h = job->ctx->h;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
-    char context [256];
-    char *event = NULL;
+    json_t *entry = NULL;
+    char *entrystr = NULL;
     const char *key = "exec.eventlog";
 
-    if (ev_context_vsprintf (context, sizeof (context), fmt, ap) < 0) {
-        flux_log_error (h, "emit event: ev_context_vsprintf");
+    if (!(entry = eventlog_entry_vpack (0., name, fmt, ap))) {
+        flux_log_error (h, "emit event: eventlog_entry_vpack");
         return NULL;
     }
-    if (!(event = flux_kvs_event_encode (name, context))) {
-        flux_log_error (h, "emit event: flux_kvs_event_encode");
-        return NULL;
+    if (!(entrystr = eventlog_entry_encode (entry))) {
+        flux_log_error (h, "emit event: eventlog_entry_encode");
+        goto out;
     }
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "emit event: flux_kvs_txn_create");
         goto out;
     }
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, event) < 0) {
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0) {
         flux_log_error (h, "emit event: flux_kvs_txn_put");
         goto out;
     }
@@ -215,20 +204,21 @@ static flux_future_t * jobinfo_emit_eventv (struct jobinfo *job,
         flux_log_error (h, "emit event: flux_kvs_commit");
 out:
     saved_errno = errno;
-    free (event);
+    json_decref (entry);
+    free (entrystr);
     flux_kvs_txn_destroy (txn);
     errno = saved_errno;
     return f;
 }
 
-static flux_future_t * jobinfo_emit_event (struct jobinfo *job,
-                                           const char *name,
-                                           const char *fmt, ...)
+static flux_future_t * jobinfo_emit_event_pack (struct jobinfo *job,
+                                                const char *name,
+                                                const char *fmt, ...)
 {
     flux_future_t *f = NULL;
     va_list ap;
     va_start (ap, fmt);
-    f = jobinfo_emit_eventv (job, name, fmt, ap);
+    f = jobinfo_emit_event_vpack (job, name, fmt, ap);
     va_end (ap);
     return f;
 }
@@ -253,7 +243,7 @@ static int jobinfo_emit_event_nowait (struct jobinfo *job,
 {
     va_list ap;
     va_start (ap, fmt);
-    flux_future_t *f = jobinfo_emit_eventv (job, name, fmt, ap);
+    flux_future_t *f = jobinfo_emit_event_vpack (job, name, fmt, ap);
     va_end (ap);
     if (f == NULL)
         return -1;
@@ -332,8 +322,8 @@ static void jobinfo_complete (struct jobinfo *job)
     flux_t *h = job->ctx->h;
     if (h && job->req) {
         jobinfo_emit_event_nowait (job, "complete",
-                                        "{\"status\":%d}",
-                                        job->wait_status);
+                                        "{ s:i }",
+                                        "status", job->wait_status);
         if (flux_respond_pack (h, job->req, "{s:I s:s s:{s:i}}",
                                             "id", job->id,
                                             "type", "finish",
@@ -382,7 +372,7 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
         msg [msglen-2] = '+';
         msg [msglen-1] = '\0';
     }
-    jobinfo_emit_event_nowait (job, "exception", "{\"note\":\"%s\"}", msg);
+    jobinfo_emit_event_nowait (job, "exception", "{ s:s }", "note", msg);
     /* If exception_in_progress set, then no need to respond with another
      *  exception back to job manager. O/w, DO respond to job-manager
      *  and set exception-in-progress.
@@ -514,7 +504,7 @@ static void namespace_move (flux_future_t *fprev, void *arg)
     flux_future_t *f = NULL;
     flux_future_t *fnext = NULL;
 
-    if (!(f = jobinfo_emit_event (job, "done", NULL))) {
+    if (!(f = jobinfo_emit_event_pack (job, "done", NULL))) {
         flux_log_error (h, "namespace_move: jobinfo_emit_event");
         goto error;
     }
@@ -580,11 +570,17 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
      *   future and errno if rc < 0 for informational purposes,
      *   but do not generate an exception.
      */
-    if (!(f = jobinfo_emit_event (job, "cleanup.finish",
-                                       "{\"rc\":%d%s%s%s}", rc,
-                                        rc < 0 ? ",\"note\":\"" : "",
-                                        rc < 0 ? strerror (errno) : "",
-                                        rc < 0 ? "\"" : "")))
+    if (rc < 0)
+        f = jobinfo_emit_event_pack (job, "cleanup.finish",
+                                     "{ s:i s:s}",
+                                     "rc", rc,
+                                     "note", strerror (errno));
+    else
+        f = jobinfo_emit_event_pack (job, "cleanup.finish",
+                                     "{ s:i }",
+                                     "rc", rc);
+
+    if (!f)
         flux_future_continue_error (prev, errno, NULL);
     else
         flux_future_continue (prev, f);
@@ -618,7 +614,7 @@ static flux_future_t * jobinfo_start_cleanup (struct jobinfo *job)
     /*  O/w, create cleanup composite future sandwiched by
      *   cleanup.start and cleanup.finish events in the eventlog
      */
-    if (!(f = jobinfo_emit_event (job, "cleanup.start", NULL)))
+    if (!(f = jobinfo_emit_event_pack (job, "cleanup.start", NULL)))
         goto error;
     if (!(fnext = flux_future_and_then (f, jobinfo_cleanup, job)))
         goto error;
@@ -701,13 +697,15 @@ static int jobinfo_start_timer (struct jobinfo *job)
     if (t < 0.)
         t = 1.e-5;
     if (t > 0.) {
+        char timebuf[256];
         job->timer = flux_timer_watcher_create (r, t, 0., timer_cb, job);
         if (!job->timer) {
             flux_log_error (h, "jobinfo_start: timer_create");
             return -1;
         }
         flux_watcher_start (job->timer);
-        jobinfo_emit_event_nowait (job, "running", "{\"timer\"=\"%.6fs\"}", t);
+        snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
+        jobinfo_emit_event_nowait (job, "running", "{ s:s }", "timer", timebuf);
         job->running = 1;
     }
     else
@@ -878,7 +876,7 @@ static void namespace_link (flux_future_t *fprev, void *arg)
         goto error;
     }
     flux_future_set_flux (cf, h);
-    if (!(f = jobinfo_emit_event (job, "init", NULL))
+    if (!(f = jobinfo_emit_event_pack (job, "init", NULL))
         || flux_future_push (cf, "emit event", f) < 0)
         goto error;
 
