@@ -168,7 +168,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     job->free_pending = 0;
-    if (event_job_post (ctx->event_ctx, job, "free", NULL) < 0)
+    if (event_job_post_pack (ctx->event_ctx, job, "free", NULL) < 0)
         goto teardown;
     return;
 teardown:
@@ -423,8 +423,8 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         job->alloc_queued = 0;
         ctx->active_alloc_count++;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post (ctx->event_ctx, job,
-                                 "debug.alloc-request", NULL);
+            (void)event_job_post_pack (ctx->event_ctx, job,
+                                       "debug.alloc-request", NULL);
 
     }
 }
@@ -437,8 +437,8 @@ int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job)
             return -1;
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post (ctx->event_ctx, job,
-                                  "debug.free-request", NULL);
+            (void)event_job_post_pack (ctx->event_ctx, job,
+                                       "debug.free-request", NULL);
     }
     return 0;
 }
