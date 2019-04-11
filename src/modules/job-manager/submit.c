@@ -181,7 +181,6 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     zlist_t *newjobs;
     struct job *job;
     const char *errmsg = NULL;
-    int rc;
 
     if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0) {
         flux_log_error (h, "%s", __FUNCTION__);
@@ -213,11 +212,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     zlist_destroy (&newjobs);
     return;
 error:
-    if (errmsg)
-        rc = flux_respond_error (h, msg, errno, "%s", errmsg);
-    else
-        rc = flux_respond_error (h, msg, errno, NULL);
-    if (rc < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 

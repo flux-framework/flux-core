@@ -83,11 +83,10 @@ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       const void *data, int len);
 
 /* Create an error response to the provided request message with optional
- * printf-style error string payload if 'fmt' is non-NULL.
+ * error string payload (if errstr is non-NULL).
  */
 int flux_respond_error (flux_t *h, const flux_msg_t *request,
-                        int errnum, const char *fmt, ...)
-                        __attribute__ ((format (printf, 4, 5)));
+                        int errnum, const char *errstr);
 
 
 #ifdef __cplusplus

@@ -288,7 +288,7 @@ error:
 }
 
 int flux_respond_error (flux_t *h, const flux_msg_t *request,
-                        int errnum, const char *fmt, ...)
+                        int errnum, const char *errstr)
 {
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
@@ -297,12 +297,7 @@ int flux_respond_error (flux_t *h, const flux_msg_t *request,
         errno = EINVAL;
         goto error;
     }
-    if (fmt) {
-        va_list ap;
-        char errstr[1024];
-        va_start (ap, fmt);
-        (void)vsnprintf (errstr, sizeof (errstr), fmt, ap);
-        va_end (ap);
+    if (errstr) {
         if (flux_msg_set_string (msg, errstr) < 0)
             goto error;
     }
