@@ -33,6 +33,7 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
+#include "src/common/libeventlog/eventlog.h"
 
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
@@ -643,60 +644,61 @@ int cmd_id (optparse_t *p, int argc, char **argv)
 }
 
 struct eventlog_ctx {
-    struct flux_kvs_eventlog *log;
     optparse_t *p;
     flux_jobid_t id;
     const char *format;
 };
 
-void output_event_text (const char *event)
+void output_event_text (json_t *event)
 {
     double timestamp;
-    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-    json_error_t error;
-    const char *key;
-    json_t *value;
-    json_t *o;
+    const char *name;
+    json_t *context = NULL;
 
-    if (flux_kvs_event_decode (event, &timestamp, name, sizeof (name),
-                               context, sizeof (context)) < 0)
-        log_err_exit ("flux_kvs_event_decode");
+    if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
+        log_err_exit ("eventlog_entry_parse");
 
     printf ("%lf %s", timestamp, name);
 
-    if (*context) {
-        if (!(o = json_loads (context, 0, &error))) {
-            log_msg ("error parsing context '%s': %s (line %d column %d)",
-                     context, error.text, error.line, error.column);
-            return;
-        }
-
-        json_object_foreach (o, key, value) {
+    if (context) {
+        const char *key;
+        json_t *value;
+        json_object_foreach (context, key, value) {
             char *sval;
             sval = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
             printf (" %s=%s", key, sval);
             free (sval);
         }
-        json_decref (o);
     }
     printf ("\n");
     fflush (stdout);
 }
 
-void output_event (const char *event, const char *format)
+void output_event_json (json_t *event)
+{
+    char *e;
+
+    if (!(e = json_dumps (event, JSON_COMPACT)))
+        log_msg_exit ("json_dumps");
+    printf ("%s\n", e);
+    free (e);
+}
+
+void output_event (json_t *event, const char *format)
 {
     if (!strcasecmp (format, "text"))
         output_event_text (event);
     else if (!strcasecmp (format, "json"))
-        printf ("%s", event);
+        output_event_json (event);
 }
 
 void eventlog_continuation (flux_future_t *f, void *arg)
 {
     struct eventlog_ctx *ctx = arg;
     const char *s;
-    const char *event;
+    json_t *a = NULL;
+    size_t index;
+    json_t *value;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
         if (errno == ENOENT) {
@@ -707,12 +709,15 @@ void eventlog_continuation (flux_future_t *f, void *arg)
             log_err_exit ("flux_job_eventlog_lookup_get");
     }
 
-    if (flux_kvs_eventlog_append (ctx->log, s) < 0)
-        log_err_exit ("flux_kvs_eventlog_append");
+    if (!(a = eventlog_decode (s)))
+        log_err_exit ("eventlog_decode");
 
-    while ((event = flux_kvs_eventlog_next (ctx->log)))
-        output_event (event, ctx->format);
+    json_array_foreach (a, index, value) {
+        output_event (value, ctx->format);
+    }
+
     fflush (stdout);
+    json_decref (a);
     flux_future_destroy (f);
 }
 
@@ -734,8 +739,6 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
 
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
 
-    if (!(ctx.log = flux_kvs_eventlog_create()))
-        log_err_exit ("flux_kvs_eventlog_create");
     ctx.p = p;
     ctx.format = optparse_get_str (p, "format", "text");
     if (strcasecmp (ctx.format, "text")
@@ -753,7 +756,6 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
-    flux_kvs_eventlog_destroy (ctx.log);
     flux_close (h);
     return (0);
 }
@@ -770,7 +772,8 @@ struct wait_event_ctx {
 void wait_event_continuation (flux_future_t *f, void *arg)
 {
     struct wait_event_ctx *ctx = arg;
-    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    const char *name;
+    json_t *o = NULL;
     const char *event;
 
     if (flux_rpc_get (f, NULL) < 0) {
@@ -796,19 +799,24 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     if (flux_job_event_watch_get (f, &event) < 0)
         log_err_exit ("flux_job_event_watch_get");
 
-    if (flux_kvs_event_decode (event, NULL, name, sizeof (name), NULL, 0) < 0)
-        log_err_exit ("flux_kvs_event_decode");
+    if (!(o = eventlog_entry_decode (event)))
+        log_err_exit ("eventlog_entry_decode");
+
+    if (eventlog_entry_parse (o, NULL, &name, NULL) < 0)
+        log_err_exit ("eventlog_entry_parse");
 
     if (!strcmp (name, ctx->wait_event)) {
         ctx->got_event = true;
         if (!optparse_hasopt (ctx->p, "quiet"))
-            output_event (event, ctx->format);
+            output_event (o, ctx->format);
         if (flux_job_event_watch_cancel (f) < 0)
             log_err_exit ("flux_job_event_watch_cancel");
     } else if (optparse_hasopt (ctx->p, "verbose")) {
         if (!ctx->got_event)
-            output_event (event, ctx->format);
+            output_event (o, ctx->format);
     }
+
+    json_decref (o);
 
     flux_future_reset (f);
 
