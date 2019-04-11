@@ -662,8 +662,14 @@ static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
         json_decref (out);
     }
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
-        flux_log_error (h, "cron.request: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "cron.request: flux_respond_error");
+    }
+    else {
+        if (flux_respond (h, msg, json_str) < 0)
+            flux_log_error (h, "cron.request: flux_respond");
+    }
     free (json_str);
 }
 
@@ -704,8 +710,8 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
     return;
 
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "cron.request: flux_respond");
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "cron.request: flux_respond_error");
 }
 
 static cron_entry_t *cron_ctx_find_entry (cron_ctx_t *ctx, int64_t id)
@@ -764,8 +770,14 @@ static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
 done:
     if (out && rc >= 0)
         json_str = json_dumps (out, JSON_COMPACT);
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
-        flux_log_error (h, "cron.delete: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "cron.delete: flux_respond_error");
+    }
+    else {
+        if (flux_respond (h, msg, json_str) < 0)
+            flux_log_error (h, "cron.delete: flux_respond");
+    }
     free (json_str);
     json_decref (out);
 }
@@ -793,8 +805,14 @@ static void cron_stop_handler (flux_t *h, flux_msg_handler_t *w,
         json_decref (out);
     }
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
-        flux_log_error (h, "cron.stop: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "cron.stop: flux_respond_error");
+    }
+    else {
+        if (flux_respond (h, msg, json_str) < 0)
+            flux_log_error (h, "cron.stop: flux_respond");
+    }
     free (json_str);
 }
 
@@ -821,8 +839,14 @@ static void cron_start_handler (flux_t *h, flux_msg_handler_t *w,
         json_decref (out);
     }
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
-        flux_log_error (h, "cron.start: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "cron.start: flux_respond_error");
+    }
+    else {
+        if (flux_respond (h, msg, json_str) < 0)
+            flux_log_error (h, "cron.start: flux_respond");
+    }
     free (json_str);
 }
 
@@ -840,7 +864,7 @@ static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
     json_t *entries = json_array ();
 
     if (out == NULL || entries == NULL) {
-        flux_respond (h, msg, ENOMEM, NULL);
+        flux_respond_error (h, msg, ENOMEM, NULL);
         flux_log_error (h, "cron.list: Out of memory");
         return;
     }
@@ -858,7 +882,7 @@ static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
 
     if (!(json_str = json_dumps (out, JSON_COMPACT)))
         flux_log_error (h, "cron.list: json_dumps");
-    else if (flux_respond (h, msg, 0, json_str) < 0)
+    else if (flux_respond (h, msg, json_str) < 0)
         flux_log_error (h, "cron.list: flux_respond");
     json_decref (out);
     free (json_str);

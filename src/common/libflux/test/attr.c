@@ -92,7 +92,7 @@ void set_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     diag ("attr.set: %s=%s", name, value);
     zhashx_update (attrs, name, (char *)value);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         BAIL_OUT ("flux_respond failed");
     return;
 error:
@@ -117,7 +117,7 @@ void rm_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     diag ("attr.rm: %s", name);
     zhashx_delete (attrs, name);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         BAIL_OUT ("flux_respond failed");
     return;
 error:

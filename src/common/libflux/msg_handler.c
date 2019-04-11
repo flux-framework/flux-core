@@ -208,7 +208,7 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
                         && flux_msg_get_matchtag (msg, &matchtag) == 0
                         && matchtag != FLUX_MATCHTAG_NONE) {
-            (void)flux_respond (mh->d->h, msg, EPERM, NULL);
+            (void)flux_respond_error (mh->d->h, msg, EPERM, NULL);
         }
         return;
     }
@@ -335,7 +335,7 @@ static void handle_cb (flux_reactor_t *r,
         else {
             switch (type) {
                 case FLUX_MSGTYPE_REQUEST:
-                    if (flux_respond (d->h, msg, ENOSYS, NULL))
+                    if (flux_respond_error (d->h, msg, ENOSYS, NULL))
                         goto done;
                     break;
                 case FLUX_MSGTYPE_EVENT:

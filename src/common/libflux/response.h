@@ -64,10 +64,8 @@ flux_msg_t *flux_response_encode_error (const char *topic, int errnum,
 
 /* Create a response to the provided request message with optional
  * string payload.
- * If errnum is nonzero, payload argument is ignored.
  */
-int flux_respond (flux_t *h, const flux_msg_t *request,
-                  int errnum, const char *s);
+int flux_respond (flux_t *h, const flux_msg_t *request, const char *s);
 
 /* Create a response to the provided request message with json payload, using
  * jansson pack style variable arguments for encoding the JSON object

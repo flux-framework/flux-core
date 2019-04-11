@@ -1018,7 +1018,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
         if (!(c->rolemask & FLUX_ROLE_OWNER)) {
             flux_log (h, LOG_ERR, "message has inappropriate userid/rolemask");
             if (type == FLUX_MSGTYPE_REQUEST) {
-                if (flux_respond (h, msg, EPERM, NULL) < 0)
+                if (flux_respond_error (h, msg, EPERM, NULL) < 0)
                     flux_log_error (h, "error sending EPERM response");
             } /* else drop */
             goto done;

@@ -88,7 +88,7 @@ void priority_handle_request (flux_t *h, struct queue *queue,
                              "priority", priority) < 0)
         goto error;
     queue_reorder (queue, job, job->queue_handle);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:

@@ -209,8 +209,8 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
     try_alloc (h, ss);
     return;
 err:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "alloc: flux_respond");
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "alloc: flux_respond_error");
 }
 
 static int hello_cb (flux_t *h, const char *R, void *arg)

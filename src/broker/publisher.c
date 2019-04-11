@@ -164,8 +164,8 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
 error_restore_seq:
     pub->seq--;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     flux_msg_destroy (event);
 }
 

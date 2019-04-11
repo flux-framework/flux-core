@@ -167,7 +167,7 @@ static void insmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(m = module_create (path, argz, argz_len)))
         goto error;
     flux_log (h, LOG_DEBUG, "insmod %s", m->name);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (argz);
     return;
@@ -192,7 +192,7 @@ static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     zhash_delete (modules, name);
     flux_log (h, LOG_DEBUG, "rmmod %s", name);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:

@@ -64,7 +64,7 @@ void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_respond (h, msg, 0, s) < 0)
+    if (flux_respond (h, msg, s) < 0)
         BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
     return;
 error:
@@ -126,7 +126,7 @@ void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
     return;
 error:

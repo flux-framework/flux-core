@@ -31,7 +31,7 @@ static void commit_continuation (flux_future_t *f, void *arg)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     }
     else {
-        if (flux_respond (h, msg, 0, NULL) < 0)
+        if (flux_respond (h, msg, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     flux_msg_destroy (msg);

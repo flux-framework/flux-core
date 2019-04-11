@@ -216,7 +216,7 @@ static void lookup (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s", __FUNCTION__);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
@@ -247,7 +247,7 @@ static void addrole (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s", __FUNCTION__);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
@@ -272,7 +272,7 @@ static void delrole (flux_t *h, flux_msg_handler_t *mh,
         user_delete (ctx, userid);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
@@ -321,7 +321,7 @@ static void getnext (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s", __FUNCTION__);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
     free (uuid);
 }

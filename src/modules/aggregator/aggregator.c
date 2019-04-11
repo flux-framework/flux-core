@@ -662,8 +662,14 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
         aggregate_sink (h, ag);
     rc = 0;
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
-        flux_log_error (h, "aggregator.push: flux_respond");
+    if (rc < 0) {
+        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "aggregator.push: flux_respond_error");
+    }
+    else {
+        if (flux_respond (h, msg, NULL) < 0)
+            flux_log_error (h, "aggregator.push: flux_respond");
+    }
 }
 
 

@@ -224,13 +224,12 @@ error:
     return NULL;
 }
 
-int flux_respond (flux_t *h, const flux_msg_t *request,
-                  int errnum, const char *s)
+int flux_respond (flux_t *h, const flux_msg_t *request, const char *s)
 {
-    flux_msg_t *msg = derive_response (h, request, errnum);
+    flux_msg_t *msg = derive_response (h, request, 0);
     if (!msg)
         goto error;
-    if (!errnum && s && flux_msg_set_string (msg, s) < 0)
+    if (s && flux_msg_set_string (msg, s) < 0)
         goto error;
     if (flux_send (h, msg, 0) < 0)
         goto error;

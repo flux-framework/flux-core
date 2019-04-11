@@ -126,7 +126,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (asprintf (&ctx->start_topic, "%s.start", service_name) < 0)
         goto error;
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     /* Response has been sent, now take action on jobs in run state.
      */

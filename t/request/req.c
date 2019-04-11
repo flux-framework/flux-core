@@ -104,11 +104,11 @@ void flush_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     while ((req = zlist_pop (ctx->clog_requests))) {
         /* send clog response */
-        if (flux_respond (h, req, 0, NULL) < 0)
+        if (flux_respond (h, req, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     /* send flush response */
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
@@ -126,12 +126,12 @@ void sink_request_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 /* Return a fixed json payload
@@ -154,12 +154,12 @@ void nsrc_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     for (i = 0; i < count; i++) {
         if (flux_respond_pack (h, msg, "{s:i}", "seq", i) < 0)
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 /* Always return an error 42
@@ -167,8 +167,8 @@ error:
 void err_request_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
-    if (flux_respond (h, msg, 42, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, 42, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 /* Echo a json payload back to requestor.
@@ -177,22 +177,19 @@ void echo_request_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
-    int saved_errno;
-    int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!json_str) {
-        saved_errno = EPROTO;
-        goto done;
+        errno = EPROTO;
+        goto error;
     }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              rc < 0 ? NULL : json_str) < 0)
+    if (flux_respond (h, msg, json_str) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 /* Proxy ping.
@@ -226,8 +223,8 @@ void xping_request_cb (flux_t *h, flux_msg_handler_t *mh,
     free (hashkey);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 /* Handle ping response for proxy ping.
@@ -322,7 +319,7 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
                   strerror (errno));
         goto error;
     }
-    if (flux_respond (h, msg, 0, NULL) < 0) {
+    if (flux_respond (h, msg, NULL) < 0) {
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
         goto error;
     }

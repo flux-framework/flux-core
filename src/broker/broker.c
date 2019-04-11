@@ -1226,7 +1226,7 @@ proto:
     errno = EPROTO;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (argz);
 }
 
@@ -1259,11 +1259,11 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
     char *out;
 
     if (!(out = overlay_lspeer_encode (ctx->overlay))) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
         return;
     }
-    if (flux_respond (h, msg, 0, out) < 0)
+    if (flux_respond (h, msg, out) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (out);
 }
@@ -1321,13 +1321,13 @@ static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (module_subscribe (ctx->modhash, uuid, topic) < 0)
         goto error;
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (uuid);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (uuid);
 }
 
@@ -1348,13 +1348,13 @@ static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (module_unsubscribe (ctx->modhash, uuid, topic) < 0)
         goto error;
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (uuid);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (uuid);
 }
 
@@ -1374,61 +1374,59 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int rc = -1;
     const char *name = NULL;
     char *sender = NULL;
     module_t *p;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0)
+        goto error;
+    if (flux_msg_get_route_first (msg, &sender) < 0)
+        goto error;
     if (!(p = module_lookup (ctx->modhash, sender))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
-    rc = service_add (ctx->services, name, sender, mod_svc_cb, p);
-done:
-    free (sender);
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (service_add (ctx->services, name, sender, mod_svc_cb, p) < 0)
+        goto error;
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "service_add: flux_respond");
+    free (sender);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "service_add: flux_respond_error");
+    free (sender);
 }
 
 static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int rc = -1;
     const char *name;
     const char *uuid;
     char *sender = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0)
+        goto error;
+    if (flux_msg_get_route_first (msg, &sender) < 0)
+        goto error;
     if (!(uuid = service_get_uuid (ctx->services, name))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
     if (strcmp (uuid, sender) != 0) {
         errno = EINVAL;
-        goto done;
+        goto error;
     }
     service_remove (ctx->services, name);
-    rc = 0;
-done:
-    free (sender);
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "service_remove: flux_respond");
+    free (sender);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "service_remove: flux_respond_error");
+    free (sender);
 }
 
 
@@ -1691,9 +1689,14 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     if (prev_status == FLUX_MODSTATE_INIT) {
         if ((msg = module_pop_insmod (p))) {
             int errnum = 0;
+            int rc;
             if (status == FLUX_MODSTATE_EXITED)
                 errnum = module_get_errnum (p);
-            if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
+            if (errnum == 0)
+                rc = flux_respond (ctx->h, msg, NULL);
+            else
+                rc = flux_respond_error (ctx->h, msg, errnum, NULL);
+            if (rc < 0)
                 flux_log_error (ctx->h, "flux_respond to insmod %s", name);
             flux_msg_destroy (msg);
         }
@@ -1707,7 +1710,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
         service_remove_byuuid (ctx->services, module_get_uuid (p));
         while ((msg = module_pop_rmmod (p))) {
-            if (flux_respond (ctx->h, msg, 0, NULL) < 0)
+            if (flux_respond (ctx->h, msg, NULL) < 0)
                 flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
             flux_msg_destroy (msg);
         }

@@ -124,8 +124,8 @@ void raise_handle_request (flux_t *h, struct queue *queue,
                                        "severity", severity)))
         goto error;
     flux_future_destroy (f);
-    if (flux_respond (h, msg, 0, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)

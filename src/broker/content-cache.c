@@ -642,16 +642,15 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
 {
     content_cache_t *cache = arg;
     const char *name;
-    int rc = -1;
     int backing;
 
     if (flux_request_unpack (msg, NULL, "{ s:b s:s }",
                              "backing", &backing,
                              "name", &name) < 0)
-        goto done;
+        goto error;
     if (cache->rank != 0) {
         errno = EINVAL;
-        goto done;
+        goto error;
     }
     if (!cache->backing && backing) {
         cache->backing = 1;
@@ -666,9 +665,11 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
         cache->backing_name = NULL;
         flux_log (h, LOG_DEBUG, "content backing store: disabled %s", name);
     }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "content backing");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content backing");
 };
 
@@ -685,7 +686,6 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
     char *key;
     struct cache_entry *e;
     int orig_size;
-    int saved_errno;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -704,16 +704,17 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
     }
     rc = 0;
 done:
-    saved_errno = errno;
-    if (rc < 0)
-        flux_log (h, LOG_DEBUG, "content dropcache: %s",
-                  flux_strerror (saved_errno));
-    else
+    if (rc < 0) {
+        flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "content dropcache");
+    }
+    else {
         flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
                   orig_size - (int)zhash_size (cache->entries), orig_size);
-    errno = saved_errno;
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
-        flux_log_error (h, "content dropcache");
+        if (flux_respond (h, msg, NULL) < 0)
+            flux_log_error (h, "content dropcache");
+    }
     zlist_destroy (&keys);
 }
 
@@ -735,7 +736,7 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "content stats");
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content stats");
 }
 
@@ -767,7 +768,6 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
-    int saved_errno;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -789,15 +789,16 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
     }
     rc = 0;
 done:
-    saved_errno = errno;
-    if (rc < 0)
-        flux_log (h, LOG_DEBUG, "content flush: %s",
-                  flux_strerror (saved_errno));
-    else
+    if (rc < 0) {
+        flux_log (h, LOG_DEBUG, "content flush: %s", flux_strerror (errno));
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "content flush");
+    }
+    else {
         flux_log (h, LOG_DEBUG, "content flush");
-    errno = saved_errno;
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
-        flux_log_error (h, "content flush");
+        if (flux_respond (h, msg, NULL) < 0)
+            flux_log_error (h, "content flush");
+    }
 }
 
 /* Heartbeat drives periodic cache purge
