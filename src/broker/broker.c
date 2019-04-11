@@ -1776,8 +1776,13 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
     int rc = -1;
     uint32_t rank = overlay_get_rank(ctx->overlay);
     uint32_t size = overlay_get_size(ctx->overlay);
+    const char *topic;
+    char errbuf[64];
+    const char *errstr = NULL;
 
     if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+        goto error;
+    if (flux_msg_get_topic (msg, &topic) < 0)
         goto error;
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == rank) {
         rc = overlay_sendmsg_parent (ctx->overlay, msg);
@@ -1788,7 +1793,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
         if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
-                errno = ENOSYS;
+                goto nosys;
         }
         if (rc < 0)
             goto error;
@@ -1797,7 +1802,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
         if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
-                errno = ENOSYS;
+                goto nosys;
         }
         if (rc < 0)
             goto error;
@@ -1816,11 +1821,16 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
             goto error;
     }
     return 0;
+nosys:
+    errno = ENOSYS;
+    (void)snprintf (errbuf, sizeof (errbuf),
+                    "No service matching %s is registered", topic);
+    errstr = errbuf;
 error:
     if (errmode == ERROR_MODE_RETURN)
         return -1;
     /* ERROR_MODE_RESPOND */
-    (void)flux_respond (ctx->h, msg, errno, NULL);
+    (void)flux_respond_error (ctx->h, msg, errno, errstr);
     return 0;
 }
 
