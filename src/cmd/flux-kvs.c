@@ -1817,8 +1817,6 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
 struct eventlog_get_ctx {
     struct flux_kvs_eventlog *log;
     optparse_t *p;
-    int maxcount;
-    int count;
 };
 
 /* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
@@ -1864,17 +1862,6 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
     struct eventlog_get_ctx *ctx = arg;
     const char *s;
     const char *event;
-    bool limit_reached = false;
-
-    /* Handle cancelled lookup (FLUX_KVS_WATCH flag only).
-     * Destroy the future and return (reactor will then terminate).
-     * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
-     */
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
-        flux_future_destroy (f);
-        return;
-    }
 
     if (flux_kvs_lookup_get (f, &s) < 0)
         log_err_exit ("flux_kvs_lookup_get");
@@ -1883,29 +1870,14 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
 
     /* Display any new events.
      */
-    while ((event = flux_kvs_eventlog_next (ctx->log)) && !limit_reached) {
+    while ((event = flux_kvs_eventlog_next (ctx->log))) {
         if (optparse_hasopt (ctx->p, "unformatted"))
             printf ("%s", event);
         else
             eventlog_prettyprint (stdout, event);
-        if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
-            limit_reached = true;
     }
     fflush (stdout);
-
-    /* If watching, re-arm future for next response.
-     * If --count limit has been reached, send a cancel request.
-     * The resulting ENODATA error response is handled above.
-     */
-    if (optparse_hasopt (ctx->p, "watch")) {
-        flux_future_reset (f);
-        if (limit_reached) {
-            if (flux_kvs_lookup_cancel (f) < 0)
-                log_err_exit ("flux_kvs_lookup_cancel");
-        }
-    }
-    else
-        flux_future_destroy (f);
+    flux_future_destroy (f);
 }
 
 int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
@@ -1922,16 +1894,10 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     key = argv[optindex++];
-    if (optparse_hasopt (p, "watch")) {
-        flags |= FLUX_KVS_WATCH;
-        flags |= FLUX_KVS_WATCH_APPEND;
-    }
 
     if (!(ctx.log = flux_kvs_eventlog_create()))
         log_err_exit ("flux_kvs_eventlog_create");
     ctx.p = p;
-    ctx.count = 0;
-    ctx.maxcount = optparse_get_int (p, "count", 0);
 
     if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
         log_err_exit ("flux_kvs_lookup");
@@ -1953,12 +1919,6 @@ static struct optparse_option eventlog_append_opts[] =  {
 };
 
 static struct optparse_option eventlog_get_opts[] =  {
-    { .name = "watch", .key = 'w', .has_arg = 0,
-      .usage = "Monitor eventlog",
-    },
-    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
-      .usage = "Display at most COUNT events",
-    },
     { .name = "unformatted", .key = 'u', .has_arg = 0,
       .usage = "Show event in RFC 18 form",
     },
@@ -1974,7 +1934,7 @@ static struct optparse_subcommand eventlog_subcommands[] = {
       eventlog_append_opts,
     },
     { "get",
-      "[-u] [-w] [-c COUNT] key",
+      "[-u] key",
       "Get eventlog",
       cmd_eventlog_get,
       0,

@@ -179,14 +179,10 @@ Specify an alternate namespace to retrieve from via '-N'.  If '-o' is
 specified, display the namespace owner.  If '-s' is specified, display
 the root sequence number.
 
-*eventlog get* [-w] [-c count] [-u] 'key'::
+*eventlog get* [-u] 'key'::
 Display the contents of an RFC 18 KVS eventlog referred to by 'key'.
 If '-u' is specified, display the log in raw form, otherwise format the
-dates as ISO 8601.  If '-w' is specified, after the existing contents
-have been displayed, the eventlog is monitored and updates are
-displayed as they are committed.  This runs until the program is
-interrupted or an error occurs, unless the number of events is limited
-with the '-c' option.
+dates as ISO 8601.
 
 *eventlog append* [-t SECONDS] 'key' 'name' ['context ...']::
 Append an event to an RFC 18 KVS eventlog referred to by 'key'.
