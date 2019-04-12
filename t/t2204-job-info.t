@@ -229,6 +229,23 @@ test_expect_success 'flux job wait-event hangs on no event' '
         ! run_timeout 0.2 flux job wait-event $jobid foobar
 '
 
+test_expect_success 'flux job wait-event --context-format=json works' '
+        jobid=$(submit_job) &&
+	flux job wait-event --context-format=json $jobid submit > wait_event_format1.out &&
+        grep -q "\"userid\":$(id -u)" wait_event_format1.out
+'
+
+test_expect_success 'flux job wait-event --context-format=text works' '
+        jobid=$(submit_job) &&
+	flux job wait-event --context-format=text $jobid submit > wait_event_format2.out &&
+        grep -q "userid=$(id -u)" wait_event_format2.out
+'
+
+test_expect_success 'flux job wait-event --context-format=invalid fails' '
+        jobid=$(submit_job) &&
+	! flux job wait-event --context-format=invalid $jobid submit
+'
+
 #
 # job info tests
 #
