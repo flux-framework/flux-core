@@ -1821,6 +1821,12 @@ struct eventlog_get_ctx {
     int count;
 };
 
+/* print event in raw form */
+void eventlog_unformatted_print (const char *event)
+{
+    printf ("%s", event);
+}
+
 /* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
  * with microsecond precision
  */
@@ -1843,7 +1849,7 @@ static int eventlog_timestr (double timestamp, char *buf, size_t size)
 
 /* print event with human-readable time
  */
-static void eventlog_prettyprint (FILE *f, const char *s)
+static void eventlog_prettyprint (const char *s)
 {
     double timestamp;
     char name[FLUX_KVS_MAX_EVENT_NAME + 1];
@@ -1856,7 +1862,7 @@ static void eventlog_prettyprint (FILE *f, const char *s)
     if (eventlog_timestr (timestamp, buf, sizeof (buf)) < 0)
         log_msg_exit ("error converting timestamp to ISO 8601");
 
-    fprintf (f, "%s %s%s%s\n", buf, name, *context ? " " : "", context);
+    printf ("%s %s%s%s\n", buf, name, *context ? " " : "", context);
 }
 
 void eventlog_get_continuation (flux_future_t *f, void *arg)
@@ -1885,9 +1891,9 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
      */
     while ((event = flux_kvs_eventlog_next (ctx->log)) && !limit_reached) {
         if (optparse_hasopt (ctx->p, "unformatted"))
-            printf ("%s", event);
+            eventlog_unformatted_print (event);
         else
-            eventlog_prettyprint (stdout, event);
+            eventlog_prettyprint (event);
         if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
             limit_reached = true;
     }
