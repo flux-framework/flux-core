@@ -97,21 +97,23 @@ test_expect_success 'flux job eventlog fails on bad id' '
 	! flux job eventlog 12345
 '
 
-test_expect_success 'flux job eventlog --context-format=json works' '
+test_expect_success 'flux job eventlog --format=json works' '
         jobid=$(submit_job) &&
-	flux job eventlog --context-format=json $jobid > eventlog_format1.out &&
+	flux job eventlog --format=json $jobid > eventlog_format1.out &&
+        grep -q "\"name\":\"submit\"" eventlog_format1.out &&
         grep -q "\"userid\":$(id -u)" eventlog_format1.out
 '
 
-test_expect_success 'flux job eventlog --context-format=text works' '
+test_expect_success 'flux job eventlog --format=text works' '
         jobid=$(submit_job) &&
-	flux job eventlog --context-format=text $jobid > eventlog_format2.out &&
+	flux job eventlog --format=text $jobid > eventlog_format2.out &&
+        grep -q "submit" eventlog_format2.out &&
         grep -q "userid=$(id -u)" eventlog_format2.out
 '
 
-test_expect_success 'flux job eventlog --context-format=invalid fails' '
+test_expect_success 'flux job eventlog --format=invalid fails' '
         jobid=$(submit_job) &&
-	! flux job eventlog --context-format=invalid $jobid
+	! flux job eventlog --format=invalid $jobid
 '
 
 #
@@ -231,21 +233,23 @@ test_expect_success 'flux job wait-event hangs on no event' '
         ! run_timeout 0.2 flux job wait-event $jobid foobar
 '
 
-test_expect_success 'flux job wait-event --context-format=json works' '
+test_expect_success 'flux job wait-event --format=json works' '
         jobid=$(submit_job) &&
-	flux job wait-event --context-format=json $jobid submit > wait_event_format1.out &&
+	flux job wait-event --format=json $jobid submit > wait_event_format1.out &&
+        grep -q "\"name\":\"submit\"" eventlog_format1.out &&
         grep -q "\"userid\":$(id -u)" wait_event_format1.out
 '
 
-test_expect_success 'flux job wait-event --context-format=text works' '
+test_expect_success 'flux job wait-event --format=text works' '
         jobid=$(submit_job) &&
-	flux job wait-event --context-format=text $jobid submit > wait_event_format2.out &&
+	flux job wait-event --format=text $jobid submit > wait_event_format2.out &&
+        grep -q "submit" wait_event_format2.out &&
         grep -q "userid=$(id -u)" wait_event_format2.out
 '
 
-test_expect_success 'flux job wait-event --context-format=invalid fails' '
+test_expect_success 'flux job wait-event --format=invalid fails' '
         jobid=$(submit_job) &&
-	! flux job wait-event --context-format=invalid $jobid submit
+	! flux job wait-event --format=invalid $jobid submit
 '
 
 #
