@@ -1480,11 +1480,8 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
     }
 
-    if (flux_respond_pack (h, msg, "{ s:O }",
-                           "val", val) < 0) {
+    if (flux_respond_pack (h, msg, "{ s:O }", "val", val) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
 
     rc = 0;
 done:
@@ -1534,10 +1531,8 @@ static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
                            "val", val,
                            "rootseq", root_seq,
-                           "rootref", root_ref) < 0) {
+                           "rootref", root_ref) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
 
     rc = 0;
 done:
@@ -1991,10 +1986,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", root->seq,
-                           "rootref", root->ref) < 0) {
+                           "rootref", root->ref) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     return;
 
@@ -2047,10 +2040,8 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
                            "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
-                           "flags", root->flags) < 0) {
+                           "flags", root->flags) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
 done:
     return;
@@ -2362,10 +2353,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_respond_pack (h, msg,
                            "{ s:O s:O }",
                            "cache", cstats,
-                           "namespace", nsstats) < 0) {
+                           "namespace", nsstats) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
 
     rc = 0;
  done:
@@ -2722,10 +2711,8 @@ static void namespace_list_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_respond_pack (h, msg, "{ s:O }",
                            "namespaces",
-                           namespaces) < 0) {
+                           namespaces) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
 
     rc = 0;
 done:

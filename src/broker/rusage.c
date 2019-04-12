@@ -49,7 +49,7 @@ static void rusage_request_cb (flux_t *h, flux_msg_handler_t *mh,
             "nsignals", ru.ru_nsignals,
             "nvcsw", ru.ru_nvcsw,
             "nivcsw", ru.ru_nivcsw) < 0)
-        goto error;
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
