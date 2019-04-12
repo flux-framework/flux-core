@@ -18,7 +18,8 @@
 
 #include "info.h"
 #include "allow.h"
-#include "util.h"
+
+#include "src/common/libeventlog/eventlog.h"
 
 /* Parse the submit userid from the event log.
  * Assume "submit" is the first event.
@@ -26,44 +27,37 @@
 static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
                                 int *useridp)
 {
-    const char *input = s;
-    const char *tok;
-    size_t toklen;
-    char *event = NULL;
-    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-    json_t *o = NULL;
+    json_t *a = NULL;
+    json_t *entry = NULL;
+    const char *name = NULL;
+    json_t *context = NULL;
+    int rv = -1;
 
-    if (!eventlog_parse_next (&input, &tok, &toklen)) {
+    if (!(a = eventlog_decode (s))) {
+        flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
+        goto error;
+    }
+    if (!(entry = json_array_get (a, 0))) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
+        flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
+        goto error;
+    }
+    if (strcmp (name, "submit") != 0 || !context) {
         flux_log_error (ctx->h, "%s: invalid event", __FUNCTION__);
         errno = EINVAL;
         goto error;
     }
-    if (!(event = strndup (tok, toklen)))
-        goto error;
-    if (flux_kvs_event_decode (event, NULL, name, sizeof (name),
-                               context, sizeof (context)) < 0)
-        goto error;
-    if (strcmp (name, "submit") != 0) {
-        flux_log_error (ctx->h, "%s: invalid event", __FUNCTION__);
-        errno = EINVAL;
-        goto error;
-    }
-    if (!(o = json_loads (context, 0, NULL))) {
+    if (json_unpack (context, "{ s:i }", "userid", useridp) < 0) {
         errno = EPROTO;
         goto error;
     }
-    if (json_unpack (o, "{ s:i }", "userid", useridp) < 0) {
-        errno = EPROTO;
-        goto error;
-    }
-    free (event);
-    json_decref (o);
-    return 0;
- error:
-    free (event);
-    json_decref (o);
-    return -1;
+    rv = 0;
+error:
+    json_decref (a);
+    return rv;
 }
 
 int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
