@@ -20,7 +20,6 @@
 #include "info.h"
 #include "watch.h"
 #include "allow.h"
-#include "util.h"
 
 struct watch_ctx {
     struct info_ctx *ctx;
@@ -99,6 +98,19 @@ static int watch_key (struct watch_ctx *w)
     }
 
     return 0;
+}
+
+static bool eventlog_parse_next (const char **pp, const char **tok,
+                                 size_t *toklen)
+{
+    char *term;
+
+    if (!(term = strchr (*pp, '\n')))
+        return false;
+    *tok = *pp;
+    *toklen = term - *pp + 1;
+    *pp = term + 1;
+    return true;
 }
 
 static void watch_continuation (flux_future_t *f, void *arg)

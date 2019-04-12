@@ -20,7 +20,6 @@
 #include "info.h"
 #include "lookup.h"
 #include "allow.h"
-#include "util.h"
 
 struct lookup_ctx {
     struct info_ctx *ctx;
