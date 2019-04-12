@@ -833,42 +833,63 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
     return 0;
 }
 
-/* If user set the 'broker.rundir' attribute on the command line,
- * validate the directory and its permissions, and set the immutable flag
- * on the attribute.  If unset, create a unique directory and arrange to remove
- * it on exit.
+/*  Handle broker.rundir attribute.
+ *  If not set, create a temporary directory and use it as the rundir.
+ *  If set, attempt to create it if it doesn't exist. In either case,
+ *  validate directory persmissions and set the broker.rundir attribute
+ *  immutable. If the rundir is created by this function it will be
+ *  scheduled for later cleanup at broker exit. Pre-existing directories
+ *  are left intact.
  */
 static int create_rundir (attr_t *attrs)
 {
     const char *run_dir, *local_uri;
     char *dir = NULL;
     char *uri = NULL;
+    bool do_cleanup = true;
+    struct stat sb;
     int rc = -1;
 
-    if (attr_get (attrs, "broker.rundir", &run_dir, NULL) == 0) {
-        struct stat sb;
-        if (stat (run_dir, &sb) < 0)
-            goto done;
-        if (!S_ISDIR (sb.st_mode)) {
-            errno = ENOTDIR;
-            goto done;
-        }
-        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-            errno = EPERM;
-            goto done;
-        }
-        if (attr_set_flags (attrs, "broker.rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    } else {
+    /*  If broker.rundir attribute isn't set, then create a temp directory
+     *   and use that as rundir. If directory was set, try to create it if
+     *   it doesn't exist. If directory was pre-existing, do not schedule
+     *   the dir for auto-cleanup at broker exit.
+     */
+    if (attr_get (attrs, "broker.rundir", &run_dir, NULL) < 0) {
         const char *tmpdir = getenv ("TMPDIR");
-        dir = xasprintf ("%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp");
-        if (!mkdtemp (dir))
+        if (asprintf (&dir, "%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp") < 0)
             goto done;
-        cleanup_push_string (cleanup_directory, dir);
-        if (attr_add (attrs, "broker.rundir", dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (!(run_dir = mkdtemp (dir)))
             goto done;
-        run_dir = dir;
+        if (attr_add (attrs, "broker.rundir", run_dir, 0) < 0)
+            goto done;
     }
+    else if (mkdir (run_dir, 0700) < 0) {
+        if (errno != EEXIST)
+            goto done;
+        /* Do not cleanup directory if we did not create it here
+         */
+        do_cleanup = false;
+    }
+
+    /*  Ensure created or existing directory is writeable:
+     */
+    if (stat (run_dir, &sb) < 0)
+        goto done;
+    if (!S_ISDIR (sb.st_mode)) {
+        errno = ENOTDIR;
+        goto done;
+    }
+    if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+        errno = EPERM;
+        goto done;
+    }
+
+    if (attr_set_flags (attrs, "broker.rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        goto done;
+    if (do_cleanup)
+        cleanup_push_string (cleanup_directory, run_dir);
+
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
         uri = xasprintf ("local://%s", run_dir);
         if (attr_add (attrs, "local-uri", uri,
