@@ -407,6 +407,7 @@ AC_CONFIG_FILES( \
   src/common/libtomlc99/Makefile \
   src/common/libaggregate/Makefile \
   src/common/libschedutil/Makefile \
+  src/common/libeventlog/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
