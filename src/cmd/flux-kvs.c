@@ -23,6 +23,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libeventlog/eventlog.h"
 
 int cmd_namespace (optparse_t *p, int argc, char **argv);
 int cmd_get (optparse_t *p, int argc, char **argv);
@@ -1767,21 +1768,22 @@ static flux_future_t *eventlog_append_event (flux_t *h, const char *key,
                                              const char *context)
 {
     flux_kvs_txn_t *txn;
-    char *event;
+    json_t *entry;
+    char *entrystr;
     flux_future_t *f;
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (timestamp < 0.)
-        event = flux_kvs_event_encode (name, context);
-    else
-        event = flux_kvs_event_encode_timestamp  (timestamp, name, context);
-    if (!event)
-        log_err_exit ("flux_kvs_event_encode");
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, event) < 0)
+    if (!(entry = eventlog_entry (timestamp, name, context)))
+        log_err_exit ("eventlog_entry");
+    if (!(entrystr = eventlog_entry_encode (entry)))
+        log_err_exit ("eventlog_entry_encode");
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0)
         log_err_exit ("flux_kvs_txn_put");
     if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
         log_err_exit ("flux_kvs_commit");
+    free (entrystr);
+    json_decref (entry);
     return f;
 }
 
@@ -1793,7 +1795,7 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
     const char *name;
     char *context = NULL;
     flux_future_t *f;
-    double timestamp = optparse_get_double (p, "timestamp", -1.);
+    double timestamp = optparse_get_double (p, "timestamp", 0.);
 
     if (argc - optindex < 2) {
         optparse_print_usage (p);
@@ -1814,15 +1816,15 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-struct eventlog_get_ctx {
-    struct flux_kvs_eventlog *log;
-    optparse_t *p;
-};
-
 /* print event in raw form */
-void eventlog_unformatted_print (const char *event)
+void eventlog_unformatted_print (json_t *event)
 {
-    printf ("%s", event);
+    char *e;
+
+    if (!(e = json_dumps (event, JSON_COMPACT)))
+        log_msg_exit ("json_dumps");
+    printf ("%s\n", e);
+    free (e);
 }
 
 /* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
@@ -1847,42 +1849,57 @@ static int eventlog_timestr (double timestamp, char *buf, size_t size)
 
 /* print event with human-readable time
  */
-static void eventlog_prettyprint (const char *s)
+static void eventlog_prettyprint (json_t *event)
 {
     double timestamp;
-    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
+    const char *name;
+    json_t *context = NULL;
+    char *context_str = NULL;
     char buf[64];
 
-    if (flux_kvs_event_decode (s, &timestamp, name, sizeof (name),
-                                              context, sizeof (context)) < 0)
-        log_err_exit ("flux_kvs_event_decode");
+    if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
+        log_err_exit ("eventlog_entry_parse");
+
     if (eventlog_timestr (timestamp, buf, sizeof (buf)) < 0)
         log_msg_exit ("error converting timestamp to ISO 8601");
 
-    printf ("%s %s%s%s\n", buf, name, *context ? " " : "", context);
+    if (context) {
+        if (!(context_str = json_dumps (context, JSON_COMPACT)))
+            log_msg_exit ("json_dumps");
+    }
+
+    printf ("%s %s%s%s\n", buf,
+                           name,
+                           context_str ? " " : "",
+                           context_str ? context_str : "");
+
+    free (context_str);
+    fflush (stdout);
 }
 
 void eventlog_get_continuation (flux_future_t *f, void *arg)
 {
-    struct eventlog_get_ctx *ctx = arg;
+    optparse_t *p = arg;
     const char *s;
-    const char *event;
+    json_t *a;
+    size_t index;
+    json_t *value;
 
     if (flux_kvs_lookup_get (f, &s) < 0)
         log_err_exit ("flux_kvs_lookup_get");
-    if (flux_kvs_eventlog_append (ctx->log, s) < 0)
-        log_err_exit ("flux_kvs_eventlog_append");
 
-    /* Display any new events.
-     */
-    while ((event = flux_kvs_eventlog_next (ctx->log))) {
-        if (optparse_hasopt (ctx->p, "unformatted"))
-            eventlog_unformatted_print (event);
+    if (!(a = eventlog_decode (s)))
+        log_err_exit ("eventlog_decode");
+
+    json_array_foreach (a, index, value) {
+        if (optparse_hasopt (p, "unformatted"))
+            eventlog_unformatted_print (value);
         else
-            eventlog_prettyprint (event);
+            eventlog_prettyprint (value);
     }
+
     fflush (stdout);
+    json_decref (a);
     flux_future_destroy (f);
 }
 
@@ -1893,7 +1910,6 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     const char *key;
     flux_future_t *f;
     int flags = 0;
-    struct eventlog_get_ctx ctx;
 
     if (argc - optindex != 1) {
         optparse_print_usage (p);
@@ -1901,18 +1917,12 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     }
     key = argv[optindex++];
 
-    if (!(ctx.log = flux_kvs_eventlog_create()))
-        log_err_exit ("flux_kvs_eventlog_create");
-    ctx.p = p;
-
     if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
+    if (flux_future_then (f, -1., eventlog_get_continuation, p) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
-
-    flux_kvs_eventlog_destroy (ctx.log);
 
     return (0);
 }

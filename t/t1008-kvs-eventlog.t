@@ -28,4 +28,8 @@ test_expect_success 'flux kvs eventlog append works w/ context' '
         grep -q "\"data\":\"bar\"" get_c.out
 '
 
+test_expect_success 'flux kvs eventlog append fails with invalid context' '
+	! flux kvs eventlog append test.c foo not_a_object
+'
+
 test_done
