@@ -203,6 +203,11 @@ test_expect_success 'broker.rundir override works' '
 	test -d $RUNDIR &&
 	rmdir $RUNDIR
 '
+test_expect_success 'broker.rundir override creates nonexistent dirs' '
+	RUNDIR="$(pwd)/rundir" &&
+	flux start ${ARGS} -o,--setattr=broker.rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
+	test_expect_code 1 test -d $RUNDIR
+'
 test_expect_success 'broker persist-directory works' '
 	PERSISTDIR=`mktemp -d` &&
 	flux start ${ARGS} -o,--setattr=persist-directory=$PERSISTDIR /bin/true &&
