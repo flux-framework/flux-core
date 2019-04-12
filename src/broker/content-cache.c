@@ -94,36 +94,40 @@ static void message_list_destroy (zlist_t **l)
 
 /* Respond identically to a list of requests.
  * The list is always run to completion, then destroyed.
- * Returns 0 on succes, -1 on failure with errno set.
+ * On error, log at LOG_ERR level.
  */
-static int respond_requests_raw (zlist_t **l, flux_t *h, int errnum,
-                                 const void *data, int len)
+static void respond_requests_raw (zlist_t **l, flux_t *h,
+                                  const void *data, int len,
+                                  const char *type)
 {
-    flux_msg_t *msg;
-    int rc = 0, saved_errno = 0;
-
     if (*l) {
+        flux_msg_t *msg;
         while ((msg = zlist_pop (*l))) {
-            if (errnum != 0) {
-                if (flux_respond_error (h, msg, errnum, NULL) < 0) {
-                    saved_errno = errno;
-                    rc = -1;
-                }
-            }
-            else {
-                if (flux_respond_raw (h, msg, data, len) < 0) {
-                    saved_errno = errno;
-                    rc = -1;
-                }
-            }
+            if (flux_respond_raw (h, msg, data, len) < 0)
+                flux_log_error (h, "%s (%s):", __FUNCTION__, type);
             flux_msg_destroy (msg);
         }
         zlist_destroy (l);
     }
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
 }
+
+/* Same as above only send errnum, errmsg response
+ */
+static void respond_requests_error (zlist_t **l, flux_t *h,
+                                    int errnum, const char *errmsg,
+                                    const char *type)
+{
+    if (*l) {
+        flux_msg_t *msg;
+        while ((msg = zlist_pop (*l))) {
+            if (flux_respond_error (h, msg, errnum, errmsg) < 0)
+                flux_log_error (h, "%s (%s):", __FUNCTION__, type);
+            flux_msg_destroy (msg);
+        }
+        zlist_destroy (l);
+    }
+}
+
 
 /* Add request message to a list, creating the list as needed.
  * Returns 0 on succes, -1 on failure with errno set.
@@ -269,22 +273,18 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const void *data = NULL;
     int len = 0;
-    int saved_errno;
-    int rc = -1;
 
     e->load_pending = 0;
     if (flux_content_load_get (f, &data, &len) < 0) {
         if (errno == ENOSYS && cache->rank == 0)
             errno = ENOENT;
-        saved_errno = errno;
         if (errno != ENOENT)
             flux_log_error (cache->h, "content load");
-        goto done;
+        goto error;
     }
     if (cache_entry_fill (e, data, len) < 0) {
-        saved_errno = errno;
         flux_log_error (cache->h, "content load");
-        goto done;
+        goto error;
     }
     if (!e->valid) {
         e->valid = 1;
@@ -292,15 +292,12 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         cache->acct_size += len;
     }
     e->lastused = cache->epoch;
-    rc = 0;
-done:
-    if (respond_requests_raw (&e->load_requests, cache->h,
-                                                    rc < 0 ? saved_errno : 0,
-                                                    e->data, e->len) < 0)
-        flux_log_error (cache->h, "%s: error responding to load requests",
-                        __FUNCTION__);
-    if (rc < 0)
-        remove_entry (cache, e);
+    respond_requests_raw (&e->load_requests, cache->h, e->data, e->len, "load");
+    flux_future_destroy (f);
+    return;
+error:
+    respond_requests_error (&e->load_requests, cache->h, errno, NULL, "load");
+    remove_entry (cache, e);
     flux_future_destroy (f);
 }
 
@@ -350,56 +347,43 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     void *data = NULL;
     int len = 0;
     struct cache_entry *e;
-    int saved_errno = 0;
-    int rc = -1;
 
     if (flux_request_decode_raw (msg, NULL, (const void **)&blobref,
-                                 &blobref_size) < 0) {
-        saved_errno = errno;
-        goto done;
-    }
+                                 &blobref_size) < 0)
+        goto error;
     if (!blobref || blobref[blobref_size - 1] != '\0') {
-        saved_errno = errno = EPROTO;
-        goto done;
+        errno = EPROTO;
+        goto error;
     }
     if (!(e = lookup_entry (cache, blobref))) {
         if (cache->rank == 0 && !cache->backing) {
-            saved_errno = errno = ENOENT;
-            goto done;
+            errno = ENOENT;
+            goto error;
         }
         if (!(e = cache_entry_create (blobref))
                                             || insert_entry (cache, e) < 0) {
-            saved_errno = errno;
             flux_log_error (h, "content load");
-            goto done; /* insert destroys 'e' on failure */
+            goto error; /* insert destroys 'e' on failure */
         }
     }
     if (!e->valid) {
-        if (cache_load (cache, e) < 0) {
-            saved_errno = errno;
-            goto done;
-        }
+        if (cache_load (cache, e) < 0)
+            goto error;
         if (defer_request (&e->load_requests, msg) < 0) {
-            saved_errno = errno;
             flux_log_error (h, "content load");
-            goto done;
+            goto error;
         }
         return; /* RPC continuation will respond to msg */
     }
     e->lastused = cache->epoch;
     data = e->data;
     len = e->len;
-    rc = 0;
-done:
-    assert (rc == 0 || saved_errno != 0);
-    if (rc < 0) {
-        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
-            flux_log_error (h, "content load: flux_respond_error");
-    }
-    else {
-        if (flux_respond_raw (h, msg, data, len) < 0)
-            flux_log_error (h, "content load: flux_respond_raw");
-    }
+    if (flux_respond_raw (h, msg, data, len) < 0)
+        flux_log_error (h, "content load: flux_respond_raw");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "content load: flux_respond_error");
 }
 
 /* Store operation
@@ -421,56 +405,57 @@ done:
  * offload rank 0 hash entries at a slower pace.
  */
 
-static void cache_store_continuation (flux_future_t *f, void *arg)
+/* If cache has been flushed, respond to flush requests, if any.
+ * If there are still dirty entries and the number of outstanding
+ * store requests would not exceed the limit, flush more entries.
+ * Optimization: since scanning for dirty entries is a linear search,
+ * only do it when the number of outstanding store requests falls to
+ * a low water mark, here hardwired to be half of the limit.
+ */
+static void cache_resume_flush (content_cache_t *cache)
 {
-    content_cache_t *cache = arg;
-    struct cache_entry *e = flux_future_aux_get (f, "entry");
-    const char *blobref;
-    int saved_errno = 0;
-    int rc = -1;
-
-    e->store_pending = 0;
-    assert (cache->flush_batch_count > 0);
-    cache->flush_batch_count--;
-    if (flux_content_store_get (f, &blobref) < 0) {
-        saved_errno = errno;
-        if (cache->rank == 0 && errno == ENOSYS)
-            flux_log (cache->h, LOG_DEBUG, "content store: %s",
-                      "backing store service unavailable");
-        else
-            flux_log_error (cache->h, "content store");
-        goto done;
-    }
-    if (strcmp (blobref, e->blobref)) {
-        saved_errno = errno = EIO;
-        flux_log (cache->h, LOG_ERR, "content store: wrong blobref");
-        goto done;
-    }
-    if (e->dirty) {
-        cache->acct_dirty--;
-        e->dirty = 0;
-    }
-    rc = 0;
-done:
-    if (respond_requests_raw (&e->store_requests, cache->h,
-                                        rc < 0 ? saved_errno : 0,
-                                        e->blobref, strlen (e->blobref) + 1) < 0)
-        flux_log_error (cache->h, "%s: error responding to store requests",
-                        __FUNCTION__);
-    flux_future_destroy (f);
-
-    /* If cache has been flushed, respond to flush requests, if any.
-     * If there are still dirty entries and the number of outstanding
-     * store requests would not exceed the limit, flush more entries.
-     * Optimization: since scanning for dirty entries is a linear search,
-     * only do it when the number of outstanding store requests falls to
-     * a low water mark, here hardwired to be half of the limit.
-     */
     if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
     else if (cache->acct_dirty - cache->flush_batch_count > 0
             && cache->flush_batch_count <= cache->flush_batch_limit / 2)
         (void)cache_flush (cache); /* resume flushing */
+}
+
+static void cache_store_continuation (flux_future_t *f, void *arg)
+{
+    content_cache_t *cache = arg;
+    struct cache_entry *e = flux_future_aux_get (f, "entry");
+    const char *blobref;
+
+    e->store_pending = 0;
+    assert (cache->flush_batch_count > 0);
+    cache->flush_batch_count--;
+    if (flux_content_store_get (f, &blobref) < 0) {
+        if (cache->rank == 0 && errno == ENOSYS)
+            flux_log (cache->h, LOG_DEBUG, "content store: %s",
+                      "backing store service unavailable");
+        else
+            flux_log_error (cache->h, "content store");
+        goto error;
+    }
+    if (strcmp (blobref, e->blobref)) {
+        flux_log (cache->h, LOG_ERR, "content store: wrong blobref");
+        errno = EIO;
+        goto error;
+    }
+    if (e->dirty) {
+        cache->acct_dirty--;
+        e->dirty = 0;
+    }
+    respond_requests_raw (&e->store_requests, cache->h,
+                          e->blobref, strlen (e->blobref) + 1, "store");
+    flux_future_destroy (f);
+    cache_resume_flush (cache);
+    return;
+error:
+    respond_requests_error (&e->store_requests, cache->h, errno, NULL, "store");
+    flux_future_destroy (f);
+    cache_resume_flush (cache);
 }
 
 static int cache_store (content_cache_t *cache, struct cache_entry *e)
@@ -521,36 +506,33 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
     int len;
     struct cache_entry *e = NULL;
     char blobref[BLOBREF_MAX_STRING_SIZE];
-    int rc = -1;
 
     if (flux_request_decode_raw (msg, NULL, &data, &len) < 0)
-        goto done;
+        goto error;
     if (len > cache->blob_size_limit) {
         errno = EFBIG;
-        goto done;
+        goto error;
     }
     if (blobref_hash (cache->hash_name, (uint8_t *)data, len, blobref,
                       sizeof (blobref)) < 0)
-        goto done;
+        goto error;
 
     if (!(e = lookup_entry (cache, blobref))) {
         if (!(e = cache_entry_create (blobref)))
-            goto done;
+            goto error;
         if (insert_entry (cache, e) < 0)
-            goto done; /* insert destroys 'e' on failure */
+            goto error; /* insert destroys 'e' on failure */
     }
     if (!e->valid) {
         if (cache_entry_fill (e, data, len) < 0)
-            goto done;
+            goto error;
         if (!e->valid) {
             e->valid = 1;
             cache->acct_valid++;
             cache->acct_size += len;
         }
-        if (respond_requests_raw (&e->load_requests, cache->h, 0,
-                                                        e->data, e->len) < 0)
-            flux_log_error (cache->h, "%s: error responding to load requests",
-                            __FUNCTION__);
+        respond_requests_raw (&e->load_requests, cache->h,
+                              e->data, e->len, "load");
         if (!e->dirty) {
             e->dirty = 1;
             cache->acct_dirty++;
@@ -560,10 +542,10 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
-                goto done;
+                goto error;
             if (cache->rank > 0) {  /* write-through */
                 if (defer_request (&e->store_requests, msg) < 0)
-                    goto done;
+                    goto error;
                 return;
             }
         }
@@ -577,17 +559,12 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             cache->acct_dirty++;
         }
     }
-    rc = 0;
-done:
-    assert (rc == 0 || errno != 0);
-    if (rc < 0) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "content store: flux_respond_error");
-    }
-    else {
-        if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
-            flux_log_error (h, "content store: flux_respond_raw");
-    }
+    if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+        flux_log_error (h, "content store: flux_respond_raw");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "content store: flux_respond_error");
 }
 
 /* Backing store is enabled/disabled by modules that provide the
@@ -686,14 +663,13 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
     char *key;
     struct cache_entry *e;
     int orig_size;
-    int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
+        goto error;
     orig_size = zhash_size (cache->entries);
     if (!(keys = zhash_keys (cache->entries))) {
         errno = ENOMEM;
-        goto done;
+        goto error;
     }
     while ((key = zlist_pop (keys))) {
         e = zhash_lookup (cache->entries, key);
@@ -702,19 +678,16 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
             remove_entry (cache, e);
         free (key);
     }
-    rc = 0;
-done:
-    if (rc < 0) {
-        flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "content dropcache");
-    }
-    else {
-        flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
-                  orig_size - (int)zhash_size (cache->entries), orig_size);
-        if (flux_respond (h, msg, NULL) < 0)
-            flux_log_error (h, "content dropcache");
-    }
+    flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
+              orig_size - (int)zhash_size (cache->entries), orig_size);
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "content dropcache");
+    zlist_destroy (&keys);
+    return;
+error:
+    flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "content dropcache");
     zlist_destroy (&keys);
 }
 
@@ -751,54 +724,47 @@ error:
 /* This is called when outstanding store ops have completed.  */
 static void flush_respond (content_cache_t *cache)
 {
-    int errnum = 0;
-
-    if (cache->acct_dirty){
-        errnum = EIO;
-        if (cache->rank == 0 && !cache->backing)
-            errnum = ENOSYS;
+    if (!cache->acct_dirty) {
+        respond_requests_raw (&cache->flush_requests, cache->h,
+                              NULL, 0, "flush");
     }
-    if (respond_requests_raw (&cache->flush_requests, cache->h,
-                              errnum, NULL, 0) < 0)
-        flux_log_error (cache->h, "%s: error responding to flush requests",
-                        __FUNCTION__);
+    else {
+        errno = EIO;
+        if (cache->rank == 0 && !cache->backing)
+            errno = ENOSYS;
+        respond_requests_error (&cache->flush_requests, cache->h,
+                                errno, NULL, "flush");
+    }
 }
 
 static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
-    int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
-    if (cache->acct_dirty == 0) {
-        rc = 0;
-        goto done;
+        goto error;
+    if (cache->acct_dirty != 0) {
+        if (cache_flush (cache) < 0)
+            goto error;
+        if (cache->acct_dirty > 0) {
+            if (defer_request (&cache->flush_requests, msg) < 0)
+                goto error;
+            return;
+        }
+        if (cache->acct_dirty > 0) {
+            errno = EIO;
+            goto error;
+        }
     }
-    if (cache_flush (cache) < 0)
-        goto done;
-    if (cache->acct_dirty > 0) {
-        if (defer_request (&cache->flush_requests, msg) < 0)
-            goto done;
-        return;
-    }
-    if (cache->acct_dirty > 0) {
-        errno = EIO;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (rc < 0) {
-        flux_log (h, LOG_DEBUG, "content flush: %s", flux_strerror (errno));
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "content flush");
-    }
-    else {
-        flux_log (h, LOG_DEBUG, "content flush");
-        if (flux_respond (h, msg, NULL) < 0)
-            flux_log_error (h, "content flush");
-    }
+    flux_log (h, LOG_DEBUG, "content flush");
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "content flush");
+    return;
+error:
+    flux_log (h, LOG_DEBUG, "content flush: %s", flux_strerror (errno));
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "content flush");
 }
 
 /* Heartbeat drives periodic cache purge

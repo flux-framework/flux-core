@@ -248,10 +248,8 @@ static void status_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "rlist_to_R_compressed");
         goto err;
     }
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
+    if (flux_respond_pack (h, msg, "o", o) < 0)
         flux_log_error (h, "flux_respond_pack");
-        goto err;
-    }
     return;
 err:
     json_decref (o);

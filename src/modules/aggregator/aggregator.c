@@ -614,7 +614,6 @@ aggregator_new_aggregate (struct aggregator *ctx, const char *key,
 static void push_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
-    int rc = -1;
     struct aggregator *ctx = arg;
     struct aggregate *ag = NULL;
     const char *key;
@@ -622,54 +621,44 @@ static void push_cb (flux_t *h, flux_msg_handler_t *mh,
     int64_t fwd_count = 0;
     int64_t total = 0;
     json_t *entries = NULL;
-    int saved_errno = 0;
 
     if (flux_msg_unpack (msg, "{s:s,s:I,s:o,s?F,s?I}",
                               "key", &key,
                               "total", &total,
                               "entries", &entries,
                               "timeout", &timeout,
-                              "fwd_count", &fwd_count) < 0) {
-        saved_errno = EPROTO;
-        goto done;
-    }
+                              "fwd_count", &fwd_count) < 0)
+        goto error;
 
     if (!(ag = zhash_lookup (ctx->aggregates, key)) &&
         !(ag = aggregator_new_aggregate (ctx, key, total, timeout))) {
         flux_log_error (ctx->h, "failed to get new aggregate");
-        saved_errno = errno;
-        goto done;
+        goto error;
     }
 
     if (fwd_count > 0)
         ag->fwd_count = fwd_count;
 
-    if ((rc = aggregate_push_json (ag, entries)) < 0) {
+    if (aggregate_push_json (ag, entries) < 0) {
         flux_log_error (h, "aggregate_push_json: failed");
-        goto done;
+        goto error;
     }
 
     flux_log (ctx->h, LOG_DEBUG, "push: %s: count=%d fwd_count=%d total=%d",
                       ag->key, ag->count, ag->fwd_count, ag->total);
     if (ctx->rank > 0) {
-        if ((ag->count == ag->total
-            || ag->count == ag->fwd_count
-            || timeout == 0.)
-            && (rc = aggregate_flush (ag)))
-            goto done;
+        if ((ag->count == ag->total || ag->count == ag->fwd_count || timeout == 0.))
+            if (aggregate_flush (ag) < 0)
+                goto error;
     }
     else if (ag->count == ag->total)
         aggregate_sink (h, ag);
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (flux_respond_error (h, msg, saved_errno, NULL) < 0)
-            flux_log_error (h, "aggregator.push: flux_respond_error");
-    }
-    else {
-        if (flux_respond (h, msg, NULL) < 0)
-            flux_log_error (h, "aggregator.push: flux_respond");
-    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "aggregator.push: flux_respond");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "aggregator.push: flux_respond_error");
 }
 
 
