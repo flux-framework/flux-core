@@ -102,15 +102,15 @@ static struct optparse_option id_opts[] =  {
 };
 
 static struct optparse_option eventlog_opts[] =  {
-    { .name = "context-format", .key = 'c', .has_arg = 1, .arginfo = "FORMAT",
-      .usage = "Specify context format: text, json",
+    { .name = "format", .key = 'f', .has_arg = 1, .arginfo = "FORMAT",
+      .usage = "Specify output format: text, json",
     },
     OPTPARSE_TABLE_END
 };
 
 static struct optparse_option wait_event_opts[] =  {
-    { .name = "context-format", .key = 'c', .has_arg = 1, .arginfo = "FORMAT",
-      .usage = "Specify context format: text, json",
+    { .name = "format", .key = 'f', .has_arg = 1, .arginfo = "FORMAT",
+      .usage = "Specify output format: text, json",
     },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
       .usage = "timeout after DURATION",
@@ -649,14 +649,19 @@ struct eventlog_ctx {
     const char *format;
 };
 
-void output_event_text (double timestamp,
-                        const char *name,
-                        const char *context)
+void output_event_text (const char *event)
 {
+    double timestamp;
+    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
+    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
     json_error_t error;
     const char *key;
     json_t *value;
     json_t *o;
+
+    if (flux_kvs_event_decode (event, &timestamp, name, sizeof (name),
+                               context, sizeof (context)) < 0)
+        log_err_exit ("flux_kvs_event_decode");
 
     printf ("%lf %s", timestamp, name);
 
@@ -679,27 +684,12 @@ void output_event_text (double timestamp,
     fflush (stdout);
 }
 
-void output_event_json (double timestamp,
-                        const char *name,
-                        const char *context)
-{
-    printf ("%lf %s%s%s\n", timestamp, name, *context ? " " : "", context);
-}
-
 void output_event (const char *event, const char *format)
 {
-    double timestamp;
-    char name[FLUX_KVS_MAX_EVENT_NAME + 1];
-    char context[FLUX_KVS_MAX_EVENT_CONTEXT + 1];
-
-    if (flux_kvs_event_decode (event, &timestamp, name, sizeof (name),
-                               context, sizeof (context)) < 0)
-        log_err_exit ("flux_kvs_event_decode");
-
     if (!strcasecmp (format, "text"))
-        output_event_text (timestamp, name, context);
+        output_event_text (event);
     else if (!strcasecmp (format, "json"))
-        output_event_json (timestamp, name, context);
+        printf ("%s", event);
 }
 
 void eventlog_continuation (flux_future_t *f, void *arg)
@@ -747,10 +737,10 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     if (!(ctx.log = flux_kvs_eventlog_create()))
         log_err_exit ("flux_kvs_eventlog_create");
     ctx.p = p;
-    ctx.format = optparse_get_str (p, "context-format", "text");
+    ctx.format = optparse_get_str (p, "format", "text");
     if (strcasecmp (ctx.format, "text")
         && strcasecmp (ctx.format, "json"))
-        log_msg_exit ("invalid context-format type");
+        log_msg_exit ("invalid format type");
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
@@ -845,10 +835,10 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
-    ctx.format = optparse_get_str (p, "context-format", "text");
+    ctx.format = optparse_get_str (p, "format", "text");
     if (strcasecmp (ctx.format, "text")
         && strcasecmp (ctx.format, "json"))
-        log_msg_exit ("invalid context-format type");
+        log_msg_exit ("invalid format type");
 
     if (!(f = flux_job_event_watch (h, ctx.id)))
         log_err_exit ("flux_job_event_watch");
