@@ -50,4 +50,9 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --watch returns append 
 	wait $pid &&
 	test_cmp get_e.exp get_e.out
 '
+
+test_expect_success 'flux kvs eventlog append fails with invalid context' '
+	! flux kvs eventlog append test.c foo not_a_object
+'
+
 test_done
