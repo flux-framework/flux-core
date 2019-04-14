@@ -159,6 +159,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
+static void create_broker_rundir (overlay_t *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
@@ -398,6 +399,11 @@ int main (int argc, char *argv[])
 
     if (create_rundir (ctx.attrs) < 0)
         log_err_exit ("create_rundir");
+
+    /* Set & create broker.rundir *after* overlay initialization,
+     * when broker rank is determined.
+     */
+    overlay_set_init_callback (ctx.overlay, create_broker_rundir, ctx.attrs);
 
     /* Execute boot method selected by 'boot.method' attr.
      * Default is pmi.
@@ -833,35 +839,36 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
     return 0;
 }
 
-/*  Handle broker.rundir attribute.
+/*  Handle global rundir attribute.
+ *
  *  If not set, create a temporary directory and use it as the rundir.
  *  If set, attempt to create it if it doesn't exist. In either case,
- *  validate directory persmissions and set the broker.rundir attribute
+ *  validate directory persmissions and set the rundir attribute
  *  immutable. If the rundir is created by this function it will be
  *  scheduled for later cleanup at broker exit. Pre-existing directories
  *  are left intact.
  */
 static int create_rundir (attr_t *attrs)
 {
-    const char *run_dir, *local_uri;
+    const char *run_dir;
     char *dir = NULL;
     char *uri = NULL;
     bool do_cleanup = true;
     struct stat sb;
     int rc = -1;
 
-    /*  If broker.rundir attribute isn't set, then create a temp directory
+    /*  If rundir attribute isn't set, then create a temp directory
      *   and use that as rundir. If directory was set, try to create it if
      *   it doesn't exist. If directory was pre-existing, do not schedule
      *   the dir for auto-cleanup at broker exit.
      */
-    if (attr_get (attrs, "broker.rundir", &run_dir, NULL) < 0) {
+    if (attr_get (attrs, "rundir", &run_dir, NULL) < 0) {
         const char *tmpdir = getenv ("TMPDIR");
         if (asprintf (&dir, "%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp") < 0)
             goto done;
         if (!(run_dir = mkdtemp (dir)))
             goto done;
-        if (attr_add (attrs, "broker.rundir", run_dir, 0) < 0)
+        if (attr_add (attrs, "rundir", run_dir, 0) < 0)
             goto done;
     }
     else if (mkdir (run_dir, 0700) < 0) {
@@ -885,22 +892,49 @@ static int create_rundir (attr_t *attrs)
         goto done;
     }
 
-    if (attr_set_flags (attrs, "broker.rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    /*  rundir is now fixed, so make the attribute immutable, and
+     *   schedule the dir for cleanup at exit if we created it here.
+     */
+    if (attr_set_flags (attrs, "rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
         goto done;
     if (do_cleanup)
-        cleanup_push_string (cleanup_directory, run_dir);
-
-    if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        uri = xasprintf ("local://%s", run_dir);
-        if (attr_add (attrs, "local-uri", uri,
-                                            FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    }
+        cleanup_push_string (cleanup_directory_recursive, run_dir);
     rc = 0;
 done:
     free (dir);
     free (uri);
     return rc;
+}
+
+void create_broker_rundir (overlay_t *ov, void *arg)
+{
+    attr_t *attrs = arg;
+    uint32_t rank;
+    const char *rundir;
+    const char *local_uri;
+    char *broker_rundir = NULL;
+
+    if (attr_get (attrs, "rundir", &rundir, NULL) < 0)
+        log_msg_exit ("create_broker_rundir: rundir attribute not set");
+
+    rank = overlay_get_rank (ov);
+    if (asprintf (&broker_rundir, "%s/%u", rundir, rank) < 0)
+        log_err_exit ("create_broker_rundir: asprintf");
+    if (mkdir (broker_rundir, 0700) < 0)
+        log_err_exit ("create_broker_rundir: mkdir (%s)", broker_rundir);
+    if (attr_add (attrs, "broker.rundir", broker_rundir,
+                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("create_broker_rundir: attr_add broker.rundir");
+
+    if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
+        char *uri;
+        if (asprintf (&uri, "local://%s", broker_rundir) < 0)
+            log_err_exit ("create_broker_rundir: asprintf (uri)");
+        if (attr_add (attrs, "local-uri", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            log_err_exit ("create_broker_rundir: attr_add (local-uri)");
+        free (uri);
+    }
+    free (broker_rundir);
 }
 
 /* If 'persist-directory' set, validate it, make it immutable, done.

@@ -368,7 +368,7 @@ char *create_scratch_dir (const char *session_id)
 
     if (!mkdtemp (scratchdir))
         log_err_exit ("mkdtemp %s", scratchdir);
-    cleanup_push_string (cleanup_directory, scratchdir);
+    cleanup_push_string (cleanup_directory_recursive, scratchdir);
     return scratchdir;
 }
 
@@ -467,14 +467,9 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     cli->rank = rank;
     add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     argz_add (&argz, &argz_len, broker_path);
-    char *run_dir = xasprintf ("%s/%d", scratch_dir, rank);
-    if (mkdir (run_dir, 0755) < 0)
-        log_err_exit ("mkdir %s", run_dir);
-    cleanup_push_string (cleanup_directory, run_dir);
-    char *dir_arg = xasprintf ("--setattr=broker.rundir=%s", run_dir);
+    char *dir_arg = xasprintf ("--setattr=rundir=%s", scratch_dir);
     argz_add (&argz, &argz_len, dir_arg);
     argz_add (&argz, &argz_len, "--setattr=tbon.endpoint=ipc://%B/req");
-    free (run_dir);
     free (dir_arg);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)
