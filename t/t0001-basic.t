@@ -176,36 +176,36 @@ test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
        NUM=`flux start --size 4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
        test $NUM -eq 3
 '
-test_expect_success 'flux start --bootstrap=pmi (singlton) cleans up broker.rundir' '
+test_expect_success 'flux start --bootstrap=pmi (singlton) cleans up rundir' '
 	flux start ${ARGS} --bootstrap=pmi \
-		flux getattr broker.rundir >rundir_pmi.out &&
+		flux getattr rundir >rundir_pmi.out &&
 	RUNDIR=$(cat rundir_pmi.out) &&
 	test_must_fail test -d $RUNDIR
 '
-test_expect_success 'flux start --bootstrap=selfpmi --size=1 cleans up broker.rundirs' '
+test_expect_success 'flux start --bootstrap=selfpmi --size=1 cleans up rundirs' '
 	flux start ${ARGS} --bootstrap=selfpmi --size=1 \
-		flux getattr broker.rundir >rundir_selfpmi1.out &&
+		flux getattr rundir >rundir_selfpmi1.out &&
 	RUNDIR=$(cat rundir_selfpmi1.out) &&
 	test -n "$RUNDIR" &&
-	test_must_fail test -d $(dirname $RUNDIR)
+	test_must_fail test -d $RUNDIR
 '
-test_expect_success 'flux start --bootstrap=selfpmi --size=2 cleans up broker.rundirs' '
+test_expect_success 'flux start --bootstrap=selfpmi --size=2 cleans up rundirs' '
 	flux start ${ARGS} --bootstrap=selfpmi --size=2 \
-		flux getattr broker.rundir >rundir_selfpmi2.out &&
+		flux getattr rundir >rundir_selfpmi2.out &&
 	RUNDIR=$(cat rundir_selfpmi2.out) &&
 	test -n "$RUNDIR" &&
-	test_must_fail test -d $(dirname $RUNDIR)
+	test_must_fail test -d $RUNDIR
 '
-test_expect_success 'broker.rundir override works' '
+test_expect_success 'rundir override works' '
 	RUNDIR=`mktemp -d` &&
-	DIR=`flux start ${ARGS} -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&
+	DIR=`flux start ${ARGS} -o,--setattr=rundir=$RUNDIR flux getattr rundir` &&
 	test "$DIR" = "$RUNDIR" &&
 	test -d $RUNDIR &&
-	rmdir $RUNDIR
+	rm -rf $RUNDIR
 '
-test_expect_success 'broker.rundir override creates nonexistent dirs' '
+test_expect_success 'rundir override creates nonexistent dirs' '
 	RUNDIR="$(pwd)/rundir" &&
-	flux start ${ARGS} -o,--setattr=broker.rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
+	flux start ${ARGS} -o,--setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
 	test_expect_code 1 test -d $RUNDIR
 '
 test_expect_success 'broker persist-directory works' '
@@ -383,7 +383,7 @@ test_expect_success 'reactor: reactorcat example program works' '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
 	! flux start --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
-		bash -c "flux getattr broker.rundir; flux comms -r 1 panic fubar; sleep 5" >panic.out 2>panic.err
+		bash -c "flux getattr rundir; flux comms -r 1 panic fubar; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '
 	grep -q fubar panic.err
@@ -397,26 +397,6 @@ test_expect_success 'flux-start: rank 0 Killed' '
 	egrep "flux-start: 0 .* Killed" panic.err
 '
 
-# Usage: cleanup_tmpdir tmpdir size
-# Remove tmpdir and expected contents.
-# Could be replaced with rm -rf $tmpdir
-cleanup_tmpdir () {
-	local topdir=$1
-	local size=$2
-	local rank
-
-	for rank in $(seq 0 $(($size-1))); do
-		rm -f $topdir/${rank}/local
-		rm -f $topdir/${rank}/req
-		rmdir $topdir/${rank} || :
-	done
-	rmdir $topdir || :
-}
-
-test_expect_success 'flux-start: cleanup testdir after panic _exit()' '
-	tmpdir=$(dirname $(cat panic.out)) &&
-	test -n "$tmpdir" &&
-	cleanup_tmpdir ${tmpdir} 2
-'
+# Note: flux-start auto-removes rundir
 
 test_done
