@@ -16,9 +16,15 @@
 
 typedef struct overlay_struct overlay_t;
 typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
+typedef void (*overlay_init_cb_f)(overlay_t *ov, void *arg);
 
 overlay_t *overlay_create (void);
 void overlay_destroy (overlay_t *ov);
+
+/* Set a callback triggered during overlay_init()
+ */
+void overlay_set_init_callback (overlay_t *ov,
+                                overlay_init_cb_f cb, void *arg);
 
 /* These need to be called before connect/bind.
  */
