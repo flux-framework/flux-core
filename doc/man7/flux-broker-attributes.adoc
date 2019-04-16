@@ -29,11 +29,19 @@ The number of ranks in the comms session.
 session-id::
 The identity of the comms session.
 
+rundir::
+A global, shared temporary directory available for scratch storage
+within the session. By default, a temporary directory is created
+for each broker rank, but if rundir is set on the command line, this
+directory may be shared by all broker ranks (typically only within
+a node).  If rundir does not exist, it is created and subsequently
+removed during session exit. An existing rundir is not removed at exit.
+
 broker.rundir::
-A temporary directory available for scratch storage within
-the session.  This directory is unique to the local rank.
-Cleanup of directory contents is the responsibility of
-the creator.
+A temporary directory available for per-rank scratch storage within
+the session. By default broker.rundir is set to "${rundir}/${rank}",
+which guarantees a unique directory per rank.  It is not advisable
+to override this attribute on the command line. Use rundir instead.
 
 persist-directory::
 A persistent directory available for storage on rank 0 only.
@@ -80,7 +88,8 @@ based overlay network.  This attribute will not be set on rank zero.
 
 local-uri::
 The Flux URI that should be passed to flux_open(1) to establish
-a connection to the local broker rank.
+a connection to the local broker rank. By default, local-uri is
+created as "local://<broker.rank>/local".
 
 parent-uri::
 The Flux URI that should be passed to flux_open(1) to establish

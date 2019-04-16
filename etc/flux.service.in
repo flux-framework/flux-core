@@ -3,7 +3,7 @@ Description=Flux message broker
 
 [Service]
 Environment=FLUX_USERDB_OPTIONS=--default-rolemask=user
-ExecStart=@X_BINDIR@/flux broker -Sbroker.rundir=@X_RUNSTATEDIR@/flux -Sboot.method=config -Sboot.config_file=@X_SYSCONFDIR@/flux/conf.d/boot.conf sleep inf
+ExecStart=@X_BINDIR@/flux broker -Srundir=@X_RUNSTATEDIR@/flux -Sboot.method=config -Sboot.config_file=@X_SYSCONFDIR@/flux/conf.d/boot.conf sleep inf
 User=flux
 Group=flux
 RuntimeDirectory=flux

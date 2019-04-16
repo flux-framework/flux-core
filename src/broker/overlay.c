@@ -59,6 +59,9 @@ struct overlay_struct {
     overlay_cb_f child_cb;
     void *child_arg;
 
+    overlay_init_cb_f init_cb;
+    void *init_arg;
+
     int idle_warning;
 };
 
@@ -100,7 +103,7 @@ void overlay_destroy (overlay_t *ov)
     }
 }
 
-overlay_t *overlay_create ()
+overlay_t *overlay_create (void)
 {
     overlay_t *ov = xzmalloc (sizeof (*ov));
     ov->rank = FLUX_NODEID_ANY;
@@ -108,7 +111,14 @@ overlay_t *overlay_create ()
 
     if (!(ov->children = zhash_new ()))
         oom ();
+
     return ov;
+}
+
+void overlay_set_init_callback (overlay_t *ov, overlay_init_cb_f cb, void *arg)
+{
+    ov->init_cb = cb;
+    ov->init_arg = arg;
 }
 
 void overlay_init (overlay_t *overlay,
@@ -120,6 +130,8 @@ void overlay_init (overlay_t *overlay,
     overlay->tbon_level = kary_levelof (tbon_k, rank);
     overlay->tbon_maxlevel = kary_levelof (tbon_k, size - 1);
     overlay->tbon_descendants = kary_sum_descendants (tbon_k, size, rank);
+    if (overlay->init_cb)
+        (*overlay->init_cb) (overlay, overlay->init_arg);
 }
 
 void overlay_set_sec (overlay_t *ov, zsecurity_t *sec)
