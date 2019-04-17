@@ -653,7 +653,6 @@ test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c DIR.d works' '
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
 	flux kvs link --target-namespace=foo c $DIR.d &&
-	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c $DIR.d >output-1 &&
 	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c $DIR.d >output &&
 	cat >expected <<-EOF &&
 	$DIR.a
@@ -668,7 +667,6 @@ test_expect_success 'kvs: ls -1RF shows directory titles' '
 	flux kvs put --json $DIR.a=69 &&
 	flux kvs put --json $DIR.b.d=42 &&
 	flux kvs link b $DIR.c &&
-	flux kvs ls -1RF $DIR | grep : >output-2 &&
 	flux kvs ls -1RF $DIR | grep : | wc -l >output &&
 	cat >expected <<-EOF &&
 	2
