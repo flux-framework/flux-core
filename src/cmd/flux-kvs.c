@@ -1557,7 +1557,7 @@ static int categorize_key (optparse_t *p, const char *ns, const char *key,
             fprintf (stderr, "%s: Not a directory\n", nkey);
             goto error;
         }
-        if (zlist_append (singles, xstrdup (key)) < 0)
+        if (zlist_append (singles, nkey) < 0)
             log_err_exit ("zlist_append");
     }
     else if (treeobj_is_symlink (treeobj)) {
