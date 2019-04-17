@@ -62,6 +62,7 @@ struct flux_future {
     struct now_context *now;
     struct then_context *then;
     zlist_t *queue;
+    flux_future_t *embed;
     int refcount;
 };
 
@@ -295,6 +296,7 @@ void flux_future_destroy (flux_future_t *f)
 {
     if (f && (--f->refcount == 0)) {
         int saved_errno = errno;
+        flux_future_destroy (f->embed);
         aux_destroy (&f->aux);
         clear_result (&f->result);
         free (f->fatal_errnum_string);
@@ -318,6 +320,7 @@ flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
     f->init = cb;
     f->init_arg = arg;
     f->queue = NULL;
+    f->embed = NULL;
     f->refcount = 1;
     return f;
 error:
@@ -559,11 +562,14 @@ int flux_future_then (flux_future_t *f, double timeout,
  */
 void *flux_future_aux_get (flux_future_t *f, const char *name)
 {
+    void *result = NULL;
     if (!f) {
         errno = EINVAL;
         return NULL;
     }
-    return aux_get (f->aux, name);
+    if (!(result = aux_get (f->aux, name)) && f->embed)
+        result = flux_future_aux_get (f->embed, name);
+    return result;
 }
 
 /* Store 'aux' object by name.
@@ -654,6 +660,50 @@ void flux_future_fulfill_error (flux_future_t *f, int errnum,
         }
         post_fulfill (f);
     }
+}
+
+int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p)
+{
+    if (!f || !p || (f == p)) {
+        errno = EINVAL;
+        return -1;
+    }
+    /*  Only allow the same embedded future to be used for multiple
+     *   fulfillment. This constrains the usefulness of fulfill_with
+     *   a small amount to avoid the need to keep a list of embedded
+     *   futures that go with each result.
+     */
+    if (f->embed && (p != f->embed)) {
+        errno = EEXIST;
+        return -1;
+    }
+    if (!future_is_ready (p)) {
+        errno = EAGAIN;
+        return -1;
+    }
+    /*  Copy fatal error result, normal result, or error result into `f`
+     *   (in that order of precedence). The "result" is copied using futures
+     *   API to ensure fulfillment (including multiple fulfillment) is posted
+     *   to `f` properly.
+     */
+    if (p->fatal_errnum_valid)
+        flux_future_fatal_error (f, p->fatal_errnum, p->fatal_errnum_string);
+    else if (p->result.is_error)
+        flux_future_fulfill_error (f, p->result.errnum,
+                                      p->result.errnum_string);
+    else {
+        /*  Nornal result, if result has a free_fn registered, then we have
+         *   to steal the reference for the result. We do this by copying
+         *   the free_fn to 'f' and nullifying it in 'p'.
+         */
+        flux_future_fulfill (f, p->result.value, p->result.value_free);
+        p->result.value_free = NULL;
+    }
+    if (!f->embed) {
+        f->embed = p;
+        flux_future_incref (p);
+    }
+    return 0;
 }
 
 void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr)
