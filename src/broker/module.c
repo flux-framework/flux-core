@@ -154,7 +154,7 @@ static void *module_thread (void *arg)
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
         flux_log (p->h, LOG_DEBUG, "responding to post-shutdown %s", topic);
-        if (flux_respond (p->h, msg, ENOSYS, NULL) < 0)
+        if (flux_respond_error (p->h, msg, ENOSYS, NULL) < 0)
             flux_log_error (p->h, "responding to post-shutdown %s", topic);
         flux_msg_destroy (msg);
     }

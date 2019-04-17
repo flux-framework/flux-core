@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test broker content service' 
+test_description='Test broker content service'
 
 . `dirname $0`/sharness.sh
 
@@ -14,6 +14,7 @@ test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 MAXBLOB=`flux getattr content.blob-size-limit`
 HASHFUN=`flux getattr content.hash`
@@ -22,7 +23,7 @@ test_expect_success 'store 100 blobs on rank 0' '
         for i in `seq 0 99`; do echo test$i | \
             flux content store >/dev/null; done &&
 	TOTAL=`flux module stats --type int --parse count content` &&
-        test $TOTAL -ge 100 
+        test $TOTAL -ge 100
 '
 
 # Write on rank 0, various size blobs
@@ -156,6 +157,13 @@ test_expect_success 'store 8K blobs from rank 0 using async RPC' '
 # Write 1024 blobs per rank
 test_expect_success 'store 1K blobs from all ranks using async RPC' '
 	flux exec -n flux content spam 1024 256
+'
+
+test_expect_success 'load request with empty payload fails with EPROTO(71)' '
+	${RPC} content.load 71 </dev/null
+'
+test_expect_success 'backing request with empty payload fails with EPROTO(71)' '
+	${RPC} content.backing 71 </dev/null
 '
 
 test_done

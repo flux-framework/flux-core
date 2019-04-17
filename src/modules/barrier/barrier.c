@@ -202,7 +202,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     if (internal == false) {
         if (barrier_add_client (b, sender, msg) < 0) {
-            flux_respond (ctx->h, msg, EEXIST, NULL);
+            flux_respond_error (ctx->h, msg, EEXIST, NULL);
             flux_log (ctx->h, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
@@ -288,7 +288,12 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
     if ((b = zhash_lookup (ctx->barriers, name))) {
         b->errnum = errnum;
         FOREACH_ZHASH (b->clients, key, req) {
-            if (flux_respond (h, req, b->errnum, NULL) < 0)
+            int rc;
+            if (b->errnum == 0)
+                rc = flux_respond (h, req, NULL);
+            else
+                rc = flux_respond_error (h, req, b->errnum, NULL);
+            if (rc < 0)
                 flux_log_error (h, "%s: sending enter response", __FUNCTION__);
         }
         zhash_delete (ctx->barriers, name);

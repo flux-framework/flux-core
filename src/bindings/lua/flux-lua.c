@@ -642,7 +642,7 @@ static int l_f_zi_resp_cb (lua_State *L,
     flux_t *f = arg;
     flux_msg_t **msgp = zmsg_info_zmsg (zi);
     int rc;
-    rc = flux_respond (f, *msgp, 0, json_str);
+    rc = flux_respond (f, *msgp, json_str);
     return l_pushresult (L, rc);
 }
 

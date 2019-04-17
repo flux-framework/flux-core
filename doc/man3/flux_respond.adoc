@@ -13,7 +13,7 @@ SYNOPSIS
  #include <flux/core.h>
 
  int flux_respond (flux_t *h, const flux_msg_t *request,
-                   int errnum, const char *s);
+                   const char *s);
 
  int flux_respond_pack (flux_t *h, const flux_msg_t *request,
                         const char *fmt, ...);
@@ -22,7 +22,7 @@ SYNOPSIS
                        int errnum, const void *data, int length);
 
  int flux_respond_error (flux_t *h, const flux_msg_t *request,
-                         int errnum, const char *fmt, ...);
+                         int errnum, const char *errmsg);
 
 DESCRIPTION
 -----------
@@ -32,24 +32,21 @@ DESCRIPTION
 deriving topic string, matchtag, and route stack from the provided
 _request_.
 
-`flux_respond()` can operate in two modes.  If _errnum_ is non-zero,
-an error is returned to the sender such that `flux_rpc_get(3)` or
-variants will fail, with the system errno set to _errnum_.  Any payload
-arguments are ignored in this case.
+`flux_respond()` sends a response to _request_.  If _s_ is non-NULL,
+`flux_respond()` will send it as the response payload, otherwise there
+will be no payload.
 
-If _s_ is non-NULL, `flux_respond()` will send it as the response
-payload, otherwise there will be no payload.  Similarly, if _data_ is
-non-NULL, `flux_respond_raw()` will send it as the response payload.
+`flux_respond_raw()` is identical except if _data_ is non-NULL,
+`flux_respond_raw()` will send it as the response payload.
 
 `flux_respond_pack()` encodes a response message with a JSON payload,
 building the payload using variable arguments with a format string in
 the style of jansson's `json_pack()` (used internally).
 
 `flux_respond_error()` returns an error response to the sender.
-_errnum_ must be non-zero.  If _fmt_ is non-NULL, an error string
-payload is included in the response, constructed using printf(3)-style
-arguments.  The error string may be used to provide a more
-detailed error message than can be conveyed via _errnum_.
+_errnum_ must be non-zero.  If _errmsg_ is non-NULL, an error string
+payload is included in the response.  The error string may be used to
+provide a more detailed error message than can be conveyed via _errnum_.
 
 include::JSON_PACK.adoc[]
 

@@ -101,7 +101,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 
@@ -144,8 +144,8 @@ static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 /* Reactor loop is about to block.

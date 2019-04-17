@@ -112,7 +112,7 @@ static void testrpc1 (flux_t *h, flux_msg_handler_t *mh,
 {
     diag ("testrpc1 handler invoked");
     testrpc1_called = true;
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         diag ("flux_respond: %s", flux_strerror (errno));
 }
 

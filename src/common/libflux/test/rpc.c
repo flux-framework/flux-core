@@ -64,7 +64,7 @@ void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_respond (h, msg, 0, s) < 0)
+    if (flux_respond (h, msg, s) < 0)
         BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
     return;
 error:
@@ -83,7 +83,7 @@ void rpctest_echo_error_cb (flux_t *h, flux_msg_handler_t *mh,
                              "errnum", &errnum, "errstr", &errstr) < 0)
         goto error;
     if (errstr) {
-        if (flux_respond_error (h, msg, errnum, "Error: %s", errstr) < 0)
+        if (flux_respond_error (h, msg, errnum, errstr) < 0)
             BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
     }
     else {
@@ -126,7 +126,7 @@ void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
     return;
 error:
@@ -350,7 +350,7 @@ void test_error (flux_t *h)
     ok (flux_rpc_get (f, NULL) < 0 && errno == 69,
         "flux_rpc_get failed with expected errno");
     errstr = flux_future_error_string (f);
-    ok (errstr != NULL && !strcmp (errstr, "Error: Hello world"),
+    ok (errstr != NULL && !strcmp (errstr, "Hello world"),
         "flux_rpc_get_error returned expected error string");
     flux_future_destroy (f);
 

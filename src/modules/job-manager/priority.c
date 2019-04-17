@@ -47,7 +47,6 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     flux_jobid_t id;
     struct job *job;
     int priority;
-    int rc;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:i}",
@@ -89,15 +88,11 @@ void priority_handle_request (flux_t *h, struct queue *queue,
                              "priority", priority) < 0)
         goto error;
     queue_reorder (queue, job, job->queue_handle);
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (errstr)
-        rc = flux_respond_error (h, msg, errno, "%s", errstr);
-    else
-        rc = flux_respond_error (h, msg, errno, NULL);
-    if (rc < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 

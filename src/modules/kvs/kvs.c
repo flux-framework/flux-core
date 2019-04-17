@@ -395,8 +395,8 @@ static void getroot_completion (flux_future_t *f, void *arg)
     return;
 
 error:
-    if (flux_respond (ctx->h, msg, errno, NULL) < 0)
-        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (ctx->h, msg, errno, NULL) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
     flux_msg_destroy (msg);
     flux_future_destroy (f);
 }
@@ -1178,24 +1178,25 @@ static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
-    int rc = -1;
 
     /* irrelevant if root not initialized, drop cache entries */
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
+        goto error;
     size = cache_count_entries (ctx->cache);
     if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0) {
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
-        goto done;
+        goto error;
     }
     else
         flux_log (h, LOG_ALERT, "dropped %d of %d cache entries",
                   expcount, size);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -1457,38 +1458,30 @@ stall:
 static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    lookup_t *lh = NULL;
-    json_t *val = NULL;
+    lookup_t *lh;
+    json_t *val;
     bool stall = false;
-    int rc = -1;
 
     if (!(lh = lookup_common (h, mh, msg, arg, lookup_request_cb,
                               &stall))) {
         if (stall)
-            goto stall;
-        goto done;
+            return;
+        goto error;
     }
 
     if (!(val = lookup_get_value (lh))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
-
-    if (flux_respond_pack (h, msg, "{ s:O }",
-                           "val", val) < 0) {
+    if (flux_respond_pack (h, msg, "{ s:O }", "val", val) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
-
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    }
     lookup_destroy (lh);
-stall:
     json_decref (val);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    lookup_destroy (lh);
 }
 
 /* similar to kvs.lookup, but root_ref / root_seq returned to caller.
@@ -1501,18 +1494,17 @@ stall:
 static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
-    lookup_t *lh = NULL;
+    lookup_t *lh;
     json_t *val = NULL;
-    const char *root_ref = NULL;
-    int root_seq = 0;
+    const char *root_ref;
+    int root_seq;
     bool stall = false;
-    int rc = -1;
 
     if (!(lh = lookup_common (h, mh, msg, arg, lookup_plus_request_cb,
                               &stall))) {
         if (stall)
-            goto stall;
-        goto done;
+            return;
+        goto error;
     }
 
     root_ref = lookup_get_root_ref (lh);
@@ -1521,38 +1513,25 @@ static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
     assert (root_seq >= 0);
 
     if (!(val = lookup_get_value (lh))) {
-        errno = ENOENT;
-        goto done;
+        if (flux_respond_pack (h, msg, "{ s:i s:i s:s }",
+                               "errno", ENOENT,
+                               "rootseq", root_seq,
+                               "rootref", root_ref) < 0)
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
-
-    if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
-                           "val", val,
-                           "rootseq", root_seq,
-                           "rootref", root_ref) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
-
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (errno == ENOENT) {
-            if (flux_respond_pack (h, msg, "{ s:i s:i s:s }",
-                                   "errno", errno,
-                                   "rootseq", root_seq,
-                                   "rootref", root_ref) < 0) {
-                flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-                goto done;
-            }
-        }
-        else {
-            if (flux_respond (h, msg, errno, NULL) < 0)
-                flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-        }
+    else {
+        if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
+                               "val", val,
+                               "rootseq", root_seq,
+                               "rootref", root_ref) < 0)
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
     lookup_destroy (lh);
-stall:
     json_decref (val);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 
@@ -1563,14 +1542,14 @@ static int finalize_transaction_req (treq_t *tr,
     struct kvs_cb_data *cbd = data;
 
     if (cbd->errnum) {
-        if (flux_respond (cbd->ctx->h, req, cbd->errnum, NULL) < 0)
-            flux_log_error (cbd->ctx->h, "%s: flux_respond", __FUNCTION__);
+        if (flux_respond_error (cbd->ctx->h, req, cbd->errnum, NULL) < 0)
+            flux_log_error (cbd->ctx->h, "%s: flux_respond_error", __FUNCTION__);
     }
     else {
         if (flux_respond_pack (cbd->ctx->h, req, "{ s:s s:i }",
                                "rootref", cbd->root->ref,
                                "rootseq", cbd->root->seq) < 0)
-            flux_log_error (cbd->ctx->h, "%s: flux_respond", __FUNCTION__);
+            flux_log_error (cbd->ctx->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
     return 0;
@@ -1680,7 +1659,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
                           commit_request_cb,
                           &stall))) {
         if (stall)
-            goto stall;
+            return;
         goto error;
     }
 
@@ -1737,10 +1716,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-stall:
-    return;
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 
@@ -1944,8 +1921,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 stall:
     return;
 }
@@ -1971,7 +1948,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(root = getroot (ctx, ns, mh, msg, NULL, sync_request_cb,
                           &stall))) {
         if (stall)
-            goto stall;
+            return;
         goto error;
     }
 
@@ -1985,18 +1962,14 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", root->seq,
-                           "rootref", root->ref) < 0) {
+                           "rootref", root->ref) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     return;
 
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-stall:
-    return;
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2031,7 +2004,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (!(root = getroot (ctx, ns, mh, msg, NULL,
                               getroot_request_cb, &stall))) {
             if (stall)
-                goto done;
+                return;
             goto error;
         }
     }
@@ -2041,17 +2014,12 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
                            "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
-                           "flags", root->flags) < 0) {
+                           "flags", root->flags) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
-
-done:
     return;
-
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2294,16 +2262,15 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     tstat_t ts = { .min = 0.0, .max = 0.0, .M = 0.0, .S = 0.0, .newM = 0.0,
                    .newS = 0.0, .n = 0 };
     int size = 0, incomplete = 0, dirty = 0;
-    int rc = -1;
     double scale = 1E-3;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
+        goto error;
 
     /* if no roots are initialized, respond with all zeroes as stats */
     if (kvsroot_mgr_root_count (ctx->krm) > 0) {
         if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
-            goto done;
+            goto error;
     }
 
     if (!(tstats = json_pack ("{ s:i s:f s:f s:f s:f }",
@@ -2311,30 +2278,24 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                               "min", tstat_min (&ts)*scale,
                               "mean", tstat_mean (&ts)*scale,
                               "stddev", tstat_stddev (&ts)*scale,
-                              "max", tstat_max (&ts)*scale))) {
-        errno = ENOMEM;
-        goto done;
-    }
+                              "max", tstat_max (&ts)*scale)))
+        goto nomem;
 
     if (!(cstats = json_pack ("{ s:f s:O s:i s:i s:i }",
                               "obj size total (MiB)", (double)size/1048576,
                               "obj size (KiB)", tstats,
                               "#obj dirty", dirty,
                               "#obj incomplete", incomplete,
-                              "#faults", ctx->faults))) {
-        errno = ENOMEM;
-        goto done;
-    }
+                              "#faults", ctx->faults)))
+        goto nomem;
 
-    if (!(nsstats = json_object ())) {
-        errno = ENOMEM;
-        goto done;
-    }
+    if (!(nsstats = json_object ()))
+        goto nomem;
 
     if (kvsroot_mgr_root_count (ctx->krm) > 0) {
         if (kvsroot_mgr_iter_roots (ctx->krm, stats_get_root_cb, nsstats) < 0) {
             flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
-            goto done;
+            goto error;
         }
     }
     else {
@@ -2345,28 +2306,29 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                              "#no-op stores", 0,
                              "#transactions", 0,
                              "#readytransactions", 0,
-                             "store revision", 0))) {
-            errno = ENOMEM;
-            goto done;
-        }
+                             "store revision", 0)))
+            goto nomem;
 
-        json_object_set_new (nsstats, KVS_PRIMARY_NAMESPACE, s);
+        if (json_object_set_new (nsstats, KVS_PRIMARY_NAMESPACE, s) < 0) {
+            json_decref (s);
+            goto nomem;
+        }
     }
 
     if (flux_respond_pack (h, msg,
                            "{ s:O s:O }",
                            "cache", cstats,
-                           "namespace", nsstats) < 0) {
+                           "namespace", nsstats) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
-
-    rc = 0;
- done:
-    if (rc < 0) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    }
+    json_decref (tstats);
+    json_decref (cstats);
+    json_decref (nsstats);
+    return;
+nomem:
+    errno = ENOMEM;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (tstats);
     json_decref (cstats);
     json_decref (nsstats);
@@ -2401,7 +2363,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     stats_clear (ctx);
 
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
@@ -2518,10 +2480,12 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (namespace_create (ctx, ns, owner, flags) < 0)
         goto error;
 
-    errno = 0;
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static int root_remove_process_transactions (treq_t *tr, void *data)
@@ -2648,10 +2612,12 @@ static void namespace_remove_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    errno = 0;
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void namespace_removed_event_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2697,32 +2663,27 @@ static void namespace_list_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     json_t *namespaces = NULL;
-    int rc = -1;
 
-    if (!(namespaces = json_array ())) {
-        errno = ENOMEM;
-        goto done;
-    }
+    if (!(namespaces = json_array ()))
+        goto nomem;
 
     if (kvsroot_mgr_iter_roots (ctx->krm, namespace_list_cb,
                                 namespaces) < 0) {
         flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
-        goto done;
+        goto error;
     }
 
     if (flux_respond_pack (h, msg, "{ s:O }",
                            "namespaces",
-                           namespaces) < 0) {
+                           namespaces) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto done;
-    }
-
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    }
+    json_decref (namespaces);
+    return;
+nomem:
+    errno = ENOMEM;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (namespaces);
 }
 
@@ -2740,12 +2701,11 @@ static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *ns = NULL;
     struct kvsroot *root;
     bool stall = false;
-    int rc = -1;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }",
                              "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
-        goto done;
+        goto error;
     }
 
     if (!(root = getroot (ctx,
@@ -2757,7 +2717,7 @@ static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
                           &stall))) {
         if (stall)
             return;
-        goto done;
+        goto error;
     }
 
     root->setroot_pause = true;
@@ -2765,14 +2725,16 @@ static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!root->setroot_queue) {
         if (!(root->setroot_queue = zlist_new ())) {
             errno = ENOMEM;
-            goto done;
+            goto error;
         }
     }
 
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static void setroot_unpause_process_msg (kvs_ctx_t *ctx, struct kvsroot *root,
@@ -2811,12 +2773,11 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     flux_msg_t *m;
     bool stall = false;
-    int rc = -1;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }",
                              "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
-        goto done;
+        goto error;
     }
 
     if (!(root = getroot (ctx,
@@ -2828,25 +2789,24 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
                           &stall))) {
         if (stall)
             return;
-        goto done;
+        goto error;
     }
 
     root->setroot_pause = false;
 
-    /* user never called pause */
-    if (!root->setroot_queue)
-        goto out;
-
-    while ((m = zlist_pop (root->setroot_queue))) {
-        setroot_unpause_process_msg (ctx, root, m);
-        flux_msg_destroy (m);
+    /* user never called pause if !root->setroot_queue*/
+    if (root->setroot_queue) {
+        while ((m = zlist_pop (root->setroot_queue))) {
+            setroot_unpause_process_msg (ctx, root, m);
+            flux_msg_destroy (m);
+        }
     }
-
-out:
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 static const struct flux_msg_handler_spec htab[] = {

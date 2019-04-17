@@ -43,11 +43,11 @@ static void start_cb (flux_t *h, flux_msg_handler_t *mh,
     errno = ENOSYS;
     goto error;
 #endif
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 
@@ -68,11 +68,11 @@ static void dump_cb (flux_t *h, flux_msg_handler_t *mh,
     errno = ENOSYS;
     goto error;
 #endif
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 
@@ -91,11 +91,11 @@ static void stop_cb (flux_t *h, flux_msg_handler_t *mh,
     errno = ENOSYS;
     goto error;
 #endif /* WITH_TCMALLOC */
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 

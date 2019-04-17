@@ -4,7 +4,7 @@ import flux
 
 def echo_cb(h, typemask, message, arg):
     h.log(syslog.LOG_INFO, "in cb, args:{}".format((typemask, message, arg)))
-    h.respond(message, 0, message.payload_str)
+    h.respond(message, message.payload_str)
     return 0
 
 

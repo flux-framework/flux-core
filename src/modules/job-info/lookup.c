@@ -243,7 +243,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     if (!(data = json_dumps (o, JSON_COMPACT)))
         goto enomem;
 
-    if (flux_respond (ctx->h, l->msg, 0, data) < 0) {
+    if (flux_respond (ctx->h, l->msg, data) < 0) {
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
         goto error;
     }

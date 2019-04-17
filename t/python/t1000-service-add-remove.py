@@ -55,7 +55,7 @@ class TestServiceAddRemove(unittest.TestCase):
 
     def test_003_add_service_message_watcher(self):
         def service_cb(f, t, msg, arg):
-            rc = f.respond(msg, 0, msg.payload_str)
+            rc = f.respond(msg, msg.payload_str)
             self.assertEqual(rc, 0)
 
         self.f.watcher = self.f.msg_watcher_create(

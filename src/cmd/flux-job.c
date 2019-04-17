@@ -547,11 +547,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_submit (h, J ? J : jobspec, priority, flags)))
         log_err_exit ("flux_job_submit");
     if (flux_job_submit_get_id (f, &id) < 0) {
-        if (errno == ENOSYS)
-            log_msg_exit ("submit: job-ingest module is not loaded");
-        else
-            log_msg_exit ("%llu: %s", (unsigned long long)id,
-                          flux_future_error_string (f));
+        log_msg_exit ("%s", flux_future_error_string (f));
     }
     printf ("%llu\n", (unsigned long long)id);
     flux_future_destroy (f);

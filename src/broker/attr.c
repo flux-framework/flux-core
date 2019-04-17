@@ -325,7 +325,7 @@ void getattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
         FLUX_LOG_ERROR (h);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 
@@ -345,7 +345,7 @@ void setattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (attr_add (attrs, name, val, 0) < 0)
             goto error;
     }
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -363,7 +363,7 @@ void rmattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (attr_delete (attrs, name, false) < 0)
         goto error;
-    if (flux_respond (h, msg, 0, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -402,7 +402,7 @@ void lsattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
     json_decref (names);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
     json_decref (names);
 }

@@ -43,7 +43,7 @@ static void drain_complete_cb (struct queue *queue, void *arg)
     flux_msg_t *msg;
 
     while ((msg = zlist_pop (ctx->requests))) {
-        if (flux_respond (ctx->h, msg, 0, NULL) < 0)
+        if (flux_respond (ctx->h, msg, NULL) < 0)
             flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
         flux_msg_destroy (msg);
     }
@@ -91,7 +91,7 @@ static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         flux_msg_destroy (req);
     }
-    if (flux_respond (ctx->h, msg, 0, NULL) < 0)
+    if (flux_respond (ctx->h, msg, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
 }
 

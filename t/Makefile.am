@@ -185,6 +185,7 @@ check_PROGRAMS = \
 	kvs/waitcreate_cancel \
 	kvs/setrootevents \
 	request/treq \
+	request/rpc \
 	barrier/tbarrier \
 	reactor/reactorcat \
 	rexec/rexec \
@@ -330,6 +331,11 @@ kvs_setrootevents_LDADD = \
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
 request_treq_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+request_rpc_SOURCES = request/rpc.c
+request_rpc_CPPFLAGS = $(test_cppflags)
+request_rpc_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 module_parent_la_SOURCES = module/parent.c

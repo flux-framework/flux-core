@@ -15,6 +15,8 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
@@ -1144,4 +1146,37 @@ test_expect_success 'kvs: get --label works' '
 	flux kvs get --label test.ZZZ |grep test.ZZZ=42
 '
 
+#
+# Malformed requests
+#
+test_expect_success 'getroot request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.getroot 71 </dev/null
+'
+test_expect_success 'sync request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.sync 71 </dev/null
+'
+test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.lookup 71 </dev/null
+'
+test_expect_success 'lookup-plus request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.lookup-plus 71 </dev/null
+'
+test_expect_success 'commit request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.commit 71 </dev/null
+'
+test_expect_success 'fence request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.fence 71 </dev/null
+'
+test_expect_success 'namespace-create request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.namespace-create 71 </dev/null
+'
+test_expect_success 'namespace-remove request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.namespace-remove 71 </dev/null
+'
+test_expect_success 'setroot-pause request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.setroot-pause 71 </dev/null
+'
+test_expect_success 'setroot-unpause request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.setroot-unpause 71 </dev/null
+'
 test_done

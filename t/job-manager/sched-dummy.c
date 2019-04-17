@@ -175,7 +175,7 @@ void alloc_cb (flux_t *h, const flux_msg_t *msg,
     try_alloc (sc);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 

@@ -388,8 +388,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 cleanup:
     flux_cmd_destroy (cmd);
     free (env);
@@ -539,10 +539,12 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (s->h, "kill");
         goto error;
     }
-
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 char *subprocess_sender (flux_subprocess_t *p)
@@ -619,8 +621,8 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (procs);
 }
 

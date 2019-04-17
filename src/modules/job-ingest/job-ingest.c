@@ -201,7 +201,7 @@ static void batch_respond_error (struct batch *batch,
     flux_t *h = batch->ctx->h;
     struct job *job = zlist_first (batch->jobs);
     while (job) {
-        if (flux_respond_error (h, job->msg, errnum, "%s", errstr) < 0)
+        if (flux_respond_error (h, job->msg, errnum, errstr) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
         job = zlist_next (batch->jobs);
     }
@@ -270,9 +270,7 @@ static void batch_announce_continuation (flux_future_t *f, void *arg)
     flux_t *h = batch->ctx->h;
 
     if (flux_future_get (f, NULL) < 0) {
-        const char *errstr = flux_future_error_string (f);
-        batch_respond_error (batch, errno,
-                             errstr ? errstr : "job-manager request failed");
+        batch_respond_error (batch, errno, flux_future_error_string (f));
         if (batch_cleanup (batch) < 0)
             flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
     }
@@ -452,7 +450,6 @@ void validate_continuation (flux_future_t *f, void *arg)
     struct job_ingest_ctx *ctx = job->ctx;
     flux_t *h = flux_future_get_flux (f);
     const char *errmsg = NULL;
-    int rc;
 
     /* If jobspec validation failed, respond immediately to the user.
      */
@@ -476,11 +473,7 @@ void validate_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     return;
 error:
-    if (errmsg)
-        rc = flux_respond_error (h, job->msg, errno, "%s", errmsg);
-    else
-        rc = flux_respond_error (h, job->msg, errno, NULL);
-    if (rc < 0)
+    if (flux_respond_error (h, job->msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     job_destroy (job);
     flux_future_destroy (f);
@@ -498,7 +491,6 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     int64_t userid_signer;
     const char *mech_type;
     flux_future_t *f = NULL;
-    int rc;
 
     /* Parse request.
      */
@@ -583,11 +575,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     return;
 error:
-    if (errmsg)
-        rc = flux_respond_error (h, msg, errno, "%s", errmsg);
-    else
-        rc = flux_respond_error (h, msg, errno, NULL);
-    if (rc < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     job_destroy (job);
     flux_future_destroy (f);

@@ -42,8 +42,8 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
         diag ("%s: flux_respond_pack: %s", __FUNCTION__, strerror (errno));
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        diag ("%s: flux_respond: %s", __FUNCTION__, strerror (errno));
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        diag ("%s: flux_respond_error: %s", __FUNCTION__, strerror (errno));
 }
 
 void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -73,19 +73,18 @@ done:
 void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
     const char *json_str;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        errnum = errno;
-        goto done;
-    }
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!json_str) {
-        errnum = EPROTO;
-        goto done;
+        errno = EPROTO;
+        goto error;
     }
-done:
-    (void)flux_respond (h, msg, errnum, json_str);
+    (void)flux_respond (h, msg, json_str);
+    return;
+error:
+    (void)flux_respond_error (h, msg, errno, NULL);
 }
 
 /* no-payload response */
@@ -93,37 +92,31 @@ static int hello_count = 0;
 void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
     const char *json_str;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        errnum = errno;
-        goto done;
-    }
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (json_str) {
-        errnum = EPROTO;
-        goto done;
+        errno = EPROTO;
+        goto error;
     }
     hello_count++;
-done:
-    (void)flux_respond (h, msg, errnum, NULL);
+    (void)flux_respond (h, msg, NULL);
+    return;
+error:
+    (void)flux_respond_error (h, msg, errno, NULL);
 }
 
 void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
-    int errnum = 0;
-
-    if (flux_request_unpack (msg, NULL, "{ ! }") < 0) {
-        errnum = errno;
-        goto done;
-    }
+    if (flux_request_unpack (msg, NULL, "{ ! }") < 0)
+        goto error;
     hello_count++;
-done:
-    if (errnum)
-        (void)flux_respond (h, msg, errnum, NULL);
-    else
-        (void)flux_respond_pack (h, msg, "{}");
+    (void)flux_respond_pack (h, msg, "{}");
+    return;
+error:
+    (void)flux_respond_error (h, msg, errno, NULL);
 }
 
 static const struct flux_msg_handler_spec htab[] = {

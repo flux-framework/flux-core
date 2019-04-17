@@ -524,13 +524,13 @@ static void append_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (logbuf_append (logbuf, buf, len) < 0)
         goto error;
     if (matchtag != FLUX_MATCHTAG_NONE) {
-        if (flux_respond (h, msg, 0, NULL) < 0)
+        if (flux_respond (h, msg, NULL) < 0)
             log_err ("%s: error responding to log request", __FUNCTION__);
     }
     return;
 error:
     if (matchtag != FLUX_MATCHTAG_NONE) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
             log_err ("%s: error responding to log request", __FUNCTION__);
     }
 }
@@ -540,14 +540,14 @@ static void clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     logbuf_t *logbuf = arg;
     int seq;
-    int rc = -1;
 
     if (flux_request_unpack (msg, NULL, "{ s:i }", "seq", &seq) < 0)
-        goto done;
+        goto error;
     logbuf_clear (logbuf, seq);
-    rc = 0;
-done:
-    flux_respond (h, msg, rc < 0 ? errno : 0, NULL);
+    flux_respond (h, msg, NULL);
+    return;
+error:
+    flux_respond_error (h, msg, errno, NULL);
 }
 
 static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -570,14 +570,13 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         goto error;
     }
-    if (flux_respond_pack (h, msg, "{ s:i s:s# }",
-                                   "seq", seq,
-                                   "buf", buf, len) < 0)
-        goto error;
+    flux_respond_pack (h, msg, "{ s:i s:s# }",
+                               "seq", seq,
+                               "buf", buf, len);
     return;
 
 error:
-    flux_respond (h, msg, errno, NULL);
+    flux_respond_error (h, msg, errno, NULL);
 }
 
 static int cmp_sender (flux_msg_t *msg, const char *uuid)

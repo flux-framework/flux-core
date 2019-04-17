@@ -78,15 +78,15 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                                  userid, rolemask))) {
         goto error;
     }
-    if (flux_respond (h, msg, 0, resp_str) < 0)
+    if (flux_respond (h, msg, resp_str) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (route_str);
     free (full_route_str);
     free (resp_str);
     return;
 error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (route_str);
     free (full_route_str);
     free (resp_str);
