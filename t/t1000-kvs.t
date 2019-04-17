@@ -749,6 +749,66 @@ test_expect_success 'kvs: ls key. fails if key does not exist' '
 	flux kvs unlink -Rf $DIR &&
 	test_must_fail flux kvs ls $DIR.a
 '
+test_expect_success 'kvs: ls does not follow symlink with -d' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.foo=1 &&
+	flux kvs link $DIR.foo $DIR.link &&
+	flux kvs ls -d $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls does not follow symlink with -F' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.foo=1 &&
+	flux kvs link $DIR.foo $DIR.link &&
+	flux kvs ls -F $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs linkname when link points to value' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.foo=1 &&
+	flux kvs link $DIR.foo $DIR.link &&
+	flux kvs ls $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs linkname when link points to invalid target' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs link invalid $DIR.link &&
+	flux kvs ls $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs dir when link points to dir' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b=1 &&
+	flux kvs link $DIR.a $DIR.link &&
+	flux kvs ls $DIR.link >output &&
+	cat >expected <<-EOF &&
+	b
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs dir and header when link points to dir and -R' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b=1 &&
+	flux kvs link $DIR.a $DIR.link &&
+	flux kvs ls -R $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link:
+	b
+	EOF
+	test_cmp expected output
+'
 test_expect_success 'kvs: namespace create setup' '
 	flux kvs namespace create TESTLSNS
 '

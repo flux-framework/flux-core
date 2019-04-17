@@ -1510,12 +1510,42 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
+/* links are special.  If it points to a value, output the link name.
+ * If it points to a dir, output contents of the dir.  If it points to
+ * an illegal key, still output the link name. */
+static int categorize_link (flux_t *h, const char *ns, char *nkey,
+                            zlist_t *dirs, zlist_t *singles)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (h, ns, 0, nkey)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, NULL) < 0) {
+        if (errno == ENOENT) {
+            if (zlist_append (singles, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else if (errno == EISDIR) {
+            if (zlist_append (dirs, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else
+            log_err_exit ("%s", nkey);
+    }
+    else {
+        if (zlist_append (singles, nkey) < 0)
+            log_err_exit ("zlist_append");
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 /* Put key in 'dirs' or 'singles' list, depending on whether
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
  */
 static int categorize_key (optparse_t *p, const char *ns, const char *key,
-                            zlist_t *dirs, zlist_t *singles)
+                           zlist_t *dirs, zlist_t *singles)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     flux_future_t *f;
@@ -1567,8 +1597,16 @@ static int categorize_key (optparse_t *p, const char *ns, const char *key,
         }
         if (optparse_hasopt (p, "classify"))
             strcat (nkey, "@");
-        if (zlist_append (singles, nkey) < 0)
-            log_err_exit ("zlist_append");
+        /* do not follow symlink under several circumstances */
+        if (optparse_hasopt (p, "classify")
+            || optparse_hasopt (p, "directory")) {
+            if (zlist_append (singles, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else {
+            if (categorize_link (h, ns, nkey, dirs, singles) < 0)
+                goto error;
+        }
     }
     zlist_sort (singles, sort_cmp);
     zlist_sort (dirs, sort_cmp);
