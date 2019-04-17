@@ -749,6 +749,27 @@ test_expect_success 'kvs: ls key. fails if key does not exist' '
 	flux kvs unlink -Rf $DIR &&
 	test_must_fail flux kvs ls $DIR.a
 '
+test_expect_success 'kvs: namespace create setup' '
+	flux kvs namespace create TESTLSNS
+'
+test_expect_success 'kvs: ls --namespace -1F DIR works' '
+	flux kvs unlink --namespace=TESTLSNS -Rf $DIR.ns &&
+	flux kvs put --namespace=TESTLSNS --json $DIR.ns.a=69 &&
+	flux kvs mkdir --namespace=TESTLSNS $DIR.ns.b &&
+	flux kvs link --namespace=TESTLSNS b $DIR.ns.c &&
+	flux kvs link --namespace=TESTLSNS --target-namespace=foo c $DIR.ns.d &&
+	flux kvs ls --namespace=TESTLSNS -1F $DIR.ns >output &&
+	cat >expected <<-EOF &&
+	a
+	b.
+	c@
+	d@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: namespace remove cleanup' '
+	flux kvs namespace remove TESTLSNS
+'
 
 #
 # link/readlink tests

@@ -1514,7 +1514,7 @@ static int sort_cmp (void *item1, void *item2)
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
  */
-static int categorize_key (optparse_t *p, const char *key,
+static int categorize_key (optparse_t *p, const char *ns, const char *key,
                             zlist_t *dirs, zlist_t *singles)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
@@ -1533,7 +1533,7 @@ static int categorize_key (optparse_t *p, const char *key,
         nkey[strlen (nkey) - 1] = '\0';
         require_directory = true;
     }
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_TREEOBJ, nkey)))
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_TREEOBJ, nkey)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         fprintf (stderr, "%s: %s\n", nkey, flux_strerror (errno));
@@ -1609,11 +1609,11 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
         log_err_exit ("zlist_new");
 
     if (optindex == argc) {
-        if (categorize_key (p, ".", dirs, singles) < 0)
+        if (categorize_key (p, ns, ".", dirs, singles) < 0)
             rc = -1;
     }
     while (optindex < argc) {
-        if (categorize_key (p, argv[optindex++], dirs, singles) < 0)
+        if (categorize_key (p, ns, argv[optindex++], dirs, singles) < 0)
             rc = -1;
     }
     if (zlist_size (singles) > 0) {
