@@ -246,23 +246,20 @@ struct chained_future {
 };
 
 /*
- *  Continuation for chained futures: fulfill future `next` immediately
- *   with the result from `f`. Since a result freed by destruction of
- *   `f` will now be placed into `next`, the `next` future must steal
- *   a reference to `f`, thus we place `f` in the aux hash.
+ *  Fulfill "next" future in a chain with the fulfilled future `f`.
  */
 static void fulfill_next (flux_future_t *f, flux_future_t *next)
 {
-    void *result;
-    /*  Tie destruction of future `f` to future `next` since we
-     *   are fulfilling `next` via `f`
+    /* NB: flux_future_fulfill_with(3) takes a reference to `f` on success.
+     *  Since this function serves as an internal callback for `f` as a
+     *  result of flux_future_continue(3), we destroy the implicit
+     *  reference taken by flux_future_continue(3) here, since the
+     *  next callback the user will see will be for the future `next`.
      */
-    flux_future_aux_set (next, NULL, f, (flux_free_f) flux_future_destroy);
-
-    if (flux_future_get (f, (const void **)&result) < 0)
-        flux_future_fulfill_error (next, errno, NULL);
-    else
-        flux_future_fulfill (next, result, NULL);
+    if (flux_future_fulfill_with (next, f) < 0)
+        flux_future_fatal_error (next, errno,
+            "fulfill_next: flux_future_fulfill_with failed");
+    flux_future_destroy (f);
 }
 
 /*  Callback for chained continuations. Obtains the result of the completed
