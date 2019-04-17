@@ -4,6 +4,8 @@ test_description='Test basic flux aggreagation via aggregator module'
 
 . `dirname $0`/sharness.sh
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_under_flux 8
 
 #  Set path to jq
@@ -77,6 +79,10 @@ test_expect_success 'flux-aggregate: --fwd-count works' '
      "flux aggregate -t10 -c \$((1+\$(flux getattr tbon.descendants))) test 1" &&
     kvs_json_check test \
         ".count == 8 and .total == 8 and .min == 1 and .max == 1"
+'
+
+test_expect_success 'push request with empty payload fails with EPROTO(71)' '
+	${RPC} aggregator.push 71 </dev/null
 '
 
 test_done

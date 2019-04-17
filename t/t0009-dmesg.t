@@ -4,6 +4,8 @@ test_description='Test broker log ring buffer'
 
 . `dirname $0`/sharness.sh
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_under_flux 4 minimal
 
 test_expect_success 'flux getattr log-count counts log messages' '
@@ -85,6 +87,12 @@ test_expect_success 'embedded blank log messages are ignored' '
 test_expect_success 'logged non-ascii characters handled ok' '
 	/bin/echo -n -e "\xFF\xFE\x82\x00" | flux logger &&
 	flux dmesg
+'
+test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '
+	${RPC} log.dmesg 71 </dev/null
+'
+test_expect_success 'clear request with empty payload fails with EPROTO(71)' '
+	${RPC} log.clear 71 </dev/null
 '
 
 test_done

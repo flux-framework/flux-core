@@ -10,6 +10,8 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=4
 test_under_flux ${SIZE} minimal
@@ -308,7 +310,25 @@ test_expect_success 'flux cron sync can set epsilon' '
     flux cron sync --epsilon=42s cron.sync2 &&
     flux cron sync | grep 42.000s
 '
+
+test_expect_success 'create request with empty payload fails with EPROTO(71)' '
+	${RPC} cron.create 71 </dev/null
+'
+test_expect_success 'delete request with empty payload fails with EPROTO(71)' '
+	${RPC} cron.delete 71 </dev/null
+'
+test_expect_success 'stop request with empty payload fails with EPROTO(71)' '
+	${RPC} cron.stop 71 </dev/null
+'
+test_expect_success 'start request with empty payload fails with EPROTO(71)' '
+	${RPC} cron.start 71 </dev/null
+'
+test_expect_success 'sync request with empty payload fails with EPROTO(71)' '
+	${RPC} cron.sync 71 </dev/null
+'
+
 test_expect_success 'flux module remove cron' '
     flux module remove cron
 '
+
 test_done
