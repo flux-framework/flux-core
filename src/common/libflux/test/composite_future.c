@@ -221,6 +221,11 @@ static void step3 (flux_future_t *f2, void *arg)
         "chained: step3: flux_future_get returns success");
     strcat (str, "-step3");
     flux_future_t *next = flux_future_create (NULL, NULL);
+    /* Set an aux member in the 'next' future here, so we can ensure
+     *  we'll have access to it from the chained future later fulfilled
+     *  by this one.
+     */
+    flux_future_aux_set (next, "test_aux", (void *) 0x42, NULL);
     flux_future_continue (f2, next);
     flux_future_fulfill (next, NULL, NULL);
     flux_future_destroy (f2);
@@ -251,6 +256,8 @@ static void test_basic_chained (flux_reactor_t *r)
         "chained: flux_future_wait_for step3 returns");
     ok (flux_future_get (f3, NULL) == 0,
         "chained: flux_future_get == 0");
+    ok (flux_future_aux_get (f3, "test_aux") == (void *) 0x42,
+        "chained: aux item set in prev future available in chained future");
     is (str, "step1-step2-step3",
         "chained: futures ran in correct order");
 
