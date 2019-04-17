@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test broker content service' 
+test_description='Test broker content service'
 
 . `dirname $0`/sharness.sh
 
@@ -22,7 +22,7 @@ test_expect_success 'store 100 blobs on rank 0' '
         for i in `seq 0 99`; do echo test$i | \
             flux content store >/dev/null; done &&
 	TOTAL=`flux module stats --type int --parse count content` &&
-        test $TOTAL -ge 100 
+        test $TOTAL -ge 100
 '
 
 # Write on rank 0, various size blobs
