@@ -389,6 +389,25 @@ test_expect_success 'kvs: empty directory remains after key removed' '
         flux kvs unlink $DIR.a &&
 	test_empty_directory $DIR
 '
+test_expect_success 'kvs: unlink works on link that points to invalid target' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs link invalid $DIR.link &&
+        flux kvs unlink $DIR.link
+'
+test_expect_success 'kvs: unlink works on link that points to invalid namespace' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs put $DIR.foo=1 &&
+        flux kvs link --target-namespace=invalid $DIR.foo $DIR.link &&
+        flux kvs unlink $DIR.link
+'
+test_expect_success 'kvs: unlink works on link with infinite cycle' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs link $DIR.a $DIR.b &&
+        flux kvs link $DIR.b $DIR.a &&
+        flux kvs unlink $DIR.a &&
+        flux kvs unlink $DIR.b &&
+	test_empty_directory $DIR
+'
 
 #
 # empty string corner case tests

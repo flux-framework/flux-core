@@ -930,34 +930,63 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-/* Some checks prior to unlinking key:
- * - fail if key does not exist (ENOENT) and fopt not specified or
- *   other fatal lookup error
- * - fail if key is a non-empty directory (ENOTEMPTY) and -R was not specified
- */
-static int unlink_safety_check (flux_t *h, const char *key, const char *ns,
-                                bool Ropt, bool fopt, bool *unlinkable)
+static int unlink_check_dir_empty (flux_t *h, const char *key, const char *ns)
 {
     flux_future_t *f;
     const flux_kvsdir_t *dir = NULL;
     int rc = -1;
 
-    *unlinkable = false;
-
     if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
         goto done;
-    if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
+        goto done;
+    if (flux_kvsdir_get_size (dir) > 0) {
+        errno = ENOTEMPTY;
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+/* Some checks prior to unlinking key:
+ * - fail if key does not exist (ENOENT) and fopt not specified or
+ *   other fatal lookup error
+ * - fail if key is a non-empty directory (ENOTEMPTY) and -R was not specified
+ * - if key is a link, a val, or a valref, we can always remove it.
+ */
+static int unlink_safety_check (flux_t *h, const char *key, const char *ns,
+                                bool Ropt, bool fopt, bool *unlinkable)
+{
+    flux_future_t *f;
+    const char *json_str;
+    json_t *treeobj = NULL;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_TREEOBJ, key)))
+        goto done;
+    if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         if (errno == ENOENT && fopt)
             goto out;
-        if (errno != ENOTDIR)
-            goto done;
+        goto done;
     }
-    else if (!Ropt) {
-        if (flux_kvsdir_get_size (dir) > 0) {
+    if (!(treeobj = treeobj_decode (json_str)))
+        log_err_exit ("%s: metadata decode error", key);
+    if (treeobj_is_dir (treeobj)) {
+        if (!Ropt && treeobj_get_count (treeobj) > 0) {
             errno = ENOTEMPTY;
             goto done;
         }
     }
+    else if (treeobj_is_dirref (treeobj)) {
+        if (!Ropt) {
+            /* have to do another lookup to resolve this dirref */
+            if (unlink_check_dir_empty (h, key, ns) < 0)
+                goto done;
+        }
+    }
+    /* else treeobj is symlink, val, or valref */
     *unlinkable = true;
 out:
     rc = 0;
