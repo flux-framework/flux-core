@@ -970,7 +970,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
                                              "id", &job->id,
                                              "userid", &job->userid) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
-        goto error;
+        return -1;
     }
     if (job_get_ns_name (job->ns, sizeof (job->ns), job->id) < 0) {
         jobinfo_fatal_error (job, errno, "failed to create ns name for job");
@@ -1003,6 +1003,9 @@ static void start_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (job_start (ctx, msg) < 0) {
         flux_log_error (h, "job_start");
+        /* The following "normal" RPC response will trigger the job-manager's
+         * teardown of the exec system interface.
+         */
         if (flux_respond_error (h, msg, errno, NULL) < 0)
             flux_log_error (h, "job-exec.start respond_error");
     }
