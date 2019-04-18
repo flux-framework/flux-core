@@ -191,6 +191,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              "internal", &internal) < 0
                 || flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
+        flux_respond_error (ctx->h, msg, errno, NULL);
         goto done;
     }
 
