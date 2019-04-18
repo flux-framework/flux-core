@@ -252,6 +252,42 @@ test_expect_success 'flux job wait-event --format=invalid fails' '
 	! flux job wait-event --format=invalid $jobid submit
 '
 
+test_expect_success 'flux job wait-event w/ match-context works (string w/ quotes)' '
+        jobid=$(submit_job) &&
+	flux job wait-event --match-context="type=\"cancel\"" $jobid exception > wait_event_context1.out &&
+        grep -q "exception" wait_event_context1.out &&
+        grep -q "type=\"cancel\"" wait_event_context1.out
+'
+
+test_expect_success 'flux job wait-event w/ match-context works (string w/o quotes)' '
+        jobid=$(submit_job) &&
+	flux job wait-event --match-context=type=cancel $jobid exception > wait_event_context2.out &&
+        grep -q "exception" wait_event_context2.out &&
+        grep -q "type=\"cancel\"" wait_event_context2.out
+'
+
+test_expect_success 'flux job wait-event w/ match-context works (int)' '
+        jobid=$(submit_job) &&
+	flux job wait-event --match-context=flags=0 $jobid submit > wait_event_context3.out &&
+        grep -q "submit" wait_event_context3.out &&
+        grep -q "flags=0" wait_event_context3.out
+'
+
+test_expect_success 'flux job wait-event w/ bad match-context fails (invalid key)' '
+        jobid=$(submit_job) &&
+        ! run_timeout 0.2 flux job wait-event --match-context=foo=bar $jobid exception
+'
+
+test_expect_success 'flux job wait-event w/ bad match-context fails (invalid value)' '
+        jobid=$(submit_job) &&
+        ! run_timeout 0.2 flux job wait-event --match-context=type=foo $jobid exception
+'
+
+test_expect_success 'flux job wait-event w/ bad match-context fails (invalid input)' '
+        jobid=$(submit_job) &&
+        ! flux job wait-event --match-context=foo $jobid exception
+'
+
 #
 # job info tests
 #

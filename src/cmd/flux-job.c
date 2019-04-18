@@ -29,6 +29,7 @@
 #if HAVE_FLUX_SECURITY
 #include <flux/security/sign.h>
 #endif
+#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job.h"
@@ -116,6 +117,9 @@ static struct optparse_option wait_event_opts[] =  {
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
       .usage = "timeout after DURATION",
     },
+    { .name = "match-context", .key = 'm', .has_arg = 1, .arginfo = "KEY=VAL",
+      .usage = "match key=val in context",
+    },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Do not output matched event",
     },
@@ -183,7 +187,7 @@ static struct optparse_subcommand subcommands[] = {
       eventlog_opts
     },
     { "wait-event",
-      "[-c text|json] [-t seconds] id event",
+      "[-c text|json] [-t seconds] [-m key=val] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
@@ -763,12 +767,62 @@ struct wait_event_ctx {
     flux_jobid_t id;
     bool got_event;
     const char *format;
+    char *context_key;
+    char *context_value;
 };
+
+bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
+{
+    void *iter;
+    bool match = false;
+
+    iter = json_object_iter (context);
+    while (iter && !match) {
+        const char *key = json_object_iter_key (iter);
+        json_t *value = json_object_iter_value (iter);
+        if (!strcmp (key, ctx->context_key)) {
+            char *str = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
+            if (!strcmp (str, ctx->context_value))
+                match = true;
+            free (str);
+        }
+        /* special case, json_dumps() will put quotes around string
+         * values.  Consider the case when user does not surround
+         * string value with quotes */
+        if (!match && json_is_string (value)) {
+            const char *str = json_string_value (value);
+            if (!strcmp (str, ctx->context_value))
+                match = true;
+        }
+        iter = json_object_iter_next (context, iter);
+    }
+    return match;
+}
+
+bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
+{
+    const char *name;
+    json_t *context = NULL;
+    bool match = false;
+
+    if (eventlog_entry_parse (event, NULL, &name, &context) < 0)
+        log_err_exit ("eventlog_entry_parse");
+
+    if (!strcmp (name, ctx->wait_event)) {
+        if (ctx->context_key) {
+            if (context)
+                match = wait_event_test_context (ctx, context);
+        }
+        else
+            match = true;
+    }
+
+    return match;
+}
 
 void wait_event_continuation (flux_future_t *f, void *arg)
 {
     struct wait_event_ctx *ctx = arg;
-    const char *name;
     json_t *o = NULL;
     const char *event;
 
@@ -798,10 +852,7 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     if (!(o = eventlog_entry_decode (event)))
         log_err_exit ("eventlog_entry_decode");
 
-    if (eventlog_entry_parse (o, NULL, &name, NULL) < 0)
-        log_err_exit ("eventlog_entry_parse");
-
-    if (!strcmp (name, ctx->wait_event)) {
+    if (wait_event_test (ctx, o)) {
         ctx->got_event = true;
         if (!optparse_hasopt (ctx->p, "quiet"))
             output_event (o, ctx->format);
@@ -827,11 +878,12 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_future_t *f;
     struct wait_event_ctx ctx = {0};
+    const char *str;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (argc - optindex != 2) {
+    if ((argc - optindex) != 2) {
         optparse_print_usage (p);
         exit (1);
     }
@@ -843,6 +895,13 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     if (strcasecmp (ctx.format, "text")
         && strcasecmp (ctx.format, "json"))
         log_msg_exit ("invalid format type");
+    if ((str = optparse_get_str (p, "match-context", NULL))) {
+        ctx.context_key = xstrdup (str);
+        ctx.context_value = strchr (ctx.context_key, '=');
+        if (!ctx.context_value)
+            log_msg_exit ("must specify a context test as key=value");
+        *ctx.context_value++ = '\0';
+    }
 
     if (!(f = flux_job_event_watch (h, ctx.id)))
         log_err_exit ("flux_job_event_watch");
@@ -851,6 +910,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    free (ctx.context_key);
     flux_close (h);
     return (0);
 }
