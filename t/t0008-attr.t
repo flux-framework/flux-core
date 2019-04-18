@@ -8,6 +8,8 @@ test_description='Test broker attributes'
 
 test_under_flux 1 minimal
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'flux getattr rank works' '
 	ATTR_VAL=`flux getattr rank` &&
 	test "${ATTR_VAL}" -eq 0
@@ -47,6 +49,15 @@ test_expect_success 'flux lsattr with extra argument fails' '
 '
 test_expect_success 'flux getattr with no attribute argument fails' '
 	test_must_fail flux getattr
+'
+test_expect_success 'get request with empty payload fails with EPROTO(71)' '
+	${RPC} attr.get 71 </dev/null
+'
+test_expect_success 'set request with empty payload fails with EPROTO(71)' '
+	${RPC} attr.set 71 </dev/null
+'
+test_expect_success 'rm request with empty payload fails with EPROTO(71)' '
+	${RPC} attr.rm 71 </dev/null
 '
 
 test_done

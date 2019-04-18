@@ -19,6 +19,7 @@ flux setattr log-stderr-level 1
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J=${JOBSPEC}/y2j.py
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 DUMMY_EVENTLOG=test.ingest.eventlog
 
@@ -130,6 +131,10 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job submit \
 		--sign-type=none basic.json 2>badrole.out &&
 	grep -q "only instance owner" badrole.out
+'
+
+test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
+	${RPC} job-ingest.submit 71 </dev/null
 '
 
 test_expect_success 'job-ingest: remove modules' '

@@ -14,6 +14,8 @@ test_under_flux ${SIZE} minimal
 tbarrier="${FLUX_BUILD_DIR}/t/barrier/tbarrier"
 test "$verbose" = "t" || tbarrier="${tbarrier} -q"
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'barrier: load barrier module' '
 	flux module load -r all barrier
 '
@@ -48,7 +50,9 @@ test_expect_success 'barrier: succeeds with name=NULL inside SLURM step' '
         SLURM_STEPID=1 && export SLURM_STEPID &&
 	flux exec -n ${tbarrier} --nprocs ${SIZE}
 '
-
+test_expect_success 'enter request with empty payload fails with EPROTO(71)' '
+	${RPC} barrier.enter 71 </dev/null
+'
 test_expect_success 'barrier: remove barrier module' '
 	flux module remove -r all barrier
 '

@@ -11,6 +11,8 @@ SIZE=4
 LASTRANK=$((SIZE-1))
 test_under_flux ${SIZE} kvs
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'event: can publish' '
 	run_timeout 5 \
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
@@ -55,5 +57,11 @@ test_expect_success 'heaptrace start' '
 	heaptrace_error_check stop
 '
 
+test_expect_success 'heaptrace.start request with empty payload fails with EPROTO(71)' '
+	${RPC} heaptrace.start 71 </dev/null
+'
+test_expect_success 'heaptrace.dump request with empty payload fails with EPROTO(71)' '
+	${RPC} heaptrace.dump 71 </dev/null
+'
 
 test_done

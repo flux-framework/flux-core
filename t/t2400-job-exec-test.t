@@ -13,6 +13,7 @@ flux setattr log-stderr-level 1
 jq=$(which jq 2>/dev/null)
 test -n "$jq" && test_set_prereq HAVE_JQ
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
 
@@ -111,6 +112,9 @@ test_expect_success HAVE_JQ 'job-exec: exception during cleanup' '
 	flux job wait-event -t 2.5 ${jobid} clean &&
 	exec_eventlog $jobid > exec.eventlog.$jobid &&
 	grep "cleanup\.finish " exec.eventlog.$jobid
+'
+test_expect_success 'start request with empty payload fails with EPROTO(71)' '
+	${RPC} job-exec.start 71 </dev/null
 '
 test_expect_success 'job-exec: remove sched-simple,job-exec modules' '
 	flux module remove -r 0 sched-simple &&

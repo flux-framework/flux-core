@@ -8,6 +8,8 @@ test_description='Test KVS get --watch && --waitcreate'
 
 test_under_flux 4 kvs
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
 test_expect_success 'flux kvs get --watch --count=1 works' '
@@ -660,4 +662,7 @@ test_expect_success 'flux kvs get --watch allows owner access to guest ns' '
 	flux kvs namespace remove testns4
 '
 
+test_expect_success 'kvs-watch.lookup request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs-watch.lookup 71 </dev/null
+'
 test_done
