@@ -10,6 +10,13 @@ Verify basic request/response/rpc handling.
 . `dirname $0`/sharness.sh
 test_under_flux 2 minimal
 
+#  Set path to jq(1)
+#
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
+
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'flux_rpc(3) example runs' '
 	${FLUX_BUILD_DIR}/doc/man3/trpc
 '
@@ -96,6 +103,24 @@ test_expect_success 'request: unloaded req module on rank 1' '
 
 test_expect_success 'request: unloaded req module on rank 0' '
 	flux module remove --rank=0 req
+'
+
+test_expect_success 'request: rpc test client works with no request payload' '
+	$RPC attr.list </dev/null >attr.list.out &&
+		test -s attr.list.out
+'
+test_expect_success HAVE_JQ 'request: rpc test client works with request payload' '
+	$jq -j -c -n  "{name:\"rank\"}" | $RPC attr.get >attr.get.out &&
+		test -s attr.get.out
+'
+test_expect_success 'request: rpc test client handles expected failure' '
+	$RPC attr.get 71 </dev/null
+'
+test_expect_success HAVE_JQ 'request: rpc test client handles expected failure other than EPROTO' '
+	$jq -j -c -n  "{name:\"noexist\"}" | $RPC attr.get 2
+'
+test_expect_success 'request: rpc test client handles unexpected failure' '
+	test_must_fail $RPC attr.get 2 </dev/null
 '
 
 test_done
