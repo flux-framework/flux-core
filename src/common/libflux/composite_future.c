@@ -233,6 +233,39 @@ const char *flux_future_next_child (flux_future_t *f)
 
 /*  Chained futures support: */
 
+/*
+ *  Chained futures implementation:
+ *
+ *  When a chained future is created using flux_future_and_then() or
+ *   flux_future_or_then() on a target future f, a chained_future structure
+ *   (see below) is created and embedded in the aux data for f. The call
+ *   returns an empty "next" future in the chain (cf->next) to the user.
+ *   If the user calls both and_then() and or_then(), the same cf->next
+ *   future is returned, since only one of these calls will be used.
+ *
+ *  The underlying then() callback for `f` is subsequently set to use 
+ *   chained_continuation() below, which will call `and_then()` on successful
+ *   fulfillment of f (aka `prev`) or or_then() on failure. These continuations
+ *   are passed `f, arg` as if a normal continuation was used with
+ *   flux_future_then(3). These callbacks may use one of 
+ *   flux_future_continue(3) or flux_future_continue_error(3) to schedule
+ *   fulfillment of the internal `cf->next` future based on a new
+ *   intermediate future created during the continuation (e.g. when a
+ *   new RPC call is started in the continuation, the future returned by
+ *   that call is considered the intermediate future which will eventually
+ *   fulfill cf->next).
+ *
+ *  flux_future_continue(f, f2) works by setting a then() callback
+ *   on f to call fulfill_next() on the cf->next embedded in f.
+ *   This results in `flux_future_fulfill_with (cf->next, f2)` immediately
+ *   when f2 is fulfilled.
+ *
+ *  All of this simply allows the "next" future returned by and_then()
+ *   or or_then() to be a placeholder for a future which can't be
+ *   created yet, because it requires the result of a previous, but not
+ *   yet complete, operation in the chain.
+ */
+
 struct continuation_info {
     flux_continuation_f cb;
     void *arg;
