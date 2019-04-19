@@ -930,34 +930,63 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-/* Some checks prior to unlinking key:
- * - fail if key does not exist (ENOENT) and fopt not specified or
- *   other fatal lookup error
- * - fail if key is a non-empty directory (ENOTEMPTY) and -R was not specified
- */
-static int unlink_safety_check (flux_t *h, const char *key, const char *ns,
-                                bool Ropt, bool fopt, bool *unlinkable)
+static int unlink_check_dir_empty (flux_t *h, const char *key, const char *ns)
 {
     flux_future_t *f;
     const flux_kvsdir_t *dir = NULL;
     int rc = -1;
 
-    *unlinkable = false;
-
     if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
         goto done;
-    if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
+        goto done;
+    if (flux_kvsdir_get_size (dir) > 0) {
+        errno = ENOTEMPTY;
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+/* Some checks prior to unlinking key:
+ * - fail if key does not exist (ENOENT) and fopt not specified or
+ *   other fatal lookup error
+ * - fail if key is a non-empty directory (ENOTEMPTY) and -R was not specified
+ * - if key is a link, a val, or a valref, we can always remove it.
+ */
+static int unlink_safety_check (flux_t *h, const char *key, const char *ns,
+                                bool Ropt, bool fopt, bool *unlinkable)
+{
+    flux_future_t *f;
+    const char *json_str;
+    json_t *treeobj = NULL;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_TREEOBJ, key)))
+        goto done;
+    if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         if (errno == ENOENT && fopt)
             goto out;
-        if (errno != ENOTDIR)
-            goto done;
+        goto done;
     }
-    else if (!Ropt) {
-        if (flux_kvsdir_get_size (dir) > 0) {
+    if (!(treeobj = treeobj_decode (json_str)))
+        log_err_exit ("%s: metadata decode error", key);
+    if (treeobj_is_dir (treeobj)) {
+        if (!Ropt && treeobj_get_count (treeobj) > 0) {
             errno = ENOTEMPTY;
             goto done;
         }
     }
+    else if (treeobj_is_dirref (treeobj)) {
+        if (!Ropt) {
+            /* have to do another lookup to resolve this dirref */
+            if (unlink_check_dir_empty (h, key, ns) < 0)
+                goto done;
+        }
+    }
+    /* else treeobj is symlink, val, or valref */
     *unlinkable = true;
 out:
     rc = 0;
@@ -1510,12 +1539,42 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
+/* links are special.  If it points to a value, output the link name.
+ * If it points to a dir, output contents of the dir.  If it points to
+ * an illegal key, still output the link name. */
+static int categorize_link (flux_t *h, const char *ns, char *nkey,
+                            zlist_t *dirs, zlist_t *singles)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (h, ns, 0, nkey)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, NULL) < 0) {
+        if (errno == ENOENT) {
+            if (zlist_append (singles, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else if (errno == EISDIR) {
+            if (zlist_append (dirs, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else
+            log_err_exit ("%s", nkey);
+    }
+    else {
+        if (zlist_append (singles, nkey) < 0)
+            log_err_exit ("zlist_append");
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 /* Put key in 'dirs' or 'singles' list, depending on whether
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
  */
-static int categorize_key (optparse_t *p, const char *key,
-                            zlist_t *dirs, zlist_t *singles)
+static int categorize_key (optparse_t *p, const char *ns, const char *key,
+                           zlist_t *dirs, zlist_t *singles)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     flux_future_t *f;
@@ -1533,7 +1592,7 @@ static int categorize_key (optparse_t *p, const char *key,
         nkey[strlen (nkey) - 1] = '\0';
         require_directory = true;
     }
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_TREEOBJ, nkey)))
+    if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_TREEOBJ, nkey)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         fprintf (stderr, "%s: %s\n", nkey, flux_strerror (errno));
@@ -1557,7 +1616,7 @@ static int categorize_key (optparse_t *p, const char *key,
             fprintf (stderr, "%s: Not a directory\n", nkey);
             goto error;
         }
-        if (zlist_append (singles, xstrdup (key)) < 0)
+        if (zlist_append (singles, nkey) < 0)
             log_err_exit ("zlist_append");
     }
     else if (treeobj_is_symlink (treeobj)) {
@@ -1567,8 +1626,16 @@ static int categorize_key (optparse_t *p, const char *key,
         }
         if (optparse_hasopt (p, "classify"))
             strcat (nkey, "@");
-        if (zlist_append (singles, nkey) < 0)
-            log_err_exit ("zlist_append");
+        /* do not follow symlink under several circumstances */
+        if (optparse_hasopt (p, "classify")
+            || optparse_hasopt (p, "directory")) {
+            if (zlist_append (singles, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else {
+            if (categorize_link (h, ns, nkey, dirs, singles) < 0)
+                goto error;
+        }
     }
     zlist_sort (singles, sort_cmp);
     zlist_sort (dirs, sort_cmp);
@@ -1609,11 +1676,11 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
         log_err_exit ("zlist_new");
 
     if (optindex == argc) {
-        if (categorize_key (p, ".", dirs, singles) < 0)
+        if (categorize_key (p, ns, ".", dirs, singles) < 0)
             rc = -1;
     }
     while (optindex < argc) {
-        if (categorize_key (p, argv[optindex++], dirs, singles) < 0)
+        if (categorize_key (p, ns, argv[optindex++], dirs, singles) < 0)
             rc = -1;
     }
     if (zlist_size (singles) > 0) {

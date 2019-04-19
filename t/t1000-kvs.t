@@ -389,6 +389,25 @@ test_expect_success 'kvs: empty directory remains after key removed' '
         flux kvs unlink $DIR.a &&
 	test_empty_directory $DIR
 '
+test_expect_success 'kvs: unlink works on link that points to invalid target' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs link invalid $DIR.link &&
+        flux kvs unlink $DIR.link
+'
+test_expect_success 'kvs: unlink works on link that points to invalid namespace' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs put $DIR.foo=1 &&
+        flux kvs link --target-namespace=invalid $DIR.foo $DIR.link &&
+        flux kvs unlink $DIR.link
+'
+test_expect_success 'kvs: unlink works on link with infinite cycle' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs link $DIR.a $DIR.b &&
+        flux kvs link $DIR.b $DIR.a &&
+        flux kvs unlink $DIR.a &&
+        flux kvs unlink $DIR.b &&
+	test_empty_directory $DIR
+'
 
 #
 # empty string corner case tests
@@ -653,7 +672,6 @@ test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c DIR.d works' '
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
 	flux kvs link --target-namespace=foo c $DIR.d &&
-	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c $DIR.d >output-1 &&
 	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c $DIR.d >output &&
 	cat >expected <<-EOF &&
 	$DIR.a
@@ -668,7 +686,6 @@ test_expect_success 'kvs: ls -1RF shows directory titles' '
 	flux kvs put --json $DIR.a=69 &&
 	flux kvs put --json $DIR.b.d=42 &&
 	flux kvs link b $DIR.c &&
-	flux kvs ls -1RF $DIR | grep : >output-2 &&
 	flux kvs ls -1RF $DIR | grep : | wc -l >output &&
 	cat >expected <<-EOF &&
 	2
@@ -750,6 +767,87 @@ test_expect_success 'kvs: ls key. fails if key is not a directory' '
 test_expect_success 'kvs: ls key. fails if key does not exist' '
 	flux kvs unlink -Rf $DIR &&
 	test_must_fail flux kvs ls $DIR.a
+'
+test_expect_success 'kvs: ls does not follow symlink with -d' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.foo=1 &&
+	flux kvs link $DIR.foo $DIR.link &&
+	flux kvs ls -d $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls does not follow symlink with -F' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.foo=1 &&
+	flux kvs link $DIR.foo $DIR.link &&
+	flux kvs ls -F $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs linkname when link points to value' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.foo=1 &&
+	flux kvs link $DIR.foo $DIR.link &&
+	flux kvs ls $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs linkname when link points to invalid target' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs link invalid $DIR.link &&
+	flux kvs ls $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs dir when link points to dir' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b=1 &&
+	flux kvs link $DIR.a $DIR.link &&
+	flux kvs ls $DIR.link >output &&
+	cat >expected <<-EOF &&
+	b
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls outputs dir and header when link points to dir and -R' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b=1 &&
+	flux kvs link $DIR.a $DIR.link &&
+	flux kvs ls -R $DIR.link >output &&
+	cat >expected <<-EOF &&
+	$DIR.link:
+	b
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: namespace create setup' '
+	flux kvs namespace create TESTLSNS
+'
+test_expect_success 'kvs: ls --namespace -1F DIR works' '
+	flux kvs unlink --namespace=TESTLSNS -Rf $DIR.ns &&
+	flux kvs put --namespace=TESTLSNS --json $DIR.ns.a=69 &&
+	flux kvs mkdir --namespace=TESTLSNS $DIR.ns.b &&
+	flux kvs link --namespace=TESTLSNS b $DIR.ns.c &&
+	flux kvs link --namespace=TESTLSNS --target-namespace=foo c $DIR.ns.d &&
+	flux kvs ls --namespace=TESTLSNS -1F $DIR.ns >output &&
+	cat >expected <<-EOF &&
+	a
+	b.
+	c@
+	d@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: namespace remove cleanup' '
+	flux kvs namespace remove TESTLSNS
 '
 
 #
