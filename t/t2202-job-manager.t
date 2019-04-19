@@ -10,6 +10,7 @@ flux setattr log-stderr-level 1
 
 DRAIN_UNDRAIN=${FLUX_SOURCE_DIR}/t/job-manager/drain-undrain.py
 DRAIN_CANCEL=${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 # List jobs without header
 list_jobs() {
@@ -286,6 +287,25 @@ test_expect_success 'job-manager: there is still one job in the queue' '
 test_expect_success 'job-manager: drain unblocks when last job is canceld' '
 	jobid=$(cut -f1 <list.out) &&
 	run_timeout 5 ${DRAIN_CANCEL} ${jobid}
+'
+
+test_expect_success 'list request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.list 71 </dev/null
+'
+test_expect_success 'raise request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.raise 71 </dev/null
+'
+test_expect_success 'priority request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.priority 71 </dev/null
+'
+test_expect_success 'sched-ready request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.sched-ready 71 </dev/null
+'
+test_expect_success 'exec-hello request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.exec-hello 71 </dev/null
+'
+test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.submit 71 </dev/null
 '
 
 test_expect_success 'job-manager: remove job-manager, job-info, job-ingest' '

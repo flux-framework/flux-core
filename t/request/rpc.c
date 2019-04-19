@@ -42,6 +42,8 @@ int main (int argc, char *argv[])
 
     if ((inlen = read_all (STDIN_FILENO, &inbuf)) < 0)
         log_err_exit ("read from stdin");
+    if (inlen > 0)  // flux stringified JSON payloads are sent with \0-term
+        inlen++;    //  and read_all() ensures inbuf has one, not acct in inlen
 
     if (!(f = flux_rpc_raw (h, topic, inbuf, inlen, FLUX_NODEID_ANY, 0)))
         log_err_exit ("flux_rpc_raw %s", topic);

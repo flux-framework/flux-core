@@ -8,6 +8,8 @@ SIZE=4
 LASTRANK=$(($SIZE-1))
 test_under_flux ${SIZE} minimal
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'heartbeat is received on all ranks' '
 	run_timeout 5 \
           flux exec -n flux event sub --count=1 hb >output_event_sub &&
@@ -75,6 +77,10 @@ test_expect_success 'publish private event with raw payload (synchronous)' '
 
 test_expect_success 'publish private event with no payload (synchronous,loopback)' '
 	run_timeout 5 flux event pub -p -s -l foo.bar
+'
+
+test_expect_success 'event.pub request with empty payload fails with EPROTO(71)' '
+	${RPC} event.pub 71 </dev/null
 '
 
 test_done

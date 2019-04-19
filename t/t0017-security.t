@@ -6,6 +6,8 @@ test_description='Test broker security'
 
 test_under_flux 4 minimal
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'simulated local connector auth failure returns EPERM' '
 	flux comms info &&
 	flux module debug --set 1 connector-local &&
@@ -97,9 +99,25 @@ test_expect_success 'flux user can add/lookup bin user by name' '
 	flux module remove userdb
 '
 
+test_expect_success 'load userdb module' '
+	flux module load userdb
+'
+
 test_expect_success 'flux user cannot add user with no roles' '
-	flux module load userdb &&
-	! flux user addrole 1234 0 &&
+	test_must_fail flux user addrole 1234 0
+'
+
+test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
+	${RPC} userdb.lookup 71 </dev/null
+'
+test_expect_success 'addrole request with empty payload fails with EPROTO(71)' '
+	${RPC} userdb.addrole 71 </dev/null
+'
+test_expect_success 'delrole request with empty payload fails with EPROTO(71)' '
+	${RPC} userdb.delrole 71 </dev/null
+'
+
+test_expect_success 'unload userdb module' '
 	flux module remove userdb
 '
 

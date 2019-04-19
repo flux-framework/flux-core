@@ -8,6 +8,8 @@ test_description='Test flux job info service'
 
 test_under_flux 4 job
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 # Usage: submit_job
 # To ensure robustness of tests despite future job manager changes,
 # cancel the job, and wait for clean event.
@@ -328,6 +330,13 @@ test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventl
 test_expect_success 'job-info stats works' '
         flux module stats job-info | grep "lookups" &&
         flux module stats job-info | grep "watchers"
+'
+
+test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
+	${RPC} job-info.lookup 71 </dev/null
+'
+test_expect_success 'eventlog-watch request with empty payload fails with EPROTO(71)' '
+	${RPC} job-info.eventlog-watch 71 </dev/null
 '
 
 test_done
