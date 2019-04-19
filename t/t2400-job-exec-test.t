@@ -63,7 +63,7 @@ test_expect_success 'job-exec: canceling job during execution works' '
 	flux job wait-event -t 2.5 ${jobid} finish | grep status=9 &&
 	flux job wait-event -t 2.5 ${jobid} release &&
 	flux job wait-event -t 2.5 ${jobid} clean &&
-	exec_eventlog $jobid | grep "complete status=9"
+	exec_eventlog $jobid | grep "complete" | grep "\"status\":9"
 '
 test_expect_success HAVE_JQ 'job-exec: mock exception during initialization' '
 	flux jobspec srun hostname | \
@@ -111,7 +111,7 @@ test_expect_success HAVE_JQ 'job-exec: exception during cleanup' '
 	flux job cancel ${jobid} &&
 	flux job wait-event -t 2.5 ${jobid} clean &&
 	exec_eventlog $jobid > exec.eventlog.$jobid &&
-	grep "cleanup\.finish " exec.eventlog.$jobid
+	grep "cleanup\.finish" exec.eventlog.$jobid
 '
 test_expect_success 'start request with empty payload fails with EPROTO(71)' '
 	${RPC} job-exec.start 71 </dev/null

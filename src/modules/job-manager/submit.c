@@ -24,6 +24,8 @@
 
 #include "submit.h"
 
+#include "src/common/libeventlog/eventlog.h"
+
 struct submit_ctx {
     flux_t *h;
     bool submit_disable;
@@ -107,56 +109,26 @@ error:
     return NULL;
 }
 
-char *create_submit_event (struct job *job)
-{
-    json_t *o = NULL;
-    char *context = NULL;
-    char *event = NULL;
-    int save_errno;
-
-    if (!(o = json_pack ("{ s:i s:i s:i }",
-                         "userid", job->userid,
-                         "priority", job->priority,
-                         "flags", job->flags)))
-        goto nomem;
-
-    if (!(context = json_dumps (o, JSON_COMPACT)))
-        goto nomem;
-
-    if (!(event = flux_kvs_event_encode_timestamp (job->t_submit,
-                                                   "submit",
-                                                   context)))
-        goto error;
-
-    json_decref (o);
-    free (context);
-    return event;
-
-nomem:
-    errno = ENOMEM;
-error:
-    save_errno = errno;
-    json_decref (o);
-    free (context);
-    free (event);
-    errno = save_errno;
-    return NULL;
-}
-
 /* Submit event requires special handling.  It cannot go through
- * event_job_post() because job-ingest already logged it.
+ * event_job_post_pack() because job-ingest already logged it.
  * However, we want to let the state machine choose the next state and action,
  * We instead re-create the event and run it directly through
  * event_job_update() and event_job_action().
  */
 int submit_post_event (struct event_ctx *event_ctx, struct job *job)
 {
-    char *event;
+    json_t *entry = NULL;
     int rv = -1;
 
-    if (!(event = create_submit_event (job)))
+    entry = eventlog_entry_pack (job->t_submit,
+                                 "submit",
+                                 "{ s:i s:i s:i }",
+                                 "userid", job->userid,
+                                 "priority", job->priority,
+                                 "flags", job->flags);
+    if (!entry)
         goto error;
-    if (event_job_update (job, event) < 0) /* NEW -> DEPEND */
+    if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
         goto error;
     if (event_batch_pub_state (event_ctx, job) < 0)
         goto error;
@@ -164,7 +136,7 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
         goto error;
     rv = 0;
  error:
-    free (event);
+    json_decref (entry);
     return rv;
 }
 

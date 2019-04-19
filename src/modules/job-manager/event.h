@@ -13,6 +13,7 @@
 
 #include <stdarg.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "job.h"
 #include "alloc.h"
@@ -30,7 +31,7 @@ int event_job_action (struct event_ctx *ctx, struct job *job);
 /* Call to update 'job' internal state based on 'event'.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int event_job_update (struct job *job, const char *event);
+int event_job_update (struct job *job, json_t *event);
 
 /* Add notification of job's state transition to its current state
  * to batch for publication.
@@ -43,14 +44,8 @@ int event_batch_pub_state (struct event_ctx *ctx, struct job *job);
  * The future passed in as an argument should not be destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int event_job_post (struct event_ctx *ctx, struct job *job,
-                    const char *name, const char *context);
-
-/* Same as above except event context is constructed from (fmt, ...)
- * using style of jansson's json_pack().
- */
 int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         const char *name, const char *fmt, ...);
+                         const char *name, const char *context_fmt, ...);
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
                               struct alloc_ctx *alloc_ctx);

@@ -18,7 +18,6 @@
 #include "kvs_getroot.h"
 #include "kvs_txn.h"
 #include "kvs_commit.h"
-#include "kvs_eventlog.h"
 #include "kvs_copy.h"
 
 #ifdef __cplusplus

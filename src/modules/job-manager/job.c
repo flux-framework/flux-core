@@ -13,9 +13,12 @@
 #endif
 #include <stdlib.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "job.h"
 #include "event.h"
+
+#include "src/common/libeventlog/eventlog.h"
 
 void job_decref (struct job *job)
 {
@@ -49,30 +52,33 @@ struct job *job_create (void)
 
 struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
 {
-    struct flux_kvs_eventlog *eventlog;
-    const char *event;
     struct job *job;
+    json_t *a = NULL;
+    size_t index;
+    json_t *event;
 
     if (!(job = job_create ()))
         return NULL;
     job->id = id;
-    if (!(eventlog = flux_kvs_eventlog_decode (s)))
+
+    if (!(a = eventlog_decode (s)))
         goto error;
-    event = flux_kvs_eventlog_first (eventlog);
-    while (event) {
+
+    json_array_foreach (a, index, event) {
         if (event_job_update (job, event) < 0)
             goto error;
-        event = flux_kvs_eventlog_next (eventlog);
     }
+
     if (job->state == FLUX_JOB_NEW)
         goto inval;
-    flux_kvs_eventlog_destroy (eventlog);
+
+    json_decref (a);
     return job;
 inval:
     errno = EINVAL;
 error:
     job_decref (job);
-    flux_kvs_eventlog_destroy (eventlog);
+    json_decref (a);
     return NULL;
 }
 
