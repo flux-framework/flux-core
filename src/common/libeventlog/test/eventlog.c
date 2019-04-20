@@ -40,6 +40,20 @@ void eventlog_entry_parsing (void)
         "eventlog_entry_parse fails with EINVAL on bad event");
     json_decref (event);
 
+    event = json_pack ("{ s:f s:s s:[s] }",
+                       "timestamp", 52.0,
+                       "name", "bar",
+                       "context",
+                       "foo", "bar");
+    if (!event)
+        BAIL_OUT ("Error creating test json object");
+
+    errno = 0;
+    ok (eventlog_entry_parse (event, NULL, NULL, NULL) < 0
+        && errno == EINVAL,
+        "eventlog_entry_parse fails with EINVAL on bad context");
+    json_decref (event);
+
     event = json_pack ("{ s:f s:s }",
                        "timestamp", 42.0,
                        "name", "foo");
