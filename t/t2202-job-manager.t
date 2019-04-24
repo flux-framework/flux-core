@@ -62,7 +62,7 @@ test_expect_success 'job-manager: queue list job with correct priority' '
 test_expect_success 'job-manager: raise non-fatal exception on job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
-        flux job wait-event --timeout=5.0 ${jobid} exception &&
+        flux job wait-event --timeout=5.0 --match-context=type=testing ${jobid} exception &&
 	flux job eventlog $jobid \
 		| grep exception >list1_exception.out &&
 	grep -q "type=\"testing\"" list1_exception.out &&
@@ -82,7 +82,7 @@ test_expect_success 'job-manager: queue contains 1 jobs' '
 test_expect_success 'job-manager: cancel job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job cancel ${jobid} &&
-        flux job wait-event --timeout=5.0 ${jobid} exception &&
+        flux job wait-event --timeout=5.0 --match-context=type=cancel ${jobid} exception &&
 	flux job eventlog $jobid | grep exception \
 		| grep severity=0 | grep "type=\"cancel\""
 '
