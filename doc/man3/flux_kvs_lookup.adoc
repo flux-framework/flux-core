@@ -96,8 +96,7 @@ lookup.
 
 `flux_kvs_lookup_cancel()` cancels a stream of lookup responses
 requested with FLUX_KVS_WATCH or a waiting lookup response with
-FLUX_KVS_WAITCREATE (see below). The future will be fulfilled with an
-ENODATA error once the cancel request is received and processed.
+FLUX_KVS_WAITCREATE.  See FLAGS below for additional information.
 
 These functions may be used asynchronously.  See `flux_future_then(3)` for
 details.
@@ -127,10 +126,13 @@ that can be passed to `flux_kvs_lookupat()`.
 FLUX_KVS_WATCH::
 After the initial response, continue to send responses to the lookup
 request each time _key_ is mentioned verbatim in a committed transaction.
-Responses continue until the namespace is removed, the key is removed,
-the lookup is canceled with `flux_kvs_lookup_cancel()`, or an error
-occurs.  `flux_future_reset()` should be used to consume a response
-and prepare for the next one.
+After receiving a response, `flux_future_reset()` should be used to
+consume a response and prepare for the next one.  Responses continue
+until the namespace is removed, the key is removed, the lookup is
+canceled with `flux_kvs_lookup_cancel()`, or an error occurs.  After
+calling `flux_kvs_lookup_cancel()`, callers should wait for the future
+to be fulfilled with an ENODATA error to ensure the cancel request has
+been received and processed.
 
 FLUX_KVS_WATCH_UNIQ::
 Specified along with FLUX_KVS_WATCH, this flag will alter watch
@@ -155,7 +157,10 @@ scenarios, such as a parent directory being altered.
 FLUX_KVS_WAITCREATE::
 If a KVS key does not exist, wait for it to exist before returning.
 This flag can be specified with or without FLUX_KVS_WATCH.  The lookup
-can be canceled with `flux_kvs_lookup_cancel()`.
+can be canceled with `flux_kvs_lookup_cancel()`.  After calling
+`flux_kvs_lookup_cancel()`, callers should wait for the future to be
+fulfilled with an ENODATA error to ensure the cancel request has been
+received and processed.
 
 RETURN VALUE
 ------------
