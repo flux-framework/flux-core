@@ -94,9 +94,10 @@ to the symlink, _ns_ is set to NULL.
 `flux_kvs_lookup_get_key()` accesses the key argument from the original
 lookup.
 
-`flux_kvs_lookup_cancel()` cancels a stream of lookup responses requested
-with FLUX_KVS_WATCH (see below).  The future will be fulfilled with
-an ENODATA error once the cancel request is received and processed.
+`flux_kvs_lookup_cancel()` cancels a stream of lookup responses
+requested with FLUX_KVS_WATCH or a waiting lookup response with
+FLUX_KVS_WAITCREATE (see below). The future will be fulfilled with an
+ENODATA error once the cancel request is received and processed.
 
 These functions may be used asynchronously.  See `flux_future_then(3)` for
 details.
@@ -150,6 +151,11 @@ behavior to respond when the value of the key being watched has
 changed.  Unlike FLUX_KVS_WATCH_UNIQ, the key being watched need not
 be mentioned in a transaction.  This may occur under several
 scenarios, such as a parent directory being altered.
+
+FLUX_KVS_WAITCREATE::
+If a KVS key does not exist, wait for it to exist before returning.
+This flag can be specified with or without FLUX_KVS_WATCH.  The lookup
+can be canceled with `flux_kvs_lookup_cancel()`.
 
 RETURN VALUE
 ------------
