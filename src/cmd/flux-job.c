@@ -652,6 +652,7 @@ int cmd_id (optparse_t *p, int argc, char **argv)
 struct entry_format {
     const char *format;
     const char *time_format;
+    double initial;
 };
 
 void entry_format_parse_options (optparse_t *p, struct entry_format *e)
@@ -683,7 +684,7 @@ static int event_timestr (struct entry_format *e, double timestamp,
         if (snprintf (buf, size, "%lf", timestamp) >= size)
             return -1;
     }
-    else { /* !strcasecmp (time_format, "iso") */
+    else if (!strcasecmp (e->time_format, "iso")) {
         time_t sec = timestamp;
         unsigned long usec = (timestamp - sec)*1E6;
         struct tm tm;
@@ -694,6 +695,13 @@ static int event_timestr (struct entry_format *e, double timestamp,
         size -= strlen (buf);
         buf += strlen (buf);
         if (snprintf (buf, size, ".%.6luZ", usec) >= size)
+            return -1;
+    }
+    else { /* !strcasecmp (e->time_format, "offset") */
+        if (e->initial == 0.)
+            e->initial = timestamp;
+        timestamp -= e->initial;
+        if (snprintf (buf, size, "%lf", timestamp) >= size)
             return -1;
     }
     return 0;
@@ -851,12 +859,16 @@ bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
 
 bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
 {
+    double timestamp;
     const char *name;
     json_t *context = NULL;
     bool match = false;
 
-    if (eventlog_entry_parse (event, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
+
+    if (ctx->e.initial == 0.)
+        ctx->e.initial = timestamp;
 
     if (!strcmp (name, ctx->wait_event)) {
         if (ctx->context_key) {

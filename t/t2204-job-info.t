@@ -134,6 +134,13 @@ test_expect_success 'flux job eventlog --time-format=iso works' '
         get_timestamp_field submit eventlog_time_format2.out | grep T | grep Z
 '
 
+test_expect_success 'flux job eventlog --time-format=offset works' '
+        jobid=$(submit_job) &&
+	flux job eventlog --time-format=offset $jobid > eventlog_time_format3.out &&
+        get_timestamp_field submit eventlog_time_format3.out | grep "0.000000" &&
+        get_timestamp_field exception eventlog_time_format3.out | grep -v "0.000000"
+'
+
 test_expect_success 'flux job eventlog --time-format=invalid fails works' '
         jobid=$(submit_job) &&
 	! flux job eventlog --time-format=invalid $jobid
@@ -285,6 +292,14 @@ test_expect_success 'flux job wait-event --time-format=iso works' '
         jobid=$(submit_job) &&
 	flux job wait-event --time-format=iso $jobid submit > wait_event_time_format2.out &&
         get_timestamp_field submit wait_event_time_format2.out | grep T | grep Z
+'
+
+test_expect_success 'flux job wait-event --time-format=offset works' '
+        jobid=$(submit_job) &&
+	flux job wait-event --time-format=offset $jobid submit > wait_event_time_format3A.out &&
+        get_timestamp_field submit wait_event_time_format3A.out | grep "0.000000" &&
+	flux job wait-event --time-format=offset $jobid exception > wait_event_time_format3B.out &&
+        get_timestamp_field exception wait_event_time_format3B.out | grep -v "0.000000"
 '
 
 test_expect_success 'flux job wait-event --time-format=invalid fails works' '
