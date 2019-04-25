@@ -1900,26 +1900,6 @@ void eventlog_unformatted_print (json_t *event)
     free (e);
 }
 
-/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
- * with microsecond precision
- */
-static int eventlog_timestr (double timestamp, char *buf, size_t size)
-{
-    time_t sec = timestamp;
-    unsigned long usec = (timestamp - sec)*1E6;
-    struct tm tm;
-
-    if (!gmtime_r (&sec, &tm))
-        return -1;
-    if (strftime (buf, size, "%FT%T", &tm) == 0)
-        return -1;
-    size -= strlen (buf);
-    buf += strlen (buf);
-    if (snprintf (buf, size, ".%.6luZ", usec) >= size)
-        return -1;
-    return 0;
-}
-
 /* print event with human-readable time
  */
 static void eventlog_prettyprint (json_t *event)
@@ -1928,23 +1908,19 @@ static void eventlog_prettyprint (json_t *event)
     const char *name;
     json_t *context = NULL;
     char *context_str = NULL;
-    char buf[64];
 
     if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
-
-    if (eventlog_timestr (timestamp, buf, sizeof (buf)) < 0)
-        log_msg_exit ("error converting timestamp to ISO 8601");
 
     if (context) {
         if (!(context_str = json_dumps (context, JSON_COMPACT)))
             log_msg_exit ("json_dumps");
     }
 
-    printf ("%s %s%s%s\n", buf,
-                           name,
-                           context_str ? " " : "",
-                           context_str ? context_str : "");
+    printf ("%lf %s%s%s\n", timestamp,
+                            name,
+                            context_str ? " " : "",
+                            context_str ? context_str : "");
 
     free (context_str);
     fflush (stdout);
