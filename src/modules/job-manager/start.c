@@ -106,6 +106,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "service", &service_name) < 0)
         goto error;
+    flux_log (h, LOG_DEBUG, "%s: %s said hello", __FUNCTION__, service_name);
     /* If existing exec service is loaded, ensure it is idle before
      * allowing new exec service to override.
      */
@@ -125,6 +126,8 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    flux_log (h, LOG_DEBUG, "%s: registering %s as the start topic",
+              __FUNCTION__, start->topic);
     /* Response has been sent, now take action on jobs in run state.
      */
     job = zhashx_first (ctx->active_jobs);
