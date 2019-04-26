@@ -32,6 +32,8 @@ struct simple_sched {
     struct rlist *rlist;    /* list of resources */
     struct jobreq *job;     /* currently processed job */
     schedutil_t *util_ctx;
+    bool idle;
+    flux_msg_t *quiescent_req;
 };
 
 static void jobreq_destroy (struct jobreq *job)
@@ -66,6 +68,7 @@ err:
 
 static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
 {
+    flux_msg_destroy (ss->quiescent_req);
     schedutil_destroy (ss->util_ctx);
     if (ss->job) {
         flux_respond_error (h, ss->job->msg, ENOSYS, "simple sched exiting");
@@ -81,6 +84,7 @@ static struct simple_sched * simple_sched_create (void)
     struct simple_sched *ss = calloc (1, sizeof (*ss));
     if (ss == NULL)
         return NULL;
+    ss->idle = true;
     return ss;
 }
 
@@ -267,6 +271,59 @@ err:
         flux_log_error (h, "flux_respond_error");
 }
 
+static inline int respond_to_quiescent (flux_t *h, const flux_msg_t *msg)
+{
+    const char *payload = NULL;
+    flux_msg_get_string (msg, &payload);
+    int rc = flux_respond (h, msg, payload);
+    flux_log (h, LOG_DEBUG, "responding to quiescent request");
+    return rc;
+}
+
+static void idle_cb (flux_t *h, void *arg)
+{
+    struct simple_sched *ss = arg;
+
+    ss->idle = true;
+    if (ss->quiescent_req) {
+        if (respond_to_quiescent (h, ss->quiescent_req) < 0)
+            flux_log (h, LOG_ERR,
+                      "idle_cb: error responding to quiescent request");
+        flux_msg_destroy (ss->quiescent_req);
+        ss->quiescent_req = NULL;
+    }
+}
+
+static void busy_cb (flux_t *h, void *arg)
+{
+    struct simple_sched *ss = arg;
+    ss->idle = false;
+}
+
+static void quiescent_cb (flux_t *h, flux_msg_handler_t *mh,
+                          const flux_msg_t *msg, void *arg)
+{
+    struct simple_sched *ss = arg;
+
+    // If the schedutil is idle, with no outstanding futures/messages, then
+    // respond immediately since this scheduler has no outstanding
+    // futures/messages itself.  Otherwise, delay responding until the `idle_cb`
+    // is called.
+    if (ss->idle) {
+        flux_log (h, LOG_DEBUG,
+                  "quiescent_cb: immediately responding to quiescent request "
+                  "since schedutil is idle");
+        if (respond_to_quiescent (h, msg) < 0)
+            flux_log (h, LOG_ERR,
+                      "quiescent_cb: error responding to quiescent request");
+    } else {
+        flux_log (h, LOG_DEBUG,
+                  "quiescent_cb: delaying response to quiescent request "
+                  "until schedutil is idle");
+        ss->quiescent_req = flux_msg_copy (msg, true);
+    }
+}
+
 static int simple_sched_init (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
@@ -336,6 +393,7 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "sched.quiescent", quiescent_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "sched-simple.status", status_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -359,8 +417,8 @@ int mod_main (flux_t *h, int argc, char **argv)
                                      alloc_cb,
                                      free_cb,
                                      exception_cb,
-                                     NULL,
-                                     NULL,
+                                     idle_cb,
+                                     busy_cb,
                                      ss);
     if (ss->util_ctx == NULL) {
         flux_log_error (h, "schedutil_create");

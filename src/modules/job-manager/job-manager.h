@@ -11,6 +11,8 @@
 #ifndef _FLUX_JOB_MANAGER_H
 #define _FLUX_JOB_MANAGER_H
 
+#include <czmq.h>
+
 struct job_manager {
     flux_t *h;
     flux_msg_handler_t **handlers;
@@ -21,6 +23,7 @@ struct job_manager {
     struct submit *submit;
     struct drain *drain;
     struct waitjob *wait;
+    struct simulator *simulator;
 };
 
 #endif /* !_FLUX_JOB_MANAGER_H */

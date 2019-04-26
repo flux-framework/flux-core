@@ -87,6 +87,7 @@
 #include "job.h"
 #include "alloc.h"
 #include "event.h"
+#include "simulator.h"
 
 typedef enum {
     SCHED_SINGLE,       // only allow one outstanding sched.alloc request
@@ -295,6 +296,7 @@ int alloc_request (struct alloc *alloc, struct job *job)
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
     flux_msg_destroy (msg);
+    sim_sending_sched_request (alloc->ctx->simulator);
     return 0;
 error:
     flux_msg_destroy (msg);
