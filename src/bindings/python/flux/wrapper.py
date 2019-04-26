@@ -15,6 +15,7 @@ number of assumptions about the error propagation and handling that flux uses.
 """
 import re
 import os
+import errno
 import inspect
 import six
 
@@ -212,7 +213,9 @@ class FunctionWrapper(object):
         if self.is_error(result):
             err = calling_object.ffi.errno
             if err != 0:
-                raise EnvironmentError(err, os.strerror(err))
+                raise EnvironmentError(
+                    err, "{}: {}".format(errno.errorcode[err], os.strerror(err))
+                )
 
         return result
 
