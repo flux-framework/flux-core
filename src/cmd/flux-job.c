@@ -107,12 +107,18 @@ static struct optparse_option eventlog_opts[] =  {
     { .name = "format", .key = 'f', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify output format: text, json",
     },
+    { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
+      .usage = "Specify time format: raw, iso, offset",
+    },
     OPTPARSE_TABLE_END
 };
 
 static struct optparse_option wait_event_opts[] =  {
     { .name = "format", .key = 'f', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify output format: text, json",
+    },
+    { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
+      .usage = "Specify time format: raw, iso, offset",
     },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
       .usage = "timeout after DURATION",
@@ -180,14 +186,14 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "[-c text|json] id",
+      "[-f text|json] [-T raw|iso|offset] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
       eventlog_opts
     },
     { "wait-event",
-      "[-c text|json] [-t seconds] [-m key=val] id event",
+      "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
@@ -643,22 +649,78 @@ int cmd_id (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
+struct entry_format {
+    const char *format;
+    const char *time_format;
+    double initial;
+};
+
+void entry_format_parse_options (optparse_t *p, struct entry_format *e)
+{
+    e->format = optparse_get_str (p, "format", "text");
+    if (strcasecmp (e->format, "text")
+        && strcasecmp (e->format, "json"))
+        log_msg_exit ("invalid format type");
+    e->time_format = optparse_get_str (p, "time-format", "raw");
+    if (strcasecmp (e->time_format, "raw")
+        && strcasecmp (e->time_format, "iso")
+        && strcasecmp (e->time_format, "offset"))
+        log_msg_exit ("invalid time-format type");
+}
+
 struct eventlog_ctx {
     optparse_t *p;
     flux_jobid_t id;
-    const char *format;
+    struct entry_format e;
 };
 
-void output_event_text (json_t *event)
+/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
+ * with microsecond precision
+ */
+static int event_timestr (struct entry_format *e, double timestamp,
+                          char *buf, size_t size)
+{
+    if (!strcasecmp (e->time_format, "raw")) {
+        if (snprintf (buf, size, "%lf", timestamp) >= size)
+            return -1;
+    }
+    else if (!strcasecmp (e->time_format, "iso")) {
+        time_t sec = timestamp;
+        unsigned long usec = (timestamp - sec)*1E6;
+        struct tm tm;
+        if (!gmtime_r (&sec, &tm))
+            return -1;
+        if (strftime (buf, size, "%FT%T", &tm) == 0)
+            return -1;
+        size -= strlen (buf);
+        buf += strlen (buf);
+        if (snprintf (buf, size, ".%.6luZ", usec) >= size)
+            return -1;
+    }
+    else { /* !strcasecmp (e->time_format, "offset") */
+        if (e->initial == 0.)
+            e->initial = timestamp;
+        timestamp -= e->initial;
+        if (snprintf (buf, size, "%lf", timestamp) >= size)
+            return -1;
+    }
+    return 0;
+}
+
+void output_event_text (struct entry_format *e, json_t *event)
 {
     double timestamp;
     const char *name;
     json_t *context = NULL;
+    char buf[128];
 
     if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    printf ("%lf %s", timestamp, name);
+    if (event_timestr (e, timestamp, buf, sizeof (buf)) < 0)
+        log_msg_exit ("error converting timestamp to ISO 8601");
+
+    printf ("%s %s", buf, name);
 
     if (context) {
         const char *key;
@@ -684,11 +746,11 @@ void output_event_json (json_t *event)
     free (e);
 }
 
-void output_event (json_t *event, const char *format)
+void output_event (struct entry_format *e, json_t *event)
 {
-    if (!strcasecmp (format, "text"))
-        output_event_text (event);
-    else if (!strcasecmp (format, "json"))
+    if (!strcasecmp (e->format, "text"))
+        output_event_text (e, event);
+    else /* !strcasecmp (e->format, "json") */
         output_event_json (event);
 }
 
@@ -713,7 +775,7 @@ void eventlog_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_decode");
 
     json_array_foreach (a, index, value) {
-        output_event (value, ctx->format);
+        output_event (&ctx->e, value);
     }
 
     fflush (stdout);
@@ -738,12 +800,8 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     }
 
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
-
     ctx.p = p;
-    ctx.format = optparse_get_str (p, "format", "text");
-    if (strcasecmp (ctx.format, "text")
-        && strcasecmp (ctx.format, "json"))
-        log_msg_exit ("invalid format type");
+    entry_format_parse_options (p, &ctx.e);
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
@@ -766,7 +824,7 @@ struct wait_event_ctx {
     double timeout;
     flux_jobid_t id;
     bool got_event;
-    const char *format;
+    struct entry_format e;
     char *context_key;
     char *context_value;
 };
@@ -801,12 +859,16 @@ bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
 
 bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
 {
+    double timestamp;
     const char *name;
     json_t *context = NULL;
     bool match = false;
 
-    if (eventlog_entry_parse (event, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
+
+    if (ctx->e.initial == 0.)
+        ctx->e.initial = timestamp;
 
     if (!strcmp (name, ctx->wait_event)) {
         if (ctx->context_key) {
@@ -855,12 +917,12 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     if (wait_event_test (ctx, o)) {
         ctx->got_event = true;
         if (!optparse_hasopt (ctx->p, "quiet"))
-            output_event (o, ctx->format);
+            output_event (&ctx->e, o);
         if (flux_job_event_watch_cancel (f) < 0)
             log_err_exit ("flux_job_event_watch_cancel");
     } else if (optparse_hasopt (ctx->p, "verbose")) {
         if (!ctx->got_event)
-            output_event (o, ctx->format);
+            output_event (&ctx->e, o);
     }
 
     json_decref (o);
@@ -891,10 +953,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
-    ctx.format = optparse_get_str (p, "format", "text");
-    if (strcasecmp (ctx.format, "text")
-        && strcasecmp (ctx.format, "json"))
-        log_msg_exit ("invalid format type");
+    entry_format_parse_options (p, &ctx.e);
     if ((str = optparse_get_str (p, "match-context", NULL))) {
         ctx.context_key = xstrdup (str);
         ctx.context_value = strchr (ctx.context_key, '=');
