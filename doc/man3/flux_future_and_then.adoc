@@ -44,10 +44,12 @@ of a previous operation. That is, `flux_future_and_then()` returns a
 placeholder future for an eventual future that can't be created until
 the continuation `cb` is run. The returned future can then be
 used as a synchronization handle or even passed to another
-`flux_future_and_then()` in the chain. The callback `cb` *must* call
-either `flux_future_continue(3)` or `flux_future_continue_error(3)`
-to pass a result to the next future in the chain, otherwise the last
-future in the chain can never be fulfilled.
+`flux_future_and_then()` in the chain. By default, the next future
+in the chain will be fulfilled immediately using the result of the
+previous future after return from the callback `cb`. Most callbacks,
+however, should use either `flux_future_continue(3)` or
+`flux_future_continue_error(3)` to pass an intermediate future
+to use in fulfillment of the next future in the chain.
 
 `flux_future_or_then(3)` is like `flux_future_and_then()`, except
 the continuation callback `cb` is run when the future `f` is fulfilled
@@ -58,17 +60,23 @@ callback offers a chance to successfully fulfill the "next" future
 in the chain, even when the "previous" future was fulfilled with
 an error.
 
-As with `flux_future_and_then()` it is important that the continuation
-`cb` function for `flux_future_or_then()` calls `flux_future_continue()`
-or `flux_future_continue_error()` to avoid breaking the chain.
+As with `flux_future_and_then()` the continuation
+`cb` function for `flux_future_or_then()` should call
+`flux_future_continue()` or `flux_future_continue_error()`, or
+the result of the previous future will be propagated immediately
+to the next future in the chain.
 
 `flux_future_continue(3)` continues the next future embedded in `prev`
-(created by `flux_future_and_then()` or `flux_future_or_then()` with
+(created by `flux_future_and_then()` or `flux_future_or_then()`) with
 the eventual result of the provided future `f`. This allows a future
 that was not created until the context of the callback to continue
 a sequential chain of futures created earlier. After the call to
 `flux_future_continue(3)` completes, the future `prev` may safely be
-destroyed.
+destroyed. `flux_future_continue(3)` may be called with `f` equal
+to `NULL` if the caller desires the next future in the chain to
+*not* be fulfilled, in order to disable the automatic fulfillment
+that normally occurs for non-continued futures after the callback
+completes.
 
 `flux_future_continue_error(3)` is like `flux_future_continue()`
 but immediately fulfills the next future in the chain with an error and
