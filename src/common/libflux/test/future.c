@@ -998,6 +998,183 @@ void test_multiple_fulfill_asynchronous (void)
     flux_reactor_destroy (r);
 }
 
+void test_fulfill_with (void)
+{
+    flux_future_t *f = NULL;
+    flux_future_t *p = NULL;
+    flux_future_t *x = NULL;
+    const char *result = NULL;
+    char *p_result = NULL;
+
+    if (!(f = flux_future_create (NULL, NULL)) ||
+        !(p = flux_future_create (NULL, NULL)) ||
+        !(x = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    ok (flux_future_fulfill_with (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_future_fulfill_with (NULL, NULL) returns EINVAL");
+    ok (flux_future_fulfill_with (f, NULL) < 0 && errno == EINVAL,
+        "flux_future_fulfill_with (f, NULL) returns EINVAL");
+    ok (flux_future_fulfill_with (NULL, f) < 0 && errno == EINVAL,
+        "flux_future_fulfill_with (NULL, f) returns EINVAL");
+    ok (flux_future_fulfill_with (f, p) < 0 && errno == EAGAIN,
+        "flux_future_fulfill_with with unfulfilled future returns EAGAIN");
+
+    flux_future_aux_set (p, "test", (void *) 0x42, NULL);
+    if (!(p_result = strdup ("result")))
+        BAIL_OUT ("strdup failed");
+    flux_future_fulfill (p, p_result, free);
+
+    ok (flux_future_is_ready (p),
+        "flux_future_t p is ready");
+    ok (!flux_future_is_ready (f),
+        "flux_future_t f is not ready");
+
+    ok (flux_future_fulfill_with (f, p) == 0,
+        "flux_future_fulfill_with (f, p) works");
+
+    ok (flux_future_fulfill_with (f, x) < 0 && errno == EEXIST,
+        "flux_future_fulfill_with with different future returns EEXIST");
+
+    ok (flux_future_is_ready (f),
+        "flux_future_t f is now ready");
+    ok (flux_future_get (f, (const void **)&result) == 0,
+        "flux_future_get (f) works");
+    ok (result == p_result && strcmp (result, "result") == 0,
+        "flux_future_get (f) returns result from p");
+    ok (flux_future_aux_get (f, "test") == (void *) 0x42,
+        "flux_future_aux_get (f, ...) retrieves aux item from p");
+    flux_future_aux_set (f, "foo", (void *) 0x180, NULL);
+    ok (flux_future_aux_get (f, "foo") == (void *) 0x180,
+        "flux_future_aux_set (f) still works");
+
+    /* Test fulfill_with when embedded future has error:
+     */
+    flux_future_reset (p);
+    flux_future_reset (f);
+    flux_future_fulfill_error (p, EFAULT, "test error string");
+    ok (flux_future_fulfill_with (f, p) == 0,
+        "flux_future_fulfill_with after fulfill error works");
+    ok (flux_future_is_ready (f),
+        "f is now ready");
+    ok (flux_future_get (f, NULL) < 0 && errno == EFAULT,
+        "flux_future_get returns expected error and errno");
+    ok (flux_future_error_string (f) &&
+        strcmp (flux_future_error_string (f), "test error string") == 0,
+        "flux_future_error_string() has expected error string");
+
+    /* Test fulfill_with multiple fulfillment:
+     */
+    flux_future_reset (p);
+    flux_future_reset (f);
+
+    flux_future_fulfill (p, (void *) 0xa, NULL);
+    flux_future_fulfill (p, (void *) 0xb, NULL);
+
+    ok (flux_future_is_ready (p),
+        "flux_future_t p is ready with multiple fulfillment");
+    ok (flux_future_fulfill_with (f, p) == 0,
+        "flux_future_fulfill_with (f, p)");
+
+    flux_future_reset (p);
+    ok (flux_future_fulfill_with (f, p) == 0,
+        "flux_future_fulfill_with (f, p) after flux_future_reset (p)");
+    ok (flux_future_get (f, (const void **) &result) == 0,
+        "flux_future_get (f) works");
+    ok (result == (void *) 0xa,
+        "first flux_future_get returns first result");
+
+    flux_future_reset (f);
+    ok (flux_future_get (f, (const void **) &result) == 0,
+        "flux_future_get (f) works");
+    ok (result == (void *) 0xb,
+        "second flux_future_get returns second result");
+
+    flux_future_reset (f);
+    ok (!flux_future_is_ready (f),
+        "flux_future_t f is no longer ready after reset");
+
+    /* Test fulfill_with when p has fatal error:
+     * XXX: This test should be last because you can't reset a fatal error
+     */
+    flux_future_reset (p);
+    flux_future_reset (f);
+    flux_future_fatal_error (p, EFAULT, "fatal error string");
+    ok (flux_future_fulfill_with (f, p) == 0,
+        "flux_future_fulfill_with after fatal error works");
+    ok (flux_future_is_ready (f),
+        "f is now ready");
+    ok (flux_future_get (f, NULL) < 0 && errno == EFAULT,
+        "flux_future_get returns expected error and errno");
+    ok (flux_future_error_string (f) &&
+        strcmp (flux_future_error_string (f), "fatal error string") == 0,
+        "flux_future_error_string() has expected error string");
+
+    flux_future_destroy (f);
+    flux_future_destroy (p);
+    flux_future_destroy (x);
+}
+
+void fulfill_with_continuation (flux_future_t *f, void *arg)
+{
+    const void **resultp = arg;
+    ok (flux_future_get (f, resultp) == 0,
+        "fulfill_with_async: flux_future_get works in callback");
+}
+
+void call_fulfill_with (flux_future_t *p, void *arg)
+{
+    flux_future_t *f = arg;
+    ok (flux_future_fulfill_with (f, p) == 0,
+        "flux_future_fulfill_with works in callback");
+    /* flux_future_fulfill_with() takes a ref to p, so ok
+     *  to destroy here.
+     */
+    flux_future_destroy (p);
+}
+
+void test_fulfill_with_async (void)
+{
+    flux_reactor_t *r = NULL;
+    flux_future_t *f = NULL;
+    flux_future_t *p = NULL;
+    void *result = NULL;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
+
+    if (!(f = flux_future_create (NULL, NULL))
+        || !(p = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+    flux_future_set_reactor (p, r);
+
+    ok (flux_future_then (p, -1., call_fulfill_with, f) == 0,
+        "flux_future_then (p, ...)");
+    ok (flux_future_then (f, -1., fulfill_with_continuation,
+                                  (void *) &result) == 0,
+        "flux_future_then (f, ...)");
+
+    flux_future_aux_set (p, "test_aux", (void *) 0x42, NULL);
+
+    // fulfill p so its continuation can fulfill f
+    flux_future_fulfill (p, (void *) 0xa1a1a1, NULL);
+
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run");
+
+    ok (flux_future_is_ready (f),
+        "future f was fulfilled by p");
+    ok (result == (void *) 0xa1a1a1,
+        "with result from p");
+    ok (flux_future_aux_get (f, "test_aux") == (void *) 0x42,
+        "aux hash from future p available via future f");
+
+    // destroys both f and embedded p
+    flux_future_destroy (f);
+    flux_reactor_destroy (r);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1022,6 +1199,9 @@ int main (int argc, char *argv[])
 
     test_multiple_fulfill ();
     test_multiple_fulfill_asynchronous ();
+
+    test_fulfill_with ();
+    test_fulfill_with_async ();
 
     done_testing();
     return (0);

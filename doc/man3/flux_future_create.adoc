@@ -5,7 +5,7 @@ flux_future_create(3)
 
 NAME
 ----
-flux_future_create, flux_future_fulfill, flux_future_fulfill_error, flux_future_aux_get, flux_future_aux_set, flux_future_set_flux, flux_future_get_flux - support methods for classes that return futures
+flux_future_create, flux_future_fulfill, flux_future_fulfill_error, flux_future_fulfill_with, flux_future_aux_get, flux_future_aux_set, flux_future_set_flux, flux_future_get_flux - support methods for classes that return futures
 
 
 SYNOPSIS
@@ -22,6 +22,8 @@ SYNOPSIS
 
  void flux_future_fulfill_error (flux_future_t *f, int errnum,
                                  const char *errstr);
+
+ void flux_future_fulfill_with (flux_future_t *f, flux_future_t *p);
 
  void flux_future_fatal_error (flux_future_t *f, int errnum,
                                const char *errstr);
@@ -86,10 +88,21 @@ _errnum_ value and an optional error string.  After the future is
 fulfilled with an error, `flux_future_get()` will return -1 with errno
 set to _errnum_.
 
-Both `flux_future_fulfill()` and `flux_future_fulfill_error()` can be
-called multiple times to queue multiple results or errors.  When
-callers access future results via `flux_future_get()`, results or
-errors will be returned in FIFO order.
+`flux_future_fulfill_with()` fulfills the target future _f_ using a
+fulfilled future _p_. This function copies the pending result or error
+from _p_ into _f_, and adds read-only access to the _aux_ items for _p_
+from _f_. This ensures that any `get` method which requires _aux_ items
+for _p_ will work with _f_. This function takes a reference to the source
+future _p_, so it safe to call `flux_future_destroy (p)` after this call.
+`flux_future_fulfill_with()` returns -1 on error with _errno_
+set on failure.
+
+`flux_future_fulfill()`, `flux_future_fulfill_with()`, and
+`flux_future_fulfill_error()` can be called multiple times to queue
+multiple results or errors.  When callers access future results via
+`flux_future_get()`, results or errors will be returned in FIFO order.
+It is an error to call `flux_future_fulfill_with()` multiple times on
+the same target future _f_ with a different source future _p_.
 
 `flux_future_fatal_error()` fulfills the future, assigning an _errnum_
 value and an optional error string.  Unlike
@@ -181,6 +194,11 @@ NULL is returned and errno is set appropriately.
 `flux_future_get_reactor()` returns a flux_reactor_t on success.  On error,
 NULL is returned and errno is set appropriately.
 
+`flux_future_fulfill_with()` returns zero on success. On error, -1 is
+returned with errno set to EINVAL if either _f_ or _p_  is NULL, or
+_f_ and _p_ are the same, EAGAIN if the future _p_ is not ready, or
+EEXIST if the function is called multiple times with different _p_.
+
 
 ERRORS
 ------
@@ -193,6 +211,14 @@ Invalid argument.
 
 ENOENT::
 The requested object is not found.
+
+EAGAIN::
+The requested operation is not ready. For `flux_future_fulfill_with()`,
+the target future _p_ is not fulfilled.
+
+EEXIST::
+`flux_future_fulfill_with()` was called multiple times with a different
+target future _p_.
 
 AUTHOR
 ------

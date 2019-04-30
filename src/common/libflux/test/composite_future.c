@@ -221,6 +221,11 @@ static void step3 (flux_future_t *f2, void *arg)
         "chained: step3: flux_future_get returns success");
     strcat (str, "-step3");
     flux_future_t *next = flux_future_create (NULL, NULL);
+    /* Set an aux member in the 'next' future here, so we can ensure
+     *  we'll have access to it from the chained future later fulfilled
+     *  by this one.
+     */
+    flux_future_aux_set (next, "test_aux", (void *) 0x42, NULL);
     flux_future_continue (f2, next);
     flux_future_fulfill (next, NULL, NULL);
     flux_future_destroy (f2);
@@ -251,6 +256,8 @@ static void test_basic_chained (flux_reactor_t *r)
         "chained: flux_future_wait_for step3 returns");
     ok (flux_future_get (f3, NULL) == 0,
         "chained: flux_future_get == 0");
+    ok (flux_future_aux_get (f3, "test_aux") == (void *) 0x42,
+        "chained: aux item set in prev future available in chained future");
     is (str, "step1-step2-step3",
         "chained: futures ran in correct order");
 
@@ -568,6 +575,95 @@ void test_chained_async ()
     flux_reactor_destroy (r);
 }
 
+void f_setbool (flux_future_t *prev, void *arg)
+{
+    bool *bp = arg;
+    *bp = true;
+    ok (true, "in setbool");
+    flux_future_destroy (prev);
+}
+
+void test_chained_no_continue ()
+{
+    flux_future_t *f1, *f2, *f3;
+    bool first = false;
+    bool second = false;
+
+    /*  Create empty first future to trigger auto-fulfill cascade:
+     */
+    if (!(f1 = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    if (!(f2 = flux_future_and_then (f1, f_setbool, &first)))
+        BAIL_OUT ("flux_future_and_then");
+    if (!(f3 = flux_future_and_then (f2, f_setbool, &second)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill (f1, NULL, NULL);
+
+    ok (flux_future_wait_for (f3, 5.) == 0,
+        "flux_future_wait_for()");
+
+    ok (first && second,
+        "All futures auto-fulfilled without flux_future_continue");
+    flux_future_destroy (f3);
+}
+
+/*  Multiple fulfill continuation. Only continue f when result is 3
+ */
+void check_cb (flux_future_t *f, void *arg)
+{
+    int *countp = arg;
+    int *rp = NULL;
+
+    ++*countp;
+
+    if (flux_future_get (f, (void *) &rp) < 0)
+        BAIL_OUT ("check_cb: flux_future_get failed");
+    pass ("multiple fulfill: flux_future_get() result = %d", *rp);
+    if (*rp == 3)
+        ok (flux_future_continue (f, f) == 0,
+            "multiple fulfill: flux_future_continue (f,f)");
+    else
+        ok (flux_future_continue (f, NULL) == 0,
+            "multiple fulfill: flux_future_continue (f, NULL)");
+    flux_future_reset (f);
+}
+
+
+void test_chained_multiple_fulfill ()
+{
+    flux_future_t *f1, *f;
+    int vals[4] = { 0, 1, 2, 3 };
+    int count = 0;
+    int *rp = NULL;
+
+    if (!(f1 = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    if (!(f = flux_future_and_then (f1, check_cb, &count)))
+        BAIL_OUT ("flux_future_and_then");
+
+    for (int i = 0; i < 4; i++) {
+        flux_future_fulfill (f1, (void *) &vals[i], NULL);
+        pass ("multiple fulfill: flux_future_fulfill (f1, %d)", vals[i]);
+    }
+
+    if (flux_future_wait_for (f, 1.) < 0)
+        BAIL_OUT ("flux_future_wait_for()");
+
+    if (flux_future_get (f, (void *) &rp) < 0)
+        BAIL_OUT ("test_chained_multiple_fulfill: flux_future_get");
+    ok (*rp == 3,
+        "multiple fulfill: flux_future_get returned %d", *rp);
+    ok (count == 4,
+        "multiple fulfill: continuation called %d times", count);
+    flux_future_destroy (f);
+
+    /* NB: f1 not destroyed in its continuation since it is
+     *  multiply fulfilled. Destroy it here.
+     */
+    flux_future_destroy (f1);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -589,6 +685,8 @@ int main (int argc, char *argv[])
     test_composite_any_async (false);
     test_composite_any_async (true);
     test_chained_async ();
+    test_chained_no_continue ();
+    test_chained_multiple_fulfill ();
 
     flux_reactor_destroy (reactor);
 

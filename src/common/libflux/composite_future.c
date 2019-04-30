@@ -233,12 +233,52 @@ const char *flux_future_next_child (flux_future_t *f)
 
 /*  Chained futures support: */
 
+/*
+ *  Chained futures implementation:
+ *
+ *  When a chained future is created using flux_future_and_then() or
+ *   flux_future_or_then() on a target future f, a chained_future structure
+ *   (see below) is created and embedded in the aux data for f. The call
+ *   returns an empty "next" future in the chain (cf->next) to the user.
+ *   If the user calls both and_then() and or_then(), the same cf->next
+ *   future is returned, since only one of these calls will be used.
+ *
+ *  The underlying then() callback for `f` is subsequently set to use 
+ *   chained_continuation() below, which will call `and_then()` on successful
+ *   fulfillment of f (aka `prev`) or or_then() on failure. These continuations
+ *   are passed `f, arg` as if a normal continuation was used with
+ *   flux_future_then(3). These callbacks may use one of 
+ *   flux_future_continue(3) or flux_future_continue_error(3) to schedule
+ *   fulfillment of the internal `cf->next` future based on a new
+ *   intermediate future created during the continuation (e.g. when a
+ *   new RPC call is started in the continuation, the future returned by
+ *   that call is considered the intermediate future which will eventually
+ *   fulfill cf->next).
+ *
+ *  flux_future_continue(f, f2) works by setting a then() callback
+ *   on f to call fulfill_next() on the cf->next embedded in f.
+ *   This results in `flux_future_fulfill_with (cf->next, f2)` immediately
+ *   when f2 is fulfilled.
+ *
+ *  If flux_future_continue(3),flux_future_future_continue_error(3) are
+ *   not used in the callback, then the default behavior is to immediately
+ *   fulfill the next future with the current future. To avoid fulfilling
+ *   the next future, e.g. if conditions are not met during multiple
+ *   fulfillment, the caller may use flux_future_continue (f, NULL);
+ *
+ *  All of this simply allows the "next" future returned by and_then()
+ *   or or_then() to be a placeholder for a future which can't be
+ *   created yet, because it requires the result of a previous, but not
+ *   yet complete, operation in the chain.
+ */
+
 struct continuation_info {
     flux_continuation_f cb;
     void *arg;
 };
 
 struct chained_future {
+    bool continued;
     flux_future_t *next;
     flux_future_t *prev;
     struct continuation_info and_then;
@@ -246,23 +286,20 @@ struct chained_future {
 };
 
 /*
- *  Continuation for chained futures: fulfill future `next` immediately
- *   with the result from `f`. Since a result freed by destruction of
- *   `f` will now be placed into `next`, the `next` future must steal
- *   a reference to `f`, thus we place `f` in the aux hash.
+ *  Fulfill "next" future in a chain with the fulfilled future `f`.
  */
 static void fulfill_next (flux_future_t *f, flux_future_t *next)
 {
-    void *result;
-    /*  Tie destruction of future `f` to future `next` since we
-     *   are fulfilling `next` via `f`
+    /* NB: flux_future_fulfill_with(3) takes a reference to `f` on success.
+     *  Since this function serves as an internal callback for `f` as a
+     *  result of flux_future_continue(3), we destroy the implicit
+     *  reference taken by flux_future_continue(3) here, since the
+     *  next callback the user will see will be for the future `next`.
      */
-    flux_future_aux_set (next, NULL, f, (flux_free_f) flux_future_destroy);
-
-    if (flux_future_get (f, (const void **)&result) < 0)
-        flux_future_fulfill_error (next, errno, NULL);
-    else
-        flux_future_fulfill (next, result, NULL);
+    if (flux_future_fulfill_with (next, f) < 0)
+        flux_future_fatal_error (next, errno,
+            "fulfill_next: flux_future_fulfill_with failed");
+    flux_future_destroy (f);
 }
 
 /*  Callback for chained continuations. Obtains the result of the completed
@@ -271,20 +308,53 @@ static void fulfill_next (flux_future_t *f, flux_future_t *next)
  */
 static void chained_continuation (flux_future_t *prev, void *arg)
 {
+    bool ran_callback = false;
     struct chained_future *cf = arg;
+
+    /*  Reset cf->continued to handle multiple fulfillment of prev:
+     */
+    cf->continued = false;
+
+    /*  Take a reference to prev in case it is destroyed during the
+     *   and_then or or_then callback -- we need to access cf contents
+     *   after these callbacks complete to determine if the future
+     *   was continued.
+     */
+    flux_future_incref (prev);
 
     if (flux_future_get (prev, NULL) < 0) {
         /*  Handle "or" callback if set and return immediately */
-        if (cf->or_then.cb)
-            return (*cf->or_then.cb) (prev, cf->or_then.arg);
+        if (cf->or_then.cb) {
+            (*cf->or_then.cb) (prev, cf->or_then.arg);
+            ran_callback = true;
+        }
     }
-    else if (cf->and_then.cb)
-        return (*cf->and_then.cb) (prev, cf->and_then.arg);
+    else if (cf->and_then.cb) {
+        (*cf->and_then.cb) (prev, cf->and_then.arg);
+        ran_callback = true;
+    }
 
-    /* Neither and-then nor or-then callback was used, auto-fulfill cf->next
-     *  using the result of prev:
+    /*  If future prev was not continued with flux_future_continue()
+     *   or flux_future_continue_error(), then fallback to continue
+     *   cf->next using prev directly.
      */
-    fulfill_next (prev, cf->next);
+    if (!cf->continued && flux_future_fulfill_with (cf->next, prev) < 0) {
+        flux_future_fatal_error (cf->next, errno,
+                                 "chained_continuation: fulfill_with failed");
+    }
+
+    /*  Release our reference to prev here (this may destroy prev)
+     */
+    flux_future_decref (prev);
+
+    /*  Destroy prev here only if we didn't call a user's callback,
+     *   e.g. one of or_then() or and_then() was not registered when the
+     *   future was fulfilled with error or success respectively.
+     *
+     *  XXX: Look at this again if ownership model of flux_future_t changes.
+     */
+    if (!ran_callback)
+        flux_future_destroy (prev);
 }
 
 /*  Initialization for a chained future. Get current reactor for this
@@ -394,6 +464,20 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f)
         errno = EINVAL;
         return -1;
     }
+    cf->continued = true;
+
+    /*  If f is NULL then continue without fulfilling cf->next */
+    if (f == NULL)
+        return 0;
+
+    /*  If f == prev, then we're continuing the next future with the
+     *   currently fulfilled future. Just call fulfill_with() immediately
+     *   and return, no need to propagate context or install a
+     *   continuation.
+     */
+    if (f == prev)
+        return flux_future_fulfill_with (cf->next, f);
+
     /*  Ensure that the reactor/handle for f matches the current reactor
      *   context for the previous future `prev`.
      */
@@ -413,8 +497,10 @@ void flux_future_continue_error (flux_future_t *prev, int errnum,
                                  const char *errstr)
 {
     struct chained_future *cf = chained_future_get (prev);
-    if (cf && cf->next)
+    if (cf && cf->next) {
+        cf->continued = true;
         flux_future_fulfill_error (cf->next, errnum, errstr);
+    }
 }
 
 flux_future_t *flux_future_and_then (flux_future_t *prev,

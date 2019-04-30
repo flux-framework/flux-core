@@ -56,6 +56,8 @@ int flux_future_get (flux_future_t *f, const void **result);
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn);
 void flux_future_fulfill_error (flux_future_t *f, int errnum, const char *errstr);
 
+int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p);
+
 void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr);
 
 const char *flux_future_error_string (flux_future_t *f);
