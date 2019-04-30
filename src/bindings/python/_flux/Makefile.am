@@ -78,3 +78,17 @@ clean-local-vpath:
 clean-local: clean-local-vpath
 	-rm -f *.c *_build.py *.so *.pyc *.pyo
 	-rm -rf __pycache__
+
+install-data-hook:
+	$(AM_V_at)echo Linking python modules in non-standard location... && \
+	  $(MKDIR_P) "$(DESTDIR)$(fluxpylinkdir)" && \
+	  target=$(fluxpysodir) && \
+	  f=$${target##*/} && \
+	  cd "$(DESTDIR)$(fluxpylinkdir)" && \
+	  rm -f $$f && \
+	  $(LN_S) $$target .
+
+uninstall-local:
+	$(AM_V_at)target=$(fluxpysodir) && f=$${target##*/} && \
+	  echo "Removing $(fluxpylinkdir)/$$f" && \
+	  rm -rf $(fluxpylinkdir)/$$f
