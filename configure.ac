@@ -253,8 +253,8 @@ if test "$ac_python_ldflags_set_by_user" != "true"; then
 fi
 AS_VAR_SET(fluxpydir, $pyexecdir/flux)
 AC_SUBST(fluxpydir)
-AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
-AC_SUBST(fluxsodir)
+AS_VAR_SET(fluxpysodir, $pyexecdir/_flux)
+AC_SUBST(fluxpysodir)
 AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
 AC_SUBST(fluxpymoddir)
 AC_SUBST(PYTHON_LIBRARY, lib${ac_python_library}.so)
