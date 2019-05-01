@@ -9,11 +9,11 @@ fi
 
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
-MAXJOBID_KVS="job.active.ffff.ffff.ffff.ffff"
+MAXJOBID_KVS="job.ffff.ffff.ffff.ffff"
 MAXJOBID_WORDS="natural-analyze-verbal--natural-analyze-verbal"
 
 MINJOBID_DEC=0
-MINJOBID_KVS="job.active.0000.0000.0000.0000"
+MINJOBID_KVS="job.0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 
 test_under_flux 1 job
@@ -132,9 +132,9 @@ test_expect_success 'flux-job: id --to=kvs works' '
 test_expect_success 'flux-job: id --from=kvs fails on bad input' '
 	test_must_fail flux job id --from=kvs badstring &&
 	test_must_fail flux job id --from=kvs \
-	    job.active.0000.0000 &&
+	    job.0000.0000 &&
 	test_must_fail flux job id --from=kvs \
-	    job.active.0000.0000.0000.000P
+	    job.0000.0000.0000.000P
 '
 
 test_expect_success 'flux-job: id --from=dec fails on bad input' '
