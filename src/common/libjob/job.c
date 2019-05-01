@@ -224,8 +224,10 @@ int flux_job_kvs_key (char *buf, int bufsz, bool active,
                     idstr,
                     key ? "." : "",
                     key ? key : "");
-    if (len >= bufsz)
+    if (len >= bufsz) {
+        errno = EOVERFLOW;
         return -1;
+    }
     return len;
 }
 
