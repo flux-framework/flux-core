@@ -151,7 +151,7 @@ static int restart_map_cb (struct job *job, void *arg)
 int restart_from_kvs (flux_t *h, struct queue *queue,
                       struct event_ctx *event_ctx)
 {
-    const char *dirname = "job.active";
+    const char *dirname = "job";
     int dirskip = strlen (dirname);
     int count;
     struct restart_ctx ctx;
