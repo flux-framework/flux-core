@@ -39,14 +39,6 @@ bad_first_event() {
         echo $jobid
 }
 
-# We cheat and manually move active to inactive in these tests.
-move_inactive() {
-        activekvsdir=$(flux job id --to=kvs-active $1)
-        inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/')
-        flux kvs move ${activekvsdir} ${inactivekvsdir}
-        return 0
-}
-
 set_userid() {
         export FLUX_HANDLE_USERID=$1
         export FLUX_HANDLE_ROLEMASK=0x2
@@ -84,28 +76,6 @@ test_expect_success 'flux job eventlog fails (wrong user)' '
         unset_userid
 '
 
-test_expect_success 'flux job eventlog works (owner, inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux job eventlog $jobid
-'
-
-test_expect_success 'flux job eventlog works (user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9000 &&
-        flux job eventlog $jobid &&
-        unset_userid
-'
-
-test_expect_success 'flux job eventlog fails (wrong user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9999 &&
-        ! flux job eventlog $jobid &&
-        unset_userid
-'
-
 test_expect_success 'flux job eventlog fails on bad first event (user)' '
         jobid=$(bad_first_event 9000) &&
         set_userid 9999 &&
@@ -136,28 +106,6 @@ test_expect_success 'flux job wait-event fails (wrong user)' '
         unset_userid
 '
 
-test_expect_success 'flux job wait-event works (owner, inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux job wait-event $jobid submit
-'
-
-test_expect_success 'flux job wait-event works (user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9000 &&
-        flux job wait-event $jobid submit &&
-        unset_userid
-'
-
-test_expect_success 'flux job wait-event fails (wrong user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9999 &&
-        ! flux job wait-event $jobid submit &&
-        unset_userid
-'
-
 #
 # job info
 #
@@ -176,28 +124,6 @@ test_expect_success 'flux job info eventlog works (user)' '
 
 test_expect_success 'flux job info eventlog fails (wrong user)' '
         jobid=$(submit_job 9000) &&
-        set_userid 9999 &&
-        ! flux job info $jobid eventlog &&
-        unset_userid
-'
-
-test_expect_success 'flux job info eventlog works (owner, inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux job info $jobid eventlog
-'
-
-test_expect_success 'flux job info eventlog works (user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9000 &&
-        flux job info $jobid eventlog &&
-        unset_userid
-'
-
-test_expect_success 'flux job info eventlog fails (wrong user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
         set_userid 9999 &&
         ! flux job info $jobid eventlog &&
         unset_userid
@@ -222,28 +148,6 @@ test_expect_success 'flux job info jobspec fails (wrong user)' '
         unset_userid
 '
 
-test_expect_success 'flux job info jobspec works (owner, inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux job info $jobid jobspec
-'
-
-test_expect_success 'flux job info jobspec works (user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9000 &&
-        flux job info $jobid jobspec &&
-        unset_userid
-'
-
-test_expect_success 'flux job info jobspec fails (wrong user, inactive)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9999 &&
-        ! flux job info $jobid jobspec &&
-        unset_userid
-'
-
 test_expect_success 'flux job info multiple keys works (owner, include eventlog)' '
         jobid=$(submit_job) &&
         flux job info $jobid eventlog jobspec J
@@ -263,28 +167,6 @@ test_expect_success 'flux job info multiple keys fails (wrong user, include even
         unset_userid
 '
 
-test_expect_success 'flux job info multiple keys works (owner, inactive, include eventlog)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux job info $jobid eventlog jobspec J
-'
-
-test_expect_success 'flux job info multiple keys works (user, inactive, include eventlog)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9000 &&
-        flux job info $jobid eventlog jobspec J &&
-        unset_userid
-'
-
-test_expect_success 'flux job info multiple keys fails (wrong user, inactive, include eventlog)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9999 &&
-        ! flux job info $jobid jobspec J &&
-        unset_userid
-'
-
 test_expect_success 'flux job info multiple keys works (owner, no eventlog)' '
         jobid=$(submit_job) &&
         flux job info $jobid jobspec J
@@ -299,28 +181,6 @@ test_expect_success 'flux job info multiple keys works (user, no eventlog)' '
 
 test_expect_success 'flux job info multiple keys fails (wrong user, no eventlog)' '
         jobid=$(submit_job 9000) &&
-        set_userid 9999 &&
-        ! flux job info $jobid jobspec J &&
-        unset_userid
-'
-
-test_expect_success 'flux job info multiple keys works (owner, inactive, no eventlog)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux job info $jobid jobspec J
-'
-
-test_expect_success 'flux job info multiple keys works (user, inactive, no eventlog)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
-        set_userid 9000 &&
-        flux job info $jobid jobspec J &&
-        unset_userid
-'
-
-test_expect_success 'flux job info multiple keys fails (wrong user, inactive, no eventlog)' '
-        jobid=$(submit_job 9000) &&
-        move_inactive $jobid &&
         set_userid 9999 &&
         ! flux job info $jobid jobspec J &&
         unset_userid

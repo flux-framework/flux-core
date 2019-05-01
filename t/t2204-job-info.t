@@ -36,14 +36,6 @@ wait_watchers_nonzero() {
         return 0
 }
 
-# We cheat and manually move active to inactive in these tests.
-move_inactive() {
-        activekvsdir=$(flux job id --to=kvs-active $1)
-        inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/')
-        flux kvs move ${activekvsdir} ${inactivekvsdir}
-        return 0
-}
-
 get_timestamp_field() {
         field=$1
         file=$2
@@ -58,45 +50,19 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 # job eventlog tests
 #
 
-test_expect_success 'flux job eventlog works (active)' '
+test_expect_success 'flux job eventlog works' '
         jobid=$(submit_job) &&
 	flux job eventlog $jobid > eventlog_a.out &&
         grep submit eventlog_a.out
 '
 
-test_expect_success 'flux job eventlog works on multiple entries (active)' '
+test_expect_success 'flux job eventlog works on multiple entries' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs-active $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foo &&
 	flux job eventlog $jobid >eventlog_b.out &&
 	grep -q submit eventlog_b.out &&
 	grep -q foo eventlog_b.out
-'
-
-test_expect_success 'flux job eventlog works (inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-	flux job eventlog $jobid > eventlog_c.out &&
-        grep submit eventlog_c.out
-'
-
-test_expect_success 'flux job eventlog works on multiple entries (inactive)' '
-        jobid=$(submit_job) &&
-        activekvsdir=$(flux job id --to=kvs-active $jobid) &&
-	flux kvs eventlog append ${activekvsdir}.eventlog foo &&
-        move_inactive $jobid &&
-	flux job eventlog $jobid >eventlog_d.out &&
-	grep -q submit eventlog_d.out &&
-	grep -q foo eventlog_d.out
-'
-
-test_expect_success 'flux job eventlog works on multiple entries (active -> inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-	flux kvs eventlog append ${inactivekvsdir}.eventlog foo &&
-	flux job eventlog $jobid >eventlog_e.out &&
-	grep -q submit eventlog_e.out &&
-	grep -q foo eventlog_e.out
 '
 
 test_expect_success 'flux job eventlog fails on bad id' '
@@ -150,21 +116,13 @@ test_expect_success 'flux job eventlog --time-format=invalid fails works' '
 # job wait-event tests
 #
 
-test_expect_success 'flux job wait-event works (active)' '
+test_expect_success 'flux job wait-event works' '
         jobid=$(submit_job) &&
         flux job wait-event $jobid submit > wait_event1.out &&
         grep submit wait_event1.out
 '
 
-test_expect_success 'flux job wait-event works (inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        flux kvs eventlog append ${inactivekvsdir}.eventlog foobar &&
-        flux job wait-event $jobid submit > wait_event2.out &&
-        grep submit wait_event2.out
-'
-
-test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later (active)' '
+test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later' '
         jobid=$(submit_job)
         flux job wait-event $jobid foobar > wait_event3.out &
         waitpid=$! &&
@@ -174,52 +132,6 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later (ac
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
         wait $waitpid &&
         grep foobar wait_event3.out
-'
-
-# must carefully fake active -> inactive transition to avoid race
-# where job-info module sees inactive transition but does not see any
-# new events.  We do this by copying the eventlog, modifying the
-# inactive eventlog, then removing the active one.
-
-test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later (active -> inactive) ' '
-        jobid=$(submit_job)
-        flux job wait-event $jobid foobar > wait_event4.out &
-        waitpid=$! &&
-        wait_watchers_nonzero &&
-        wait_watcherscount_nonzero primary &&
-        activekvsdir=$(flux job id --to=kvs-active $jobid) &&
-        flux kvs eventlog append ${activekvsdir}.eventlog foobaz &&
-        inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/') &&
-        flux kvs copy ${activekvsdir}.eventlog ${inactivekvsdir}.eventlog &&
-        flux kvs eventlog append ${inactivekvsdir}.eventlog foobar &&
-        flux kvs unlink ${activekvsdir}.eventlog &&
-        wait $waitpid &&
-        grep foobar wait_event4.out
-'
-
-test_expect_success 'flux job wait-event exits if never receives event (inactive) ' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-        ! flux job wait-event $jobid foobar > wait_event5.out 2> wait_event5.err &&
-        ! test -s wait_event5.out &&
-        grep "never received" wait_event5.err
-'
-
-# can't move the entire active directory wholesale in this test,
-# otherwise the move of a specific key will be missed
-
-test_expect_success NO_CHAIN_LINT 'flux job wait-event exits if never receives event (active -> inactive) ' '
-        jobid=$(submit_job)
-        flux job wait-event $jobid foobar > wait_event6.out 2> wait_event6.err &
-        waitpid=$! &&
-        wait_watchers_nonzero &&
-        wait_watcherscount_nonzero primary &&
-        activekvsdir=$(flux job id --to=kvs-active $jobid) &&
-        inactivekvsdir=$(echo $activekvsdir | sed 's/active/inactive/') &&
-        flux kvs move ${activekvsdir}.eventlog ${inactivekvsdir}.eventlog &&
-        ! wait $waitpid &&
-        ! test -s wait_event6.out &&
-        grep "never received" wait_event6.err
 '
 
 test_expect_success 'flux job wait-event fails on bad id' '
@@ -347,34 +259,20 @@ test_expect_success 'flux job wait-event w/ bad match-context fails (invalid inp
 # job info tests
 #
 
-test_expect_success 'flux job info eventlog works (active)' '
+test_expect_success 'flux job info eventlog works' '
         jobid=$(submit_job) &&
 	flux job info $jobid eventlog > eventlog_info_a.out &&
         grep submit eventlog_info_a.out
-'
-
-test_expect_success 'flux job info eventlog works (inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-	flux job info $jobid eventlog > eventlog_info_b.out &&
-        grep submit eventlog_info_b.out
 '
 
 test_expect_success 'flux job info eventlog fails on bad id' '
 	! flux job info 12345 eventlog
 '
 
-test_expect_success 'flux job info jobspec works (active)' '
+test_expect_success 'flux job info jobspec works' '
         jobid=$(submit_job) &&
 	flux job info $jobid jobspec > jobspec_a.out &&
         grep hostname jobspec_a.out
-'
-
-test_expect_success 'flux job info jobspec works (inactive)' '
-        jobid=$(submit_job) &&
-        move_inactive $jobid &&
-	flux job info $jobid jobspec > jobspec_b.out &&
-        grep hostname jobspec_b.out
 '
 
 test_expect_success 'flux job info jobspec fails on bad id' '
@@ -385,18 +283,10 @@ test_expect_success 'flux job info jobspec fails on bad id' '
 # job info tests (multiple info requests)
 #
 
-test_expect_success 'flux job info multiple keys works (active)' '
+test_expect_success 'flux job info multiple keys works' '
         jobid=$(flux job submit test.json) &&
 	flux job info $jobid eventlog jobspec J > all_info_a.out &&
         grep submit all_info_a.out &&
-        grep hostname all_info_a.out
-'
-
-test_expect_success 'flux job info multiple keys works (inactive)' '
-        jobid=$(flux job submit test.json) &&
-        move_inactive $jobid &&
-	flux job info $jobid eventlog jobspec J > all_info_b.out &&
-        grep submit all_info_b.out &&
         grep hostname all_info_a.out
 '
 

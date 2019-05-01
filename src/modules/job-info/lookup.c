@@ -28,7 +28,6 @@ struct lookup_ctx {
     json_t *keys;
     bool check_eventlog;
     int flags;
-    bool active;
     flux_future_t *f;
     bool allow;
 };
@@ -61,7 +60,6 @@ static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
     l->ctx = ctx;
     l->id = id;
     l->flags = flags;
-    l->active = true;
 
     if (!(l->keys = json_copy (keys))) {
         errno = ENOMEM;
@@ -159,20 +157,6 @@ error:
     return -1;
 }
 
-static int check_lookup_error (struct lookup_ctx *l)
-{
-    if (errno == ENOENT && l->active) {
-        /* transition / try the inactive key */
-        l->active = false;
-        if (lookup_keys (l) < 0)
-            return -1;
-        return 0;
-    }
-    else if (errno != ENOENT)
-        flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
-    return -1;
-}
-
 static void info_lookup_continuation (flux_future_t *fall, void *arg)
 {
     struct lookup_ctx *l = arg;
@@ -192,9 +176,9 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         }
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
-            if (check_lookup_error (l) < 0)
-                goto error;
-            return;
+            if (errno != ENOENT)
+                flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+            goto error;
         }
 
         if (eventlog_allow (ctx, l->msg, s) < 0)
@@ -221,9 +205,9 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         }
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
-            if (check_lookup_error (l) < 0)
-                goto error;
-            return;
+            if (errno != ENOENT)
+                flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+            goto error;
         }
 
         if (!(str = json_string (s)))
