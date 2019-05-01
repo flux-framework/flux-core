@@ -58,7 +58,7 @@ test_expect_success 'flux job eventlog works' '
 
 test_expect_success 'flux job eventlog works on multiple entries' '
         jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs-active $jobid) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foo &&
 	flux job eventlog $jobid >eventlog_b.out &&
 	grep -q submit eventlog_b.out &&
@@ -128,7 +128,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later' '
         waitpid=$! &&
         wait_watchers_nonzero &&
         wait_watcherscount_nonzero primary &&
-        kvsdir=$(flux job id --to=kvs-active $jobid) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
         wait $waitpid &&
         grep foobar wait_event3.out
@@ -146,7 +146,7 @@ test_expect_success 'flux job wait-event --quiet works' '
 
 test_expect_success 'flux job wait-event --verbose works' '
         jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs-active $jobid) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobaz &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
         flux job wait-event --verbose $jobid foobar > wait_event8.out &&
@@ -157,7 +157,7 @@ test_expect_success 'flux job wait-event --verbose works' '
 
 test_expect_success 'flux job wait-event --verbose doesnt show events after wait event' '
         jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs-active $jobid) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
         flux job wait-event --verbose $jobid submit > wait_event9.out &&
         grep submit wait_event9.out &&
@@ -296,14 +296,14 @@ test_expect_success 'flux job info multiple keys fails on bad id' '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (include eventlog)' '
         jobid=$(flux job submit test.json) &&
-        activekvsdir=$(flux job id --to=kvs-active $jobid) &&
+        activekvsdir=$(flux job id --to=kvs $jobid) &&
         flux kvs unlink ${activekvsdir}.jobspec &&
 	! flux job info $jobid eventlog jobspec J > all_info_b.out
 '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventlog)' '
         jobid=$(flux job submit test.json) &&
-        activekvsdir=$(flux job id --to=kvs-active $jobid) &&
+        activekvsdir=$(flux job id --to=kvs $jobid) &&
         flux kvs unlink ${activekvsdir}.jobspec &&
 	! flux job info $jobid jobspec J > all_info_b.out
 '

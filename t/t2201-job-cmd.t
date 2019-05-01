@@ -101,10 +101,10 @@ test_expect_success 'flux-job: id --from=words works' '
 	test "$jobid" = "$MINJOBID_DEC"
 '
 
-test_expect_success 'flux-job: id --from=kvs-active works' '
-	jobid=$(flux job id --from=kvs-active $MAXJOBID_KVS) &&
+test_expect_success 'flux-job: id --from=kvs works' '
+	jobid=$(flux job id --from=kvs $MAXJOBID_KVS) &&
 	test "$jobid" = "$MAXJOBID_DEC" &&
-	jobid=$(flux job id --from=kvs-active $MINJOBID_KVS) &&
+	jobid=$(flux job id --from=kvs $MINJOBID_KVS) &&
 	test "$jobid" = "$MINJOBID_DEC"
 '
 
@@ -122,18 +122,18 @@ test_expect_success 'flux-job: id --to=words works' '
 	test "$jobid" = "$MINJOBID_WORDS"
 '
 
-test_expect_success 'flux-job: id --to=kvs-active works' '
-	jobid=$(flux job id --to=kvs-active $MAXJOBID_DEC) &&
+test_expect_success 'flux-job: id --to=kvs works' '
+	jobid=$(flux job id --to=kvs $MAXJOBID_DEC) &&
 	test "$jobid" = "$MAXJOBID_KVS" &&
-	jobid=$(flux job id --to=kvs-active $MINJOBID_DEC) &&
+	jobid=$(flux job id --to=kvs $MINJOBID_DEC) &&
 	test "$jobid" = "$MINJOBID_KVS"
 '
 
-test_expect_success 'flux-job: id --from=kvs-active fails on bad input' '
-	test_must_fail flux job id --from=kvs-active badstring &&
-	test_must_fail flux job id --from=kvs-active \
+test_expect_success 'flux-job: id --from=kvs fails on bad input' '
+	test_must_fail flux job id --from=kvs badstring &&
+	test_must_fail flux job id --from=kvs \
 	    job.active.0000.0000 &&
-	test_must_fail flux job id --from=kvs-active \
+	test_must_fail flux job id --from=kvs \
 	    job.active.0000.0000.0000.000P
 '
 

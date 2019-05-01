@@ -19,7 +19,7 @@ submit_job() {
         flux job cancel $jobid
         flux job wait-event $jobid clean >/dev/null
         if test -n "$userid"; then
-            kvsdir=$(flux job id --to=kvs-active $jobid)
+            kvsdir=$(flux job id --to=kvs $jobid)
             flux kvs get --raw ${kvsdir}.eventlog \
                 | sed -e 's/\("userid":\)[0-9]*/\1'${userid}/ \
                 | flux kvs put --raw ${kvsdir}.eventlog=-
@@ -32,7 +32,7 @@ submit_job() {
 bad_first_event() {
         jobid=$(flux job submit test.json)
         flux job wait-event $jobid depend >/dev/null
-        kvsdir=$(flux job id --to=kvs-active $jobid)
+        kvsdir=$(flux job id --to=kvs $jobid)
         flux kvs get --raw ${kvsdir}.eventlog \
             | sed -e s/submit/foobar/ \
             | flux kvs put --raw ${kvsdir}.eventlog=-
