@@ -18,27 +18,24 @@
 
 struct jobkey_input {
     flux_jobid_t id;
-    bool active;
     const char *key;
     const char *expected;
 };
 
 struct jobkey_input jobkeytab[] = {
-    { 1, true, NULL,            "job.active.0000.0000.0000.0001" },
-    { 1, false, NULL,           "job.inactive.0000.0000.0000.0001" },
-    { 2, true, "foo",           "job.active.0000.0000.0000.0002.foo" },
-    { 2, false, "foo",          "job.inactive.0000.0000.0000.0002.foo" },
-    { 3, true, "a.b.c",         "job.active.0000.0000.0000.0003.a.b.c" },
-    { 0xdeadbeef, true, NULL,   "job.active.0000.0000.dead.beef" },
+    { 1, NULL,           "job.0000.0000.0000.0001" },
+    { 2, "foo",          "job.0000.0000.0000.0002.foo" },
+    { 3, "a.b.c",        "job.0000.0000.0000.0003.a.b.c" },
+    { 0xdeadbeef, NULL,  "job.0000.0000.dead.beef" },
 
     /* expected failure: overflow */
-    { 4, true, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", NULL },
+    { 4, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", NULL },
 
-    { 0, false, NULL, NULL },
+    { 0, NULL, NULL },
 };
 bool is_jobkeytab_end (struct jobkey_input *try)
 {
-    if (try->id == 0 && try->active == false && !try->key && !try->expected)
+    if (try->id == 0 && !try->key && !try->expected)
         return true;
     return false;
 }
@@ -50,7 +47,7 @@ void check_one_jobkey (struct jobkey_input *try)
     bool valid = false;
 
     memset (path, 0, sizeof (path));
-    len = flux_job_kvs_key (path, sizeof (path), try->active, try->id, try->key);
+    len = flux_job_kvs_key (path, sizeof (path), try->id, try->key);
 
     if (try->expected) {
         if (len >= 0 && len == strlen (try->expected)
@@ -62,9 +59,8 @@ void check_one_jobkey (struct jobkey_input *try)
             valid = true;
     }
     ok (valid == true,
-        "util_jobkey id=%llu active=%s key=%s %s",
+        "util_jobkey id=%llu key=%s %s",
         (unsigned long long)try->id,
-        try->active ? "true" : "false",
         try->key ? try->key : "NULL",
         try->expected ? "works" : "fails");
 
@@ -134,7 +130,7 @@ void check_corner_case (void)
     /* flux_job_kvs_key */
 
     errno = 0;
-    ok (flux_job_kvs_key (NULL, 0, false, 0, NULL) < 0
+    ok (flux_job_kvs_key (NULL, 0, 0, NULL) < 0
         && errno == EINVAL,
         "flux_job_kvs_key fails with errno == EINVAL");
 

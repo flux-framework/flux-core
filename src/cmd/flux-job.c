@@ -600,9 +600,7 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
         snprintf (dst, dstsz, "%llu", (unsigned long long)id);
     }
     else if (!strcmp (to, "kvs-active")) {
-        if (snprintf (dst, dstsz, "job.active.") >= dstsz
-                || fluid_encode (dst + strlen (dst), dstsz - strlen (dst),
-                                 id, FLUID_STRING_DOTHEX) < 0)
+        if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
             log_msg_exit ("error encoding id");
     }
     else if (!strcmp (to, "words")) {

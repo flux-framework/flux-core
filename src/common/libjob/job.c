@@ -206,8 +206,7 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
     return f;
 }
 
-int flux_job_kvs_key (char *buf, int bufsz, bool active,
-                      flux_jobid_t id, const char *key)
+int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key)
 {
     char idstr[32];
     int len;
@@ -219,8 +218,7 @@ int flux_job_kvs_key (char *buf, int bufsz, bool active,
 
     if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    len = snprintf (buf, bufsz, "job.%s.%s%s%s",
-                    active ? "active" : "inactive",
+    len = snprintf (buf, bufsz, "job.%s%s%s",
                     idstr,
                     key ? "." : "",
                     key ? key : "");

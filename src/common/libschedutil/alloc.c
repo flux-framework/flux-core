@@ -87,7 +87,7 @@ static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         return NULL;
-    if (flux_job_kvs_key (key, sizeof (key), true, id, "R") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
         errno = EINVAL;
         return NULL;
     }

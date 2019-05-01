@@ -93,12 +93,11 @@ flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason);
  */
 flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority);
 
-/* Write KVS path to 'key' relative to active job directory for job 'id'.
+/* Write KVS path to 'key' relative to job directory for job 'id'.
  * If key=NULL, write the job directory.
  * Returns string length on success, or -1 on failure.
  */
-int flux_job_kvs_key (char *buf, int bufsz, bool active,
-                      flux_jobid_t id, const char *key);
+int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key);
 
 /* Job eventlog watch functions
  */

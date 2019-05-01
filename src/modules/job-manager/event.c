@@ -217,7 +217,7 @@ static int event_batch_commit_event (struct event_ctx *ctx, struct job *job,
 
     if (event_batch_start (ctx) < 0)
         return -1;
-    if (flux_job_kvs_key (key, sizeof (key), true, job->id, "eventlog") < 0)
+    if (flux_job_kvs_key (key, sizeof (key), job->id, "eventlog") < 0)
         return -1;
     if (!ctx->batch->txn && !(ctx->batch->txn = flux_kvs_txn_create ()))
         return -1;

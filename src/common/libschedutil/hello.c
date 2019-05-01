@@ -23,7 +23,7 @@ static int schedutil_hello_job (flux_t *h, flux_jobid_t id,
     flux_future_t *f;
     const char *s;
 
-    if (flux_job_kvs_key (key, sizeof (key), true, id, "R") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
         errno = EPROTO;
         return -1;
     }

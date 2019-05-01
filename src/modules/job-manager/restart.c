@@ -61,7 +61,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     }
     if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    if (flux_job_kvs_key (path, sizeof (path), true, id, "eventlog") < 0) {
+    if (flux_job_kvs_key (path, sizeof (path), id, "eventlog") < 0) {
         errno = EINVAL;
         return -1;
     }

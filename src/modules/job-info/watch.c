@@ -82,7 +82,7 @@ static int watch_key (struct watch_ctx *w)
         w->f = NULL;
     }
 
-    if (flux_job_kvs_key (key, sizeof (key), w->active, w->id, "eventlog") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), w->id, "eventlog") < 0) {
         flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
         return -1;
     }

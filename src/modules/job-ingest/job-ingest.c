@@ -357,7 +357,7 @@ error:
  */
 static int make_key (char *buf, int bufsz, struct job *job, const char *name)
 {
-    if (flux_job_kvs_key (buf, bufsz, true, job->id, name) < 0) {
+    if (flux_job_kvs_key (buf, bufsz, job->id, name) < 0) {
         errno = EINVAL;
         return -1;
     }
