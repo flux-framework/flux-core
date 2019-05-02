@@ -55,6 +55,11 @@ def parse_notification(jobs, msg):
             jobs[jobid].append(state)
 
 
+# cmp() not defined in Python 3
+def cmp(a, b):
+    return (a > b) - (a < b)
+
+
 if len(sys.argv) != 2:
     njobs = 10
 else:
