@@ -56,7 +56,7 @@ fi
 #   user installed modules (e.g. those installed with pip install --user)
 #
 REAL_HOME=$(getent passwd $USER | cut -d: -f6)
-USER_SITE=$(HOME=$REAL_HOME python -c 'import site; print site.USER_SITE')
+USER_SITE=$(HOME=$REAL_HOME flux python -c 'import site; print(site.USER_SITE)')
 PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}${USER_SITE}
 export REAL_HOME PYTHONPATH
 
