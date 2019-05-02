@@ -253,8 +253,8 @@ if test "$ac_python_ldflags_set_by_user" != "true"; then
 fi
 AS_VAR_SET(fluxpydir, $pyexecdir/flux)
 AC_SUBST(fluxpydir)
-AS_VAR_SET(fluxsodir, $pyexecdir/_flux)
-AC_SUBST(fluxsodir)
+AS_VAR_SET(fluxpysodir, $pyexecdir/_flux)
+AC_SUBST(fluxpysodir)
 AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
 AC_SUBST(fluxpymoddir)
 AC_SUBST(PYTHON_LIBRARY, lib${ac_python_library}.so)
@@ -355,6 +355,13 @@ AC_SUBST(fluxcmddir)
 
 AS_VAR_SET(fluxlibdir, $libdir/flux)
 AC_SUBST(fluxlibdir)
+
+# Target of PYTHONPATH set by flux(1) cmddriver, so flux(1)
+# doesn't inadvertently insert system python paths (or any
+# other python path for that matter) first in PYTHONPATH.
+#
+AS_VAR_SET(fluxpylinkdir, $fluxlibdir/python$PYTHON_VERSION)
+AC_SUBST(fluxpylinkdir)
 
 AS_VAR_SET(fluxmoddir, $libdir/flux/modules)
 AC_SUBST(fluxmoddir)
