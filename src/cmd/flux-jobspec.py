@@ -8,13 +8,20 @@ import math
 import logging
 import argparse
 import json
-from collections import Sequence
+import collections
+
+try:
+    collectionsAbc = collections.abc
+except AttributeError:
+    collectionsAbc = collections
 
 import yaml
 
 
 def create_resource(res_type, count, with_child=[]):
-    assert isinstance(with_child, Sequence), "child resource must be a sequence"
+    assert isinstance(
+        with_child, collectionsAbc.Sequence
+    ), "child resource must be a sequence"
     assert not isinstance(with_child, str), "child resource must not be a string"
     assert count > 0, "resource count must be > 0"
 

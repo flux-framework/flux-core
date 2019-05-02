@@ -11,10 +11,18 @@
 from __future__ import print_function
 
 import json
-import collections
 import errno
+import collections
+
 from _flux._core import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
+
+try:
+    # pylint: disable=invalid-name
+    collectionsAbc = collections.abc
+except AttributeError:
+    # pylint: disable=invalid-name
+    collectionsAbc = collections
 
 
 class KVSWrapper(Wrapper):
@@ -116,7 +124,7 @@ def dropcache(flux_handle):
     return RAW.flux_kvs_dropcache(flux_handle)
 
 
-class KVSDir(WrapperPimpl, collections.MutableMapping):
+class KVSDir(WrapperPimpl, collectionsAbc.MutableMapping):
     # pylint: disable=too-many-ancestors, too-many-public-methods
 
     class InnerWrapper(Wrapper):
@@ -185,7 +193,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     def __delitem__(self, key):
         put_unlink(self.fhdl, key)
 
-    class KVSDirIterator(collections.Iterator):
+    class KVSDirIterator(collectionsAbc.Iterator):
         def __init__(self, kvsdir):
             super(KVSDir.KVSDirIterator, self).__init__()
             self.kvsdir = kvsdir

@@ -5,11 +5,16 @@ from __future__ import print_function
 import sys
 import argparse
 import json
-from collections import Sequence
+import collections
+
+try:
+    collectionsAbc = collections.abc
+except AttributeError:
+    collectionsAbc = collections
 
 
 def create_resource(res_type, count, with_child=[]):
-    assert isinstance(with_child, Sequence)
+    assert isinstance(with_child, collectionsAbc.Sequence)
     assert not isinstance(with_child, str)
     assert count > 0
 
