@@ -12,6 +12,7 @@
 
 import unittest
 
+import six
 import flux
 from flux.core.inner import ffi, raw
 import flux.wrapper
@@ -44,18 +45,16 @@ class TestWrapper(unittest.TestCase):
         future = f.rpc("cmb.ping", payload)
         resp = future.get()
         future.pimpl.handle = None
-        with self.assertRaises(ValueError) as cm:
+        with six.assertRaisesRegex(
+            self, ValueError, r"Attempting to call a cached, bound method.*NULL handle"
+        ):
             resp = future.get()
-        self.assertRegexpMatches(
-            cm.exception.message,
-            "Attempting to call a cached, " "bound method.*NULL handle",
-        )
 
     def test_automatic_unwrapping(self):
         flux.core.inner.raw.flux_log(flux.Flux("loop://"), 0, "stuff")
 
     def test_masked_function(self):
-        with self.assertRaisesRegexp(AttributeError, r".*masks function.*"):
+        with six.assertRaisesRegex(self, AttributeError, r".*masks function.*"):
             flux.Flux("loop://").rpc("topic").pimpl.flux_request_encode("request", 15)
 
     def test_set_pimpl_handle(self):
@@ -68,7 +67,7 @@ class TestWrapper(unittest.TestCase):
     def test_set_pimpl_handle_invalid(self):
         f = flux.Flux("loop://")
         r = f.rpc("topic")
-        with self.assertRaisesRegexp(TypeError, r".*expected a.*"):
+        with six.assertRaisesRegex(self, TypeError, r".*expected a.*"):
             r.handle = f.rpc("other topic")
 
     def test_read_basic_value(self):

@@ -133,7 +133,7 @@ def slurm_jobspec(args):
     try:
         validate_slurm_args(args)
     except ValueError as e:
-        logger.error(e.message)
+        logger.error(str(e))
         sys.exit(1)
     t = slurm_walltime_to_duration(args.time)
     return create_slurm_style_jobspec(
@@ -199,8 +199,8 @@ if __name__ == "__main__":
     except SystemExit as e:  # don't intercept sys.exit calls
         exit_code = e
     except Exception as e:
-        logging.error(e.message)
         exit_code = 1
+        logging.error(str(e))
     finally:
         logging.shutdown()
         sys.exit(exit_code)

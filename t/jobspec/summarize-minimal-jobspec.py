@@ -74,6 +74,6 @@ if __name__ == "__main__":
     except SystemExit as e:  # don't intercept sys.exit calls
         sys.exit(e)
     except Exception as e:
-        print("Unknown error: {}".format(e.message), file=sys.stderr)
+        print("Unknown error: {}".format(str(e)), file=sys.stderr)
         sys.exit(1)
     sys.exit(0)
