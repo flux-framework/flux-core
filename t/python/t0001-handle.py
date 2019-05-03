@@ -30,10 +30,6 @@ class TestHandle(unittest.TestCase):
         """Create a handle, connect to flux"""
         self.f = flux.Flux()
 
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
-
     def test_create_handle(self):
         """Successfully connected to flux"""
         self.assertIsNotNone(self.f)

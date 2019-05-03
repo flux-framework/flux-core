@@ -91,6 +91,5 @@ for jobid in jobs:
 
 # Unsubscribe to state notifications and close connection to broker.
 h.event_unsubscribe("job-state")
-h.close()
 
 # vim: tabstop=4 shiftwidth=4 expandtab

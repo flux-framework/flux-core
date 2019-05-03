@@ -51,5 +51,3 @@ try:
 except EnvironmentError as e:
     print("{}: {}".format("cancel", e.strerror))
     sys.exit(1)
-
-h.close()

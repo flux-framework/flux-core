@@ -40,10 +40,6 @@ class TestServiceAddRemove(unittest.TestCase):
     def setUpClass(self):
         self.f = flux.Flux()
 
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
-
     def test_001_register_service(self):
         rc = service_add(self.f, "foo")
         self.assertEqual(rc, 0)

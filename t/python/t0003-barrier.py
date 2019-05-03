@@ -24,7 +24,6 @@ def barr_count(x, name, count):
     print(x, name, count)
     f = flux.Flux()
     f.barrier(name, count)
-    f.close()
 
 
 def __flux_size():
@@ -35,10 +34,6 @@ class TestBarrier(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.f = flux.Flux()
-
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
 
     def test_single(self):
         self.f.barrier("testbarrier1", 1)
