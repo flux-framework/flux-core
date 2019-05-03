@@ -83,6 +83,17 @@ builtin-cmds.c : builtin builtin-cmds-list.sh
 	    $(srcdir)/builtin-cmds-list.sh $(srcdir)/builtin/*.c > $@
 
 #
+# Ensure we pick up configured python first in path during testing:
+#
+noinst_SCRIPTS = \
+	python
+python: Makefile
+	$(AM_V_GEN)printf "#!/bin/sh\nexec $(PYTHON) \"\$$@\"\n" > python \
+	  && chmod 755 python
+clean-local:
+	rm -f python
+
+#
 # coverage:
 #  Ensure all programs are run at least once, so we can see which
 #  have zero coverage:
