@@ -31,7 +31,7 @@
 #include "cmdhelp.h"
 #include "builtin.h"
 
-void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
+void exec_subcommand (const char *path, bool vopt, int argc, char *argv[]);
 bool flux_is_installed (void);
 void setup_path (struct environment *env, const char *argv0);
 void setup_keydir (struct environment *env, int flags);
@@ -209,7 +209,7 @@ int main (int argc, char *argv[])
         searchpath = environment_get (env, "FLUX_EXEC_PATH");
         if (vopt)
             printf ("sub-command search path: %s\n", searchpath);
-        exec_subcommand (searchpath, vopt, argv + optindex);
+        exec_subcommand (searchpath, vopt, argc - optindex, argv + optindex);
     }
 
     environment_destroy (env);
@@ -319,6 +319,30 @@ void setup_keydir (struct environment *env, int flags)
         free (new_dir);
 }
 
+/* Check for a flux-<command>.py in dir and execute it under the configured
+ * PYTHON_INTERPRETER if found.
+ */
+void exec_subcommand_py (bool vopt, const char *dir,
+                         int argc, char *argv[],
+	                     const char *prefix)
+{
+    char *path = xasprintf ("%s%s%s%s.py",
+            dir ? dir : "",
+            dir ? "/" : "",
+            prefix ? prefix : "", argv[0]);
+    if (access (path, R_OK|X_OK) == 0) {
+        char *av [argc+2];
+        av[0] = PYTHON_INTERPRETER;
+        av[1] = path;
+        for (int i = 2; i < argc+2; i++)
+            av[i] = argv[i-1];
+        if (vopt)
+            log_msg ("trying to exec %s %s", PYTHON_INTERPRETER, path);
+        execvp (PYTHON_INTERPRETER, av);
+    }
+    free (path);
+}
+
 void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
         const char *prefix)
 {
@@ -332,7 +356,7 @@ void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
     free (path);
 }
 
-void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
+void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
 {
     if (strchr (argv[0], '/')) {
         exec_subcommand_dir (vopt, NULL, argv, NULL);
@@ -342,6 +366,10 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
         char *dir, *saveptr = NULL, *a1 = cpy;
 
         while ((dir = strtok_r (a1, ":", &saveptr))) {
+            /*  Try executing command as a python script `flux-<cmd>.py`,
+             *  then fall back to execing flux-<cmd> directly.
+             */
+            exec_subcommand_py (vopt, dir, argc, argv, "flux-");
             exec_subcommand_dir (vopt, dir, argv, "flux-");
             a1 = NULL;
         }
