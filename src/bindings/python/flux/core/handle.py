@@ -42,6 +42,7 @@ class Flux(Wrapper):
 
         self.aux_txn = None
 
+    # pylint: disable=no-self-use
     def close(self):
         """
         The underlying flux handle is automatically closed when a Flux instance is
