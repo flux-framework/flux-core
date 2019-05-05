@@ -17,7 +17,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
 
-job_kvsdir()    { flux job id --to=kvs-active $1; }
+job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; } 
 exec_testattr() {
 	${jq} --arg key "$1" --arg value $2 \

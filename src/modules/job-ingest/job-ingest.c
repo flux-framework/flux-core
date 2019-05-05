@@ -41,10 +41,10 @@
  * The jobid is returned to the user in response to the job-ingest.submit RPC.
  * Responses are sent after the job has been successfully ingested.
  *
- * Currently all KVS data is committed under job.active.<fluid-dothex>,
+ * Currently all KVS data is committed under job.<fluid-dothex>,
  * where <fluid-dothex> is the jobid converted to 16-bit, 0-padded hex
  * strings delimited by periods, e.g.
- *   job.active.0000.0004.b200.0000
+ *   job.0000.0004.b200.0000
  *
  * The job-ingest module can be loaded on rank 0, or on many ranks across
  * the instance, rank < max FLUID id of 16384.  Each rank is relatively
@@ -230,7 +230,7 @@ static void batch_cleanup_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-/* Remove KVS active job entries previously committed for all jobs in batch.
+/* Remove KVS job entries previously committed for all jobs in batch.
  */
 static int batch_cleanup (struct batch *batch)
 {
@@ -357,8 +357,7 @@ error:
  */
 static int make_key (char *buf, int bufsz, struct job *job, const char *name)
 {
-    int n = flux_job_kvs_key (buf, bufsz, true, job->id, name ? name : NULL);
-    if (n < 0 || n >= bufsz) {
+    if (flux_job_kvs_key (buf, bufsz, job->id, name) < 0) {
         errno = EINVAL;
         return -1;
     }

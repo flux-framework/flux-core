@@ -57,7 +57,7 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
-    if (flux_job_kvs_key (key, sizeof (key), true, id, "jobspec") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), id, "jobspec") < 0) {
         errno = EPROTO;
         goto error;
     }
@@ -112,7 +112,7 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
-    if (flux_job_kvs_key (key, sizeof (key), true, id, "R") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
         errno = EPROTO;
         goto error;
     }

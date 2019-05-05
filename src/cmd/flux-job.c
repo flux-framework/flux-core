@@ -93,11 +93,11 @@ static struct optparse_option submit_opts[] =  {
 
 static struct optparse_option id_opts[] =  {
     { .name = "from", .key = 'f', .has_arg = 1,
-      .arginfo = "dec|kvs-active|words",
+      .arginfo = "dec|kvs|words",
       .usage = "Convert jobid from specified form",
     },
     { .name = "to", .key = 't', .has_arg = 1,
-      .arginfo = "dec|kvs-active|words",
+      .arginfo = "dec|kvs|words",
       .usage = "Convert jobid to specified form",
     },
     OPTPARSE_TABLE_END
@@ -581,10 +581,10 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     if (!strcmp (from, "dec")) {
         id = parse_arg_unsigned (src, "input");
     }
-    else if (!strcmp (from, "kvs-active")) {
-        if (strncmp (src, "job.active.", 11) != 0)
-            log_msg_exit ("%s: missing 'job.active.' prefix", src);
-        if (fluid_decode (src + 11, &id, FLUID_STRING_DOTHEX) < 0)
+    else if (!strcmp (from, "kvs")) {
+        if (strncmp (src, "job.", 4) != 0)
+            log_msg_exit ("%s: missing 'job.' prefix", src);
+        if (fluid_decode (src + 4, &id, FLUID_STRING_DOTHEX) < 0)
             log_msg_exit ("%s: malformed input", src);
     }
     else if (!strcmp (from, "words")) {
@@ -599,10 +599,8 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     if (!strcmp (to, "dec")) {
         snprintf (dst, dstsz, "%llu", (unsigned long long)id);
     }
-    else if (!strcmp (to, "kvs-active")) {
-        if (snprintf (dst, dstsz, "job.active.") >= dstsz
-                || fluid_encode (dst + strlen (dst), dstsz - strlen (dst),
-                                 id, FLUID_STRING_DOTHEX) < 0)
+    else if (!strcmp (to, "kvs")) {
+        if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
             log_msg_exit ("error encoding id");
     }
     else if (!strcmp (to, "words")) {

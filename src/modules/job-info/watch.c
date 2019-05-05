@@ -25,7 +25,6 @@ struct watch_ctx {
     struct info_ctx *ctx;
     flux_msg_t *msg;
     flux_jobid_t id;
-    bool active;
     flux_future_t *f;
     int offset;
     bool allow;
@@ -56,7 +55,6 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
 
     w->ctx = ctx;
     w->id = id;
-    w->active = true;
 
     if (!(w->msg = flux_msg_copy (msg, true))) {
         flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
@@ -82,7 +80,7 @@ static int watch_key (struct watch_ctx *w)
         w->f = NULL;
     }
 
-    if (flux_job_kvs_key (key, sizeof (key), w->active, w->id, "eventlog") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), w->id, "eventlog") < 0) {
         flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
         return -1;
     }
@@ -123,14 +121,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     size_t toklen;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
-        if (errno == ENOENT && w->active) {
-            /* transition / try the inactive key */
-            w->active = false;
-            if (watch_key (w) < 0)
-                goto error;
-            return;
-        }
-        else if (errno == ENODATA) {
+        if (errno == ENODATA) {
             if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
                 flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
             goto done;
@@ -154,32 +145,16 @@ static void watch_continuation (flux_future_t *f, void *arg)
 
     input = s;
     while (eventlog_parse_next (&input, &tok, &toklen)) {
-        if (w->active)
-            w->offset += toklen;
-
-        if (w->active || !w->offset) {
-            if (flux_respond_pack (ctx->h, w->msg,
-                                   "{s:s#}",
-                                   "event", tok, toklen) < 0) {
-                flux_log_error (ctx->h, "%s: flux_respond_pack",
-                                __FUNCTION__);
-                goto error;
-            }
+        if (flux_respond_pack (ctx->h, w->msg,
+                               "{s:s#}",
+                               "event", tok, toklen) < 0) {
+            flux_log_error (ctx->h, "%s: flux_respond_pack",
+                            __FUNCTION__);
+            goto error;
         }
-
-        if (!w->active && w->offset)
-            w->offset -= toklen;
     }
 
-    if (w->active)
-        flux_future_reset (f);
-    else {
-        /* we're in inactive state, there are no more events coming */
-        if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        goto done;
-    }
-
+    flux_future_reset (f);
     return;
 
 error:

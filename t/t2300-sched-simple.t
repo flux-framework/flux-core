@@ -13,8 +13,8 @@ query=${FLUX_BUILD_DIR}/src/modules/sched-simple/rlist-query
 hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-1"}}'
 hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
 
-kvs_active() {
-	flux job id --to=kvs-active $1
+kvs_job_dir() {
+	flux job id --to=kvs $1
 }
 list_R() {
 	for id in "$@"; do
@@ -117,7 +117,7 @@ test_expect_success 'sched-simple: cancel pending job' '
 	flux job cancel $id &&
 	flux job wait-event --timeout=5.0 $id exception &&
 	flux job cancel $(cat job6.id) &&
-	test_expect_code 1 flux kvs get $(kvs_active $id).R
+	test_expect_code 1 flux kvs get $(kvs_job_dir $id).R
 '
 test_expect_success 'sched-simple: cancel remaining jobs' '
 	flux job cancel $(cat job7.id) &&

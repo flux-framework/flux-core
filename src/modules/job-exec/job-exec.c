@@ -475,7 +475,7 @@ static void namespace_copy (flux_future_t *f, void *arg)
     flux_future_t *fnext = NULL;
     char dst [265];
 
-    if (flux_job_kvs_key (dst, sizeof (dst), true, job->id, "guest") < 0) {
+    if (flux_job_kvs_key (dst, sizeof (dst), job->id, "guest") < 0) {
         flux_log_error (h, "namespace_move: flux_job_kvs_key");
         goto done;
     }
@@ -761,7 +761,7 @@ static flux_future_t *flux_jobid_kvs_lookup (flux_t *h, flux_jobid_t id,
                                              int flags, const char *key)
 {
     char path [256];
-    if (flux_job_kvs_key (path, sizeof (path), true, id, key) < 0)
+    if (flux_job_kvs_key (path, sizeof (path), id, key) < 0)
         return NULL;
     return flux_kvs_lookup (h, NULL, flags, path);
 }
@@ -843,7 +843,7 @@ static flux_future_t * jobinfo_link_guestns (struct jobinfo *job)
     flux_future_t *f = NULL;
     char key [64];
 
-    if (flux_job_kvs_key (key, sizeof (key), true, job->id, "guest") < 0) {
+    if (flux_job_kvs_key (key, sizeof (key), job->id, "guest") < 0) {
         flux_log_error (h, "link guestns: flux_job_kvs_key");
         return NULL;
     }

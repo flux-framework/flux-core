@@ -61,7 +61,7 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     }
     if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    if (flux_job_kvs_key (path, sizeof (path), true, id, "eventlog") < 0) {
+    if (flux_job_kvs_key (path, sizeof (path), id, "eventlog") < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -151,7 +151,7 @@ static int restart_map_cb (struct job *job, void *arg)
 int restart_from_kvs (flux_t *h, struct queue *queue,
                       struct event_ctx *event_ctx)
 {
-    const char *dirname = "job.active";
+    const char *dirname = "job";
     int dirskip = strlen (dirname);
     int count;
     struct restart_ctx ctx;
