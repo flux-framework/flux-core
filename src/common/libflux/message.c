@@ -40,6 +40,14 @@
 
 #include "message.h"
 
+#define FLUX_MSG_MAGIC 0x33321eee
+struct flux_msg {
+    int magic;
+    zmsg_t *zmsg;
+    json_t *json;
+    struct aux_item *aux;
+};
+
 /* Begin manual codec
  */
 #define PROTO_MAGIC         0x8e
@@ -53,14 +61,6 @@
 #define PROTO_OFF_ROLEMASK  8 /* 4 bytes */
 #define PROTO_OFF_BIGINT    12 /* 4 bytes */
 #define PROTO_OFF_BIGINT2   16 /* 4 bytes */
-
-#define FLUX_MSG_MAGIC 0x33321eee
-struct flux_msg {
-    int magic;
-    zmsg_t *zmsg;
-    json_t *json;
-    struct aux_item *aux;
-};
 
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
 static int proto_set_bigint2 (uint8_t *data, int len, uint32_t bigint);
