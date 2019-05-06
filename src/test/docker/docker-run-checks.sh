@@ -124,6 +124,7 @@ docker run --rm \
     -e USER \
     -e TRAVIS \
     -e TAP_DRIVER_QUIET \
+    -e PYTHON_VERSION \
     --cap-add SYS_PTRACE \
     --tty \
     ${INTERACTIVE:+--interactive} \

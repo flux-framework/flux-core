@@ -28,10 +28,6 @@ class TestEvent(unittest.TestCase):
         """Create a handle, connect to flux"""
         self.f = flux.Flux()
 
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
-
     def test_t1_0_sub(self):
         """Subscribe to an event"""
         self.assertGreaterEqual(self.f.event_subscribe("testevent.1"), 0)

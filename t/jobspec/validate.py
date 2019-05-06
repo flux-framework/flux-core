@@ -19,7 +19,7 @@ def validate_input(jobspec_stream, schema, label=""):
         print("{}: {}".format(label, e.problem))
         errors = errors + 1
     except (Exception) as e:
-        print("{}: {}".format(label, e.message))
+        print("{}: {}".format(label, str(e)))
         errors = errors + 1
     except:
         print("{}: unknown error".format(label))

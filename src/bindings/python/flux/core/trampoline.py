@@ -16,9 +16,13 @@ from flux.core.handle import Flux
 def mod_main_trampoline(name, int_handle, args):
     # generate a flux wrapper class instance from the handle
     flux_instance = Flux(handle=lib.unpack_long(int_handle))
+    # increment reference count to prevent destruction of the underlying handle
+    # (which is owned by the broker) when the flux handle leaves scope and is
+    # garbage collected
+    flux_instance.incref()
     user_mod = None
     try:
-        user_mod = importlib.import_module("flux.modules." + name, "flux.modules")
+        user_mod = importlib.import_module("flux.modules." + name)
     except ImportError:  # check user paths for the module
         user_mod = importlib.import_module(name)
 

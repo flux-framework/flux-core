@@ -25,10 +25,6 @@ class TestTimer(unittest.TestCase):
     def setUpClass(self):
         self.f = flux.Flux()
 
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
-
     def test_timer_add_negative(self):
         """Add a negative timer"""
         with self.assertRaises(EnvironmentError):

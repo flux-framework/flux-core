@@ -42,6 +42,19 @@ class Flux(Wrapper):
 
         self.aux_txn = None
 
+    # pylint: disable=no-self-use
+    def close(self):
+        """
+        The underlying flux handle is automatically closed when a Flux instance is
+        deconstructed.  Prevent users from manually closing, the handle, leading
+        to a double free.
+        """
+        raise RuntimeError(
+            "Unnecessary manual invocation of a Flux handle's close method via "
+            "the python bindings.  Handles are automatically closed when the "
+            "Python object is deconstructed."
+        )
+
     def log(self, level, fstring):
         """
         Log to the flux logging facility

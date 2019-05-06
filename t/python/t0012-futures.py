@@ -33,10 +33,6 @@ class TestHandle(unittest.TestCase):
         """Create a handle, connect to flux"""
         self.f = flux.Flux()
 
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
-
     def test_01_rpc_get(self):
         payload = {"seq": 1, "pad": "stuff"}
         future = self.f.rpc("cmb.ping", payload)

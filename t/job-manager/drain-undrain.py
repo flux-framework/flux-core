@@ -48,5 +48,3 @@ try:
 except EnvironmentError as e:
     print("{}: {}".format("undrain", e.strerror))
     sys.exit(1)
-
-h.close()

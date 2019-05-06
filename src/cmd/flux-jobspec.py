@@ -8,13 +8,20 @@ import math
 import logging
 import argparse
 import json
-from collections import Sequence
+import collections
+
+try:
+    collectionsAbc = collections.abc
+except AttributeError:
+    collectionsAbc = collections
 
 import yaml
 
 
 def create_resource(res_type, count, with_child=[]):
-    assert isinstance(with_child, Sequence), "child resource must be a sequence"
+    assert isinstance(
+        with_child, collectionsAbc.Sequence
+    ), "child resource must be a sequence"
     assert not isinstance(with_child, str), "child resource must not be a string"
     assert count > 0, "resource count must be > 0"
 
@@ -126,7 +133,7 @@ def slurm_jobspec(args):
     try:
         validate_slurm_args(args)
     except ValueError as e:
-        logger.error(e.message)
+        logger.error(str(e))
         sys.exit(1)
     t = slurm_walltime_to_duration(args.time)
     return create_slurm_style_jobspec(
@@ -192,8 +199,8 @@ if __name__ == "__main__":
     except SystemExit as e:  # don't intercept sys.exit calls
         exit_code = e
     except Exception as e:
-        logging.error(e.message)
         exit_code = 1
+        logging.error(str(e))
     finally:
         logging.shutdown()
         sys.exit(exit_code)

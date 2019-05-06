@@ -29,10 +29,6 @@ class TestKVS(unittest.TestCase):
     def setUpClass(self):
         self.f = flux.Flux()
 
-    @classmethod
-    def tearDownClass(self):
-        self.f.close()
-
     def test_kvs_dir_open(self):
         with flux.kvs.get_dir(self.f) as d:
             self.assertIsNotNone(d)
