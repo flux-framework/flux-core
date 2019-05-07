@@ -376,8 +376,16 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     }
     argz_extract (c->ssh_argz, c->ssh_argz_len, c->ssh_argv);
-    if (!(c->p = popen2 (c->ssh_cmd, c->ssh_argv)))
+    if (!(c->p = popen2 (c->ssh_cmd, c->ssh_argv))) {
+        /* If popen fails because ssh cannot be found, flux_open()
+         * will just fail with errno = ENOENT, which is not all that helpful.
+         * Emit a hint on stderr even though this is perhaps not ideal.
+         */
+        fprintf (stderr, "ssh-connector: %s: %s\n",
+                 c->ssh_cmd, strerror (errno));
+        fprintf (stderr, "Hint: set FLUX_SSH in environment to override\n");
         goto error;
+    }
     c->fd = popen2_get_fd (c->p);
     c->fd_nonblock = -1;
     flux_msg_iobuf_init (&c->outbuf);
