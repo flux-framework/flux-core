@@ -10,14 +10,14 @@
 
 #include <string.h>
 #include <errno.h>
+#include <flux/core.h>
 
-#include "message.h"
-#include "request.h"
-#include "response.h"
 #include "src/common/libtap/tap.h"
+#include "util.h"
 
 int main (int argc, char *argv[])
 {
+    flux_t *h;
     flux_msg_t *msg;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
@@ -126,6 +126,42 @@ int main (int argc, char *argv[])
     ok (flux_response_decode_error (msg, &s) == 0 && !strcmp (s, "My Error"),
         "flux_response_decode_error includes error message");
     flux_msg_destroy (msg);
+
+    /* respond with h=NULL */
+    msg = flux_request_encode ("foo", NULL);
+    if (!msg)
+        BAIL_OUT ("flux_request_encode failed");
+    errno = 0;
+    ok (flux_respond (NULL, msg, NULL) < 0 && errno == EINVAL,
+        "flux_respond h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_respond_pack (NULL, msg, "{s:i}", "x", 1) < 0 && errno == EINVAL,
+        "flux_respond_pack h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_respond_raw (NULL, msg, "foo", 3) < 0 && errno == EINVAL,
+        "flux_respond_raw h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_respond_error (NULL, msg, ENODATA, NULL) < 0 && errno == EINVAL,
+        "flux_respond_error h=NULL fails with EINVAL");
+    flux_msg_destroy (msg);
+
+    /* respond with request=NULL */
+    h = loopback_create (0);
+    if (!h)
+        BAIL_OUT ("loopback_create");
+    errno = 0;
+    ok (flux_respond (h, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_respond msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_respond_pack (h, NULL, "{s:i}", "x", 1) < 0 && errno == EINVAL,
+        "flux_respond_pack msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_respond_raw (h, NULL, "foo", 3) < 0 && errno == EINVAL,
+        "flux_respond_raw msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_respond_error (h, NULL, ENODATA, NULL) < 0 && errno == EINVAL,
+        "flux_respond_error msg=NULL fails with EINVAL");
+    flux_close (h);
 
     done_testing();
     return (0);

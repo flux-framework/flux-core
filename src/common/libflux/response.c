@@ -13,9 +13,7 @@
 #endif
 #include <errno.h>
 #include <stdarg.h>
-
-#include "response.h"
-#include "message.h"
+#include <flux/core.h>
 
 static int response_decode (const flux_msg_t *msg, const char **topic)
 {
@@ -199,17 +197,12 @@ error:
     return NULL;
 }
 
-static flux_msg_t *derive_response (flux_t *h, const flux_msg_t *request,
-                                    int errnum)
+static flux_msg_t *derive_response (const flux_msg_t *request, int errnum)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
 
-    if (!request) {
-        errno = EINVAL;
-        goto error;
-    }
     if (!(msg = flux_msg_copy (request, false)))
-        goto error;
+        return NULL;
     if (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto error;
     if (flux_msg_set_userid (msg, FLUX_USERID_UNKNOWN) < 0)
@@ -226,7 +219,11 @@ error:
 
 int flux_respond (flux_t *h, const flux_msg_t *request, const char *s)
 {
-    flux_msg_t *msg = derive_response (h, request, 0);
+    flux_msg_t *msg = NULL;
+
+    if (!h || !request)
+        goto inval;
+    msg = derive_response (request, 0);
     if (!msg)
         goto error;
     if (s && flux_msg_set_string (msg, s) < 0)
@@ -235,6 +232,8 @@ int flux_respond (flux_t *h, const flux_msg_t *request, const char *s)
         goto error;
     flux_msg_destroy (msg);
     return 0;
+inval:
+    errno = EINVAL;
 error:
     flux_msg_destroy (msg);
     return -1;
@@ -243,7 +242,11 @@ error:
 static int flux_respond_vpack (flux_t *h, const flux_msg_t *request,
                                const char *fmt, va_list ap)
 {
-    flux_msg_t *msg = derive_response (h, request, 0);
+    flux_msg_t *msg = NULL;
+
+    if (!h || !request || !fmt)
+        goto inval;
+    msg = derive_response (request, 0);
     if (!msg)
         goto error;
     if (flux_msg_vpack (msg, fmt, ap) < 0)
@@ -252,6 +255,8 @@ static int flux_respond_vpack (flux_t *h, const flux_msg_t *request,
         goto error;
     flux_msg_destroy (msg);
     return 0;
+inval:
+    errno = EINVAL;
 error:
     flux_msg_destroy (msg);
     return -1;
@@ -263,6 +268,10 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request,
     int rc;
     va_list ap;
 
+    if (!fmt) {
+        errno = EINVAL;
+        return -1;
+    }
     va_start (ap, fmt);
     rc = flux_respond_vpack (h, request, fmt, ap);
     va_end (ap);
@@ -272,7 +281,11 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request,
 int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       const void *data, int len)
 {
-    flux_msg_t *msg = derive_response (h, request, 0);
+    flux_msg_t *msg = NULL;
+
+    if (!h || !request)
+        goto inval;
+    msg  = derive_response (request, 0);
     if (!msg)
         goto error;
     if (data && flux_msg_set_payload (msg, data, len) < 0)
@@ -281,6 +294,8 @@ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
         goto error;
     flux_msg_destroy (msg);
     return 0;
+inval:
+    errno = EINVAL;
 error:
     flux_msg_destroy (msg);
     return -1;
@@ -289,13 +304,13 @@ error:
 int flux_respond_error (flux_t *h, const flux_msg_t *request,
                         int errnum, const char *errstr)
 {
-    flux_msg_t *msg = derive_response (h, request, errnum);
+    flux_msg_t *msg = NULL;
+
+    if (!h || !request || errnum == 0)
+        goto inval;
+    msg = derive_response (request, errnum);
     if (!msg)
         goto error;
-    if (errnum == 0) {
-        errno = EINVAL;
-        goto error;
-    }
     if (errstr) {
         if (flux_msg_set_string (msg, errstr) < 0)
             goto error;
@@ -304,6 +319,8 @@ int flux_respond_error (flux_t *h, const flux_msg_t *request,
         goto error;
     flux_msg_destroy (msg);
     return 0;
+inval:
+    errno = EINVAL;
 error:
     flux_msg_destroy (msg);
     return -1;
