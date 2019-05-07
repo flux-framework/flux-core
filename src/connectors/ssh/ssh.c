@@ -28,8 +28,6 @@
 #include "src/common/libutil/popen2.h"
 #include "src/common/libutil/fdutils.h"
 
-static const char *default_ssh_cmd = "/usr/bin/rsh";
-
 #define CTX_MAGIC   0xe534babb
 typedef struct {
     int magic;
@@ -361,7 +359,7 @@ flux_t *connector_init (const char *path, int flags)
     c->magic = CTX_MAGIC;
 
     if (!(c->ssh_cmd = getenv ("FLUX_SSH")))
-        c->ssh_cmd = default_ssh_cmd;
+        c->ssh_cmd = PATH_SSH;
     if (argz_add (&c->ssh_argz, &c->ssh_argz_len, c->ssh_cmd) != 0)
         goto error;
     if (parse_ssh_port (c, path) < 0) /* [-p port] */

@@ -107,6 +107,11 @@ else
             [deepbind is unsupported with asan, musl and so-forth])
 fi
 
+# N.B. /usr/bin/rsh is a symlink to preferred remote shell on some systems
+AC_ARG_VAR(SSH, [The path to preferred remote shell])
+AC_PATH_PROGS(SSH, [rsh ssh], [/usr/bin/rsh])
+AC_DEFINE_UNQUOTED([PATH_SSH], "$SSH",
+          [Define remote shell program to be used by the ssh:// connector])
 
 LT_INIT
 AC_PROG_AWK
