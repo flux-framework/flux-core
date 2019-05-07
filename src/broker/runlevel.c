@@ -296,7 +296,8 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
         if (!(p = flux_exec (r->h,
                              flags,
                              r->rc[level].cmd,
-                             &ops)))
+                             &ops,
+                             NULL)))
             goto error;
 
         if (flux_subprocess_aux_set (p, "runlevel", r, NULL) < 0)

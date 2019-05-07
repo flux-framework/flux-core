@@ -146,6 +146,7 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
                                               int flags,
                                               const flux_cmd_t *cmd,
                                               const flux_subprocess_ops_t *ops,
+                                              const flux_subprocess_hooks_t *hooks,
                                               int rank,
                                               bool local)
 {
@@ -178,6 +179,9 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
 
     if (ops)
         p->ops = *ops;
+
+    if (hooks)
+        p->hooks = *hooks;
 
     p->h = h;
     p->reactor = r;
@@ -555,7 +559,8 @@ static int subprocess_setup_completed (flux_subprocess_t *p)
 
 static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int flags,
                                            const flux_cmd_t *cmd,
-                                           const flux_subprocess_ops_t *ops)
+                                           const flux_subprocess_ops_t *ops,
+                                           const flux_subprocess_hooks_t *hooks)
 {
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
@@ -572,7 +577,7 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
         return NULL;
     }
 
-    if (!(p = subprocess_create (h, r, flags, cmd, ops, -1, true)))
+    if (!(p = subprocess_create (h, r, flags, cmd, ops, hooks, -1, true)))
         goto error;
 
     if (subprocess_local_setup (p) < 0)
@@ -597,7 +602,8 @@ error:
 
 flux_subprocess_t * flux_exec (flux_t *h, int flags,
                                const flux_cmd_t *cmd,
-                               const flux_subprocess_ops_t *ops)
+                               const flux_subprocess_ops_t *ops,
+                               const flux_subprocess_hooks_t *hooks)
 {
     flux_reactor_t *r;
 
@@ -609,14 +615,15 @@ flux_subprocess_t * flux_exec (flux_t *h, int flags,
     if (!(r = flux_get_reactor (h)))
         return NULL;
 
-    return flux_exec_wrap (h, r, flags, cmd, ops);
+    return flux_exec_wrap (h, r, flags, cmd, ops, hooks);
 }
 
 flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
                                      const flux_cmd_t *cmd,
-                                     const flux_subprocess_ops_t *ops)
+                                     const flux_subprocess_ops_t *ops,
+                                     const flux_subprocess_hooks_t *hooks)
 {
-    return flux_exec_wrap (NULL, r, flags, cmd, ops);
+    return flux_exec_wrap (NULL, r, flags, cmd, ops, hooks);
 }
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
@@ -657,7 +664,7 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
     if (!(r = flux_get_reactor (h)))
         goto error;
 
-    if (!(p = subprocess_create (h, r, flags, cmd, ops, rank, false)))
+    if (!(p = subprocess_create (h, r, flags, cmd, ops, NULL, rank, false)))
         goto error;
 
     if (subprocess_remote_setup (p) < 0)
@@ -688,7 +695,7 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
     flux_buffer_t *fb;
     int ret;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC) {
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
@@ -748,7 +755,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC) {
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
@@ -800,7 +807,7 @@ static const char *subprocess_read (flux_subprocess_t *p,
     flux_buffer_t *fb;
     const char *ptr;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC) {
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
         errno = EINVAL;
         return NULL;
     }
@@ -869,7 +876,8 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f = NULL;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || !signum) {
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)
+        || !signum) {
         errno = EINVAL;
         return NULL;
     }
@@ -1060,7 +1068,7 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p)
 int flux_subprocess_aux_set (flux_subprocess_t *p,
                              const char *name, void *x, flux_free_f free_fn)
 {
-    if (!p || p->magic != SUBPROCESS_MAGIC) {
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
@@ -1069,7 +1077,7 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
 
 void * flux_subprocess_aux_get (flux_subprocess_t *p, const char *name)
 {
-    if (!p || p->magic != SUBPROCESS_MAGIC) {
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
         errno = EINVAL;
         return NULL;
     }

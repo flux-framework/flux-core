@@ -516,6 +516,15 @@ static int local_child (flux_subprocess_t *p)
         _exit (1);
     }
 
+    if (p->hooks.pre_exec) {
+        /* always a chance caller may destroy subprocess in callback */
+        flux_subprocess_ref (p);
+        p->in_hook = true;
+        (*p->hooks.pre_exec) (p, p->hooks.pre_exec_arg);
+        p->in_hook = false;
+        flux_subprocess_unref (p);
+    }
+
     if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP) {
         if (setpgrp () < 0) {
             flux_log_error (p->h, "setpgrp");
@@ -614,6 +623,15 @@ static int local_fork (flux_subprocess_t *p)
         return -1;
 
     p->state = FLUX_SUBPROCESS_STARTED;
+
+    if (p->hooks.post_fork) {
+        /* always a chance caller may destroy subprocess in callback */
+        flux_subprocess_ref (p);
+        p->in_hook = true;
+        (*p->hooks.post_fork) (p, p->hooks.post_fork_arg);
+        p->in_hook = false;
+        flux_subprocess_unref (p);
+    }
 
     return (0);
 }

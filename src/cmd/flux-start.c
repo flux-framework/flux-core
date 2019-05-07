@@ -563,7 +563,8 @@ int client_run (struct client *cli)
     if (!(cli->p = flux_local_exec (ctx.reactor,
                                     FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
                                     cli->cmd,
-                                    &ops)))
+                                    &ops,
+                                    NULL)))
         log_err_exit ("flux_exec");
     if (flux_subprocess_aux_set (cli->p, "cli", cli, NULL) < 0)
         log_err_exit ("flux_subprocess_aux_set");

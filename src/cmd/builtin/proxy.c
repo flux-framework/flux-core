@@ -861,7 +861,8 @@ static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpa
     if (!(p = flux_local_exec (ctx->reactor,
                                FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
                                cmd,
-                               &ops)))
+                               &ops,
+                               NULL)))
         goto error;
 
     if (flux_subprocess_aux_set (p, "ctx", ctx, NULL) < 0)

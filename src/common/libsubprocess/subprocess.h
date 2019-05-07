@@ -79,6 +79,7 @@ typedef void (*flux_subprocess_output_f) (flux_subprocess_t *p,
                                           const char *stream);
 typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
                                          flux_subprocess_state_t state);
+typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 
 /*
  *  Functions for event-driven subprocess handling:
@@ -95,6 +96,17 @@ typedef struct {
     flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
     flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
 } flux_subprocess_ops_t;
+
+/*
+ *  flux_subprocess_hooks_t: Hook functions to execute at pre-defined
+ *  points.  Hooks can only be executed on local processes.
+ */
+typedef struct {
+    flux_subprocess_hook_f pre_exec;
+    void *pre_exec_arg;
+    flux_subprocess_hook_f post_fork;
+    void *post_fork_arg;
+} flux_subprocess_hooks_t;
 
 /*
  *  General support:
@@ -222,8 +234,6 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 
-
-
 /*
  *  Subprocesses:
  */
@@ -246,11 +256,13 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
  */
 flux_subprocess_t *flux_exec (flux_t *h, int flags,
                               const flux_cmd_t *cmd,
-                              const flux_subprocess_ops_t *ops);
+                              const flux_subprocess_ops_t *ops,
+                              const flux_subprocess_hooks_t *hooks);
 
 flux_subprocess_t *flux_local_exec (flux_reactor_t *r, int flags,
                                     const flux_cmd_t *cmd,
-                                    const flux_subprocess_ops_t *ops);
+                                    const flux_subprocess_ops_t *ops,
+                                    const flux_subprocess_hooks_t *hooks);
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
