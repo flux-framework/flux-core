@@ -276,7 +276,6 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int type, size;
     const void *buf;
     uint32_t nodeid;
-    int flags;
 
     if (!msg) {
         flux_log (h, LOG_ERR, "%s: got NULL msg!", __FUNCTION__);
@@ -291,7 +290,7 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
                   flux_msg_typestr (type));
         goto error;
     }
-    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
+    if (flux_msg_get_nodeid (msg, &nodeid) < 0) {
         flux_log_error (h, "%s: flux_msg_get_nodeid", __FUNCTION__);
         goto error;
     }

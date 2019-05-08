@@ -36,11 +36,13 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
-    int flags;
+    uint8_t flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+    if (flux_msg_get_nodeid (msg, &nodeid) < 0)
+        goto error;
+    if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "s:i s:i",
                                    "nodeid", (int)nodeid,

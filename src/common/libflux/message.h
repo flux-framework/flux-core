@@ -40,6 +40,15 @@ enum {
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
 };
 
+/* N.B. FLUX_NODEID_UPSTREAM should be used in the RPC interface only.
+ * The resulting request message is constructed with flags including
+ * FLUX_MSGFLAG_UPSTREAM and nodeid set set to local broker rank.
+ */
+enum {
+    FLUX_NODEID_ANY      = 0xFFFFFFFF, //(~(uint32_t)0),
+    FLUX_NODEID_UPSTREAM = 0xFFFFFFFE  //(~(uint32_t)1)
+};
+
 struct flux_match {
     int typemask;           /* bitmask of matching message types (or 0) */
     uint32_t matchtag;      /* matchtag (or FLUX_MATCHTAG_NONE) */
@@ -197,16 +206,9 @@ int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...);
 int flux_msg_vunpack (const flux_msg_t *msg, const char *fmt, va_list ap);
 
 /* Get/set nodeid (request only)
- * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.
- * FLUX_NODEID_UPSTREAM is a stand in for this flag + sending rank in
- * higher level functions (not to be used here).
  */
-enum {
-    FLUX_NODEID_ANY      = 0xFFFFFFFF, //(~(uint32_t)0),
-    FLUX_NODEID_UPSTREAM = 0xFFFFFFFE  //(~(uint32_t)1)
-};
-int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags);
-int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags);
+int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid);
+int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid);
 
 /* Get/set userid
  */

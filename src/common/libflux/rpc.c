@@ -222,7 +222,7 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
 {
     struct flux_rpc *rpc = NULL;
     flux_future_t *f;
-    int msgflags = 0;
+    uint8_t msgflags;
 
     if (!(f = flux_future_create (initialize_cb, NULL)))
         goto error;
@@ -236,12 +236,16 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
     if (flux_msg_set_matchtag (msg, rpc->matchtag) < 0)
         goto error;
     flux_future_set_flux (f, h);
+    if (flux_msg_get_flags (msg, &msgflags) < 0)
+        goto error;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         msgflags |= FLUX_MSGFLAG_UPSTREAM;
         if (flux_get_rank (h, &nodeid) < 0)
             goto error;
     }
-    if (flux_msg_set_nodeid (msg, nodeid, msgflags) < 0)
+    if (flux_msg_set_flags (msg, msgflags) < 0)
+        goto error;
+    if (flux_msg_set_nodeid (msg, nodeid) < 0)
         goto error;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");

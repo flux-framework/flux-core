@@ -345,7 +345,6 @@ void check_proto (void)
     uint32_t nodeid;
     int errnum;
     int type;
-    int flags;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "flux_msg_create works");
@@ -356,18 +355,16 @@ void check_proto (void)
         "flux_msg_set_type works");
     ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "flux_msg_get_type works and returns what we set");
-    ok (flux_msg_get_nodeid (msg, &nodeid, &flags) == 0
-        && nodeid == FLUX_NODEID_ANY
-        && flags == 0,
+    ok (flux_msg_get_nodeid (msg, &nodeid) == 0
+        && nodeid == FLUX_NODEID_ANY,
         "flux_msg_get_nodeid works on request and default is sane");
 
     nodeid = 42;
-    ok (flux_msg_set_nodeid (msg, nodeid, 0) == 0,
+    ok (flux_msg_set_nodeid (msg, nodeid) == 0,
         "flux_msg_set_nodeid works on request");
     nodeid = 0;
-    ok (flux_msg_get_nodeid (msg, &nodeid, &flags) == 0
-        && nodeid == 42
-        && flags == 0,
+    ok (flux_msg_get_nodeid (msg, &nodeid) == 0
+        && nodeid == 42,
         "flux_msg_get_nodeid works and returns what we set");
 
     errno = 0;
@@ -380,7 +377,7 @@ void check_proto (void)
     ok (flux_msg_set_errnum (msg, 43) == 0,
         "flux_msg_set_errnum works on response");
     errno = 0;
-    ok (flux_msg_set_nodeid (msg, 0, 0) < 0 && errno == EINVAL,
+    ok (flux_msg_set_nodeid (msg, 0) < 0 && errno == EINVAL,
         "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
     errnum = 0;
     ok (flux_msg_get_errnum (msg, &errnum) == 0 && errnum == 43,
@@ -388,20 +385,11 @@ void check_proto (void)
 
     ok (flux_msg_set_type (msg, FLUX_MSGTYPE_REQUEST) == 0,
         "flux_msg_set_type works");
-    errno = 0;
-    ok (flux_msg_set_nodeid (msg, FLUX_NODEID_ANY, FLUX_MSGFLAG_UPSTREAM) < 0
-        && errno == EINVAL,
-        "flux_msg_set_nodeid ANY + FLUX_MSGFLAG_UPSTREAM fails with EINVAL");
 
     errno = 0;
-    ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM, 0) < 0
+    ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM) < 0
         && errno == EINVAL,
         "flux_msg_set_nodeid FLUX_NODEID_UPSTREAM fails with EINVAL");
-
-    ok (flux_msg_set_nodeid (msg, 42, FLUX_MSGFLAG_UPSTREAM) == 0
-        && flux_msg_get_nodeid (msg, &nodeid, &flags) == 0
-        && nodeid == 42 && flags == FLUX_MSGFLAG_UPSTREAM,
-        "flux_msg_set_nodeid with nodeid + FLUX_MSGFLAG_UPSTREAM works");
 
     flux_msg_destroy (msg);
 }

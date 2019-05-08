@@ -26,10 +26,11 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
-    int flags;
+    uint8_t flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0
-            || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
+            || flux_msg_get_nodeid (msg, &nodeid) < 0
+            || flux_msg_get_flags (msg, &flags)) {
         goto error;
     }
     if (nodeid == nodeid_fake_error) {
@@ -51,10 +52,11 @@ void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     int errnum = 0;
     uint32_t nodeid = 0;
-    int flags = 0;
+    uint8_t flags = 0;
 
     if (flux_request_unpack (msg, NULL, "{}") < 0
-            || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
+            || flux_msg_get_nodeid (msg, &nodeid) < 0
+            || flux_msg_get_flags (msg, &flags) < 0) {
         errnum = errno;
         goto done;
     }
