@@ -1,5 +1,5 @@
 AM_CPPFLAGS = \
-	$(WARNING_CFLAGS) -Wno-error=missing-field-initializers \
+	$(WARNING_CFLAGS) -Wno-missing-field-initializers \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libflux \

@@ -14,17 +14,82 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/aux.h"
 
+struct aux_container {
+    struct aux_item *aux;
+    int count;
+};
+
+void c_cb (void *arg)
+{
+    struct aux_container *ac = arg;
+    ac->count++;
+}
+void b_cb (void *arg)
+{
+    struct aux_container *ac = arg;
+    ac->count++;
+    aux_set (&ac->aux, "c", ac, c_cb);
+}
+
+void a_cb (void *arg)
+{
+    struct aux_container *ac = arg;
+    ac->count++;
+    aux_set (&ac->aux, "b", ac, b_cb);
+}
+
+void aux_destroy_set_ok (void)
+{
+    struct aux_container ac;
+    ac.aux = NULL;
+    ac.count = 0;
+
+    aux_set (&ac.aux, "a", &ac, a_cb);
+    aux_destroy (&ac.aux);
+    ok (ac.count == 3,
+        "aux_destroy allows list to be modified");
+    diag ("ac.count=%d", ac.count);
+}
+
+void ngs_free (void *arg)
+{
+    struct aux_container *ac = arg;
+    if (aux_get (ac->aux, "foo"))
+        ac->count++;
+    if (aux_get (ac->aux, "bar"))
+        ac->count++;
+    if (aux_get (ac->aux, "baz"))
+        ac->count++;
+}
+
+/* aux_destroy iteration should not allow aux_get to succeed on
+ * the item being destroyed
+ */
+void aux_destroy_no_get_self (void)
+{
+    struct aux_container ac;
+    ac.aux = NULL;
+    ac.count = 0;
+
+    aux_set (&ac.aux, "foo", &ac, ngs_free);
+    aux_set (&ac.aux, "bar", &ac, ngs_free);
+    aux_set (&ac.aux, "baz", &ac, ngs_free);
+    aux_destroy (&ac.aux);
+
+    /* 2+1+0 == 3 */
+    ok (ac.count == 3,
+        "aux_destroy doesn't allow access to items being destroyed");
+}
+
 int myfree_count;
 void myfree (void *arg)
 {
     myfree_count++;
 }
 
-int main (int argc, char *argv[])
+void simple_test (void)
 {
     struct aux_item *aux = NULL;
-
-    plan (NO_PLAN);
 
     errno = 0;
     ok (aux_get (aux, "frog") == NULL && errno == ENOENT,
@@ -109,10 +174,20 @@ int main (int argc, char *argv[])
 
     lives_ok ({aux_destroy (NULL);},
         "aux_destroy aux=NULL doesn't crash");
+}
+
+int main (int argc, char *argv[])
+{
+    plan (NO_PLAN);
+
+    simple_test ();
+    aux_destroy_no_get_self ();
+    aux_destroy_set_ok ();
 
     done_testing ();
+
     return 0;
-}
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

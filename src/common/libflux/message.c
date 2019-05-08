@@ -40,20 +40,6 @@
 
 #include "message.h"
 
-/* Begin manual codec
- */
-#define PROTO_MAGIC         0x8e
-#define PROTO_VERSION       1
-#define PROTO_SIZE          20
-#define PROTO_OFF_MAGIC     0 /* 1 byte */
-#define PROTO_OFF_VERSION   1 /* 1 byte */
-#define PROTO_OFF_TYPE      2 /* 1 byte */
-#define PROTO_OFF_FLAGS     3 /* 1 byte */
-#define PROTO_OFF_USERID    4 /* 4 bytes */
-#define PROTO_OFF_ROLEMASK  8 /* 4 bytes */
-#define PROTO_OFF_BIGINT    12 /* 4 bytes */
-#define PROTO_OFF_BIGINT2   16 /* 4 bytes */
-
 #define FLUX_MSG_MAGIC 0x33321eee
 struct flux_msg {
     int magic;
@@ -62,8 +48,35 @@ struct flux_msg {
     struct aux_item *aux;
 };
 
-static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
-static int proto_set_bigint2 (uint8_t *data, int len, uint32_t bigint);
+/* Begin manual codec
+ * PROTO consists of 4 byte prelude followed by a fixed length
+ * array of u32's in network byte order.
+ */
+#define PROTO_MAGIC         0x8e
+#define PROTO_VERSION       1
+
+#define PROTO_OFF_MAGIC     0 /* 1 byte */
+#define PROTO_OFF_VERSION   1 /* 1 byte */
+#define PROTO_OFF_TYPE      2 /* 1 byte */
+#define PROTO_OFF_FLAGS     3 /* 1 byte */
+#define PROTO_OFF_U32_ARRAY 4
+
+#define PROTO_IND_USERID    0
+#define PROTO_IND_ROLEMASK  1
+#define PROTO_IND_AUX1      2
+#define PROTO_IND_AUX2      3
+
+#define PROTO_U32_COUNT     4
+#define PROTO_SIZE          4 + (PROTO_U32_COUNT * 4)
+
+/* Helpful aliases */
+#define PROTO_IND_NODEID    PROTO_IND_AUX1 // request
+#define PROTO_IND_MATCHTAG  PROTO_IND_AUX2 // request, response
+#define PROTO_IND_SEQUENCE  PROTO_IND_AUX1 // event
+#define PROTO_IND_ERRNUM    PROTO_IND_AUX1 // response, keepalive
+#define PROTO_IND_STATUS    PROTO_IND_AUX2 // keepalive
+
+static int proto_set_u32 (uint8_t *data, int len, int index, uint32_t val);
 
 static int proto_set_type (uint8_t *data, int len, int type)
 {
@@ -72,25 +85,28 @@ static int proto_set_type (uint8_t *data, int len, int type)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (proto_set_bigint (data, len, FLUX_NODEID_ANY) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_NODEID,
+                               FLUX_NODEID_ANY) < 0)
                 return -1;
-            if (proto_set_bigint2 (data, len, FLUX_MATCHTAG_NONE) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_MATCHTAG,
+                               FLUX_MATCHTAG_NONE) < 0)
                 return -1;
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            if (proto_set_bigint (data, len, 0) < 0)
+            /* N.B. don't clobber matchtag from request on set_type */
+            if (proto_set_u32 (data, len, PROTO_IND_ERRNUM, 0) < 0)
                 return -1;
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (proto_set_bigint (data, len, 0) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_SEQUENCE, 0) < 0)
                 return -1;
-            if (proto_set_bigint2 (data, len, 0) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_AUX2, 0) < 0)
                 return -1;
             break;
         case FLUX_MSGTYPE_KEEPALIVE:
-            if (proto_set_bigint (data, len, 0) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_STATUS, 0) < 0)
                 return -1;
-            if (proto_set_bigint2 (data, len, 0) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_ERRNUM, 0) < 0)
                 return -1;
             break;
         default:
@@ -134,99 +150,43 @@ static int proto_mod_flags (uint8_t *data, int len, uint8_t val, bool clear)
         data[PROTO_OFF_FLAGS] |= val;
     return 0;
 }
-static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint)
+static int proto_set_u32 (uint8_t *data, int len, int index, uint32_t val)
 {
-    uint32_t x = htonl (bigint);
+    uint32_t x = htonl (val);
+    int offset = PROTO_OFF_U32_ARRAY + index * 4;
 
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION
+                         || index < 0 || index >= PROTO_U32_COUNT)
         return -1;
-    memcpy (&data[PROTO_OFF_BIGINT], &x, sizeof (x));
+    memcpy (&data[offset], &x, sizeof (x));
     return 0;
 }
-static int proto_get_bigint (uint8_t *data, int len, uint32_t *bigint)
+static int proto_get_u32 (uint8_t *data, int len, int index, uint32_t *val)
 {
     uint32_t x;
+    int offset = PROTO_OFF_U32_ARRAY + index * 4;
 
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION
+                         || index < 0 || index >= PROTO_U32_COUNT)
         return -1;
-    memcpy (&x, &data[PROTO_OFF_BIGINT], sizeof (x));
-    *bigint = ntohl (x);
-    return 0;
-}
-static int proto_set_bigint2 (uint8_t *data, int len, uint32_t bigint)
-{
-    uint32_t x = htonl (bigint);
-
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    memcpy (&data[PROTO_OFF_BIGINT2], &x, sizeof (x));
-    return 0;
-}
-static int proto_get_bigint2 (uint8_t *data, int len, uint32_t *bigint)
-{
-    uint32_t x;
-
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    memcpy (&x, &data[PROTO_OFF_BIGINT2], sizeof (x));
-    *bigint = ntohl (x);
-    return 0;
-}
-static int proto_set_userid (uint8_t *data, int len, uint32_t userid)
-{
-    uint32_t x = htonl (userid);
-
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    memcpy (&data[PROTO_OFF_USERID], &x, sizeof (x));
-    return 0;
-}
-static int proto_get_userid (uint8_t *data, int len, uint32_t *userid)
-{
-    uint32_t x;
-
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    memcpy (&x, &data[PROTO_OFF_USERID], sizeof (x));
-    *userid = ntohl (x);
-    return 0;
-}
-static int proto_set_rolemask (uint8_t *data, int len, uint32_t rolemask)
-{
-    uint32_t x = htonl (rolemask);
-
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    memcpy (&data[PROTO_OFF_ROLEMASK], &x, sizeof (x));
-    return 0;
-}
-static int proto_get_rolemask (uint8_t *data, int len, uint32_t *rolemask)
-{
-    uint32_t x;
-
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    memcpy (&x, &data[PROTO_OFF_ROLEMASK], sizeof (x));
-    *rolemask = ntohl (x);
+    memcpy (&x, &data[offset], sizeof (x));
+    *val = ntohl (x);
     return 0;
 }
 static void proto_init (uint8_t *data, int len, uint8_t flags)
 {
+    int n;
     assert (len >= PROTO_SIZE);
     memset (data, 0, len);
     data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
     data[PROTO_OFF_VERSION] = PROTO_VERSION;
     data[PROTO_OFF_FLAGS] = flags;
-    proto_set_userid (data, len, FLUX_USERID_UNKNOWN);
-    proto_set_rolemask (data, len, FLUX_ROLE_NONE);
+    n = proto_set_u32 (data, len, PROTO_IND_USERID, FLUX_USERID_UNKNOWN);
+    assert (n == 0);
+    n = proto_set_u32 (data, len, PROTO_IND_ROLEMASK, FLUX_ROLE_NONE);
+    assert (n == 0);
 }
 /* End manual codec
  */
@@ -447,8 +407,8 @@ bool flux_msg_is_private (const flux_msg_t *msg)
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_set_userid (zframe_data (zf),
-                                 zframe_size (zf), userid) < 0) {
+    if (!zf || proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_USERID, userid) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -458,8 +418,8 @@ int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_get_userid (zframe_data (zf),
-                                 zframe_size (zf), userid) < 0) {
+    if (!zf || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_USERID, userid) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -469,8 +429,8 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_set_rolemask (zframe_data (zf),
-                                   zframe_size (zf), rolemask) < 0) {
+    if (!zf || proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_ROLEMASK, rolemask) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -480,8 +440,8 @@ int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_get_rolemask (zframe_data (zf),
-                                   zframe_size (zf), rolemask) < 0) {
+    if (!zf || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_ROLEMASK, rolemask) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -505,7 +465,8 @@ int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags)
         goto error;
     if (type != FLUX_MSGTYPE_REQUEST)
         goto error;
-    if (proto_set_bigint (zframe_data (zf), zframe_size (zf), nodeid) < 0)
+    if (proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                       PROTO_IND_NODEID, nodeid) < 0)
         goto error;
     if (proto_mod_flags (zframe_data (zf), zframe_size (zf), flags, false) < 0)
         goto error;
@@ -524,7 +485,8 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_REQUEST
-            || proto_get_bigint (zframe_data (zf), zframe_size (zf), &nid) < 0
+            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_NODEID, &nid) < 0
             || proto_get_flags (zframe_data (zf), zframe_size (zf), &fl) < 0
             || ((fl & FLUX_MSGFLAG_UPSTREAM) && nid == FLUX_NODEID_ANY)
             || nid == FLUX_NODEID_UPSTREAM) {
@@ -543,7 +505,8 @@ int flux_msg_set_errnum (flux_msg_t *msg, int e)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
-            || proto_set_bigint (zframe_data (zf), zframe_size (zf), e) < 0) {
+            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_ERRNUM, e) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -558,7 +521,8 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
-            || proto_get_bigint (zframe_data (zf), zframe_size (zf), &xe) < 0) {
+            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_ERRNUM, &xe) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -573,7 +537,8 @@ int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_EVENT
-            || proto_set_bigint (zframe_data (zf), zframe_size (zf), seq) < 0) {
+            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_SEQUENCE, seq) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -587,7 +552,8 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_EVENT
-            || proto_get_bigint (zframe_data (zf), zframe_size (zf), seq) < 0) {
+            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_SEQUENCE, seq) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -601,7 +567,8 @@ int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-            || proto_set_bigint2 (zframe_data (zf), zframe_size (zf), t) < 0) {
+            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_MATCHTAG, t) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -615,7 +582,8 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-            || proto_get_bigint2 (zframe_data (zf), zframe_size (zf), t) < 0) {
+            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_MATCHTAG, t) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -629,7 +597,8 @@ int flux_msg_set_status (flux_msg_t *msg, int s)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_KEEPALIVE
-            || proto_set_bigint2 (zframe_data (zf), zframe_size (zf), s) < 0) {
+            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_STATUS, s) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -644,7 +613,8 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_KEEPALIVE
-            || proto_get_bigint2 (zframe_data (zf), zframe_size (zf), &u) < 0) {
+            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                              PROTO_IND_STATUS, &u) < 0) {
         errno = EPROTO;
         return -1;
     }

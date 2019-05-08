@@ -28,8 +28,6 @@
 #include "src/common/libutil/popen2.h"
 #include "src/common/libutil/fdutils.h"
 
-static const char *default_ssh_cmd = "/usr/bin/rsh";
-
 #define CTX_MAGIC   0xe534babb
 typedef struct {
     int magic;
@@ -361,7 +359,7 @@ flux_t *connector_init (const char *path, int flags)
     c->magic = CTX_MAGIC;
 
     if (!(c->ssh_cmd = getenv ("FLUX_SSH")))
-        c->ssh_cmd = default_ssh_cmd;
+        c->ssh_cmd = PATH_SSH;
     if (argz_add (&c->ssh_argz, &c->ssh_argz_len, c->ssh_cmd) != 0)
         goto error;
     if (parse_ssh_port (c, path) < 0) /* [-p port] */
@@ -376,8 +374,16 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     }
     argz_extract (c->ssh_argz, c->ssh_argz_len, c->ssh_argv);
-    if (!(c->p = popen2 (c->ssh_cmd, c->ssh_argv)))
+    if (!(c->p = popen2 (c->ssh_cmd, c->ssh_argv))) {
+        /* If popen fails because ssh cannot be found, flux_open()
+         * will just fail with errno = ENOENT, which is not all that helpful.
+         * Emit a hint on stderr even though this is perhaps not ideal.
+         */
+        fprintf (stderr, "ssh-connector: %s: %s\n",
+                 c->ssh_cmd, strerror (errno));
+        fprintf (stderr, "Hint: set FLUX_SSH in environment to override\n");
         goto error;
+    }
     c->fd = popen2_get_fd (c->p);
     c->fd_nonblock = -1;
     flux_msg_iobuf_init (&c->outbuf);

@@ -152,9 +152,9 @@ void aux_destroy (struct aux_item **head)
 {
     if (head) {
         while (*head) {
-            struct aux_item *next = (*head)->next;
-            aux_item_destroy (*head);
-            *head = next;
+            struct aux_item *item = *head;
+            *head = item->next;
+            aux_item_destroy (item);
         }
     }
 }

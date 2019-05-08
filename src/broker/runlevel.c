@@ -218,8 +218,8 @@ static void completion_cb (flux_subprocess_t *p)
     if ((rc = flux_subprocess_exit_code (p)) < 0) {
         /* bash standard, signals + 128 */
         if ((rc = flux_subprocess_signaled (p)) >= 0) {
-            rc += 128;
             exit_string = strsignal (rc);
+            rc += 128;
         }
     }
     else {
