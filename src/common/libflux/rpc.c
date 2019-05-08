@@ -37,6 +37,7 @@ struct flux_rpc {
     uint32_t matchtag;
     int flags;
     flux_future_t *f;
+    bool sent;
 };
 
 static void log_matchtag_leak (flux_t *h, const char *msg, int matchtag)
@@ -45,32 +46,46 @@ static void log_matchtag_leak (flux_t *h, const char *msg, int matchtag)
         fprintf (stderr, "MATCHDEBUG: %s leaks matchtag=%d\n", msg, matchtag);
 }
 
+/* Free matchtag, if any, as long as there are no outstanding responses.
+ * Return 0 on success, or -1 if matchtag is still in use.
+ * N.B. whilst "normal" RPCs can be retired once fulfilled once,
+ * streaming RPCs may only be retired once fulfilled with an error (per RFC 6).
+ * Streaming RPCs may also queue up multiple fulfillments, so we must run
+ * through the backlog, being careful not to block.
+ */
+static int rpc_finalize (struct flux_rpc *rpc)
+{
+    if (rpc->matchtag == FLUX_MATCHTAG_NONE)
+        goto out;
+    if (!rpc->sent)
+        goto out_free;
+    if ((rpc->flags & FLUX_RPC_STREAMING)) {
+        while (flux_future_is_ready (rpc->f)) {
+            if (flux_future_get (rpc->f, NULL) < 0)
+                goto out_free;
+            flux_future_reset (rpc->f);
+        }
+    }
+    else {
+        if (flux_future_is_ready (rpc->f))
+            goto out_free;
+    }
+    return -1;
+out_free:
+    flux_matchtag_free (rpc->h, rpc->matchtag);
+    rpc->matchtag = FLUX_MATCHTAG_NONE;
+out:
+    return 0;
+}
+
 static void rpc_destroy (struct flux_rpc *rpc)
 {
     if (rpc) {
-        /* If future is unfulilled, or a streaming future is fulfilled but
-         * not with an error indicating end-of-stream, then responses
-         * may still be coming.  Better to leak the matchtag than reuse
-         * it prematurely.
-         */
-        if (rpc->matchtag == FLUX_MATCHTAG_NONE)
-            goto done;
-        if ((rpc->flags & FLUX_RPC_STREAMING)) {
-            if (!flux_future_is_ready (rpc->f)
-                                    || flux_future_get (rpc->f, NULL) == 0) {
-                log_matchtag_leak (rpc->h, "unterminated streaming RPC",
-                                   rpc->matchtag);
-                goto done;
-            }
-        }
-        else {
-            if (!flux_future_is_ready (rpc->f)) {
-                log_matchtag_leak (rpc->h, "unfulfilled RPC", rpc->matchtag);
-                goto done;
-            }
-        }
-        flux_matchtag_free (rpc->h, rpc->matchtag);
-done:
+        if (rpc_finalize (rpc) < 0)
+            log_matchtag_leak (rpc->h, (rpc->flags & FLUX_RPC_STREAMING)
+                               ? "unterminated streaming RPC"
+                               : "unfulfilled RPC",
+                               rpc->matchtag);
         free (rpc);
     }
 }
@@ -263,6 +278,7 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
 #endif
     if (rc < 0)
         goto error;
+    rpc->sent = true;
     /* Fulfill future now if one-way
      */
     if ((flags & FLUX_RPC_NORESPONSE))
