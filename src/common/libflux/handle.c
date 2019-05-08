@@ -536,6 +536,11 @@ void flux_matchtag_free (flux_t *h, uint32_t matchtag)
     tagpool_free (h->tagpool, matchtag);
 }
 
+bool flux_matchtag_group (uint32_t matchtag)
+{
+    return tagpool_group (matchtag);
+}
+
 uint32_t flux_matchtag_avail (flux_t *h, int flags)
 {
     h = lookup_clone_ancestor (h);

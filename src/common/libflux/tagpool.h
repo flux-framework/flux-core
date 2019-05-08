@@ -12,6 +12,7 @@
 #define _FLUX_CORE_TAGPOOL_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 enum {
     TAGPOOL_FLAG_GROUP = 1,
@@ -21,6 +22,8 @@ struct tagpool *tagpool_create (void);
 void tagpool_destroy (struct tagpool *t);
 uint32_t tagpool_alloc (struct tagpool *t, int flags);
 void tagpool_free (struct tagpool *t, uint32_t matchtag);
+
+bool tagpool_group (uint32_t matchtag);
 
 typedef void (*tagpool_grow_f)(void *arg, uint32_t oldsize, uint32_t newsize, int flags);
 void tagpool_set_grow_cb (struct tagpool *t, tagpool_grow_f cb, void *arg);

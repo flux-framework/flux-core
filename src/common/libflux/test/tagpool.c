@@ -19,6 +19,7 @@ int main (int argc, char *argv[])
     uint32_t avail;
     uint32_t norm_size, grp_size;
     int i, j, k, count, duplicates;
+    int group_type;
 
     plan (NO_PLAN);
 
@@ -52,13 +53,18 @@ int main (int argc, char *argv[])
 
     ok (avail >= 256,
         "regular: at least 256 tags available");
+    group_type = 0;
     for (i = 0; i < 256; i++) {
         tags[i] = tagpool_alloc (t, 0);
         if (tags[i] == FLUX_MATCHTAG_NONE)
             break;
+        if (tagpool_group (tags[i]))
+            group_type++;
     }
     ok (i == 256,
         "regular: tagpool_alloc worked 256 times");
+    ok (group_type == 0,
+        "regular: all tags were regular type");
     avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
     if (avail != norm_size - 256)
         diag ("wrong number avail: %u of %u", avail, norm_size);
@@ -99,13 +105,18 @@ int main (int argc, char *argv[])
 
     ok (avail >= 256,
         "regular: at least 256 tags available");
+    group_type = 0;
     for (i = 0; i < 256; i++) {
         tags[i] = tagpool_alloc (t, TAGPOOL_FLAG_GROUP);
         if (tags[i] == FLUX_MATCHTAG_NONE)
             break;
+        if (tagpool_group (tags[i]))
+            group_type++;
     }
     ok (i == 256,
         "group: tagpool_alloc worked 256 times", i);
+    ok (group_type == i,
+        "group: all tags were group type");
     ok (tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL) == grp_size - 256,
         "group: pool depleted by 256");
 
