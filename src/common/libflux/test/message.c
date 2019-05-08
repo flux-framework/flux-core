@@ -734,6 +734,81 @@ void check_params (void)
     flux_msg_destroy (msg);
 }
 
+void check_flags (void)
+{
+    flux_msg_t *msg;
+    uint8_t flags;
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        BAIL_OUT ("flux_msg_create failed");
+    ok (flux_msg_get_flags (msg, &flags) == 0,
+        "flux_msg_get_flags works");
+    ok (flags == 0,
+        "flags are initially zero");
+
+    /* FLUX_MSGFLAG_PRIVATE */
+    ok (flux_msg_is_private (msg) == false,
+        "flux_msg_is_private = false");
+    ok (flux_msg_set_private (msg) == 0,
+        "flux_msg_set_private_works");
+    ok (flux_msg_is_private (msg) == true,
+        "flux_msg_is_private = true");
+
+    /* FLUX_MSGFLAG_STREAMING */
+    ok (flux_msg_is_streaming (msg) == false,
+        "flux_msg_is_streaming = false");
+    ok (flux_msg_set_streaming (msg) == 0,
+        "flux_msg_set_streaming_works");
+    ok (flux_msg_is_streaming (msg) == true,
+        "flux_msg_is_streaming = true");
+
+    ok (flux_msg_set_topic (msg, "foo") == 0
+        && flux_msg_get_flags (msg, &flags) == 0
+        && (flags & FLUX_MSGFLAG_TOPIC),
+        "flux_msg_set_topic sets FLUX_MSGFLAG_TOPIC");
+
+    ok (flux_msg_set_payload (msg, "foo", 3) == 0
+        && flux_msg_get_flags (msg, &flags) == 0
+        && (flags & FLUX_MSGFLAG_PAYLOAD),
+        "flux_msg_set_payload sets FLUX_MSGFLAG_PAYLOAD");
+
+    ok (flux_msg_enable_route (msg) == 0
+        && flux_msg_get_flags (msg, &flags) == 0
+        && (flags & FLUX_MSGFLAG_ROUTE),
+        "flux_msg_enable_route sets FLUX_MSGFLAG_ROUTE");
+
+    flux_msg_destroy (msg);
+
+    /* invalid params checks */
+
+    errno = 0;
+    ok (flux_msg_get_flags (NULL, &flags) < 0 && errno == EINVAL,
+        "flux_msg_get_flags msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_flags (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_flags flags=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_flags (NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_flags msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_flags (msg, 0xff) < 0 && errno == EINVAL,
+        "flux_msg_set_flags flags=(invalid) fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_private (NULL) < 0 && errno == EINVAL,
+        "flux_msg_set_private msg=NULL fails with EINVAL");
+    ok (flux_msg_is_private (NULL) == true,
+        "flux_msg_is_private msg=NULL returns true");
+
+    errno = 0;
+    ok (flux_msg_set_streaming (NULL) < 0 && errno == EINVAL,
+        "flux_msg_set_streaming msg=NULL fails with EINVAL");
+    ok (flux_msg_is_streaming (NULL) == true,
+        "flux_msg_is_streaming msg=NULL returns true");
+}
+
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -748,6 +823,7 @@ int main (int argc, char *argv[])
     check_security ();
     check_aux ();
     check_copy ();
+    check_flags ();
 
     check_cmp ();
 

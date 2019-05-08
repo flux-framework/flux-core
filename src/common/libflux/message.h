@@ -38,6 +38,7 @@ enum {
     FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
+    FLUX_MSGFLAG_STREAMING  = 0x40, /* request/response is streaming RPC */
 };
 
 /* N.B. FLUX_NODEID_UPSTREAM should be used in the RPC interface only.
@@ -162,6 +163,13 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type);
  */
 int flux_msg_set_private (flux_msg_t *msg);
 bool flux_msg_is_private (const flux_msg_t *msg);
+
+/* Get/set streaming flag.
+ * Requests to streaming RPC services should set this flag.
+ * Streaming RPC services should return an error if flag is not set.
+ */
+int flux_msg_set_streaming (flux_msg_t *msg);
+bool flux_msg_is_streaming (const flux_msg_t *msg);
 
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.

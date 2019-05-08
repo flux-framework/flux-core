@@ -155,11 +155,15 @@ void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     int i, count;
+    uint8_t flags;
 
     if (flux_request_unpack (msg, NULL, "{s:i}", "count", &count) < 0)
         goto error;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        goto error;
     for (i = 0; i < count; i++) {
-        if (flux_respond_pack (h, msg, "{s:i}", "seq", i) < 0)
+        if (flux_respond_pack (h, msg, "{s:i s:i}", "seq", i,
+                                                    "flags", flags) < 0)
             BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     }
     errno = ENODATA; // EOF of sorts
@@ -543,15 +547,21 @@ void test_multi_response (flux_t *h)
 {
     flux_future_t *f;
     int seq = -1;
+    int inflags = 0;
+    uint8_t outflags = 0;
     int count = 0;
     int t1, t2;
+    const flux_msg_t *response;
 
     f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
                           "{s:i}", "count", 3);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     errno = 0;
-    while (flux_rpc_get_unpack (f, "{s:i}", "seq", &seq) == 0) {
+    while (flux_rpc_get_unpack (f, "{s:i s:i}", "seq", &seq,
+                                                "flags", &inflags) == 0) {
+        if (flux_future_get (f, (const void **)&response) == 0)
+            (void)flux_msg_get_flags (response, &outflags);
         count++;
         flux_future_reset (f);
     }
@@ -559,6 +569,13 @@ void test_multi_response (flux_t *h)
         "multi-now: got ENODATA as EOF");
     ok (count == 3,
         "multi-now: received 3 valid responses");
+
+    ok ((inflags & FLUX_MSGFLAG_STREAMING) != 0,
+        "multi-now: MSGFLAG_STREAMING was set in the request");
+    ok ((outflags & FLUX_MSGFLAG_STREAMING),
+        "multi-now: MSGFLAG_STREAMING was set in the response");
+
+
     t1 = flux_matchtag_avail (h, 0);
     flux_future_destroy (f);
     t2 = flux_matchtag_avail (h, 0);

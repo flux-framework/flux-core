@@ -356,6 +356,14 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
 
 int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 {
+    const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
+                              | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
+                              | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING;
+
+    if (!msg || (fl & ~valid_flags) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_set_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
         errno = EINVAL;
@@ -366,6 +374,10 @@ int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 
 int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
 {
+    if (!msg || !fl) {
+        errno = EINVAL;
+        return -1;
+    }
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
         errno = EPROTO;
@@ -392,6 +404,23 @@ bool flux_msg_is_private (const flux_msg_t *msg)
     return (flags & FLUX_MSGFLAG_PRIVATE) ? true : false;
 }
 
+int flux_msg_set_streaming (flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return -1;
+    if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_STREAMING) < 0)
+        return -1;
+    return 0;
+}
+
+bool flux_msg_is_streaming (const flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return true;
+    return (flags & FLUX_MSGFLAG_STREAMING) ? true : false;
+}
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
