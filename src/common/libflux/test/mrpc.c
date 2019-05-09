@@ -16,6 +16,7 @@
 #include "src/common/libidset/idset.h"
 
 #include "util.h"
+#include "util_rpc.h"
 
 static uint32_t fake_size = 1;
 static uint32_t fake_rank = 0;
@@ -206,6 +207,23 @@ static void rpctest_set_size (flux_t *h, uint32_t newsize)
     flux_get_size (h, &size);
     cmp_ok (size, "==", fake_size,
         "successfully faked flux_get_size() of %d", fake_size);
+}
+
+/* Purposefully abandon an mrpc and ensure that matchtag reclaim
+ * logic does not reclaim the matchtag when a response is received.
+ * (If matchtag is a group matchtag, currently there is no way to reclaim it
+ * if the mrpc was abandoned).
+ */
+void test_mrpc_matchtag_leak (flux_t *h)
+{
+    flux_mrpc_t *r;
+
+    ok ((r = flux_mrpc (h, "rpctest.hello", NULL, "all", 0)) != NULL,
+        "flux_mrpc sent rpctest.hello");
+    flux_mrpc_destroy (r);
+
+    ok (reclaim_matchtag (h, 1, 0.1) < 0,
+        "matchag reclaim did not prematurely retire orphaned group matchtag");
 }
 
 void test_mrpc (flux_t *h)
@@ -649,6 +667,7 @@ int main (int argc, char *argv[])
 
     test_mrpc_invalid_args();
     test_mrpc (h);
+    test_mrpc_matchtag_leak (h);
     test_mrpc_then (h);
     test_mrpcf (h);
     test_mrpcf_then (h);

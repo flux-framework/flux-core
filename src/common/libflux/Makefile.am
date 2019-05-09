@@ -169,7 +169,9 @@ check_LTLIBRARIES = \
 
 test_libtestutil_la_SOURCES = \
 	test/util.h \
-	test/util.c
+	test/util.c \
+	test/util_rpc.h \
+	test/util_rpc.c
 
 check_PROGRAMS = $(TESTS)
 
