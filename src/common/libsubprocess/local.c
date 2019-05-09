@@ -594,6 +594,8 @@ static int local_fork (flux_subprocess_t *p)
     if (p->pid == 0)
         local_child (p); /* No return */
 
+    p->pid_set = true;
+
     close_child_fds (p);
 
     /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */

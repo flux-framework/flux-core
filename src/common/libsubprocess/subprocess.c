@@ -1028,6 +1028,14 @@ pid_t flux_subprocess_pid (flux_subprocess_t *p)
         errno = EINVAL;
         return -1;
     }
+    /* do not return to user if the pid not yet received/set.  Note
+     * that checking the state here isn't safe, b/c
+     * FLUX_SUBPROCESS_FAILED may have occurred at any point before /
+     * after the pid was available */
+    if (!p->pid_set) {
+        errno = EINVAL;
+        return -1;
+    }
     return p->pid;
 }
 

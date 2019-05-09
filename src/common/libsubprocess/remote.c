@@ -93,6 +93,7 @@ static void process_new_state (flux_subprocess_t *p,
 
     if (p->state == FLUX_SUBPROCESS_STARTED) {
         p->pid = pid;
+        p->pid_set = true;
     }
     else if (p->state == FLUX_SUBPROCESS_RUNNING) {
         start_channel_watchers (p);

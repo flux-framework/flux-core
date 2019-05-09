@@ -67,6 +67,7 @@ struct flux_subprocess {
 
     int refcount;
     pid_t pid;
+    bool pid_set;
 
     flux_subprocess_ops_t ops;      /* Callbacks registered for this proc */
 
