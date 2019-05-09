@@ -172,12 +172,17 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     struct watch_ctx *w = NULL;
     flux_jobid_t id;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
-
+    if (!flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        errmsg = "eventlog-watch request rejected without streaming RPC flag";
+        goto error;
+    }
     if (!(w = watch_ctx_create (ctx, msg, id)))
         goto error;
 
@@ -194,7 +199,7 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     watch_ctx_destroy (w);
 }

@@ -162,6 +162,10 @@ void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{s:i s:i}", "count", &count,
                                                      "noterm", &noterm) < 0)
         goto error;
+    if (!flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        goto error;
+    }
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     for (i = 0; i < count; i++) {

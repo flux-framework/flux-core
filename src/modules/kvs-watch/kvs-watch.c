@@ -981,13 +981,18 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     int flags;
     struct ns_monitor *nsm;
     struct watcher *w;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:s s:i}",
                              "namespace", &ns,
                              "key", &key,
                              "flags", &flags) < 0)
         goto error;
-
+    if ((flags & FLUX_KVS_WATCH) && !flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        errmsg = "KVS watch request rejected without streaming RPC flag";
+        goto error;
+    }
     if (!(nsm = namespace_monitor (ctx, ns)))
         goto error;
 
@@ -1008,7 +1013,7 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         watcher_respond (nsm, w);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
