@@ -118,6 +118,16 @@ class Message(WrapperPimpl):
     def type_str(self):
         return msg_typestr(self.type)
 
+    def copy(self, payload=True):
+        """Duplicate message
+        :param payload: Whether the payload should be included in the message copy
+        :type payload: boolean
+        :return type: Message
+        """
+        return Message(
+            type_id=self.type, handle=self.pimpl.copy(payload), destruct=True
+        )
+
 
 # Residing here to avoid cyclic references
 
