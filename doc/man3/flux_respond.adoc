@@ -48,6 +48,22 @@ _errnum_ must be non-zero.  If _errmsg_ is non-NULL, an error string
 payload is included in the response.  The error string may be used to
 provide a more detailed error message than can be conveyed via _errnum_.
 
+
+STREAMING SERVICES
+------------------
+
+Per RFC 6, a "streaming" service must return zero or more non-error
+responses to a request and a final error response.  If the requested
+operation was successful, the final error response may use ENODATA as
+the error number.  Clients should interpret ENODATA as a non-error
+end-of-stream marker.
+
+It is essential that services which return multiple responses verify that
+requests were made with the FLUX_RPC_STREAMING flag by testing the
+FLUX_MSGFLAG_STREAMING flag, e.g. using `flux_msg_is_streaming()`.
+If the flag is not set, the service must return an immediate EPROTO error.
+
+
 include::JSON_PACK.adoc[]
 
 
