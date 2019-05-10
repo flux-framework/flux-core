@@ -594,6 +594,8 @@ static int local_fork (flux_subprocess_t *p)
     if (p->pid == 0)
         local_child (p); /* No return */
 
+    p->pid_set = true;
+
     close_child_fds (p);
 
     /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
@@ -657,7 +659,7 @@ static int local_exec (flux_subprocess_t *p)
             return -1;
         p->status = status;
 
-        /* spritually FLUX_SUBPROCESS_EXEC_FAILED state at this
+        /* spiritually FLUX_SUBPROCESS_EXEC_FAILED state at this
          * point */
         errno = p->exec_failed_errno;
         return -1;

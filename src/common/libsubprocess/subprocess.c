@@ -145,7 +145,7 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
                                               flux_reactor_t *r,
                                               int flags,
                                               const flux_cmd_t *cmd,
-                                              flux_subprocess_ops_t *ops,
+                                              const flux_subprocess_ops_t *ops,
                                               int rank,
                                               bool local)
 {
@@ -555,7 +555,7 @@ static int subprocess_setup_completed (flux_subprocess_t *p)
 
 static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int flags,
                                            const flux_cmd_t *cmd,
-                                           flux_subprocess_ops_t *ops)
+                                           const flux_subprocess_ops_t *ops)
 {
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
@@ -597,7 +597,7 @@ error:
 
 flux_subprocess_t * flux_exec (flux_t *h, int flags,
                                const flux_cmd_t *cmd,
-                               flux_subprocess_ops_t *ops)
+                               const flux_subprocess_ops_t *ops)
 {
     flux_reactor_t *r;
 
@@ -614,14 +614,14 @@ flux_subprocess_t * flux_exec (flux_t *h, int flags,
 
 flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
                                      const flux_cmd_t *cmd,
-                                     flux_subprocess_ops_t *ops)
+                                     const flux_subprocess_ops_t *ops)
 {
     return flux_exec_wrap (NULL, r, flags, cmd, ops);
 }
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
-                               flux_subprocess_ops_t *ops)
+                               const flux_subprocess_ops_t *ops)
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
@@ -1025,6 +1025,14 @@ int flux_subprocess_signaled (flux_subprocess_t *p)
 pid_t flux_subprocess_pid (flux_subprocess_t *p)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+    /* do not return to user if the pid not yet received/set.  Note
+     * that checking the state here isn't safe, b/c
+     * FLUX_SUBPROCESS_FAILED may have occurred at any point before /
+     * after the pid was available */
+    if (!p->pid_set) {
         errno = EINVAL;
         return -1;
     }
