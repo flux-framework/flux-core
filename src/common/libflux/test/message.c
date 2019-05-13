@@ -345,7 +345,6 @@ void check_proto (void)
     uint32_t nodeid;
     int errnum;
     int type;
-    int flags;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "flux_msg_create works");
@@ -356,18 +355,16 @@ void check_proto (void)
         "flux_msg_set_type works");
     ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "flux_msg_get_type works and returns what we set");
-    ok (flux_msg_get_nodeid (msg, &nodeid, &flags) == 0
-        && nodeid == FLUX_NODEID_ANY
-        && flags == 0,
+    ok (flux_msg_get_nodeid (msg, &nodeid) == 0
+        && nodeid == FLUX_NODEID_ANY,
         "flux_msg_get_nodeid works on request and default is sane");
 
     nodeid = 42;
-    ok (flux_msg_set_nodeid (msg, nodeid, 0) == 0,
+    ok (flux_msg_set_nodeid (msg, nodeid) == 0,
         "flux_msg_set_nodeid works on request");
     nodeid = 0;
-    ok (flux_msg_get_nodeid (msg, &nodeid, &flags) == 0
-        && nodeid == 42
-        && flags == 0,
+    ok (flux_msg_get_nodeid (msg, &nodeid) == 0
+        && nodeid == 42,
         "flux_msg_get_nodeid works and returns what we set");
 
     errno = 0;
@@ -380,7 +377,7 @@ void check_proto (void)
     ok (flux_msg_set_errnum (msg, 43) == 0,
         "flux_msg_set_errnum works on response");
     errno = 0;
-    ok (flux_msg_set_nodeid (msg, 0, 0) < 0 && errno == EINVAL,
+    ok (flux_msg_set_nodeid (msg, 0) < 0 && errno == EINVAL,
         "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
     errnum = 0;
     ok (flux_msg_get_errnum (msg, &errnum) == 0 && errnum == 43,
@@ -388,20 +385,11 @@ void check_proto (void)
 
     ok (flux_msg_set_type (msg, FLUX_MSGTYPE_REQUEST) == 0,
         "flux_msg_set_type works");
-    errno = 0;
-    ok (flux_msg_set_nodeid (msg, FLUX_NODEID_ANY, FLUX_MSGFLAG_UPSTREAM) < 0
-        && errno == EINVAL,
-        "flux_msg_set_nodeid ANY + FLUX_MSGFLAG_UPSTREAM fails with EINVAL");
 
     errno = 0;
-    ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM, 0) < 0
+    ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM) < 0
         && errno == EINVAL,
         "flux_msg_set_nodeid FLUX_NODEID_UPSTREAM fails with EINVAL");
-
-    ok (flux_msg_set_nodeid (msg, 42, FLUX_MSGFLAG_UPSTREAM) == 0
-        && flux_msg_get_nodeid (msg, &nodeid, &flags) == 0
-        && nodeid == 42 && flags == FLUX_MSGFLAG_UPSTREAM,
-        "flux_msg_set_nodeid with nodeid + FLUX_MSGFLAG_UPSTREAM works");
 
     flux_msg_destroy (msg);
 }
@@ -746,6 +734,81 @@ void check_params (void)
     flux_msg_destroy (msg);
 }
 
+void check_flags (void)
+{
+    flux_msg_t *msg;
+    uint8_t flags;
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        BAIL_OUT ("flux_msg_create failed");
+    ok (flux_msg_get_flags (msg, &flags) == 0,
+        "flux_msg_get_flags works");
+    ok (flags == 0,
+        "flags are initially zero");
+
+    /* FLUX_MSGFLAG_PRIVATE */
+    ok (flux_msg_is_private (msg) == false,
+        "flux_msg_is_private = false");
+    ok (flux_msg_set_private (msg) == 0,
+        "flux_msg_set_private_works");
+    ok (flux_msg_is_private (msg) == true,
+        "flux_msg_is_private = true");
+
+    /* FLUX_MSGFLAG_STREAMING */
+    ok (flux_msg_is_streaming (msg) == false,
+        "flux_msg_is_streaming = false");
+    ok (flux_msg_set_streaming (msg) == 0,
+        "flux_msg_set_streaming_works");
+    ok (flux_msg_is_streaming (msg) == true,
+        "flux_msg_is_streaming = true");
+
+    ok (flux_msg_set_topic (msg, "foo") == 0
+        && flux_msg_get_flags (msg, &flags) == 0
+        && (flags & FLUX_MSGFLAG_TOPIC),
+        "flux_msg_set_topic sets FLUX_MSGFLAG_TOPIC");
+
+    ok (flux_msg_set_payload (msg, "foo", 3) == 0
+        && flux_msg_get_flags (msg, &flags) == 0
+        && (flags & FLUX_MSGFLAG_PAYLOAD),
+        "flux_msg_set_payload sets FLUX_MSGFLAG_PAYLOAD");
+
+    ok (flux_msg_enable_route (msg) == 0
+        && flux_msg_get_flags (msg, &flags) == 0
+        && (flags & FLUX_MSGFLAG_ROUTE),
+        "flux_msg_enable_route sets FLUX_MSGFLAG_ROUTE");
+
+    flux_msg_destroy (msg);
+
+    /* invalid params checks */
+
+    errno = 0;
+    ok (flux_msg_get_flags (NULL, &flags) < 0 && errno == EINVAL,
+        "flux_msg_get_flags msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_flags (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_flags flags=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_flags (NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_flags msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_flags (msg, 0xff) < 0 && errno == EINVAL,
+        "flux_msg_set_flags flags=(invalid) fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_private (NULL) < 0 && errno == EINVAL,
+        "flux_msg_set_private msg=NULL fails with EINVAL");
+    ok (flux_msg_is_private (NULL) == true,
+        "flux_msg_is_private msg=NULL returns true");
+
+    errno = 0;
+    ok (flux_msg_set_streaming (NULL) < 0 && errno == EINVAL,
+        "flux_msg_set_streaming msg=NULL fails with EINVAL");
+    ok (flux_msg_is_streaming (NULL) == true,
+        "flux_msg_is_streaming msg=NULL returns true");
+}
+
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -760,6 +823,7 @@ int main (int argc, char *argv[])
     check_security ();
     check_aux ();
     check_copy ();
+    check_flags ();
 
     check_cmp ();
 

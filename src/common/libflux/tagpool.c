@@ -159,6 +159,13 @@ uint32_t tagpool_alloc (struct tagpool *t, int flags)
     return FLUX_MATCHTAG_NONE;
 }
 
+bool tagpool_group (uint32_t tag)
+{
+    if (tag != FLUX_MATCHTAG_NONE && (tag >> FLUX_MATCHTAG_GROUP_SHIFT) > 0)
+        return true;
+    return false;
+}
+
 void tagpool_free (struct tagpool *t, uint32_t tag)
 {
     assert (t->magic == TAGPOOL_MAGIC);

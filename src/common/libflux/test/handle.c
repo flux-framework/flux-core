@@ -63,6 +63,7 @@ int main (int argc, char *argv[])
     char *s;
     flux_msg_t *msg;
     const char *topic;
+    uint32_t matchtag;
 
     plan (NO_PLAN);
 
@@ -258,6 +259,21 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+
+    /* matchtags */
+    matchtag = flux_matchtag_alloc (h, 0);
+    ok (matchtag != FLUX_MATCHTAG_NONE,
+        "flux_matchtag_alloc (regular) works");
+    ok (flux_matchtag_group (matchtag) == false,
+        "matchtag is regular type");
+    flux_matchtag_free (h, matchtag);
+
+    matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
+    ok (matchtag != FLUX_MATCHTAG_NONE,
+        "flux_matchtag_alloc (group) works");
+    ok (flux_matchtag_group (matchtag) == true,
+        "matchtag is group type");
+    flux_matchtag_free (h, matchtag);
 
     flux_close (h);
     done_testing();

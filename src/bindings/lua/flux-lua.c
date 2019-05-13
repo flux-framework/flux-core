@@ -270,7 +270,6 @@ static int send_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
                               const char *topic, const char *json_str)
 {
     flux_msg_t *msg;
-    int msgflags = 0;
     int rc = -1;
 
     if (!(msg = flux_request_encode (topic, json_str)))
@@ -278,11 +277,15 @@ static int send_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
     if (flux_msg_set_matchtag (msg, matchtag) < 0)
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
-        msgflags |= FLUX_MSGFLAG_UPSTREAM;
+        uint8_t flags;
+        if (flux_msg_get_flags (msg, &flags) < 0)
+            goto done;
+        if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_UPSTREAM) < 0)
+            goto done;
         if (flux_get_rank (h, &nodeid) < 0)
             goto done;
     }
-    if (flux_msg_set_nodeid (msg, nodeid, msgflags) < 0)
+    if (flux_msg_set_nodeid (msg, nodeid) < 0)
         goto done;
     if (flux_send (h, msg, 0) < 0)
         goto done;

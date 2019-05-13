@@ -136,6 +136,7 @@ int flux_flags_get (flux_t *h);
 uint32_t flux_matchtag_alloc (flux_t *h, int flags);
 void flux_matchtag_free (flux_t *h, uint32_t matchtag);
 uint32_t flux_matchtag_avail (flux_t *h, int flags);
+bool flux_matchtag_group (uint32_t matchtag);
 
 /* Send a message
  * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)

@@ -339,7 +339,14 @@ static int disconnect_sendmsg (struct disconnect_notify *d)
         goto done;
     if (flux_msg_push_route (msg, zuuid_str (d->c->uuid)) < 0)
         goto done;
-    if (flux_msg_set_nodeid (msg, d->nodeid, d->flags) < 0)
+    if (d->flags != 0) {
+        uint8_t flags;
+        if (flux_msg_get_flags (msg, &flags) < 0)
+            goto done;
+        if (flux_msg_set_flags (msg, flags | d->flags) < 0)
+            goto done;
+    }
+    if (flux_msg_set_nodeid (msg, d->nodeid) < 0)
         goto done;
     if (flux_send (d->c->ctx->h, msg, 0) < 0) {
         flux_log_error (d->c->ctx->h, "%s flux_send disconnect for %s",
@@ -370,14 +377,17 @@ static int disconnect_update (client_t *c, const flux_msg_t *msg)
     char *svc = NULL;
     const char *topic;
     uint32_t nodeid;
-    int flags;
+    uint8_t flags;
     struct disconnect_notify *d;
     int rc = -1;
 
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
-    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+    if (flux_msg_get_nodeid (msg, &nodeid) < 0)
         goto done;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        goto done;
+    flags &= FLUX_MSGFLAG_UPSTREAM; // the only flag that affects routing
     svc = xstrdup (topic);
     if ((p = strchr (svc, '.')))
         *p = '\0';

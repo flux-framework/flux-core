@@ -1775,7 +1775,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
                                    request_error_mode_t errmode)
 {
     uint32_t nodeid, gw;
-    int flags;
+    uint8_t flags;
     int rc = -1;
     uint32_t rank = overlay_get_rank(ctx->overlay);
     uint32_t size = overlay_get_size(ctx->overlay);
@@ -1783,7 +1783,9 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
     char errbuf[64];
     const char *errstr = NULL;
 
-    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+    if (flux_msg_get_nodeid (msg, &nodeid) < 0)
+        goto error;
+    if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto error;

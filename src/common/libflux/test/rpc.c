@@ -14,6 +14,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "util.h"
+#include "util_rpc.h"
 
 /* increment integer and send it back */
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -36,11 +37,13 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
-    int flags;
+    uint8_t flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+    if (flux_msg_get_nodeid (msg, &nodeid) < 0)
+        goto error;
+    if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "s:i s:i",
                                    "nodeid", (int)nodeid,
@@ -153,17 +156,29 @@ void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     int i, count;
+    uint8_t flags;
+    int noterm;
 
-    if (flux_request_unpack (msg, NULL, "{s:i}", "count", &count) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:i s:i}", "count", &count,
+                                                     "noterm", &noterm) < 0)
+        goto error;
+    if (!flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     for (i = 0; i < count; i++) {
-        if (flux_respond_pack (h, msg, "{s:i}", "seq", i) < 0)
+        if (flux_respond_pack (h, msg, "{s:i s:i}", "seq", i,
+                                                    "flags", flags) < 0)
             BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     }
+    if (noterm)
+        return;
     errno = ENODATA; // EOF of sorts
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        BAIL_OUT ("flux_respond: %s", flux_strerror (errno));
+        BAIL_OUT ("flux_respond_error: %s", flux_strerror (errno));
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -300,10 +315,16 @@ void test_service (flux_t *h)
     rc = flux_msg_get_route_count (msg);
     ok ((rc == -1 && errno == EINVAL) || (rc == 0),
         "response has no residual route stack");
-    flux_msg_destroy (msg);
     flux_future_destroy (r);
     ok (flux_matchtag_avail (h, 0) == count - 1,
         "flux_future_destroy did not free matchtag");
+    // requeue "lost" response so matchtag can be reclaimed
+    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
+        "flux_requeue response worked");
+    flux_msg_destroy (msg);
+
+    ok (reclaim_matchtag (h, 1, 1.) == 0,
+        "matchtag from prematurely destroyed RPC was reclaimed");
 
     diag ("completed test with rpc request, flux_recv response");
 }
@@ -541,15 +562,21 @@ void test_multi_response (flux_t *h)
 {
     flux_future_t *f;
     int seq = -1;
+    int inflags = 0;
+    uint8_t outflags = 0;
     int count = 0;
     int t1, t2;
+    const flux_msg_t *response;
 
     f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i}", "count", 3);
+                          "{s:i s:i}", "count", 3, "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     errno = 0;
-    while (flux_rpc_get_unpack (f, "{s:i}", "seq", &seq) == 0) {
+    while (flux_rpc_get_unpack (f, "{s:i s:i}", "seq", &seq,
+                                                "flags", &inflags) == 0) {
+        if (flux_future_get (f, (const void **)&response) == 0)
+            (void)flux_msg_get_flags (response, &outflags);
         count++;
         flux_future_reset (f);
     }
@@ -557,6 +584,13 @@ void test_multi_response (flux_t *h)
         "multi-now: got ENODATA as EOF");
     ok (count == 3,
         "multi-now: received 3 valid responses");
+
+    ok ((inflags & FLUX_MSGFLAG_STREAMING) != 0,
+        "multi-now: MSGFLAG_STREAMING was set in the request");
+    ok ((outflags & FLUX_MSGFLAG_STREAMING),
+        "multi-now: MSGFLAG_STREAMING was set in the response");
+
+
     t1 = flux_matchtag_avail (h, 0);
     flux_future_destroy (f);
     t2 = flux_matchtag_avail (h, 0);
@@ -572,7 +606,7 @@ void test_multi_response_noterm (flux_t *h)
 
     // service will send two responses: seq=0, ENODATA
     f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i}", "count", 1);
+                          "{s:i s:i}", "count", 1, "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     // consume seq=0 response
@@ -584,7 +618,30 @@ void test_multi_response_noterm (flux_t *h)
     t2 = flux_matchtag_avail (h, 0);
     cmp_ok (t1, "==", t2,
         "multi-now-noterm: unterminated stream leaked matchtag");
+    ok (reclaim_matchtag (h, 1, 1.) == 0,
+        "multi-now-noterm: matchtag from prematurely destroyed RPC reclaimed");
 }
+
+/* Like above, except service doesn't terminate stream.
+ * Abandon RPC.  Matchtag reclaim logic MUST NOT reclaim matchtag.
+ */
+void test_multi_response_server_noterm (flux_t *h)
+{
+    flux_future_t *f;
+
+    // service will send only seq=0 (not ENODATA).
+    f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
+                          "{s:i s:i}", "count", 1, "noterm", 1);
+    if (!f)
+        BAIL_OUT ("flux_rpc_pack failed");
+    flux_future_destroy (f);
+
+    // seq=0 response will be discarded without retiring matchtag
+    // ENODATA will not arrive, so this must time out
+    ok (reclaim_matchtag (h, 1, 0.1) < 0,
+        "matchtag reclaim did not prematurely retire orphaned matchtag");
+}
+
 
 static void multi_then_cb (flux_future_t *f, void *arg)
 {
@@ -610,7 +667,7 @@ void test_multi_response_then (flux_t *h)
     flux_future_t *f;
 
     f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i}", "count", 3);
+                          "{s:i s:i}", "count", 3, "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     ok (flux_future_then (f, -1., multi_then_cb, NULL) == 0,
@@ -662,7 +719,7 @@ void test_multi_response_then_chain (flux_t *h)
     flux_future_t *f;
 
     f = flux_rpc_pack (h, "rpctest.multi", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
-                          "{s:i}", "count", 3);
+                          "{s:i s:i}", "count", 3, "noterm", 0);
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     ok (flux_future_then (f, -1., multi_then_first_cb, NULL) == 0,
@@ -800,6 +857,7 @@ int main (int argc, char *argv[])
     test_then (h);
     test_multi_response (h);
     test_multi_response_noterm (h);
+    test_multi_response_server_noterm (h);
     test_multi_response_then (h);
     test_multi_response_then_chain (h);
     test_rpc_message_inval (h);

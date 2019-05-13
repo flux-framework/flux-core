@@ -130,10 +130,10 @@ static flux_mrpc_t *mrpc_create (flux_t *h, int rx_expected)
 static int mrpc_request_prepare (flux_mrpc_t *mrpc, flux_msg_t *msg,
                                 uint32_t nodeid)
 {
-    int flags = 0;
     int rc = -1;
     uint32_t matchtag = mrpc->m.matchtag & ~FLUX_MATCHTAG_GROUP_MASK;
     uint32_t matchgrp = mrpc->m.matchtag & FLUX_MATCHTAG_GROUP_MASK;
+    uint8_t msgflags;
 
     /* So that flux_mrpc_get_nodeid() can get nodeid from a response:
      * For group mrpc, use the lower matchtag bits to stash the nodeid
@@ -152,12 +152,16 @@ static int mrpc_request_prepare (flux_mrpc_t *mrpc, flux_msg_t *msg,
         mrpc->nodeid = nodeid;
     if (flux_msg_set_matchtag (msg, matchtag) < 0)
         goto done;
+    if (flux_msg_get_flags (msg, &msgflags) < 0)
+        goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
-        flags |= FLUX_MSGFLAG_UPSTREAM;
+        msgflags |= FLUX_MSGFLAG_UPSTREAM;
         if (flux_get_rank (mrpc->h, &nodeid) < 0)
             goto done;
     }
-    if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
+    if (flux_msg_set_flags (msg, msgflags) < 0)
+        goto done;
+    if (flux_msg_set_nodeid (msg, nodeid) < 0)
         goto done;
     rc = 0;
 done:

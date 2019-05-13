@@ -250,6 +250,30 @@ static bool dispatch_message (struct dispatch *d,
     return match;
 }
 
+/* A matchtag may have been leaked if an RPC future is destroyed with
+ * responses outstanding.  If the last response is finally received,
+ * return it to the pool.
+ */
+static void handle_late_response (struct dispatch *d, const flux_msg_t *msg)
+{
+    uint32_t matchtag;
+    int errnum;
+
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0)
+        return;
+    if (matchtag == FLUX_MATCHTAG_NONE)
+        return; // no matchtag was allocated
+    if (flux_matchtag_group (matchtag))
+        return; // no way to tell here if an mrpc is complete
+    if (flux_msg_is_streaming (msg)) {
+        if (flux_msg_get_errnum (msg, &errnum) < 0 || errnum == 0)
+            return; // streaming RPC is only terminated with an error response
+    }
+    flux_matchtag_free (d->h, matchtag);
+    if (flux_flags_get (d->h) & FLUX_O_MATCHDEBUG)
+        fprintf (stderr, "MATCHDEBUG: reclaimed matchtag=%d\n", matchtag);
+}
+
 static int transfer_items_zlist (zlist_t *from, zlist_t *to)
 {
     void *item;
@@ -339,6 +363,9 @@ static void handle_cb (flux_reactor_t *r,
                         goto done;
                     break;
                 case FLUX_MSGTYPE_EVENT:
+                    break;
+                case FLUX_MSGTYPE_RESPONSE:
+                    handle_late_response (d, msg);
                     break;
                 default:
                     if (flux_flags_get (d->h) & FLUX_O_TRACE) {

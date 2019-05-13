@@ -139,17 +139,6 @@ static int proto_get_flags (uint8_t *data, int len, uint8_t *val)
     *val = data[PROTO_OFF_FLAGS];
     return 0;
 }
-static int proto_mod_flags (uint8_t *data, int len, uint8_t val, bool clear)
-{
-    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
-        return -1;
-    if (clear)
-        data[PROTO_OFF_FLAGS] &= ~val;
-    else
-        data[PROTO_OFF_FLAGS] |= val;
-    return 0;
-}
 static int proto_set_u32 (uint8_t *data, int len, int index, uint32_t val)
 {
     uint32_t x = htonl (val);
@@ -367,6 +356,14 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
 
 int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 {
+    const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
+                              | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
+                              | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING;
+
+    if (!msg || (fl & ~valid_flags) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_set_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
         errno = EINVAL;
@@ -377,6 +374,10 @@ int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 
 int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
 {
+    if (!msg || !fl) {
+        errno = EINVAL;
+        return -1;
+    }
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
         errno = EPROTO;
@@ -403,6 +404,23 @@ bool flux_msg_is_private (const flux_msg_t *msg)
     return (flags & FLUX_MSGFLAG_PRIVATE) ? true : false;
 }
 
+int flux_msg_set_streaming (flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return -1;
+    if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_STREAMING) < 0)
+        return -1;
+    return 0;
+}
+
+bool flux_msg_is_streaming (const flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return true;
+    return (flags & FLUX_MSGFLAG_STREAMING) ? true : false;
+}
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
@@ -448,16 +466,14 @@ int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
     return 0;
 }
 
-int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags)
+int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
 {
     zframe_t *zf;
     int type;
 
-    if (flags != 0 && flags != FLUX_MSGFLAG_UPSTREAM)
+    if (!msg)
         goto error;
     if (nodeid == FLUX_NODEID_UPSTREAM) /* should have been resolved earlier */
-        goto error;
-    if (flags == FLUX_MSGFLAG_UPSTREAM && nodeid == FLUX_NODEID_ANY)
         goto error;
     if (!(zf = zmsg_last (msg->zmsg)))
         goto error;
@@ -468,34 +484,36 @@ int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags)
     if (proto_set_u32 (zframe_data (zf), zframe_size (zf),
                        PROTO_IND_NODEID, nodeid) < 0)
         goto error;
-    if (proto_mod_flags (zframe_data (zf), zframe_size (zf), flags, false) < 0)
-        goto error;
     return 0;
 error:
     errno = EINVAL;
     return -1;
 }
 
-int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags)
+int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeidp)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
-    uint8_t fl;
-    uint32_t nid;
+    uint32_t nodeid;
 
-    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_REQUEST
-            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_NODEID, &nid) < 0
-            || proto_get_flags (zframe_data (zf), zframe_size (zf), &fl) < 0
-            || ((fl & FLUX_MSGFLAG_UPSTREAM) && nid == FLUX_NODEID_ANY)
-            || nid == FLUX_NODEID_UPSTREAM) {
-        errno = EPROTO;
+    if (!msg || !nodeidp) {
+        errno = EINVAL;
         return -1;
     }
-    *nodeid = nid;
-    *flags = (fl & FLUX_MSGFLAG_UPSTREAM);
+    if (!(zf = zmsg_last (msg->zmsg)))
+        goto error;
+    if (proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0)
+        goto error;
+    if (type != FLUX_MSGTYPE_REQUEST)
+        goto error;
+    if (proto_get_u32 (zframe_data (zf), zframe_size (zf),
+                       PROTO_IND_NODEID, &nodeid) < 0)
+        goto error;
+    *nodeidp = nodeid;
     return 0;
+error:
+    return EPROTO;
+    return -1;
 }
 
 int flux_msg_set_errnum (flux_msg_t *msg, int e)
