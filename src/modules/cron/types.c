@@ -21,15 +21,12 @@ extern struct cron_entry_ops cron_datetime_operations;
 static struct cron_typeinfo {
     const char *name;
     struct cron_entry_ops *ops;
-} cron_types[] = {
-    { "interval", &cron_interval_operations },
-    { "event",    &cron_event_operations    },
-    { "datetime", &cron_datetime_operations },
-    { NULL, NULL }
-};
+} cron_types[] = {{"interval", &cron_interval_operations},
+                  {"event", &cron_event_operations},
+                  {"datetime", &cron_datetime_operations},
+                  {NULL, NULL}};
 
-int cron_type_operations_lookup (const char *name,
-    struct cron_entry_ops *ops)
+int cron_type_operations_lookup (const char *name, struct cron_entry_ops *ops)
 {
     struct cron_typeinfo *type = cron_types;
     while (type && type->name) {

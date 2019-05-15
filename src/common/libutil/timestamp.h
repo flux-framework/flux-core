@@ -22,7 +22,6 @@ int timestamp_tostr (time_t t, char *buf, int size);
  */
 int timestamp_fromstr (const char *s, time_t *tp);
 
-
 #endif /* !_UTIL_TIMESTAMP_H */
 
 /*

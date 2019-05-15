@@ -10,20 +10,19 @@
 
 #define OPTIONS "hpun:"
 static const struct option longopts[] = {
-    {"help",      no_argument,       0, 'h'},
-    {"pause",     no_argument,       0, 'p'},
-    {"unpause",   no_argument,       0, 'u'},
+    {"help", no_argument, 0, 'h'},
+    {"pause", no_argument, 0, 'p'},
+    {"unpause", no_argument, 0, 'u'},
     {"namespace", required_argument, 0, 'n'},
-    { 0, 0, 0, 0 },
+    {0, 0, 0, 0},
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: setrootevents --pause\n"
-"       or\n"
-"       setrootevents --unpause\n"
-);
+             "Usage: setrootevents --pause\n"
+             "       or\n"
+             "       setrootevents --unpause\n");
     exit (1);
 }
 
@@ -58,9 +57,8 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if ((!pause && !unpause)
-        || (pause && unpause))
-        usage();
+    if ((!pause && !unpause) || (pause && unpause))
+        usage ();
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -70,9 +68,7 @@ int main (int argc, char *argv[])
     else
         topic = "kvs.setroot-unpause";
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{ s:s }",
-                             "namespace", ns)))
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0, "{ s:s }", "namespace", ns)))
         log_err_exit ("flux_rpc_pack");
 
     if (flux_future_get (f, NULL) < 0)

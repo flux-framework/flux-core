@@ -108,4 +108,3 @@ void ev_zmq_stop (struct ev_loop *loop, ev_zmq *w)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

@@ -23,12 +23,12 @@ struct entry {
 };
 
 static struct entry hardwired[] = {
-    { .key = "cow",     .val = "moo",   .flags = 1 },
-    { .key = "duck",    .val = "quack", .flags = 1 },
-    { .key = "chick",   .val = "peep",  .flags = 1  },
-    { .key = "fox",     .val = "-",     .flags = 1  },
-    { .key = "bear",    .val = "roar",  .flags = 1  },
-    { .key = NULL,      .val = NULL,    .flags = 1  },
+    {.key = "cow", .val = "moo", .flags = 1},
+    {.key = "duck", .val = "quack", .flags = 1},
+    {.key = "chick", .val = "peep", .flags = 1},
+    {.key = "fox", .val = "-", .flags = 1},
+    {.key = "bear", .val = "roar", .flags = 1},
+    {.key = NULL, .val = NULL, .flags = 1},
 };
 
 static bool lookup_hardwired (const char *key, const char **val, int *flags)
@@ -52,8 +52,7 @@ static bool lookup_hardwired (const char *key, const char **val, int *flags)
  * all other values come from the hash and are returned with (flags = 0)
  */
 static volatile int get_count = 0;
-void get_cb (flux_t *h, flux_msg_handler_t *mh,
-             const flux_msg_t *msg, void *arg)
+void get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     zhashx_t *attrs = arg;
     const char *name;
@@ -63,13 +62,12 @@ void get_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
     if (!lookup_hardwired (name, &value, &flags)
-                            && !(value = zhashx_lookup (attrs, name))) {
+        && !(value = zhashx_lookup (attrs, name))) {
         errno = ENOENT;
         goto error;
     }
     diag ("attr.get: %s=%s (flags=%d)", name, value, flags);
-    if (flux_respond_pack (h, msg, "{s:s s:i}", "value", value,
-                                                "flags", flags) < 0)
+    if (flux_respond_pack (h, msg, "{s:s s:i}", "value", value, "flags", flags) < 0)
         BAIL_OUT ("flux_respond failed");
     return;
 error:
@@ -77,14 +75,13 @@ error:
         BAIL_OUT ("flux_respond_error failed");
 }
 
-void set_cb (flux_t *h, flux_msg_handler_t *mh,
-             const flux_msg_t *msg, void *arg)
+void set_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     zhashx_t *attrs = arg;
     const char *name;
     const char *value;
-    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name,
-                                                     "value", &value) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name, "value", &value)
+        < 0)
         goto error;
     if (lookup_hardwired (name, NULL, NULL)) {
         errno = EPERM;
@@ -100,8 +97,7 @@ error:
         BAIL_OUT ("flux_respond_error failed");
 }
 
-void rm_cb (flux_t *h, flux_msg_handler_t *mh,
-            const flux_msg_t *msg, void *arg)
+void rm_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     zhashx_t *attrs = arg;
     const char *name;
@@ -126,9 +122,9 @@ error:
 }
 
 static const struct flux_msg_handler_spec tab[] = {
-    { FLUX_MSGTYPE_REQUEST, "attr.get",    get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "attr.set",    set_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "attr.rm",     rm_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "attr.get", get_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "attr.set", set_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "attr.rm", rm_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -181,16 +177,13 @@ int main (int argc, char *argv[])
 
     errno = 0;
     get_count = 0;
-    ok (flux_attr_get (h, "notakey") == NULL && errno == ENOENT
-        && get_count == 1,
+    ok (flux_attr_get (h, "notakey") == NULL && errno == ENOENT && get_count == 1,
         "flux_attr_get name=notakey fails with ENOENT (with rpc)");
 
     /* set, get */
 
-    ok (flux_attr_set (h, "foo", "bar") == 0,
-        "flux_attr_set foo=bar works");
-    ok (flux_attr_set (h, "baz", "meep") == 0,
-        "flux_attr_set baz=meep works");
+    ok (flux_attr_set (h, "foo", "bar") == 0, "flux_attr_set foo=bar works");
+    ok (flux_attr_set (h, "baz", "meep") == 0, "flux_attr_set baz=meep works");
 
     get_count = 0;
     value = flux_attr_get (h, "foo");
@@ -236,8 +229,7 @@ int main (int argc, char *argv[])
     ok (flux_attr_set (h, "notakey", NULL) < 0 && errno == ENOENT,
         "flux_attr_set notakey=NULL fails with ENOENT");
 
-    ok (flux_attr_set (h, "foo", NULL) == 0,
-        "flux_attr_set foo=NULL works");
+    ok (flux_attr_set (h, "foo", NULL) == 0, "flux_attr_set foo=NULL works");
     errno = 0;
     ok (flux_attr_get (h, "foo") == NULL && errno == ENOENT,
         "flux_attr_get foo fails with ENOENT");
@@ -285,11 +277,10 @@ int main (int argc, char *argv[])
     test_server_stop (h);
     flux_close (h);
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

@@ -16,7 +16,7 @@
 typedef int (*register_cmd_f) (optparse_t *p);
 
 struct builtin_cmd {
-    const char *   name;
+    const char *name;
     register_cmd_f reg_fn;
 };
 

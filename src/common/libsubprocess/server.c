@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -106,7 +106,7 @@ cleanup:
 static void subprocess_cleanup (flux_subprocess_t *p)
 {
     flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    flux_msg_t *msg = (flux_msg_t *)flux_subprocess_aux_get (p, "msg");
 
     assert (s && msg);
 
@@ -116,15 +116,20 @@ static void subprocess_cleanup (flux_subprocess_t *p)
 static void rexec_completion_cb (flux_subprocess_t *p)
 {
     flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    flux_msg_t *msg = (flux_msg_t *)flux_subprocess_aux_get (p, "msg");
 
     assert (s && msg);
 
     if (p->state != FLUX_SUBPROCESS_FAILED) {
         /* no fallback if this fails */
-        if (flux_respond_pack (s->h, msg, "{s:s s:i}",
-                               "type", "complete",
-                               "rank", s->rank) < 0)
+        if (flux_respond_pack (s->h,
+                               msg,
+                               "{s:s s:i}",
+                               "type",
+                               "complete",
+                               "rank",
+                               s->rank)
+            < 0)
             flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
@@ -154,44 +159,71 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
 static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
     flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    flux_msg_t *msg = (flux_msg_t *)flux_subprocess_aux_get (p, "msg");
 
     assert (s && msg);
 
     if (state == FLUX_SUBPROCESS_STARTED) {
         if (store_pid (s, p) < 0)
             goto error;
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "pid", flux_subprocess_pid (p),
-                               "state", state) < 0) {
+        if (flux_respond_pack (s->h,
+                               msg,
+                               "{s:s s:i s:i s:i}",
+                               "type",
+                               "state",
+                               "rank",
+                               s->rank,
+                               "pid",
+                               flux_subprocess_pid (p),
+                               "state",
+                               state)
+            < 0) {
             flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
     } else if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", state) < 0) {
+        if (flux_respond_pack (s->h,
+                               msg,
+                               "{s:s s:i s:i}",
+                               "type",
+                               "state",
+                               "rank",
+                               s->rank,
+                               "state",
+                               state)
+            < 0) {
             flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
     } else if (state == FLUX_SUBPROCESS_EXITED) {
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", state,
-                               "status", flux_subprocess_status (p)) < 0) {
+        if (flux_respond_pack (s->h,
+                               msg,
+                               "{s:s s:i s:i s:i}",
+                               "type",
+                               "state",
+                               "rank",
+                               s->rank,
+                               "state",
+                               state,
+                               "status",
+                               flux_subprocess_status (p))
+            < 0) {
             flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
     } else if (state == FLUX_SUBPROCESS_FAILED) {
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", FLUX_SUBPROCESS_FAILED,
-                               "errno", p->failed_errno) < 0) {
+        if (flux_respond_pack (s->h,
+                               msg,
+                               "{s:s s:i s:i s:i}",
+                               "type",
+                               "state",
+                               "rank",
+                               s->rank,
+                               "state",
+                               FLUX_SUBPROCESS_FAILED,
+                               "errno",
+                               p->failed_errno)
+            < 0) {
             flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -208,9 +240,12 @@ error:
     internal_fatal (s, p);
 }
 
-static int rexec_output_data (flux_subprocess_t *p, const char *stream,
-                              flux_subprocess_server_t *s, flux_msg_t *msg,
-                              const char *data, int len)
+static int rexec_output_data (flux_subprocess_t *p,
+                              const char *stream,
+                              flux_subprocess_server_t *s,
+                              flux_msg_t *msg,
+                              const char *data,
+                              int len)
 {
     char *s_data = NULL;
     int s_len;
@@ -225,15 +260,26 @@ static int rexec_output_data (flux_subprocess_t *p, const char *stream,
         goto error;
     }
 
-    sodium_bin2base64 (s_data, s_len, (unsigned char *)data, len,
+    sodium_bin2base64 (s_data,
+                       s_len,
+                       (unsigned char *)data,
+                       len,
                        sodium_base64_VARIANT_ORIGINAL);
 
-    if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:s s:s}",
-                           "type", "output",
-                           "rank", s->rank,
-                           "pid", flux_subprocess_pid (p),
-                           "stream", stream,
-                           "data", s_data) < 0) {
+    if (flux_respond_pack (s->h,
+                           msg,
+                           "{s:s s:i s:i s:s s:s}",
+                           "type",
+                           "output",
+                           "rank",
+                           s->rank,
+                           "pid",
+                           flux_subprocess_pid (p),
+                           "stream",
+                           stream,
+                           "data",
+                           s_data)
+        < 0) {
         flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -244,15 +290,25 @@ error:
     return rv;
 }
 
-static int rexec_output_eof (flux_subprocess_t *p, const char *stream,
-                             flux_subprocess_server_t *s, flux_msg_t *msg)
+static int rexec_output_eof (flux_subprocess_t *p,
+                             const char *stream,
+                             flux_subprocess_server_t *s,
+                             flux_msg_t *msg)
 {
-    if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:s s:i}",
-                           "type", "output",
-                           "rank", s->rank,
-                           "pid", flux_subprocess_pid (p),
-                           "stream", stream,
-                           "eof", 1) < 0) {
+    if (flux_respond_pack (s->h,
+                           msg,
+                           "{s:s s:i s:i s:s s:i}",
+                           "type",
+                           "output",
+                           "rank",
+                           s->rank,
+                           "pid",
+                           flux_subprocess_pid (p),
+                           "stream",
+                           stream,
+                           "eof",
+                           1)
+        < 0) {
         flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
         return -1;
     }
@@ -263,7 +319,7 @@ static int rexec_output_eof (flux_subprocess_t *p, const char *stream,
 static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
 {
     flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    flux_msg_t *msg = (flux_msg_t *)flux_subprocess_aux_get (p, "msg");
     const char *ptr;
     int lenp;
 
@@ -277,8 +333,7 @@ static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
     if (lenp) {
         if (rexec_output_data (p, stream, s, msg, ptr, lenp) < 0)
             goto error;
-    }
-    else {
+    } else {
         if (rexec_output_eof (p, stream, s, msg) < 0)
             goto error;
     }
@@ -295,8 +350,10 @@ static void flux_msg_destroy_wrapper (void *arg)
     flux_msg_destroy (msg);
 }
 
-static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void server_exec_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     flux_subprocess_server_t *s = arg;
     const char *cmd_str;
@@ -313,11 +370,17 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     int on_channel_out, on_stdout, on_stderr;
     char **env = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:i}",
-                             "cmd", &cmd_str,
-                             "on_channel_out", &on_channel_out,
-                             "on_stdout", &on_stdout,
-                             "on_stderr", &on_stderr))
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i s:i s:i}",
+                             "cmd",
+                             &cmd_str,
+                             "on_channel_out",
+                             &on_channel_out,
+                             "on_stdout",
+                             &on_stdout,
+                             "on_stderr",
+                             &on_stderr))
         goto error;
 
     if (!on_channel_out)
@@ -354,20 +417,26 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", s->local_uri) < 0)
         goto error;
 
-    if (flux_respond_pack (s->h, msg, "{s:s s:i}",
-                           "type", "start",
-                           "rank", s->rank) < 0) {
+    if (flux_respond_pack (s->h, msg, "{s:s s:i}", "type", "start", "rank", s->rank)
+        < 0) {
         flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
 
     if (!(p = flux_exec (s->h, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops))) {
         /* error here, generate FLUX_SUBPROCESS_EXEC_FAILED state */
-        if (flux_respond_pack (h, msg, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", FLUX_SUBPROCESS_EXEC_FAILED,
-                               "errno", errno) < 0) {
+        if (flux_respond_pack (h,
+                               msg,
+                               "{s:s s:i s:i s:i}",
+                               "type",
+                               "state",
+                               "rank",
+                               s->rank,
+                               "state",
+                               FLUX_SUBPROCESS_EXEC_FAILED,
+                               "errno",
+                               errno)
+            < 0) {
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -378,7 +447,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (flux_subprocess_aux_set (p, "msg", copy, flux_msg_destroy_wrapper) < 0)
         goto error;
-    copy = NULL;                /* owned by 'p' now */
+    copy = NULL; /* owned by 'p' now */
     if (flux_subprocess_aux_set (p, "server_ctx", s, NULL) < 0)
         goto error;
 
@@ -396,8 +465,10 @@ cleanup:
     flux_subprocess_unref (p);
 }
 
-static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
-                             const char *name, const char *s_data)
+static int write_subprocess (flux_subprocess_server_t *s,
+                             flux_subprocess_t *p,
+                             const char *name,
+                             const char *s_data)
 {
     int save_errno;
     size_t s_len, len;
@@ -412,9 +483,15 @@ static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
         goto cleanup;
     }
 
-    if (sodium_base642bin ((unsigned char *)data, len, s_data, s_len,
-                           NULL, &len, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0) {
+    if (sodium_base642bin ((unsigned char *)data,
+                           len,
+                           s_data,
+                           s_len,
+                           NULL,
+                           &len,
+                           NULL,
+                           sodium_base64_VARIANT_ORIGINAL)
+        < 0) {
         flux_log_error (s->h, "%s: sodium_base642bin", __FUNCTION__);
         goto cleanup;
     }
@@ -427,8 +504,13 @@ static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     /* add list of msgs if there is overflow? */
 
     if (tmp != len) {
-        flux_log_error (s->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %zu",
-                        s->rank, flux_subprocess_pid (p), name, len);
+        flux_log_error (s->h,
+                        "channel buffer error: rank = %d pid = %d, stream = %s, len = "
+                        "%zu",
+                        s->rank,
+                        flux_subprocess_pid (p),
+                        name,
+                        len);
         errno = EOVERFLOW;
         goto cleanup;
     }
@@ -441,7 +523,8 @@ cleanup:
     return rv;
 }
 
-static int close_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
+static int close_subprocess (flux_subprocess_server_t *s,
+                             flux_subprocess_t *p,
                              const char *name)
 {
     if (flux_subprocess_close (p, name) < 0) {
@@ -452,8 +535,10 @@ static int close_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     return 0;
 }
 
-static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void server_write_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     flux_subprocess_t *p;
     flux_subprocess_server_t *s = arg;
@@ -461,10 +546,16 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
     pid_t pid;
     int close_flag;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:s s:i }",
-                             "pid", &pid,
-                             "name", &name,
-                             "close", &close_flag) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:s s:i }",
+                             "pid",
+                             &pid,
+                             "name",
+                             &name,
+                             "close",
+                             &close_flag)
+        < 0) {
         /* can't handle error, no pid to sent errno back to, so just
          * return */
         flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
@@ -493,12 +584,10 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
     if (close_flag) {
         if (close_subprocess (s, p, name) < 0)
             goto error;
-    }
-    else {
+    } else {
         const char *data;
 
-        if (flux_request_unpack (msg, NULL, "{ s:s }",
-                                 "data", &data) < 0) {
+        if (flux_request_unpack (msg, NULL, "{ s:s }", "data", &data) < 0) {
             flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
             errno = EPROTO;
             goto error;
@@ -514,8 +603,10 @@ error:
     internal_fatal (s, p);
 }
 
-static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void server_signal_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     flux_subprocess_server_t *s = arg;
     pid_t pid;
@@ -523,9 +614,8 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
 
     errno = 0;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
-                             "pid", &pid,
-                             "signum", &signum) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:i s:i }", "pid", &pid, "signum", &signum)
+        < 0) {
         flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
         errno = EPROTO;
         goto error;
@@ -578,8 +668,10 @@ static json_t *process_info (flux_subprocess_t *p)
 
     /* very limited returned, just for testing */
     if (!(info = json_pack ("{s:i s:s}",
-                            "pid", flux_subprocess_pid (p),
-                            "sender", sender))) {
+                            "pid",
+                            flux_subprocess_pid (p),
+                            "sender",
+                            sender))) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -590,8 +682,10 @@ cleanup:
     return info;
 }
 
-static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg, void *arg)
+static void server_processes_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
 {
     flux_subprocess_server_t *s = arg;
     flux_subprocess_t *p;
@@ -605,8 +699,7 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
     p = zhash_first (s->subprocesses);
     while (p) {
         json_t *o = NULL;
-        if (!(o = process_info (p))
-            || json_array_append_new (procs, o) < 0) {
+        if (!(o = process_info (p)) || json_array_append_new (procs, o) < 0) {
             json_decref (o);
             errno = ENOMEM;
             goto error;
@@ -614,8 +707,7 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
         p = zhash_next (s->subprocesses);
     }
 
-    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
-                           "procs", procs) < 0)
+    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank, "procs", procs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 
@@ -629,10 +721,10 @@ int server_start (flux_subprocess_server_t *s, const char *prefix)
 {
     /* rexec.processes is primarily for testing */
     struct flux_msg_handler_spec htab[] = {
-        { FLUX_MSGTYPE_REQUEST, "rexec",        server_exec_cb, 0 },
-        { FLUX_MSGTYPE_REQUEST, "rexec.write",  server_write_cb, 0 },
-        { FLUX_MSGTYPE_REQUEST, "rexec.signal", server_signal_cb, 0 },
-        { FLUX_MSGTYPE_REQUEST, "rexec.processes", server_processes_cb, 0 },
+        {FLUX_MSGTYPE_REQUEST, "rexec", server_exec_cb, 0},
+        {FLUX_MSGTYPE_REQUEST, "rexec.write", server_write_cb, 0},
+        {FLUX_MSGTYPE_REQUEST, "rexec.signal", server_signal_cb, 0},
+        {FLUX_MSGTYPE_REQUEST, "rexec.processes", server_processes_cb, 0},
         FLUX_MSGHANDLER_TABLE_END,
     };
     char *topic_globs[4] = {NULL, NULL, NULL, NULL};
@@ -709,8 +801,7 @@ static void terminate_uuid (flux_subprocess_t *p, const char *id)
     free (sender);
 }
 
-int server_terminate_by_uuid (flux_subprocess_server_t *s,
-                              const char *id)
+int server_terminate_by_uuid (flux_subprocess_server_t *s, const char *id)
 {
     flux_subprocess_t *p;
 

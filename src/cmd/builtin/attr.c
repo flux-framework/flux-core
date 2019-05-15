@@ -12,12 +12,14 @@
 #include <jansson.h>
 #include "builtin.h"
 
-static struct optparse_option setattr_opts[] = {
-    { .name = "expunge", .key = 'e', .has_arg = 0,
-      .usage = "Unset the specified attribute",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option setattr_opts[] = {{
+                                                    .name = "expunge",
+                                                    .key = 'e',
+                                                    .has_arg = 0,
+                                                    .usage = "Unset the specified "
+                                                             "attribute",
+                                                },
+                                                OPTPARSE_TABLE_END};
 
 static int cmd_setattr (optparse_t *p, int ac, char *av[])
 {
@@ -36,8 +38,7 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
         name = av[n];
         if (flux_attr_set (h, name, NULL) < 0)
             log_err_exit ("flux_attr_set");
-    }
-    else {
+    } else {
         if (n != ac - 2) {
             optparse_print_usage (p);
             exit (1);
@@ -52,12 +53,14 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
-static struct optparse_option lsattr_opts[] = {
-    { .name = "values", .key = 'v', .has_arg = 0,
-      .usage = "List values with attributes",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option lsattr_opts[] = {{
+                                                   .name = "values",
+                                                   .key = 'v',
+                                                   .has_arg = 0,
+                                                   .usage = "List values with "
+                                                            "attributes",
+                                               },
+                                               OPTPARSE_TABLE_END};
 
 void attrfree (void **item)
 {
@@ -72,7 +75,7 @@ void *attrdup (const void *item)
     return strdup (item);
 }
 
-int attrcmp(const void *item1, const void *item2)
+int attrcmp (const void *item1, const void *item2)
 {
     return strcmp (item1, item2);
 }
@@ -84,7 +87,7 @@ zlistx_t *get_sorted_attrlist (flux_t *h)
 {
     flux_future_t *f;
     zlistx_t *list;
-    json_t *names; // array of attr names
+    json_t *names;  // array of attr names
     size_t index;
     json_t *value;
 
@@ -94,9 +97,10 @@ zlistx_t *get_sorted_attrlist (flux_t *h)
     zlistx_set_duplicator (list, attrdup);
     zlistx_set_destructor (list, attrfree);
     if (!(f = flux_rpc (h, "attr.list", NULL, FLUX_NODEID_ANY, 0))
-                || flux_rpc_get_unpack  (f, "{s:o}", "names", &names) < 0)
+        || flux_rpc_get_unpack (f, "{s:o}", "names", &names) < 0)
         log_err_exit ("attr.list");
-    json_array_foreach (names, index, value) {
+    json_array_foreach (names, index, value)
+    {
         const char *name = json_string_value (value);
         if (!name)
             log_msg_exit ("non-string attr name returned");
@@ -156,27 +160,33 @@ static int cmd_getattr (optparse_t *p, int ac, char *av[])
 int subcommand_attr_register (optparse_t *p)
 {
     optparse_err_t e;
-    e = optparse_reg_subcommand (p, "setattr", cmd_setattr,
-        "name value",
-        "Set broker attribute",
-        0,
-        setattr_opts);
+    e = optparse_reg_subcommand (p,
+                                 "setattr",
+                                 cmd_setattr,
+                                 "name value",
+                                 "Set broker attribute",
+                                 0,
+                                 setattr_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
-    e = optparse_reg_subcommand (p, "getattr", cmd_getattr,
-        "name",
-        "Get broker attribute",
-        0,
-        NULL);
+    e = optparse_reg_subcommand (p,
+                                 "getattr",
+                                 cmd_getattr,
+                                 "name",
+                                 "Get broker attribute",
+                                 0,
+                                 NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
-    e = optparse_reg_subcommand (p, "lsattr", cmd_lsattr,
-        "[-v]",
-        "List broker attributes",
-        0,
-        lsattr_opts);
+    e = optparse_reg_subcommand (p,
+                                 "lsattr",
+                                 cmd_lsattr,
+                                 "[-v]",
+                                 "List broker attributes",
+                                 0,
+                                 lsattr_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 

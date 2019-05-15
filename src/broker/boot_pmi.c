@@ -39,7 +39,7 @@
  *
  * Caller is responsible for freeing memory of returned value.
  */
-static char * format_endpoint (attr_t *attrs, const char *endpoint)
+static char *format_endpoint (attr_t *attrs, const char *endpoint)
 {
     char ipaddr[HOST_NAME_MAX + 1];
     char *ptr, *buf, *rv = NULL;
@@ -54,8 +54,8 @@ static char * format_endpoint (attr_t *attrs, const char *endpoint)
     while (*ptr) {
         if (percent_flag) {
             if (*ptr == 'h') {
-                if (ipaddr_getprimary (ipaddr, sizeof (ipaddr),
-                                       error, sizeof (error)) < 0) {
+                if (ipaddr_getprimary (ipaddr, sizeof (ipaddr), error, sizeof (error))
+                    < 0) {
                     log_msg ("%s", error);
                     goto done;
                 }
@@ -65,8 +65,7 @@ static char * format_endpoint (attr_t *attrs, const char *endpoint)
                 }
                 strcat (buf, ipaddr);
                 len += strlen (ipaddr);
-            }
-            else if (*ptr == 'B') {
+            } else if (*ptr == 'B') {
                 if (attr_get (attrs, "broker.rundir", &rundir, NULL) < 0) {
                     log_msg ("broker.rundir attribute is not set");
                     goto done;
@@ -77,16 +76,14 @@ static char * format_endpoint (attr_t *attrs, const char *endpoint)
                 }
                 strcat (buf, rundir);
                 len += strlen (rundir);
-            }
-            else if (*ptr == '%')
+            } else if (*ptr == '%')
                 buf[len++] = '%';
             else {
                 buf[len++] = '%';
                 buf[len++] = *ptr;
             }
             percent_flag = false;
-        }
-        else {
+        } else {
             if (*ptr == '%')
                 percent_flag = true;
             else
@@ -113,8 +110,10 @@ done:
  * If attribute was not initially set, start with 'default_value'.
  * Return 0 on success, -1 on failure with diagnostics to stderr.
  */
-static int update_endpoint_attr (attr_t *attrs, const char *name,
-                                 const char **value, const char *default_value)
+static int update_endpoint_attr (attr_t *attrs,
+                                 const char *name,
+                                 const char **value,
+                                 const char *default_value)
 {
     const char *val;
     char *fmt_val = NULL;
@@ -183,13 +182,11 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
     /* Set session-id attribute from PMI appnum if not already set.
      */
     if (attr_get (attrs, "session-id", NULL, NULL) < 0) {
-        if (attr_add_int (attrs, "session-id", appnum,
-                          FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add_int (attrs, "session-id", appnum, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
 
-    if (update_endpoint_attr (attrs, "tbon.endpoint", &tbonendpoint,
-                                                        "tcp://%h:*") < 0)
+    if (update_endpoint_attr (attrs, "tbon.endpoint", &tbonendpoint, "tcp://%h:*") < 0)
         goto done;
 
     overlay_set_child (overlay, tbonendpoint);
@@ -221,7 +218,7 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
      * the real addresses.
      */
     if (overlay_bind (overlay) < 0) {
-        log_err ("overlay_bind failed");   /* function is idempotent */
+        log_err ("overlay_bind failed"); /* function is idempotent */
         goto done;
     }
 

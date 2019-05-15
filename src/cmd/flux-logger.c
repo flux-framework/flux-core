@@ -22,19 +22,18 @@
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/read_all.h"
 
-
 #define OPTIONS "hs:n:"
 static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"severity",   required_argument,  0, 's'},
-    {"appname",    required_argument,  0, 'n'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"severity", required_argument, 0, 's'},
+    {"appname", required_argument, 0, 'n'},
+    {0, 0, 0, 0},
 };
 
 void usage (void)
 {
-    fprintf (stderr, "Usage: flux-logger [--severity LEVEL] [--appname NAME] message ...\n"
-);
+    fprintf (stderr,
+             "Usage: flux-logger [--severity LEVEL] [--appname NAME] message ...\n");
     exit (1);
 }
 
@@ -57,7 +56,9 @@ int main (int argc, char *argv[])
                 break;
             case 's': /* --severity LEVEL */
                 if ((severity = stdlog_string_to_severity (optarg)) < 0)
-                    log_msg_exit ("invalid severity: Use emerg|alert|crit|err|warning|notice|info|debug");
+                    log_msg_exit (
+                        "invalid severity: Use "
+                        "emerg|alert|crit|err|warning|notice|info|debug");
                 break;
             case 'n': /* --appname NAME */
                 appname = optarg;

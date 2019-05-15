@@ -18,28 +18,27 @@
 #include "pmi.h"
 #include "pmi_strerror.h"
 
-
 typedef struct {
     int errnum;
     const char *errstr;
 } etab_t;
 
 static etab_t pmi_errors[] = {
-    { PMI_SUCCESS,              "operation completed successfully" },
-    { PMI_FAIL,                 "operation failed" },
-    { PMI_ERR_NOMEM,            "input buffer not large enough" },
-    { PMI_ERR_INIT,             "PMI not initialized" },
-    { PMI_ERR_INVALID_ARG,      "invalid argument" },
-    { PMI_ERR_INVALID_KEY,      "invalid key argument" },
-    { PMI_ERR_INVALID_KEY_LENGTH,"invalid key length argument" },
-    { PMI_ERR_INVALID_VAL,      "invalid val argument" },
-    { PMI_ERR_INVALID_VAL_LENGTH,"invalid val length argument" },
-    { PMI_ERR_INVALID_LENGTH,   "invalid length argument" },
-    { PMI_ERR_INVALID_NUM_ARGS, "invalid number of arguments" },
-    { PMI_ERR_INVALID_ARGS,     "invalid args argument" },
-    { PMI_ERR_INVALID_NUM_PARSED, "invalid num_parsed length argument" },
-    { PMI_ERR_INVALID_KEYVALP,  "invalid keyvalp argument" },
-    { PMI_ERR_INVALID_SIZE,     "invalid size argument" },
+    {PMI_SUCCESS, "operation completed successfully"},
+    {PMI_FAIL, "operation failed"},
+    {PMI_ERR_NOMEM, "input buffer not large enough"},
+    {PMI_ERR_INIT, "PMI not initialized"},
+    {PMI_ERR_INVALID_ARG, "invalid argument"},
+    {PMI_ERR_INVALID_KEY, "invalid key argument"},
+    {PMI_ERR_INVALID_KEY_LENGTH, "invalid key length argument"},
+    {PMI_ERR_INVALID_VAL, "invalid val argument"},
+    {PMI_ERR_INVALID_VAL_LENGTH, "invalid val length argument"},
+    {PMI_ERR_INVALID_LENGTH, "invalid length argument"},
+    {PMI_ERR_INVALID_NUM_ARGS, "invalid number of arguments"},
+    {PMI_ERR_INVALID_ARGS, "invalid args argument"},
+    {PMI_ERR_INVALID_NUM_PARSED, "invalid num_parsed length argument"},
+    {PMI_ERR_INVALID_KEYVALP, "invalid keyvalp argument"},
+    {PMI_ERR_INVALID_SIZE, "invalid size argument"},
 };
 static const int pmi_errors_len = sizeof (pmi_errors) / sizeof (pmi_errors[0]);
 

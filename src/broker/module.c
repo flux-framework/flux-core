@@ -43,8 +43,7 @@
 #include "module.h"
 #include "modservice.h"
 
-
-#define MODULE_MAGIC    0xfeefbe01
+#define MODULE_MAGIC 0xfeefbe01
 struct module_struct {
     int magic;
 
@@ -55,17 +54,17 @@ struct module_struct {
     int lastseen;
     heartbeat_t *heartbeat;
 
-    zsock_t *sock;          /* broker end of PAIR socket */
-    uint32_t userid;        /* creds of connection */
+    zsock_t *sock;   /* broker end of PAIR socket */
+    uint32_t userid; /* creds of connection */
     uint32_t rolemask;
 
-    zuuid_t *uuid;          /* uuid for unique request sender identity */
-    pthread_t t;            /* module thread */
-    mod_main_f *main;       /* dlopened mod_main() */
+    zuuid_t *uuid;    /* uuid for unique request sender identity */
+    pthread_t t;      /* module thread */
+    mod_main_f *main; /* dlopened mod_main() */
     char *name;
-    void *dso;              /* reference on dlopened module */
-    int size;               /* size of .so file for lsmod */
-    char *digest;           /* digest of .so file for lsmod */
+    void *dso;    /* reference on dlopened module */
+    int size;     /* size of .so file for lsmod */
+    char *digest; /* digest of .so file for lsmod */
     size_t argz_len;
     char *argz;
     int status;
@@ -79,9 +78,9 @@ struct module_struct {
     zlist_t *rmmod;
     flux_msg_t *insmod;
 
-    flux_t *h;               /* module's handle */
+    flux_t *h; /* module's handle */
 
-    zlist_t *subs;          /* subscription strings */
+    zlist_t *subs; /* subscription strings */
 };
 
 struct modhash_struct {
@@ -121,7 +120,7 @@ static void *module_thread (void *arg)
      */
     if (!(p->h = flux_open (uri, 0)))
         log_err_exit ("flux_open %s", uri);
-    rankstr = xasprintf ("%"PRIu32, p->rank);
+    rankstr = xasprintf ("%" PRIu32, p->rank);
     if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
         goto done;
@@ -254,7 +253,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->rank);
+            snprintf (uuid, sizeof (uuid), "%" PRIu32, p->rank);
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
             if (flux_msg_push_route (cpy, uuid) < 0)
@@ -321,7 +320,7 @@ static void module_destroy (module_t *p)
             log_msg ("module '%s' was not cleanly shutdown", p->name);
     }
 
-    flux_close (p->h); // in case thread was canceled
+    flux_close (p->h);  // in case thread was canceled
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
@@ -358,8 +357,11 @@ int module_stop (module_t *p)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpc (p->broker_h, topic, NULL,
-                          FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc (p->broker_h,
+                        topic,
+                        NULL,
+                        FLUX_NODEID_ANY,
+                        FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
@@ -368,8 +370,7 @@ done:
     return rc;
 }
 
-static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void module_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
@@ -394,7 +395,7 @@ done:
     return rc;
 }
 
-void module_set_args (module_t *p, int argc, char * const argv[])
+void module_set_args (module_t *p, int argc, char *const argv[])
 {
     int e;
 
@@ -548,8 +549,10 @@ module_t *module_add (modhash_t *mh, const char *path)
     if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
         log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
     if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
-                                                 p->sock, FLUX_POLLIN,
-                                                 module_cb, p)))
+                                                 p->sock,
+                                                 FLUX_POLLIN,
+                                                 module_cb,
+                                                 p)))
         log_err_exit ("flux_zmq_watcher_create");
     /* Set creds for connection.
      * Since this is a point to point connection between broker threads,
@@ -562,8 +565,7 @@ module_t *module_add (modhash_t *mh, const char *path)
      */
     rc = zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
     assert (rc == 0); /* uuids are by definition unique */
-    zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
-                  (zhash_free_fn *)module_destroy);
+    zhash_freefn (mh->zh_byuuid, module_get_uuid (p), (zhash_free_fn *)module_destroy);
     return p;
 }
 
@@ -588,7 +590,8 @@ void modhash_destroy (modhash_t *mh)
     int e;
 
     if (mh) {
-        FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
+        FOREACH_ZHASH (mh->zh_byuuid, uuid, p)
+        {
             if (p->t) {
                 if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH)
                     log_errn (e, "pthread_cancel");
@@ -621,7 +624,7 @@ json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
     char *uuid;
     module_t *p;
 
-    if (!(mods = json_array()))
+    if (!(mods = json_array ()))
         goto nomem;
     if (!(uuids = zhash_keys (mh->zh_byuuid)))
         goto nomem;
@@ -631,15 +634,21 @@ json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
             json_t *svcs;
             json_t *entry;
 
-            if (!(svcs  = service_list_byuuid (sw, uuid)))
+            if (!(svcs = service_list_byuuid (sw, uuid)))
                 goto nomem;
             if (!(entry = json_pack ("{s:s s:i s:s s:i s:i s:o}",
-                                     "name", module_get_name (p),
-                                     "size", p->size,
-                                     "digest", p->digest,
-                                      "idle", module_get_idle (p),
-                                      "status", p->status,
-                                      "services", svcs))) {
+                                     "name",
+                                     module_get_name (p),
+                                     "size",
+                                     p->size,
+                                     "digest",
+                                     p->digest,
+                                     "idle",
+                                     module_get_idle (p),
+                                     "status",
+                                     p->status,
+                                     "services",
+                                     svcs))) {
                 json_decref (svcs);
                 goto nomem;
             }

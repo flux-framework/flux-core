@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 enum {
-    CONF_FLAG_INTREE=1,
+    CONF_FLAG_INTREE = 1,
 };
 
 const char *flux_conf_get (const char *name, int flags);

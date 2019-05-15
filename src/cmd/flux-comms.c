@@ -20,21 +20,19 @@
 
 #include "src/common/libutil/log.h"
 
-
 #define OPTIONS "+hr:"
 static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"rank",       required_argument,  0, 'r'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"rank", required_argument, 0, 'r'},
+    {0, 0, 0, 0},
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-comms [-r N] idle\n"
-"       flux-comms        info\n"
-"       flux-comms [-r N] panic [msg ...]\n"
-);
+             "Usage: flux-comms [-r N] idle\n"
+             "       flux-comms        info\n"
+             "       flux-comms [-r N] panic [msg ...]\n");
     exit (1);
 }
 
@@ -89,7 +87,7 @@ int main (int argc, char *argv[])
         usage ();
     cmd = argv[optind++];
     if (rank != FLUX_NODEID_ANY
-            && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
+        && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
         usage ();
 
     if (!(h = flux_open (NULL, 0)))
@@ -112,8 +110,7 @@ int main (int argc, char *argv[])
                 log_errn_exit (e, "argz_create");
             argz_stringify (reason, len, ' ');
         }
-        if (flux_panic (h, rank, flags,
-                        reason ? reason : "user request") < 0)
+        if (flux_panic (h, rank, flags, reason ? reason : "user request") < 0)
             log_err_exit ("flux_panic");
         free (reason);
     } else if (!strcmp (cmd, "info")) {
@@ -125,8 +122,8 @@ int main (int argc, char *argv[])
         if (!(s = flux_attr_get (h, "tbon.arity")))
             log_err_exit ("flux_attr_get tbon.arity");
         arity = strtoul (s, NULL, 10);
-        printf ("rank=%"PRIu32"\n", rank);
-        printf ("size=%"PRIu32"\n", size);
+        printf ("rank=%" PRIu32 "\n", rank);
+        printf ("size=%" PRIu32 "\n", size);
         printf ("arity=%d\n", arity);
     } else
         usage ();

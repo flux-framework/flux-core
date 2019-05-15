@@ -17,11 +17,11 @@
 extern "C" {
 #endif
 
-/* 
+/*
  *  Register service `name` with the broker for this handle. On success
- *   request messages sent to "name.*" will be routed to this handle 
+ *   request messages sent to "name.*" will be routed to this handle
  *   until `flux_service_remove()` is called for `name`, or upon
- *   disconnect. 
+ *   disconnect.
  *
  *  On success, the returned future will be fulfilled with no error, o/w
  *   the future is fulfilled with errnum set appropriately:
@@ -29,7 +29,7 @@ extern "C" {
  *   EINVAL - Invalid service name
  *   EEXIST - Service already registered under this name
  *   ENOENT - Unable to lookup route to requesting sender
- * 
+ *
  */
 flux_future_t *flux_service_register (flux_t *h, const char *name);
 
@@ -41,8 +41,8 @@ flux_future_t *flux_service_register (flux_t *h, const char *name);
  *
  *  ENOENT - No such service registered as `name`
  *  EINVAL - Sender does not match current owner of service
- * 
- */  
+ *
+ */
 flux_future_t *flux_service_unregister (flux_t *h, const char *name);
 
 #ifdef __cplusplus

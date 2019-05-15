@@ -21,8 +21,7 @@ struct pmi_operations {
     int (*get_rank) (void *impl, int *rank);
     int (*get_appnum) (void *impl, int *appnum);
     int (*get_universe_size) (void *impl, int *universe_size);
-    int (*publish_name) (void *impl, const char *service_name,
-                         const char *port);
+    int (*publish_name) (void *impl, const char *service_name, const char *port);
     int (*unpublish_name) (void *impl, const char *service_name);
     int (*lookup_name) (void *impl, const char *service_name, char *port);
     int (*barrier) (void *impl);
@@ -31,11 +30,16 @@ struct pmi_operations {
     int (*kvs_get_name_length_max) (void *impl, int *length);
     int (*kvs_get_key_length_max) (void *impl, int *length);
     int (*kvs_get_value_length_max) (void *impl, int *length);
-    int (*kvs_put) (void *impl, const char *kvsname,
-                    const char *key, const char *value);
+    int (*kvs_put) (void *impl,
+                    const char *kvsname,
+                    const char *key,
+                    const char *value);
     int (*kvs_commit) (void *impl, const char *kvsname);
-    int (*kvs_get) (void *impl, const char *kvsname,
-                    const char *key, char *value, int len);
+    int (*kvs_get) (void *impl,
+                    const char *kvsname,
+                    const char *key,
+                    char *value,
+                    int len);
     int (*get_clique_size) (void *impl, int *size);
     int (*get_clique_ranks) (void *impl, int ranks[], int length);
 
@@ -52,7 +56,6 @@ struct pmi_operations {
 
     void (*destroy) (void *impl);
 };
-
 
 #endif /* _FLUX_CORE_PMI_OPERATIONS_H */
 

@@ -18,7 +18,6 @@
 
 #include "panic.h"
 
-
 int flux_panic (flux_t *h, uint32_t nodeid, int flags, const char *reason)
 {
     flux_future_t *f;
@@ -27,10 +26,15 @@ int flux_panic (flux_t *h, uint32_t nodeid, int flags, const char *reason)
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_rpc_pack (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
+    if (!(f = flux_rpc_pack (h,
+                             "cmb.panic",
+                             nodeid,
+                             FLUX_RPC_NORESPONSE,
                              "{s:s s:i}",
-                             "reason", reason,
-                             "flags", flags)))
+                             "reason",
+                             reason,
+                             "flags",
+                             flags)))
         return -1;
     flux_future_destroy (f);
     return 0;

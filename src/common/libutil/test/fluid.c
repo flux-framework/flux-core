@@ -23,13 +23,11 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    ok (fluid_init (&gen, 0) == 0,
-        "fluid_init id=0 works");
+    ok (fluid_init (&gen, 0) == 0, "fluid_init id=0 works");
 
     /* Probably all zeroes, or (unlikely) with slightly advanced timestamp.
      */
-    ok (fluid_generate (&gen, &id) == 0,
-        "fluid_generate works first time");
+    ok (fluid_generate (&gen, &id) == 0, "fluid_generate works first time");
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,
@@ -45,10 +43,9 @@ int main (int argc, char *argv[])
     /* With artificially tweaked generator state
      */
     gen.id = 16383;
-    gen.epoch -= 1000ULL*60*60*24*365*34; // 34 years
+    gen.epoch -= 1000ULL * 60 * 60 * 24 * 365 * 34;  // 34 years
     gen.seq = 1023;
-    ok (fluid_generate (&gen, &id) == 0,
-        "fluid_generate works 34 years in the future");
+    ok (fluid_generate (&gen, &id) == 0, "fluid_generate works 34 years in the future");
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,
@@ -75,12 +72,9 @@ int main (int argc, char *argv[])
         if (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) < 0 || id != id2)
             decode_errors++;
     }
-    ok (generate_errors == 0,
-        "fluid_generate worked 64K times in tight loop");
-    ok (encode_errors == 0,
-        "fluid_encode type=DOTHEX worked 64K times");
-    ok (decode_errors == 0,
-        "fluid_decode type=DOTHEX worked 64K times");
+    ok (generate_errors == 0, "fluid_generate worked 64K times in tight loop");
+    ok (encode_errors == 0, "fluid_encode type=DOTHEX worked 64K times");
+    ok (decode_errors == 0, "fluid_decode type=DOTHEX worked 64K times");
 
     /* Continue for another 4K with NMEMONIC encoding, which is slower
      * and probably won't induce usleep.
@@ -96,12 +90,9 @@ int main (int argc, char *argv[])
         if (fluid_decode (buf, &id2, FLUID_STRING_MNEMONIC) < 0 || id != id2)
             decode_errors++;
     }
-    ok (generate_errors == 0,
-        "fluid_generate worked 4K times");
-    ok (encode_errors == 0,
-        "fluid_encode type=MNEMONIC worked 4K times");
-    ok (decode_errors == 0,
-        "fluid_decode type=MNEMONIC worked 4K times");
+    ok (generate_errors == 0, "fluid_generate worked 4K times");
+    ok (encode_errors == 0, "fluid_encode type=MNEMONIC worked 4K times");
+    ok (decode_errors == 0, "fluid_decode type=MNEMONIC worked 4K times");
 
     /* Decode bad input must fail
      */

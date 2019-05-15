@@ -69,7 +69,7 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     char **av = NULL;
 
     if (stat (path, &sb) < 0 || !(m->name = flux_modname (path, NULL, NULL))
-                             || !(m->digest = digest (path))) {
+        || !(m->digest = digest (path))) {
         module_destroy (m);
         errno = ESRCH;
         return NULL;
@@ -124,12 +124,20 @@ static json_t *module_list (void)
         json_t *o;
         m = zhash_lookup (modules, name);
         if (!(o = json_pack ("{s:s s:i s:s s:i s:i s:[s,s,s]}",
-                             "name", m->name,
-                             "size", m->size,
-                             "digest", m->digest,
-                             "idle", m->idle,
-                             "status", m->status,
-                             "services", "test1", "test2", rankstr)))
+                             "name",
+                             m->name,
+                             "size",
+                             m->size,
+                             "digest",
+                             m->digest,
+                             "idle",
+                             m->idle,
+                             "status",
+                             m->status,
+                             "services",
+                             "test1",
+                             "test2",
+                             rankstr)))
             oom ();
         if (json_array_append_new (mods, o) < 0)
             oom ();
@@ -139,8 +147,10 @@ static json_t *module_list (void)
     return mods;
 }
 
-static void insmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void insmod_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     const char *path;
     json_t *args;
@@ -151,12 +161,12 @@ static void insmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
     module_t *m = NULL;
     error_t e;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
-                                                     "args", &args) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path, "args", &args) < 0)
         goto error;
     if (!json_is_array (args))
         goto proto;
-    json_array_foreach (args, index, value) {
+    json_array_foreach (args, index, value)
+    {
         if (!json_is_string (value))
             goto proto;
         if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
@@ -179,8 +189,10 @@ error:
     free (argz);
 }
 
-static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void rmmod_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     const char *name;
 
@@ -200,8 +212,10 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void lsmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void lsmod_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     json_t *mods = NULL;
 
@@ -218,9 +232,9 @@ error:
 }
 
 const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "parent.insmod",         insmod_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "parent.rmmod",          rmmod_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "parent.lsmod",          lsmod_request_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "parent.insmod", insmod_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "parent.rmmod", rmmod_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "parent.lsmod", lsmod_request_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

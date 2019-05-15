@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 typedef struct flux_mrpc_struct flux_mrpc_t;
-typedef void (*flux_mrpc_continuation_f)(flux_mrpc_t *mrpc, void *arg);
+typedef void (*flux_mrpc_continuation_f) (flux_mrpc_t *mrpc, void *arg);
 
 /* Send an RPC request to 'nodeset' and return a flux_mrpc_t object to
  * allow responses to be handled.  "all" is a valid shorthand for all
@@ -30,14 +30,21 @@ typedef void (*flux_mrpc_continuation_f)(flux_mrpc_t *mrpc, void *arg);
  * shorthand for a single rpc sent to FLUX_NODEID_UPSTREAM.  On
  * failure return NULL with errno set.
  */
-flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *s,
-                        const char *nodeset, int flags);
+flux_mrpc_t *flux_mrpc (flux_t *h,
+                        const char *topic,
+                        const char *s,
+                        const char *nodeset,
+                        int flags);
 
 /* Variant of flux_mrpc that encodes a json payload using jansson
  * pack format strings.
  */
-flux_mrpc_t *flux_mrpc_pack (flux_t *h, const char *topic, const char *nodeset,
-                             int flags, const char *fmt, ...);
+flux_mrpc_t *flux_mrpc_pack (flux_t *h,
+                             const char *topic,
+                             const char *nodeset,
+                             int flags,
+                             const char *fmt,
+                             ...);
 
 /* Destroy an mrpc, invalidating previous payload returned by flux_mrpc_get().
  */
@@ -92,8 +99,10 @@ int flux_mrpc_next (flux_mrpc_t *mrpc);
 /* Helper functions for extending flux_mrpc_t.
  */
 void *flux_mrpc_aux_get (flux_mrpc_t *mrpc, const char *name);
-int flux_mrpc_aux_set (flux_mrpc_t *mrpc, const char *name,
-                      void *aux, flux_free_f destroy);
+int flux_mrpc_aux_set (flux_mrpc_t *mrpc,
+                       const char *name,
+                       void *aux,
+                       flux_free_f destroy);
 
 #ifdef __cplusplus
 }

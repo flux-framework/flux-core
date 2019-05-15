@@ -25,16 +25,15 @@ int subcommand_python_register (optparse_t *p)
 {
     optparse_err_t e;
     e = optparse_reg_subcommand (p,
-        "python",
-        cmd_python,
-        "[PYTHON ARGUMENTS...]",
-        "Run the python interpreter flux was configured with",
-        OPTPARSE_SUBCMD_SKIP_OPTS,
-        NULL);
+                                 "python",
+                                 cmd_python,
+                                 "[PYTHON ARGUMENTS...]",
+                                 "Run the python interpreter flux was configured with",
+                                 OPTPARSE_SUBCMD_SKIP_OPTS,
+                                 NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 
 /*
  * vi: ts=4 sw=4 expandtab
  */
-

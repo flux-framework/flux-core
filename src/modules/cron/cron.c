@@ -40,17 +40,17 @@
 #include "types.h"
 
 struct cron_ctx {
-    flux_t *               h;
-    uint64_t               next_id;         /* Id for next cron entry        */
-    char *                 sync_event;      /* If set, sync entries to event */
-    flux_msg_handler_t *   mh;              /* sync event message handler    */
-    zlist_t    *           entries;
-    zlist_t    *           deferred;        /* list of deferred entries      */
-    double                 last_sync;       /* timestamp of last sync event  */
-    double                 sync_epsilon;    /* allow tasks to run for this
-                                               number of seconds after last-
-                                               sync before deferring         */
-    char *                 cwd;             /* cwd to avoid constant lookups */
+    flux_t *h;
+    uint64_t next_id;       /* Id for next cron entry        */
+    char *sync_event;       /* If set, sync entries to event */
+    flux_msg_handler_t *mh; /* sync event message handler    */
+    zlist_t *entries;
+    zlist_t *deferred;   /* list of deferred entries      */
+    double last_sync;    /* timestamp of last sync event  */
+    double sync_epsilon; /* allow tasks to run for this
+                            number of seconds after last-
+                            sync before deferring         */
+    char *cwd;           /* cwd to avoid constant lookups */
 };
 
 /**************************************************************************
@@ -59,10 +59,13 @@ struct cron_ctx {
 static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg);
 static void cron_entry_destroy (cron_entry_t *e);
 static int cron_entry_stop (cron_entry_t *e);
-static void cron_entry_finished_handler (flux_t *h, cron_task_t *t,
-    void *arg);
-static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, const char *data, int datalen);
+static void cron_entry_finished_handler (flux_t *h, cron_task_t *t, void *arg);
+static void cron_entry_io_cb (flux_t *h,
+                              cron_task_t *t,
+                              void *arg,
+                              bool is_stderr,
+                              const char *data,
+                              int datalen);
 static int cron_entry_run_task (cron_entry_t *e);
 static int cron_entry_defer (cron_entry_t *e);
 
@@ -78,14 +81,17 @@ double get_timestamp (void)
 {
     struct timespec tm;
     clock_gettime (CLOCK_REALTIME, &tm);
-    return ((double) tm.tv_sec + (tm.tv_nsec/1.0e9));
+    return ((double)tm.tv_sec + (tm.tv_nsec / 1.0e9));
 }
 
 static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)
 {
     cron_entry_t *e = arg;
-    flux_log (h, LOG_INFO, "cron-%ju: task timeout at %.2fs. Killing",
-              e->id, e->timeout);
+    flux_log (h,
+              LOG_INFO,
+              "cron-%ju: task timeout at %.2fs. Killing",
+              e->id,
+              e->timeout);
     cron_task_kill (t, SIGTERM);
 }
 
@@ -115,8 +121,11 @@ int cron_entry_schedule_task (cron_entry_t *e)
     /* Refuse to run more than one task at once
      */
     if (e->task) {
-        flux_log (h, LOG_INFO, "cron-%ju: %s: task still running or scheduled",
-                  e->id, e->name);
+        flux_log (h,
+                  LOG_INFO,
+                  "cron-%ju: %s: task still running or scheduled",
+                  e->id,
+                  e->name);
         return (0);
     }
     if (!(e->task = cron_task_new (h, cron_entry_finished_handler, e))) {
@@ -137,16 +146,25 @@ int cron_entry_schedule_task (cron_entry_t *e)
     return cron_entry_defer (e);
 }
 
-
 /**************************************************************************/
 
-static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
-    bool is_stderr, const char *data, int datalen)
+static void cron_entry_io_cb (flux_t *h,
+                              cron_task_t *t,
+                              void *arg,
+                              bool is_stderr,
+                              const char *data,
+                              int datalen)
 {
     cron_entry_t *e = arg;
     int level = is_stderr ? LOG_ERR : LOG_INFO;
-    flux_log (h, level, "cron-%ju[%s]: rank=%d: command=\"%s\": \"%s\"",
-              e->id, e->name, e->rank, e->command, data);
+    flux_log (h,
+              level,
+              "cron-%ju[%s]: rank=%d: command=\"%s\": \"%s\"",
+              e->id,
+              e->name,
+              e->rank,
+              e->command,
+              data);
 }
 
 /* Push task t onto the front of the completed tasks list for
@@ -172,9 +190,11 @@ static void cron_entry_failure (cron_entry_t *e)
     e->stats.failure++;
     e->stats.failcount++;
     if (e->stop_on_failure && e->stats.failcount >= e->stop_on_failure) {
-        flux_log (e->ctx->h, LOG_ERR,
-                "cron-%ju: exceeded failure limit of %d. stopping",
-                e->id, e->stop_on_failure);
+        flux_log (e->ctx->h,
+                  LOG_ERR,
+                  "cron-%ju: exceeded failure limit of %d. stopping",
+                  e->id,
+                  e->stop_on_failure);
         cron_entry_stop (e);
     }
 }
@@ -186,17 +206,18 @@ static void cron_entry_finished_handler (flux_t *h, cron_task_t *t, void *arg)
     if (strcmp (cron_task_state (t), "Exec Failure") == 0) {
         flux_log_error (h, "cron-%ju: failed to run %s", e->id, e->command);
         cron_entry_failure (e);
-    }
-    else if (strcmp (cron_task_state (t), "Rexec Failure") == 0) {
+    } else if (strcmp (cron_task_state (t), "Rexec Failure") == 0) {
         flux_log_error (h, "cron-%ju: failure running %s", e->id, e->command);
         cron_entry_failure (e);
-    }
-    else if (cron_task_status (t) != 0) {
-        flux_log (h, LOG_ERR, "cron-%ju: \"%s\": Failed: %s",
-                 e->id, e->command, cron_task_state (t));
+    } else if (cron_task_status (t) != 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "cron-%ju: \"%s\": Failed: %s",
+                  e->id,
+                  e->command,
+                  cron_task_state (t));
         cron_entry_failure (e);
-    }
-    else
+    } else
         e->stats.success++;
 
     /*
@@ -230,8 +251,7 @@ static int cron_entry_stop (cron_entry_t *e)
 /*
  * Callback used to stop a cron entry safely.
  */
-static void entry_stop_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void entry_stop_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     cron_entry_stop (arg);
     flux_watcher_stop (w);
@@ -245,8 +265,7 @@ static void entry_stop_cb (flux_reactor_t *r, flux_watcher_t *w,
 int cron_entry_stop_safe (cron_entry_t *e)
 {
     flux_reactor_t *r = flux_get_reactor (e->ctx->h);
-    flux_watcher_t *w = flux_prepare_watcher_create (r,
-                            entry_stop_cb, e);
+    flux_watcher_t *w = flux_prepare_watcher_create (r, entry_stop_cb, e);
     if (!w)
         return (-1);
     flux_watcher_start (w);
@@ -318,8 +337,10 @@ static void cron_entry_destroy (cron_entry_t *e)
     free (e);
 }
 
-static void deferred_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+static void deferred_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     cron_ctx_t *ctx = arg;
     cron_entry_t *e;
@@ -346,8 +367,11 @@ static int cron_entry_defer (cron_entry_t *e)
     if (zlist_push (ctx->deferred, e) < 0)
         return (-1);
     e->stats.deferred++;
-    flux_log (ctx->h, LOG_DEBUG, "deferring cron-%ju to next %s event",
-             e->id, ctx->sync_event);
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "deferring cron-%ju to next %s event",
+              e->id,
+              ctx->sync_event);
 
     if (zlist_size (ctx->deferred) == 1)
         flux_msg_handler_start (ctx->mh);
@@ -376,11 +400,17 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
     int saved_errno = EPROTO;
 
     /* Get required fields "type", "name" and "command" */
-    if (flux_msg_unpack (msg, "{ s:s, s:s, s:s, s:O }",
-            "type", &type,
-            "name", &name,
-            "command", &command,
-            "args", &args) < 0) {
+    if (flux_msg_unpack (msg,
+                         "{ s:s, s:s, s:s, s:O }",
+                         "type",
+                         &type,
+                         "name",
+                         &name,
+                         "command",
+                         &command,
+                         "args",
+                         &args)
+        < 0) {
         flux_log_error (h, "cron.create: Failed to get name/command/args");
         goto done;
     }
@@ -391,7 +421,8 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    e->id = ctx->next_id++;;
+    e->id = ctx->next_id++;
+    ;
     e->ctx = ctx;
     e->stopped = 1;
     if (!(e->name = strdup (name)) || !(e->command = strdup (command))) {
@@ -409,14 +440,23 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
     e->stop_on_failure = 0;    /* Whether the cron job is stopped on failure */
     e->timeout = -1.0;         /* Task timeout (default -1, no timeout)      */
 
-    if (flux_msg_unpack (msg, "{ s?O, s?s, s?i, s?i, s?i, s?i, s?F }",
-            "environ",            &e->env,
-            "cwd",                &cwd,
-            "repeat",             &e->repeat,
-            "rank",               &e->rank,
-            "task-history-count", &e->task_history_count,
-            "stop-on-failure",    &e->stop_on_failure,
-            "timeout",            &e->timeout) < 0) {
+    if (flux_msg_unpack (msg,
+                         "{ s?O, s?s, s?i, s?i, s?i, s?i, s?F }",
+                         "environ",
+                         &e->env,
+                         "cwd",
+                         &cwd,
+                         "repeat",
+                         &e->repeat,
+                         "rank",
+                         &e->rank,
+                         "task-history-count",
+                         &e->task_history_count,
+                         "stop-on-failure",
+                         &e->stop_on_failure,
+                         "timeout",
+                         &e->timeout)
+        < 0) {
         saved_errno = EPROTO;
         flux_log_error (h, "cron.create: flux_msg_unpack");
         goto out_err;
@@ -504,16 +544,14 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
 
-    flux_log (ctx->h, LOG_INFO,
-        "synchronizing cron tasks to event %s", topic);
+    flux_log (ctx->h, LOG_INFO, "synchronizing cron tasks to event %s", topic);
 
     if ((ctx->sync_event = strdup (topic)) == NULL) {
         flux_log_error (ctx->h, "sync_event_init: strdup");
         return (-1);
     }
     match.topic_glob = ctx->sync_event;
-    ctx->mh = flux_msg_handler_create (ctx->h, match,
-                                       deferred_cb, (void *) ctx);
+    ctx->mh = flux_msg_handler_create (ctx->h, match, deferred_cb, (void *)ctx);
     if (!ctx->mh) {
         flux_log_error (ctx->h, "sync_event_init: msg_handler_create");
         return (-1);
@@ -526,7 +564,7 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
     return (0);
 }
 
-static cron_ctx_t * cron_ctx_create (flux_t *h)
+static cron_ctx_t *cron_ctx_create (flux_t *h)
 {
     cron_ctx_t *ctx = calloc (1, sizeof (*ctx));
     if (ctx == NULL) {
@@ -535,15 +573,14 @@ static cron_ctx_t * cron_ctx_create (flux_t *h)
     }
 
     ctx->sync_event = NULL;
-    ctx->last_sync  = 0.0;
-    ctx->next_id    = 1;
+    ctx->last_sync = 0.0;
+    ctx->next_id = 1;
 
     /* Default: run synchronized events up to 15ms after sync event */
     ctx->sync_epsilon = 0.015;
     ctx->mh = NULL;
 
-    if (!(ctx->entries = zlist_new ())
-        || !(ctx->deferred = zlist_new ())) {
+    if (!(ctx->entries = zlist_new ()) || !(ctx->deferred = zlist_new ())) {
         flux_log_error (h, "cron_ctx_create: zlist_new");
         goto error;
     }
@@ -565,15 +602,24 @@ error:
 static json_t *cron_stats_to_json (struct cron_stats *stats)
 {
     return json_pack ("{ s:f, s:f, s:f, s:I, s:I, s:I, s:I, s:I, s:I }",
-                      "ctime", stats->ctime,
-                      "starttime", stats->starttime,
-                      "lastrun", stats->lastrun,
-                      "count", stats->count,
-                      "failcount", stats->failcount,
-                      "total", stats->total,
-                      "success", stats->success,
-                      "failure", stats->failure,
-                      "deferred", stats->deferred);
+                      "ctime",
+                      stats->ctime,
+                      "starttime",
+                      stats->starttime,
+                      "lastrun",
+                      stats->lastrun,
+                      "count",
+                      stats->count,
+                      "failcount",
+                      stats->failcount,
+                      "total",
+                      stats->total,
+                      "success",
+                      stats->success,
+                      "failure",
+                      stats->failure,
+                      "deferred",
+                      stats->deferred);
 }
 
 static json_t *cron_entry_to_json (cron_entry_t *e)
@@ -586,13 +632,20 @@ static json_t *cron_entry_to_json (cron_entry_t *e)
      *  Common entry contents:
      */
     if (!(o = json_pack ("{ s:I, s:i, s:s, s:s, s:i, s:b, s:s }",
-                   "id", (json_int_t) e->id,
-                   "rank", e->rank,
-                   "name", e->name,
-                   "command", e->command,
-                   "repeat", e->repeat,
-                   "stopped", e->stopped,
-                   "type", e->typename)))
+                         "id",
+                         (json_int_t)e->id,
+                         "rank",
+                         e->rank,
+                         "name",
+                         e->name,
+                         "command",
+                         e->command,
+                         "repeat",
+                         e->repeat,
+                         "stopped",
+                         e->stopped,
+                         "type",
+                         e->typename)))
         return NULL;
 
     if (e->timeout >= 0.0)
@@ -630,14 +683,15 @@ fail:
     return NULL;
 }
 
-
 /**************************************************************************/
 
 /*
  *  Handle cron.create: create a new cron entry
  */
-static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
-                                  const flux_msg_t *msg, void *arg)
+static void cron_create_handler (flux_t *h,
+                                 flux_msg_handler_t *w,
+                                 const flux_msg_t *msg,
+                                 void *arg)
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
@@ -665,8 +719,10 @@ error:
         flux_log_error (h, "cron.request: flux_respond_error");
 }
 
-static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
-                                const flux_msg_t *msg, void *arg)
+static void cron_sync_handler (flux_t *h,
+                               flux_msg_handler_t *w,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     cron_ctx_t *ctx = arg;
     const char *topic;
@@ -691,9 +747,14 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
         ctx->sync_epsilon = epsilon;
 
     if (ctx->sync_event) {
-        if (flux_respond_pack (h, msg, "{ s:s s:f }",
-                               "sync_event", ctx->sync_event,
-                               "sync_epsilon", ctx->sync_epsilon) < 0)
+        if (flux_respond_pack (h,
+                               msg,
+                               "{ s:s s:f }",
+                               "sync_event",
+                               ctx->sync_event,
+                               "sync_epsilon",
+                               ctx->sync_epsilon)
+            < 0)
             flux_log_error (h, "cron.request: flux_respond_pack");
     } else {
         if (flux_respond_pack (h, msg, "{ s:b }", "sync_disabled", true) < 0)
@@ -718,8 +779,10 @@ static cron_entry_t *cron_ctx_find_entry (cron_ctx_t *ctx, int64_t id)
  *  Return a cron entry referenced by request in flux message msg.
  *  [service] is name of service for logging purposes.
  */
-static cron_entry_t *entry_from_request (flux_t *h, const flux_msg_t *msg,
-                                         cron_ctx_t *ctx, const char *service)
+static cron_entry_t *entry_from_request (flux_t *h,
+                                         const flux_msg_t *msg,
+                                         cron_ctx_t *ctx,
+                                         const char *service)
 {
     int64_t id;
 
@@ -735,8 +798,10 @@ static cron_entry_t *entry_from_request (flux_t *h, const flux_msg_t *msg,
 /*
  *  "cron.delete" handler
  */
-static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
-                                 const flux_msg_t *msg, void *arg)
+static void cron_delete_handler (flux_t *h,
+                                 flux_msg_handler_t *w,
+                                 const flux_msg_t *msg,
+                                 void *arg)
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
@@ -748,8 +813,7 @@ static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
         goto error;
 
     out = cron_entry_to_json (e);
-    if (e->task
-        && !flux_request_unpack (msg, NULL, "{ s:b }", "kill", &kill)
+    if (e->task && !flux_request_unpack (msg, NULL, "{ s:b }", "kill", &kill)
         && kill == true)
         cron_task_kill (e->task, SIGTERM);
     cron_entry_destroy (e);
@@ -769,8 +833,10 @@ error:
 /*
  *  "cron.stop" handler: stop a cron entry until restarted
  */
-static void cron_stop_handler (flux_t *h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
+static void cron_stop_handler (flux_t *h,
+                               flux_msg_handler_t *w,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
@@ -797,8 +863,10 @@ error:
 /*
  *  "cron.start" handler: start a stopped cron entry
  */
-static void cron_start_handler (flux_t *h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
+static void cron_start_handler (flux_t *h,
+                                flux_msg_handler_t *w,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
@@ -822,12 +890,13 @@ error:
         flux_log_error (h, "cron.start: flux_respond_error");
 }
 
-
 /*
  *  Handle "cron.list" -- dump a list of current cron entries via JSON
  */
-static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
-                             const flux_msg_t *msg, void *arg)
+static void cron_ls_handler (flux_t *h,
+                             flux_msg_handler_t *w,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     cron_ctx_t *ctx = arg;
     cron_entry_t *e = NULL;
@@ -863,12 +932,12 @@ static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
 /**************************************************************************/
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "cron.create",   cron_create_handler, 0 },
-    { FLUX_MSGTYPE_REQUEST,     "cron.delete",   cron_delete_handler, 0 },
-    { FLUX_MSGTYPE_REQUEST,     "cron.list",     cron_ls_handler, 0 },
-    { FLUX_MSGTYPE_REQUEST,     "cron.stop",     cron_stop_handler, 0 },
-    { FLUX_MSGTYPE_REQUEST,     "cron.start",    cron_start_handler, 0 },
-    { FLUX_MSGTYPE_REQUEST,     "cron.sync",     cron_sync_handler, 0 },
+    {FLUX_MSGTYPE_REQUEST, "cron.create", cron_create_handler, 0},
+    {FLUX_MSGTYPE_REQUEST, "cron.delete", cron_delete_handler, 0},
+    {FLUX_MSGTYPE_REQUEST, "cron.list", cron_ls_handler, 0},
+    {FLUX_MSGTYPE_REQUEST, "cron.stop", cron_stop_handler, 0},
+    {FLUX_MSGTYPE_REQUEST, "cron.start", cron_start_handler, 0},
+    {FLUX_MSGTYPE_REQUEST, "cron.sync", cron_sync_handler, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -877,17 +946,15 @@ static void process_args (cron_ctx_t *ctx, int ac, char **av)
     int i;
     for (i = 0; i < ac; i++) {
         if (strncmp (av[i], "sync=", 5) == 0)
-            cron_ctx_sync_event_init (ctx, (av[i])+5);
+            cron_ctx_sync_event_init (ctx, (av[i]) + 5);
         else if (strncmp (av[i], "sync_epsilon=", 13) == 0) {
-            char *s = (av[i])+13;
+            char *s = (av[i]) + 13;
             if (fsd_parse_duration (s, &ctx->sync_epsilon) < 0)
                 flux_log_error (ctx->h, "option %s ignored", av[i]);
-        }
-        else
+        } else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
     }
 }
-
 
 int mod_main (flux_t *h, int ac, char **av)
 {

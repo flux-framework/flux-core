@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 #include <glob.h>
 #include <string.h>
@@ -101,10 +101,15 @@ static int command_list_read (zhash_t *h, const char *path)
             log_msg ("%s: entry %d is not an object", path, i);
             goto out;
         }
-        if (json_unpack (entry, "{s:s s:s s:s}",
-                                "category", &category,
-                                "command", &command,
-                                "description", &description) < 0) {
+        if (json_unpack (entry,
+                         "{s:s s:s s:s}",
+                         "category",
+                         &category,
+                         "command",
+                         &command,
+                         "description",
+                         &description)
+            < 0) {
             log_msg ("%s: Missing element in JSON entry %d", path, i);
             goto out;
         }
@@ -113,9 +118,9 @@ static int command_list_read (zhash_t *h, const char *path)
             if (s == NULL)
                 goto out;
             zl = zlist_new ();
-            //zlist_set_destructor (zl, (czmq_destructor *) cmdhelp_destroy);
-            zhash_insert (h, s, (void *) zl);
-            zhash_freefn (h, s, (zhash_free_fn *) cmd_list_destroy);
+            // zlist_set_destructor (zl, (czmq_destructor *) cmdhelp_destroy);
+            zhash_insert (h, s, (void *)zl);
+            zhash_freefn (h, s, (zhash_free_fn *)cmd_list_destroy);
             free (s);
         }
         zlist_append (zl, cmdhelp_create (command, description));
@@ -125,7 +130,6 @@ static int command_list_read (zhash_t *h, const char *path)
 out:
     json_decref (o);
     return (rc);
-
 }
 
 static void emit_command_list_category (zhash_t *zh, const char *cat, FILE *fp)
@@ -152,7 +156,7 @@ static int categorycmp (const char *s1, const char *s2)
     return strcmp (s1, s2);
 }
 
-#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3,0,1)
+#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3, 0, 1)
 static bool category_cmp (const char *s1, const char *s2)
 {
     return (categorycmp (s1, s2) > 0);
@@ -188,7 +192,7 @@ zhash_t *get_command_list_hash (const char *pattern)
     }
 
     zh = zhash_new ();
-    //zhash_set_destructor (zh, (czmq_destructor *) zlist_destroy);
+    // zhash_set_destructor (zh, (czmq_destructor *) zlist_destroy);
     for (i = 0; i < gl.gl_pathc; i++) {
         const char *file = gl.gl_pathv[i];
         if (command_list_read (zh, file) < 0)
@@ -211,7 +215,7 @@ static void emit_command_help_from_pattern (const char *pattern, FILE *fp)
         return;
 
     keys = zhash_keys (zh);
-    zlist_sort (keys, (zlist_compare_fn *) category_cmp);
+    zlist_sort (keys, (zlist_compare_fn *)category_cmp);
 
     cat = zlist_first (keys);
     while (cat) {

@@ -37,11 +37,11 @@
 
 typedef struct {
     int depth;
-    char *path_copy;            /* for internal parsing, do not use */
-    char *root_ref;             /* internal copy, in case root_ref is changed */
-    json_t *root_dirent;        /* root dirent for this level */
+    char *path_copy;     /* for internal parsing, do not use */
+    char *root_ref;      /* internal copy, in case root_ref is changed */
+    json_t *root_dirent; /* root dirent for this level */
     const json_t *dirent;
-    json_t *tmp_dirent;         /* tmp dirent that may need to be created */
+    json_t *tmp_dirent; /* tmp dirent that may need to be created */
     zlist_t *pathcomps;
 } walk_level_t;
 
@@ -54,7 +54,7 @@ struct lookup {
     char *ns_name;
     char *root_ref;
     int root_seq;
-    bool root_ref_set_by_user;  /* if root_ref passed in by user */
+    bool root_ref_set_by_user; /* if root_ref passed in by user */
 
     char *path;
 
@@ -68,7 +68,7 @@ struct lookup {
     void *aux;
 
     /* potential return values from lookup */
-    json_t *val;           /* value of lookup */
+    json_t *val; /* value of lookup */
 
     /* if valref_missing_refs is true, iterate on refs, else
      * return missing_ref string.
@@ -80,12 +80,12 @@ struct lookup {
 
     char *missing_namespace;
 
-    int errnum;                 /* errnum if error */
+    int errnum; /* errnum if error */
     int aux_errnum;
 
     /* API internal */
     zlist_t *levels;
-    const json_t *wdirent;       /* result after walk() */
+    const json_t *wdirent; /* result after walk() */
     enum {
         LOOKUP_STATE_INIT,
         LOOKUP_STATE_CHECK_NAMESPACE,
@@ -139,7 +139,7 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
 
     return pathcomps;
 
- error:
+error:
     zlist_destroy (&pathcomps);
     errno = saved_errno;
     return NULL;
@@ -190,7 +190,7 @@ static walk_level_t *walk_level_create (const char *root_ref,
 
     return wl;
 
- error:
+error:
     walk_level_destroy (wl);
     errno = saved_errno;
     return NULL;
@@ -235,10 +235,7 @@ static lookup_process_t symlink_check_namespace (lookup_t *lh,
         goto done;
     }
 
-    if (kvsroot_check_user (lh->krm,
-                            root,
-                            lh->rolemask,
-                            lh->userid) < 0) {
+    if (kvsroot_check_user (lh->krm, root, lh->rolemask, lh->userid) < 0) {
         lh->errnum = EPERM;
         goto done;
     }
@@ -273,8 +270,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
      * flags say we can follow it
      */
     if (!last_pathcomp (wl->pathcomps, current_pathcomp)
-        || (!(lh->flags & FLUX_KVS_READLINK)
-            && !(lh->flags & FLUX_KVS_TREEOBJ))) {
+        || (!(lh->flags & FLUX_KVS_READLINK) && !(lh->flags & FLUX_KVS_TREEOBJ))) {
         if (wl->depth == SYMLINK_CYCLE_LIMIT) {
             lh->errnum = ELOOP;
             goto cleanup;
@@ -282,9 +278,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
 
         if (ns) {
             lookup_process_t nsret;
-            nsret = symlink_check_namespace (lh,
-                                             ns,
-                                             &root);
+            nsret = symlink_check_namespace (lh, ns, &root);
             if (nsret != LOOKUP_PROCESS_FINISHED) {
                 ret = nsret;
                 goto cleanup;
@@ -308,11 +302,9 @@ static lookup_process_t walk_symlink (lookup_t *lh,
                     goto cleanup;
                 }
                 wl->dirent = wl->tmp_dirent;
-            }
-            else
+            } else
                 wl->dirent = wl->root_dirent;
-        }
-        else {
+        } else {
             /* "recursively" determine link dirent */
             if (!(wltmp = walk_levels_push (lh,
                                             root ? root->ref : wl->root_ref,
@@ -325,8 +317,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
             (*wlp) = wltmp;
             goto done;
         }
-    }
-    else
+    } else
         wl->dirent = dirent_tmp;
 
     (*wlp) = NULL;
@@ -356,7 +347,6 @@ static lookup_process_t walk (lookup_t *lh)
 
     /* walk directories */
     while ((pathcomp = zlist_head (wl->pathcomps))) {
-
         /* Get directory of dirent */
 
         if (treeobj_is_dirref (wl->dirent)) {
@@ -408,19 +398,22 @@ static lookup_process_t walk (lookup_t *lh)
             }
         } else {
             /* Unexpected dirent type */
-            if (treeobj_is_valref (wl->dirent)
-                || treeobj_is_val (wl->dirent)) {
+            if (treeobj_is_valref (wl->dirent) || treeobj_is_val (wl->dirent)) {
                 /* don't return ENOENT or ENOTDIR, error to be
                  * determined by caller */
                 goto done;
-            }
-            else {
+            } else {
                 char *s = json_dumps (wl->dirent, JSON_ENCODE_ANY);
-                flux_log (lh->h, LOG_ERR,
+                flux_log (lh->h,
+                          LOG_ERR,
                           "%s: unknown/unexpected dirent type: "
                           "lh->path=%s pathcomp=%s wl->dirent(ptr)=%p "
                           "wl->dirent(str)=%s",
-                          __FUNCTION__, lh->path, pathcomp, wl->dirent, s);
+                          __FUNCTION__,
+                          lh->path,
+                          pathcomp,
+                          wl->dirent,
+                          s);
                 free (s);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;
@@ -458,12 +451,10 @@ static lookup_process_t walk (lookup_t *lh)
                 wl = wltmp;
                 continue;
             }
-        }
-        else
+        } else
             wl->dirent = dirent_tmp;
 
-        if (last_pathcomp (wl->pathcomps, pathcomp)
-            && wl->depth) {
+        if (last_pathcomp (wl->pathcomps, pathcomp) && wl->depth) {
             /* Unwind "recursive" step */
             do {
                 walk_level_t *wl_tmp;
@@ -575,7 +566,7 @@ lookup_t *lookup_create (struct cache *cache,
 
     return lh;
 
- cleanup:
+cleanup:
     lookup_destroy (lh);
     errno = saved_errno;
     return NULL;
@@ -600,8 +591,7 @@ int lookup_get_errnum (lookup_t *lh)
         if (lh->state == LOOKUP_STATE_FINISHED)
             return lh->errnum;
         if (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
-            || lh->state == LOOKUP_STATE_CHECK_ROOT
-            || lh->state == LOOKUP_STATE_WALK
+            || lh->state == LOOKUP_STATE_CHECK_ROOT || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)
             return EAGAIN;
     }
@@ -626,9 +616,7 @@ int lookup_set_aux_errnum (lookup_t *lh, int errnum)
 
 json_t *lookup_get_value (lookup_t *lh)
 {
-    if (lh
-        && lh->state == LOOKUP_STATE_FINISHED
-        && lh->errnum == 0)
+    if (lh && lh->state == LOOKUP_STATE_FINISHED && lh->errnum == 0)
         return json_incref (lh->val);
     return NULL;
 }
@@ -636,8 +624,7 @@ json_t *lookup_get_value (lookup_t *lh)
 int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 {
     if (lh
-        && (lh->state == LOOKUP_STATE_CHECK_ROOT
-            || lh->state == LOOKUP_STATE_WALK
+        && (lh->state == LOOKUP_STATE_CHECK_ROOT || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)) {
         if (lh->valref_missing_refs) {
             int refcount, i;
@@ -659,15 +646,13 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 
                 if (!(entry = cache_lookup (lh->cache, ref, lh->current_epoch))
                     || !cache_entry_get_valid (entry)) {
-
                     /* valref points to raw data, raw_data flag is always
                      * true */
                     if (cb (lh, ref, data) < 0)
                         return -1;
                 }
             }
-        }
-        else {
+        } else {
             if (cb (lh, lh->missing_ref, data) < 0)
                 return -1;
         }
@@ -679,10 +664,10 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 
 const char *lookup_missing_namespace (lookup_t *lh)
 {
-   if (lh
-       && (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
-           || lh->state == LOOKUP_STATE_WALK)) {
-       return lh->missing_namespace;
+    if (lh
+        && (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
+            || lh->state == LOOKUP_STATE_WALK)) {
+        return lh->missing_namespace;
     }
     errno = EINVAL;
     return NULL;
@@ -741,10 +726,7 @@ static int namespace_still_valid (lookup_t *lh)
     /* Small chance root removed, then re-inserted, check security
      * checks again */
 
-    if (kvsroot_check_user (lh->krm,
-                            root,
-                            lh->rolemask,
-                            lh->userid) < 0) {
+    if (kvsroot_check_user (lh->krm, root, lh->rolemask, lh->userid) < 0) {
         lh->errnum = errno;
         return -1;
     }
@@ -784,8 +766,10 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
     return 0;
 }
 
-static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
-                                            int *total_len, bool *stall)
+static int get_multi_blobref_valref_length (lookup_t *lh,
+                                            int refcount,
+                                            int *total_len,
+                                            bool *stall)
 {
     struct cache_entry *entry;
     const char *reftmp;
@@ -824,8 +808,7 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
     return 0;
 }
 
-static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
-                                            int total_len)
+static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount, int total_len)
 {
     struct cache_entry *entry;
     const char *reftmp;
@@ -866,8 +849,7 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
 
 /* return 0 on success, -1 on failure.  On success, stall should be
  * check */
-static int get_multi_blobref_valref_value (lookup_t *lh, int refcount,
-                                           bool *stall)
+static int get_multi_blobref_valref_value (lookup_t *lh, int refcount, bool *stall)
 {
     char *valbuf = NULL;
     int total_len = 0;
@@ -912,8 +894,7 @@ lookup_process_t lookup (lookup_t *lh)
     if (lh->errnum)
         return LOOKUP_PROCESS_ERROR;
 
-    if (lh->state != LOOKUP_STATE_INIT
-        && lh->state != LOOKUP_STATE_FINISHED)
+    if (lh->state != LOOKUP_STATE_INIT && lh->state != LOOKUP_STATE_FINISHED)
         is_replay = true;
 
     switch (lh->state) {
@@ -938,10 +919,7 @@ lookup_process_t lookup (lookup_t *lh)
                     return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
                 }
 
-                if (kvsroot_check_user (lh->krm,
-                                        root,
-                                        lh->rolemask,
-                                        lh->userid) < 0) {
+                if (kvsroot_check_user (lh->krm, root, lh->rolemask, lh->userid) < 0) {
                     lh->errnum = errno;
                     goto error;
                 }
@@ -977,16 +955,14 @@ lookup_process_t lookup (lookup_t *lh)
                         lh->errnum = EISDIR;
                         goto error;
                     }
-                    if (!(entry = cache_lookup (lh->cache,
-                                                lh->root_ref,
-                                                lh->current_epoch))
+                    if (!(entry =
+                              cache_lookup (lh->cache, lh->root_ref, lh->current_epoch))
                         || !cache_entry_get_valid (entry)) {
                         lh->missing_ref = lh->root_ref;
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                     }
                     if (!(valtmp = cache_entry_get_treeobj (entry))) {
-                        flux_log (lh->h, LOG_ERR,
-                                  "root_ref points to non-treeobj");
+                        flux_log (lh->h, LOG_ERR, "root_ref points to non-treeobj");
                         lh->errnum = EINVAL;
                         goto error;
                     }
@@ -1015,8 +991,7 @@ lookup_process_t lookup (lookup_t *lh)
 
             lh->state = LOOKUP_STATE_WALK;
             /* fallthrough */
-        case LOOKUP_STATE_WALK:
-        {
+        case LOOKUP_STATE_WALK: {
             lookup_process_t lret;
 
             if (is_replay) {
@@ -1033,7 +1008,7 @@ lookup_process_t lookup (lookup_t *lh)
             else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS)
                 return LOOKUP_PROCESS_LOAD_MISSING_REFS;
             else if (!lh->wdirent) {
-                //lh->errnum = ENOENT;
+                // lh->errnum = ENOENT;
                 goto done; /* a NULL response is not necessarily an error */
             }
 
@@ -1068,8 +1043,7 @@ lookup_process_t lookup (lookup_t *lh)
                     goto error;
                 }
                 if (refcount != 1) {
-                    flux_log (lh->h, LOG_ERR, "invalid dirref count: %d",
-                              refcount);
+                    flux_log (lh->h, LOG_ERR, "invalid dirref count: %d", refcount);
                     lh->errnum = ENOTRECOVERABLE;
                     goto error;
                 }
@@ -1077,8 +1051,7 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-                if (!(entry = cache_lookup (lh->cache, reftmp,
-                                            lh->current_epoch))
+                if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
                     || !cache_entry_get_valid (entry)) {
                     lh->missing_ref = reftmp;
                     return LOOKUP_PROCESS_LOAD_MISSING_REFS;
@@ -1113,8 +1086,7 @@ lookup_process_t lookup (lookup_t *lh)
                     goto error;
                 }
                 if (!refcount) {
-                    flux_log (lh->h, LOG_ERR, "invalid valref count: %d",
-                              refcount);
+                    flux_log (lh->h, LOG_ERR, "invalid valref count: %d", refcount);
                     lh->errnum = ENOTRECOVERABLE;
                     goto error;
                 }
@@ -1123,11 +1095,8 @@ lookup_process_t lookup (lookup_t *lh)
                         goto error;
                     if (stall)
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
-                }
-                else {
-                    if (get_multi_blobref_valref_value (lh,
-                                                        refcount,
-                                                        &stall) < 0)
+                } else {
+                    if (get_multi_blobref_valref_value (lh, refcount, &stall) < 0)
                         goto error;
                     if (stall)
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
@@ -1174,8 +1143,12 @@ lookup_process_t lookup (lookup_t *lh)
                 }
             } else {
                 char *s = json_dumps (lh->wdirent, JSON_ENCODE_ANY);
-                flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %p, %s",
-                          __FUNCTION__, lh->wdirent, s);
+                flux_log (lh->h,
+                          LOG_ERR,
+                          "%s: corrupt dirent: %p, %s",
+                          __FUNCTION__,
+                          lh->wdirent,
+                          s);
                 free (s);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;
@@ -1185,8 +1158,7 @@ lookup_process_t lookup (lookup_t *lh)
         case LOOKUP_STATE_FINISHED:
             break;
         default:
-            flux_log (lh->h, LOG_ERR, "%s: invalid state %d",
-                      __FUNCTION__, lh->state);
+            flux_log (lh->h, LOG_ERR, "%s: invalid state %d", __FUNCTION__, lh->state);
             lh->errnum = ENOTRECOVERABLE;
             goto error;
     }

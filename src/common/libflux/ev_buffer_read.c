@@ -24,18 +24,14 @@ static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
             return true;
         /* if eof read, no lines, but left over data non-line data,
          * this data should be flushed to the user */
-        else if (ebr->eof_read
-                 && flux_buffer_bytes (ebr->fb))
+        else if (ebr->eof_read && flux_buffer_bytes (ebr->fb))
             return true;
-    }
-    else {
+    } else {
         if (flux_buffer_bytes (ebr->fb) > 0)
             return true;
     }
 
-    if (ebr->eof_read
-        && !ebr->eof_sent
-        && !flux_buffer_bytes (ebr->fb)) {
+    if (ebr->eof_read && !ebr->eof_sent && !flux_buffer_bytes (ebr->fb)) {
         if (is_eof)
             (*is_eof) = true;
         return true;
@@ -54,17 +50,15 @@ static void buffer_space_available_cb (flux_buffer_t *fb, void *arg)
         ev_io_start (ebr->loop, &(ebr->io_w));
 
     /* clear this callback */
-    if (flux_buffer_set_high_write_cb (ebr->fb,
-                                       NULL,
-                                       0,
-                                       NULL) < 0)
+    if (flux_buffer_set_high_write_cb (ebr->fb, NULL, 0, NULL) < 0)
         return;
 }
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)((char *)w
-                            - offsetof (struct ev_buffer_read, prepare_w));
+    struct ev_buffer_read *ebr =
+        (struct ev_buffer_read *)((char *)w
+                                  - offsetof (struct ev_buffer_read, prepare_w));
 
     if (data_to_read (ebr, NULL) == true)
         ev_idle_start (loop, &ebr->idle_w);
@@ -86,20 +80,19 @@ static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
         if (!ret) {
             ebr->eof_read = true;
             ev_io_stop (ebr->loop, iow);
-        }
-        else if (ret == space) {
+        } else if (ret == space) {
             /* buffer full, buffer_space_available_cb will be called
              * to re-enable io reactor when space is available */
             if (flux_buffer_set_high_write_cb (ebr->fb,
                                                buffer_space_available_cb,
                                                flux_buffer_size (ebr->fb),
-                                               ebr) < 0)
+                                               ebr)
+                < 0)
                 return;
 
             ev_io_stop (ebr->loop, iow);
         }
-    }
-    else {
+    } else {
         if (ebr->cb)
             ebr->cb (loop, ebr, revents);
     }
@@ -107,8 +100,9 @@ static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
 
 static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)((char *)w
-                            - offsetof (struct ev_buffer_read, check_w));
+    struct ev_buffer_read *ebr =
+        (struct ev_buffer_read *)((char *)w
+                                  - offsetof (struct ev_buffer_read, check_w));
     bool is_eof = false;
 
     ev_idle_stop (loop, &ebr->idle_w);
@@ -174,7 +168,8 @@ void ev_buffer_read_start (struct ev_loop *loop, struct ev_buffer_read *ebr)
             if (flux_buffer_set_high_write_cb (ebr->fb,
                                                buffer_space_available_cb,
                                                flux_buffer_size (ebr->fb),
-                                               ebr) < 0)
+                                               ebr)
+                < 0)
                 return;
         }
     }
@@ -194,4 +189,3 @@ void ev_buffer_read_stop (struct ev_loop *loop, struct ev_buffer_read *ebr)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

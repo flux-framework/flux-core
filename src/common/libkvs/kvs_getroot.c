@@ -25,7 +25,7 @@
 static const char *auxkey = "flux::getroot_ctx";
 
 struct getroot_ctx {
-    char *treeobj;      /* cached treeobj */
+    char *treeobj; /* cached treeobj */
 };
 
 static void free_ctx (struct getroot_ctx *ctx)
@@ -59,10 +59,15 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *ns, int flags)
         return NULL;
     if (!ns && !(ns = kvs_get_namespace ()))
         goto error;
-    if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.getroot",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i}",
-                             "namespace", ns,
-                             "flags", flags)))
+                             "namespace",
+                             ns,
+                             "flags",
+                             flags)))
         goto error;
     if (flux_future_aux_set (f, auxkey, ctx, (flux_free_f)free_ctx) < 0)
         goto error_future;
@@ -75,19 +80,27 @@ error:
     return NULL;
 }
 
-static int decode_response (flux_future_t *f, const char **rootrefp,
-                            int *rootseqp, uint32_t *ownerp)
+static int decode_response (flux_future_t *f,
+                            const char **rootrefp,
+                            int *rootseqp,
+                            uint32_t *ownerp)
 {
     const char *rootref;
     int rootseq;
     int owner;
     int flags;
 
-    if (flux_rpc_get_unpack (f, "{s:s s:i s:i s:i}",
-                             "rootref", &rootref,
-                             "rootseq", &rootseq,
-                             "owner", &owner,
-                             "flags", &flags) < 0)
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:i s:i s:i}",
+                             "rootref",
+                             &rootref,
+                             "rootseq",
+                             &rootseq,
+                             "owner",
+                             &owner,
+                             "flags",
+                             &flags)
+        < 0)
         return -1;
     if (rootrefp)
         *rootrefp = rootref;

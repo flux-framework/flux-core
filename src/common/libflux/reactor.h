@@ -30,16 +30,16 @@ typedef struct flux_reactor flux_reactor_t;
 /* Flags for flux_reactor_run()
  */
 enum {
-    FLUX_REACTOR_NOWAIT = 1,  /* run loop once without blocking */
-    FLUX_REACTOR_ONCE = 2,    /* same as above but block until at least */
-                              /*     one event occurs */
+    FLUX_REACTOR_NOWAIT = 1, /* run loop once without blocking */
+    FLUX_REACTOR_ONCE = 2,   /* same as above but block until at least */
+                             /*     one event occurs */
 };
 
 /* Flags for flux_reactor_create()
  */
 enum {
-    FLUX_REACTOR_SIGCHLD = 1,  /* enable use of child watchers */
-                               /*    only one thread can do this per program */
+    FLUX_REACTOR_SIGCHLD = 1, /* enable use of child watchers */
+                              /*    only one thread can do this per program */
 };
 
 /* Flags for buffer watchers */
@@ -67,8 +67,10 @@ double flux_reactor_time (void);
 
 typedef struct flux_watcher flux_watcher_t;
 
-typedef void (*flux_watcher_f)(flux_reactor_t *r, flux_watcher_t *w,
-                               int revents, void *arg);
+typedef void (*flux_watcher_f) (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg);
 
 void flux_watcher_start (flux_watcher_t *w);
 void flux_watcher_stop (flux_watcher_t *w);
@@ -79,15 +81,20 @@ double flux_watcher_next_wakeup (flux_watcher_t *w);
  */
 
 flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
-                                            flux_t *h, int events,
-                                            flux_watcher_f cb, void *arg);
+                                            flux_t *h,
+                                            int events,
+                                            flux_watcher_f cb,
+                                            void *arg);
 flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w);
 
 /* file descriptor
  */
 
-flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r, int fd, int events,
-                                        flux_watcher_f cb, void *arg);
+flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r,
+                                        int fd,
+                                        int events,
+                                        flux_watcher_f cb,
+                                        void *arg);
 int flux_fd_watcher_get_fd (flux_watcher_t *w);
 
 /* buffer
@@ -95,16 +102,22 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w);
 
 /* on eof, callback will be called with an empty buffer */
 /* if line buffered, second to last callback may not contain a full line */
-flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
-                                                 int size, flux_watcher_f cb,
-                                                 int flags, void *arg);
+flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r,
+                                                 int fd,
+                                                 int size,
+                                                 flux_watcher_f cb,
+                                                 int flags,
+                                                 void *arg);
 
 flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w);
 
 /* 'cb' only called after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR) */
-flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
-                                                  int size, flux_watcher_f cb,
-                                                  int flags, void *arg);
+flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r,
+                                                  int fd,
+                                                  int size,
+                                                  flux_watcher_f cb,
+                                                  int flags,
+                                                  void *arg);
 
 flux_buffer_t *flux_buffer_write_watcher_get_buffer (flux_watcher_t *w);
 
@@ -126,16 +139,20 @@ int flux_buffer_write_watcher_is_closed (flux_watcher_t *w, int *close_err);
  */
 
 flux_watcher_t *flux_zmq_watcher_create (flux_reactor_t *r,
-                                         void *zsock, int events,
-                                         flux_watcher_f cb, void *arg);
+                                         void *zsock,
+                                         int events,
+                                         flux_watcher_f cb,
+                                         void *arg);
 void *flux_zmq_watcher_get_zsock (flux_watcher_t *w);
 
 /* timer
  */
 
 flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
-                                           double after, double repeat,
-                                           flux_watcher_f cb, void *arg);
+                                           double after,
+                                           double repeat,
+                                           flux_watcher_f cb,
+                                           void *arg);
 
 void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat);
 
@@ -145,41 +162,50 @@ void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat);
 typedef double (*flux_reschedule_f) (flux_watcher_t *w, double now, void *arg);
 
 flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
-                                             double offset, double interval,
-                                             flux_reschedule_f reschedule_cb,
-                                             flux_watcher_f cb, void *arg);
+                                              double offset,
+                                              double interval,
+                                              flux_reschedule_f reschedule_cb,
+                                              flux_watcher_f cb,
+                                              void *arg);
 
 void flux_periodic_watcher_reset (flux_watcher_t *w,
-                                  double next_wakeup, double interval,
+                                  double next_wakeup,
+                                  double interval,
                                   flux_reschedule_f reschedule_cb);
-
 
 /* prepare/check/idle
  */
 
 flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
-                                             flux_watcher_f cb, void *arg);
+                                             flux_watcher_f cb,
+                                             void *arg);
 
 flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
-                                          flux_watcher_f cb, void *arg);
+                                           flux_watcher_f cb,
+                                           void *arg);
 
 flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
-                                          flux_watcher_f cb, void *arg);
+                                          flux_watcher_f cb,
+                                          void *arg);
 
 /* child
  */
 
 flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
-                                           int pid, bool trace,
-                                           flux_watcher_f cb, void *arg);
+                                           int pid,
+                                           bool trace,
+                                           flux_watcher_f cb,
+                                           void *arg);
 int flux_child_watcher_get_rpid (flux_watcher_t *w);
 int flux_child_watcher_get_rstatus (flux_watcher_t *w);
 
 /* signal
  */
 
-flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r, int signum,
-                                            flux_watcher_f cb, void *arg);
+flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r,
+                                            int signum,
+                                            flux_watcher_f cb,
+                                            void *arg);
 
 int flux_signal_watcher_get_signum (flux_watcher_t *w);
 
@@ -187,10 +213,13 @@ int flux_signal_watcher_get_signum (flux_watcher_t *w);
  */
 
 flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
-                                          const char *path, double interval,
-                                          flux_watcher_f cb, void *arg);
+                                          const char *path,
+                                          double interval,
+                                          flux_watcher_f cb,
+                                          void *arg);
 void flux_stat_watcher_get_rstat (flux_watcher_t *w,
-                                  struct stat *stat, struct stat *prev);
+                                  struct stat *stat,
+                                  struct stat *prev);
 
 /* Custom watcher construction functions:
  */
@@ -208,17 +237,19 @@ struct flux_watcher_ops {
  *  Caller retrieves pointer to allocated implementation data with
  *   flux_watcher_data (w).
  */
-flux_watcher_t * flux_watcher_create (flux_reactor_t *r, size_t data_size,
-                                      struct flux_watcher_ops *ops,
-                                      flux_watcher_f fn, void *arg);
+flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
+                                     size_t data_size,
+                                     struct flux_watcher_ops *ops,
+                                     flux_watcher_f fn,
+                                     void *arg);
 
 /*  Return pointer to implementation data reserved by watcher object 'w'.
  */
-void * flux_watcher_get_data (flux_watcher_t *w);
+void *flux_watcher_get_data (flux_watcher_t *w);
 
 /*  Return pointer to flux_watcher_ops structure for this watcher.
  */
-struct flux_watcher_ops * flux_watcher_get_ops (flux_watcher_t *w);
+struct flux_watcher_ops *flux_watcher_get_ops (flux_watcher_t *w);
 
 #ifdef __cplusplus
 }

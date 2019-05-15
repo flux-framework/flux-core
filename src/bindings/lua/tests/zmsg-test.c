@@ -23,15 +23,14 @@
 #include "zmsg-lua.h"
 #include "lutil.h"
 
-
 flux_msg_t *l_cmb_zmsg_encode (lua_State *L)
 {
-	const char *tag = lua_tostring (L, 1);
+    const char *tag = lua_tostring (L, 1);
     char *json_str = NULL;
 
     lua_value_to_json_string (L, 2, &json_str);
-	if ((json_str == NULL) || (tag == NULL))
-		return NULL;
+    if ((json_str == NULL) || (tag == NULL))
+        return NULL;
 
     flux_msg_t *msg = flux_request_encode (tag, json_str);
     if (!msg)
@@ -41,7 +40,9 @@ flux_msg_t *l_cmb_zmsg_encode (lua_State *L)
 }
 
 static int l_zi_resp_cb (lua_State *L,
-    struct zmsg_info *zi, const char *json_str, void *arg)
+                         struct zmsg_info *zi,
+                         const char *json_str,
+                         void *arg)
 {
     flux_msg_t **old = zmsg_info_zmsg (zi);
     flux_msg_t **msg = malloc (sizeof (*msg));
@@ -57,15 +58,15 @@ static int l_zi_resp_cb (lua_State *L,
 static int l_cmb_zmsg_create_type (lua_State *L, int type)
 {
     struct zmsg_info *zi;
-	flux_msg_t **msg = malloc (sizeof (*msg));
-	if ((*msg = l_cmb_zmsg_encode (L)) == NULL) {
+    flux_msg_t **msg = malloc (sizeof (*msg));
+    if ((*msg = l_cmb_zmsg_encode (L)) == NULL) {
         free (msg);
         return luaL_error (L, "Failed to encode zmsg");
     }
     zi = zmsg_info_create (msg, type);
     zmsg_info_register_resp_cb (zi, l_zi_resp_cb, NULL);
 
-	return lua_push_zmsg_info (L, zi);
+    return lua_push_zmsg_info (L, zi);
 }
 
 static int l_cmb_zmsg_create_response (lua_State *L)
@@ -114,20 +115,19 @@ static int l_cmb_zmsg_create_event (lua_State *L)
     return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_EVENT);
 }
 
-static const struct luaL_Reg zmsg_info_test_functions [] = {
-	{ "req",       l_cmb_zmsg_create_request   },
-	{ "resp",      l_cmb_zmsg_create_response  },
-	{ "resp_err",  l_cmb_zmsg_create_response_with_error },
-	{ "event",     l_cmb_zmsg_create_event     },
-	{ NULL,        NULL              }
-};
+static const struct luaL_Reg zmsg_info_test_functions[] =
+    {{"req", l_cmb_zmsg_create_request},
+     {"resp", l_cmb_zmsg_create_response},
+     {"resp_err", l_cmb_zmsg_create_response_with_error},
+     {"event", l_cmb_zmsg_create_event},
+     {NULL, NULL}};
 
 int luaopen_zmsgtest (lua_State *L)
 {
     l_zmsg_info_register_metatable (L);
     lua_newtable (L);
     luaL_setfuncs (L, zmsg_info_test_functions, 0);
-	return (1);
+    return (1);
 }
 
 /*

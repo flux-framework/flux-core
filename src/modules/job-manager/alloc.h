@@ -21,7 +21,8 @@ struct alloc_ctx;
 struct event_ctx;
 
 void alloc_ctx_destroy (struct alloc_ctx *ctx);
-struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
+struct alloc_ctx *alloc_ctx_create (flux_t *h,
+                                    struct queue *queue,
                                     struct event_ctx *event_ctx);
 
 /* Call from SCHED state to put job in queue to request resources.

@@ -21,7 +21,7 @@
 
 static bool string_to_tm (char *s, struct tm *tmp)
 {
-    char *p = strptime (s,"%Y-%m-%d %H:%M:%S", tmp);
+    char *p = strptime (s, "%Y-%m-%d %H:%M:%S", tmp);
     if (p == NULL || *p != '\0')
         return (false);
     return (true);
@@ -33,7 +33,7 @@ static bool string_to_tv (char *s, struct timeval *tvp)
     struct tm tm;
     char *p = strptime (s, "%Y-%m-%d %H:%M:%S", &tm);
 
-    if ((t = mktime (&tm)) == (time_t) -1)
+    if ((t = mktime (&tm)) == (time_t)-1)
         return (false);
 
     tvp->tv_sec = t;
@@ -45,7 +45,7 @@ static bool string_to_tv (char *s, struct timeval *tvp)
             diag ("Failed to convert usecs %s", p);
             return (false);
         }
-        tvp->tv_usec = (long) (d * 1.0e6);
+        tvp->tv_usec = (long)(d * 1.0e6);
     }
     return (true);
 }
@@ -57,28 +57,25 @@ static bool cronodate_check_match (struct cronodate *d, char *s)
     return cronodate_match (d, &tm);
 }
 
-static bool cronodate_check_next (struct cronodate *d,
-                                  char *start, char *expected)
+static bool cronodate_check_next (struct cronodate *d, char *start, char *expected)
 {
-    char buf [256];
+    char buf[256];
     time_t t, t_exp;
     struct tm tm;
     int rc;
 
     memset (&tm, 0, sizeof (tm));
-    ok (string_to_tm (expected, &tm),
-        "string_to_tm (expected=%s)", expected);
-    if ((t_exp = mktime (&tm)) < (time_t) 0)
+    ok (string_to_tm (expected, &tm), "string_to_tm (expected=%s)", expected);
+    if ((t_exp = mktime (&tm)) < (time_t)0)
         return false;
 
-    ok (string_to_tm (start, &tm),
-        "string_to_tm (start=%s)", start);
+    ok (string_to_tm (start, &tm), "string_to_tm (start=%s)", start);
     strftime (buf, sizeof (buf), "%Y-%m-%d %H:%M:%S %Z", &tm);
     diag ("start = %s", buf);
     rc = cronodate_next (d, &tm);
     strftime (buf, sizeof (buf), "%Y-%m-%d %H:%M:%S %Z", &tm);
     ok (rc >= 0, "cronodate_next() = %s", buf);
-    if ((t = mktime (&tm)) < (time_t) 0) {
+    if ((t = mktime (&tm)) < (time_t)0) {
         diag ("mktime: %s", strerror (errno));
         return false;
     }
@@ -88,7 +85,7 @@ static bool cronodate_check_next (struct cronodate *d,
 
 static double tv_to_double (struct timeval *tv)
 {
-    return (tv->tv_sec + (tv->tv_usec/1e6));
+    return (tv->tv_sec + (tv->tv_usec / 1e6));
 }
 
 static bool almost_is (double a, double b)
@@ -122,22 +119,26 @@ int main (int argc, char *argv[])
     ok (tm_unit_max (TM_MIN) == 59, "check max value for tm_min");
     ok (tm_unit_max (TM_HOUR) == 23, "check max value for tm_hour");
     ok (tm_unit_max (TM_MON) == 11, "check max value for tm_mon");
-    ok (tm_unit_max (TM_YEAR) == 3000-1900, "check max value for tm_year");
+    ok (tm_unit_max (TM_YEAR) == 3000 - 1900, "check max value for tm_year");
     ok (tm_unit_max (TM_WDAY) == 6, "check max value for tm_wday");
     ok (tm_unit_max (TM_MDAY) == 31, "check max value for tm_mday");
 
-    is (tm_unit_string (TM_SEC),  "second", "tm_unit_string: seconds");
-    is (tm_unit_string (TM_MIN),  "minute", "tm_unit_string: minute");
+    is (tm_unit_string (TM_SEC), "second", "tm_unit_string: seconds");
+    is (tm_unit_string (TM_MIN), "minute", "tm_unit_string: minute");
     is (tm_unit_string (TM_HOUR), "hour", "tm_unit_string: hour");
-    is (tm_unit_string (TM_MON),  "month", "tm_unit_string: month");
+    is (tm_unit_string (TM_MON), "month", "tm_unit_string: month");
     is (tm_unit_string (TM_MDAY), "mday", "tm_unit_string: mday");
     is (tm_unit_string (TM_WDAY), "weekday", "tm_unit_string: weekday");
     is (tm_unit_string (TM_YEAR), "year", "tm_unit_string: year");
 
     for (i = 0; i < 12; i++)
-        ok (tm_string_to_month (tm_month_string (i)) == i, "checking %s", tm_month_string (i));
+        ok (tm_string_to_month (tm_month_string (i)) == i,
+            "checking %s",
+            tm_month_string (i));
     for (i = 0; i < 7; i++)
-        ok (tm_string_to_weekday (tm_weekday_string (i)) == i, "checking %s", tm_weekday_string (i));
+        ok (tm_string_to_weekday (tm_weekday_string (i)) == i,
+            "checking %s",
+            tm_weekday_string (i));
 
     ok (tm_string_to_month ("foo") == -1, "invalid month returns -1");
     ok (tm_string_to_weekday ("foo") == -1, "invalid weekday returns -1");
@@ -149,11 +150,11 @@ int main (int argc, char *argv[])
 
     /* test ranges, keywords */
     ok (cronodate_set (d, TM_MON, "Jan") >= 0, "set Jan");
-    is (cronodate_get (d, TM_MON), "0",  "got '0'");
+    is (cronodate_get (d, TM_MON), "0", "got '0'");
     ok (cronodate_set (d, TM_MON, "*/2") >= 0, "set mon = '*/2'");
-    is (cronodate_get (d, TM_MON), "0,2,4,6,8,10",  "got every other month");
+    is (cronodate_get (d, TM_MON), "0,2,4,6,8,10", "got every other month");
     ok (cronodate_set (d, TM_MON, "1-5,7-9") >= 0, "set mon = '1-5,7-9'");
-    is (cronodate_get (d, TM_MON), "1-5,7-9",  "got '1-5,7-9'");
+    is (cronodate_get (d, TM_MON), "1-5,7-9", "got '1-5,7-9'");
     ok (cronodate_set (d, TM_MON, "January-June") >= 0, "set January to June");
     is (cronodate_get (d, TM_MON), "0-5", "get January to June");
 
@@ -163,9 +164,9 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_WDAY, "Mon") >= 0, "set Mon");
     is (cronodate_get (d, TM_WDAY), "1", "get Mon");
     ok (cronodate_set (d, TM_WDAY, "*/2") >= 0, "set mon = '*/2'");
-    is (cronodate_get (d, TM_WDAY), "0,2,4,6",  "got every second day");
+    is (cronodate_get (d, TM_WDAY), "0,2,4,6", "got every second day");
     ok (cronodate_set (d, TM_WDAY, "mon-fri") >= 0, "set mon-fri");
-    is (cronodate_get (d, TM_WDAY), "1-5",  "got 0-5");
+    is (cronodate_get (d, TM_WDAY), "1-5", "got 0-5");
 
     ok (d != NULL, "cronodate_create()");
     /* match all dates */
@@ -262,8 +263,9 @@ int main (int argc, char *argv[])
         "TM_MDAY == 32 returns ERANGE");
     ok (cronodate_set_integer (d, TM_YEAR, -1) < 0 && errno == ERANGE,
         "TM_YEAR == -1 returns ERANGE");
-    ok (cronodate_set_integer (d, TM_YEAR, 3001-1900) < 0 && errno == ERANGE,
-        "TM_YEAR == %d returns ERANGE", 3001-1900);
+    ok (cronodate_set_integer (d, TM_YEAR, 3001 - 1900) < 0 && errno == ERANGE,
+        "TM_YEAR == %d returns ERANGE",
+        3001 - 1900);
 
     ok (cronodate_set (d, TM_MON, "6") >= 0, "date glob set, mon = 6");
     ok (cronodate_set (d, TM_MDAY, "6") >= 0, "date glob set, mday = 6");
@@ -286,7 +288,7 @@ int main (int argc, char *argv[])
     ok (almost_is (x, 3599.700), "cronodate_remaining works: got %.6fs", x);
     ok (string_to_tv ("2016-06-06 08:00:00", &tv), "string_to_tv");
     x = cronodate_remaining (d, tv_to_double (&tv));
-    ok (almost_is (x, 24*60*60), "cronodate_remaining works: got %.6fs", x);
+    ok (almost_is (x, 24 * 60 * 60), "cronodate_remaining works: got %.6fs", x);
 
     cronodate_destroy (d);
 

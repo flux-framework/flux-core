@@ -108,7 +108,7 @@ void *committhread (void *arg)
     if (flux_kvs_txn_pack (txn, 0, key, "i", t->n) < 0)
         log_err_exit ("%s", key);
     if (!(f = flux_kvs_commit (t->h, NULL, nopt ? FLUX_KVS_NO_MERGE : 0, txn))
-            || flux_future_get (f, NULL) < 0)
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
 
     flux_future_destroy (f);
@@ -130,11 +130,11 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-        case 'n':
-            nopt = true;
-            break;
-        default:
-            usage ();
+            case 'n':
+                nopt = true;
+                break;
+            default:
+                usage ();
         }
     }
 
@@ -160,18 +160,14 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_put (txn, 0, key, "init-val") < 0)
         log_err_exit ("flux_kvs_txn_put");
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
 
     r = flux_get_reactor (h);
 
-    if (!(f = flux_kvs_lookup (h,
-                               NULL,
-                               FLUX_KVS_WATCH,
-                               key)))
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH, key)))
         log_err_exit ("flux_kvs_lookup %s", key);
 
     /* wait for initial response */
@@ -206,7 +202,7 @@ int main (int argc, char *argv[])
             log_errn (rc, "pthread_join");
     }
 
-    printf("%d\n", changecount);
+    printf ("%d\n", changecount);
 
     free (thd);
     free (key);

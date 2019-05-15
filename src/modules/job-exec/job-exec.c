@@ -92,51 +92,50 @@
 #include "rset.h"
 
 struct job_exec_ctx {
-    flux_t *              h;
-    flux_msg_handler_t ** handlers;
-    zhashx_t *            jobs;
+    flux_t *h;
+    flux_msg_handler_t **handlers;
+    zhashx_t *jobs;
 };
-
 
 /*  Exec system testing configuration:
  *  Set from jobspec attributes.system.exec.test object, if any.
  */
 struct testconf {
-    double                run_duration;     /* duration of fake job in sec  */
-    double                cleanup_duration; /* if > 0., duration of epilog  */
-    int                   wait_status;      /* reported status for "finish" */
-    const char *          mock_exception;   /* fake excetion at this site   */
-                                            /* ("init", or "run")           */
+    double run_duration;        /* duration of fake job in sec  */
+    double cleanup_duration;    /* if > 0., duration of epilog  */
+    int wait_status;            /* reported status for "finish" */
+    const char *mock_exception; /* fake excetion at this site   */
+                                /* ("init", or "run")           */
 };
 
 struct jobinfo {
-    flux_jobid_t          id;
-    char                  ns [64];
-    flux_msg_t *          req;
-    uint32_t              userid;
-    int                   flags;
+    flux_jobid_t id;
+    char ns[64];
+    flux_msg_t *req;
+    uint32_t userid;
+    int flags;
 
-    struct resource_set * R;
-    json_t *              jobspec;
+    struct resource_set *R;
+    json_t *jobspec;
 
-    uint8_t               needs_cleanup:1;
-    uint8_t               has_namespace:1;
-    uint8_t               exception_in_progress:1;
-    uint8_t               running:1;
-    uint8_t               finalizing:1;
+    uint8_t needs_cleanup : 1;
+    uint8_t has_namespace : 1;
+    uint8_t exception_in_progress : 1;
+    uint8_t running : 1;
+    uint8_t finalizing : 1;
 
-    int                   wait_status;
+    int wait_status;
 
-    int                   refcount;
+    int refcount;
 
-    struct testconf       testconf;
-    flux_watcher_t *      timer;
+    struct testconf testconf;
+    flux_watcher_t *timer;
 
-    zhashx_t *            cleanup;
-    struct job_exec_ctx * ctx;
+    zhashx_t *cleanup;
+    struct job_exec_ctx *ctx;
 };
 
-typedef flux_future_t * (*cleanup_task_f) (struct jobinfo *job);
+typedef flux_future_t *(*cleanup_task_f) (struct jobinfo *job);
 
 static void jobinfo_incref (struct jobinfo *job)
 {
@@ -160,7 +159,7 @@ static void jobinfo_decref (struct jobinfo *job)
     }
 }
 
-static struct jobinfo * jobinfo_new (void)
+static struct jobinfo *jobinfo_new (void)
 {
     struct jobinfo *job = calloc (1, sizeof (*job));
     job->cleanup = zhashx_new ();
@@ -171,10 +170,10 @@ static struct jobinfo * jobinfo_new (void)
 /*  Emit an event to the exec system eventlog and return a future from
  *   flux_kvs_commit().
  */
-static flux_future_t * jobinfo_emit_event_vpack (struct jobinfo *job,
-                                                 const char *name,
-                                                 const char *fmt,
-                                                 va_list ap)
+static flux_future_t *jobinfo_emit_event_vpack (struct jobinfo *job,
+                                                const char *name,
+                                                const char *fmt,
+                                                va_list ap)
 {
     int saved_errno;
     flux_t *h = job->ctx->h;
@@ -211,9 +210,10 @@ out:
     return f;
 }
 
-static flux_future_t * jobinfo_emit_event_pack (struct jobinfo *job,
-                                                const char *name,
-                                                const char *fmt, ...)
+static flux_future_t *jobinfo_emit_event_pack (struct jobinfo *job,
+                                               const char *name,
+                                               const char *fmt,
+                                               ...)
 {
     flux_future_t *f = NULL;
     va_list ap;
@@ -239,7 +239,8 @@ static void emit_event_continuation (flux_future_t *f, void *arg)
  */
 static int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
                                            const char *name,
-                                           const char *fmt, ...)
+                                           const char *fmt,
+                                           ...)
 {
     va_list ap;
     va_start (ap, fmt);
@@ -259,76 +260,105 @@ error:
     return -1;
 }
 
-
-static void jobinfo_add_cleanup (struct jobinfo *job, const char *name,
+static void jobinfo_add_cleanup (struct jobinfo *job,
+                                 const char *name,
                                  cleanup_task_f fn)
 {
-    (void) zhashx_insert (job->cleanup, name, (void *) fn);
+    (void)zhashx_insert (job->cleanup, name, (void *)fn);
 }
 
-
-static int jobid_respond_error (flux_t *h, flux_jobid_t id,
+static int jobid_respond_error (flux_t *h,
+                                flux_jobid_t id,
                                 const flux_msg_t *msg,
-                                int errnum, const char *text)
+                                int errnum,
+                                const char *text)
 {
-    char note [256];
+    char note[256];
     if (errnum)
-        snprintf (note, sizeof (note), "%s%s%s",
-                                        text ? text : "",
-                                        text ? ": " : "",
-                                        strerror (errnum));
+        snprintf (note,
+                  sizeof (note),
+                  "%s%s%s",
+                  text ? text : "",
+                  text ? ": " : "",
+                  strerror (errnum));
     else
         snprintf (note, sizeof (note), "%s", text ? text : "");
-    return flux_respond_pack (h, msg, "{s:I s:s s:{s:i s:s s:s}}",
-                                      "id", id,
-                                      "type", "exception",
-                                      "data",
-                                      "severity", 0,
-                                      "type", "exec",
-                                      "note", note);
+    return flux_respond_pack (h,
+                              msg,
+                              "{s:I s:s s:{s:i s:s s:s}}",
+                              "id",
+                              id,
+                              "type",
+                              "exception",
+                              "data",
+                              "severity",
+                              0,
+                              "type",
+                              "exec",
+                              "note",
+                              note);
 }
 
-static int jobinfo_respond_error (struct jobinfo *job, int errnum,
-                                  const char *msg)
+static int jobinfo_respond_error (struct jobinfo *job, int errnum, const char *msg)
 {
     return jobid_respond_error (job->ctx->h, job->id, job->req, errnum, msg);
 }
 
-static int jobinfo_send_release (struct jobinfo *job,
-                                 const struct idset *idset)
+static int jobinfo_send_release (struct jobinfo *job, const struct idset *idset)
 {
     int rc;
     flux_t *h = job->ctx->h;
     // XXX: idset ignored for now. Always release all resources
-    rc = flux_respond_pack (h, job->req, "{s:I s:s s{s:s s:b}}",
-                                         "id", job->id,
-                                         "type", "release",
-                                         "data", "ranks", "all",
-                                                 "final", true);
+    rc = flux_respond_pack (h,
+                            job->req,
+                            "{s:I s:s s{s:s s:b}}",
+                            "id",
+                            job->id,
+                            "type",
+                            "release",
+                            "data",
+                            "ranks",
+                            "all",
+                            "final",
+                            true);
     return rc;
 }
 
-static int jobinfo_respond (flux_t *h, struct jobinfo *job,
-                            const char *event, int status)
+static int jobinfo_respond (flux_t *h,
+                            struct jobinfo *job,
+                            const char *event,
+                            int status)
 {
-    return flux_respond_pack (h, job->req, "{s:I s:s s:{}}",
-                                           "id", job->id,
-                                           "type", event,
-                                           "data");
+    return flux_respond_pack (h,
+                              job->req,
+                              "{s:I s:s s:{}}",
+                              "id",
+                              job->id,
+                              "type",
+                              event,
+                              "data");
 }
 
 static void jobinfo_complete (struct jobinfo *job)
 {
     flux_t *h = job->ctx->h;
     if (h && job->req) {
-        jobinfo_emit_event_pack_nowait (job, "complete",
+        jobinfo_emit_event_pack_nowait (job,
+                                        "complete",
                                         "{ s:i }",
-                                        "status", job->wait_status);
-        if (flux_respond_pack (h, job->req, "{s:I s:s s:{s:i}}",
-                                            "id", job->id,
-                                            "type", "finish",
-                                            "data",
-                                            "status", job->wait_status) < 0)
+                                        "status",
+                                        job->wait_status);
+        if (flux_respond_pack (h,
+                               job->req,
+                               "{s:I s:s s:{s:i}}",
+                               "id",
+                               job->id,
+                               "type",
+                               "finish",
+                               "data",
+                               "status",
+                               job->wait_status)
+            < 0)
             flux_log_error (h, "jobinfo_complete: flux_respond");
     }
 }
@@ -358,19 +388,21 @@ static void jobinfo_kill (struct jobinfo *job)
 
 static int jobinfo_finalize (struct jobinfo *job);
 
-static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
-                                  const char *fmt, va_list ap)
+static void jobinfo_fatal_verror (struct jobinfo *job,
+                                  int errnum,
+                                  const char *fmt,
+                                  va_list ap)
 {
     int n;
-    char msg [256];
+    char msg[256];
     int msglen = sizeof (msg);
     flux_t *h = job->ctx->h;
 
     if ((n = vsnprintf (msg, msglen, fmt, ap)) < 0)
         strcpy (msg, "vsnprintf error");
     else if (n >= msglen) {
-        msg [msglen-2] = '+';
-        msg [msglen-1] = '\0';
+        msg[msglen - 2] = '+';
+        msg[msglen - 1] = '\0';
     }
     jobinfo_emit_event_pack_nowait (job, "exception", "{ s:s }", "note", msg);
     /* If exception_in_progress set, then no need to respond with another
@@ -390,8 +422,7 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
     }
 }
 
-static void jobinfo_fatal_error (struct jobinfo *job, int errnum,
-                                 const char *fmt, ...)
+static void jobinfo_fatal_error (struct jobinfo *job, int errnum, const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
     int saved_errno = errno;
@@ -407,9 +438,13 @@ static void jobinfo_fatal_error (struct jobinfo *job, int errnum,
 static double jobspec_duration (flux_t *h, json_t *jobspec)
 {
     double duration = 0.;
-    if (json_unpack (jobspec, "{s:{s:{s:F}}}",
-                              "attributes", "system",
-                              "duration", &duration) < 0)
+    if (json_unpack (jobspec,
+                     "{s:{s:{s:F}}}",
+                     "attributes",
+                     "system",
+                     "duration",
+                     &duration)
+        < 0)
         return -1.;
     return duration;
 }
@@ -427,17 +462,30 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
     conf->wait_status = 0;
     conf->mock_exception = NULL;
 
-    if (json_unpack_ex (jobspec, &err, 0,
-                     "{s:{s:{s:{s:o}}}}",
-                     "attributes", "system", "exec",
-                     "test", &test) < 0)
+    if (json_unpack_ex (jobspec,
+                        &err,
+                        0,
+                        "{s:{s:{s:{s:o}}}}",
+                        "attributes",
+                        "system",
+                        "exec",
+                        "test",
+                        &test)
+        < 0)
         return 0;
-    if (json_unpack_ex (test, &err, 0,
+    if (json_unpack_ex (test,
+                        &err,
+                        0,
                         "{s?s s?s s?i s?s}",
-                        "run_duration", &trun,
-                        "cleanup_duration", &tclean,
-                        "wait_status", &conf->wait_status,
-                        "mock_exception", &conf->mock_exception) < 0) {
+                        "run_duration",
+                        &trun,
+                        "cleanup_duration",
+                        &tclean,
+                        "wait_status",
+                        &conf->wait_status,
+                        "mock_exception",
+                        &conf->mock_exception)
+        < 0) {
         flux_log (h, LOG_ERR, "init_testconf: %s", err.text);
         return -1;
     }
@@ -473,7 +521,7 @@ static void namespace_copy (flux_future_t *f, void *arg)
     struct jobinfo *job = arg;
     flux_t *h = job->ctx->h;
     flux_future_t *fnext = NULL;
-    char dst [265];
+    char dst[265];
 
     if (flux_job_kvs_key (dst, sizeof (dst), job->id, "guest") < 0) {
         flux_log_error (h, "namespace_move: flux_job_kvs_key");
@@ -508,8 +556,8 @@ static void namespace_move (flux_future_t *fprev, void *arg)
         flux_log_error (h, "namespace_move: jobinfo_emit_event");
         goto error;
     }
-    if (   !(fnext = flux_future_and_then (f, namespace_copy, job))
-        || !(fnext = flux_future_and_then (f=fnext, namespace_delete, job))) {
+    if (!(fnext = flux_future_and_then (f, namespace_copy, job))
+        || !(fnext = flux_future_and_then (f = fnext, namespace_delete, job))) {
         flux_log_error (h, "namespace_move: flux_future_and_then");
         goto error;
     }
@@ -544,8 +592,7 @@ static void jobinfo_cleanup (flux_future_t *fprev, void *arg)
     while (fn) {
         const char *name = zhashx_cursor (job->cleanup);
         if (!(f = (*fn) (job))) {
-            flux_log_error (h, "%s",
-                            (const char *) zhashx_cursor (job->cleanup));
+            flux_log_error (h, "%s", (const char *)zhashx_cursor (job->cleanup));
             goto error;
         }
         flux_future_push (cf, name, f);
@@ -571,14 +618,15 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
      *   but do not generate an exception.
      */
     if (rc < 0)
-        f = jobinfo_emit_event_pack (job, "cleanup.finish",
+        f = jobinfo_emit_event_pack (job,
+                                     "cleanup.finish",
                                      "{ s:i s:s }",
-                                     "rc", rc,
-                                     "note", strerror (errno));
+                                     "rc",
+                                     rc,
+                                     "note",
+                                     strerror (errno));
     else
-        f = jobinfo_emit_event_pack (job, "cleanup.finish",
-                                     "{ s:i }",
-                                     "rc", rc);
+        f = jobinfo_emit_event_pack (job, "cleanup.finish", "{ s:i }", "rc", rc);
 
     if (!f)
         flux_future_continue_error (prev, errno, NULL);
@@ -594,7 +642,7 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
  *  Returns a chained future that will be fulfilled when these steps
  *   are complete.
  */
-static flux_future_t * jobinfo_start_cleanup (struct jobinfo *job)
+static flux_future_t *jobinfo_start_cleanup (struct jobinfo *job)
 {
     flux_future_t *f = NULL;
     flux_future_t *fnext = NULL;
@@ -655,8 +703,7 @@ static int jobinfo_finalize (struct jobinfo *job)
 
     if (!(f = jobinfo_start_cleanup (job)))
         goto error;
-    if (job->has_namespace &&
-        !(fnext = flux_future_and_then (f, namespace_move, job)))
+    if (job->has_namespace && !(fnext = flux_future_and_then (f, namespace_move, job)))
         goto error;
     if (flux_future_then (fnext, -1., jobinfo_release, job) < 0)
         goto error;
@@ -705,23 +752,20 @@ static int jobinfo_start_timer (struct jobinfo *job)
         }
         flux_watcher_start (job->timer);
         snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
-        jobinfo_emit_event_pack_nowait (job, "running", "{ s:s }",
-                                        "timer", timebuf);
+        jobinfo_emit_event_pack_nowait (job, "running", "{ s:s }", "timer", timebuf);
         job->running = 1;
-    }
-    else
+    } else
         return -1;
     return 0;
 }
 
-void epilog_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+void epilog_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
-    flux_future_fulfill ((flux_future_t *) arg, NULL, NULL);
+    flux_future_fulfill ((flux_future_t *)arg, NULL, NULL);
     flux_watcher_destroy (w);
 }
 
-static flux_future_t * ersatz_epilog (struct jobinfo *job)
+static flux_future_t *ersatz_epilog (struct jobinfo *job)
 {
     flux_t *h = job->ctx->h;
     flux_reactor_t *r = flux_get_reactor (h);
@@ -733,8 +777,7 @@ static flux_future_t * ersatz_epilog (struct jobinfo *job)
         return NULL;
     flux_future_set_flux (f, h);
 
-    if (!(timer = flux_timer_watcher_create (r, t, 0.,
-                                             epilog_timer_cb, f))) {
+    if (!(timer = flux_timer_watcher_create (r, t, 0., epilog_timer_cb, f))) {
         flux_log_error (h, "flux_timer_watcher_create");
         flux_future_fulfill_error (f, errno, "flux_timer_watcher_create");
     }
@@ -757,10 +800,12 @@ static int jobinfo_start_execution (struct jobinfo *job)
 
 /*  Lookup key 'key' under jobid 'id' kvs dir:
  */
-static flux_future_t *flux_jobid_kvs_lookup (flux_t *h, flux_jobid_t id,
-                                             int flags, const char *key)
+static flux_future_t *flux_jobid_kvs_lookup (flux_t *h,
+                                             flux_jobid_t id,
+                                             int flags,
+                                             const char *key)
 {
-    char path [256];
+    char path[256];
     if (flux_job_kvs_key (path, sizeof (path), id, key) < 0)
         return NULL;
     return flux_kvs_lookup (h, NULL, flags, path);
@@ -769,7 +814,7 @@ static flux_future_t *flux_jobid_kvs_lookup (flux_t *h, flux_jobid_t id,
 /*
  *  Call lookup_get on a child named 'name' of the composite future 'f'
  */
-static const char * jobinfo_kvs_lookup_get (flux_future_t *f, const char *name)
+static const char *jobinfo_kvs_lookup_get (flux_future_t *f, const char *name)
 {
     const char *result;
     flux_future_t *child = flux_future_get_child (f, name);
@@ -835,13 +880,13 @@ done:
     flux_future_destroy (f);
 }
 
-static flux_future_t * jobinfo_link_guestns (struct jobinfo *job)
+static flux_future_t *jobinfo_link_guestns (struct jobinfo *job)
 {
     int saved_errno;
     flux_t *h = job->ctx->h;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
-    char key [64];
+    char key[64];
 
     if (flux_job_kvs_key (key, sizeof (key), job->id, "guest") < 0) {
         flux_log_error (h, "link guestns: flux_job_kvs_key");
@@ -894,9 +939,7 @@ error:
     flux_future_destroy (fprev);
 }
 
-static flux_future_t *ns_create_and_link (flux_t *h,
-                                          struct jobinfo *job,
-                                          int flags)
+static flux_future_t *ns_create_and_link (flux_t *h, struct jobinfo *job, int flags)
 {
     flux_future_t *f = NULL;
     flux_future_t *f2 = NULL;
@@ -925,8 +968,7 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "jobspec"))
         || flux_future_push (f, "jobspec", f_kvs) < 0)
         goto err;
-    if (!(f_kvs = ns_create_and_link (h, job, 0))
-        || flux_future_push (f, "ns", f_kvs))
+    if (!(f_kvs = ns_create_and_link (h, job, 0)) || flux_future_push (f, "ns", f_kvs))
         goto err;
 
     /* Increase refcount during init phase in case job is canceled:
@@ -963,9 +1005,14 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     }
     job->ctx = ctx;
 
-    if (flux_request_unpack (job->req, NULL, "{s:I, s:i}",
-                                             "id", &job->id,
-                                             "userid", &job->userid) < 0) {
+    if (flux_request_unpack (job->req,
+                             NULL,
+                             "{s:I, s:i}",
+                             "id",
+                             &job->id,
+                             "userid",
+                             &job->userid)
+        < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
         return -1;
     }
@@ -993,8 +1040,10 @@ error:
     return -1;
 }
 
-static void start_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void start_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_exec_ctx *ctx = arg;
 
@@ -1008,8 +1057,10 @@ static void start_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void exception_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct job_exec_ctx *ctx = arg;
     flux_jobid_t id;
@@ -1017,15 +1068,20 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *type = NULL;
     struct jobinfo *job = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{s:I s:s s:i}",
-                                      "id", &id,
-                                      "type", &type,
-                                      "severity", &severity) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{s:I s:s s:i}",
+                           "id",
+                           &id,
+                           "type",
+                           &type,
+                           "severity",
+                           &severity)
+        < 0) {
         flux_log_error (h, "job-exception event");
         return;
     }
-    if (severity == 0
-        && (job = zhashx_lookup (ctx->jobs, &id))
+    if (severity == 0 && (job = zhashx_lookup (ctx->jobs, &id))
         && (!job->exception_in_progress)) {
         job->exception_in_progress = 1;
         flux_log (h, LOG_DEBUG, "exec aborted: id=%ld", id);
@@ -1039,7 +1095,7 @@ static size_t job_hash_fn (const void *key)
     return *id;
 }
 
-#define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
+#define NUMCMP(a, b) ((a) == (b) ? 0 : ((a) < (b) ? -1 : 1))
 
 static int job_hash_key_cmp (const void *x, const void *y)
 {
@@ -1058,7 +1114,7 @@ static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
     free (ctx);
 }
 
-static struct job_exec_ctx * job_exec_ctx_create (flux_t *h)
+static struct job_exec_ctx *job_exec_ctx_create (flux_t *h)
 {
     struct job_exec_ctx *ctx = calloc (1, sizeof (*ctx));
     if (ctx == NULL)
@@ -1076,10 +1132,13 @@ static int exec_hello (flux_t *h, const char *service)
 {
     int rc = -1;
     flux_future_t *f;
-    if (!(f = flux_rpc_pack (h, "job-manager.exec-hello",
-                             FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.exec-hello",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s}",
-                             "service", service))) {
+                             "service",
+                             service))) {
         flux_log_error (h, "flux_rpc (job-manager.exec-hello)");
         return -1;
     }
@@ -1089,11 +1148,10 @@ static int exec_hello (flux_t *h, const char *service)
     return rc;
 }
 
-static const struct flux_msg_handler_spec htab[]  = {
-    { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
-    { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
-    FLUX_MSGHANDLER_TABLE_END
-};
+static const struct flux_msg_handler_spec htab[] =
+    {{FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb, 0},
+     {FLUX_MSGTYPE_EVENT, "job-exception", exception_cb, 0},
+     FLUX_MSGHANDLER_TABLE_END};
 
 int mod_main (flux_t *h, int argc, char **argv)
 {

@@ -46,8 +46,7 @@ void test_modname (void)
 
     errmsg_count = 0;
     name = flux_modname (FAKE2, NULL, NULL);
-    ok (name == NULL && errmsg_count == 0,
-        "flux_modname moderr callback can be NULL");
+    ok (name == NULL && errmsg_count == 0, "flux_modname moderr callback can be NULL");
 
     errno = 0;
     errmsg_count = 0;
@@ -68,7 +67,7 @@ void test_modname (void)
  * module fake2.so does not define the mod_name symbol.
  */
 char dir[3][PATH_MAX + 1];
-char searchpath[3*PATH_MAX + 4];
+char searchpath[3 * PATH_MAX + 4];
 char link1[PATH_MAX + 1];
 char link2[PATH_MAX + 1];
 
@@ -134,8 +133,7 @@ void test_modfind (void)
 
     errno = 0;
     path = flux_modfind (searchpath, NULL, NULL, NULL);
-    ok (path == NULL && errno == EINVAL,
-        "flux_modfind modname=NULL fails with EINVAL");
+    ok (path == NULL && errno == EINVAL, "flux_modfind modname=NULL fails with EINVAL");
 
     errno = 0;
     path = flux_modfind (NULL, "fake1", NULL, NULL);
@@ -147,17 +145,15 @@ void test_modfind (void)
 
 int main (int argc, char *argv[])
 {
-
     plan (NO_PLAN);
 
     test_modname ();
     test_modfind ();
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

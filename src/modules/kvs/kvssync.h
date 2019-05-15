@@ -16,11 +16,15 @@
 
 #include "kvsroot.h"
 
-typedef bool (*kvssync_test_msg_f)(const flux_msg_t *msg, void *arg);
+typedef bool (*kvssync_test_msg_f) (const flux_msg_t *msg, void *arg);
 
 /* add a kvssync structure to the kvsroot synclist */
-int kvssync_add (struct kvsroot *root, flux_msg_handler_f cb, flux_t *h,
-                 flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg,
+int kvssync_add (struct kvsroot *root,
+                 flux_msg_handler_f cb,
+                 flux_t *h,
+                 flux_msg_handler_t *mh,
+                 const flux_msg_t *msg,
+                 void *arg,
                  int seq);
 
 /* if a root sequence number has gone past a sync sequence number,
@@ -30,9 +34,7 @@ int kvssync_add (struct kvsroot *root, flux_msg_handler_f cb, flux_t *h,
 void kvssync_process (struct kvsroot *root, bool all);
 
 /* remove message on synclist that meet 'cmp' conditions */
-int kvssync_remove_msg (struct kvsroot *root,
-                        kvssync_test_msg_f cmp,
-                        void *arg);
+int kvssync_remove_msg (struct kvsroot *root, kvssync_test_msg_f cmp, void *arg);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 

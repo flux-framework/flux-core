@@ -38,12 +38,14 @@ void setup_keydir (struct environment *env, int flags);
 static void print_environment (struct environment *env);
 static void register_builtin_subcommands (optparse_t *p);
 
-static struct optparse_option opts[] = {
-    { .name = "verbose",         .key = 'v', .has_arg = 0,
-      .usage = "Be verbose about environment and command search",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option opts[] = {{
+                                            .name = "verbose",
+                                            .key = 'v',
+                                            .has_arg = 0,
+                                            .usage = "Be verbose about environment and "
+                                                     "command search",
+                                        },
+                                        OPTPARSE_TABLE_END};
 
 static const char *default_cmdhelp_pattern (optparse_t *p)
 {
@@ -57,10 +59,12 @@ void usage (optparse_t *p)
     const char *val = getenv ("FLUX_CMDHELP_PATTERN");
     const char *def = default_cmdhelp_pattern (p);
 
-    if (asprintf (&help_pattern, "%s%s%s",
+    if (asprintf (&help_pattern,
+                  "%s%s%s",
                   def ? def : "",
                   val ? ":" : "",
-                  val ? val : "") < 0)
+                  val ? val : "")
+        < 0)
         log_err_exit ("failed to get command help list!");
 
     optparse_print_usage (p);
@@ -69,7 +73,7 @@ void usage (optparse_t *p)
     free (help_pattern);
 }
 
-static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
+static optparse_t *setup_optparse_parse_args (int argc, char *argv[])
 {
     optparse_err_t e;
     optparse_t *p = optparse_create ("flux");
@@ -99,7 +103,6 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
     return (p);
 }
 
-
 int main (int argc, char *argv[])
 {
     bool vopt = false;
@@ -119,7 +122,7 @@ int main (int argc, char *argv[])
     optparse_set_data (p, "conf_flags", &flags);
 
     if (optparse_hasopt (p, "help")) {
-        usage (p); // N.B. accesses "conf_flags"
+        usage (p);  // N.B. accesses "conf_flags"
         exit (0);
     }
     optindex = optparse_option_index (p);
@@ -165,21 +168,20 @@ int main (int argc, char *argv[])
     }
 
     environment_from_env (env, "FLUX_EXEC_PATH", "", ':');
-    environment_push (env, "FLUX_EXEC_PATH",
-                      flux_conf_get ("exec_path", flags));
+    environment_push (env, "FLUX_EXEC_PATH", flux_conf_get ("exec_path", flags));
     environment_push (env, "FLUX_EXEC_PATH", getenv ("FLUX_EXEC_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_CONNECTOR_PATH", "", ':');
-    environment_push (env, "FLUX_CONNECTOR_PATH",
+    environment_push (env,
+                      "FLUX_CONNECTOR_PATH",
                       flux_conf_get ("connector_path", flags));
-    environment_push (env, "FLUX_CONNECTOR_PATH",
+    environment_push (env,
+                      "FLUX_CONNECTOR_PATH",
                       getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_MODULE_PATH", "", ':');
-    environment_push (env, "FLUX_MODULE_PATH",
-                      flux_conf_get ("module_path", flags));
-    environment_push (env, "FLUX_MODULE_PATH",
-                      getenv ("FLUX_MODULE_PATH_PREPEND"));
+    environment_push (env, "FLUX_MODULE_PATH", flux_conf_get ("module_path", flags));
+    environment_push (env, "FLUX_MODULE_PATH", getenv ("FLUX_MODULE_PATH_PREPEND"));
 
     /* Set FLUX_SEC_DIRECTORY, possibly to $HOME/.flux.
      */
@@ -188,21 +190,21 @@ int main (int argc, char *argv[])
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
 
-    environment_from_env (env, "FLUX_RC1_PATH",
-                          flux_conf_get ("rc1_path", flags), 0);
-    environment_from_env (env, "FLUX_RC3_PATH",
-                          flux_conf_get ("rc3_path", flags), 0);
-    environment_from_env (env, "FLUX_PMI_LIBRARY_PATH",
-                          flux_conf_get ("pmi_library_path", flags), 0);
+    environment_from_env (env, "FLUX_RC1_PATH", flux_conf_get ("rc1_path", flags), 0);
+    environment_from_env (env, "FLUX_RC3_PATH", flux_conf_get ("rc3_path", flags), 0);
+    environment_from_env (env,
+                          "FLUX_PMI_LIBRARY_PATH",
+                          flux_conf_get ("pmi_library_path", flags),
+                          0);
     if ((flags & CONF_FLAG_INTREE))
         environment_push (env, "FLUX_CONF_INTREE", "1");
 
-    environment_apply(env);
+    environment_apply (env);
     optparse_set_data (p, "env", env);
 
     if (vopt)
         print_environment (env);
-    if (optparse_get_subcommand (p, argv [optindex])) {
+    if (optparse_get_subcommand (p, argv[optindex])) {
         if (optparse_run_subcommand (p, argc, argv) < 0)
             exit (1);
     } else {
@@ -224,12 +226,8 @@ int main (int argc, char *argv[])
 char *strip_trailing_dot_libs (char *dir)
 {
     char *p = dir + strlen (dir) - 1;
-    if (   (*(p--) == 's')
-        && (*(p--) == 'b')
-        && (*(p--) == 'i')
-        && (*(p--) == 'l')
-        && (*(p--) == '.')
-        && (*p == '/') )
+    if ((*(p--) == 's') && (*(p--) == 'b') && (*(p--) == 'i') && (*(p--) == 'l')
+        && (*(p--) == '.') && (*p == '/'))
         *p = '\0';
     return (dir);
 }
@@ -240,7 +238,7 @@ char *strip_trailing_dot_libs (char *dir)
  */
 char *dir_self (void)
 {
-    static char  flux_exe_path [MAXPATHLEN];
+    static char flux_exe_path[MAXPATHLEN];
     static char *flux_exe_dir;
     static bool exe_path_valid = false;
     if (!exe_path_valid) {
@@ -267,9 +265,8 @@ bool flux_is_installed (void)
      *   clearly can't be from the installed path:
      */
 
-    if (!(bindir = realpath (conf_bindir, NULL))
-       && (errno != ENOENT)
-       && (errno != EACCES))
+    if (!(bindir = realpath (conf_bindir, NULL)) && (errno != ENOENT)
+        && (errno != EACCES))
         log_err_exit ("realpath (%s)", conf_bindir);
     else if (bindir && !strcmp (selfdir, bindir))
         ret = false;
@@ -322,20 +319,23 @@ void setup_keydir (struct environment *env, int flags)
 /* Check for a flux-<command>.py in dir and execute it under the configured
  * PYTHON_INTERPRETER if found.
  */
-void exec_subcommand_py (bool vopt, const char *dir,
-                         int argc, char *argv[],
-	                     const char *prefix)
+void exec_subcommand_py (bool vopt,
+                         const char *dir,
+                         int argc,
+                         char *argv[],
+                         const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s.py",
-            dir ? dir : "",
-            dir ? "/" : "",
-            prefix ? prefix : "", argv[0]);
-    if (access (path, R_OK|X_OK) == 0) {
-        char *av [argc+2];
+                            dir ? dir : "",
+                            dir ? "/" : "",
+                            prefix ? prefix : "",
+                            argv[0]);
+    if (access (path, R_OK | X_OK) == 0) {
+        char *av[argc + 2];
         av[0] = PYTHON_INTERPRETER;
         av[1] = path;
-        for (int i = 2; i < argc+2; i++)
-            av[i] = argv[i-1];
+        for (int i = 2; i < argc + 2; i++)
+            av[i] = argv[i - 1];
         if (vopt)
             log_msg ("trying to exec %s %s", PYTHON_INTERPRETER, path);
         execvp (PYTHON_INTERPRETER, av);
@@ -343,13 +343,13 @@ void exec_subcommand_py (bool vopt, const char *dir,
     free (path);
 }
 
-void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
-        const char *prefix)
+void exec_subcommand_dir (bool vopt, const char *dir, char *argv[], const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s",
-            dir ? dir : "",
-            dir ? "/" : "",
-            prefix ? prefix : "", argv[0]);
+                            dir ? dir : "",
+                            dir ? "/" : "",
+                            prefix ? prefix : "",
+                            argv[0]);
     if (vopt)
         log_msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
@@ -382,8 +382,8 @@ static void print_environment (struct environment *env)
 {
     const char *val;
     for (val = environment_first (env); val; val = environment_next (env))
-        printf("%s=%s\n", environment_cursor (env), val);
-    fflush(stdout);
+        printf ("%s=%s\n", environment_cursor (env), val);
+    fflush (stdout);
 }
 
 flux_t *builtin_get_flux_handle (optparse_t *p)

@@ -18,20 +18,20 @@
 
 // flags for cf_check
 enum {
-    CF_STRICT = 1,     // parse error on unknown keys
-    CF_ANYTAB = 2,     // allow unknown keys for tables only
+    CF_STRICT = 1,  // parse error on unknown keys
+    CF_ANYTAB = 2,  // allow unknown keys for tables only
 };
 
 // allowed types
 enum cf_type {
-    CF_UNKNOWN      = 0,
-    CF_INT64        = 1,
-    CF_DOUBLE       = 2,
-    CF_BOOL         = 3,
-    CF_STRING       = 4,
-    CF_TIMESTAMP    = 5,
-    CF_TABLE        = 6,
-    CF_ARRAY        = 7,
+    CF_UNKNOWN = 0,
+    CF_INT64 = 1,
+    CF_DOUBLE = 2,
+    CF_BOOL = 3,
+    CF_STRING = 4,
+    CF_TIMESTAMP = 5,
+    CF_TABLE = 6,
+    CF_ARRAY = 7,
 };
 
 typedef void cf_t;
@@ -44,7 +44,10 @@ struct cf_option {
     enum cf_type type;
     bool required;
 };
-#define CF_OPTIONS_TABLE_END { NULL, 0, false }
+#define CF_OPTIONS_TABLE_END \
+    {                        \
+        NULL, 0, false       \
+    }
 
 /* Error information is filled in by cf_update, cf_file, and cf_check.
  * If filename is unavailable, it is set to empty string.
@@ -81,11 +84,11 @@ const cf_t *cf_get_at (const cf_t *cf, int index);
 /* Access object as a particular type.
  * If wrong type or NULL cf, default value is returned.
  */
-int64_t cf_int64 (const cf_t *cf);        // default: 0
-double cf_double (const cf_t *cf);        // default: 0.
-const char *cf_string (const cf_t *cf);   // default: ""
-bool cf_bool (const cf_t *cf);            // default: false
-time_t cf_timestamp (const cf_t *cf);     // default: 0
+int64_t cf_int64 (const cf_t *cf);       // default: 0
+double cf_double (const cf_t *cf);       // default: 0.
+const char *cf_string (const cf_t *cf);  // default: ""
+bool cf_bool (const cf_t *cf);           // default: false
+time_t cf_timestamp (const cf_t *cf);    // default: 0
 
 /* Get array size.
  * If object is not an array, return 0.
@@ -116,7 +119,9 @@ int cf_update_glob (cf_t *cf, const char *pattern, struct cf_error *error);
  * On success return 0.  On failure, return -1 with errno set.
  * If error is non-NULL, write error description there.
  */
-int cf_check (const cf_t *cf, const struct cf_option opts[], int flags,
+int cf_check (const cf_t *cf,
+              const struct cf_option opts[],
+              int flags,
               struct cf_error *error);
 
 #endif /* !_UTIL_CF_H */

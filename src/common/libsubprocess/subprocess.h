@@ -47,13 +47,13 @@ typedef struct flux_subprocess_server flux_subprocess_server_t;
  * any state -> failed
  */
 typedef enum {
-    FLUX_SUBPROCESS_INIT,         /* initial state */
-    FLUX_SUBPROCESS_STARTED,      /* fork() has been issued/requested */
-    FLUX_SUBPROCESS_EXEC_FAILED,  /* exec(2) has failed, only for rexec() */
-    FLUX_SUBPROCESS_RUNNING,      /* exec(2) has been called */
-    FLUX_SUBPROCESS_EXITED,       /* process has exited */
-    FLUX_SUBPROCESS_FAILED,       /* internal failure, catch all for
-                                   * all other errors */
+    FLUX_SUBPROCESS_INIT,        /* initial state */
+    FLUX_SUBPROCESS_STARTED,     /* fork() has been issued/requested */
+    FLUX_SUBPROCESS_EXEC_FAILED, /* exec(2) has failed, only for rexec() */
+    FLUX_SUBPROCESS_RUNNING,     /* exec(2) has been called */
+    FLUX_SUBPROCESS_EXITED,      /* process has exited */
+    FLUX_SUBPROCESS_FAILED,      /* internal failure, catch all for
+                                  * all other errors */
 } flux_subprocess_state_t;
 
 /*
@@ -75,8 +75,7 @@ enum {
  *
  */
 typedef void (*flux_subprocess_f) (flux_subprocess_t *p);
-typedef void (*flux_subprocess_output_f) (flux_subprocess_t *p,
-                                          const char *stream);
+typedef void (*flux_subprocess_output_f) (flux_subprocess_t *p, const char *stream);
 typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
                                          flux_subprocess_state_t state);
 
@@ -85,15 +84,15 @@ typedef void (*flux_subprocess_state_f) (flux_subprocess_t *p,
  *
  */
 typedef struct {
-    flux_subprocess_f on_completion;    /* Process exited and all I/O
-                                         * complete, will not be
-                                         * called if EXEC_FAILED or
-                                         * FAILED states reached.
-                                         */
-    flux_subprocess_state_f on_state_change;  /* Process state change        */
+    flux_subprocess_f on_completion;         /* Process exited and all I/O
+                                              * complete, will not be
+                                              * called if EXEC_FAILED or
+                                              * FAILED states reached.
+                                              */
+    flux_subprocess_state_f on_state_change; /* Process state change        */
     flux_subprocess_output_f on_channel_out; /* Read from channel when ready */
-    flux_subprocess_output_f on_stdout; /* Read of stdout is ready           */
-    flux_subprocess_output_f on_stderr; /* Read of stderr is ready           */
+    flux_subprocess_output_f on_stdout;      /* Read of stdout is ready           */
+    flux_subprocess_output_f on_stderr;      /* Read of stderr is ready           */
 } flux_subprocess_ops_t;
 
 /*
@@ -136,12 +135,12 @@ void flux_standard_output (flux_subprocess_t *p, const char *stream);
 /*
  *  Create a cmd object, from which subprocesses can be created
  */
-flux_cmd_t * flux_cmd_create (int argc, char *argv[], char **env);
+flux_cmd_t *flux_cmd_create (int argc, char *argv[], char **env);
 
 /*
  *  Create a copy of a cmd object.
  */
-flux_cmd_t * flux_cmd_copy (const flux_cmd_t *cmd);
+flux_cmd_t *flux_cmd_copy (const flux_cmd_t *cmd);
 
 /*
  *  Destroy and free command object `cmd`
@@ -167,8 +166,11 @@ const char *flux_cmd_arg (const flux_cmd_t *cmd, int n);
  *  Set a single environment variable (name) to formatted string `fmt`.
  *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
  */
-int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
-		      const char *name, const char *fmt, ...);
+int flux_cmd_setenvf (flux_cmd_t *cmd,
+                      int overwrite,
+                      const char *name,
+                      const char *fmt,
+                      ...);
 
 /*
  *  Unset environment variable `name` in the command object `cmd`.
@@ -222,8 +224,6 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 
-
-
 /*
  *  Subprocesses:
  */
@@ -244,18 +244,21 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
  *   by the time the call returns.
  *
  */
-flux_subprocess_t *flux_exec (flux_t *h, int flags,
+flux_subprocess_t *flux_exec (flux_t *h,
+                              int flags,
                               const flux_cmd_t *cmd,
                               const flux_subprocess_ops_t *ops);
 
-flux_subprocess_t *flux_local_exec (flux_reactor_t *r, int flags,
+flux_subprocess_t *flux_local_exec (flux_reactor_t *r,
+                                    int flags,
                                     const flux_cmd_t *cmd,
                                     const flux_subprocess_ops_t *ops);
 
-flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
+flux_subprocess_t *flux_rexec (flux_t *h,
+                               int rank,
+                               int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops);
-
 
 /*
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be
@@ -264,8 +267,10 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
  *
  *  Returns the total amount of data successfully buffered.
  */
-int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
-                           const char *buf, size_t len);
+int flux_subprocess_write (flux_subprocess_t *p,
+                           const char *stream,
+                           const char *buf,
+                           size_t len);
 
 /*
  *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
@@ -289,7 +294,8 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  */
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
-                                  int len, int *lenp);
+                                  int len,
+                                  int *lenp);
 
 /*
  *  Read line unread data from stream `stream`.  'stream' can be
@@ -327,7 +333,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
  */
 void flux_subprocess_ref (flux_subprocess_t *p);
 void flux_subprocess_unref (flux_subprocess_t *p);
-#define flux_subprocess_destroy(x) flux_subprocess_unref(x)
+#define flux_subprocess_destroy(x) flux_subprocess_unref (x)
 
 /*  Return current state value of subprocess.  Note this may differ
  *  than state returned in on_state_change callback, as a subprocess
@@ -368,7 +374,7 @@ flux_cmd_t *flux_subprocess_get_cmd (flux_subprocess_t *p);
 
 /*  Return the reactor object associated with subprocess `p`.
  */
-flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
+flux_reactor_t *flux_subprocess_get_reactor (flux_subprocess_t *p);
 
 /*
  *  Set arbitrary context `ctx` with name `name` on subprocess object `p`.
@@ -376,7 +382,9 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
  *  Returns 0 on success
  */
 int flux_subprocess_aux_set (flux_subprocess_t *p,
-                             const char *name, void *ctx, flux_free_f free);
+                             const char *name,
+                             void *ctx,
+                             flux_free_f free);
 
 /*
  *  Return pointer to any context associated with `p` under `name`. If

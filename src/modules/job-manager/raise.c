@@ -40,7 +40,7 @@ int raise_check_type (const char *s)
 {
     const char *cp;
 
-    if (strlen (s)  == 0)
+    if (strlen (s) == 0)
         return -1;
     for (cp = s; *cp != '\0'; cp++)
         if (isspace (*cp) || *cp == '=')
@@ -62,7 +62,8 @@ int raise_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid)
     return 0;
 }
 
-void raise_handle_request (flux_t *h, struct queue *queue,
+void raise_handle_request (flux_t *h,
+                           struct queue *queue,
                            struct event_ctx *event_ctx,
                            const flux_msg_t *msg)
 {
@@ -76,13 +77,20 @@ void raise_handle_request (flux_t *h, struct queue *queue,
     flux_future_t *f;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i s:s s?:s}",
-                                        "id", &id,
-                                        "severity", &severity,
-                                        "type", &type,
-                                        "note", &note) < 0
-                    || flux_msg_get_userid (msg, &userid) < 0
-                    || flux_msg_get_rolemask (msg, &rolemask) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i s:s s?:s}",
+                             "id",
+                             &id,
+                             "severity",
+                             &severity,
+                             "type",
+                             &type,
+                             "note",
+                             &note)
+            < 0
+        || flux_msg_get_userid (msg, &userid) < 0
+        || flux_msg_get_rolemask (msg, &rolemask) < 0)
         goto error;
     if (raise_check_severity (severity)) {
         errstr = "invalid exception severity";
@@ -108,20 +116,30 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPROTO;
         goto error;
     }
-    if (event_job_post_pack (event_ctx, job,
+    if (event_job_post_pack (event_ctx,
+                             job,
                              "exception",
                              "{ s:s s:i s:i s:s }",
-                             "type", type,
-                             "severity", severity,
-                             "userid", userid,
-                             "note", note ? note : "") < 0)
+                             "type",
+                             type,
+                             "severity",
+                             severity,
+                             "userid",
+                             userid,
+                             "note",
+                             note ? note : "")
+        < 0)
         goto error;
-    if (!(f = flux_event_publish_pack (h, "job-exception",
+    if (!(f = flux_event_publish_pack (h,
+                                       "job-exception",
                                        FLUX_MSGFLAG_PRIVATE,
                                        "{s:I s:s s:i}",
-                                       "id", job->id,
-                                       "type", type,
-                                       "severity", severity)))
+                                       "id",
+                                       job->id,
+                                       "type",
+                                       type,
+                                       "severity",
+                                       severity)))
         goto error;
     flux_future_destroy (f);
     if (flux_respond (h, msg, NULL) < 0)

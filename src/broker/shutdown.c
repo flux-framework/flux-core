@@ -37,7 +37,6 @@ struct shutdown_struct {
     void *arg;
 };
 
-
 shutdown_t *shutdown_create (void)
 {
     shutdown_t *s = xzmalloc (sizeof (*s));
@@ -58,8 +57,7 @@ void shutdown_destroy (shutdown_t *s)
 
 /* When the timer expires, call the registered callback.
  */
-static void timer_handler (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void timer_handler (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     shutdown_t *s = arg;
     if (s->shutdown)
@@ -73,27 +71,35 @@ static void timer_handler (flux_reactor_t *r, flux_watcher_t *w,
 /* On receipt of the shutdown event message, begin the grace timer,
  * and log the "shutdown in..." message on rank 0.
  */
-void shutdown_handler (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+void shutdown_handler (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     shutdown_t *s = arg;
 
     if (!s->timer) {
-        if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
-                             s->reason, sizeof (s->reason)) < 0) {
+        if (shutdown_decode (msg,
+                             &s->grace,
+                             &s->rc,
+                             &s->rank,
+                             s->reason,
+                             sizeof (s->reason))
+            < 0) {
             flux_log_error (h, "shutdown event");
             return;
         }
         if (!(s->timer = flux_timer_watcher_create (flux_get_reactor (s->h),
-                                                    s->grace, 0.,
-                                                    timer_handler, s))) {
+                                                    s->grace,
+                                                    0.,
+                                                    timer_handler,
+                                                    s))) {
             flux_log_error (h, "shutdown timer creation");
             return;
         }
         flux_watcher_start (s->timer);
         if (s->myrank == 0)
-            flux_log (s->h, LOG_INFO, "shutdown in %.3fs: %s",
-                      s->grace, s->reason);
+            flux_log (s->h, LOG_INFO, "shutdown in %.3fs: %s", s->grace, s->reason);
     }
 }
 
@@ -104,8 +110,7 @@ void shutdown_set_handle (shutdown_t *s, flux_t *h)
     s->h = h;
 
     match.topic_glob = "shutdown";
-    if (!(s->shutdown = flux_msg_handler_create (s->h, match,
-                                                 shutdown_handler, s)))
+    if (!(s->shutdown = flux_msg_handler_create (s->h, match, shutdown_handler, s)))
         log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (s->shutdown);
     if (flux_event_subscribe (s->h, "shutdown") < 0)
@@ -135,22 +140,29 @@ void shutdown_disarm (shutdown_t *s)
     }
 }
 
-flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
-                              const char *fmt, va_list ap)
+flux_msg_t *shutdown_vencode (double grace,
+                              int exitcode,
+                              int rank,
+                              const char *fmt,
+                              va_list ap)
 {
     char reason[REASON_MAX];
 
     vsnprintf (reason, sizeof (reason), fmt, ap);
 
-    return flux_event_pack ("shutdown", "{ s:s s:f s:i s:i }",
-                            "reason", reason,
-                            "grace", grace,
-                            "rank", rank,
-                            "exitcode", exitcode);
+    return flux_event_pack ("shutdown",
+                            "{ s:s s:f s:i s:i }",
+                            "reason",
+                            reason,
+                            "grace",
+                            grace,
+                            "rank",
+                            rank,
+                            "exitcode",
+                            exitcode);
 }
 
-flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
-                             const char *fmt, ...)
+flux_msg_t *shutdown_encode (double grace, int exitcode, int rank, const char *fmt, ...)
 {
     va_list ap;
     flux_msg_t *msg;
@@ -162,17 +174,28 @@ flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
     return msg;
 }
 
-int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
-                     int *rank, char *reason, int reason_len)
+int shutdown_decode (const flux_msg_t *msg,
+                     double *grace,
+                     int *exitcode,
+                     int *rank,
+                     char *reason,
+                     int reason_len)
 {
     const char *s;
     int rc = -1;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s s:F s:i s:i}",
-                           "reason", &s,
-                           "grace", grace,
-                           "rank", rank,
-                           "exitcode", exitcode) < 0)
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{ s:s s:F s:i s:i}",
+                           "reason",
+                           &s,
+                           "grace",
+                           grace,
+                           "rank",
+                           rank,
+                           "exitcode",
+                           exitcode)
+        < 0)
         goto done;
     snprintf (reason, reason_len, "%s", s);
     rc = 0;
@@ -180,8 +203,7 @@ done:
     return rc;
 }
 
-int shutdown_arm (shutdown_t *s, double grace, int exitcode,
-                  const char *fmt, ...)
+int shutdown_arm (shutdown_t *s, double grace, int exitcode, const char *fmt, ...)
 {
     va_list ap;
     flux_msg_t *msg = NULL;

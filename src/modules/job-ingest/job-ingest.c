@@ -59,14 +59,12 @@
  * connector.
  */
 
-
 /* The batch_timeout (seconds) is the maximum length of time
  * any given job request is delayed before initiating a KVS commit.
  * Too large, and individual job submit latency will suffer.
  * Too small, and KVS commit overhead will increase.
  */
 const double batch_timeout = 0.01;
-
 
 struct job_ingest_ctx {
     flux_t *h;
@@ -82,7 +80,7 @@ struct job_ingest_ctx {
 };
 
 struct job {
-    fluid_t id;         // jobid
+    fluid_t id;  // jobid
 
     flux_msg_t *msg;    // copy of submit request message
     const char *J;      // signed jobspec
@@ -91,8 +89,8 @@ struct job {
     int priority;       // requested job priority
     int flags;          // submit flags
 
-    char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
-    int jobspecsz;      // jobspec string length
+    char *jobspec;  // jobspec, not \0 terminated (unwrapped from signed)
+    int jobspecsz;  // jobspec string length
 
     struct job_ingest_ctx *ctx;
 };
@@ -127,8 +125,7 @@ static void job_destroy (struct job *job)
     }
 }
 
-static struct job *job_create (const flux_msg_t *msg,
-                               struct job_ingest_ctx *ctx)
+static struct job *job_create (const flux_msg_t *msg, struct job_ingest_ctx *ctx)
 {
     struct job *job;
 
@@ -136,10 +133,16 @@ static struct job *job_create (const flux_msg_t *msg,
         return NULL;
     if (!(job->msg = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_request_unpack (job->msg, NULL, "{s:s s:i s:i}",
-                             "J", &job->J,
-                             "priority", &job->priority,
-                             "flags", &job->flags) < 0)
+    if (flux_request_unpack (job->msg,
+                             NULL,
+                             "{s:s s:i s:i}",
+                             "J",
+                             &job->J,
+                             "priority",
+                             &job->priority,
+                             "flags",
+                             &job->flags)
+        < 0)
         goto error;
     if (flux_msg_get_userid (job->msg, &job->userid) < 0)
         goto error;
@@ -196,8 +199,7 @@ error:
 
 /* Respond to all requestors (for each job) with errnum and errstr (required).
  */
-static void batch_respond_error (struct batch *batch,
-                                 int errnum, const char *errstr)
+static void batch_respond_error (struct batch *batch, int errnum, const char *errstr)
 {
     flux_t *h = batch->ctx->h;
     struct job *job = zlist_first (batch->jobs);
@@ -274,8 +276,7 @@ static void batch_announce_continuation (flux_future_t *f, void *arg)
         batch_respond_error (batch, errno, flux_future_error_string (f));
         if (batch_cleanup (batch) < 0)
             flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
-    }
-    else
+    } else
         batch_respond_success (batch);
 
     batch_destroy (batch);
@@ -289,9 +290,13 @@ static void batch_announce (struct batch *batch)
     flux_t *h = batch->ctx->h;
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (h, "job-manager.submit", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.submit",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:O}",
-                             "jobs", batch->joblist)))
+                             "jobs",
+                             batch->joblist)))
         goto error;
     if (flux_future_then (f, -1., batch_announce_continuation, batch) < 0)
         goto error;
@@ -315,8 +320,7 @@ static void batch_flush_continuation (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0) {
         batch_respond_error (batch, errno, "KVS commit failed");
         batch_destroy (batch);
-    }
-    else {
+    } else {
         batch_announce (batch);
     }
     flux_future_destroy (f);
@@ -327,8 +331,7 @@ static void batch_flush_continuation (flux_future_t *f, void *arg)
  * continuations that commit its data to the KVS, respond to requestors,
  * and announce the new jobids.
  */
-static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void batch_flush (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
     struct batch *batch;
@@ -386,14 +389,17 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
-    if (flux_kvs_txn_put_raw (batch->txn, 0, key,
-                              job->jobspec, job->jobspecsz) < 0)
+    if (flux_kvs_txn_put_raw (batch->txn, 0, key, job->jobspec, job->jobspecsz) < 0)
         goto error;
-    entry = eventlog_entry_pack (0., "submit",
+    entry = eventlog_entry_pack (0.,
+                                 "submit",
                                  "{ s:i s:i s:i }",
-                                 "userid", job->userid,
-                                 "priority", job->priority,
-                                 "flags", job->flags);
+                                 "userid",
+                                 job->userid,
+                                 "priority",
+                                 job->priority,
+                                 "flags",
+                                 job->flags);
     if (!entry)
         goto error;
     if (!(entrystr = eventlog_entry_encode (entry)))
@@ -406,11 +412,16 @@ static int batch_add_job (struct batch *batch, struct job *job)
     if (eventlog_entry_parse (entry, &t, NULL, NULL) < 0)
         goto error;
     if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i}",
-                                "id", job->id,
-                                "userid", job->userid,
-                                "priority", job->priority,
-                                "t_submit", t,
-                                "flags", job->flags)))
+                                "id",
+                                job->id,
+                                "userid",
+                                job->userid,
+                                "priority",
+                                job->priority,
+                                "t_submit",
+                                t,
+                                "flags",
+                                job->flags)))
         goto nomem;
     if (json_array_append_new (batch->joblist, jobentry) < 0) {
         json_decref (jobentry);
@@ -418,7 +429,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
     }
     free (entrystr);
     json_decref (entry);
-    job_clean (job); // batch->txn now holds this info
+    job_clean (job);  // batch->txn now holds this info
     return 0;
 nomem:
     errno = ENOMEM;
@@ -470,8 +481,10 @@ error:
 
 /* Handle "job-ingest.submit" request to add a new job.
  */
-static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void submit_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
     struct job *job;
@@ -494,16 +507,20 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     /* Validate requested job priority.
      */
     if (job->priority < FLUX_JOB_PRIORITY_MIN
-            || job->priority > FLUX_JOB_PRIORITY_MAX) {
-        snprintf (errbuf, sizeof (errbuf), "priority range is [%d:%d]",
-                  FLUX_JOB_PRIORITY_MIN, FLUX_JOB_PRIORITY_MAX);
+        || job->priority > FLUX_JOB_PRIORITY_MAX) {
+        snprintf (errbuf,
+                  sizeof (errbuf),
+                  "priority range is [%d:%d]",
+                  FLUX_JOB_PRIORITY_MIN,
+                  FLUX_JOB_PRIORITY_MAX);
         errmsg = errbuf;
         errno = EINVAL;
         goto error;
     }
     if (!(job->rolemask & FLUX_ROLE_OWNER)
-           && job->priority > FLUX_JOB_PRIORITY_DEFAULT) {
-        snprintf (errbuf, sizeof (errbuf),
+        && job->priority > FLUX_JOB_PRIORITY_DEFAULT) {
+        snprintf (errbuf,
+                  sizeof (errbuf),
                   "only the instance owner can submit with priority >%d",
                   FLUX_JOB_PRIORITY_DEFAULT);
         errmsg = errbuf;
@@ -517,9 +534,14 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      */
 #if HAVE_FLUX_SECURITY
     const void *jobspec;
-    if (flux_sign_unwrap_anymech (ctx->sec, job->J, &jobspec, &job->jobspecsz,
-                                  &mech_type, &userid_signer,
-                                  FLUX_SIGN_NOVERIFY) < 0) {
+    if (flux_sign_unwrap_anymech (ctx->sec,
+                                  job->J,
+                                  &jobspec,
+                                  &job->jobspecsz,
+                                  &mech_type,
+                                  &userid_signer,
+                                  FLUX_SIGN_NOVERIFY)
+        < 0) {
         errmsg = flux_security_last_error (ctx->sec);
         goto error;
     }
@@ -532,8 +554,11 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      * Unlike flux-security version, returned payload must be freed,
      * and returned userid is a uint32_t.
      */
-    if (sign_none_unwrap (job->J, (void **)&job->jobspec, &job->jobspecsz,
-                          &userid_signer_u32) < 0) {
+    if (sign_none_unwrap (job->J,
+                          (void **)&job->jobspec,
+                          &job->jobspecsz,
+                          &userid_signer_u32)
+        < 0) {
         errmsg = "could not unwrap jobspec";
         goto error;
     }
@@ -541,15 +566,18 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     userid_signer = userid_signer_u32;
 #endif
     if (userid_signer != job->userid) {
-        snprintf (errbuf, sizeof (errbuf),
+        snprintf (errbuf,
+                  sizeof (errbuf),
                   "signer=%lu != requestor=%lu",
-                  (unsigned long)userid_signer, (unsigned long)job->userid);
+                  (unsigned long)userid_signer,
+                  (unsigned long)job->userid);
         errmsg = errbuf;
         errno = EPERM;
         goto error;
     }
     if (!(job->rolemask & FLUX_ROLE_OWNER) && !strcmp (mech_type, "none")) {
-        snprintf (errbuf, sizeof (errbuf),
+        snprintf (errbuf,
+                  sizeof (errbuf),
                   "only instance owner can use sign-type=none");
         errmsg = errbuf;
         errno = EPERM;
@@ -571,7 +599,7 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "job-ingest.submit", submit_cb, FLUX_ROLE_USER },
+    {FLUX_MSGTYPE_REQUEST, "job-ingest.submit", submit_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -590,7 +618,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (flux_security_configure (ctx.sec, NULL) < 0) {
-        flux_log_error (h, "flux_security_configure: %s",
+        flux_log_error (h,
+                        "flux_security_configure: %s",
                         flux_security_last_error (ctx.sec));
         goto done;
     }
@@ -599,8 +628,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
-    if (!(ctx.timer = flux_timer_watcher_create (r, 0., 0.,
-                                                 batch_flush, &ctx))) {
+    if (!(ctx.timer = flux_timer_watcher_create (r, 0., 0., batch_flush, &ctx))) {
         flux_log_error (h, "flux_timer_watcher_create");
         goto done;
     }

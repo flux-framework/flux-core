@@ -39,7 +39,7 @@ struct overlay_struct {
     zsecurity_t *sec;
     bool sec_initialized;
     flux_t *h;
-    zhash_t *children;          /* child_t - by uuid */
+    zhash_t *children; /* child_t - by uuid */
     flux_msg_handler_t *heartbeat;
     int epoch;
 
@@ -50,12 +50,12 @@ struct overlay_struct {
     int tbon_maxlevel;
     int tbon_descendants;
 
-    struct endpoint *parent;    /* DEALER - requests to parent */
+    struct endpoint *parent; /* DEALER - requests to parent */
     overlay_cb_f parent_cb;
     void *parent_arg;
     int parent_lastsent;
 
-    struct endpoint *child;     /* ROUTER - requests from children */
+    struct endpoint *child; /* ROUTER - requests from children */
     overlay_cb_f child_cb;
     void *child_arg;
 
@@ -69,8 +69,10 @@ typedef struct {
     int lastseen;
 } child_t;
 
-static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg);
+static void heartbeat_handler (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg);
 
 static void endpoint_destroy (struct endpoint *ep)
 {
@@ -121,8 +123,7 @@ void overlay_set_init_callback (overlay_t *ov, overlay_init_cb_f cb, void *arg)
     ov->init_arg = arg;
 }
 
-void overlay_init (overlay_t *overlay,
-                   uint32_t size, uint32_t rank, int tbon_k)
+void overlay_init (overlay_t *overlay, uint32_t size, uint32_t rank, int tbon_k)
 {
     overlay->size = size;
     overlay->rank = rank;
@@ -156,8 +157,8 @@ void overlay_set_flux (overlay_t *ov, flux_t *h)
     ov->h = h;
 
     match.topic_glob = "hb";
-    if (!(ov->heartbeat = flux_msg_handler_create (ov->h, match,
-                                                   heartbeat_handler, ov)))
+    if (!(ov->heartbeat =
+              flux_msg_handler_create (ov->h, match, heartbeat_handler, ov)))
         log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (ov->heartbeat);
     if (flux_event_subscribe (ov->h, "hb") < 0)
@@ -179,9 +180,9 @@ char *overlay_lspeer_encode (overlay_t *ov)
 
     if (!(o = json_object ()))
         goto nomem;
-    FOREACH_ZHASH (ov->children, uuid, child) {
-        if (!(child_o = json_pack ("{s:i}", "idle",
-                                   ov->epoch - child->lastseen)))
+    FOREACH_ZHASH (ov->children, uuid, child)
+    {
+        if (!(child_o = json_pack ("{s:i}", "idle", ov->epoch - child->lastseen)))
             goto nomem;
         if (json_object_set_new (o, uuid, child_o) < 0) {
             json_decref (child_o);
@@ -204,18 +205,22 @@ void overlay_log_idle_children (overlay_t *ov)
     int idle;
 
     if (ov->idle_warning > 0) {
-        FOREACH_ZHASH (ov->children, uuid, child) {
+        FOREACH_ZHASH (ov->children, uuid, child)
+        {
             idle = ov->epoch - child->lastseen;
             if (idle >= ov->idle_warning)
-                flux_log (ov->h, LOG_CRIT, "child %s idle for %d heartbeats",
-                          uuid, idle);
+                flux_log (ov->h,
+                          LOG_CRIT,
+                          "child %s idle for %d heartbeats",
+                          uuid,
+                          idle);
         }
     }
 }
 
 void overlay_checkin_child (overlay_t *ov, const char *uuid)
 {
-    child_t *child  = zhash_lookup (ov->children, uuid);
+    child_t *child = zhash_lookup (ov->children, uuid);
     if (!child) {
         child = xzmalloc (sizeof (*child));
         zhash_update (ov->children, uuid, child);
@@ -274,8 +279,10 @@ done:
     return rc;
 }
 
-static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void heartbeat_handler (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     overlay_t *ov = arg;
 
@@ -336,7 +343,8 @@ int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg)
 
     if (!ov->child || !ov->child->zs || !ov->children)
         return 0;
-    FOREACH_ZHASH (ov->children, uuid, child) {
+    FOREACH_ZHASH (ov->children, uuid, child)
+    {
         if (!(cpy = flux_msg_copy (msg, true)))
             oom ();
         if (flux_msg_enable_route (cpy) < 0)
@@ -354,8 +362,7 @@ done:
     return rc;
 }
 
-static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void child_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
@@ -376,7 +383,10 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
         ep->uri = zsock_last_endpoint (ep->zs);
     }
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
-                                           ep->zs, FLUX_POLLIN, child_cb, ov)))
+                                           ep->zs,
+                                           FLUX_POLLIN,
+                                           child_cb,
+                                           ov)))
         log_err_exit ("flux_zmq_watcher_create");
     flux_watcher_start (ep->w);
     /* Ensure that ipc files are removed when the broker exits.
@@ -387,8 +397,7 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
     return 0;
 }
 
-static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void parent_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
@@ -409,12 +418,15 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
         errno = savederr;
         goto error;
     }
-    snprintf (rankstr, sizeof (rankstr), "%"PRIu32, ov->rank);
+    snprintf (rankstr, sizeof (rankstr), "%" PRIu32, ov->rank);
     zsock_set_identity (ep->zs, rankstr);
     if (zsock_connect (ep->zs, "%s", ep->uri) < 0)
         goto error;
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
-                                           ep->zs, FLUX_POLLIN, parent_cb, ov)))
+                                           ep->zs,
+                                           FLUX_POLLIN,
+                                           parent_cb,
+                                           ov)))
         goto error;
     flux_watcher_start (ep->w);
     return 0;
@@ -486,7 +498,7 @@ static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
     int rc = -1;
 
     if (!strcmp (name, "tbon.parent-endpoint"))
-        *val = overlay_get_parent(overlay);
+        *val = overlay_get_parent (overlay);
     else {
         errno = ENOENT;
         goto done;
@@ -498,27 +510,35 @@ done:
 
 int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
 {
-    if (attr_add_active (attrs, "tbon.parent-endpoint",
+    if (attr_add_active (attrs,
+                         "tbon.parent-endpoint",
                          FLUX_ATTRFLAG_READONLY,
-                         overlay_attr_get_cb, NULL, overlay) < 0)
+                         overlay_attr_get_cb,
+                         NULL,
+                         overlay)
+        < 0)
         return -1;
-    if (attr_add_uint32 (attrs, "rank", overlay->rank,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_uint32 (attrs, "rank", overlay->rank, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_uint32 (attrs, "size", overlay->size,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_uint32 (attrs, "size", overlay->size, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.arity", overlay->tbon_k,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_int (attrs, "tbon.arity", overlay->tbon_k, FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.level", overlay->tbon_level,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_int (attrs, "tbon.level", overlay->tbon_level, FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.maxlevel", overlay->tbon_maxlevel,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_int (attrs,
+                      "tbon.maxlevel",
+                      overlay->tbon_maxlevel,
+                      FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.descendants", overlay->tbon_descendants,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_int (attrs,
+                      "tbon.descendants",
+                      overlay->tbon_descendants,
+                      FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         return -1;
 
     return 0;

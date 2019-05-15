@@ -12,18 +12,18 @@
 #define _EV_ZMQ_H
 
 typedef struct ev_zmq_struct ev_zmq;
-typedef void (*ev_zmq_cb)(struct ev_loop *loop, ev_zmq *w, int revents);
+typedef void (*ev_zmq_cb) (struct ev_loop *loop, ev_zmq *w, int revents);
 
 struct ev_zmq_struct {
-    ev_io       io_w;
-    ev_prepare  prepare_w;
-    ev_idle     idle_w;
-    ev_check    check_w;
-    void        *zsock;
-    int         fd;
-    int         events;
-    ev_zmq_cb   cb;
-    void        *data;
+    ev_io io_w;
+    ev_prepare prepare_w;
+    ev_idle idle_w;
+    ev_check check_w;
+    void *zsock;
+    int fd;
+    int events;
+    ev_zmq_cb cb;
+    void *data;
 };
 
 int ev_zmq_init (ev_zmq *w, ev_zmq_cb cb, void *zsock, int events);
@@ -71,4 +71,3 @@ static __inline__ int etoz (int e)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

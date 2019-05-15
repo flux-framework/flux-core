@@ -19,7 +19,6 @@
 struct cache_entry;
 struct cache;
 
-
 /* Create/destroy cache entry.
  *
  * cache_entry_create() creates an empty cache entry.  Data can be set
@@ -79,8 +78,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *entry);
  * cache_entry_set_raw() & cache_entry_clear_data()
  * return -1 on error, 0 on success
  */
-int cache_entry_get_raw (struct cache_entry *entry, const void **data,
-                         int *len);
+int cache_entry_get_raw (struct cache_entry *entry, const void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *entry, const void *data, int len);
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *entry);
@@ -112,7 +110,8 @@ void cache_destroy (struct cache *cache);
  * taking care not to not run backwards.
  */
 struct cache_entry *cache_lookup (struct cache *cache,
-                                  const char *ref, int current_epoch);
+                                  const char *ref,
+                                  int current_epoch);
 
 /* Insert entry in the cache.  Reference for entry created during
  * cache_entry_create() time.  Ownership of the cache entry is
@@ -139,8 +138,11 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh);
 /* Obtain statistics on the cache.
  * Returns -1 on error, 0 on success
  */
-int cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
-                     int *incomplete, int *dirty);
+int cache_get_stats (struct cache *cache,
+                     tstat_t *ts,
+                     int *size,
+                     int *incomplete,
+                     int *dirty);
 
 /* Destroy wait_t's on the waitqueue_t of any cache entry
  * if they meet match criteria.

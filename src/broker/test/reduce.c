@@ -67,8 +67,8 @@ void forward (flux_reduce_t *r, int batchnum, void *arg)
 
 void clear_counts (void)
 {
-    sink_calls = sink_items = reduce_calls = reduce_items
-                            = forward_calls = forward_items = 0;
+    sink_calls = sink_items = reduce_calls = reduce_items = forward_calls =
+        forward_items = 0;
 }
 
 int itemweight (void *item)
@@ -76,7 +76,7 @@ int itemweight (void *item)
     return 1;
 }
 
-static struct flux_reduce_ops reduce_ops =  {
+static struct flux_reduce_ops reduce_ops = {
     .destroy = free,
     .reduce = reduce,
     .sink = sink,
@@ -92,12 +92,12 @@ void test_hwm (flux_t *h)
 
     clear_counts ();
 
-    ok ((r = flux_reduce_create (h, reduce_ops, 0., NULL,
-        FLUX_REDUCE_HWMFLUSH)) != NULL,
+    ok ((r = flux_reduce_create (h, reduce_ops, 0., NULL, FLUX_REDUCE_HWMFLUSH))
+            != NULL,
         "hwm: flux_reduce_create works");
 
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm)) == 0
-        && hwm == 0,
+            && hwm == 0,
         "hwm: hwm is initially zero");
 
     /* batch 0 is a training batch.
@@ -108,14 +108,10 @@ void test_hwm (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 0) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "hwm.0: flux_reduce_append added 100 items");
-    cmp_ok (reduce_calls, "==", 0,
-        "hwm.0: op.reduce not called (training)");
-    cmp_ok (sink_calls, "==", 100,
-        "hwm.0: op.sink called 100 times");
-    cmp_ok (sink_items, "==", 100,
-        "hwm.0: op.sink processed 100 items");
+    ok (errors == 0, "hwm.0: flux_reduce_append added 100 items");
+    cmp_ok (reduce_calls, "==", 0, "hwm.0: op.reduce not called (training)");
+    cmp_ok (sink_calls, "==", 100, "hwm.0: op.sink called 100 times");
+    cmp_ok (sink_items, "==", 100, "hwm.0: op.sink processed 100 items");
 
     clear_counts ();
 
@@ -126,28 +122,22 @@ void test_hwm (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 1) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "hwm.1: flux_reduce_append added 99 items");
+    ok (errors == 0, "hwm.1: flux_reduce_append added 99 items");
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm)) == 0
-        && hwm == 100,
+            && hwm == 100,
         "hwm.0: hwm is 100");
-    cmp_ok (reduce_calls, "==", 98,
-        "hwm.1: op.reduce called 98 times");
-    cmp_ok (sink_calls, "==", 0,
-        "hwm.1: op.sink not called yet");
+    cmp_ok (reduce_calls, "==", 98, "hwm.1: op.reduce called 98 times");
+    cmp_ok (sink_calls, "==", 0, "hwm.1: op.sink not called yet");
 
     /* Now finish batch 1 with one item.  Everything should go thru.
      */
     ok (flux_reduce_append (r, xstrdup ("hi"), 1) == 0,
         "hwm.1: flux_reduce_append added 1 item");
-    cmp_ok (reduce_calls, "==", 99,
-        "hwm.1: op.reduce called");
-    cmp_ok (sink_calls, "==", 1,
-        "hwm.1: op.sink called 1 time");
-    cmp_ok (sink_items, "==", 100,
-        "hwm.1: op.sink handled 100 items");
+    cmp_ok (reduce_calls, "==", 99, "hwm.1: op.reduce called");
+    cmp_ok (sink_calls, "==", 1, "hwm.1: op.sink called 1 time");
+    cmp_ok (sink_items, "==", 100, "hwm.1: op.sink handled 100 items");
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm)) == 0
-        && hwm == 100,
+            && hwm == 100,
         "hwm.1: hwm is 100");
 
     clear_counts ();
@@ -159,23 +149,18 @@ void test_hwm (flux_t *h)
      */
     ok (flux_reduce_append (r, xstrdup ("hi"), 2) == 0,
         "hwm.2: flux_reduce_append added 1 item");
-    cmp_ok (reduce_calls, "==", 0,
-        "hwm.2: op.reduce not called");
-    cmp_ok (sink_calls, "==", 0,
-        "hwm.2: op.sink not called");
+    cmp_ok (reduce_calls, "==", 0, "hwm.2: op.reduce not called");
+    cmp_ok (sink_calls, "==", 0, "hwm.2: op.sink not called");
     ok (flux_reduce_append (r, xstrdup ("hi"), 1) == 0,
         "hwm.1: flux_reduce_append added 1 straggler");
-    cmp_ok (reduce_calls, "==", 0,
-        "hwm.1: op.reduce not called");
-    cmp_ok (sink_calls, "==", 1,
-        "hwm.1: op.sink called 1 time");
-    cmp_ok (sink_items, "==", 1,
-        "hwm.1: op.sink handled 1 item");
+    cmp_ok (reduce_calls, "==", 0, "hwm.1: op.reduce not called");
+    cmp_ok (sink_calls, "==", 1, "hwm.1: op.sink called 1 time");
+    cmp_ok (sink_items, "==", 1, "hwm.1: op.sink handled 1 item");
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm)) == 0
-        && hwm == 101,
+            && hwm == 101,
         "hwm.1: hwm is 101");
 
-    sink_items = sink_calls = 0; // don't count batch 1 straggler below
+    sink_items = sink_calls = 0;  // don't count batch 1 straggler below
 
     /* At this point we have one batch 2 item in queue.
      * Put in 99 more and we should be one short of 101 hwm.
@@ -185,20 +170,15 @@ void test_hwm (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 2) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "hwm.2: flux_reduce_append added 99 items");
-    cmp_ok (reduce_calls, "==", 99,
-        "hwm.2: op.reduce called 99 times");
-    cmp_ok (sink_calls, "==", 0,
-        "hwm.2: op.sink not called yet");
+    ok (errors == 0, "hwm.2: flux_reduce_append added 99 items");
+    cmp_ok (reduce_calls, "==", 99, "hwm.2: op.reduce called 99 times");
+    cmp_ok (sink_calls, "==", 0, "hwm.2: op.sink not called yet");
     ok (flux_reduce_append (r, xstrdup ("hi"), 2) == 0,
         "hwm.2: flux_reduce_append added 1 item");
-    cmp_ok (sink_calls, "==", 1,
-        "hwm.2: op.sink called 1 time");
-    cmp_ok (sink_items, "==", 101,
-        "hwm.2: op.sink handled 101 items");
+    cmp_ok (sink_calls, "==", 1, "hwm.2: op.sink called 1 time");
+    cmp_ok (sink_items, "==", 101, "hwm.2: op.sink handled 101 items");
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm)) == 0
-        && hwm == 101,
+            && hwm == 101,
         "hwm.2: hwm is 101");
 
     clear_counts ();
@@ -217,19 +197,15 @@ void test_hwm (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 3) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "hwm.3: flux_reduce_append added 20 items");
-    cmp_ok (reduce_calls, "==", 9,
-        "hwm.3: op.reduce called 9 times");
-    cmp_ok (sink_calls, "==", 11,
-        "hwm.3: op.sink called 11 times");
-    cmp_ok (sink_items, "==", 20,
-        "hwm.3: op.sink handled 20 items");
+    ok (errors == 0, "hwm.3: flux_reduce_append added 20 items");
+    cmp_ok (reduce_calls, "==", 9, "hwm.3: op.reduce called 9 times");
+    cmp_ok (sink_calls, "==", 11, "hwm.3: op.sink called 11 times");
+    cmp_ok (sink_items, "==", 20, "hwm.3: op.sink handled 20 items");
     ok (flux_reduce_append (r, xstrdup ("hi"), 4) == 0,
         "hwm.4: flux_reduce_append added one item");
     hwm = 0;
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm)) == 0
-        && hwm == 10,
+            && hwm == 10,
         "hwm.4: hwm is still 10");
 
     flux_reduce_destroy (r);
@@ -250,16 +226,14 @@ void test_nopolicy (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 0) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "nopolicy: flux_reduce_append added 100 items in batch 0");
-    cmp_ok (forward_calls, "==", 0,
-        "nopolicy: op.forward not called as we are rank 0");
-    cmp_ok (reduce_calls, "==", 0,
-        "nopolicy: op.reduce not called as we have no flush policy");
-    cmp_ok (sink_calls, "==", 100,
-        "nopolicy: op.sink called 100 times");
-    cmp_ok (sink_items, "==", 100,
-        "nopolicy: op.sink processed 100 items");
+    ok (errors == 0, "nopolicy: flux_reduce_append added 100 items in batch 0");
+    cmp_ok (forward_calls, "==", 0, "nopolicy: op.forward not called as we are rank 0");
+    cmp_ok (reduce_calls,
+            "==",
+            0,
+            "nopolicy: op.reduce not called as we have no flush policy");
+    cmp_ok (sink_calls, "==", 100, "nopolicy: op.sink called 100 times");
+    cmp_ok (sink_items, "==", 100, "nopolicy: op.sink processed 100 items");
 
     flux_reduce_destroy (r);
 }
@@ -272,13 +246,14 @@ void test_timed (flux_t *h)
 
     clear_counts ();
 
-    ok ((r = flux_reduce_create (h, reduce_ops, 0.1, NULL,
-                                 FLUX_REDUCE_TIMEDFLUSH)) != NULL,
+    ok ((r = flux_reduce_create (h, reduce_ops, 0.1, NULL, FLUX_REDUCE_TIMEDFLUSH))
+            != NULL,
         "timed: flux_reduce_create works");
     if (!r)
-        BAIL_OUT();
-    ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_TIMEOUT, &timeout,
-                             sizeof (timeout)) == 0 && timeout == 0.1,
+        BAIL_OUT ();
+    ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_TIMEOUT, &timeout, sizeof (timeout))
+                == 0
+            && timeout == 0.1,
         "timed: flux_reduce_opt_get TIMEOUT returned timeout");
 
     /* Append 100 items in batch 0 before starting reactor.
@@ -290,22 +265,17 @@ void test_timed (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 0) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "timed.0: flux_reduce_append added 100 items");
-    cmp_ok (reduce_calls, "==", 99,
-        "timed.0: op.reduce called 99 times");
-    cmp_ok (sink_calls, "==", 0,
-        "timed.0: op.sink called 0 times");
+    ok (errors == 0, "timed.0: flux_reduce_append added 100 items");
+    cmp_ok (reduce_calls, "==", 99, "timed.0: op.reduce called 99 times");
+    cmp_ok (sink_calls, "==", 0, "timed.0: op.sink called 0 times");
 
     /* Start reactor so timeout handler can run.
      * It should fire once and sink all items in one sink call.
      */
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "timed.0: reactor completed normally");
-    cmp_ok (sink_calls, "==", 1,
-        "timed.0: op.sink called 1 time");
-    cmp_ok (sink_items, "==", 100,
-        "timed.0: op.sink processed 100 items");
+    cmp_ok (sink_calls, "==", 1, "timed.0: op.sink called 1 time");
+    cmp_ok (sink_items, "==", 100, "timed.0: op.sink processed 100 items");
 
     clear_counts ();
 
@@ -314,12 +284,9 @@ void test_timed (flux_t *h)
      */
     ok (flux_reduce_append (r, xstrdup ("hi"), 0) == 0,
         "timed.0: flux_reduce_append added 1 more item");
-    cmp_ok (reduce_calls, "==", 0,
-        "timed.0: op.reduce not called");
-    cmp_ok (sink_calls, "==", 1,
-        "timed.0: op.sink called 1 time");
-    cmp_ok (sink_items, "==", 1,
-        "timed.0: op.sink processed 1 items");
+    cmp_ok (reduce_calls, "==", 0, "timed.0: op.reduce not called");
+    cmp_ok (sink_calls, "==", 1, "timed.0: op.sink called 1 time");
+    cmp_ok (sink_items, "==", 1, "timed.0: op.sink processed 1 items");
 
     clear_counts ();
 
@@ -331,22 +298,17 @@ void test_timed (flux_t *h)
         if (flux_reduce_append (r, xstrdup ("hi"), 1) < 0)
             errors++;
     }
-    ok (errors == 0,
-        "timed.1: flux_reduce_append added 100 items");
-    cmp_ok (reduce_calls, "==", 99,
-        "timed.1: op.reduce called 99 times");
-    cmp_ok (sink_calls, "==", 0,
-        "timed.1: op.sink called 0 times");
+    ok (errors == 0, "timed.1: flux_reduce_append added 100 items");
+    cmp_ok (reduce_calls, "==", 99, "timed.1: op.reduce called 99 times");
+    cmp_ok (sink_calls, "==", 0, "timed.1: op.sink called 0 times");
 
     /* Start reactor so timeout handler can run.
      * It should fire once and sink all items in one sink call.
      */
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "timed.1: reactor completed normally");
-    cmp_ok (sink_calls, "==", 1,
-        "timed.1: op.sink called 1 time");
-    cmp_ok (sink_items, "==", 100,
-        "timed.1: op.sink processed 100 items");
+    cmp_ok (sink_calls, "==", 1, "timed.1: op.sink called 1 time");
+    cmp_ok (sink_items, "==", 100, "timed.1: op.sink processed 100 items");
 
     flux_reduce_destroy (r);
 }
@@ -358,9 +320,9 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE),
+                  0);
+    ok ((h = flux_open ("loop://", 0)) != NULL, "opened loop connector");
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
 
@@ -368,16 +330,15 @@ int main (int argc, char *argv[])
     flux_attr_set_cacheonly (h, "tbon.level", "0");
     flux_attr_set_cacheonly (h, "tbon.maxlevel", "0");
 
-    test_nopolicy (h); // 6
-    test_hwm (h); // 37
-    test_timed(h); // 18
+    test_nopolicy (h);  // 6
+    test_hwm (h);       // 37
+    test_timed (h);     // 18
 
     flux_close (h);
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

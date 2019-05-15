@@ -18,7 +18,7 @@ void test_basic ()
 {
     int i;
     const int size = 5;
-    const int nputs = size*2;
+    const int nputs = size * 2;
     lru_cache_t *lru;
 
     lru = lru_cache_create (size);
@@ -38,7 +38,9 @@ void test_basic ()
             lru_cache_get (lru, "0");
     }
     ok (lru_cache_size (lru) == size,
-        "lru_cache_size still %d after %d puts", size, nputs);
+        "lru_cache_size still %d after %d puts",
+        size,
+        nputs);
     ok (lru_cache_get (lru, "0") != NULL, "0 still cached");
     ok (lru_cache_put (lru, "0", NULL) == -1 && errno == EEXIST,
         "lru_cache_put on existing key returns -1");
@@ -52,8 +54,7 @@ void test_basic ()
 
     ok (lru_cache_remove (lru, "0") >= 0, "lru_cache_remove ()");
     ok (lru_cache_get (lru, "0") == NULL, "remove worked");
-    ok (lru_cache_size (lru) == (size-1),
-        "cache size %d after remove", size - 1);
+    ok (lru_cache_size (lru) == (size - 1), "cache size %d after remove", size - 1);
 
     ok (lru_cache_selfcheck (lru) == 0, "lru_cache_selfcheck ()");
     lru_cache_destroy (lru);
@@ -71,7 +72,7 @@ void test_free_fn ()
     int x = 1, y = 2, z = 3;
 
     lru = lru_cache_create (2);
-    lru_cache_set_free_f (lru, (lru_cache_free_f) fake_int_free);
+    lru_cache_set_free_f (lru, (lru_cache_free_f)fake_int_free);
 
     ok (lru_cache_put (lru, "x", &x) == 0, "lru_cache_put (x)");
     ok (lru_cache_put (lru, "y", &y) == 0, "lru_cache_put (y)");
@@ -79,8 +80,8 @@ void test_free_fn ()
 
     ok (lru_cache_check (lru, "x") == false, "lru_cache_check (x) is false");
     ok (x == -1, "x has been freed");
-    ok (y == 2,  "y is not freed");
-    ok (z == 3,  "z is not freed");
+    ok (y == 2, "y is not freed");
+    ok (z == 3, "z is not freed");
 
     lru_cache_destroy (lru);
 
@@ -97,7 +98,7 @@ void test_corruption ()
      */
     int a = 1, b = 2, c = 3;
     lru_cache_t *lru = lru_cache_create (3);
-    lru_cache_set_free_f (lru, (lru_cache_free_f) fake_int_free);
+    lru_cache_set_free_f (lru, (lru_cache_free_f)fake_int_free);
 
     /* 1. Push a few items */
     ok (lru_cache_put (lru, "a", &a) == 0, "lru_cache_put (a)");
@@ -110,7 +111,6 @@ void test_corruption ()
 
     lru_cache_destroy (lru);
 }
-
 
 int main (int argc, char *argv[])
 {

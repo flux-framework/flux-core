@@ -39,13 +39,13 @@
 struct cache_entry {
     waitqueue_t *waitlist_notdirty;
     waitqueue_t *waitlist_valid;
-    void *data;             /* value raw data */
+    void *data; /* value raw data */
     int len;
-    json_t *o;              /* value treeobj object */
-    int lastuse_epoch;      /* time of last use for cache expiry */
-    bool valid;             /* flag indicating if raw data or treeobj
-                             * set, don't use data == NULL as test, as
-                             * zero length data can be valid */
+    json_t *o;         /* value treeobj object */
+    int lastuse_epoch; /* time of last use for cache expiry */
+    bool valid;        /* flag indicating if raw data or treeobj
+                        * set, don't use data == NULL as test, as
+                        * zero length data can be valid */
     bool dirty;
     int errnum;
     char *blobref;
@@ -137,8 +137,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *entry)
     return -1;
 }
 
-int cache_entry_get_raw (struct cache_entry *entry, const void **data,
-                         int *len)
+int cache_entry_get_raw (struct cache_entry *entry, const void **data, int *len)
 {
     if (!entry || !entry->valid)
         return -1;
@@ -203,9 +202,8 @@ int cache_entry_set_errnum_on_valid (struct cache_entry *entry, int errnum)
 
     entry->errnum = errnum;
     if (entry->waitlist_valid) {
-        if (wait_queue_iter (entry->waitlist_valid,
-                             set_wait_errnum,
-                             &entry->errnum) < 0)
+        if (wait_queue_iter (entry->waitlist_valid, set_wait_errnum, &entry->errnum)
+            < 0)
             return -1;
         if (wait_runqueue (entry->waitlist_valid) < 0)
             return -1;
@@ -223,9 +221,8 @@ int cache_entry_set_errnum_on_notdirty (struct cache_entry *entry, int errnum)
 
     entry->errnum = errnum;
     if (entry->waitlist_notdirty) {
-        if (wait_queue_iter (entry->waitlist_notdirty,
-                             set_wait_errnum,
-                             &entry->errnum) < 0)
+        if (wait_queue_iter (entry->waitlist_notdirty, set_wait_errnum, &entry->errnum)
+            < 0)
             return -1;
         if (wait_runqueue (entry->waitlist_notdirty) < 0)
             return -1;
@@ -286,7 +283,8 @@ int cache_entry_wait_valid (struct cache_entry *entry, wait_t *wait)
     return 0;
 }
 
-struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
+struct cache_entry *cache_lookup (struct cache *cache,
+                                  const char *ref,
                                   int current_epoch)
 {
     struct cache_entry *entry = zhashx_lookup (cache->zhx, ref);
@@ -310,12 +308,9 @@ int cache_remove_entry (struct cache *cache, const char *ref)
 {
     struct cache_entry *entry = zhashx_lookup (cache->zhx, ref);
 
-    if (entry
-        && !entry->dirty
-        && (!entry->waitlist_notdirty
-            || !wait_queue_length (entry->waitlist_notdirty))
-        && (!entry->waitlist_valid
-            || !wait_queue_length (entry->waitlist_valid))) {
+    if (entry && !entry->dirty
+        && (!entry->waitlist_notdirty || !wait_queue_length (entry->waitlist_notdirty))
+        && (!entry->waitlist_valid || !wait_queue_length (entry->waitlist_valid))) {
         zhashx_delete (cache->zhx, ref);
         return 1;
     }
@@ -351,13 +346,11 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     }
     ref = zlistx_first (keys);
     while (ref) {
-        if ((entry = zhashx_lookup (cache->zhx, ref))
-            && !cache_entry_get_dirty (entry)
+        if ((entry = zhashx_lookup (cache->zhx, ref)) && !cache_entry_get_dirty (entry)
             && cache_entry_get_valid (entry)
-            && (thresh == 0
-                || cache_entry_age (entry, current_epoch) > thresh)) {
-                zhashx_delete (cache->zhx, ref);
-                count++;
+            && (thresh == 0 || cache_entry_age (entry, current_epoch) > thresh)) {
+            zhashx_delete (cache->zhx, ref);
+            count++;
         }
         ref = zlistx_next (keys);
     }
@@ -365,8 +358,11 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     return count;
 }
 
-int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
-                     int *incompletep, int *dirtyp)
+int cache_get_stats (struct cache *cache,
+                     tstat_t *ts,
+                     int *sizep,
+                     int *incompletep,
+                     int *dirtyp)
 {
     struct cache_entry *entry;
     const char *key;
@@ -374,7 +370,8 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     int incomplete = 0;
     int dirty = 0;
 
-    FOREACH_ZHASHX (cache->zhx, key, entry) {
+    FOREACH_ZHASHX (cache->zhx, key, entry)
+    {
         if (cache_entry_get_valid (entry)) {
             int obj_size = 0;
 
@@ -404,7 +401,8 @@ int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
     int n, count = 0;
     int rc = -1;
 
-    FOREACH_ZHASHX (cache->zhx, key, entry) {
+    FOREACH_ZHASHX (cache->zhx, key, entry)
+    {
         if (entry->waitlist_valid) {
             if ((n = wait_destroy_msg (entry->waitlist_valid, cb, arg)) < 0)
                 goto done;

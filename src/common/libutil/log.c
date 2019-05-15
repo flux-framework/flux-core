@@ -29,8 +29,7 @@
 extern char *__progname;
 static char *prog = NULL;
 
-void
-log_init (char *p)
+void log_init (char *p)
 {
     if (!p)
         prog = __progname;
@@ -38,13 +37,11 @@ log_init (char *p)
         prog = basename (p);
 }
 
-void
-log_fini (void)
+void log_fini (void)
 {
 }
 
-static void
-_verr (int errnum, const char *fmt, va_list ap)
+static void _verr (int errnum, const char *fmt, va_list ap)
 {
     char *msg = NULL;
     char buf[128];
@@ -70,8 +67,7 @@ _verr (int errnum, const char *fmt, va_list ap)
         free (msg);
 }
 
-static void
-_vlog (const char *fmt, va_list ap)
+static void _vlog (const char *fmt, va_list ap)
 {
     char *msg = NULL;
     char buf[128];
@@ -89,8 +85,7 @@ _vlog (const char *fmt, va_list ap)
 
 /* Log message and errno string, then exit.
  */
-void
-log_err_exit (const char *fmt, ...)
+void log_err_exit (const char *fmt, ...)
 {
     va_list ap;
 
@@ -102,8 +97,7 @@ log_err_exit (const char *fmt, ...)
 
 /* Log message and errno string.
  */
-void
-log_err (const char *fmt, ...)
+void log_err (const char *fmt, ...)
 {
     va_list ap;
 
@@ -112,11 +106,9 @@ log_err (const char *fmt, ...)
     va_end (ap);
 }
 
-
 /* Log message and errnum string, then exit.
  */
-void
-log_errn_exit (int errnum, const char *fmt, ...)
+void log_errn_exit (int errnum, const char *fmt, ...)
 {
     va_list ap;
 
@@ -128,8 +120,7 @@ log_errn_exit (int errnum, const char *fmt, ...)
 
 /* Log message and errnum string.
  */
-void
-log_errn (int errnum, const char *fmt, ...)
+void log_errn (int errnum, const char *fmt, ...)
 {
     va_list ap;
 
@@ -140,8 +131,7 @@ log_errn (int errnum, const char *fmt, ...)
 
 /* Log message, then exit.
  */
-void
-log_msg_exit (const char *fmt, ...)
+void log_msg_exit (const char *fmt, ...)
 {
     va_list ap;
 
@@ -153,8 +143,7 @@ log_msg_exit (const char *fmt, ...)
 
 /* Log message.
  */
-void
-log_msg (const char *fmt, ...)
+void log_msg (const char *fmt, ...)
 {
     va_list ap;
 

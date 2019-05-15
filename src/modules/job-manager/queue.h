@@ -57,12 +57,10 @@ int queue_size (struct queue *queue);
 
 /* Arrange to be notified when queue size decreases to zero.
  */
-void queue_set_notify_empty (struct queue *queue,
-                             queue_notify_f cb, void *arg);
+void queue_set_notify_empty (struct queue *queue, queue_notify_f cb, void *arg);
 
 #endif /* _FLUX_JOB_MANAGER_QUEUE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

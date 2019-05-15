@@ -20,7 +20,8 @@
 struct drain_ctx;
 
 void drain_ctx_destroy (struct drain_ctx *ctx);
-struct drain_ctx *drain_ctx_create (flux_t *h, struct queue *queue,
+struct drain_ctx *drain_ctx_create (flux_t *h,
+                                    struct queue *queue,
                                     struct submit_ctx *submit_ctx);
 
 #endif /* ! _FLUX_JOB_MANAGER_DRAIN_H */

@@ -33,31 +33,26 @@ void test_libev_timer (void)
     ev_timer w;
     int i;
 
-    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL,
-        "ev_loop_new works");
-    ok (ev_run (loop, 0) == 0,
-        "ev_run returns 0 with no watchers configured");
+    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL, "ev_loop_new works");
+    ok (ev_run (loop, 0) == 0, "ev_run returns 0 with no watchers configured");
 
     ev_timer_init (&w, timer_cb, 1E-1, 0.);
     ev_timer_start (loop, &w);
-    ok (ev_run (loop, 0) == 0,
-        "ev_run returns 0 after no-repeat timer fires once");
+    ok (ev_run (loop, 0) == 0, "ev_run returns 0 after no-repeat timer fires once");
     ev_timer_stop (loop, &w);
 
     i = 0;
     ev_timer_init (&w, timer_arg_cb, 1E-1, 0.);
     w.data = &i;
     ev_timer_start (loop, &w);
-    ok (ev_run (loop, 0) == 0 && i == 1,
-        "passing arbitrary data using w->data works");
+    ok (ev_run (loop, 0) == 0 && i == 1, "passing arbitrary data using w->data works");
     ev_timer_stop (loop, &w);
 
     i = 0;
     ev_timer_init (&w, timer_arg_cb, 1E-3, 1E-3);
     w.data = &i;
     ev_timer_start (loop, &w);
-    ok (ev_run (loop, 0) != 0 && i == 100,
-        "ev_break causes ev_run to return nonzero");
+    ok (ev_run (loop, 0) != 0 && i == 100, "ev_break causes ev_run to return nonzero");
     ev_timer_stop (loop, &w);
 
     ev_loop_destroy (loop);
@@ -87,14 +82,12 @@ void test_libev_io (void)
     ev_io w, w2;
     int i, fd, fd2;
 
-    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL,
-        "ev_loop_new works");
+    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL, "ev_loop_new works");
 
     /* handle 100 read events from /dev/zero with two workers */
     fd = open ("/dev/zero", O_RDONLY);
     fd2 = open ("/dev/zero", O_RDONLY);
-    ok (fd >= 0 && fd2 >= 0,
-        "opened /dev/zero twice");
+    ok (fd >= 0 && fd2 >= 0, "opened /dev/zero twice");
 
     i = 0;
     ev_io_init (&w, zero_cb, fd, EV_READ);
@@ -124,13 +117,12 @@ void test_zmq_events (void)
     int fd;
     char *s = NULL;
 
-    ok ((zctx = zmq_init (1)) != NULL,
-        "initialized zmq context");
+    ok ((zctx = zmq_init (1)) != NULL, "initialized zmq context");
     ok ((zout = zmq_socket (zctx, ZMQ_PAIR)) != NULL
-        && zmq_bind (zout, "inproc://eventloop_test") == 0,
+            && zmq_bind (zout, "inproc://eventloop_test") == 0,
         "PAIR socket bind ok");
     ok ((zin = zmq_socket (zctx, ZMQ_PAIR)) != NULL
-        && zmq_connect (zin, "inproc://eventloop_test") == 0,
+            && zmq_connect (zin, "inproc://eventloop_test") == 0,
         "PAIR socket connect ok");
     size_t fd_size = sizeof (fd);
     ok (zmq_getsockopt (zin, ZMQ_FD, &fd, &fd_size) == 0 && fd >= 0,
@@ -141,30 +133,26 @@ void test_zmq_events (void)
     uint32_t zevents;
     size_t zevents_size = sizeof (zevents);
     ok (zmq_getsockopt (zin, ZMQ_EVENTS, &zevents, &zevents_size) == 0
-        && !(zevents & ZMQ_POLLIN),
+            && !(zevents & ZMQ_POLLIN),
         "zmq_getsockopt ZMQ_EVENTS says PAIR socket not ready to recv");
     // this test is somewhat questionable as there may be false positives
-    struct pollfd pfd = { .fd = fd, .events = POLLIN };
+    struct pollfd pfd = {.fd = fd, .events = POLLIN};
     ok (poll (&pfd, 1, 10) == 0,
         "poll says edge triggered mailbox descriptor is not ready");
-    ok (zstr_send (zout, "TEST") == 0,
-        "sent a message over PAIR sockets");
-    ok (poll (&pfd, 1, 10) == 1
-        && (pfd.revents & POLLIN),
+    ok (zstr_send (zout, "TEST") == 0, "sent a message over PAIR sockets");
+    ok (poll (&pfd, 1, 10) == 1 && (pfd.revents & POLLIN),
         "poll says edge triggered mailbox descriptor is ready");
     ok (zmq_getsockopt (zin, ZMQ_EVENTS, &zevents, &zevents_size) == 0
-        && (zevents & ZMQ_POLLIN),
+            && (zevents & ZMQ_POLLIN),
         "zmq_getsockopt ZMQ_EVENTS says PAIR socket ready to recv");
-    zmq_pollitem_t zp = { .socket = zin, .events = ZMQ_POLLIN };
+    zmq_pollitem_t zp = {.socket = zin, .events = ZMQ_POLLIN};
     ok (zmq_poll (&zp, 1, 10) == 1 && zp.revents == ZMQ_POLLIN,
         "zmq_poll says PAIR socket ready to recv");
-    ok ((s = zstr_recv (zin)) != NULL,
-        "received message over PAIR sockets");
+    ok ((s = zstr_recv (zin)) != NULL, "received message over PAIR sockets");
     ok (zmq_getsockopt (zin, ZMQ_EVENTS, &zevents, &zevents_size) == 0
-        && !(zevents & ZMQ_POLLIN),
+            && !(zevents & ZMQ_POLLIN),
         "zmq_getsockopt ZMQ_EVENTS says PAIR socket not ready to recv");
-    ok (zmq_poll (&zp, 1, 10) == 0,
-        "zmq_poll says PAIR socket not ready to recv");
+    ok (zmq_poll (&zp, 1, 10) == 0, "zmq_poll says PAIR socket not ready to recv");
     if (s)
         free (s);
     zmq_close (zin);
@@ -207,7 +195,6 @@ void zsock_rx_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         ev_break (loop, EVBREAK_ALL);
 }
 
-
 /* send 100 messages over PAIR sockets
  * sender in one event handler, receiver in another
  */
@@ -219,15 +206,13 @@ void test_ev_zmq (void)
     int i;
     ev_zmq win, wout;
 
-    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL,
-        "ev_loop_new works");
-    ok ((zctx = zmq_init (1)) != NULL,
-        "initialized zmq context");
+    ok ((loop = ev_loop_new (EVFLAG_AUTO)) != NULL, "ev_loop_new works");
+    ok ((zctx = zmq_init (1)) != NULL, "initialized zmq context");
     ok ((zout = zmq_socket (zctx, ZMQ_PAIR)) != NULL
-        && zmq_bind (zout, "inproc://eventloop_test") == 0,
+            && zmq_bind (zout, "inproc://eventloop_test") == 0,
         "PAIR socket bind ok");
     ok ((zin = zmq_socket (zctx, ZMQ_PAIR)) != NULL
-        && zmq_connect (zin, "inproc://eventloop_test") == 0,
+            && zmq_connect (zin, "inproc://eventloop_test") == 0,
         "PAIR socket connect ok");
 
     i = 0;
@@ -238,12 +223,10 @@ void test_ev_zmq (void)
     ev_zmq_start (loop, &win);
     ev_zmq_start (loop, &wout);
 
-    ok (ev_run (loop, 0) == 0,
-        "both watchers removed themselves and ev_run exited");
+    ok (ev_run (loop, 0) == 0, "both watchers removed themselves and ev_run exited");
     ev_zmq_stop (loop, &win);
     ev_zmq_stop (loop, &wout);
-    cmp_ok (i, "==", 100,
-        "ev_zmq handler ran 100 times");
+    cmp_ok (i, "==", 100, "ev_zmq handler ran 100 times");
 
     ev_loop_destroy (loop);
 
@@ -269,10 +252,10 @@ int main (int argc, char *argv[])
 {
     plan (27);
 
-    test_libev_timer (); // 5
-    test_libev_io (); // 3
-    test_zmq_events (); // 13
-    test_ev_zmq (); // 6
+    test_libev_timer ();  // 5
+    test_libev_io ();     // 3
+    test_zmq_events ();   // 13
+    test_ev_zmq ();       // 6
 
     done_testing ();
 }

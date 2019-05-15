@@ -55,7 +55,7 @@ static void popen2_child_close_fd (void *arg, int fd)
 {
     struct popen2_child *p = arg;
     if (fd != STDIN_FILENO && fd != STDOUT_FILENO && fd != STDERR_FILENO
-                                                  && fd != p->ctl[SP_CHILD])
+        && fd != p->ctl[SP_CHILD])
         (void)close (fd);
 }
 
@@ -65,8 +65,8 @@ static void child (struct popen2_child *p, const char *path, char *const argv[])
 
     (void)close (STDIN_FILENO);
     (void)close (STDOUT_FILENO);
-    if (    dup2 (p->fd[SP_CHILD], STDIN_FILENO) < 0
-         || dup2 (p->fd[SP_CHILD], STDOUT_FILENO) < 0) {
+    if (dup2 (p->fd[SP_CHILD], STDIN_FILENO) < 0
+        || dup2 (p->fd[SP_CHILD], STDOUT_FILENO) < 0) {
         saved_errno = errno;
         goto error;
     }
@@ -81,7 +81,7 @@ static void child (struct popen2_child *p, const char *path, char *const argv[])
 error:
     if (write (p->ctl[SP_CHILD], &saved_errno, sizeof (saved_errno)) < 0)
         fprintf (stderr, "child: write to ctl failed: %s\n", strerror (errno));
-    (void) close (p->ctl[SP_CHILD]);
+    (void)close (p->ctl[SP_CHILD]);
     exit (0);
 }
 
@@ -112,15 +112,15 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
         saved_errno = errno;
         goto error;
     }
-    signal(SIGPIPE, SIG_IGN);
+    signal (SIGPIPE, SIG_IGN);
     switch ((p->pid = fork ())) {
-        case -1:    /* fork error */
+        case -1: /* fork error */
             saved_errno = errno;
             goto error;
-        case 0:     /* child */
+        case 0: /* child */
             child (p, path, argv);
             /*NOTREACHED*/
-        default:    /* parent */
+        default: /* parent */
             break;
     }
     (void)close (p->fd[SP_CHILD]);
@@ -180,9 +180,9 @@ int pclose2 (struct popen2_child *p)
             }
         }
         if ((p->fd[SP_PARENT] >= 0 && close (p->fd[SP_PARENT]) < 0)
-         || (p->fd[SP_CHILD] >= 0 && close (p->fd[SP_CHILD]) < 0)
-         || (p->ctl[SP_PARENT] >= 0 && close (p->ctl[SP_PARENT]) < 0)
-         || (p->ctl[SP_CHILD] >= 0 && close (p->ctl[SP_CHILD]) < 0)) {
+            || (p->fd[SP_CHILD] >= 0 && close (p->fd[SP_CHILD]) < 0)
+            || (p->ctl[SP_PARENT] >= 0 && close (p->ctl[SP_PARENT]) < 0)
+            || (p->ctl[SP_CHILD] >= 0 && close (p->ctl[SP_CHILD]) < 0)) {
             saved_errno = errno;
             rc = -1;
         }

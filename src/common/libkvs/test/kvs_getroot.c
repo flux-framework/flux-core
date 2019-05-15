@@ -22,7 +22,7 @@
 
 void errors (void)
 {
-    flux_t *h = (flux_t *)(uintptr_t)42; // fake but non-NULL
+    flux_t *h = (flux_t *)(uintptr_t)42;  // fake but non-NULL
     flux_future_t *f;
     const char *s;
     int i;
@@ -71,16 +71,14 @@ void errors (void)
 
 int main (int argc, char *argv[])
 {
-
     plan (NO_PLAN);
 
     errors ();
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

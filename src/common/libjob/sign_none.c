@@ -38,9 +38,15 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
 
     if (!(dst = calloc (1, dstlen)))
         return -1;
-    if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
-                           NULL, &dstlen, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0)
+    if (sodium_base642bin ((unsigned char *)dst,
+                           dstlen,
+                           src,
+                           srclen,
+                           NULL,
+                           &dstlen,
+                           NULL,
+                           sodium_base64_VARIANT_ORIGINAL)
+        < 0)
         goto error_inval;
     if (dst[dstlen - 1] != '\0')
         goto error_inval;
@@ -57,11 +63,11 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
             goto error_inval;
     }
     if (!val_version || !val_mech || strcmp (val_version, "i1") != 0
-                                  || strcmp (val_mech, "snone") != 0)
+        || strcmp (val_mech, "snone") != 0)
         goto error_inval;
     if (!val_userid || *val_userid != 'i')
         goto error_inval;
-    if (val_userid[1] < '0' || val_userid[1] > '9') // no sign or wspace allowed
+    if (val_userid[1] < '0' || val_userid[1] > '9')  // no sign or wspace allowed
         goto error_inval;
     errno = 0;
     userid = strtoul (val_userid + 1, &endptr, 10);
@@ -84,7 +90,9 @@ static char *header_encode (uint32_t userid)
     int dstlen;
     int i;
 
-    srclen = snprintf (src, sizeof (src), "version:i1:userid:i%lu:mech:snone:",
+    srclen = snprintf (src,
+                       sizeof (src),
+                       "version:i1:userid:i%lu:mech:snone:",
                        (unsigned long)userid);
     assert (srclen < sizeof (src));
     for (i = 0; i < srclen; i++) {
@@ -95,7 +103,10 @@ static char *header_encode (uint32_t userid)
     if (!(dst = calloc (1, dstlen)))
         return NULL;
 
-    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
+    return sodium_bin2base64 (dst,
+                              dstlen,
+                              (unsigned char *)src,
+                              srclen,
                               sodium_base64_VARIANT_ORIGINAL);
 }
 
@@ -107,21 +118,29 @@ static char *payload_encode (const void *src, int srclen)
     dstlen = sodium_base64_encoded_len (srclen, sodium_base64_VARIANT_ORIGINAL);
     if (!(dst = calloc (1, dstlen)))
         return NULL;
-    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
+    return sodium_bin2base64 (dst,
+                              dstlen,
+                              (unsigned char *)src,
+                              srclen,
                               sodium_base64_VARIANT_ORIGINAL);
 }
 
-static int payload_decode (const void *src, int srclen,
-                           void **payload, int *payloadsz)
+static int payload_decode (const void *src, int srclen, void **payload, int *payloadsz)
 {
     size_t dstlen = BASE64_DECODE_SIZE (srclen);
     void *dst;
 
     if (!(dst = calloc (1, dstlen)))
         return -1;
-    if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
-                           NULL, &dstlen, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0)
+    if (sodium_base642bin ((unsigned char *)dst,
+                           dstlen,
+                           src,
+                           srclen,
+                           NULL,
+                           &dstlen,
+                           NULL,
+                           sodium_base64_VARIANT_ORIGINAL)
+        < 0)
         goto error_inval;
     *payload = dst;
     *payloadsz = dstlen;
@@ -132,8 +151,7 @@ error_inval:
     return -1;
 }
 
-char *sign_none_wrap (const void *payload, int payloadsz,
-                      uint32_t userid)
+char *sign_none_wrap (const void *payload, int payloadsz, uint32_t userid)
 {
     char *h = NULL;
     char *p = NULL;
@@ -160,7 +178,8 @@ error_nomem:
 }
 
 int sign_none_unwrap (const char *input,
-                      void **payload, int *payloadsz,
+                      void **payload,
+                      int *payloadsz,
                       uint32_t *userid)
 {
     char *p;

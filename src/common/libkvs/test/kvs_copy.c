@@ -25,36 +25,29 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     errno = 0;
-    ok (flux_kvs_copy (NULL, NULL, "a", NULL, "b", 0) == NULL
-        && errno == EINVAL,
+    ok (flux_kvs_copy (NULL, NULL, "a", NULL, "b", 0) == NULL && errno == EINVAL,
         "flux_kvs_copy h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_copy (h, NULL, NULL, NULL, "b", 0) == NULL
-        && errno == EINVAL,
+    ok (flux_kvs_copy (h, NULL, NULL, NULL, "b", 0) == NULL && errno == EINVAL,
         "flux_kvs_copy srckey=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_copy (h, NULL, "a", NULL, NULL, 0) == NULL
-        && errno == EINVAL,
+    ok (flux_kvs_copy (h, NULL, "a", NULL, NULL, 0) == NULL && errno == EINVAL,
         "flux_kvs_copy srckey=NULL fails with EINVAL");
 
     errno = 0;
-    ok (flux_kvs_move (NULL, NULL, "a", NULL, "b", 0) == NULL
-        && errno == EINVAL,
+    ok (flux_kvs_move (NULL, NULL, "a", NULL, "b", 0) == NULL && errno == EINVAL,
         "flux_kvs_move h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_move (h, NULL, NULL, NULL, "b", 0) == NULL
-        && errno == EINVAL,
+    ok (flux_kvs_move (h, NULL, NULL, NULL, "b", 0) == NULL && errno == EINVAL,
         "flux_kvs_move srckey=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_kvs_move (h, NULL, "a", NULL, NULL, 0) == NULL
-        && errno == EINVAL,
+    ok (flux_kvs_move (h, NULL, "a", NULL, NULL, 0) == NULL && errno == EINVAL,
         "flux_kvs_move srckey=NULL fails with EINVAL");
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

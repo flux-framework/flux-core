@@ -37,20 +37,20 @@
 #include "src/common/libutil/veb.h"
 #include "src/common/libutil/log.h"
 
-#define TAGPOOL_COUNT_REGULAR (1UL<<20)
-#define TAGPOOL_COUNT_GROUP (1UL<<12)
-#define TAGPOOL_START (1UL<<10)
+#define TAGPOOL_COUNT_REGULAR (1UL << 20)
+#define TAGPOOL_COUNT_GROUP (1UL << 12)
+#define TAGPOOL_START (1UL << 10)
 
-#define TAGPOOL_MAGIC   0x34447ff2
+#define TAGPOOL_MAGIC 0x34447ff2
 struct tagpool {
-    int             magic;
-    Veb             R;
-    int             reg_avail;
-    Veb             G;
-    int             group_avail;
-    tagpool_grow_f  grow_cb;
-    void            *grow_arg;
-    int             grow_depth;
+    int magic;
+    Veb R;
+    int reg_avail;
+    Veb G;
+    int group_avail;
+    tagpool_grow_f grow_cb;
+    void *grow_arg;
+    int grow_depth;
 };
 
 static void pool_set (Veb veb, uint32_t from, uint32_t to, uint8_t value)
@@ -75,7 +75,7 @@ struct tagpool *tagpool_create (void)
     if (!t->R.D || !t->G.D)
         goto nomem;
     vebdel (t->R, FLUX_MATCHTAG_NONE); /* allocate reserved value */
-    vebdel (t->G, 0); /* zero group bits means regular tag */
+    vebdel (t->G, 0);                  /* zero group bits means regular tag */
     t->reg_avail = TAGPOOL_COUNT_REGULAR - 1;
     t->group_avail = TAGPOOL_COUNT_GROUP - 1;
     return t;
@@ -147,7 +147,7 @@ uint32_t tagpool_alloc (struct tagpool *t, int flags)
         tag = alloc_with_resize (t, TAGPOOL_FLAG_GROUP);
         if (tag < t->G.M) {
             t->group_avail--;
-            return tag<<FLUX_MATCHTAG_GROUP_SHIFT;
+            return tag << FLUX_MATCHTAG_GROUP_SHIFT;
         }
     } else {
         tag = alloc_with_resize (t, 0);
@@ -170,7 +170,7 @@ void tagpool_free (struct tagpool *t, uint32_t tag)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     if (tag != FLUX_MATCHTAG_NONE) {
-        uint32_t group = tag>>FLUX_MATCHTAG_GROUP_SHIFT;
+        uint32_t group = tag >> FLUX_MATCHTAG_GROUP_SHIFT;
         if (group > 0) {
             if (group < t->G.M) {
                 vebput (t->G, group);

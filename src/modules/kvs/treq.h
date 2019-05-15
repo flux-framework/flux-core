@@ -18,9 +18,9 @@ typedef struct treq_mgr treq_mgr_t;
 
 typedef struct treq treq_t;
 
-typedef int (*treq_itr_f)(treq_t *tr, void *data);
+typedef int (*treq_itr_f) (treq_t *tr, void *data);
 
-typedef int (*treq_msg_cb)(treq_t *tr, const flux_msg_t *req, void *data);
+typedef int (*treq_msg_cb) (treq_t *tr, const flux_msg_t *req, void *data);
 
 /*
  * treq_mgr_t API
@@ -96,4 +96,3 @@ void treq_set_processed (treq_t *tr, bool p);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

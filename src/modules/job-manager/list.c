@@ -60,7 +60,8 @@ json_t *list_one_job (struct job *job, json_t *attrs)
 
     if (!(o = json_object ()))
         goto error_nomem;
-    json_array_foreach (attrs, index, value) {
+    json_array_foreach (attrs, index, value)
+    {
         const char *attr = json_string_value (value);
         json_t *val = NULL;
         if (!attr) {
@@ -69,20 +70,15 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         }
         if (!strcmp (attr, "id")) {
             val = json_integer (job->id);
-        }
-        else if (!strcmp (attr, "userid")) {
+        } else if (!strcmp (attr, "userid")) {
             val = json_integer (job->userid);
-        }
-        else if (!strcmp (attr, "priority")) {
+        } else if (!strcmp (attr, "priority")) {
             val = json_integer (job->priority);
-        }
-        else if (!strcmp (attr, "t_submit")) {
+        } else if (!strcmp (attr, "t_submit")) {
             val = json_real (job->t_submit);
-        }
-        else if (!strcmp (attr, "state")) {
+        } else if (!strcmp (attr, "state")) {
             val = json_integer (job->state);
-        }
-        else {
+        } else {
             errno = EINVAL;
             goto error;
         }
@@ -117,8 +113,7 @@ json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs)
     struct job *job;
     int saved_errno;
 
-    if (max_entries < 0 || !json_is_array (attrs)
-                        || json_array_size (attrs) == 0) {
+    if (max_entries < 0 || !json_is_array (attrs) || json_array_size (attrs) == 0) {
         errno = EPROTO;
         goto error;
     }
@@ -147,16 +142,20 @@ error:
     return NULL;
 }
 
-void list_handle_request (flux_t *h, struct queue *queue,
-                          const flux_msg_t *msg)
+void list_handle_request (flux_t *h, struct queue *queue, const flux_msg_t *msg)
 {
     int max_entries;
     json_t *jobs;
     json_t *attrs;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:o}",
-                                        "max_entries", &max_entries,
-                                        "attrs", &attrs) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:o}",
+                             "max_entries",
+                             &max_entries,
+                             "attrs",
+                             &attrs)
+        < 0)
         goto error;
     if (!(jobs = list_job_array (queue, max_entries, attrs)))
         goto error;

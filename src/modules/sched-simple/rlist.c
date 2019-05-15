@@ -71,7 +71,6 @@ fail:
     return NULL;
 }
 
-
 static struct rnode *rlist_find_rank (struct rlist *rl, uint32_t rank)
 {
     struct rnode *n = zlistx_first (rl->nodes);
@@ -130,8 +129,7 @@ static int rlist_add_rnode (struct rlist *rl, struct rnode *n)
             idset_remove_set (found->ids, n->ids);
             return (-1);
         }
-    }
-    else if (!zlistx_add_end (rl->nodes, n))
+    } else if (!zlistx_add_end (rl->nodes, n))
         return -1;
     rl->total += rnode_count (n);
     rl->avail += rnode_avail (n);
@@ -150,9 +148,9 @@ static int rlist_append (struct rlist *rl, const char *ranks, json_t *e)
     struct idset *ids = idset_decode (ranks);
     json_error_t err;
 
-    if (!ids || json_unpack_ex (e, &err, 0, "{s:i,s?s}",
-                                "Core", &n,
-                                "cpuset", &corelist) < 0)
+    if (!ids
+        || json_unpack_ex (e, &err, 0, "{s:i,s?s}", "Core", &n, "cpuset", &corelist)
+               < 0)
         goto out;
     i = idset_first (ids);
     while (i != IDSET_INVALID_ID) {
@@ -184,7 +182,8 @@ struct rlist *rlist_from_hwloc_by_rank (const char *by_rank)
     if (!(rl = rlist_create ()))
         goto err;
 
-    json_object_foreach (o, key, entry) {
+    json_object_foreach (o, key, entry)
+    {
         if (rlist_append (rl, key, entry) < 0)
             goto err;
     }
@@ -211,7 +210,7 @@ int rlist_append_ranks (struct rlist *rl, const char *rank, const char *ids)
 {
     int rc = -1;
     unsigned int i;
-    struct idset * ranks = idset_decode (rank);
+    struct idset *ranks = idset_decode (rank);
     if (!ranks)
         return -1;
     i = idset_first (ranks);
@@ -236,15 +235,20 @@ int rlist_append_idset (struct rlist *rl, int rank, struct idset *idset)
     return 0;
 }
 
-static int rlist_append_rank_entry (struct rlist *rl, json_t *entry,
-                                    json_error_t *ep)
+static int rlist_append_rank_entry (struct rlist *rl, json_t *entry, json_error_t *ep)
 {
     const char *ranks;
     const char *cores;
-    if (json_unpack_ex (entry, ep, 0,
+    if (json_unpack_ex (entry,
+                        ep,
+                        0,
                         "{s:s,s:{s:s}}",
-                        "rank", &ranks,
-                        "children", "core", &cores) < 0) {
+                        "rank",
+                        &ranks,
+                        "children",
+                        "core",
+                        &cores)
+        < 0) {
         return -1;
     }
     return rlist_append_ranks (rl, ranks, cores);
@@ -261,17 +265,25 @@ struct rlist *rlist_from_R (const char *s)
     json_t *o = json_loads (s, 0, NULL);
     if (o == NULL)
         return NULL;
-    if (!o || json_unpack_ex (o, &error, 0,
-                              "{s:i,s:{s:o}}",
-                              "version", &version,
-                              "execution", "R_lite", &R_lite) < 0) {
+    if (!o
+        || json_unpack_ex (o,
+                           &error,
+                           0,
+                           "{s:i,s:{s:o}}",
+                           "version",
+                           &version,
+                           "execution",
+                           "R_lite",
+                           &R_lite)
+               < 0) {
         goto err;
     }
     if (version != 1)
         goto err;
     if (!(rl = rlist_create ()))
         goto err;
-    json_array_foreach (R_lite, i, entry) {
+    json_array_foreach (R_lite, i, entry)
+    {
         if (rlist_append_rank_entry (rl, entry, &error) < 0)
             goto err;
     }
@@ -304,7 +316,7 @@ static void multi_rnode_destroy (struct multi_rnode **mrn)
     }
 }
 
-struct multi_rnode * multi_rnode_create (struct rnode *rnode)
+struct multi_rnode *multi_rnode_create (struct rnode *rnode)
 {
     struct multi_rnode *mrn = calloc (1, sizeof (*mrn));
     if (mrn == NULL)
@@ -334,26 +346,24 @@ done:
     return (o);
 }
 
-static zlistx_t * rlist_mrlist (struct rlist *rl)
+static zlistx_t *rlist_mrlist (struct rlist *rl)
 {
     struct rnode *n = NULL;
     struct multi_rnode *mrn = NULL;
     zlistx_t *l = zlistx_new ();
 
-    zlistx_set_comparator (l, (czmq_comparator *) multi_rnode_cmp);
-    zlistx_set_destructor (l, (czmq_destructor *) multi_rnode_destroy);
+    zlistx_set_comparator (l, (czmq_comparator *)multi_rnode_cmp);
+    zlistx_set_destructor (l, (czmq_destructor *)multi_rnode_destroy);
 
     n = zlistx_first (rl->nodes);
     while (n) {
         if (zlistx_find (l, n->avail)) {
             if (!(mrn = zlistx_handle_item (zlistx_cursor (l)))
-              || idset_set (mrn->ids, n->rank) < 0) {
+                || idset_set (mrn->ids, n->rank) < 0) {
                 goto fail;
             }
-        }
-        else if (rnode_avail (n) > 0) {
-            if (!(mrn = multi_rnode_create (n))
-                || !zlistx_add_end (l, mrn)) {
+        } else if (rnode_avail (n) > 0) {
+            if (!(mrn = multi_rnode_create (n)) || !zlistx_add_end (l, mrn)) {
                 goto fail;
             }
         }
@@ -365,7 +375,7 @@ fail:
     return NULL;
 }
 
-static json_t * rlist_compressed (struct rlist *rl)
+static json_t *rlist_compressed (struct rlist *rl)
 {
     struct multi_rnode *mrn = NULL;
     json_t *o = json_array ();
@@ -390,24 +400,22 @@ fail:
     return NULL;
 }
 
-static int
-sprintfcat (char **s, size_t *sz, size_t *lenp, const char *fmt, ...)
+static int sprintfcat (char **s, size_t *sz, size_t *lenp, const char *fmt, ...)
 {
     int done = false;
     va_list ap;
     int n = 0;
     while (!done) {
-        int nleft = *sz-*lenp;
+        int nleft = *sz - *lenp;
         va_start (ap, fmt);
-        n = vsnprintf ((*s)+*lenp, nleft, fmt, ap);
+        n = vsnprintf ((*s) + *lenp, nleft, fmt, ap);
         if (n < 0 || n >= nleft) {
             char *p;
             *sz += 128;
             if (!(p = realloc (*s, *sz)))
                 return -1;
             *s = p;
-        }
-        else
+        } else
             done = true;
         va_end (ap);
     }
@@ -415,10 +423,10 @@ sprintfcat (char **s, size_t *sz, size_t *lenp, const char *fmt, ...)
     return (n);
 }
 
-char * rlist_dumps (struct rlist *rl)
+char *rlist_dumps (struct rlist *rl)
 {
     int flags = IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS;
-    char * result = NULL;
+    char *result = NULL;
     size_t len = 0;
     size_t size = 64;
     struct multi_rnode *mrn = NULL;
@@ -429,17 +437,21 @@ char * rlist_dumps (struct rlist *rl)
         return NULL;
     }
 
-    if (!(l = rlist_mrlist (rl))
-        || !(result = calloc (size, sizeof (char))))
+    if (!(l = rlist_mrlist (rl)) || !(result = calloc (size, sizeof (char))))
         goto fail;
 
     mrn = zlistx_first (l);
     while (mrn) {
         char *ranks = idset_encode (mrn->ids, flags);
         char *cores = idset_encode (mrn->rnode->avail, flags);
-        if (sprintfcat (&result, &size, &len , "%srank%s/core%s",
-                         result[0] != '\0' ? " ": "",
-                         ranks, cores) < 0)
+        if (sprintfcat (&result,
+                        &size,
+                        &len,
+                        "%srank%s/core%s",
+                        result[0] != '\0' ? " " : "",
+                        ranks,
+                        cores)
+            < 0)
             goto fail;
         free (ranks);
         free (cores);
@@ -460,9 +472,11 @@ json_t *rlist_to_R (struct rlist *rl)
     if (!R_lite)
         return NULL;
     if (!(R = json_pack ("{s:i, s:{s:o}}",
-                         "version", 1,
+                         "version",
+                         1,
                          "execution",
-                         "R_lite", R_lite)))
+                         "R_lite",
+                         R_lite)))
         json_decref (R_lite);
     return (R);
 }
@@ -494,8 +508,10 @@ static int by_used (const void *item1, const void *item2)
     return n;
 }
 
-static int rlist_rnode_alloc (struct rlist *rl, struct rnode *n,
-                              int count, struct idset **idsetp)
+static int rlist_rnode_alloc (struct rlist *rl,
+                              struct rnode *n,
+                              int count,
+                              struct idset **idsetp)
 {
     if (!n || rnode_alloc (n, count, idsetp) < 0)
         return -1;
@@ -528,9 +544,9 @@ static struct rnode *rlist_next (struct rlist *rl)
  *  Allocate the first available N slots of size cores_per_slot from
  *   resource list rl after sorting the nodes with the current sort strategy.
  */
-static struct rlist * rlist_alloc_first_fit (struct rlist *rl,
-                                             int cores_per_slot,
-                                             int slots)
+static struct rlist *rlist_alloc_first_fit (struct rlist *rl,
+                                            int cores_per_slot,
+                                            int slots)
 {
     int rc;
     struct idset *ids = NULL;
@@ -567,7 +583,7 @@ static struct rlist * rlist_alloc_first_fit (struct rlist *rl,
         slots--;
     }
     if (slots != 0) {
-unwind:
+    unwind:
         rlist_free (rl, result);
         rlist_destroy (result);
         errno = ENOSPC;
@@ -581,9 +597,9 @@ unwind:
  *   the result. Sorts the node list by smallest available first, so that
  *   we get something like "best fit". (minimize nodes used)
  */
-static struct rlist * rlist_alloc_best_fit (struct rlist *rl,
-                                            int cores_per_slot,
-                                            int slots)
+static struct rlist *rlist_alloc_best_fit (struct rlist *rl,
+                                           int cores_per_slot,
+                                           int slots)
 {
     zlistx_set_comparator (rl->nodes, by_avail);
     return rlist_alloc_first_fit (rl, cores_per_slot, slots);
@@ -594,14 +610,13 @@ static struct rlist * rlist_alloc_best_fit (struct rlist *rl,
  *   the result. Sorts the node list by least utilized first, so that
  *   we get something like "worst fit". (Spread jobs across nodes)
  */
-static struct rlist * rlist_alloc_worst_fit (struct rlist *rl,
-                                             int cores_per_slot,
-                                             int slots)
+static struct rlist *rlist_alloc_worst_fit (struct rlist *rl,
+                                            int cores_per_slot,
+                                            int slots)
 {
     zlistx_set_comparator (rl->nodes, by_used);
     return rlist_alloc_first_fit (rl, cores_per_slot, slots);
 }
-
 
 static zlistx_t *rlist_get_nnodes (struct rlist *rl, int nnodes)
 {
@@ -626,8 +641,10 @@ err:
  *  Works by getting the first N least utilized nodes and spreading
  *  the nslots evenly across the result.
  */
-static struct rlist *rlist_alloc_nnodes (struct rlist *rl, int nnodes,
-                                         int cores_per_slot, int slots)
+static struct rlist *rlist_alloc_nnodes (struct rlist *rl,
+                                         int nnodes,
+                                         int cores_per_slot,
+                                         int slots)
 {
     struct rlist *result = NULL;
     struct rnode *n = NULL;
@@ -695,8 +712,11 @@ unwind:
     return NULL;
 }
 
-static struct rlist *rlist_try_alloc (struct rlist *rl, const char *mode,
-                                      int nnodes, int slots, int cores_per_slot)
+static struct rlist *rlist_try_alloc (struct rlist *rl,
+                                      const char *mode,
+                                      int nnodes,
+                                      int slots,
+                                      int cores_per_slot)
 {
     struct rlist *result = NULL;
 
@@ -723,8 +743,11 @@ static struct rlist *rlist_try_alloc (struct rlist *rl, const char *mode,
 
 /*  Determine if allocation request is feasible for rlist `rl`.
  */
-static bool rlist_alloc_feasible (const struct rlist *rl, const char *mode,
-                                  int nnodes, int slots, int slotsz)
+static bool rlist_alloc_feasible (const struct rlist *rl,
+                                  const char *mode,
+                                  int nnodes,
+                                  int slots,
+                                  int slotsz)
 {
     bool rc = false;
     struct rlist *result = NULL;
@@ -736,8 +759,11 @@ static bool rlist_alloc_feasible (const struct rlist *rl, const char *mode,
     return rc;
 }
 
-struct rlist *rlist_alloc (struct rlist *rl, const char *mode,
-                          int nnodes, int slots, int slotsz)
+struct rlist *rlist_alloc (struct rlist *rl,
+                           const char *mode,
+                           int nnodes,
+                           int slots,
+                           int slotsz)
 {
     int total = slots * slotsz;
     struct rlist *result = NULL;

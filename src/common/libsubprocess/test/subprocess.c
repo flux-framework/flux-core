@@ -57,39 +57,35 @@ void completion_cb (flux_subprocess_t *p)
 {
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
         "subprocess state == EXITED in completion handler");
-    ok (flux_subprocess_status (p) != -1,
-        "subprocess status is valid");
-    ok (flux_subprocess_exit_code (p) == 0,
-        "subprocess exit code is 0");
+    ok (flux_subprocess_status (p) != -1, "subprocess status is valid");
+    ok (flux_subprocess_exit_code (p) == 0, "subprocess exit code is 0");
     completion_cb_count++;
 }
 
 void test_basic (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd, *cmd2;
     flux_reactor_t *r2;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb};
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok ((flux_subprocess_pid (p) > (pid_t) 0),
-        "flux_local_exec() started pid %ld", (pid_t) flux_subprocess_pid (p));
+    ok ((flux_subprocess_pid (p) > (pid_t)0),
+        "flux_local_exec() started pid %ld",
+        (pid_t)flux_subprocess_pid (p));
     ok ((cmd2 = flux_subprocess_get_cmd (p)) != NULL,
         "flux_subprocess_get_cmd success");
     ok ((r2 = flux_subprocess_get_reactor (p)) != NULL,
         "flux_subprocess_get_reactor success");
-    ok (r == r2,
-        "flux_subprocess_get_reactor returns correct reactor");
+    ok (r == r2, "flux_subprocess_get_reactor returns correct reactor");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -102,24 +98,20 @@ void completion_fail_cb (flux_subprocess_t *p)
 {
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
         "subprocess state == EXITED in completion handler");
-    ok (flux_subprocess_status (p) != -1,
-        "subprocess status is valid");
-    ok (flux_subprocess_exit_code (p) == 1,
-        "subprocess exit code is 1");
+    ok (flux_subprocess_status (p) != -1, "subprocess status is valid");
+    ok (flux_subprocess_exit_code (p) == 1, "subprocess exit code is 1");
     completion_fail_cb_count++;
 }
 
 void test_basic_fail (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/false", NULL };
+    char *av[] = {"/bin/false", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_fail_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_fail_cb};
     completion_fail_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -137,137 +129,103 @@ void test_basic_fail (flux_reactor_t *r)
 void test_basic_errors (flux_reactor_t *r)
 {
     flux_t *h_hack = (flux_t *)0x12345678;
-    char *avgood[] = { "/bin/true", NULL };
-    char *avbad[] = { NULL };
+    char *avgood[] = {"/bin/true", NULL};
+    char *avbad[] = {NULL};
     flux_cmd_t *cmd;
 
-    ok (!flux_subprocess_server_start (NULL, NULL, NULL, 0)
-        && errno == EINVAL,
+    ok (!flux_subprocess_server_start (NULL, NULL, NULL, 0) && errno == EINVAL,
         "flux_subprocess_server_start fails with NULL pointer inputs");
-    ok (flux_exec (NULL, 0, NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_exec (NULL, 0, NULL, NULL) == NULL && errno == EINVAL,
         "flux_exec fails with NULL pointer inputs");
-    ok (flux_local_exec (NULL, 0, NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_local_exec (NULL, 0, NULL, NULL) == NULL && errno == EINVAL,
         "flux_local_exec fails with NULL pointer inputs");
-    ok (flux_local_exec (r, 1234, NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_local_exec (r, 1234, NULL, NULL) == NULL && errno == EINVAL,
         "flux_local_exec fails with invalid flag");
-    ok (flux_rexec (NULL, 0, 0, NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_rexec (NULL, 0, 0, NULL, NULL) == NULL && errno == EINVAL,
         "flux_rexec fails with NULL pointer inputs");
-    ok (flux_rexec (h_hack, 0, 1, NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_rexec (h_hack, 0, 1, NULL, NULL) == NULL && errno == EINVAL,
         "flux_rexec fails with invalid flag");
 
     ok ((cmd = flux_cmd_create (0, avbad, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h_hack, 0, 0, cmd, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_rexec (h_hack, 0, 0, cmd, NULL) == NULL && errno == EINVAL,
         "flux_rexec fails with cmd with zero args");
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h_hack, -10, 0, cmd, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_rexec (h_hack, -10, 0, cmd, NULL) == NULL && errno == EINVAL,
         "flux_rexec fails with cmd with invalid rank");
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h_hack, 0, 0, cmd, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_rexec (h_hack, 0, 0, cmd, NULL) == NULL && errno == EINVAL,
         "flux_rexec fails with cmd with no cwd");
     flux_cmd_destroy (cmd);
 
-    ok (flux_subprocess_write (NULL, "STDIN", "foo", 3) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_write (NULL, "STDIN", "foo", 3) < 0 && errno == EINVAL,
         "flux_subprocess_write fails with NULL pointer inputs");
-    ok (flux_subprocess_close (NULL, "STDIN") < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_close (NULL, "STDIN") < 0 && errno == EINVAL,
         "flux_subprocess_close fails with NULL pointer inputs");
-    ok (flux_subprocess_read (NULL, "STDOUT", -1, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_read (NULL, "STDOUT", -1, NULL) == NULL && errno == EINVAL,
         "flux_subprocess_read fails with NULL pointer inputs");
-    ok (flux_subprocess_read_line (NULL, "STDOUT", NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_read_line (NULL, "STDOUT", NULL) == NULL && errno == EINVAL,
         "flux_subprocess_read_line fails with NULL pointer inputs");
-    ok (flux_subprocess_kill (NULL, 0) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_kill (NULL, 0) == NULL && errno == EINVAL,
         "flux_subprocess_kill fails with NULL pointer inputs");
-    ok ((int)flux_subprocess_state (NULL) < 0
-        && errno == EINVAL,
+    ok ((int)flux_subprocess_state (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_state fails with NULL pointer inputs");
-    ok (flux_subprocess_rank (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_rank (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_rank fails with NULL pointer inputs");
-    ok (flux_subprocess_fail_errno (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_fail_errno (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_fail_errno fails with NULL pointer inputs");
-    ok (flux_subprocess_status (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_status (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_status fails with NULL pointer inputs");
-    ok (flux_subprocess_exit_code (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_exit_code (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_exit_code fails with NULL pointer inputs");
-    ok (flux_subprocess_signaled (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_signaled (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_signaled fails with NULL pointer inputs");
-    ok (flux_subprocess_pid (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_pid (NULL) < 0 && errno == EINVAL,
         "flux_subprocess_pid fails with NULL pointer inputs");
-    ok (flux_subprocess_get_cmd (NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_get_cmd (NULL) == NULL && errno == EINVAL,
         "flux_subprocess_get_cmd fails with NULL pointer inputs");
-    ok (flux_subprocess_get_reactor (NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_get_reactor (NULL) == NULL && errno == EINVAL,
         "flux_subprocess_get_reactor fails with NULL pointer inputs");
-    ok (flux_subprocess_aux_set (NULL, "foo", "bar", NULL) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
         "flux_subprocess_aux_set fails with NULL pointer inputs");
-    ok (flux_subprocess_aux_get (NULL, "foo") == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_aux_get (NULL, "foo") == NULL && errno == EINVAL,
         "flux_subprocess_aux_get fails with NULL pointer inputs");
 }
 
 void test_errors (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb};
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok (flux_subprocess_write (p, NULL, NULL, 0) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_write (p, NULL, NULL, 0) < 0 && errno == EINVAL,
         "flux_subprocess_write returns EINVAL on bad input");
-    ok (flux_subprocess_write (p, "foo", "foo", 3) < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_write (p, "foo", "foo", 3) < 0 && errno == EINVAL,
         "flux_subprocess_write returns EINVAL on bad stream");
-    ok (flux_subprocess_close (p, "foo") < 0
-        && errno == EINVAL,
+    ok (flux_subprocess_close (p, "foo") < 0 && errno == EINVAL,
         "flux_subprocess_close returns EINVAL on bad stream");
-    ok (flux_subprocess_read (p, NULL, 0, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_read (p, NULL, 0, NULL) == NULL && errno == EINVAL,
         "flux_subprocess_read returns EINVAL on bad input");
-    ok (flux_subprocess_read (p, "foo", -1, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_read (p, "foo", -1, NULL) == NULL && errno == EINVAL,
         "flux_subprocess_read returns EINVAL on bad stream");
-    ok (flux_subprocess_read_line (p, "foo", NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_read_line (p, "foo", NULL) == NULL && errno == EINVAL,
         "flux_subprocess_read returns EINVAL on bad stream");
-    ok (flux_subprocess_kill (p, 0) == NULL
-        && errno == EINVAL,
+    ok (flux_subprocess_kill (p, 0) == NULL && errno == EINVAL,
         "flux_subprocess_kill returns EINVAL on illegal signum");
     ok (flux_subprocess_rank (p) < 0,
         "flux_subprocess_rank fails b/c subprocess is local");
@@ -284,8 +242,7 @@ void test_errors (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
 
-    ok (flux_subprocess_write (p, NULL, "foo", 3) < 0
-        && errno == EPIPE,
+    ok (flux_subprocess_write (p, NULL, "foo", 3) < 0 && errno == EPIPE,
         "flux_subprocess_write returns EPIPE b/c process already completed");
 
     flux_subprocess_destroy (p);
@@ -310,20 +267,16 @@ void output_cb (flux_subprocess_t *p, const char *stream)
 
     if ((*counter) == 0) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         sprintf (cmpbuf, "%s:hi\n", stream);
 
         ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read_line returned correct data", stream);
-    }
-    else {
+            "flux_subprocess_read_line returned correct data",
+            stream);
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     (*counter)++;
@@ -331,16 +284,14 @@ void output_cb (flux_subprocess_t *p, const char *stream)
 
 void test_basic_stdout (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
@@ -361,16 +312,14 @@ void test_basic_stdout (flux_reactor_t *r)
 
 void test_basic_stderr (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-E", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-E", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stderr = output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stderr = output_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
@@ -379,8 +328,9 @@ void test_basic_stderr (flux_reactor_t *r)
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok ((flux_subprocess_pid (p) > (pid_t) 0),
-        "flux_local_exec() started pid %ld", (pid_t) flux_subprocess_pid (p));
+    ok ((flux_subprocess_pid (p) > (pid_t)0),
+        "flux_local_exec() started pid %ld",
+        (pid_t)flux_subprocess_pid (p));
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -393,17 +343,15 @@ void test_basic_stderr (flux_reactor_t *r)
 
 void test_basic_stdout_and_stderr (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_cb,
-        .on_stderr = output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_cb,
+                                 .on_stderr = output_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
@@ -424,17 +372,15 @@ void test_basic_stdout_and_stderr (flux_reactor_t *r)
 
 void test_basic_default_output (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = flux_standard_output,
+                                 .on_stderr = flux_standard_output};
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -457,20 +403,18 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
 
     if (output_default_stream_cb_count == 0) {
         ptr = flux_subprocess_read_line (p, NULL, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", "STDOUT");
+        ok (ptr != NULL && lenp > 0,
+            "flux_subprocess_read_line on %s success",
+            "STDOUT");
 
         sprintf (cmpbuf, "%s:hi\n", stream);
 
         ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read_line returned correct data", "STDOUT");
-    }
-    else {
+            "flux_subprocess_read_line returned correct data",
+            "STDOUT");
+    } else {
         ptr = flux_subprocess_read (p, NULL, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", "STDOUT");
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", "STDOUT");
     }
 
     output_default_stream_cb_count++;
@@ -478,16 +422,14 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
 
 void test_basic_stdout_default_stream (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_default_stream_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_default_stream_cb};
     completion_cb_count = 0;
     output_default_stream_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -499,23 +441,22 @@ void test_basic_stdout_default_stream (flux_reactor_t *r)
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
-    ok (output_default_stream_cb_count == 2, "stdout output default stream callback called 2 times");
+    ok (output_default_stream_cb_count == 2,
+        "stdout output default stream callback called 2 times");
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
 
 void test_basic_stdin (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -527,8 +468,7 @@ void test_basic_stdin (flux_reactor_t *r)
     ok (flux_subprocess_write (p, "STDIN", "hi", 2) == 2,
         "flux_subprocess_write success");
 
-    ok (flux_subprocess_close (p, "STDIN") == 0,
-        "flux_subprocess_close success");
+    ok (flux_subprocess_close (p, "STDIN") == 0, "flux_subprocess_close success");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -540,16 +480,14 @@ void test_basic_stdin (flux_reactor_t *r)
 
 void test_basic_stdin_default_stream (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -558,11 +496,9 @@ void test_basic_stdin_default_stream (flux_reactor_t *r)
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
 
-    ok (flux_subprocess_write (p, NULL, "hi", 2) == 2,
-        "flux_subprocess_write success");
+    ok (flux_subprocess_write (p, NULL, "hi", 2) == 2, "flux_subprocess_write success");
 
-    ok (flux_subprocess_close (p, NULL) == 0,
-        "flux_subprocess_close success");
+    ok (flux_subprocess_close (p, NULL) == 0, "flux_subprocess_close success");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -590,25 +526,19 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
 
     if ((*counter) == 0) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read_line on %s read 0 lines", stream);
+        ok (ptr != NULL && lenp == 0,
+            "flux_subprocess_read_line on %s read 0 lines",
+            stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read on %s read success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read on %s read success", stream);
 
         sprintf (cmpbuf, "%s:hi", stream);
 
-        ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read returned correct data");
-    }
-    else {
+        ok (!strcmp (ptr, cmpbuf), "flux_subprocess_read returned correct data");
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     (*counter)++;
@@ -616,17 +546,15 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
 
 void test_basic_no_newline (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "-n", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "-n", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (6, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_no_newline_cb,
-        .on_stderr = output_no_newline_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_no_newline_cb,
+                                 .on_stderr = output_no_newline_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
@@ -663,20 +591,18 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
 
     if ((*counter) == 0) {
         ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_trimmed_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0,
+            "flux_subprocess_read_trimmed_line on %s success",
+            stream);
 
         sprintf (cmpbuf, "%s:hi", stream);
 
         ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read_trimmed_line returned correct data", stream);
-    }
-    else {
+            "flux_subprocess_read_trimmed_line returned correct data",
+            stream);
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     (*counter)++;
@@ -684,17 +610,15 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
 
 void test_basic_trimmed_line (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_trimmed_line_cb,
-        .on_stderr = output_trimmed_line_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_trimmed_line_cb,
+                                 .on_stderr = output_trimmed_line_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
@@ -730,36 +654,26 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
 
     if ((*counter) == 0) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "foo\n"),
-            "flux_subprocess_read_line returned correct data", stream);
-    }
-    else if ((*counter) == 1) {
+            "flux_subprocess_read_line returned correct data",
+            stream);
+    } else if ((*counter) == 1) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "bar\n"),
-            "flux_subprocess_read_line returned correct data");
-    }
-    else if ((*counter) == 2) {
+        ok (!strcmp (ptr, "bar\n"), "flux_subprocess_read_line returned correct data");
+    } else if ((*counter) == 2) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "bo\n"),
-            "flux_subprocess_read_line returned correct data", stream);
-    }
-    else {
+            "flux_subprocess_read_line returned correct data",
+            stream);
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     (*counter)++;
@@ -767,17 +681,15 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
 
 void test_basic_multiple_lines (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = multiple_lines_output_cb,
-        .on_stderr = multiple_lines_output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = multiple_lines_output_cb,
+                                 .on_stderr = multiple_lines_output_cb};
     completion_cb_count = 0;
     multiple_lines_stdout_output_cb_count = 0;
     multiple_lines_stderr_output_cb_count = 0;
@@ -796,30 +708,29 @@ void test_basic_multiple_lines (flux_reactor_t *r)
     ok (flux_subprocess_write (p, "STDIN", "bo\n", 3) == 3,
         "flux_subprocess_write success");
 
-    ok (flux_subprocess_close (p, "STDIN") == 0,
-        "flux_subprocess_close success");
+    ok (flux_subprocess_close (p, "STDIN") == 0, "flux_subprocess_close success");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
-    ok (multiple_lines_stdout_output_cb_count == 4, "stdout output callback called 4 times");
-    ok (multiple_lines_stderr_output_cb_count == 4, "stderr output callback called 4 times");
+    ok (multiple_lines_stdout_output_cb_count == 4,
+        "stdout output callback called 4 times");
+    ok (multiple_lines_stderr_output_cb_count == 4,
+        "stderr output callback called 4 times");
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
 
 void test_write_after_close (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (3, av, environ)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = output_cb};
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -831,11 +742,9 @@ void test_write_after_close (flux_reactor_t *r)
     ok (flux_subprocess_write (p, "STDIN", "hi", 2) == 2,
         "flux_subprocess_write success");
 
-    ok (flux_subprocess_close (p, "STDIN") == 0,
-        "flux_subprocess_close success");
+    ok (flux_subprocess_close (p, "STDIN") == 0, "flux_subprocess_close success");
 
-    ok (flux_subprocess_write (p, "STDIN", "hi", 2) < 0
-        && errno == EPIPE,
+    ok (flux_subprocess_write (p, "STDIN", "hi", 2) < 0 && errno == EPIPE,
         "flux_subprocess_write failed with EPIPE after a close");
 
     flux_subprocess_destroy (p);
@@ -873,15 +782,13 @@ void test_flag_stdio_fallthrough (flux_reactor_t *r)
 
 void test_flag_setpgrp (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb};
     completion_cb_count = 0;
     p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -901,23 +808,17 @@ void env_passed_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp = 0;
 
-    ok (!strcasecmp (stream, "STDOUT"),
-        "env_passed_cb called with correct stream");
+    ok (!strcasecmp (stream, "STDOUT"), "env_passed_cb called with correct stream");
 
     if (!env_passed_cb_count) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strncmp (ptr, "FOOBAR=foobaz", 13),
             "environment variable FOOBAR in subprocess");
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     env_passed_cb_count++;
@@ -925,19 +826,16 @@ void env_passed_cb (flux_subprocess_t *p, const char *stream)
 
 void test_env_passed (flux_reactor_t *r)
 {
-    char *av[] = { "/usr/bin/env", NULL };
+    char *av[] = {"/usr/bin/env", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    ok (flux_cmd_setenvf (cmd, 1, "FOOBAR", "foobaz") == 0,
-        "flux_cmd_setenvf");
+    ok (flux_cmd_setenvf (cmd, 1, "FOOBAR", "foobaz") == 0, "flux_cmd_setenvf");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = env_passed_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = env_passed_cb};
     completion_cb_count = 0;
     env_passed_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -958,26 +856,22 @@ void completion_sigterm_cb (flux_subprocess_t *p)
 {
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
         "subprocess state == EXITED in completion handler");
-    ok (flux_subprocess_status (p) != -1,
-        "subprocess status is valid");
-    ok (flux_subprocess_signaled (p) == SIGTERM,
-        "subprocess terminated by SIGTERM");
+    ok (flux_subprocess_status (p) != -1, "subprocess status is valid");
+    ok (flux_subprocess_signaled (p) == SIGTERM, "subprocess terminated by SIGTERM");
     flux_reactor_stop (flux_subprocess_get_reactor (p));
     completion_sigterm_cb_count++;
 }
 
 void test_kill (flux_reactor_t *r)
 {
-    char *av[]  = { "/bin/sleep", "1000", NULL };
+    char *av[] = {"/bin/sleep", "1000", NULL};
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     flux_future_t *f = NULL;
 
     ok ((cmd = flux_cmd_create (2, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_sigterm_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_sigterm_cb};
     completion_sigterm_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -1002,11 +896,9 @@ void output_processes_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp;
 
-    if (output_processes_cb_count == 0
-        || output_processes_cb_count == 1) {
+    if (output_processes_cb_count == 0 || output_processes_cb_count == 1) {
         ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
+        ok (ptr != NULL && lenp > 0,
             "flux_subprocess_read_trimmed_line read valid data");
 
         if (ptr && lenp) {
@@ -1023,12 +915,9 @@ void output_processes_cb (flux_subprocess_t *p, const char *stream)
             /* ignore response, we're not going to wait for it */
             flux_future_destroy (f);
         }
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     output_processes_cb_count++;
@@ -1050,7 +939,7 @@ int wait_kill (int pid)
 
 void test_kill_setpgrp (flux_reactor_t *r)
 {
-    char *av[]  = { TEST_SUBPROCESS_DIR "test_fork_sleep", "100", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_fork_sleep", "100", NULL};
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     int ret;
@@ -1078,13 +967,13 @@ void test_kill_setpgrp (flux_reactor_t *r)
      * so if necessary loop a second to wait for the kill to happen
      */
     ret = wait_kill (parent_pid);
-    ok (ret < 0
-        && errno == ESRCH,
-        "kill fails with ESRCH, parent pid killed %d", parent_pid);
+    ok (ret < 0 && errno == ESRCH,
+        "kill fails with ESRCH, parent pid killed %d",
+        parent_pid);
     ret = wait_kill (child_pid);
-    ok (ret < 0
-        && errno == ESRCH,
-        "kill fails with ESRCH, child pid killed %d", child_pid);
+    ok (ret < 0 && errno == ESRCH,
+        "kill fails with ESRCH, child pid killed %d",
+        child_pid);
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
@@ -1105,16 +994,14 @@ void eof_cb (flux_subprocess_t *p, const char *stream)
     }
 
     ptr = flux_subprocess_read (p, stream, -1, &lenp);
-    ok (ptr != NULL
-        && lenp == 0,
-        "flux_subprocess_read on %s read EOF", stream);
+    ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
 
     (*counter)++;
 }
 
 void test_kill_eofs (flux_reactor_t *r)
 {
-    char *av[]  = { "/bin/sleep", "1000", NULL };
+    char *av[] = {"/bin/sleep", "1000", NULL};
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     flux_future_t *f = NULL;
@@ -1165,16 +1052,14 @@ void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void test_state_change (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_state_change = state_change_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_state_change = state_change_cb};
     completion_cb_count = 0;
     state_change_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1201,7 +1086,8 @@ void test_state_strings (void)
         "flux_subprocess_state_string returns correct string");
     ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_EXITED), "Exited"),
         "flux_subprocess_state_string returns correct string");
-    ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_EXEC_FAILED), "Exec Failed"),
+    ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_EXEC_FAILED),
+                     "Exec Failed"),
         "flux_subprocess_state_string returns correct string");
     ok (!flux_subprocess_state_string (100),
         "flux_subprocess_state_string returns NULL on bad state");
@@ -1209,33 +1095,29 @@ void test_state_strings (void)
 
 void test_exec_fail (flux_reactor_t *r)
 {
-    char *av_eacces[]  = { "/", NULL };
-    char *av_enoent[]  = { "/usr/bin/foobarbaz", NULL };
+    char *av_eacces[] = {"/", NULL};
+    char *av_enoent[] = {"/usr/bin/foobarbaz", NULL};
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av_eacces, NULL)) != NULL, "flux_cmd_create");
 
     p = flux_local_exec (r, 0, cmd, NULL);
-    ok (p == NULL
-        && errno == EACCES,
-        "flux_local_exec failed with EACCES");
+    ok (p == NULL && errno == EACCES, "flux_local_exec failed with EACCES");
 
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, av_enoent, NULL)) != NULL, "flux_cmd_create");
 
     p = flux_local_exec (r, 0, cmd, NULL);
-    ok (p == NULL
-        && errno == ENOENT,
-        "flux_local_exec failed with ENOENT");
+    ok (p == NULL && errno == ENOENT, "flux_local_exec failed with ENOENT");
 
     flux_cmd_destroy (cmd);
 }
 
 void test_context (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     char *extra = "mydata";
@@ -1243,9 +1125,7 @@ void test_context (flux_reactor_t *r)
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb};
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -1256,8 +1136,7 @@ void test_context (flux_reactor_t *r)
         "flux_subprocess_aux_set success");
     ok ((tmp = flux_subprocess_aux_get (p, "extra")) != NULL,
         "flux_subprocess_aux_get success");
-    ok (tmp == extra,
-        "flux_subprocess_aux_get returned correct pointer");
+    ok (tmp == extra, "flux_subprocess_aux_get returned correct pointer");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -1268,7 +1147,7 @@ void test_context (flux_reactor_t *r)
 
 void test_refcount (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     char *extra = "mydata";
@@ -1276,9 +1155,7 @@ void test_refcount (flux_reactor_t *r)
 
     ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb};
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -1298,8 +1175,7 @@ void test_refcount (flux_reactor_t *r)
      * subprocess should not be destroyed */
     ok ((tmp = flux_subprocess_aux_get (p, "extra")) != NULL,
         "flux_subprocess_aux_get success");
-    ok (tmp == extra,
-        "flux_subprocess_aux_get returned correct pointer");
+    ok (tmp == extra, "flux_subprocess_aux_get returned correct pointer");
 
     flux_subprocess_unref (p);
     flux_cmd_destroy (cmd);
@@ -1310,23 +1186,17 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp = 0;
 
-    ok (!strcasecmp (stream, "STDOUT"),
-        "channel_fd_env_cb called with correct stream");
+    ok (!strcasecmp (stream, "STDOUT"), "channel_fd_env_cb called with correct stream");
 
     if (!channel_fd_env_cb_count) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strncmp (ptr, "FOO=", 4),
             "environment variable FOO created in subprocess");
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     channel_fd_env_cb_count++;
@@ -1334,7 +1204,7 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
 
 void test_channel_fd_env (flux_reactor_t *r)
 {
-    char *av[] = { "/usr/bin/env", NULL };
+    char *av[] = {"/usr/bin/env", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1343,10 +1213,8 @@ void test_channel_fd_env (flux_reactor_t *r)
     ok (flux_cmd_add_channel (cmd, "FOO") == 0,
         "flux_cmd_add_channel success adding channel FOO");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = channel_fd_env_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_stdout = channel_fd_env_cb};
     completion_cb_count = 0;
     channel_fd_env_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1368,26 +1236,21 @@ void channel_in_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp = 0;
 
-    ok (!strcasecmp (stream, "STDOUT"),
-        "channel_in_cb called with correct stream");
+    ok (!strcasecmp (stream, "STDOUT"), "channel_in_cb called with correct stream");
 
     if (!channel_in_cb_count) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 7,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp == 7,
+            "flux_subprocess_read_line on %s success",
+            stream);
 
-        ok (!memcmp (ptr, "foobar\n", 7),
-            "read on channel returned correct data");
+        ok (!memcmp (ptr, "foobar\n", 7), "read on channel returned correct data");
 
         ok (flux_subprocess_close (p, "TEST_CHANNEL") == 0,
             "flux_subprocess_close success");
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     channel_in_cb_count++;
@@ -1395,7 +1258,7 @@ void channel_in_cb (flux_subprocess_t *p, const char *stream)
 
 void test_channel_fd_in (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-c", "TEST_CHANNEL", "-O", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-c", "TEST_CHANNEL", "-O", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1404,12 +1267,10 @@ void test_channel_fd_in (flux_reactor_t *r)
     ok (flux_cmd_add_channel (cmd, "TEST_CHANNEL") == 0,
         "flux_cmd_add_channel success adding channel TEST_CHANNEL");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_channel_out = NULL,
-        .on_stdout = channel_in_cb,
-        .on_stderr = flux_standard_output
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_channel_out = NULL,
+                                 .on_stdout = channel_in_cb,
+                                 .on_stderr = flux_standard_output};
     completion_cb_count = 0;
     channel_in_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1441,21 +1302,17 @@ void channel_in_and_out_cb (flux_subprocess_t *p, const char *stream)
 
     if (!channel_in_and_out_cb_count) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 7,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp == 7,
+            "flux_subprocess_read_line on %s success",
+            stream);
 
-        ok (!memcmp (ptr, "foobaz\n", 7),
-            "read on channel returned correct data");
+        ok (!memcmp (ptr, "foobaz\n", 7), "read on channel returned correct data");
 
         ok (flux_subprocess_close (p, "TEST_CHANNEL") == 0,
             "flux_subprocess_close success");
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     channel_in_and_out_cb_count++;
@@ -1463,7 +1320,7 @@ void channel_in_and_out_cb (flux_subprocess_t *p, const char *stream)
 
 void test_channel_fd_in_and_out (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-c", "TEST_CHANNEL", "-C", NULL };
+    char *av[] = {TEST_SUBPROCESS_DIR "test_echo", "-c", "TEST_CHANNEL", "-C", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1472,12 +1329,10 @@ void test_channel_fd_in_and_out (flux_reactor_t *r)
     ok (flux_cmd_add_channel (cmd, "TEST_CHANNEL") == 0,
         "flux_cmd_add_channel success adding channel TEST_CHANNEL");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_channel_out = channel_in_and_out_cb,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_channel_out = channel_in_and_out_cb,
+                                 .on_stdout = flux_standard_output,
+                                 .on_stderr = flux_standard_output};
     completion_cb_count = 0;
     channel_in_and_out_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1510,39 +1365,31 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
 
     if (multiple_lines_channel_cb_count == 0) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "bob\n"),
-            "flux_subprocess_read_line returned correct data", stream);
-    }
-    else if (multiple_lines_channel_cb_count == 1) {
+            "flux_subprocess_read_line returned correct data",
+            stream);
+    } else if (multiple_lines_channel_cb_count == 1) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "dan\n"),
-            "flux_subprocess_read_line returned correct data %s", stream);
-    }
-    else if (multiple_lines_channel_cb_count == 2) {
+            "flux_subprocess_read_line returned correct data %s",
+            stream);
+    } else if (multiple_lines_channel_cb_count == 2) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp > 0,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp > 0, "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "jo\n"),
-            "flux_subprocess_read_line returned correct data", stream);
+            "flux_subprocess_read_line returned correct data",
+            stream);
 
         ok (flux_subprocess_close (p, "TEST_CHANNEL") == 0,
             "flux_subprocess_close success");
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     multiple_lines_channel_cb_count++;
@@ -1550,7 +1397,8 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
 
 void test_channel_multiple_lines (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-c", "TEST_CHANNEL", "-C", "-n", NULL };
+    char *av[] =
+        {TEST_SUBPROCESS_DIR "test_echo", "-c", "TEST_CHANNEL", "-C", "-n", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1559,12 +1407,10 @@ void test_channel_multiple_lines (flux_reactor_t *r)
     ok (flux_cmd_add_channel (cmd, "TEST_CHANNEL") == 0,
         "flux_cmd_add_channel success adding channel TEST_CHANNEL");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_channel_out = channel_multiple_lines_cb,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_channel_out = channel_multiple_lines_cb,
+                                 .on_stdout = flux_standard_output,
+                                 .on_stderr = flux_standard_output};
     completion_cb_count = 0;
     multiple_lines_channel_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1600,21 +1446,17 @@ void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
 
     if (!channel_nul_terminate_cb_count) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
-        ok (ptr != NULL
-            && lenp == 7,
-            "flux_subprocess_read_line on %s success", stream);
+        ok (ptr != NULL && lenp == 7,
+            "flux_subprocess_read_line on %s success",
+            stream);
 
-        ok (!memcmp (ptr, "foobaz\n\0", 8),
-            "read on channel returned correct data");
+        ok (!memcmp (ptr, "foobaz\n\0", 8), "read on channel returned correct data");
 
         ok (flux_subprocess_close (p, "TEST_CHANNEL") == 0,
             "flux_subprocess_close success");
-    }
-    else {
+    } else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
-        ok (ptr != NULL
-            && lenp == 0,
-            "flux_subprocess_read on %s read EOF", stream);
+        ok (ptr != NULL && lenp == 0, "flux_subprocess_read on %s read EOF", stream);
     }
 
     channel_nul_terminate_cb_count++;
@@ -1622,7 +1464,7 @@ void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
 
 void test_bufsize (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1643,12 +1485,10 @@ void test_bufsize (flux_reactor_t *r)
     ok (flux_cmd_setopt (cmd, "TEST_CHANNEL_BUFSIZE", "1024") == 0,
         "flux_cmd_setopt set TEST_CHANNEL_BUFSIZE success");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_channel_out = flux_standard_output,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_channel_out = flux_standard_output,
+                                 .on_stdout = flux_standard_output,
+                                 .on_stderr = flux_standard_output};
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
@@ -1665,7 +1505,7 @@ void test_bufsize (flux_reactor_t *r)
 
 void test_bufsize_error (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = {"/bin/true", NULL};
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1677,15 +1517,12 @@ void test_bufsize_error (flux_reactor_t *r)
     ok (flux_cmd_setopt (cmd, "TEST_CHANNEL_BUFSIZE", "ABCD") == 0,
         "flux_cmd_setopt set TEST_CHANNEL_BUFSIZE success");
 
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_channel_out = flux_standard_output,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_channel_out = flux_standard_output,
+                                 .on_stdout = flux_standard_output,
+                                 .on_stderr = flux_standard_output};
     p = flux_local_exec (r, 0, cmd, &ops);
-    ok (p == NULL
-        && errno == EINVAL,
+    ok (p == NULL && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad bufsize input");
 
     flux_cmd_destroy (cmd);
@@ -1773,8 +1610,7 @@ int main (int argc, char *argv[])
 
     end_fdcount = fdcount ();
 
-    ok (start_fdcount == end_fdcount,
-        "no file descriptors leaked");
+    ok (start_fdcount == end_fdcount, "no file descriptors leaked");
 
     flux_reactor_destroy (r);
     done_testing ();

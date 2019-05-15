@@ -22,7 +22,7 @@ char *kvs_util_normalize_key (const char *key, bool *want_directory);
  * if not set, return default */
 const char *kvs_get_namespace (void);
 
-#endif  /* !_FLUX_KVS_UTIL_H */
+#endif /* !_FLUX_KVS_UTIL_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

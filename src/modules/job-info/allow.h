@@ -19,8 +19,7 @@
  * access job eventlog 's'.  Assume first event is the "submit"
  * event which records the job owner.
  */
-int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
-                    const char *s);
+int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg, const char *s);
 
 #endif /* ! _FLUX_JOB_INFO_ALLOW_H */
 

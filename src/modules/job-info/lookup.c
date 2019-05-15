@@ -80,9 +80,7 @@ error:
     return NULL;
 }
 
-static int lookup_key (struct lookup_ctx *l,
-                       flux_future_t *fall,
-                       const char *key)
+static int lookup_key (struct lookup_ctx *l, flux_future_t *fall, const char *key)
 {
     flux_future_t *f = NULL;
     char path[64];
@@ -131,7 +129,8 @@ static int lookup_keys (struct lookup_ctx *l)
             goto error;
     }
 
-    json_array_foreach(l->keys, index, key) {
+    json_array_foreach (l->keys, index, key)
+    {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
             errno = EINVAL;
@@ -141,10 +140,7 @@ static int lookup_keys (struct lookup_ctx *l)
             goto error;
     }
 
-    if (flux_future_then (fall,
-                          -1,
-                          info_lookup_continuation,
-                          l) < 0) {
+    if (flux_future_then (fall, -1, info_lookup_continuation, l) < 0) {
         flux_log_error (l->ctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
     }
@@ -189,7 +185,8 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     if (!(o = json_object ()))
         goto enomem;
 
-    json_array_foreach(l->keys, index, key) {
+    json_array_foreach (l->keys, index, key)
+    {
         flux_future_t *f;
         const char *keystr;
         json_t *str = NULL;
@@ -255,7 +252,8 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
     size_t index;
     json_t *key;
 
-    json_array_foreach(l->keys, index, key) {
+    json_array_foreach (l->keys, index, key)
+    {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
             errno = EINVAL;
@@ -269,8 +267,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
     return 0;
 }
 
-void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
-                const flux_msg_t *msg, void *arg)
+void lookup_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
     struct lookup_ctx *l = NULL;
@@ -279,10 +276,16 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     uint32_t rolemask;
     int flags;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:o s:i}",
-                             "id", &id,
-                             "keys", &keys,
-                             "flags", &flags) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:o s:i}",
+                             "id",
+                             &id,
+                             "keys",
+                             &keys,
+                             "flags",
+                             &flags)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }

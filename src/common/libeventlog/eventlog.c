@@ -18,8 +18,7 @@
 
 #include "eventlog.h"
 
-static json_t *eventlog_entry_decode_common (const char *event,
-                                             bool trailing_newline);
+static json_t *eventlog_entry_decode_common (const char *event, bool trailing_newline);
 
 int eventlog_entry_parse (json_t *entry,
                           double *timestamp,
@@ -35,9 +34,7 @@ int eventlog_entry_parse (json_t *entry,
         return -1;
     }
 
-    if (json_unpack (entry, "{ s:F s:s }",
-                     "timestamp", &t,
-                     "name", &n) < 0) {
+    if (json_unpack (entry, "{ s:F s:s }", "timestamp", &t, "name", &n) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -47,8 +44,7 @@ int eventlog_entry_parse (json_t *entry,
             errno = EINVAL;
             return -1;
         }
-    }
-    else
+    } else
         c = NULL;
 
     if (timestamp)
@@ -117,7 +113,7 @@ json_t *eventlog_decode (const char *s)
     free (copy);
     return a;
 
- error:
+error:
     save_errno = errno;
     free (copy);
     json_decref (a);
@@ -131,10 +127,8 @@ bool eventlog_entry_validate (json_t *entry)
     json_t *timestamp;
     json_t *context;
 
-    if (!json_is_object (entry)
-        || !(name = json_object_get (entry, "name"))
-        || !json_is_string (name)
-        || !(timestamp = json_object_get (entry, "timestamp"))
+    if (!json_is_object (entry) || !(name = json_object_get (entry, "name"))
+        || !json_is_string (name) || !(timestamp = json_object_get (entry, "timestamp"))
         || !json_is_number (timestamp))
         return false;
 
@@ -146,8 +140,7 @@ bool eventlog_entry_validate (json_t *entry)
     return true;
 }
 
-static json_t *eventlog_entry_decode_common (const char *entry,
-                                             bool trailing_newline)
+static json_t *eventlog_entry_decode_common (const char *entry, bool trailing_newline)
 {
     int len;
     char *ptr;
@@ -166,8 +159,7 @@ static json_t *eventlog_entry_decode_common (const char *entry,
         ptr = strchr (entry, '\n');
         if (ptr != &entry[len - 1])
             goto einval;
-    }
-    else {
+    } else {
         if ((ptr = strchr (entry, '\n')))
             goto einval;
     }
@@ -182,7 +174,7 @@ static json_t *eventlog_entry_decode_common (const char *entry,
 
     return o;
 
- einval:
+einval:
     errno = EINVAL;
     return NULL;
 }
@@ -201,15 +193,11 @@ static int get_timestamp_now (double *timestamp)
     return 0;
 }
 
-static json_t *entry_build (double timestamp,
-                            const char *name,
-                            json_t *context)
+static json_t *entry_build (double timestamp, const char *name, json_t *context)
 {
     json_t *o = NULL;
 
-    if (timestamp < 0.
-        || !name
-        || !strlen (name)
+    if (timestamp < 0. || !name || !strlen (name)
         || (context && !json_is_object (context))) {
         errno = EINVAL;
         return NULL;
@@ -219,14 +207,15 @@ static json_t *entry_build (double timestamp,
             return NULL;
     }
     if (!context)
-        o = json_pack ("{ s:f s:s }",
-                       "timestamp", timestamp,
-                       "name", name);
+        o = json_pack ("{ s:f s:s }", "timestamp", timestamp, "name", name);
     else
         o = json_pack ("{ s:f s:s s:O }",
-                       "timestamp", timestamp,
-                       "name", name,
-                       "context", context);
+                       "timestamp",
+                       timestamp,
+                       "name",
+                       name,
+                       "context",
+                       context);
     if (!o) {
         errno = ENOMEM;
         return NULL;
@@ -234,8 +223,7 @@ static json_t *entry_build (double timestamp,
     return o;
 }
 
-json_t *eventlog_entry_create (double timestamp, const char *name,
-                               const char *context)
+json_t *eventlog_entry_create (double timestamp, const char *name, const char *context)
 {
     json_t *rv = NULL;
     json_t *c = NULL;
@@ -248,7 +236,7 @@ json_t *eventlog_entry_create (double timestamp, const char *name,
         }
     }
     rv = entry_build (timestamp, name, c);
- error:
+error:
     save_errno = errno;
     json_decref (c);
     errno = save_errno;
@@ -271,7 +259,7 @@ json_t *eventlog_entry_vpack (double timestamp,
         }
     }
     rv = entry_build (timestamp, name, c);
- error:
+error:
     save_errno = errno;
     json_decref (c);
     errno = save_errno;
@@ -287,10 +275,7 @@ json_t *eventlog_entry_pack (double timestamp,
     json_t *rv;
 
     va_start (ap, context_fmt);
-    rv = eventlog_entry_vpack (timestamp,
-                               name,
-                               context_fmt,
-                               ap);
+    rv = eventlog_entry_vpack (timestamp, name, context_fmt, ap);
     va_end (ap);
     return rv;
 }

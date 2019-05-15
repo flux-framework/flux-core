@@ -31,8 +31,7 @@ static void commit_continuation (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0) {
         if (flux_respond_error (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    }
-    else {
+    } else {
         if (flux_respond (h, msg, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
@@ -53,16 +52,29 @@ static char *create_eventlog_entry (json_t *job)
     char *entrystr;
     int save_errno;
 
-    if (json_unpack (job, "{s:I s:i s:i s:f}", "id", &id,
-                                               "userid", &userid,
-                                               "priority", &priority,
-                                               "t_submit", &t_submit) < 0)
+    if (json_unpack (job,
+                     "{s:I s:i s:i s:f}",
+                     "id",
+                     &id,
+                     "userid",
+                     &userid,
+                     "priority",
+                     &priority,
+                     "t_submit",
+                     &t_submit)
+        < 0)
         goto error_inval;
-    if (!(entry = eventlog_entry_pack (0., "submit", "{ s:I s:i s:i s:f }",
-                                       "id", id,
-                                       "priority", priority,
-                                       "userid", userid,
-                                       "t_submit", t_submit)))
+    if (!(entry = eventlog_entry_pack (0.,
+                                       "submit",
+                                       "{ s:I s:i s:i s:f }",
+                                       "id",
+                                       id,
+                                       "priority",
+                                       priority,
+                                       "userid",
+                                       userid,
+                                       "t_submit",
+                                       t_submit)))
         goto error;
     if (!(entrystr = eventlog_entry_encode (entry)))
         goto error;
@@ -89,7 +101,8 @@ static flux_kvs_txn_t *create_eventlog_txn (json_t *jobs)
 
     if (!(txn = flux_kvs_txn_create ()))
         return NULL;
-    json_array_foreach (jobs, index, job) {
+    json_array_foreach (jobs, index, job)
+    {
         char *event = create_eventlog_entry (job);
         if (!event)
             goto error;
@@ -107,8 +120,10 @@ error:
     return NULL;
 }
 
-static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void submit_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     json_t *jobs;
     flux_kvs_txn_t *txn = NULL;
@@ -136,7 +151,7 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "job-manager.submit", submit_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

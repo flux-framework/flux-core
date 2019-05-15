@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#  include <config.h>
+#include <config.h>
 #endif /* HAVE_CONFIG_H */
 
 #include <time.h>
@@ -26,8 +26,10 @@
 static int table_to_json (toml_table_t *tab, json_t **op);
 
 static void errprintf (struct tomltk_error *error,
-                       const char *filename, int lineno,
-                       const char *fmt, ...)
+                       const char *filename,
+                       int lineno,
+                       const char *fmt,
+                       ...)
 {
     va_list ap;
     int saved_errno = errno;
@@ -50,8 +52,7 @@ static void errprintf (struct tomltk_error *error,
  * is parsed to:
  *   error->lineno=42, error->errbuf="bad key"
  */
-static void errfromtoml (struct tomltk_error *error,
-                         const char *filename, char *errstr)
+static void errfromtoml (struct tomltk_error *error, const char *filename, char *errstr)
 {
     if (error) {
         char *msg = errstr;
@@ -69,8 +70,8 @@ static void errfromtoml (struct tomltk_error *error,
  */
 static int tstotm (toml_timestamp_t *ts, struct tm *tm)
 {
-    if (!ts || !tm || !ts->year || !ts->month || !ts->day
-                   || !ts->hour  || !ts->minute || !ts->second)
+    if (!ts || !tm || !ts->year || !ts->month || !ts->day || !ts->hour || !ts->minute
+        || !ts->second)
         return -1;
     memset (tm, 0, sizeof (*tm));
     tm->tm_year = *ts->year - 1900;
@@ -146,26 +147,20 @@ static int value_to_json (const char *raw, json_t **op)
         free (s);
         if (!obj)
             goto nomem;
-    }
-    else if (toml_rtob (raw, &b) == 0) {
+    } else if (toml_rtob (raw, &b) == 0) {
         if (!(obj = b ? json_true () : json_false ()))
             goto nomem;
-    }
-    else if (toml_rtoi (raw, &i) == 0) {
+    } else if (toml_rtoi (raw, &i) == 0) {
         if (!(obj = json_integer (i)))
             goto nomem;
-    }
-    else if (toml_rtod (raw, &d) == 0) {
+    } else if (toml_rtod (raw, &d) == 0) {
         if (!(obj = json_real (d)))
             goto nomem;
-    }
-    else if (toml_rtots (raw, &ts) == 0) {
+    } else if (toml_rtots (raw, &ts) == 0) {
         time_t t;
-        if (tomltk_ts_to_epoch (&ts, &t) < 0
-                || !(obj = tomltk_epoch_to_json (t)))
+        if (tomltk_ts_to_epoch (&ts, &t) < 0 || !(obj = tomltk_epoch_to_json (t)))
             goto error;
-    }
-    else {
+    } else {
         errno = EINVAL;
         goto error;
     }
@@ -187,7 +182,7 @@ static int array_to_json (toml_array_t *arr, json_t **op)
 
     if (!(obj = json_array ()))
         goto nomem;
-    for (i = 0; ; i++) {
+    for (i = 0;; i++) {
         const char *raw;
         json_t *val;
         toml_table_t *tab;
@@ -196,16 +191,13 @@ static int array_to_json (toml_array_t *arr, json_t **op)
         if ((raw = toml_raw_at (arr, i))) {
             if (value_to_json (raw, &val) < 0)
                 goto error;
-        }
-        else if ((tab = toml_table_at (arr, i))) {
+        } else if ((tab = toml_table_at (arr, i))) {
             if (table_to_json (tab, &val) < 0)
                 goto error;
-        }
-        else if ((subarr = toml_array_at (arr, i))) {
+        } else if ((subarr = toml_array_at (arr, i))) {
             if (array_to_json (subarr, &val) < 0)
                 goto error;
-        }
-        else
+        } else
             break;
         if (json_array_append_new (obj, val) < 0) {
             json_decref (val);
@@ -233,7 +225,7 @@ static int table_to_json (toml_table_t *tab, json_t **op)
 
     if (!(obj = json_object ()))
         goto nomem;
-    for (i = 0; ; i++) {
+    for (i = 0;; i++) {
         const char *key;
         const char *raw;
         toml_table_t *subtab;
@@ -245,12 +237,10 @@ static int table_to_json (toml_table_t *tab, json_t **op)
         if ((raw = toml_raw_in (tab, key))) {
             if (value_to_json (raw, &val) < 0)
                 goto error;
-        }
-        else if ((subtab = toml_table_in (tab, key))) {
+        } else if ((subtab = toml_table_in (tab, key))) {
             if (table_to_json (subtab, &val) < 0)
                 goto error;
-        }
-        else if ((arr = toml_array_in (tab, key))) {
+        } else if ((arr = toml_array_in (tab, key))) {
             if (array_to_json (arr, &val) < 0)
                 goto error;
         }
@@ -283,8 +273,7 @@ json_t *tomltk_table_to_json (toml_table_t *tab)
     return obj;
 }
 
-toml_table_t *tomltk_parse (const char *conf, int len,
-                            struct tomltk_error *error)
+toml_table_t *tomltk_parse (const char *conf, int len, struct tomltk_error *error)
 {
     char errbuf[200];
     char *cpy;
@@ -311,8 +300,7 @@ toml_table_t *tomltk_parse (const char *conf, int len,
     return tab;
 }
 
-toml_table_t *tomltk_parse_file (const char *filename,
-                                 struct tomltk_error *error)
+toml_table_t *tomltk_parse_file (const char *filename, struct tomltk_error *error)
 {
     char errbuf[200];
     FILE *fp;

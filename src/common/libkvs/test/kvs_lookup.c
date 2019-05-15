@@ -69,16 +69,14 @@ void errors (void)
 
 int main (int argc, char *argv[])
 {
-
     plan (NO_PLAN);
 
     errors ();
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

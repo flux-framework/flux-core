@@ -15,9 +15,10 @@
 extern "C" {
 #endif
 
-flux_future_t *flux_kvs_lookup (flux_t *h, const char *ns, int flags,
-                                const char *key);
-flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
+flux_future_t *flux_kvs_lookup (flux_t *h, const char *ns, int flags, const char *key);
+flux_future_t *flux_kvs_lookupat (flux_t *h,
+                                  int flags,
+                                  const char *key,
                                   const char *treeobj);
 
 int flux_kvs_lookup_get (flux_future_t *f, const char **value);

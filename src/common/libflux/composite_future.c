@@ -18,8 +18,8 @@
 /*  Type-specific data for a composite future:
  */
 struct composite_future {
-    unsigned int any:1;  /* true if this future is a "wait any" type */
-    zhash_t *children;   /* hash of child futures by name            */
+    unsigned int any : 1; /* true if this future is a "wait any" type */
+    zhash_t *children;    /* hash of child futures by name            */
 };
 
 static void composite_future_destroy (struct composite_future *f)
@@ -31,7 +31,7 @@ static void composite_future_destroy (struct composite_future *f)
     }
 }
 
-static struct composite_future * composite_future_create (void)
+static struct composite_future *composite_future_create (void)
 {
     struct composite_future *cf = calloc (1, sizeof (*cf));
     if (cf == NULL)
@@ -45,7 +45,7 @@ static struct composite_future * composite_future_create (void)
 
 /*  Return the embedded composite_future data from future `f`
  */
-static struct composite_future * composite_get (flux_future_t *f)
+static struct composite_future *composite_get (flux_future_t *f)
 {
     return flux_future_aux_get (f, "flux::composite");
 }
@@ -138,7 +138,7 @@ void composite_future_init (flux_future_t *f, void *arg)
     child = zhash_first (cf->children);
     while (child) {
         future_propagate_context (f, child);
-        if (flux_future_then (child, -1., child_cb, (void *) f) < 0)
+        if (flux_future_then (child, -1., child_cb, (void *)f) < 0)
             goto error;
         child = zhash_next (cf->children);
     }
@@ -154,9 +154,13 @@ error:
 static flux_future_t *future_create_composite (int wait_any)
 {
     struct composite_future *cf = composite_future_create ();
-    flux_future_t *f = flux_future_create (composite_future_init, (void *) cf);
-    if (!f || !cf || flux_future_aux_set (f, "flux::composite", cf,
-                         (flux_free_f) composite_future_destroy) < 0) {
+    flux_future_t *f = flux_future_create (composite_future_init, (void *)cf);
+    if (!f || !cf
+        || flux_future_aux_set (f,
+                                "flux::composite",
+                                cf,
+                                (flux_free_f)composite_future_destroy)
+               < 0) {
         composite_future_destroy (cf);
         flux_future_destroy (f);
         return (NULL);
@@ -189,7 +193,7 @@ int flux_future_push (flux_future_t *f, const char *name, flux_future_t *child)
     }
     if (zhash_insert (cf->children, name, child) < 0)
         return (-1);
-    zhash_freefn (cf->children, name, (flux_free_f) flux_future_destroy);
+    zhash_freefn (cf->children, name, (flux_free_f)flux_future_destroy);
     if (flux_future_aux_set (child, "flux::parent", f, NULL) < 0) {
         zhash_delete (cf->children, name);
         return (-1);
@@ -243,11 +247,11 @@ const char *flux_future_next_child (flux_future_t *f)
  *   If the user calls both and_then() and or_then(), the same cf->next
  *   future is returned, since only one of these calls will be used.
  *
- *  The underlying then() callback for `f` is subsequently set to use 
+ *  The underlying then() callback for `f` is subsequently set to use
  *   chained_continuation() below, which will call `and_then()` on successful
  *   fulfillment of f (aka `prev`) or or_then() on failure. These continuations
  *   are passed `f, arg` as if a normal continuation was used with
- *   flux_future_then(3). These callbacks may use one of 
+ *   flux_future_then(3). These callbacks may use one of
  *   flux_future_continue(3) or flux_future_continue_error(3) to schedule
  *   fulfillment of the internal `cf->next` future based on a new
  *   intermediate future created during the continuation (e.g. when a
@@ -297,8 +301,9 @@ static void fulfill_next (flux_future_t *f, flux_future_t *next)
      *  next callback the user will see will be for the future `next`.
      */
     if (flux_future_fulfill_with (next, f) < 0)
-        flux_future_fatal_error (next, errno,
-            "fulfill_next: flux_future_fulfill_with failed");
+        flux_future_fatal_error (next,
+                                 errno,
+                                 "fulfill_next: flux_future_fulfill_with failed");
     flux_future_destroy (f);
 }
 
@@ -328,8 +333,7 @@ static void chained_continuation (flux_future_t *prev, void *arg)
             (*cf->or_then.cb) (prev, cf->or_then.arg);
             ran_callback = true;
         }
-    }
-    else if (cf->and_then.cb) {
+    } else if (cf->and_then.cb) {
         (*cf->and_then.cb) (prev, cf->and_then.arg);
         ran_callback = true;
     }
@@ -339,7 +343,8 @@ static void chained_continuation (flux_future_t *prev, void *arg)
      *   cf->next using prev directly.
      */
     if (!cf->continued && flux_future_fulfill_with (cf->next, prev) < 0) {
-        flux_future_fatal_error (cf->next, errno,
+        flux_future_fatal_error (cf->next,
+                                 errno,
                                  "chained_continuation: fulfill_with failed");
     }
 
@@ -397,7 +402,6 @@ error:
     fulfill_next (f, cf->next);
 }
 
-
 /*  Allocate a chained future structure */
 static struct chained_future *chained_future_alloc (void)
 {
@@ -427,9 +431,11 @@ static struct chained_future *chained_future_create (flux_future_t *f)
 {
     struct chained_future *cf = flux_future_aux_get (f, "flux::chained");
     if (cf == NULL && (cf = chained_future_alloc ())) {
-        if (flux_future_aux_set (f, "flux::chained",
-                                 (void *) cf,
-                                 (flux_free_f) chained_future_destroy) < 0) {
+        if (flux_future_aux_set (f,
+                                 "flux::chained",
+                                 (void *)cf,
+                                 (flux_free_f)chained_future_destroy)
+            < 0) {
             chained_future_destroy (cf);
             return (NULL);
         }
@@ -486,15 +492,12 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f)
     /*  Set the "next" future in the chain (prev->next) to be fulfilled
      *   by the provided future `f` once it is fulfilled.
      */
-    return flux_future_then (f, -1.,
-                             (flux_continuation_f) fulfill_next,
-                             cf->next);
+    return flux_future_then (f, -1., (flux_continuation_f)fulfill_next, cf->next);
 }
 
 /* "Continue" the chained "next" future embedded in `prev` with an error
  */
-void flux_future_continue_error (flux_future_t *prev, int errnum,
-                                 const char *errstr)
+void flux_future_continue_error (flux_future_t *prev, int errnum, const char *errstr)
 {
     struct chained_future *cf = chained_future_get (prev);
     if (cf && cf->next) {
@@ -504,7 +507,8 @@ void flux_future_continue_error (flux_future_t *prev, int errnum,
 }
 
 flux_future_t *flux_future_and_then (flux_future_t *prev,
-                                     flux_continuation_f next_cb, void *arg)
+                                     flux_continuation_f next_cb,
+                                     void *arg)
 {
     struct chained_future *cf = chained_future_create (prev);
     if (!cf)
@@ -515,7 +519,8 @@ flux_future_t *flux_future_and_then (flux_future_t *prev,
 }
 
 flux_future_t *flux_future_or_then (flux_future_t *prev,
-                                    flux_continuation_f or_cb, void *arg)
+                                    flux_continuation_f or_cb,
+                                    void *arg)
 {
     struct chained_future *cf = chained_future_create (prev);
     if (!cf)

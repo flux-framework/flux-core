@@ -40,8 +40,8 @@ void test_empty (void)
     char *s;
     const char *key;
 
-    lives_ok ({flux_kvsdir_destroy (NULL);},
-        "flux_kvsdir_destroy with NULL paramter doesn't crash");
+    lives_ok ({ flux_kvsdir_destroy (NULL); },
+              "flux_kvsdir_destroy with NULL paramter doesn't crash");
 
     errno = 0;
     dir = flux_kvsdir_create (NULL, NULL, NULL, NULL);
@@ -59,14 +59,18 @@ void test_empty (void)
         "kvsdir_create with bad JSON objects fails with EINVAL");
 
     errno = 0;
-    dir = flux_kvsdir_create (NULL, NULL, "foo",
-                         "{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}");
+    dir = flux_kvsdir_create (NULL,
+                              NULL,
+                              "foo",
+                              "{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}");
     ok (dir == NULL && errno == EINVAL,
         "flux_kvsdir_create with invalid treeobj fails with EINVAL");
 
     errno = 0;
-    dir = flux_kvsdir_create (NULL, NULL, "foo",
-                         "{\"data\":\"MQA=\",\"type\":\"val\",\"ver\":1}");
+    dir = flux_kvsdir_create (NULL,
+                              NULL,
+                              "foo",
+                              "{\"data\":\"MQA=\",\"type\":\"val\",\"ver\":1}");
     ok (dir == NULL && errno == EINVAL,
         "flux_kvsdir_create with non-dir treeobj fails with EINVAL");
 
@@ -77,8 +81,7 @@ void test_empty (void)
     dir = flux_kvsdir_create (NULL, NULL, "foo", s);
     free (s);
 
-    ok (dir != NULL,
-        "flux_kvsdir_create with empty directory works");
+    ok (dir != NULL, "flux_kvsdir_create with empty directory works");
     jdiag (kvsdir_get_obj (dir));
 
     ok (!flux_kvsdir_exists (dir, "noexist"),
@@ -98,29 +101,24 @@ void test_empty (void)
         "flux_kvsdir_handle returns NULL since that's what we put in");
     ok (flux_kvsdir_rootref (dir) == NULL,
         "flux_kvsdir_rootref returns NULL since that's what we put in");
-    ok (flux_kvsdir_get_size (dir) == 0,
-        "flux_kvsdir_get_size returns zero");
+    ok (flux_kvsdir_get_size (dir) == 0, "flux_kvsdir_get_size returns zero");
 
     errno = 0;
     ok (flux_kvsitr_create (NULL) == NULL && errno == EINVAL,
         "flux_kvsitr_create with NULL dir fails with EINVAL");
     ok (flux_kvsitr_next (NULL) == NULL,
         "flux_kvsitr_next on NULL iterator returns NULL");
-    lives_ok ({flux_kvsitr_rewind (NULL);},
-        "flux_kvsitr_rewind on NULL iterator doesn't crash");
-    lives_ok ({flux_kvsitr_destroy (NULL);},
-        "flux_kvsitr_destroy on NULL iterator doesn't crash");
+    lives_ok ({ flux_kvsitr_rewind (NULL); },
+              "flux_kvsitr_rewind on NULL iterator doesn't crash");
+    lives_ok ({ flux_kvsitr_destroy (NULL); },
+              "flux_kvsitr_destroy on NULL iterator doesn't crash");
 
     itr = flux_kvsitr_create (dir);
-    ok (itr != NULL,
-        "flux_kvsitr_create works");
-    ok (flux_kvsitr_next (itr) == NULL,
-        "flux_kvsitr_next returns NULL on first call");
-    ok (flux_kvsitr_next (itr) == NULL,
-        "flux_kvsitr_next returns NULL on second call");
+    ok (itr != NULL, "flux_kvsitr_create works");
+    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on first call");
+    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on second call");
     flux_kvsitr_rewind (itr);
-    ok (flux_kvsitr_next (itr) == NULL,
-        "flux_kvsitr_next returns NULL after rewind");
+    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL after rewind");
     flux_kvsitr_destroy (itr);
 
     flux_kvsdir_destroy (dir);
@@ -160,8 +158,7 @@ void test_full (void)
         BAIL_OUT ("json_dumps failed on new treeobj");
     dir = flux_kvsdir_create (NULL, NULL, "foo", s);
     free (s);
-    ok (dir != NULL,
-        "flux_kvsdir_create works");
+    ok (dir != NULL, "flux_kvsdir_create works");
     jdiag (kvsdir_get_obj (dir));
 
     ok (!flux_kvsdir_exists (dir, "noexist"),
@@ -197,22 +194,18 @@ void test_full (void)
     ok (flux_kvsdir_issymlink (dir, "boo"),
         "flux_kvsdir_issymlink on existing dir returns false");
 
-    ok (flux_kvsdir_get_size (dir) == 4,
-        "flux_kvsdir_get_size returns 4");
+    ok (flux_kvsdir_get_size (dir) == 4, "flux_kvsdir_get_size returns 4");
 
     itr = flux_kvsitr_create (dir);
-    ok (itr != NULL,
-        "flux_kvsitr_create works");
+    ok (itr != NULL, "flux_kvsitr_create works");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on first call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on second call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on third call");
-    ok (flux_kvsitr_next (itr) != NULL,
-        "flux_kvsitr_next returns NULL on fourth call");
-    ok (flux_kvsitr_next (itr) == NULL,
-        "flux_kvsitr_next returns NULL on fifth call");
+    ok (flux_kvsitr_next (itr) != NULL, "flux_kvsitr_next returns NULL on fourth call");
+    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on fifth call");
 
     flux_kvsitr_rewind (itr);
     ok (flux_kvsitr_next (itr) != NULL,
@@ -221,17 +214,13 @@ void test_full (void)
         "flux_kvsitr_next returns non-NULL on second call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on third call");
-    ok (flux_kvsitr_next (itr) != NULL,
-        "flux_kvsitr_next returns NULL on fourth call");
-    ok (flux_kvsitr_next (itr) == NULL,
-        "flux_kvsitr_next returns NULL on fifth call");
+    ok (flux_kvsitr_next (itr) != NULL, "flux_kvsitr_next returns NULL on fourth call");
+    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on fifth call");
     flux_kvsitr_destroy (itr);
 
     flux_kvsdir_t *cpy = flux_kvsdir_copy (dir);
-    ok (cpy != NULL,
-        "flux_kvsdir_copy was successful");
-    ok (flux_kvsdir_get_size (cpy) == 4,
-        "flux_kvsdir_get_size on copy returns 4");
+    ok (cpy != NULL, "flux_kvsdir_copy was successful");
+    ok (flux_kvsdir_get_size (cpy) == 4, "flux_kvsdir_get_size on copy returns 4");
 
     flux_kvsdir_destroy (dir);
 
@@ -243,17 +232,15 @@ void test_full (void)
 
 int main (int argc, char *argv[])
 {
-
     plan (NO_PLAN);
 
     test_empty ();
     test_full ();
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

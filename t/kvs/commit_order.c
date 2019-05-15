@@ -24,9 +24,9 @@ static int max_queue_depth = 16;
 static char *ns = NULL;
 static const char *key;
 
-static int txcount;         // count of commit requests
-static int rxcount;         // count of commit responses
-static int wrxcount;        // count of lookup/watch responses
+static int txcount;   // count of commit requests
+static int rxcount;   // count of commit responses
+static int wrxcount;  // count of lookup/watch responses
 static flux_watcher_t *w_prep;
 static flux_watcher_t *w_check;
 static flux_watcher_t *w_idle;
@@ -39,19 +39,19 @@ void check (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 
 #define OPTIONS "hvc:f:n:"
 static const struct option longopts[] = {
-    {"help",            no_argument,        0, 'h'},
-    {"verbose",         no_argument,     0, 'v'},
-    {"count",           required_argument,  0, 'c'},
-    {"fanout",          required_argument,  0, 'f'},
-    {"namespace",       required_argument,  0, 'n'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"verbose", no_argument, 0, 'v'},
+    {"count", required_argument, 0, 'c'},
+    {"fanout", required_argument, 0, 'f'},
+    {"namespace", required_argument, 0, 'n'},
+    {0, 0, 0, 0},
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: commit_order [--verbose] [--namespace=NAME] [--count=N] [--fanout=N] key\n"
-);
+             "Usage: commit_order [--verbose] [--namespace=NAME] [--count=N] "
+             "[--fanout=N] key\n");
     exit (1);
 }
 
@@ -102,7 +102,7 @@ int main (int argc, char *argv[])
      * watch request doesn't fail with ENOENT.
      */
     f = commit_int (h, key, txcount++);
-    commit_continuation (f, NULL); // destroys f, increments rxcount
+    commit_continuation (f, NULL);  // destroys f, increments rxcount
 
     /* Configure watcher
      * Wait for one response before unleashing async puts, to ensure
@@ -110,7 +110,7 @@ int main (int argc, char *argv[])
      */
     if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_WATCH, key)))
         log_err_exit ("flux_kvs_lookup");
-    watch_continuation (f, &last); // resets f, increments wrxcount
+    watch_continuation (f, &last);  // resets f, increments wrxcount
     if (flux_future_then (f, -1., watch_continuation, &last) < 0)
         log_err_exit ("flux_future_then");
 
@@ -148,11 +148,10 @@ void watch_continuation (flux_future_t *f, void *arg)
 
     if (flux_kvs_lookup_get_unpack (f, "i", &i) < 0) {
         if (errno == ENODATA) {
-            flux_future_destroy (f); // ENODATA (like EOF on response stream)
+            flux_future_destroy (f);  // ENODATA (like EOF on response stream)
             if (verbose)
                 printf ("< ENODATA\n");
-        }
-        else
+        } else
             log_err_exit ("flux_lookup_get_unpack");
         return;
     }
@@ -189,7 +188,7 @@ flux_future_t *commit_int (flux_t *h, const char *k, int v)
         log_err_exit ("flux_kvs_commit");
     flux_kvs_txn_destroy (txn);
     if (verbose)
-        printf("> %s=%d\n", k, v);
+        printf ("> %s=%d\n", k, v);
     return f;
 }
 
@@ -198,9 +197,8 @@ void prep (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     if (txcount == totcount) {
         flux_watcher_stop (w_prep);
         flux_watcher_stop (w_check);
-    }
-    else if ((txcount - rxcount) < max_queue_depth)
-        flux_watcher_start (w_idle); // keeps loop from blocking
+    } else if ((txcount - rxcount) < max_queue_depth)
+        flux_watcher_start (w_idle);  // keeps loop from blocking
 }
 
 void check (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)

@@ -18,11 +18,11 @@
 
 #include <stdint.h>
 
-char *sign_none_wrap (const void *payload, int payloadsz,
-                      uint32_t userid);
+char *sign_none_wrap (const void *payload, int payloadsz, uint32_t userid);
 
 int sign_none_unwrap (const char *input,
-                      void **payload, int *payloadsz,
+                      void **payload,
+                      int *payloadsz,
                       uint32_t *userid);
 
 #endif /* !_SIGN_NONE_H */

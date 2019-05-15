@@ -23,7 +23,7 @@
 /*
  *  Return JSON string representation of command object `cmd`
  */
-char * flux_cmd_tojson (const flux_cmd_t *cmd);
+char *flux_cmd_tojson (const flux_cmd_t *cmd);
 
 /*
  *  Return a newly allocated flux_cmd_t from a JSON string representation.

@@ -13,28 +13,25 @@
 
 struct pmi_simple_server;
 
-#define SIMPLE_KVS_KEY_MAX         64
-#define SIMPLE_KVS_VAL_MAX         1024
-#define SIMPLE_KVS_NAME_MAX        64
+#define SIMPLE_KVS_KEY_MAX 64
+#define SIMPLE_KVS_VAL_MAX 1024
+#define SIMPLE_KVS_NAME_MAX 64
 
-#define SIMPLE_MAX_PROTO_OVERHEAD  64
+#define SIMPLE_MAX_PROTO_OVERHEAD 64
 
-#define SIMPLE_MAX_PROTO_LINE \
-    (SIMPLE_KVS_KEY_MAX + SIMPLE_KVS_VAL_MAX \
-                        + SIMPLE_KVS_NAME_MAX \
-                        + SIMPLE_MAX_PROTO_OVERHEAD)
-
+#define SIMPLE_MAX_PROTO_LINE                                      \
+    (SIMPLE_KVS_KEY_MAX + SIMPLE_KVS_VAL_MAX + SIMPLE_KVS_NAME_MAX \
+     + SIMPLE_MAX_PROTO_OVERHEAD)
 
 /* User-provided service implementation.
  * Integer return: 0 on success, -1 on failure.
  */
 struct pmi_simple_ops {
-    int (*kvs_put)(void *arg, const char *kvsname,
-                   const char *key, const char *val);
-    int (*kvs_get)(void *arg, void *cli, const char *kvsname, const char *key);
-    int (*barrier_enter)(void *arg);
-    int (*response_send)(void *client, const char *buf);
-    void (*debug_trace)(void *client, const char *buf);
+    int (*kvs_put) (void *arg, const char *kvsname, const char *key, const char *val);
+    int (*kvs_get) (void *arg, void *cli, const char *kvsname, const char *key);
+    int (*barrier_enter) (void *arg);
+    int (*response_send) (void *client, const char *buf);
+    void (*debug_trace) (void *client, const char *buf);
 };
 
 enum {
@@ -57,7 +54,8 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
  * Returns 1 indicating finalized / close fd, 0 on success, -1 on failure.
  */
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
-                               const char *buf, void *client);
+                               const char *buf,
+                               void *client);
 
 /* Finalize a barrier.  Set rc to 0 for success, -1 for failure.
  */
@@ -66,7 +64,8 @@ int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc);
 /* Finalize a kvs_get.
  */
 int pmi_simple_server_kvs_get_complete (struct pmi_simple_server *pmi,
-                                        void *client, const char *val);
+                                        void *client,
+                                        const char *val);
 
 #endif /* ! _FLUX_CORE_PMI_SIMPLE_SERVER_H */
 

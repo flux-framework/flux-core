@@ -52,16 +52,14 @@ int tomltk_ts_to_epoch (toml_timestamp_t *ts, time_t *tp);
  * On failure -1 is returned with errno set.  If 'error' is
  * non-NULL, an error description is written there.
  */
-toml_table_t *tomltk_parse (const char *conf, int len,
-                            struct tomltk_error *error);
+toml_table_t *tomltk_parse (const char *conf, int len, struct tomltk_error *error);
 
 /* Wrapper for toml_parse_file() that internally
  * opens/closes 'filename'.  On success, 0 is returned.
  * On failure -1 is returned with errno set.  If 'error' is
  * non-NULL, and error description is written there.
  */
-toml_table_t *tomltk_parse_file (const char *filename,
-                                 struct tomltk_error *error);
+toml_table_t *tomltk_parse_file (const char *filename, struct tomltk_error *error);
 
 #endif /* !_UTIL_TOMLTK_H */
 

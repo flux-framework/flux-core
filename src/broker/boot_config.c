@@ -36,10 +36,10 @@ static const char *badat[] = {
 /* Config file table expectations.
  */
 static const struct cf_option opts[] = {
-    { "tbon-endpoints", CF_ARRAY, true },
-    { "session-id", CF_STRING, true },
-    { "rank", CF_INT64, false },
-    { "size", CF_INT64, false },
+    {"tbon-endpoints", CF_ARRAY, true},
+    {"session-id", CF_STRING, true},
+    {"rank", CF_INT64, false},
+    {"size", CF_INT64, false},
     CF_OPTIONS_TABLE_END,
 };
 
@@ -75,11 +75,11 @@ static int find_local_cf_endpoint (const cf_t *cf, int size)
         const char *s = get_cf_endpoint (cf, i);
         const char *entry = NULL;
 
-        if (!s) // short array
+        if (!s)  // short array
             break;
         if (fnmatch ("tcp://127.0.0.*:*", s, 0) == 0)
             break;
-        if (fnmatch("ipc://*", s, 0) == 0)
+        if (fnmatch ("ipc://*", s, 0) == 0)
             break;
         while ((entry = argz_next (addrs, addrs_len, entry))) {
             char pat[128];
@@ -87,7 +87,7 @@ static int find_local_cf_endpoint (const cf_t *cf, int size)
             if (fnmatch (pat, s, 0) == 0)
                 break;
         }
-        if (entry != NULL) // found a match in 'addrs'
+        if (entry != NULL)  // found a match in 'addrs'
             break;
     }
     free (addrs);
@@ -193,13 +193,19 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
 
     /* Update attributes.
      */
-    if (attr_add (attrs, "session-id", cf_string (cf_get_in (cf, "session-id")),
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (attr_add (attrs,
+                  "session-id",
+                  cf_string (cf_get_in (cf, "session-id")),
+                  FLUX_ATTRFLAG_IMMUTABLE)
+        < 0) {
         log_err ("setattr session-id");
         goto done;
     }
-    if (attr_add (attrs, "tbon.endpoint", get_cf_endpoint (cf, rank),
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (attr_add (attrs,
+                  "tbon.endpoint",
+                  get_cf_endpoint (cf, rank),
+                  FLUX_ATTRFLAG_IMMUTABLE)
+        < 0) {
         log_err ("setattr tbon.endpoint");
         goto done;
     }

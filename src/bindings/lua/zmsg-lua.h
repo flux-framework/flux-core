@@ -20,7 +20,9 @@
 struct zmsg_info;
 
 typedef int (*zi_resp_f) (lua_State *L,
-	struct zmsg_info *zi, const char *json_str, void *arg);
+                          struct zmsg_info *zi,
+                          const char *json_str,
+                          void *arg);
 
 struct zmsg_info *zmsg_info_create (flux_msg_t **msg, int type);
 

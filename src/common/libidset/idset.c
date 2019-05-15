@@ -231,7 +231,6 @@ unsigned int idset_first (const struct idset *idset)
     return next;
 }
 
-
 unsigned int idset_next (const struct idset *idset, unsigned int prev)
 {
     unsigned int next = IDSET_INVALID_ID;
@@ -263,8 +262,7 @@ size_t idset_count (const struct idset *idset)
     return idset->count;
 }
 
-bool idset_equal (const struct idset *idset1,
-                  const struct idset *idset2)
+bool idset_equal (const struct idset *idset1, const struct idset *idset2)
 {
     unsigned int id;
 
@@ -276,13 +274,13 @@ bool idset_equal (const struct idset *idset1,
     id = vebsucc (idset1->T, 0);
     while (id < idset1->T.M) {
         if (vebsucc (idset2->T, id) != id)
-            return false; // id in idset1 not set in idset2
+            return false;  // id in idset1 not set in idset2
         id = vebsucc (idset1->T, id + 1);
     }
     id = vebsucc (idset2->T, 0);
     while (id < idset2->T.M) {
         if (vebsucc (idset1->T, id) != id)
-            return false; // id in idset2 not set in idset1
+            return false;  // id in idset2 not set in idset1
         id = vebsucc (idset2->T, id + 1);
     }
     return true;

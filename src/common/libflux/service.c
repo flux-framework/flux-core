@@ -19,8 +19,13 @@ flux_future_t *flux_service_register (flux_t *h, const char *name)
         errno = EINVAL;
         return NULL;
     }
-    return flux_rpc_pack (h, "service.add", FLUX_NODEID_ANY, 0,
-                          "{s:s}", "service", name);
+    return flux_rpc_pack (h,
+                          "service.add",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:s}",
+                          "service",
+                          name);
 }
 
 flux_future_t *flux_service_unregister (flux_t *h, const char *name)
@@ -29,8 +34,13 @@ flux_future_t *flux_service_unregister (flux_t *h, const char *name)
         errno = EINVAL;
         return NULL;
     }
-    return flux_rpc_pack (h, "service.remove", FLUX_NODEID_ANY, 0,
-                          "{s:s}", "service", name);
+    return flux_rpc_pack (h,
+                          "service.remove",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:s}",
+                          "service",
+                          name);
 }
 
 /*

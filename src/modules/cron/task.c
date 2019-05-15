@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <signal.h>
@@ -24,40 +24,39 @@
 #include "task.h"
 
 struct cron_task {
-    flux_t *              h;      /* flux handle used to create this task   */
-    flux_subprocess_t    *p;      /* flux subprocess */
+    flux_t *h;            /* flux handle used to create this task   */
+    flux_subprocess_t *p; /* flux subprocess */
 
-    int                   rank;   /* rank on which task is being run        */
-    pid_t                 pid;    /* remote process id                      */
-    char *                state;  /* state string returned by cmb.exec      */
+    int rank;    /* rank on which task is being run        */
+    pid_t pid;   /* remote process id                      */
+    char *state; /* state string returned by cmb.exec      */
 
-    double               timeout;
-    flux_watcher_t *   timeout_w;
+    double timeout;
+    flux_watcher_t *timeout_w;
 
-    int                   status; /* exit status if state is Exited         */
-    int              rexec_errno; /* any errno returned by rexec service    */
-    int               exec_errno; /* any errno returned by remote exec(2)   */
+    int status;      /* exit status if state is Exited         */
+    int rexec_errno; /* any errno returned by rexec service    */
+    int exec_errno;  /* any errno returned by remote exec(2)   */
 
-    struct timespec   createtime; /* Time at which task was created         */
-    struct timespec    starttime; /* Time at which exec request was sent    */
-    struct timespec  runningtime; /* Time at which task state was Running   */
-    struct timespec      endtime; /* Time at which task exited/failed       */
+    struct timespec createtime;  /* Time at which task was created         */
+    struct timespec starttime;   /* Time at which exec request was sent    */
+    struct timespec runningtime; /* Time at which task state was Running   */
+    struct timespec endtime;     /* Time at which task exited/failed       */
 
-    unsigned int       started:1;
-    unsigned int  rexec_failed:1;
-    unsigned int   exec_failed:1;
-    unsigned int       running:1;
-    unsigned int      timedout:1;
-    unsigned int        exited:1;
-    unsigned int     completed:1;
+    unsigned int started : 1;
+    unsigned int rexec_failed : 1;
+    unsigned int exec_failed : 1;
+    unsigned int running : 1;
+    unsigned int timedout : 1;
+    unsigned int exited : 1;
+    unsigned int completed : 1;
 
-    cron_task_io_f       io_cb;
-    cron_task_state_f    state_cb;
-    cron_task_state_f    timeout_cb;
+    cron_task_io_f io_cb;
+    cron_task_state_f state_cb;
+    cron_task_state_f timeout_cb;
     cron_task_finished_f finished_cb;
-    void *               arg;
+    void *arg;
 };
-
 
 void cron_task_destroy (cron_task_t *t)
 {
@@ -117,8 +116,7 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
     va_end (ap);
 }
 
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     cron_task_t *t = arg;
     t->timedout = 1;
@@ -201,24 +199,20 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
         clock_gettime (CLOCK_REALTIME, &t->starttime);
         if (t->timeout >= 0.0)
             cron_task_timeout_start (t);
-    }
-    else if (state == FLUX_SUBPROCESS_RUNNING) {
+    } else if (state == FLUX_SUBPROCESS_RUNNING) {
         clock_gettime (CLOCK_REALTIME, &t->runningtime);
         t->running = 1;
         t->pid = flux_subprocess_pid (p);
         t->rank = flux_subprocess_rank (p);
-    }
-    else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
+    } else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
         cron_task_exec_failed (t, flux_subprocess_fail_errno (p));
         cron_task_handle_finished (p, t);
         errno = t->exec_errno;
-    }
-    else if (state == FLUX_SUBPROCESS_FAILED) {
+    } else if (state == FLUX_SUBPROCESS_FAILED) {
         cron_task_rexec_failed (t, flux_subprocess_fail_errno (p));
         cron_task_handle_finished (p, t);
         errno = t->rexec_errno;
-    }
-    else if (state == FLUX_SUBPROCESS_EXITED) {
+    } else if (state == FLUX_SUBPROCESS_EXITED) {
         t->exited = 1;
         t->status = flux_subprocess_status (p);
         if (WIFSIGNALED (t->status))
@@ -244,15 +238,13 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
         is_stderr = true;
 
     if (!(ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp))) {
-        flux_log_error (t->h, "%s: flux_subprocess_read_trimmed_line",
-                        __FUNCTION__);
+        flux_log_error (t->h, "%s: flux_subprocess_read_trimmed_line", __FUNCTION__);
         return;
     }
 
     if (!lenp) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-            flux_log_error (t->h, "%s: flux_subprocess_read",
-                            __FUNCTION__);
+            flux_log_error (t->h, "%s: flux_subprocess_read", __FUNCTION__);
             return;
         }
     }
@@ -280,11 +272,10 @@ int cron_task_kill (cron_task_t *t, int sig)
     return (0);
 }
 
-
 static flux_cmd_t *exec_cmd_create (struct cron_task *t,
-    const char *command,
-    const char *cwd,
-    json_t *env)
+                                    const char *command,
+                                    const char *cwd,
+                                    json_t *env)
 {
     flux_cmd_t *cmd = NULL;
     char *tmp_cwd = NULL;
@@ -308,7 +299,8 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         const char *key;
         json_t *value;
 
-        json_object_foreach (env, key, value) {
+        json_object_foreach (env, key, value)
+        {
             const char *value_str = json_string_value (value);
             if (!value_str) {
                 flux_log_error (t->h, "exec_cmd_create: json_string_value");
@@ -324,26 +316,26 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
 
     free (tmp_cwd);
     return (cmd);
- error:
+error:
     free (tmp_cwd);
     flux_cmd_destroy (cmd);
     return (NULL);
 }
 
 int cron_task_run (cron_task_t *t,
-    int rank, const char *command, const char *cwd,
-    json_t *env)
+                   int rank,
+                   const char *command,
+                   const char *cwd,
+                   json_t *env)
 {
     flux_t *h = t->h;
     flux_subprocess_t *p = NULL;
     flux_cmd_t *cmd;
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_state_change = state_change_cb,
-        .on_channel_out = NULL,
-        .on_stdout = io_cb,
-        .on_stderr = io_cb
-    };
+    flux_subprocess_ops_t ops = {.on_completion = completion_cb,
+                                 .on_state_change = state_change_cb,
+                                 .on_channel_out = NULL,
+                                 .on_stdout = io_cb,
+                                 .on_stderr = io_cb};
     int rc = -1;
 
     if (!(cmd = exec_cmd_create (t, command, cwd, env)))
@@ -389,14 +381,14 @@ static double round_timespec_to_double (struct timespec *tm)
      *   (we don't care about overflow since we'll truncate fractional
      *    part to 9 significant digits *at the most* anyway)
      */
-    double ns = tm->tv_nsec/1.0e9 + .5e-9;
+    double ns = tm->tv_nsec / 1.0e9 + .5e-9;
     return (s + ns);
 }
 
 /*
  *  Enhance t->state with more information in specific cases:
  */
-static const char * cron_task_state_string (cron_task_t *t)
+static const char *cron_task_state_string (cron_task_t *t)
 {
     if (t->rexec_errno)
         return ("Rexec Failure");
@@ -428,10 +420,14 @@ static int add_timespec (json_t *o, const char *name, struct timespec *tm)
 json_t *cron_task_to_json (struct cron_task *t)
 {
     json_t *o = json_pack ("{ s:i, s:i, s:i, s:s }",
-                           "rank", t->rank,
-                           "pid",  t->pid,
-                           "status", t->status,
-                           "state", cron_task_state_string (t));
+                           "rank",
+                           t->rank,
+                           "pid",
+                           t->pid,
+                           "status",
+                           t->status,
+                           "state",
+                           cron_task_state_string (t));
 
     if (o == NULL)
         return NULL;
@@ -457,8 +453,7 @@ json_t *cron_task_to_json (struct cron_task *t)
         goto fail;
     if (t->running && add_timespec (o, "running-time", &t->runningtime) < 0)
         goto fail;
-    if (cron_task_finished (t)
-        && add_timespec (o, "end-time", &t->endtime) < 0)
+    if (cron_task_finished (t) && add_timespec (o, "end-time", &t->endtime) < 0)
         goto fail;
 
     return (o);
@@ -469,4 +464,3 @@ fail:
 
 /* vi: ts=4 sw=4 expandtab
  */
-

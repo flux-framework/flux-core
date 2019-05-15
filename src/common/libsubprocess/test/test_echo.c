@@ -43,23 +43,16 @@ void output (const char *str)
         }
     }
     if (out) {
-        fprintf (stdout,
-                 "%s%s",
-                 prefix ? "STDOUT:" : "",
-                 str);
+        fprintf (stdout, "%s%s", prefix ? "STDOUT:" : "", str);
         fflush (stdout);
     }
     if (err) {
-        fprintf (stderr,
-                 "%s%s",
-                 prefix ? "STDERR:" : "",
-                 str);
+        fprintf (stderr, "%s%s", prefix ? "STDERR:" : "", str);
         fflush (stderr);
     }
 }
 
-int
-main (int argc, char *argv[])
+int main (int argc, char *argv[])
 {
     int bytes = 0;
 
@@ -69,33 +62,32 @@ main (int argc, char *argv[])
             break;
 
         switch (c) {
-        case 'O':
-            out++;
-            break;
-        case 'E':
-            err++;
-            break;
-        case 'n':
-            no_newline++;
-            break;
-        case 'c':
-            channel++;
-            channel_name = optarg;
-            break;
-        case 'C':
-            channel_out++;
-            break;
-        case 'P':
-            prefix++;
-            break;
-        case 'b':
-            bytes = atoi (optarg);
-            break;
+            case 'O':
+                out++;
+                break;
+            case 'E':
+                err++;
+                break;
+            case 'n':
+                no_newline++;
+                break;
+            case 'c':
+                channel++;
+                channel_name = optarg;
+                break;
+            case 'C':
+                channel_out++;
+                break;
+            case 'P':
+                prefix++;
+                break;
+            case 'b':
+                bytes = atoi (optarg);
+                break;
         }
     }
 
-    if ((out + err) == 0
-        && (!channel && !channel_out)) {
+    if ((out + err) == 0 && (!channel && !channel_out)) {
         fprintf (stderr, "must specify a way to output");
         exit (1);
     }
@@ -118,16 +110,12 @@ main (int argc, char *argv[])
         while (optind < argc) {
             char outbuf[1024];
 
-            sprintf (outbuf,
-                     "%s%s",
-                     argv[optind],
-                     no_newline ? "" : "\n");
+            sprintf (outbuf, "%s%s", argv[optind], no_newline ? "" : "\n");
 
             output (outbuf);
             optind++;
         }
-    }
-    else {
+    } else {
         char buf[1024];
         int total = 0;
         int len;
@@ -136,10 +124,7 @@ main (int argc, char *argv[])
         while ((len = read (fd, buf, 1024)) > 0) {
             char outbuf[1025]; /* add extra char for -Werror=format-overflow */
 
-            sprintf (outbuf,
-                     "%s%s",
-                     buf,
-                     no_newline ? "" : "\n");
+            sprintf (outbuf, "%s%s", buf, no_newline ? "" : "\n");
 
             output (outbuf);
 

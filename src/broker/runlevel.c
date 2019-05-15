@@ -143,28 +143,36 @@ int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
 {
     const char *val;
 
-    if (attr_add_active (attrs, "init.run-level",
+    if (attr_add_active (attrs,
+                         "init.run-level",
                          FLUX_ATTRFLAG_READONLY,
-                         runlevel_attr_get, NULL, r) < 0)
+                         runlevel_attr_get,
+                         NULL,
+                         r)
+        < 0)
         return -1;
 
     if (attr_get (attrs, "init.mode", &val, NULL) == 0) {
-
         if (runlevel_set_mode (r, val) < 0
-                || attr_delete (attrs, "init.mode", true) < 0)
+            || attr_delete (attrs, "init.mode", true) < 0)
             return -1;
     }
-    if (attr_add_active (attrs, "init.mode", 0,
-                         runlevel_attr_get, runlevel_attr_set, r) < 0)
+    if (attr_add_active (attrs, "init.mode", 0, runlevel_attr_get, runlevel_attr_set, r)
+        < 0)
         return -1;
 
     if (attr_get (attrs, "init.rc2_timeout", &val, NULL) == 0) {
         if ((fsd_parse_duration (val, &r->rc[2].timeout) < 0)
-                || attr_delete (attrs, "init.rc2_timeout", true) < 0)
+            || attr_delete (attrs, "init.rc2_timeout", true) < 0)
             return -1;
     }
-    if (attr_add_active (attrs, "init.rc2_timeout", 0,
-                         runlevel_attr_get, runlevel_attr_set, r) < 0)
+    if (attr_add_active (attrs,
+                         "init.rc2_timeout",
+                         0,
+                         runlevel_attr_get,
+                         runlevel_attr_set,
+                         r)
+        < 0)
         return -1;
 
     return 0;
@@ -175,8 +183,7 @@ void runlevel_set_size (runlevel_t *r, uint32_t size)
     int n;
 
     if (size > 1)
-        n = snprintf (r->nodeset, sizeof (r->nodeset),
-                      "[0-%" PRIu32 "]", size - 1);
+        n = snprintf (r->nodeset, sizeof (r->nodeset), "[0-%" PRIu32 "]", size - 1);
     else
         n = snprintf (r->nodeset, sizeof (r->nodeset), "[0]");
     assert (n < sizeof (r->nodeset));
@@ -194,8 +201,10 @@ void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg)
     r->io_cb_arg = arg;
 }
 
-static void runlevel_timeout (flux_reactor_t *reactor, flux_watcher_t *w,
-                              int revents, void *arg)
+static void runlevel_timeout (flux_reactor_t *reactor,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
 {
     runlevel_t *r = arg;
     flux_future_t *f;
@@ -221,8 +230,7 @@ static void completion_cb (flux_subprocess_t *p)
             exit_string = strsignal (rc);
             rc += 128;
         }
-    }
-    else {
+    } else {
         if (rc)
             exit_string = "Exited with non-zero status";
         else
@@ -289,14 +297,10 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
         if (level == 1 || level == 3) {
             ops.on_stdout = io_cb;
             ops.on_stderr = io_cb;
-        }
-        else
+        } else
             flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
 
-        if (!(p = flux_exec (r->h,
-                             flags,
-                             r->rc[level].cmd,
-                             &ops)))
+        if (!(p = flux_exec (r->h, flags, r->rc[level].cmd, &ops)))
             goto error;
 
         if (flux_subprocess_aux_set (p, "runlevel", r, NULL) < 0)
@@ -306,13 +310,18 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
         if (r->rc[level].timeout > 0.) {
             flux_watcher_t *w;
             if (!(w = flux_timer_watcher_create (reactor,
-                                                 r->rc[level].timeout, 0.,
-                                                 runlevel_timeout, r)))
+                                                 r->rc[level].timeout,
+                                                 0.,
+                                                 runlevel_timeout,
+                                                 r)))
                 goto error;
             flux_watcher_start (w);
             r->rc[level].timer = w;
-            flux_log (r->h, LOG_INFO, "runlevel %d (%.1fs) timer started",
-                      level, r->rc[level].timeout);
+            flux_log (r->h,
+                      LOG_INFO,
+                      "runlevel %d (%.1fs) timer started",
+                      level,
+                      r->rc[level].timeout);
         }
 
         r->rc[level].p = p;
@@ -342,7 +351,7 @@ int runlevel_set_level (runlevel_t *r, int level)
         if (level == 2) {
             if (runlevel_start_subprocess (r, level) < 0)
                 return -1;
-        } else  {
+        } else {
             if (r->cb)
                 r->cb (r, r->level, 0, 0., "Skipped mode=none", r->cb_arg);
         }
@@ -355,8 +364,11 @@ int runlevel_get_level (runlevel_t *r)
     return r->level;
 }
 
-int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
-                     size_t cmd_argz_len, const char *local_uri)
+int runlevel_set_rc (runlevel_t *r,
+                     int level,
+                     const char *cmd_argz,
+                     size_t cmd_argz_len,
+                     const char *local_uri)
 {
     flux_subprocess_t *p = NULL;
     flux_cmd_t *cmd = NULL;

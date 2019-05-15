@@ -13,13 +13,16 @@
 
 #include <jansson.h>
 
-typedef int (*service_send_f)(const flux_msg_t *msg, void *arg);
+typedef int (*service_send_f) (const flux_msg_t *msg, void *arg);
 
 struct service_switch *service_switch_create (void);
 void service_switch_destroy (struct service_switch *sw);
 
-int service_add (struct service_switch *sw, const char *name,
-                 const char *uuid, service_send_f cb, void *arg);
+int service_add (struct service_switch *sw,
+                 const char *name,
+                 const char *uuid,
+                 service_send_f cb,
+                 void *arg);
 
 void service_remove (struct service_switch *sw, const char *name);
 

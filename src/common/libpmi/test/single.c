@@ -26,24 +26,20 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     pmi = pmi_single_create (&ops);
-    ok (pmi != NULL,
-        "pmi_single_create works");
+    ok (pmi != NULL, "pmi_single_create works");
     spawned = -1;
     rc = ops->init (pmi, &spawned);
-    ok (rc == PMI_SUCCESS && spawned == 0,
-        "pmi_single_init works, spawned = 0");
+    ok (rc == PMI_SUCCESS && spawned == 0, "pmi_single_init works, spawned = 0");
     initialized = -1;
     rc = ops->initialized (pmi, &initialized);
     ok (rc == PMI_SUCCESS && initialized != 0,
         "pmi_single_initialized works, initialized true");
     size = -1;
     rc = ops->get_size (pmi, &size);
-    ok (rc == PMI_SUCCESS && size == 1,
-        "pmi_single_get_size works, size == 1");
+    ok (rc == PMI_SUCCESS && size == 1, "pmi_single_get_size works, size == 1");
     rank = -1;
     rc = ops->get_rank (pmi, &rank);
-    ok (rc == PMI_SUCCESS && rank == 0,
-        "pmi_single_get_rank works, rank == 0");
+    ok (rc == PMI_SUCCESS && rank == 0, "pmi_single_get_rank works, rank == 0");
     appnum = -2;
     rc = ops->get_appnum (pmi, &appnum);
     ok (rc == PMI_SUCCESS && appnum >= 0,
@@ -61,8 +57,7 @@ int main (int argc, char *argv[])
 
     kvsname = xzmalloc (kvsname_length);
     rc = ops->kvs_get_my_name (pmi, kvsname, kvsname_length);
-    ok (rc == PMI_SUCCESS && strlen (kvsname) > 0,
-        "pmi_single_kvs_get_my_name works");
+    ok (rc == PMI_SUCCESS && strlen (kvsname) > 0, "pmi_single_kvs_get_my_name works");
     diag ("kvsname: %s", kvsname);
 
     kvskey_length = -1;
@@ -83,43 +78,33 @@ int main (int argc, char *argv[])
         "pmi_single_kvs_get unknown fails w/PMI_ERR_INVALID_KEY");
 
     rc = ops->kvs_put (pmi, kvsname, "foo", "bar");
-    ok (rc == PMI_SUCCESS,
-        "pmi_single_kvs_put works");
+    ok (rc == PMI_SUCCESS, "pmi_single_kvs_put works");
     rc = ops->kvs_commit (pmi, kvsname);
-    ok (rc == PMI_SUCCESS,
-        "pmi_single_kvs_commit works");
+    ok (rc == PMI_SUCCESS, "pmi_single_kvs_commit works");
     rc = ops->barrier (pmi);
-    ok (rc == PMI_SUCCESS,
-        "pmi_single_barrier works");
+    ok (rc == PMI_SUCCESS, "pmi_single_barrier works");
     rc = ops->kvs_get (pmi, kvsname, "foo", kvsval, kvsval_length);
-    ok (rc == PMI_SUCCESS && !strcmp (kvsval, "bar"),
-        "pmi_single_kvs_get works ");
+    ok (rc == PMI_SUCCESS && !strcmp (kvsval, "bar"), "pmi_single_kvs_get works ");
 
     rc = ops->kvs_put (pmi, kvsname, "foo", "bar");
     ok (rc == PMI_ERR_INVALID_KEY,
         "pmi_single_kvs_put on duplicate key fails w/PMI_ERR_INVALID_KEY");
 
     rc = ops->publish_name (pmi, "foo", "42");
-    ok (rc == PMI_FAIL,
-        "pmi_single_publish_name fails with PMI_FAIL");
+    ok (rc == PMI_FAIL, "pmi_single_publish_name fails with PMI_FAIL");
     rc = ops->unpublish_name (pmi, "foo");
-    ok (rc == PMI_FAIL,
-        "pmi_single_unpublish_name fails with PMI_FAIL");
+    ok (rc == PMI_FAIL, "pmi_single_unpublish_name fails with PMI_FAIL");
     rc = ops->lookup_name (pmi, "foo", port);
-    ok (rc == PMI_FAIL,
-        "pmi_single_lookup_name fails with PMI_FAIL");
+    ok (rc == PMI_FAIL, "pmi_single_lookup_name fails with PMI_FAIL");
 
-    rc = ops->spawn_multiple (pmi, 0, NULL, NULL, NULL, NULL, NULL,
-                              0, NULL, NULL);
-    ok (rc == PMI_FAIL,
-        "pmi_single_spawn_multiple fails with PMI_FAIL");
+    rc = ops->spawn_multiple (pmi, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL);
+    ok (rc == PMI_FAIL, "pmi_single_spawn_multiple fails with PMI_FAIL");
 
-    dies_ok ({ops->abort (pmi, 0, "a test message");},
-        "pmi_single_abort exits program");
+    dies_ok ({ ops->abort (pmi, 0, "a test message"); },
+             "pmi_single_abort exits program");
 
     rc = ops->finalize (pmi);
-    ok (rc == PMI_SUCCESS,
-        "pmi_single_finalize works");
+    ok (rc == PMI_SUCCESS, "pmi_single_finalize works");
 
     free (kvsval);
     free (kvsname);

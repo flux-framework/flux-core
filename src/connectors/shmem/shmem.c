@@ -22,7 +22,7 @@
 
 #include "src/common/libutil/log.h"
 
-#define MODHANDLE_MAGIC    0xfeefbe02
+#define MODHANDLE_MAGIC 0xfeefbe02
 typedef struct {
     int magic;
     zsock_t *sock;
@@ -100,8 +100,13 @@ static int op_event_subscribe (void *impl, const char *topic)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (ctx->h, "cmb.sub", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "cmb.sub",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{ s:s }",
+                             "topic",
+                             topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -118,8 +123,13 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     flux_future_t *f = NULL;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (ctx->h, "cmb.unsub", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "cmb.unsub",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{ s:s }",
+                             "topic",
+                             topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -128,7 +138,6 @@ done:
     flux_future_destroy (f);
     return rc;
 }
-
 
 static void op_fini (void *impl)
 {
@@ -143,18 +152,20 @@ static void op_fini (void *impl)
 flux_t *connector_init (const char *path, int flags)
 {
 #if HAVE_CALIPER
-    cali_id_t uuid   = cali_create_attribute ("flux.uuid",
-                                              CALI_TYPE_STRING,
-                                              CALI_ATTR_SKIP_EVENTS);
-    size_t length = strlen(path);
-    cali_push_snapshot ( CALI_SCOPE_PROCESS | CALI_SCOPE_THREAD,
-                         1, &uuid, (const void **)&path, &length);
+    cali_id_t uuid =
+        cali_create_attribute ("flux.uuid", CALI_TYPE_STRING, CALI_ATTR_SKIP_EVENTS);
+    size_t length = strlen (path);
+    cali_push_snapshot (CALI_SCOPE_PROCESS | CALI_SCOPE_THREAD,
+                        1,
+                        &uuid,
+                        (const void **)&path,
+                        &length);
 #endif
 
     shmem_ctx_t *ctx = NULL;
     char *item;
     int e;
-    int bind_socket = 0; // if set, call bind on socket, else connect
+    int bind_socket = 0;  // if set, call bind on socket, else connect
 
     if (!path) {
         errno = EINVAL;
@@ -190,8 +201,7 @@ flux_t *connector_init (const char *path, int flags)
     if (bind_socket) {
         if (zsock_bind (ctx->sock, "inproc://%s", ctx->uuid) < 0)
             goto error;
-    }
-    else {
+    } else {
         if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
             goto error;
     }

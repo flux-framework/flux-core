@@ -29,12 +29,11 @@
  * stored under key is deleted, calling its destructor, if any.
  */
 
-typedef void (*aux_free_f)(void *arg);
+typedef void (*aux_free_f) (void *arg);
 
 struct aux_item;
 
-int aux_set (struct aux_item **aux, const char *key,
-             void *val, aux_free_f free_fn);
+int aux_set (struct aux_item **aux, const char *key, void *val, aux_free_f free_fn);
 
 void *aux_get (struct aux_item *aux, const char *key);
 
@@ -45,4 +44,3 @@ void aux_destroy (struct aux_item **aux);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

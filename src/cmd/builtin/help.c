@@ -20,7 +20,7 @@ static int no_docs_set (optparse_t *p)
     struct stat sb;
 
     /* FLUX_IGNORE_NO_DOCS environment workaround for unit tests */
-    if (getenv("FLUX_IGNORE_NO_DOCS"))
+    if (getenv ("FLUX_IGNORE_NO_DOCS"))
         return 0;
 
     return (!stat (no_docs_path, &sb));
@@ -32,7 +32,7 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
     char *cmd;
 
     if (n < ac) {
-        const char *topic = av [n];
+        const char *topic = av[n];
         int rc;
 
         if (no_docs_set (p))
@@ -67,11 +67,12 @@ int subcommand_help_register (optparse_t *p)
 {
     optparse_err_t e;
     e = optparse_reg_subcommand (p,
-        "help",
-        cmd_help,
-        "[OPTIONS...] [COMMAND...]",
-        "Display help information for flux commands",
-        0, NULL);
+                                 "help",
+                                 cmd_help,
+                                 "[OPTIONS...] [COMMAND...]",
+                                 "Display help information for flux commands",
+                                 0,
+                                 NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 

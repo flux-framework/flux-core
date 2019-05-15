@@ -46,9 +46,7 @@ done:
     return rc;
 }
 
-
-int flux_event_decode (const flux_msg_t *msg, const char **topicp,
-                       const char **sp)
+int flux_event_decode (const flux_msg_t *msg, const char **topicp, const char **sp)
 {
     const char *topic, *s;
     int rc = -1;
@@ -66,8 +64,10 @@ done:
     return rc;
 }
 
-int flux_event_decode_raw (const flux_msg_t *msg, const char **topicp,
-                           const void **datap, int *lenp)
+int flux_event_decode_raw (const flux_msg_t *msg,
+                           const char **topicp,
+                           const void **datap,
+                           int *lenp)
 {
     const char *topic;
     const void *data = NULL;
@@ -94,8 +94,10 @@ done:
     return rc;
 }
 
-static int flux_event_vunpack (const flux_msg_t *msg, const char **topic,
-                               const char *fmt, va_list ap)
+static int flux_event_vunpack (const flux_msg_t *msg,
+                               const char **topic,
+                               const char *fmt,
+                               va_list ap)
 {
     const char *ts;
     int rc = -1;
@@ -111,8 +113,7 @@ done:
     return rc;
 }
 
-int flux_event_unpack (const flux_msg_t *msg, const char **topic,
-                       const char *fmt, ...)
+int flux_event_unpack (const flux_msg_t *msg, const char **topic, const char *fmt, ...)
 {
     va_list ap;
     int rc;
@@ -156,8 +157,7 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_event_encode_raw (const char *topic,
-                                   const void *data, int len)
+flux_msg_t *flux_event_encode_raw (const char *topic, const void *data, int len)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
@@ -170,8 +170,7 @@ error:
     return NULL;
 }
 
-static flux_msg_t *flux_event_vpack (const char *topic,
-                                     const char *fmt, va_list ap)
+static flux_msg_t *flux_event_vpack (const char *topic, const char *fmt, va_list ap)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
@@ -196,34 +195,51 @@ flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...)
 }
 
 static flux_future_t *wrap_event_rpc (flux_t *h,
-                                      const char *topic, int flags,
-                                      const void *src, int srclen)
+                                      const char *topic,
+                                      int flags,
+                                      const void *src,
+                                      int srclen)
 {
     flux_future_t *f;
 
     if (src) {
-        size_t dstlen = sodium_base64_encoded_len (srclen,
-                                            sodium_base64_VARIANT_ORIGINAL);
+        size_t dstlen =
+            sodium_base64_encoded_len (srclen, sodium_base64_VARIANT_ORIGINAL);
         void *dst;
         if (!(dst = malloc (dstlen)))
             return NULL;
-        sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
+        sodium_bin2base64 (dst,
+                           dstlen,
+                           (unsigned char *)src,
+                           srclen,
                            sodium_base64_VARIANT_ORIGINAL);
-        if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:s}", "topic", topic,
-                                                  "flags", flags,
-                                                  "payload", dst))) {
+        if (!(f = flux_rpc_pack (h,
+                                 "event.pub",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:s s:i s:s}",
+                                 "topic",
+                                 topic,
+                                 "flags",
+                                 flags,
+                                 "payload",
+                                 dst))) {
             int saved_errno = errno;
             free (dst);
             errno = saved_errno;
             return NULL;
         }
         free (dst);
-    }
-    else {
-        if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
-                                    "{s:s s:i}", "topic", topic,
-                                                 "flags", flags))) {
+    } else {
+        if (!(f = flux_rpc_pack (h,
+                                 "event.pub",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:s s:i}",
+                                 "topic",
+                                 topic,
+                                 "flags",
+                                 flags))) {
             return NULL;
         }
     }
@@ -231,7 +247,8 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
 }
 
 flux_future_t *flux_event_publish (flux_t *h,
-                                   const char *topic, int flags,
+                                   const char *topic,
+                                   int flags,
                                    const char *json_str)
 {
     int len = 0;
@@ -245,8 +262,10 @@ flux_future_t *flux_event_publish (flux_t *h,
 }
 
 flux_future_t *flux_event_publish_pack (flux_t *h,
-                                        const char *topic, int flags,
-                                        const char *fmt, ...)
+                                        const char *topic,
+                                        int flags,
+                                        const char *fmt,
+                                        ...)
 {
     va_list ap;
     json_t *o;
@@ -270,8 +289,7 @@ flux_future_t *flux_event_publish_pack (flux_t *h,
         return NULL;
     }
     json_decref (o);
-    if (!(f = wrap_event_rpc (h,  topic, flags,
-                              json_str, strlen (json_str) + 1))) {
+    if (!(f = wrap_event_rpc (h, topic, flags, json_str, strlen (json_str) + 1))) {
         int saved_errno = errno;
         free (json_str);
         errno = saved_errno;
@@ -282,8 +300,10 @@ flux_future_t *flux_event_publish_pack (flux_t *h,
 }
 
 flux_future_t *flux_event_publish_raw (flux_t *h,
-                                       const char *topic, int flags,
-                                       const void *data, int len)
+                                       const char *topic,
+                                       int flags,
+                                       const void *data,
+                                       int len)
 {
     if (!h || !topic || (flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
         errno = EINVAL;

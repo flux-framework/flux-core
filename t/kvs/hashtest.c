@@ -36,13 +36,13 @@
 #include "src/common/libhat-trie/hat-trie.h"
 #endif
 
-//const int num_keys = 1024*1024;
-const int num_keys = 1024*1024*10;
+// const int num_keys = 1024*1024;
+const int num_keys = 1024 * 1024 * 10;
 
 struct hash_impl {
-    void (*destroy)(struct hash_impl *h);
-    void (*insert)(struct hash_impl *h, zlist_t *items);
-    void (*lookup)(struct hash_impl *h, zlist_t *items);
+    void (*destroy) (struct hash_impl *h);
+    void (*insert) (struct hash_impl *h, zlist_t *items);
+    void (*lookup) (struct hash_impl *h, zlist_t *items);
     void *h;
 };
 
@@ -191,7 +191,6 @@ void destroy_zhashx (struct hash_impl *impl)
     free (impl);
 }
 
-
 void *duplicator_zhashx (const void *item)
 {
     return (void *)item;
@@ -280,7 +279,7 @@ int cmp_lsd (const void *key1, const void *key2)
 struct hash_impl *create_lsd (void)
 {
     struct hash_impl *impl = xzmalloc (sizeof (*impl));
-    impl->h = hash_create (1024*1024*8, hash_lsd, cmp_lsd, NULL);
+    impl->h = hash_create (1024 * 1024 * 8, hash_lsd, cmp_lsd, NULL);
     assert (impl->h != NULL);
 
     impl->insert = insert_lsd;
@@ -298,7 +297,7 @@ struct hash_impl *create_lsd (void)
 void insert_judy (struct hash_impl *impl, zlist_t *items)
 {
     struct item *item;
-    //Pvoid_t array = NULL;
+    // Pvoid_t array = NULL;
     PWord_t valp;
 
     item = zlist_first (items);
@@ -314,7 +313,7 @@ void insert_judy (struct hash_impl *impl, zlist_t *items)
 void lookup_judy (struct hash_impl *impl, zlist_t *items)
 {
     struct item *item;
-    //Pvoid_t array = NULL;
+    // Pvoid_t array = NULL;
     PWord_t valp;
 
     item = zlist_first (items);
@@ -381,12 +380,12 @@ void insert_sophia (struct hash_impl *impl, zlist_t *items)
     item = zlist_first (items);
     while (item != NULL) {
         // existence check slows down by about 23X! */
-        //o = sp_object (db);
-        //assert (o != NULL);
-        //rc = sp_setstring (o, "key", item->key, sizeof (item->key));
-        //assert (rc == 0);
-        //void *result = sp_get (db, o); /* destroys 'o' */
-        //assert (result == NULL);
+        // o = sp_object (db);
+        // assert (o != NULL);
+        // rc = sp_setstring (o, "key", item->key, sizeof (item->key));
+        // assert (rc == 0);
+        // void *result = sp_get (db, o); /* destroys 'o' */
+        // assert (result == NULL);
 
         o = sp_object (db);
         assert (o != NULL);
@@ -429,7 +428,7 @@ void lookup_sophia (struct hash_impl *impl, zlist_t *items)
         sp_destroy (result);
         item = zlist_next (items);
         count++;
-        //if (count % 10000 == 0)
+        // if (count % 10000 == 0)
         //    msg ("lookup: %d of %d", count, num_keys);
     }
 
@@ -458,15 +457,15 @@ struct hash_impl *create_sophia (void)
     rc = sp_setstring (impl->h, "sophia.path", path, 0);
     assert (rc == 0);
     // 16m limit increases memory used during insert by about 2X
-    //rc = sp_setint (impl->h, "memory.limit", 1024*1024*16);
-    //assert (rc == 0);
+    // rc = sp_setint (impl->h, "memory.limit", 1024*1024*16);
+    // assert (rc == 0);
     rc = sp_setstring (impl->h, "db", "test", 0);
     assert (rc == 0);
     rc = sp_setstring (impl->h, "db.test.index.key", "string", 0);
     assert (rc == 0);
     // N.B. lz4 slows down lookups by about 4X
-    //rc = sp_setstring (impl->h, "db.test.compression", "lz4", 0);
-    //assert (rc == 0);
+    // rc = sp_setstring (impl->h, "db.test.compression", "lz4", 0);
+    // assert (rc == 0);
     rc = sp_open (impl->h);
     assert (rc == 0);
 
@@ -540,8 +539,11 @@ void insert_sqlite (struct hash_impl *impl, zlist_t *items)
 
     item = zlist_first (items);
     while (item != NULL) {
-        rc = sqlite3_bind_text (stmt, 1, (char *)item->key,
-                                sizeof (item->key), SQLITE_STATIC);
+        rc = sqlite3_bind_text (stmt,
+                                1,
+                                (char *)item->key,
+                                sizeof (item->key),
+                                SQLITE_STATIC);
         assert (rc == SQLITE_OK);
         rc = sqlite3_bind_blob (stmt, 2, item, sizeof (*item), SQLITE_STATIC);
         assert (rc == SQLITE_OK);
@@ -571,8 +573,11 @@ void lookup_sqlite (struct hash_impl *impl, zlist_t *items)
 
     item = zlist_first (items);
     while (item != NULL) {
-        rc = sqlite3_bind_text (stmt, 1, (char *)item->key,
-                                sizeof (item->key), SQLITE_STATIC);
+        rc = sqlite3_bind_text (stmt,
+                                1,
+                                (char *)item->key,
+                                sizeof (item->key),
+                                SQLITE_STATIC);
         assert (rc == SQLITE_OK);
         rc = sqlite3_step (stmt);
         assert (rc == SQLITE_ROW);
@@ -629,18 +634,22 @@ struct hash_impl *create_sqlite (void)
     assert (rc == SQLITE_OK);
 
     // raise max db pages cached in memory from 2000
-    //rc = sqlite3_exec (db, "PRAGMA cache_size=16000", NULL, NULL, NULL);
-    //assert (rc == SQLITE_OK);
+    // rc = sqlite3_exec (db, "PRAGMA cache_size=16000", NULL, NULL, NULL);
+    // assert (rc == SQLITE_OK);
 
     // raise db page size from default 1024 bytes
     // N.B. must set before table create
-    //rc = sqlite3_exec (db, "PRAGMA page_size=4096", NULL, NULL, NULL);
-    //assert (rc == SQLITE_OK);
+    // rc = sqlite3_exec (db, "PRAGMA page_size=4096", NULL, NULL, NULL);
+    // assert (rc == SQLITE_OK);
 
-    rc = sqlite3_exec (db, "CREATE TABLE objects("
-            "hash CHAR(20) PRIMARY KEY,"
-            "object BLOB"
-            ");", NULL, NULL, NULL);
+    rc = sqlite3_exec (db,
+                       "CREATE TABLE objects("
+                       "hash CHAR(20) PRIMARY KEY,"
+                       "object BLOB"
+                       ");",
+                       NULL,
+                       NULL,
+                       NULL);
     assert (rc == SQLITE_OK);
 
     impl->h = db;
@@ -652,8 +661,9 @@ struct hash_impl *create_sqlite (void)
 
 void usage (void)
 {
-    fprintf (stderr, "Usage: hashtest zhash | zhashx | judy | lsd | hat"
-           " | sophia | sqlite\n");
+    fprintf (stderr,
+             "Usage: hashtest zhash | zhashx | judy | lsd | hat"
+             " | sophia | sqlite\n");
     exit (1);
 }
 
@@ -695,26 +705,30 @@ int main (int argc, char *argv[])
         impl = create_sqlite ();
     if (!impl)
         usage ();
-    log_msg ("create hash: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
-                                       rusage_maxrss_since (&res));
+    log_msg ("create hash: %.2fs (%+ldK)",
+             monotime_since (t0) * 1E-3,
+             rusage_maxrss_since (&res));
 
     rusage (&res);
     monotime (&t0);
     items = create_items ();
-    log_msg ("create items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
-                                        rusage_maxrss_since (&res));
+    log_msg ("create items: %.2fs (%+ldK)",
+             monotime_since (t0) * 1E-3,
+             rusage_maxrss_since (&res));
 
     rusage (&res);
     monotime (&t0);
     impl->insert (impl, items);
-    log_msg ("insert items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
-                                        rusage_maxrss_since (&res));
+    log_msg ("insert items: %.2fs (%+ldK)",
+             monotime_since (t0) * 1E-3,
+             rusage_maxrss_since (&res));
 
     rusage (&res);
     monotime (&t0);
     impl->lookup (impl, items);
-    log_msg ("lookup items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
-                                        rusage_maxrss_since (&res));
+    log_msg ("lookup items: %.2fs (%+ldK)",
+             monotime_since (t0) * 1E-3,
+             rusage_maxrss_since (&res));
 
     impl->destroy (impl);
     return 0;

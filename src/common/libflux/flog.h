@@ -22,10 +22,9 @@
 extern "C" {
 #endif
 
+#define FLUX_MAX_LOGBUF 2048
 
-#define FLUX_MAX_LOGBUF     2048
-
-typedef void (*flux_log_f)(const char *buf, int len, void *arg);
+typedef void (*flux_log_f) (const char *buf, int len, void *arg);
 
 /* Set log appname for handle instance.
  * Value will be truncated after FLUX_MAX_APPNAME bytes.
@@ -43,7 +42,7 @@ void flux_log_set_procid (flux_t *h, const char *s);
  */
 int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap);
 int flux_log (flux_t *h, int level, const char *fmt, ...)
-              __attribute__ ((format (printf, 3, 4)));
+    __attribute__ ((format (printf, 3, 4)));
 
 /* Log a message at LOG_ERR level, appending a colon, space, and error string.
  * The system 'errno' is assumed to be valid and contain an error code
@@ -53,7 +52,7 @@ int flux_log (flux_t *h, int level, const char *fmt, ...)
  */
 void flux_log_verror (flux_t *h, const char *fmt, va_list ap);
 void flux_log_error (flux_t *h, const char *fmt, ...)
-                 __attribute__ ((format (printf, 2, 3)));
+    __attribute__ ((format (printf, 2, 3)));
 
 #define FLUX_LOG_ERROR(h) \
     (void)flux_log_error ((h), "%s::%d[%s]", __FILE__, __LINE__, __FUNCTION__)
@@ -61,7 +60,6 @@ void flux_log_error (flux_t *h, const char *fmt, ...)
 /* Redirect log messages to flux_log_f in this handle instance.
  */
 void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg);
-
 
 /* Manipulate the broker's ring buffer.
  */

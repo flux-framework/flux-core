@@ -48,10 +48,15 @@ int main (int argc, char *argv[])
     }
 
     /* invalid lookup - do not specify namespace or root ref */
-    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i}",
-                             "key", key,
-                             "flags", 0)))
+                             "key",
+                             key,
+                             "flags",
+                             0)))
         log_err_exit ("flux_rpc_pack");
 
     if (flux_future_get (f, NULL) < 0) {

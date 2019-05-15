@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#  include <config.h>
+#include <config.h>
 #endif /* HAVE_CONFIG_H */
 
 #include <stdio.h>
@@ -25,11 +25,12 @@
 #include "unlink_recursive.h"
 #include "dirwalk.h"
 
-
 static int unlinker (dirwalk_t *d, void *arg)
 {
-    if (unlinkat (dirwalk_dirfd (d), dirwalk_name (d),
-                  dirwalk_isdir (d) ? AT_REMOVEDIR : 0) < 0)
+    if (unlinkat (dirwalk_dirfd (d),
+                  dirwalk_name (d),
+                  dirwalk_isdir (d) ? AT_REMOVEDIR : 0)
+        < 0)
         dirwalk_stop (d, errno);
     return (0);
 }

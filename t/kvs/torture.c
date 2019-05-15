@@ -27,25 +27,24 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 
-
 #define OPTIONS "hc:s:p:qv"
 static const struct option longopts[] = {
-    {"help",            no_argument,        0, 'h'},
-    {"quiet",           no_argument,        0, 'q'},
-    {"verbose",         no_argument,        0, 'v'},
-    {"count",           required_argument,  0, 'c'},
-    {"size",            required_argument,  0, 's'},
-    {"prefix",          required_argument,  0, 'p'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"quiet", no_argument, 0, 'q'},
+    {"verbose", no_argument, 0, 'v'},
+    {"count", required_argument, 0, 'c'},
+    {"size", required_argument, 0, 's'},
+    {"prefix", required_argument, 0, 'p'},
+    {0, 0, 0, 0},
 };
 
 static void fill (char *s, int i, int len);
 
 void usage (void)
 {
-    fprintf (stderr, 
-"Usage: torture [--quiet|--verbose] [--prefix NAME] [--size BYTES] [--count N]\n"
-);
+    fprintf (stderr,
+             "Usage: torture [--quiet|--verbose] [--prefix NAME] [--size BYTES] "
+             "[--count N]\n");
     exit (1);
 }
 
@@ -102,14 +101,13 @@ int main (int argc, char *argv[])
         uint32_t rank;
         if (flux_get_rank (h, &rank) < 0)
             log_err_exit ("flux_get_rank");
-        prefix = xasprintf ("kvstorture-%"PRIu32, rank);
+        prefix = xasprintf ("kvstorture-%" PRIu32, rank);
     }
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_unlink (txn, 0, prefix) < 0)
         log_err_exit ("flux_kvs_txn_unlink");
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -131,16 +129,17 @@ int main (int argc, char *argv[])
     }
     if (!quiet)
         log_msg ("kvs_put:    time=%0.3f s (%d keys of size %d)",
-             monotime_since (t0)/1000, count, size);
+                 monotime_since (t0) / 1000,
+                 count,
+                 size);
 
     monotime (&t0);
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     if (!quiet)
-        log_msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);
+        log_msg ("kvs_commit: time=%0.3f s", monotime_since (t0) / 1000);
 
     monotime (&t0);
     for (i = 0; i < count; i++) {
@@ -148,7 +147,7 @@ int main (int argc, char *argv[])
             oom ();
         fill (val, i, size);
         if (!(f = flux_kvs_lookup (h, NULL, 0, key))
-                            || flux_kvs_lookup_get_unpack (f, "s", &s) < 0)
+            || flux_kvs_lookup_get_unpack (f, "s", &s) < 0)
             log_err_exit ("flux_kvs_lookup '%s'", key);
         if (verbose)
             log_msg ("%s = %s", key, s);
@@ -159,7 +158,9 @@ int main (int argc, char *argv[])
     }
     if (!quiet)
         log_msg ("kvs_lookup:    time=%0.3f s (%d keys of size %d)",
-             monotime_since (t0)/1000, count, size);
+                 monotime_since (t0) / 1000,
+                 count,
+                 size);
 
     if (prefix)
         free (prefix);

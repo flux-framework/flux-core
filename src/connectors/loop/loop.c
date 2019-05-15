@@ -22,7 +22,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/msglist.h"
 
-#define CTX_MAGIC   0xf434aaa0
+#define CTX_MAGIC 0xf434aaa0
 typedef struct {
     int magic;
     flux_t *h;
@@ -35,7 +35,6 @@ typedef struct {
 
     msglist_t *queue;
 } loop_ctx_t;
-
 
 static const struct flux_handle_ops handle_ops;
 
@@ -132,9 +131,9 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     /* Fake out size, rank, tbon-arity attributes for testing.
      */
-    if (flux_attr_set_cacheonly(c->h, "rank", "0") < 0
-                || flux_attr_set_cacheonly (c->h, "size", "1") < 0
-                || flux_attr_set_cacheonly (c->h, "tbon-arity", "2") < 0)
+    if (flux_attr_set_cacheonly (c->h, "rank", "0") < 0
+        || flux_attr_set_cacheonly (c->h, "size", "1") < 0
+        || flux_attr_set_cacheonly (c->h, "tbon-arity", "2") < 0)
         goto error;
     c->userid = geteuid ();
     c->rolemask = FLUX_ROLE_OWNER;

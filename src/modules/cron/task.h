@@ -20,8 +20,12 @@ typedef struct cron_task cron_task_t;
 
 /*  io callback fn for cron task
  */
-typedef void (*cron_task_io_f) (flux_t *h, cron_task_t *t, void *arg,
-                                bool is_stderr, const char *data, int datalen);
+typedef void (*cron_task_io_f) (flux_t *h,
+                                cron_task_t *t,
+                                void *arg,
+                                bool is_stderr,
+                                const char *data,
+                                int datalen);
 
 /*  task state change handler for cron task, check state with
  *   cron_task_state().
@@ -62,7 +66,8 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb);
  *   efficiency).
  */
 int cron_task_run (cron_task_t *t,
-                   int rank, const char *command,
+                   int rank,
+                   const char *command,
                    const char *cwd,
                    json_t *env);
 
@@ -73,7 +78,7 @@ int cron_task_kill (cron_task_t *t, int sig);
 
 /*  return string representation of the current cron task state
  */
-const char * cron_task_state (cron_task_t *t);
+const char *cron_task_state (cron_task_t *t);
 
 /*  return exit status, or -1 if task not exited
  */
@@ -87,4 +92,3 @@ json_t *cron_task_to_json (cron_task_t *t);
 
 /* vi: ts=4 sw=4 expandtab
  */
-

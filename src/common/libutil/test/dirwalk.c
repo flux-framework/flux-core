@@ -46,7 +46,7 @@ static int makepath (const char *fmt, ...)
         goto out;
 
     pp = path;
-    while ((sp = strchr(pp, '/'))) {
+    while ((sp = strchr (pp, '/'))) {
         if (sp > pp) {
             *sp = '\0';
             if ((mkdir (path, 0777) < 0) && (errno != EEXIST)) {
@@ -83,11 +83,11 @@ static int vcreat (const char *fmt, ...)
     return (rc);
 }
 
-static char * create_test_dir ()
+static char *create_test_dir ()
 {
     const char *tmpdir = getenv ("TMPDIR");
     const char *tmp = tmpdir ? tmpdir : "/tmp";
-    char path [PATH_MAX];
+    char path[PATH_MAX];
     int n;
 
     n = snprintf (path, sizeof (path), "%s/dirwalk_test.XXXXXX", tmp);
@@ -102,7 +102,7 @@ static char * create_test_dir ()
 
 static int find_dir (dirwalk_t *d, void *arg)
 {
-    return (dirwalk_isdir (d) ? 1 : 0); 
+    return (dirwalk_isdir (d) ? 1 : 0);
 }
 
 static int return_err (dirwalk_t *d, void *arg)
@@ -117,17 +117,14 @@ static int check_stat (dirwalk_t *d, void *arg)
     const struct stat *sb = dirwalk_stat (d);
     if (sb == NULL) {
         dirwalk_stop (d, 1);
-        diag ("dirwalk_stat for %s failed\n",
-              dirwalk_path (d));
-    }
-    else if (dirwalk_isdir (d)) {
+        diag ("dirwalk_stat for %s failed\n", dirwalk_path (d));
+    } else if (dirwalk_isdir (d)) {
         if (!S_ISDIR (sb->st_mode)) {
             diag ("dirwalk_isdir() but sb->st_mode = 0x%08x\n", sb->st_mode);
             dirwalk_stop (d, 1);
         }
-    }
-    else if (sb->st_size < 0) {
-        diag ("sb->st_size = %ju", (uintmax_t) sb->st_size);
+    } else if (sb->st_size < 0) {
+        diag ("sb->st_size = %ju", (uintmax_t)sb->st_size);
         dirwalk_stop (d, 1);
     }
     return 0;
@@ -143,8 +140,7 @@ static int check_dirfd (dirwalk_t *d, void *arg)
      */
     if (fstatat (dirfd, dirwalk_name (d), &st, 0) < 0) {
         dirwalk_stop (d, errno);
-    }
-    else if (sb->st_dev != st.st_dev || sb->st_ino != st.st_ino) {
+    } else if (sb->st_dev != st.st_dev || sb->st_ino != st.st_ino) {
         diag ("check_dirfd: st_dev or st_ino do not match");
         dirwalk_stop (d, 1);
     }
@@ -161,10 +157,10 @@ int check_zlist_order (zlist_t *l, const char *base, char *expected[])
         int result;
         char *exp;
         if (expected[i] == NULL) {
-            diag ("check_zlist: more results than expected=%d\n", i-1);
+            diag ("check_zlist: more results than expected=%d\n", i - 1);
             return 0;
         }
-        if (asprintf (&exp, "%s%s", base, expected [i]) < 0)
+        if (asprintf (&exp, "%s%s", base, expected[i]) < 0)
             BAIL_OUT ("asprintf");
 
         result = strcmp (exp, dir);
@@ -190,27 +186,29 @@ static int d_unlinkat (dirwalk_t *d, void *arg)
     return 0;
 }
 
-static int make_a_link (const char *targetbase, const char *target,
-                        const char *linkbase, const char *linkname)
+static int make_a_link (const char *targetbase,
+                        const char *target,
+                        const char *linkbase,
+                        const char *linkname)
 {
     int rc = -1;
     char *l = NULL, *t = NULL;
     if ((asprintf (&l, "%s/%s", linkbase, linkname) >= 0)
-     && (asprintf (&t, "%s/%s", targetbase, target) >= 0))
+        && (asprintf (&t, "%s/%s", targetbase, target) >= 0))
         rc = symlink (t, l);
     free (l);
     free (t);
     return rc;
 }
 
-int main(int argc, char** argv)
+int main (int argc, char **argv)
 {
     char *s, *rpath, *tmp = NULL, *tmp2 = NULL;
     int n;
 
     plan (NO_PLAN);
 
-    if (!(tmp = create_test_dir ()) || !(tmp2 = create_test_dir()))
+    if (!(tmp = create_test_dir ()) || !(tmp2 = create_test_dir ()))
         BAIL_OUT ("unable to create test directory");
 
     n = dirwalk (tmp, 0, NULL, NULL);
@@ -280,7 +278,7 @@ int main(int argc, char** argv)
     ok (l && zlist_size (l) == 3, "find with search path found all matches");
     zlist_destroy (&l);
     free (s);
- 
+
     /* depth-first find */
     l = dirwalk_find (tmp, DIRWALK_DEPTH, "foo", 0, NULL, 0);
     ok (l != NULL, "dirwalk with find callback");
@@ -291,22 +289,16 @@ int main(int argc, char** argv)
      */
     int flags = DIRWALK_DEPTH | DIRWALK_FIND_DIR;
     l = dirwalk_find (tmp, flags, "*", 0, find_dir, NULL);
-    ok (l && zlist_size (l) >  0, "dirwalk to find all dirs works");
+    ok (l && zlist_size (l) > 0, "dirwalk to find all dirs works");
 
-    char *expect_depth[] = {
-        "/a/b/c/d",
-        "/a/b/c",
-        "/a/b",
-        "/a",
-        ""
-    };
+    char *expect_depth[] = {"/a/b/c/d", "/a/b/c", "/a/b", "/a", ""};
     ok (l && check_zlist_order (l, tmp, expect_depth),
         "depth-first visited directories in correct order");
     zlist_destroy (&l);
 
     flags = DIRWALK_FIND_DIR;
     l = dirwalk_find (tmp, flags, "*", 0, find_dir, NULL);
-    ok (l && zlist_size (l) >  0, "dirwalk to find all dirs works");
+    ok (l && zlist_size (l) > 0, "dirwalk to find all dirs works");
 
     char *expect_breadth[] = {
         "",
@@ -325,7 +317,7 @@ int main(int argc, char** argv)
 
     flags |= DIRWALK_REALPATH;
     l = dirwalk_find (tmp, flags, "*", 0, find_dir, NULL);
-    ok (l && zlist_size (l) >  0, "dirwalk works with DIRWALK_REALPATH");
+    ok (l && zlist_size (l) > 0, "dirwalk works with DIRWALK_REALPATH");
 
     /* tmp base for comparison must also be realpath-ed */
     rpath = realpath (tmp, NULL);
@@ -362,7 +354,7 @@ int main(int argc, char** argv)
 
     free (tmp);
     free (tmp2);
-    done_testing();
+    done_testing ();
 }
 
 /*

@@ -39,27 +39,34 @@ struct pmi_map_block {
  * The caller must free 'blocks'.
  */
 int pmi_process_mapping_parse (const char *s,
-                               struct pmi_map_block **blocks, int *nblocks);
-
+                               struct pmi_map_block **blocks,
+                               int *nblocks);
 
 /* Determine the nodeid that will start 'rank', and return it in 'nodeid'.
  */
-int pmi_process_mapping_find_nodeid (struct pmi_map_block *blocks, int nblocks,
-                                     int rank, int *nodeid);
+int pmi_process_mapping_find_nodeid (struct pmi_map_block *blocks,
+                                     int nblocks,
+                                     int rank,
+                                     int *nodeid);
 
 /* Determine the number of ranks started by 'nodeid', and return it in 'nranks'.
  */
-int pmi_process_mapping_find_nranks (struct pmi_map_block *blocks, int nblocks,
-                                     int nodeid, int size, int *nranks);
+int pmi_process_mapping_find_nranks (struct pmi_map_block *blocks,
+                                     int nblocks,
+                                     int nodeid,
+                                     int size,
+                                     int *nranks);
 
 /* Determine the ranks that will be started by 'nodeid'.
  * The caller should supply a pre-allocated array in 'ranks' of length
  * 'nranks', sized according to find_nranks() above.
  */
-int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks, int nblocks,
-                                    int nodeid, int size,
-                                    int *ranks, int nranks);
-
+int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks,
+                                    int nblocks,
+                                    int nodeid,
+                                    int size,
+                                    int *ranks,
+                                    int nranks);
 
 /* These functions can be used in place of PMI_Get_clique_size()
  * and PMI_Get_clique_ranks().  They make canonical PMI API calls

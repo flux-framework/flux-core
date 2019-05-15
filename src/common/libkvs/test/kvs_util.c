@@ -66,7 +66,6 @@ void kvs_util_normalize_key_path_tests (void)
 
 int main (int argc, char *argv[])
 {
-
     plan (NO_PLAN);
 
     kvs_util_normalize_key_path_tests ();
@@ -74,7 +73,6 @@ int main (int argc, char *argv[])
     done_testing ();
     return (0);
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

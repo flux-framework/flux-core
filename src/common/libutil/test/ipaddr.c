@@ -14,7 +14,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/ipaddr.h"
 
-int main(int argc, char** argv)
+int main (int argc, char **argv)
 {
     char host[MAXHOSTNAMELEN + 1];
     char errstr[200];
@@ -35,7 +35,7 @@ int main(int argc, char** argv)
 
     free (addrs);
 
-    done_testing();
+    done_testing ();
 }
 
 /*

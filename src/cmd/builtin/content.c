@@ -55,7 +55,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     const char *blobref;
     int flags = 0;
 
-    if (optparse_option_index (p)  != ac) {
+    if (optparse_option_index (p) != ac) {
         optparse_print_usage (p);
         exit (1);
     }
@@ -128,7 +128,7 @@ static void store_completion (flux_future_t *f, void *arg)
         log_err_exit ("store");
     printf ("%s\n", blobref);
     flux_future_destroy (f);
-    if (--spam_cur_inflight < spam_max_inflight/2)
+    if (--spam_cur_inflight < spam_max_inflight / 2)
         flux_reactor_stop (flux_get_reactor (h));
 }
 
@@ -157,7 +157,7 @@ static int internal_content_spam (optparse_t *p, int ac, char *av[])
     i = 0;
     while (i < count || spam_cur_inflight > 0) {
         while (i < count && spam_cur_inflight < spam_max_inflight) {
-            snprintf (data, size, "spam-o-matic pid=%d seq=%d", getpid(), i);
+            snprintf (data, size, "spam-o-matic pid=%d seq=%d", getpid (), i);
             if (!(f = flux_content_store (h, data, size, 0)))
                 log_err_exit ("flux_content_store(%d)", i);
             if (flux_future_then (f, -1., store_completion, h) < 0)
@@ -181,62 +181,84 @@ int cmd_content (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_option load_opts[] = {
-    { .name = "bypass-cache",  .key = 'b',  .has_arg = 0,
-      .usage = "Load directly from rank 0 content service", },
+    {
+        .name = "bypass-cache",
+        .key = 'b',
+        .has_arg = 0,
+        .usage = "Load directly from rank 0 content service",
+    },
     OPTPARSE_TABLE_END,
 };
 
 static struct optparse_option store_opts[] = {
-    { .name = "bypass-cache",  .key = 'b',  .has_arg = 0,
-      .usage = "Store directly to rank 0 content service", },
-      OPTPARSE_TABLE_END,
+    {
+        .name = "bypass-cache",
+        .key = 'b',
+        .has_arg = 0,
+        .usage = "Store directly to rank 0 content service",
+    },
+    OPTPARSE_TABLE_END,
 };
 
-static struct optparse_subcommand content_subcmds[] = {
-    { "load",
-      "[OPTIONS] BLOBREF",
-      "Load blob for digest BLOBREF to stdout",
-      internal_content_load,
-      0,
-      load_opts,
-    },
-    { "store",
-      "[OPTIONS]",
-      "Store blob from stdin, print BLOBREF on stdout",
-      internal_content_store,
-      0,
-      store_opts,
-    },
-    { "dropcache",
-      NULL,
-      "Drop non-essential entries from local content cache",
-      internal_content_dropcache,
-      0,
-      NULL,
-    },
-    { "flush",
-      NULL,
-      "Flush dirty entries from local content cache",
-      internal_content_flush,
-      0,
-      NULL,
-    },
-    { "spam",
-      "N [M]",
-      "Store N random entries, keeping M requests in flight (default 1)",
-      internal_content_spam,
-      0,
-      NULL,
-    },
-    OPTPARSE_SUBCMD_END
-};
+static struct optparse_subcommand content_subcmds[] = {{
+                                                           "load",
+                                                           "[OPTIONS] BLOBREF",
+                                                           "Load blob for digest "
+                                                           "BLOBREF to stdout",
+                                                           internal_content_load,
+                                                           0,
+                                                           load_opts,
+                                                       },
+                                                       {
+                                                           "store",
+                                                           "[OPTIONS]",
+                                                           "Store blob from stdin, "
+                                                           "print BLOBREF on stdout",
+                                                           internal_content_store,
+                                                           0,
+                                                           store_opts,
+                                                       },
+                                                       {
+                                                           "dropcache",
+                                                           NULL,
+                                                           "Drop non-essential entries "
+                                                           "from local content cache",
+                                                           internal_content_dropcache,
+                                                           0,
+                                                           NULL,
+                                                       },
+                                                       {
+                                                           "flush",
+                                                           NULL,
+                                                           "Flush dirty entries from "
+                                                           "local content cache",
+                                                           internal_content_flush,
+                                                           0,
+                                                           NULL,
+                                                       },
+                                                       {
+                                                           "spam",
+                                                           "N [M]",
+                                                           "Store N random entries, "
+                                                           "keeping M requests in "
+                                                           "flight (default 1)",
+                                                           internal_content_spam,
+                                                           0,
+                                                           NULL,
+                                                       },
+                                                       OPTPARSE_SUBCMD_END};
 
 int subcommand_content_register (optparse_t *p)
 {
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p,
-            "content", cmd_content, NULL, "Access content store", 0, NULL);
+                                 "content",
+                                 cmd_content,
+                                 NULL,
+                                 "Access content store",
+                                 0,
+                                 NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 

@@ -35,8 +35,7 @@ int main (int argc, char *argv[])
         if (errno != ENODATA)
             log_err_exit ("flux_kvs_lookup_get");
         flux_future_destroy (f);
-    }
-    else
+    } else
         log_msg_exit ("flux_kvs_lookup_get returned success");
 
     flux_close (h);

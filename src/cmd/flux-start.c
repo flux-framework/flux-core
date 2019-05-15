@@ -56,19 +56,21 @@ struct client {
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
-int start_session (const char *cmd_argz, size_t cmd_argz_len,
-                   const char *broker_path);
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
-                 const char *broker_path);
+int start_session (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path);
+int exec_broker (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path);
 char *create_scratch_dir (const char *session_id);
-struct client *client_create (const char *broker_path, const char *scratch_dir,
-                              int rank, const char *cmd_argz, size_t cmd_argz_len);
+struct client *client_create (const char *broker_path,
+                              const char *scratch_dir,
+                              int rank,
+                              const char *cmd_argz,
+                              size_t cmd_argz_len);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
 
 #ifndef HAVE_CALIPER
-static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
+static int no_caliper_fatal_err (optparse_t *p,
+                                 struct optparse_option *o,
                                  const char *optarg)
 {
     log_msg_exit ("Error: --caliper-profile used but no Caliper support found");
@@ -77,55 +79,90 @@ static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
-    { .name = "verbose",    .key = 'v', .has_arg = 0,
-      .usage = "Be annoyingly informative", },
-    { .name = "noexec",     .key = 'X', .has_arg = 0,
-      .usage = "Don't execute (useful with -v, --verbose)", },
-    { .name = "bootstrap",  .key = 'b', .has_arg = 1, .arginfo = "METHOD",
-      .usage = "Set flux instance's network bootstrap method", },
-    { .name = "size",       .key = 's', .has_arg = 1, .arginfo = "N",
-      .usage = "Set number of ranks in new instance", },
-    { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
-      .flags = OPTPARSE_OPT_AUTOSPLIT,
-      .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
-    { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "DURATION",
-      .usage = "After a broker exits, kill other brokers after DURATION", },
-    { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
-      .usage = "Trace pmi simple server protocol exchange", },
-    { .name = "scratchdir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
-      .usage = "Use DIR as scratch directory", },
+    {
+        .name = "verbose",
+        .key = 'v',
+        .has_arg = 0,
+        .usage = "Be annoyingly informative",
+    },
+    {
+        .name = "noexec",
+        .key = 'X',
+        .has_arg = 0,
+        .usage = "Don't execute (useful with -v, --verbose)",
+    },
+    {
+        .name = "bootstrap",
+        .key = 'b',
+        .has_arg = 1,
+        .arginfo = "METHOD",
+        .usage = "Set flux instance's network bootstrap method",
+    },
+    {
+        .name = "size",
+        .key = 's',
+        .has_arg = 1,
+        .arginfo = "N",
+        .usage = "Set number of ranks in new instance",
+    },
+    {
+        .name = "broker-opts",
+        .key = 'o',
+        .has_arg = 1,
+        .arginfo = "OPTS",
+        .flags = OPTPARSE_OPT_AUTOSPLIT,
+        .usage = "Add comma-separated broker options, e.g. \"-o,-v\"",
+    },
+    {
+        .name = "killer-timeout",
+        .key = 'k',
+        .has_arg = 1,
+        .arginfo = "DURATION",
+        .usage = "After a broker exits, kill other brokers after DURATION",
+    },
+    {
+        .name = "trace-pmi-server",
+        .has_arg = 0,
+        .arginfo = NULL,
+        .usage = "Trace pmi simple server protocol exchange",
+    },
+    {
+        .name = "scratchdir",
+        .key = 'D',
+        .has_arg = 1,
+        .arginfo = "DIR",
+        .usage = "Use DIR as scratch directory",
+    },
 
-/* Option group 1, these options will be listed after those above */
-    { .group = 1,
-      .name = "caliper-profile", .has_arg = 1,
-      .arginfo = "PROFILE",
-      .usage = "Enable profiling in brokers using Caliper configuration "
-               "profile named `PROFILE'",
+    /* Option group 1, these options will be listed after those above */
+    {
+        .group = 1,
+        .name = "caliper-profile",
+        .has_arg = 1,
+        .arginfo = "PROFILE",
+        .usage = "Enable profiling in brokers using Caliper configuration "
+                 "profile named `PROFILE'",
 #ifndef HAVE_CALIPER
-      .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
-#endif /* !HAVE_CALIPER */
+        .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
+#endif                              /* !HAVE_CALIPER */
     },
-    { .group = 1,
-      .name = "wrap", .has_arg = 1, .arginfo = "ARGS,...",
-      .flags = OPTPARSE_OPT_AUTOSPLIT,
-      .usage = "Wrap broker execution in comma-separated arguments"
-    },
+    {.group = 1,
+     .name = "wrap",
+     .has_arg = 1,
+     .arginfo = "ARGS,...",
+     .flags = OPTPARSE_OPT_AUTOSPLIT,
+     .usage = "Wrap broker execution in comma-separated arguments"},
     OPTPARSE_TABLE_END,
 };
 
-enum {
-    BOOTSTRAP_PMI,
-    BOOTSTRAP_SELFPMI
-};
+enum { BOOTSTRAP_PMI, BOOTSTRAP_SELFPMI };
 
 static struct {
     char *string;
     int num;
-} bootstrap_options[] = {
-    {"pmi", BOOTSTRAP_PMI},
-    {"selfpmi", BOOTSTRAP_SELFPMI},
-    {NULL, -1}
-};
+} bootstrap_options[] = {{"pmi", BOOTSTRAP_PMI},
+                         {"selfpmi", BOOTSTRAP_SELFPMI},
+                         {NULL, -1}};
 
 /* Turn the bootstrap option string into an integer value */
 static int parse_bootstrap_option (optparse_t *opts)
@@ -134,13 +171,13 @@ static int parse_bootstrap_option (optparse_t *opts)
     int i;
 
     bootstrap = optparse_get_str (opts, "bootstrap", "pmi");
-    for (i = 0; ; i++) {
+    for (i = 0;; i++) {
         if (bootstrap_options[i].string == NULL)
             break;
-        if (!strcmp(bootstrap_options[i].string, bootstrap))
+        if (!strcmp (bootstrap_options[i].string, bootstrap))
             return bootstrap_options[i].num;
     }
-    log_msg_exit("Unknown bootstrap method \"%s\"", bootstrap);
+    log_msg_exit ("Unknown bootstrap method \"%s\"", bootstrap);
 }
 
 int main (int argc, char *argv[])
@@ -162,8 +199,8 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_set usage");
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
-    ctx.killer_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
-                                                DEFAULT_KILLER_TIMEOUT);
+    ctx.killer_timeout =
+        optparse_get_duration (ctx.opts, "killer-timeout", DEFAULT_KILLER_TIMEOUT);
     if (ctx.killer_timeout < 0.)
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optindex < argc) {
@@ -181,9 +218,10 @@ int main (int argc, char *argv[])
         if (bootstrap != BOOTSTRAP_SELFPMI) {
             if (!optparse_hasopt (ctx.opts, "bootstrap")) {
                 bootstrap = BOOTSTRAP_SELFPMI;
-                log_msg("warning: setting --bootstrap=selfpmi due to --size option");
+                log_msg ("warning: setting --bootstrap=selfpmi due to --size option");
             } else {
-                log_errn_exit(EINVAL, "--size can only be used with --bootstrap=selfpmi");
+                log_errn_exit (EINVAL,
+                               "--size can only be used with --bootstrap=selfpmi");
             }
         }
         ctx.size = optparse_get_int (ctx.opts, "size", -1);
@@ -194,18 +232,18 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     switch (bootstrap) {
-    case BOOTSTRAP_PMI:
-        if (optparse_hasopt (ctx.opts, "scratchdir"))
-            log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
-        status = exec_broker (command, len, broker_path);
-        break;
-    case BOOTSTRAP_SELFPMI:
-        if (!optparse_hasopt (ctx.opts, "size"))
-            log_msg_exit ("--size must be specified for --bootstrap=selfpmi");
-        status = start_session (command, len, broker_path);
-        break;
-    default:
-        assert(0); /* should never happen */
+        case BOOTSTRAP_PMI:
+            if (optparse_hasopt (ctx.opts, "scratchdir"))
+                log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
+            status = exec_broker (command, len, broker_path);
+            break;
+        case BOOTSTRAP_SELFPMI:
+            if (!optparse_hasopt (ctx.opts, "size"))
+                log_msg_exit ("--size must be specified for --bootstrap=selfpmi");
+            status = start_session (command, len, broker_path);
+            break;
+        default:
+            assert (0); /* should never happen */
     }
 
     optparse_destroy (ctx.opts);
@@ -230,22 +268,21 @@ static void setup_profiling_env (void)
      */
     if (optparse_getopt (ctx.opts, "caliper-profile", &profile) == 1) {
         const char *pl = getenv ("LD_PRELOAD");
-        int rc = setenvf ("LD_PRELOAD", 1, "%s%s%s",
+        int rc = setenvf ("LD_PRELOAD",
+                          1,
+                          "%s%s%s",
                           pl ? pl : "",
-                          pl ? " ": "",
+                          pl ? " " : "",
                           "libcaliper.so");
         if (rc < 0)
             log_err_exit ("Unable to set LD_PRELOAD in environment");
 
-        if ((profile != NULL) &&
-            (setenv ("CALI_CONFIG_PROFILE", profile, 1) < 0))
-                log_err_exit ("setenv (CALI_CONFIG_PROFILE)");
+        if ((profile != NULL) && (setenv ("CALI_CONFIG_PROFILE", profile, 1) < 0))
+            log_err_exit ("setenv (CALI_CONFIG_PROFILE)");
         setenv ("CALI_LOG_VERBOSITY", "0", 0);
     }
 #endif
 }
-
-
 
 char *find_broker (const char *searchpath)
 {
@@ -315,16 +352,21 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             flux_watcher_stop (ctx.timer);
         zlist_remove (ctx.clients, cli);
         client_destroy (cli);
-    }
-    else if (state == FLUX_SUBPROCESS_EXITED) {
+    } else if (state == FLUX_SUBPROCESS_EXITED) {
         pid_t pid = flux_subprocess_pid (p);
         int status;
 
         if ((status = flux_subprocess_status (p)) >= 0) {
             if (WIFSIGNALED (status))
-                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WTERMSIG (status)));
+                log_msg ("%d (pid %d) %s",
+                         cli->rank,
+                         pid,
+                         strsignal (WTERMSIG (status)));
             else if (WIFEXITED (status) && WEXITSTATUS (status) != 0)
-                log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, WEXITSTATUS (status));
+                log_msg ("%d (pid %d) exited with rc=%d",
+                         cli->rank,
+                         pid,
+                         WEXITSTATUS (status));
         } else
             log_msg ("%d (pid %d) exited, unknown status", cli->rank, pid);
     }
@@ -347,7 +389,7 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
         if (rc < 0)
             log_err_exit ("%s: pmi_simple_server_request", __FUNCTION__);
         if (rc == 1)
-            (void) flux_subprocess_close (p, stream);
+            (void)flux_subprocess_close (p, stream);
     }
 }
 
@@ -356,15 +398,15 @@ void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *
     const char *arg;
     optparse_getopt_iterator_reset (opt, name);
     while ((arg = optparse_getopt_next (opt, name)))
-        if (argz_add  (argz, argz_len, arg) != 0)
+        if (argz_add (argz, argz_len, arg) != 0)
             log_err_exit ("argz_add");
 }
 
 char *create_scratch_dir (const char *session_id)
 {
     char *tmpdir = getenv ("TMPDIR");
-    char *scratchdir = xasprintf ("%s/flux-%s-XXXXXX",
-                                  tmpdir ? tmpdir : "/tmp", session_id);
+    char *scratchdir =
+        xasprintf ("%s/flux-%s-XXXXXX", tmpdir ? tmpdir : "/tmp", session_id);
 
     if (!mkdtemp (scratchdir))
         log_err_exit ("mkdtemp %s", scratchdir);
@@ -384,16 +426,14 @@ static void pmi_debug_trace (void *client, const char *buf)
     fprintf (stderr, "%d: %s", cli->rank, buf);
 }
 
-int pmi_kvs_put (void *arg, const char *kvsname,
-                 const char *key, const char *val)
+int pmi_kvs_put (void *arg, const char *kvsname, const char *key, const char *val)
 {
     zhash_update (ctx.pmi.kvs, key, xstrdup (val));
     zhash_freefn (ctx.pmi.kvs, key, (zhash_free_fn *)free);
     return 0;
 }
 
-int pmi_kvs_get (void *arg, void *client, const char *kvsname,
-                 const char *key)
+int pmi_kvs_get (void *arg, void *client, const char *kvsname, const char *key)
 {
     char *v = zhash_lookup (ctx.pmi.kvs, key);
     if (pmi_simple_server_kvs_get_complete (ctx.pmi.srv, client, v) < 0)
@@ -419,8 +459,7 @@ int execvp_argz (char *argz, size_t argz_len)
  * broker will figure out how to bootstrap without any further aid from
  * flux-start.
  */
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
-                 const char *broker_path)
+int exec_broker (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path)
 {
     char *argz = NULL;
     size_t argz_len = 0;
@@ -456,12 +495,15 @@ error:
     return -1;
 }
 
-struct client *client_create (const char *broker_path, const char *scratch_dir,
-                              int rank, const char *cmd_argz, size_t cmd_argz_len)
+struct client *client_create (const char *broker_path,
+                              const char *scratch_dir,
+                              int rank,
+                              const char *cmd_argz,
+                              size_t cmd_argz_len)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     char *arg;
-    char * argz = NULL;
+    char *argz = NULL;
     size_t argz_len = 0;
 
     cli->rank = rank;
@@ -534,10 +576,10 @@ void pmi_server_initialize (int flags, const char *session_id)
         .debug_trace = pmi_debug_trace,
     };
     int appnum = strtol (session_id, NULL, 10);
-    if (!(ctx.pmi.kvs = zhash_new()))
+    if (!(ctx.pmi.kvs = zhash_new ()))
         oom ();
-    ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.size,
-                                            ctx.size, "-", flags, NULL);
+    ctx.pmi.srv =
+        pmi_simple_server_create (ops, appnum, ctx.size, ctx.size, "-", flags, NULL);
     if (!ctx.pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }
@@ -583,8 +625,7 @@ void restore_termios (void)
  * descriptors it implies that the brokers in this instance must all
  * be contained on one node.  This is mostly useful for testing purposes.
  */
-int start_session (const char *cmd_argz, size_t cmd_argz_len,
-                   const char *broker_path)
+int start_session (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path)
 {
     struct client *cli;
     int rank;
@@ -603,8 +644,10 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                  ctx.killer_timeout, 0.,
-                                                  killer, NULL)))
+                                                 ctx.killer_timeout,
+                                                 0.,
+                                                 killer,
+                                                 NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
@@ -621,8 +664,11 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     pmi_server_initialize (flags, session_id);
 
     for (rank = 0; rank < ctx.size; rank++) {
-        if (!(cli = client_create (broker_path, scratch_dir, rank,
-                                   cmd_argz, cmd_argz_len)))
+        if (!(cli = client_create (broker_path,
+                                   scratch_dir,
+                                   rank,
+                                   cmd_argz,
+                                   cmd_argz_len)))
             log_err_exit ("client_create");
         if (optparse_hasopt (ctx.opts, "verbose"))
             client_dumpargs (cli);

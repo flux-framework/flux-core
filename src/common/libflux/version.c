@@ -30,7 +30,6 @@ int flux_core_version (int *major, int *minor, int *patch)
     return FLUX_CORE_VERSION_HEX;
 }
 
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

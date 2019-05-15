@@ -15,7 +15,7 @@
 
 typedef struct msglist_struct msglist_t;
 
-typedef void (*msglist_free_f)(void *item);
+typedef void (*msglist_free_f) (void *item);
 
 /* Create/destroy list.
  * If 'fun' is non-NULL, msglist_destroy () will use it to destroy any
@@ -58,4 +58,3 @@ int msglist_pollfd (msglist_t *l);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

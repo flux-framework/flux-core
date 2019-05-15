@@ -17,7 +17,7 @@
 #include <lauxlib.h>
 #include <jansson.h>
 
-static void * json_nullptr;
+static void *json_nullptr;
 
 static int json_object_to_lua_table (lua_State *L, json_t *o);
 static int json_array_to_lua (lua_State *L, json_t *o);
@@ -34,11 +34,11 @@ int lua_is_json_null (lua_State *L, int index)
 
 int json_object_to_lua (lua_State *L, json_t *o)
 {
-        if (o == NULL) {
-            lua_pushnil (L);
-            return (1);
-        }
-        switch (json_typeof (o)) {
+    if (o == NULL) {
+        lua_pushnil (L);
+        return (1);
+    }
+    switch (json_typeof (o)) {
         case JSON_OBJECT:
             json_object_to_lua_table (L, o);
             break;
@@ -63,8 +63,8 @@ int json_object_to_lua (lua_State *L, json_t *o)
         case JSON_NULL:
             /* XXX: crap. */
             break;
-        }
-        return (1);
+    }
+    return (1);
 }
 
 int json_object_string_to_lua (lua_State *L, const char *json_str)
@@ -91,7 +91,7 @@ static int json_array_to_lua (lua_State *L, json_t *o)
         if (entry == NULL)
             continue;
         json_object_to_lua (L, entry);
-        lua_rawseti (L, index, i+1);
+        lua_rawseti (L, index, i + 1);
     }
     return (1);
 }
@@ -102,7 +102,8 @@ static int json_object_to_lua_table (lua_State *L, json_t *o)
     json_t *value;
     lua_newtable (L);
 
-    json_object_foreach(o, key, value) {
+    json_object_foreach (o, key, value)
+    {
         lua_pushstring (L, key);
         json_object_to_lua (L, value);
         lua_rawset (L, -3);
@@ -110,7 +111,7 @@ static int json_object_to_lua_table (lua_State *L, json_t *o)
     return (1);
 }
 
-static json_t * lua_table_to_json (lua_State *L, int i);
+static json_t *lua_table_to_json (lua_State *L, int i);
 
 static int lua_is_integer (lua_State *L, int index)
 {
@@ -154,8 +155,9 @@ int lua_value_to_json (lua_State *L, int i, json_t **valp)
             if (lua_touserdata (L, index) == json_null)
                 break;
         default:
-            luaL_error (L, "Unexpected Lua type %s",
-                lua_typename (L, lua_type (L, index)));
+            luaL_error (L,
+                        "Unexpected Lua type %s",
+                        lua_typename (L, lua_type (L, index)));
             return (-1);
     }
     *valp = o;
@@ -171,7 +173,7 @@ int lua_value_to_json_string (lua_State *L, int i, char **strp)
     }
     if (lua_value_to_json (L, i, &o) < 0)
         return (-1);
-    if (!(*strp = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY)))
+    if (!(*strp = json_dumps (o, JSON_COMPACT | JSON_ENCODE_ANY)))
         return (-1);
     json_decref (o);
     return (0);
@@ -193,7 +195,7 @@ static int lua_table_is_array (lua_State *L, int index)
     return (haskeys);
 }
 
-static json_t * lua_table_to_json_array (lua_State *L, int index)
+static json_t *lua_table_to_json_array (lua_State *L, int index)
 {
     int rc;
     json_t *o = json_array ();
@@ -214,13 +216,15 @@ static json_t * lua_table_to_json_array (lua_State *L, int index)
     return (o);
 }
 
-static json_t * lua_table_to_json (lua_State *L, int index)
+static json_t *lua_table_to_json (lua_State *L, int index)
 {
     json_t *o;
 
     if (!lua_istable (L, index))
-        fprintf (stderr, "Object at index=%d is not table, is %s\n",
-                index, lua_typename (L, lua_type (L, index)));
+        fprintf (stderr,
+                 "Object at index=%d is not table, is %s\n",
+                 index,
+                 lua_typename (L, lua_type (L, index)));
 
     if (lua_table_is_array (L, index))
         return lua_table_to_json_array (L, index);
@@ -242,7 +246,6 @@ static json_t * lua_table_to_json (lua_State *L, int index)
     }
     return (o);
 }
-
 
 /*
  * vi: ts=4 sw=4 expandtab

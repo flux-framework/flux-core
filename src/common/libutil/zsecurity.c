@@ -26,7 +26,6 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 
-
 #define FLUX_ZAP_DOMAIN "flux"
 
 struct zsecurity_struct {
@@ -58,9 +57,12 @@ const char *zsecurity_confstr (zsecurity_t *c)
 {
     if (c->confstr)
         free (c->confstr);
-    if (asprintf (&c->confstr, "Security: epgm=off, tcp/ipc=%s",
-               (c->typemask & ZSECURITY_TYPE_PLAIN) ? "PLAIN"
-             : (c->typemask & ZSECURITY_TYPE_CURVE) ? "CURVE" : "off") < 0)
+    if (asprintf (&c->confstr,
+                  "Security: epgm=off, tcp/ipc=%s",
+                  (c->typemask & ZSECURITY_TYPE_PLAIN)
+                      ? "PLAIN"
+                      : (c->typemask & ZSECURITY_TYPE_CURVE) ? "CURVE" : "off")
+        < 0)
         oom ();
     return c->confstr;
 }
@@ -155,8 +157,9 @@ done:
 
 int zsecurity_comms_init (zsecurity_t *c)
 {
-    if (c->auth == NULL && ((c->typemask & ZSECURITY_TYPE_CURVE)
-                        || (c->typemask & ZSECURITY_TYPE_PLAIN))) {
+    if (c->auth == NULL
+        && ((c->typemask & ZSECURITY_TYPE_CURVE)
+            || (c->typemask & ZSECURITY_TYPE_PLAIN))) {
         if (checksecdirs (c, false) < 0)
             goto error;
         if (!(c->auth = zactor_new (zauth, NULL))) {
@@ -250,7 +253,10 @@ stat_again:
                 create = false;
                 goto stat_again;
             } else {
-                seterrstr (c, "The directory '%s' does not exist.  Have you run \"flux keygen\"?", path);
+                seterrstr (c,
+                           "The directory '%s' does not exist.  Have you run \"flux "
+                           "keygen\"?",
+                           path);
             }
         } else
             seterrstr (c, "lstat %s: %s", path, strerror (errno));
@@ -261,7 +267,7 @@ stat_again:
         seterrstr (c, "%s: %s", path, strerror (errno));
         goto done;
     }
-    if ((sb.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) != 0700) {
+    if ((sb.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) != 0700) {
         seterrstr (c, "%s: mode should be 0700", path);
         errno = EPERM;
         goto done;
@@ -306,7 +312,7 @@ static int checksecdirs (zsecurity_t *c, bool create)
     return 0;
 }
 
-static char * ctime_iso8601_now (char *buf, size_t sz)
+static char *ctime_iso8601_now (char *buf, size_t sz)
 {
     struct tm tm;
     time_t now = time (NULL);
@@ -330,11 +336,9 @@ static zcert_t *zcert_curve_new (zsecurity_t *c)
 
     if (zmq_curve_keypair (pub, sec) < 0) {
         if (errno == ENOTSUP)
-            seterrstr (c,
-                "No CURVE support in libzmq (not compiled with libsodium?)");
+            seterrstr (c, "No CURVE support in libzmq (not compiled with libsodium?)");
         else
-            seterrstr (c,
-                "Unknown error generating CURVE keypair");
+            seterrstr (c, "Unknown error generating CURVE keypair");
         return NULL;
     }
 
@@ -351,7 +355,8 @@ static zcert_t *zcert_curve_new (zsecurity_t *c)
 
 static int gencurve (zsecurity_t *c, const char *role)
 {
-    char *path = NULL, *priv = NULL;;
+    char *path = NULL, *priv = NULL;
+    ;
     zcert_t *cert = NULL;
     char buf[64];
     struct stat sb;

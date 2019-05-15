@@ -24,21 +24,21 @@ extern "C" {
 typedef struct flux_msg flux_msg_t;
 
 enum {
-    FLUX_MSGTYPE_REQUEST    = 0x01,
-    FLUX_MSGTYPE_RESPONSE   = 0x02,
-    FLUX_MSGTYPE_EVENT      = 0x04,
-    FLUX_MSGTYPE_KEEPALIVE  = 0x08,
-    FLUX_MSGTYPE_ANY        = 0x0f,
-    FLUX_MSGTYPE_MASK       = 0x0f,
+    FLUX_MSGTYPE_REQUEST = 0x01,
+    FLUX_MSGTYPE_RESPONSE = 0x02,
+    FLUX_MSGTYPE_EVENT = 0x04,
+    FLUX_MSGTYPE_KEEPALIVE = 0x08,
+    FLUX_MSGTYPE_ANY = 0x0f,
+    FLUX_MSGTYPE_MASK = 0x0f,
 };
 
 enum {
-    FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
-    FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
-    FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
-    FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
-    FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
-    FLUX_MSGFLAG_STREAMING  = 0x40, /* request/response is streaming RPC */
+    FLUX_MSGFLAG_TOPIC = 0x01,     /* message has topic string */
+    FLUX_MSGFLAG_PAYLOAD = 0x02,   /* message has payload */
+    FLUX_MSGFLAG_ROUTE = 0x08,     /* message is routable */
+    FLUX_MSGFLAG_UPSTREAM = 0x10,  /* request nodeid is sender (route away) */
+    FLUX_MSGFLAG_PRIVATE = 0x20,   /* private to instance owner and sender */
+    FLUX_MSGFLAG_STREAMING = 0x40, /* request/response is streaming RPC */
 };
 
 /* N.B. FLUX_NODEID_UPSTREAM should be used in the RPC interface only.
@@ -46,36 +46,40 @@ enum {
  * FLUX_MSGFLAG_UPSTREAM and nodeid set set to local broker rank.
  */
 enum {
-    FLUX_NODEID_ANY      = 0xFFFFFFFF, //(~(uint32_t)0),
+    FLUX_NODEID_ANY = 0xFFFFFFFF,      //(~(uint32_t)0),
     FLUX_NODEID_UPSTREAM = 0xFFFFFFFE  //(~(uint32_t)1)
 };
 
 struct flux_match {
-    int typemask;           /* bitmask of matching message types (or 0) */
-    uint32_t matchtag;      /* matchtag (or FLUX_MATCHTAG_NONE) */
-    char *topic_glob;       /* glob matching topic string (or NULL) */
+    int typemask;      /* bitmask of matching message types (or 0) */
+    uint32_t matchtag; /* matchtag (or FLUX_MATCHTAG_NONE) */
+    char *topic_glob;  /* glob matching topic string (or NULL) */
 };
 
-#define FLUX_MATCH_ANY (struct flux_match){ \
-    .typemask = FLUX_MSGTYPE_ANY, \
-    .matchtag = FLUX_MATCHTAG_NONE, \
-    .topic_glob = NULL, \
-}
-#define FLUX_MATCH_EVENT (struct flux_match){ \
-    .typemask = FLUX_MSGTYPE_EVENT, \
-    .matchtag = FLUX_MATCHTAG_NONE, \
-    .topic_glob = NULL, \
-}
-#define FLUX_MATCH_REQUEST (struct flux_match){ \
-    .typemask = FLUX_MSGTYPE_REQUEST, \
-    .matchtag = FLUX_MATCHTAG_NONE, \
-    .topic_glob = NULL, \
-}
-#define FLUX_MATCH_RESPONSE (struct flux_match){ \
-    .typemask = FLUX_MSGTYPE_RESPONSE, \
-    .matchtag = FLUX_MATCHTAG_NONE, \
-    .topic_glob = NULL, \
-}
+#define FLUX_MATCH_ANY                                                \
+    (struct flux_match)                                               \
+    {                                                                 \
+        .typemask = FLUX_MSGTYPE_ANY, .matchtag = FLUX_MATCHTAG_NONE, \
+        .topic_glob = NULL,                                           \
+    }
+#define FLUX_MATCH_EVENT                                                \
+    (struct flux_match)                                                 \
+    {                                                                   \
+        .typemask = FLUX_MSGTYPE_EVENT, .matchtag = FLUX_MATCHTAG_NONE, \
+        .topic_glob = NULL,                                             \
+    }
+#define FLUX_MATCH_REQUEST                                                \
+    (struct flux_match)                                                   \
+    {                                                                     \
+        .typemask = FLUX_MSGTYPE_REQUEST, .matchtag = FLUX_MATCHTAG_NONE, \
+        .topic_glob = NULL,                                               \
+    }
+#define FLUX_MATCH_RESPONSE                                                \
+    (struct flux_match)                                                    \
+    {                                                                      \
+        .typemask = FLUX_MSGTYPE_RESPONSE, .matchtag = FLUX_MATCHTAG_NONE, \
+        .topic_glob = NULL,                                                \
+    }
 
 struct flux_msg_iobuf {
     uint8_t *buf;
@@ -94,8 +98,10 @@ void flux_msg_destroy (flux_msg_t *msg);
 /* Access auxiliary data members in Flux message.
  * These are for convenience only - they are not sent over the wire.
  */
-int flux_msg_aux_set (const flux_msg_t *msg, const char *name,
-                      void *aux, flux_free_f destroy);
+int flux_msg_aux_set (const flux_msg_t *msg,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy);
 void *flux_msg_aux_get (const flux_msg_t *msg, const char *name);
 
 /* Duplicate msg, omitting payload if 'payload' is false.
@@ -122,8 +128,7 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size);
  * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int flux_msg_sendfd (int fd, const flux_msg_t *msg,
-                     struct flux_msg_iobuf *iobuf);
+int flux_msg_sendfd (int fd, const flux_msg_t *msg, struct flux_msg_iobuf *iobuf);
 
 /* Receive message from file descriptor.
  * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
@@ -220,9 +225,7 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid);
 
 /* Get/set userid
  */
-enum {
-    FLUX_USERID_UNKNOWN = 0xFFFFFFFF
-};
+enum { FLUX_USERID_UNKNOWN = 0xFFFFFFFF };
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid);
 int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid);
 
@@ -319,7 +322,8 @@ int flux_msg_get_route_first (const flux_msg_t *msg, char **id); /* closest to d
  * For requests, this is the last hop; for responses: this is the next hop.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
-int flux_msg_get_route_last (const flux_msg_t *msg, char **id); /* farthest from delim */
+int flux_msg_get_route_last (const flux_msg_t *msg,
+                             char **id); /* farthest from delim */
 
 /* Return the number of route frames in the message.
  * It is an EPROTO error if there is no route stack.
@@ -343,4 +347,3 @@ char *flux_msg_get_route_string (const flux_msg_t *msg);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

@@ -16,23 +16,22 @@
 #include "tstat.h"
 #include "log.h"
 
-
 void tstat_push (tstat_t *ts, double x)
 {
     if (ts->n == 0 || x < ts->min)
         ts->min = x;
     if (ts->n == 0 || x > ts->max)
         ts->max = x;
-/* running variance
- * ref Knuth TAOCP vol 2, 3rd edition, page 232
- * and http://www.johndcook.com/standard_deviation.html
- */
+    /* running variance
+     * ref Knuth TAOCP vol 2, 3rd edition, page 232
+     * and http://www.johndcook.com/standard_deviation.html
+     */
     if (++ts->n == 1) {
         ts->M = ts->newM = x;
         ts->S = 0;
     } else {
-        ts->newM = ts->M + (x - ts->M)/ts->n;
-        ts->newS = ts->S + (x - ts->M)*(x - ts->newM);
+        ts->newM = ts->M + (x - ts->M) / ts->n;
+        ts->newS = ts->S + (x - ts->M) * (x - ts->newM);
 
         ts->M = ts->newM;
         ts->S = ts->newS;
@@ -52,7 +51,7 @@ double tstat_max (tstat_t *ts)
 }
 double tstat_variance (tstat_t *ts)
 {
-    return (ts->n > 1) ? ts->newS/(ts->n - 1) : 0;
+    return (ts->n > 1) ? ts->newS / (ts->n - 1) : 0;
 }
 double tstat_stddev (tstat_t *ts)
 {

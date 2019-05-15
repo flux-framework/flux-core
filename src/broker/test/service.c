@@ -36,7 +36,6 @@ static int foo_cb (const flux_msg_t *msg, void *arg)
     return foo_cb_rc;
 }
 
-
 int main (int argc, char **argv)
 {
     struct service_switch *sw;
@@ -45,8 +44,7 @@ int main (int argc, char **argv)
     plan (NO_PLAN);
 
     sw = service_switch_create ();
-    ok (sw != NULL,
-        "service_switch_create works");
+    ok (sw != NULL, "service_switch_create works");
 
     msg = flux_request_encode ("foo", NULL);
     if (!msg)
@@ -55,15 +53,13 @@ int main (int argc, char **argv)
     ok (service_send (sw, msg) < 0 && errno == ENOSYS,
         "service_send to 'foo' fails with ENOSYS");
 
-    ok (service_add (sw, "foo", NULL, foo_cb, NULL) == 0,
-        "service_add foo works");
+    ok (service_add (sw, "foo", NULL, foo_cb, NULL) == 0, "service_add foo works");
 
     foo_cb_msg = NULL;
     foo_cb_arg = (void *)(uintptr_t)1;
     foo_cb_called = 0;
     foo_cb_rc = 0;
-    ok (service_send (sw, msg) == 0,
-        "service_send to 'foo' works");
+    ok (service_send (sw, msg) == 0, "service_send to 'foo' works");
     ok (foo_cb_called == 1 && foo_cb_arg == NULL && foo_cb_msg == msg,
         "and callback was called with expected arguments");
 
@@ -75,25 +71,21 @@ int main (int argc, char **argv)
 
     service_remove (sw, "foo");
     errno = 0;
-    ok (service_send (sw, msg) < 0 && errno == ENOSYS,
-        "service_remove works");
+    ok (service_send (sw, msg) < 0 && errno == ENOSYS, "service_remove works");
 
     flux_msg_destroy (msg);
-
 
     msg = flux_request_encode ("bar.baz", NULL);
     if (!msg)
         BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
-    ok (service_add (sw, "bar", NULL, foo_cb, NULL) == 0,
-        "service_add bar works");
+    ok (service_add (sw, "bar", NULL, foo_cb, NULL) == 0, "service_add bar works");
     foo_cb_rc = 0;
-    ok (service_send (sw, msg) == 0,
-        "service_send to 'bar.baz' works");
+    ok (service_send (sw, msg) == 0, "service_send to 'bar.baz' works");
     flux_msg_destroy (msg);
 
- #define SVC_NAME "reallylongservicenamewowthisisimpressive"
- #define SVC_ALT1 "alt1"
- #define SVC_ALT2 "alt2"
+#define SVC_NAME "reallylongservicenamewowthisisimpressive"
+#define SVC_ALT1 "alt1"
+#define SVC_ALT2 "alt2"
     ok (service_add (sw, SVC_NAME, "fakeuuid", foo_cb, NULL) == 0,
         "service_add works for long service name");
     ok (service_add (sw, SVC_ALT1, "fakeuuid", foo_cb, NULL) == 0,
@@ -131,7 +123,7 @@ int main (int argc, char **argv)
     ok (service_send (sw, msg2) < 0 && errno == ENOSYS && foo_cb_called == 0,
         "service_send to first alternate name fails after remove_byuuid");
     errno = 0;
-    ok (service_send (sw, msg3) < 0  && errno == ENOSYS && foo_cb_called == 0,
+    ok (service_send (sw, msg3) < 0 && errno == ENOSYS && foo_cb_called == 0,
         "service_send to second alternate name fails after remove_byuuid");
 
     flux_msg_destroy (msg);

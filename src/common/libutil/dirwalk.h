@@ -16,9 +16,9 @@
 typedef struct dirwalk dirwalk_t;
 
 enum {
-    DIRWALK_DEPTH =    1<<0,  /* Traverse in depth-first order             */
-    DIRWALK_REALPATH = 1<<1,  /* Resolve all paths with realpath(3)        */
-    DIRWALK_FIND_DIR = 1<<2,  /* Do not skip directories in dirwalk_find() */
+    DIRWALK_DEPTH = 1 << 0,    /* Traverse in depth-first order             */
+    DIRWALK_REALPATH = 1 << 1, /* Resolve all paths with realpath(3)        */
+    DIRWALK_FIND_DIR = 1 << 2, /* Do not skip directories in dirwalk_find() */
 };
 
 /*
@@ -54,16 +54,16 @@ void dirwalk_stop (dirwalk_t *d, int errnum);
 /*  Return current path visited during a dirwalk. May be a relative
  *   path unless DIRWALK_REALPATH flag was used.
  */
-const char * dirwalk_path (dirwalk_t *d);
+const char *dirwalk_path (dirwalk_t *d);
 
 /*  Return the current file name (as in dirent.d_name) during a dirwalk.
  */
-const char * dirwalk_name (dirwalk_t *d);
+const char *dirwalk_name (dirwalk_t *d);
 
 /*  Return a pointer to the struct stat structure for the current file
  *   being visited during a dirwalk.
  */
-const struct stat * dirwalk_stat (dirwalk_t *d);
+const struct stat *dirwalk_stat (dirwalk_t *d);
 
 /*  Return fd for current directory in dirwalk.
  */
@@ -83,8 +83,11 @@ int dirwalk_isdir (dirwalk_t *d);
  *
  *  zlist must be freed by caller (results are set to autofree).
  */
-zlist_t * dirwalk_find (const char *path, int flags,
-                        const char *pattern, int count,
-                        dirwalk_filter_f fn, void *arg);
+zlist_t *dirwalk_find (const char *path,
+                       int flags,
+                       const char *pattern,
+                       int count,
+                       dirwalk_filter_f fn,
+                       void *arg);
 
 #endif /* !HAVE_UTIL_DIRWALK_H */

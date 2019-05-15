@@ -19,7 +19,7 @@
 
 typedef struct hello_struct hello_t;
 
-typedef void (*hello_cb_f)(hello_t *hello, void *arg);
+typedef void (*hello_cb_f) (hello_t *hello, void *arg);
 
 hello_t *hello_create (void);
 void hello_destroy (hello_t *hello);

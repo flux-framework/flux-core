@@ -17,7 +17,8 @@
 
 /* Hande a request to raise an exception on job.
  */
-void raise_handle_request (flux_t *h, struct queue *queue,
+void raise_handle_request (flux_t *h,
+                           struct queue *queue,
                            struct event_ctx *event_ctx,
                            const flux_msg_t *msg);
 

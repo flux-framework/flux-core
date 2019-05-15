@@ -24,8 +24,8 @@
 #include "attr.h"
 #include "content-cache.h"
 
-static const uint32_t default_cache_purge_target_entries = 1024*1024;
-static const uint32_t default_cache_purge_target_size = 1024*1024*16;
+static const uint32_t default_cache_purge_target_entries = 1024 * 1024;
+static const uint32_t default_cache_purge_target_size = 1024 * 1024 * 16;
 
 static const uint32_t default_cache_purge_old_entry = 5;
 static const uint32_t default_cache_purge_large_entry = 256;
@@ -34,21 +34,20 @@ static const uint32_t default_cache_purge_large_entry = 256;
  * (including KVS directories) can be supported while the KVS transitions
  * to the RFC 11 treeobj data representation.
  */
-//static const uint32_t default_blob_size_limit = 1048576; /* RFC 10 */
-static const uint32_t default_blob_size_limit = 1048576*1024;
+// static const uint32_t default_blob_size_limit = 1048576; /* RFC 10 */
+static const uint32_t default_blob_size_limit = 1048576 * 1024;
 
 static const uint32_t default_flush_batch_limit = 256;
-
 
 struct cache_entry {
     void *data;
     int len;
     char *blobref;
-    uint8_t valid:1;                /* entry contains valid data */
-    uint8_t dirty:1;                /* entry needs to be stored upstream */
-                                    /*   or to backing store (rank 0) */
-    uint8_t load_pending:1;
-    uint8_t store_pending:1;
+    uint8_t valid : 1; /* entry contains valid data */
+    uint8_t dirty : 1; /* entry needs to be stored upstream */
+                       /*   or to backing store (rank 0) */
+    uint8_t load_pending : 1;
+    uint8_t store_pending : 1;
     zlist_t *load_requests;
     zlist_t *store_requests;
     int lastused;
@@ -59,7 +58,7 @@ struct content_cache {
     flux_msg_handler_t **handlers;
     uint32_t rank;
     zhash_t *entries;
-    uint8_t backing:1;              /* 'content.backing' service available */
+    uint8_t backing : 1; /* 'content.backing' service available */
     char *backing_name;
     char hash_name[BLOBREF_MAX_STRING_SIZE];
     zlist_t *flush_requests;
@@ -74,9 +73,9 @@ struct content_cache {
     uint32_t purge_old_entry;
     uint32_t purge_large_entry;
 
-    uint32_t acct_size;             /* total size of all cache entries */
-    uint32_t acct_valid;            /* count of valid cache entries */
-    uint32_t acct_dirty;            /* count of dirty cache entries */
+    uint32_t acct_size;  /* total size of all cache entries */
+    uint32_t acct_valid; /* count of valid cache entries */
+    uint32_t acct_dirty; /* count of dirty cache entries */
 };
 
 static void flush_respond (content_cache_t *cache);
@@ -96,8 +95,10 @@ static void message_list_destroy (zlist_t **l)
  * The list is always run to completion, then destroyed.
  * On error, log at LOG_ERR level.
  */
-static void respond_requests_raw (zlist_t **l, flux_t *h,
-                                  const void *data, int len,
+static void respond_requests_raw (zlist_t **l,
+                                  flux_t *h,
+                                  const void *data,
+                                  int len,
                                   const char *type)
 {
     if (*l) {
@@ -113,8 +114,10 @@ static void respond_requests_raw (zlist_t **l, flux_t *h,
 
 /* Same as above only send errnum, errmsg response
  */
-static void respond_requests_error (zlist_t **l, flux_t *h,
-                                    int errnum, const char *errmsg,
+static void respond_requests_error (zlist_t **l,
+                                    flux_t *h,
+                                    int errnum,
+                                    const char *errmsg,
                                     const char *type)
 {
     if (*l) {
@@ -127,7 +130,6 @@ static void respond_requests_error (zlist_t **l, flux_t *h,
         zlist_destroy (l);
     }
 }
-
 
 /* Add request message to a list, creating the list as needed.
  * Returns 0 on succes, -1 on failure with errno set.
@@ -237,8 +239,7 @@ static int insert_entry (content_cache_t *cache, struct cache_entry *e)
  * Returns entry on success, NULL on failure.
  * N.B. errno is not set
  */
-static struct cache_entry *lookup_entry (content_cache_t *cache,
-                                         const char *blobref)
+static struct cache_entry *lookup_entry (content_cache_t *cache, const char *blobref)
 {
     return zhash_lookup (cache->entries, blobref);
 }
@@ -338,8 +339,10 @@ done:
     return rc;
 }
 
-void content_load_request (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+void content_load_request (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     content_cache_t *cache = arg;
     const char *blobref;
@@ -348,8 +351,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     int len = 0;
     struct cache_entry *e;
 
-    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref,
-                                 &blobref_size) < 0)
+    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref, &blobref_size) < 0)
         goto error;
     if (!blobref || blobref[blobref_size - 1] != '\0') {
         errno = EPROTO;
@@ -360,8 +362,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOENT;
             goto error;
         }
-        if (!(e = cache_entry_create (blobref))
-                                            || insert_entry (cache, e) < 0) {
+        if (!(e = cache_entry_create (blobref)) || insert_entry (cache, e) < 0) {
             flux_log_error (h, "content load");
             goto error; /* insert destroys 'e' on failure */
         }
@@ -417,7 +418,7 @@ static void cache_resume_flush (content_cache_t *cache)
     if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
     else if (cache->acct_dirty - cache->flush_batch_count > 0
-            && cache->flush_batch_count <= cache->flush_batch_limit / 2)
+             && cache->flush_batch_count <= cache->flush_batch_limit / 2)
         (void)cache_flush (cache); /* resume flushing */
 }
 
@@ -432,7 +433,9 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
     cache->flush_batch_count--;
     if (flux_content_store_get (f, &blobref) < 0) {
         if (cache->rank == 0 && errno == ENOSYS)
-            flux_log (cache->h, LOG_DEBUG, "content store: %s",
+            flux_log (cache->h,
+                      LOG_DEBUG,
+                      "content store: %s",
                       "backing store service unavailable");
         else
             flux_log_error (cache->h, "content store");
@@ -447,8 +450,11 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
         cache->acct_dirty--;
         e->dirty = 0;
     }
-    respond_requests_raw (&e->store_requests, cache->h,
-                          e->blobref, strlen (e->blobref) + 1, "store");
+    respond_requests_raw (&e->store_requests,
+                          cache->h,
+                          e->blobref,
+                          strlen (e->blobref) + 1,
+                          "store");
     flux_future_destroy (f);
     cache_resume_flush (cache);
     return;
@@ -498,8 +504,10 @@ done:
     return rc;
 }
 
-static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void content_store_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     content_cache_t *cache = arg;
     const void *data;
@@ -513,8 +521,8 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         errno = EFBIG;
         goto error;
     }
-    if (blobref_hash (cache->hash_name, (uint8_t *)data, len, blobref,
-                      sizeof (blobref)) < 0)
+    if (blobref_hash (cache->hash_name, (uint8_t *)data, len, blobref, sizeof (blobref))
+        < 0)
         goto error;
 
     if (!(e = lookup_entry (cache, blobref))) {
@@ -531,8 +539,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             cache->acct_valid++;
             cache->acct_size += len;
         }
-        respond_requests_raw (&e->load_requests, cache->h,
-                              e->data, e->len, "load");
+        respond_requests_raw (&e->load_requests, cache->h, e->data, e->len, "load");
         if (!e->dirty) {
             e->dirty = 1;
             cache->acct_dirty++;
@@ -543,7 +550,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
                 goto error;
-            if (cache->rank > 0) {  /* write-through */
+            if (cache->rank > 0) { /* write-through */
                 if (defer_request (&e->store_requests, msg) < 0)
                     goto error;
                 return;
@@ -592,11 +599,12 @@ static int cache_flush (content_cache_t *cache)
     int rc = 0;
 
     if (cache->acct_dirty - cache->flush_batch_count == 0
-            || cache->flush_batch_count >= cache->flush_batch_limit)
+        || cache->flush_batch_count >= cache->flush_batch_limit)
         return 0;
 
     flux_log (cache->h, LOG_DEBUG, "content flush begin");
-    FOREACH_ZHASH (cache->entries, key, e) {
+    FOREACH_ZHASH (cache->entries, key, e)
+    {
         if (!e->dirty || e->store_pending)
             continue;
         if (cache_store (cache, e) < 0) {
@@ -607,23 +615,34 @@ static int cache_flush (content_cache_t *cache)
         if (cache->flush_batch_count >= cache->flush_batch_limit)
             break;
     }
-    flux_log (cache->h, LOG_DEBUG, "content flush +%d (dirty=%d pending=%d)",
-              count, cache->acct_dirty, cache->flush_batch_count);
+    flux_log (cache->h,
+              LOG_DEBUG,
+              "content flush +%d (dirty=%d pending=%d)",
+              count,
+              cache->acct_dirty,
+              cache->flush_batch_count);
     if (rc < 0)
         errno = saved_errno;
     return rc;
 }
 
-static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+static void content_backing_request (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
 {
     content_cache_t *cache = arg;
     const char *name;
     int backing;
 
-    if (flux_request_unpack (msg, NULL, "{ s:b s:s }",
-                             "backing", &backing,
-                             "name", &name) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:b s:s }",
+                             "backing",
+                             &backing,
+                             "name",
+                             &name)
+        < 0)
         goto error;
     if (cache->rank != 0) {
         errno = EINVAL;
@@ -632,8 +651,7 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
     if (!cache->backing && backing) {
         cache->backing = 1;
         cache->backing_name = xstrdup (name);
-        flux_log (h, LOG_DEBUG,
-                "content backing store: enabled %s", name);
+        flux_log (h, LOG_DEBUG, "content backing store: enabled %s", name);
         (void)cache_flush (cache);
     } else if (cache->backing && !backing) {
         cache->backing = 0;
@@ -655,8 +673,10 @@ error:
  * N.B. this walks the entire cache in one go.
  */
 
-static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
-                                       const flux_msg_t *msg, void *arg)
+static void content_dropcache_request (flux_t *h,
+                                       flux_msg_handler_t *mh,
+                                       const flux_msg_t *msg,
+                                       void *arg)
 {
     content_cache_t *cache = arg;
     zlist_t *keys = NULL;
@@ -678,8 +698,11 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
             remove_entry (cache, e);
         free (key);
     }
-    flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
-              orig_size - (int)zhash_size (cache->entries), orig_size);
+    flux_log (h,
+              LOG_DEBUG,
+              "content dropcache %d/%d",
+              orig_size - (int)zhash_size (cache->entries),
+              orig_size);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "content dropcache");
     zlist_destroy (&keys);
@@ -694,18 +717,27 @@ error:
 /* Return stats about the cache.
  */
 
-static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void content_stats_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     content_cache_t *cache = arg;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i}",
-                           "count", zhash_size (cache->entries),
-                           "valid", cache->acct_valid,
-                           "dirty", cache->acct_dirty,
-                           "size", cache->acct_size) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{ s:i s:i s:i s:i}",
+                           "count",
+                           zhash_size (cache->entries),
+                           "valid",
+                           cache->acct_valid,
+                           "dirty",
+                           cache->acct_dirty,
+                           "size",
+                           cache->acct_size)
+        < 0)
         flux_log_error (h, "content stats");
     return;
 error:
@@ -725,20 +757,19 @@ error:
 static void flush_respond (content_cache_t *cache)
 {
     if (!cache->acct_dirty) {
-        respond_requests_raw (&cache->flush_requests, cache->h,
-                              NULL, 0, "flush");
-    }
-    else {
+        respond_requests_raw (&cache->flush_requests, cache->h, NULL, 0, "flush");
+    } else {
         errno = EIO;
         if (cache->rank == 0 && !cache->backing)
             errno = ENOSYS;
-        respond_requests_error (&cache->flush_requests, cache->h,
-                                errno, NULL, "flush");
+        respond_requests_error (&cache->flush_requests, cache->h, errno, NULL, "flush");
     }
 }
 
-static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void content_flush_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     content_cache_t *cache = arg;
 
@@ -782,19 +813,19 @@ static int cache_purge (content_cache_t *cache)
     if (cache->acct_dirty == zhash_size (cache->entries))
         return 0;
 
-    FOREACH_ZHASH (cache->entries, key, e) {
+    FOREACH_ZHASH (cache->entries, key, e)
+    {
         if (after_size <= cache->purge_target_size
-                        && after_entries <= cache->purge_target_entries)
+            && after_entries <= cache->purge_target_entries)
             break;
         if (!e->valid || e->dirty)
             continue;
         if (cache->epoch - e->lastused < cache->purge_old_entry)
             continue;
         if (after_entries <= cache->purge_target_entries
-                    && e->len < cache->purge_large_entry)
+            && e->len < cache->purge_large_entry)
             continue;
-        if ((!purge && !(purge = zlist_new ()))
-                    || zlist_append (purge, e) < 0) {
+        if ((!purge && !(purge = zlist_new ())) || zlist_append (purge, e) < 0) {
             errno = ENOMEM;
             goto done;
         }
@@ -802,7 +833,9 @@ static int cache_purge (content_cache_t *cache)
         after_entries--;
     }
     if (purge) {
-        flux_log (cache->h, LOG_DEBUG, "content purge: %d entries",
+        flux_log (cache->h,
+                  LOG_DEBUG,
+                  "content purge: %d entries",
                   (int)zlist_size (purge));
         while ((e = zlist_pop (purge)))
             remove_entry (cache, e);
@@ -813,8 +846,10 @@ done:
     return rc;
 }
 
-static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void heartbeat_event (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     content_cache_t *cache = arg;
 
@@ -827,15 +862,13 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
  */
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request,
-      FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request,
-      FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content.flush",     content_flush_request, 0 },
-    { FLUX_MSGTYPE_EVENT,   "hb",                heartbeat_event, 0 },
+    {FLUX_MSGTYPE_REQUEST, "content.load", content_load_request, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "content.store", content_store_request, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "content.backing", content_backing_request, 0},
+    {FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0},
+    {FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0},
+    {FLUX_MSGTYPE_REQUEST, "content.flush", content_flush_request, 0},
+    {FLUX_MSGTYPE_EVENT, "hb", heartbeat_event, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -854,7 +887,6 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
 
 static int content_cache_setattr (const char *name, const char *val, void *arg)
 {
-
     content_cache_t *cache = arg;
     if (!strcmp (name, "content.hash")) {
         if (blobref_validate_hashtype (val) < 0)
@@ -889,51 +921,95 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
 {
     /* Purge tunables
      */
-    if (attr_add_active_uint32 (attr, "content.purge-target-entries",
-                &cache->purge_target_entries, 0) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.purge-target-entries",
+                                &cache->purge_target_entries,
+                                0)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.purge-target-size",
-                &cache->purge_target_size, 0) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.purge-target-size",
+                                &cache->purge_target_size,
+                                0)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.purge-old-entry",
-                &cache->purge_old_entry, 0) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.purge-old-entry",
+                                &cache->purge_old_entry,
+                                0)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.purge-large-entry",
-                &cache->purge_large_entry, 0) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.purge-large-entry",
+                                &cache->purge_large_entry,
+                                0)
+        < 0)
         return -1;
     /* Accounting numbers
      */
-    if (attr_add_active_uint32 (attr, "content.acct-size",
-                &cache->acct_size, FLUX_ATTRFLAG_READONLY) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.acct-size",
+                                &cache->acct_size,
+                                FLUX_ATTRFLAG_READONLY)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.acct-dirty",
-                &cache->acct_dirty, FLUX_ATTRFLAG_READONLY) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.acct-dirty",
+                                &cache->acct_dirty,
+                                FLUX_ATTRFLAG_READONLY)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.acct-valid",
-                &cache->acct_valid, FLUX_ATTRFLAG_READONLY) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.acct-valid",
+                                &cache->acct_valid,
+                                FLUX_ATTRFLAG_READONLY)
+        < 0)
         return -1;
-    if (attr_add_active (attr, "content.acct-entries", FLUX_ATTRFLAG_READONLY,
-                content_cache_getattr, NULL, cache) < 0)
+    if (attr_add_active (attr,
+                         "content.acct-entries",
+                         FLUX_ATTRFLAG_READONLY,
+                         content_cache_getattr,
+                         NULL,
+                         cache)
+        < 0)
         return -1;
     /* Misc
      */
-    if (attr_add_active_uint32 (attr, "content.flush-batch-limit",
-                &cache->flush_batch_limit, 0) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.flush-batch-limit",
+                                &cache->flush_batch_limit,
+                                0)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.blob-size-limit",
-                &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.blob-size-limit",
+                                &cache->blob_size_limit,
+                                FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         return -1;
-    if (attr_add_active (attr, "content.backing",FLUX_ATTRFLAG_READONLY,
-                 content_cache_getattr, NULL, cache) < 0)
+    if (attr_add_active (attr,
+                         "content.backing",
+                         FLUX_ATTRFLAG_READONLY,
+                         content_cache_getattr,
+                         NULL,
+                         cache)
+        < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content.flush-batch-count",
-                &cache->flush_batch_count, 0) < 0)
+    if (attr_add_active_uint32 (attr,
+                                "content.flush-batch-count",
+                                &cache->flush_batch_count,
+                                0)
+        < 0)
         return -1;
     /* content-hash can be set on the command line
      */
-    if (attr_add_active (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE,
+    if (attr_add_active (attr,
+                         "content.hash",
+                         FLUX_ATTRFLAG_IMMUTABLE,
                          content_cache_getattr,
-                         content_cache_setattr, cache) < 0)
+                         content_cache_setattr,
+                         cache)
+        < 0)
         return -1;
 
     return 0;

@@ -61,7 +61,7 @@ struct worker {
     char *name;
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
-    zlist_t *queue; // queue of futures (head is currently running)
+    zlist_t *queue;  // queue of futures (head is currently running)
     flux_watcher_t *timer;
     double inactivity_timeout;
     zlist_t *trash;
@@ -85,8 +85,7 @@ static void worker_completion_cb (flux_subprocess_t *p)
             flux_log (w->h, LOG_DEBUG, "%s: exited normally", w->name);
         else
             flux_log (w->h, LOG_ERR, "%s: exited with rc=%d", w->name, rc);
-    }
-    else if ((rc = flux_subprocess_signaled (p)) >= 0)
+    } else if ((rc = flux_subprocess_signaled (p)) >= 0)
         flux_log (w->h, LOG_ERR, "%s: killed by %s", w->name, strsignal (rc));
     else
         flux_log (w->h, LOG_ERR, "%s: completed (not signal or exit)", w->name);
@@ -96,30 +95,37 @@ static void worker_completion_cb (flux_subprocess_t *p)
 
 /* Subprocess state change.
  */
-static void worker_state_cb (flux_subprocess_t *p,
-                             flux_subprocess_state_t state)
+static void worker_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
     struct worker *w = flux_subprocess_aux_get (p, worker_auxkey);
 
     switch (state) {
         case FLUX_SUBPROCESS_RUNNING:
-            flux_log (w->h, LOG_DEBUG, "%s: running (pid=%d)", w->name,
+            flux_log (w->h,
+                      LOG_DEBUG,
+                      "%s: running (pid=%d)",
+                      w->name,
                       (int)flux_subprocess_pid (p));
             break;
         case FLUX_SUBPROCESS_EXEC_FAILED:
         case FLUX_SUBPROCESS_FAILED:
-            flux_log (w->h, LOG_ERR, "%s: %s", w->name,
+            flux_log (w->h,
+                      LOG_ERR,
+                      "%s: %s",
+                      w->name,
                       flux_subprocess_state_string (state));
             break;
         case FLUX_SUBPROCESS_STARTED:
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:
-            break; // ignore
+            break;  // ignore
     }
 }
 
-static void worker_timeout (flux_reactor_t *r, flux_watcher_t *timer,
-                            int revents, void *arg)
+static void worker_timeout (flux_reactor_t *r,
+                            flux_watcher_t *timer,
+                            int revents,
+                            void *arg)
 {
     struct worker *w = arg;
     flux_log (w->h, LOG_DEBUG, "%s: inactivity timeout", w->name);
@@ -150,8 +156,8 @@ static void worker_fulfill_future (struct worker *w, flux_future_t *f, const cha
 {
     json_t *o;
     int errnum;
-    const char *errstr = NULL; // optional
-    json_t *data = NULL; // optional
+    const char *errstr = NULL;  // optional
+    json_t *data = NULL;        // optional
     char *s_data = NULL;
 
     if (!(o = json_loads (s, 0, NULL))) {
@@ -159,9 +165,15 @@ static void worker_fulfill_future (struct worker *w, flux_future_t *f, const cha
         errnum = EINVAL;
         goto error;
     }
-    if (json_unpack (o, "{s:i s?:s s?:o}", "errnum", &errnum,
-                                           "errstr", &errstr,
-                                           "data", &data) < 0) {
+    if (json_unpack (o,
+                     "{s:i s?:s s?:o}",
+                     "errnum",
+                     &errnum,
+                     "errstr",
+                     &errstr,
+                     "data",
+                     &data)
+        < 0) {
         flux_log (w->h, LOG_ERR, "%s: json_unpack '%s' failed", w->name, s);
         errnum = EINVAL;
         goto error;
@@ -197,32 +209,30 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         flux_log_error (w->h, "%s: subprocess_read_trimmed_line", w->name);
         return;
     }
-    if (len == 0) // EOF
+    if (len == 0)  // EOF
         return;
     if (!strcmp (stream, "STDOUT")) {
         flux_future_t *f;
 
         if (!(f = zlist_pop (w->queue))) {
-            flux_log (w->h, LOG_ERR, "%s: dropping orphan response: '%s'",
-                      w->name, s);
+            flux_log (w->h, LOG_ERR, "%s: dropping orphan response: '%s'", w->name, s);
             return;
         }
         worker_fulfill_future (w, f, s);
         flux_future_decref (f);
         if (zlist_size (w->queue) == 0)
             worker_inactive (w);
-    }
-    else if (!strcmp (stream, "STDERR")) {
+    } else if (!strcmp (stream, "STDERR")) {
         flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
     }
 }
 
 flux_subprocess_ops_t worker_ops = {
-    .on_completion      = worker_completion_cb,
-    .on_state_change    = worker_state_cb,
-    .on_channel_out     = NULL,
-    .on_stdout          = worker_output_cb,
-    .on_stderr          = worker_output_cb,
+    .on_completion = worker_completion_cb,
+    .on_state_change = worker_state_cb,
+    .on_channel_out = NULL,
+    .on_stdout = worker_output_cb,
+    .on_stderr = worker_output_cb,
 };
 
 flux_future_t *worker_request (struct worker *w, const char *s)
@@ -248,7 +258,7 @@ flux_future_t *worker_request (struct worker *w, const char *s)
         goto error;
     if (zlist_append (w->queue, f) < 0)
         goto error;
-    flux_future_incref (f); // queue takes a reference on the future
+    flux_future_incref (f);  // queue takes a reference on the future
     free (buf);
     return f;
 error:
@@ -280,8 +290,7 @@ static void worker_stop (struct worker *w)
 static int worker_start (struct worker *w)
 {
     if (!w->p) {
-        if (!(w->p = flux_rexec (w->h, FLUX_NODEID_ANY, 0,
-                                 w->cmd, &worker_ops))) {
+        if (!(w->p = flux_rexec (w->h, FLUX_NODEID_ANY, 0, w->cmd, &worker_ops))) {
             return -1;
         }
         if (flux_subprocess_aux_set (w->p, worker_auxkey, w, NULL) < 0) {
@@ -309,7 +318,7 @@ void worker_destroy (struct worker *w)
         flux_subprocess_t *p;
         flux_future_t *f;
 
-        worker_stop (w); // puts w->p in w->trash
+        worker_stop (w);  // puts w->p in w->trash
         flux_cmd_destroy (w->cmd);
         while ((f = zlist_pop (w->queue)))
             flux_future_decref (f);
@@ -324,8 +333,10 @@ void worker_destroy (struct worker *w)
     }
 }
 
-struct worker *worker_create (flux_t *h, double inactivity_timeout,
-                              int argc, char **argv)
+struct worker *worker_create (flux_t *h,
+                              double inactivity_timeout,
+                              int argc,
+                              char **argv)
 {
     struct worker *w;
     char path[PATH_MAX + 1];
@@ -335,10 +346,10 @@ struct worker *worker_create (flux_t *h, double inactivity_timeout,
         return NULL;
     w->h = h;
     w->inactivity_timeout = inactivity_timeout;
-    if (!(w->timer = flux_timer_watcher_create (r, inactivity_timeout,
-                                                0., worker_timeout, w)))
+    if (!(w->timer =
+              flux_timer_watcher_create (r, inactivity_timeout, 0., worker_timeout, w)))
         goto error;
-    if (!(w->trash = zlist_new()))
+    if (!(w->trash = zlist_new ()))
         goto error;
     if (!(w->name = strdup (basename (argv[0]))))
         goto error;

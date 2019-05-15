@@ -24,7 +24,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
 
-
 #include "environment.h"
 
 struct environment {
@@ -41,7 +40,7 @@ void environment_destroy (struct environment *e)
 
 struct environment *environment_create (void)
 {
-    struct environment *e = xzmalloc (sizeof(*e));
+    struct environment *e = xzmalloc (sizeof (*e));
     if (!(e->environment = zhash_new ()))
         oom ();
     return e;
@@ -56,21 +55,22 @@ struct env_item {
     char *str_cache;
 };
 
-struct env_item * new_env_item(){
-    return calloc (1, sizeof(struct env_item));
+struct env_item *new_env_item ()
+{
+    return calloc (1, sizeof (struct env_item));
 }
-void free_env_item(struct env_item *i)
+void free_env_item (struct env_item *i)
 {
     free (i->argz);
     free (i->str_cache);
     free (i);
 }
 
-char *find_env_item(struct env_item *i, const char *s)
+char *find_env_item (struct env_item *i, const char *s)
 {
     char *entry = 0;
     while ((entry = argz_next (i->argz, i->argz_len, entry))) {
-        if (!strcmp(entry, s))
+        if (!strcmp (entry, s))
             return entry;
     }
     return NULL;
@@ -85,10 +85,10 @@ static const char *stringify_env_item (struct env_item *item)
     if (item->clean)
         return item->str_cache;
 
-    free(item->str_cache);
-    item->str_cache = malloc(item->argz_len);
-    memcpy(item->str_cache, item->argz, item->argz_len);
-    argz_stringify(item->str_cache, item->argz_len, item->sep);
+    free (item->str_cache);
+    item->str_cache = malloc (item->argz_len);
+    memcpy (item->str_cache, item->argz, item->argz_len);
+    argz_stringify (item->str_cache, item->argz_len, item->sep);
 
     return item->str_cache;
 }
@@ -96,7 +96,7 @@ static const char *stringify_env_item (struct env_item *item)
 const char *environment_get (struct environment *e, const char *key)
 {
     struct env_item *item = zhash_lookup (e->environment, key);
-    return stringify_env_item(item);
+    return stringify_env_item (item);
 }
 
 static void environment_set_inner (struct environment *e,
@@ -104,14 +104,14 @@ static void environment_set_inner (struct environment *e,
                                    const char *value,
                                    char separator)
 {
-    struct env_item *item = new_env_item();
+    struct env_item *item = new_env_item ();
     item->clean = false;
     item->unset = (value == NULL);
     item->sep = separator;
     zhash_update (e->environment, key, (void *)item);
     zhash_freefn (e->environment, key, (zhash_free_fn *)free_env_item);
 
-    environment_push_back(e, key, value);
+    environment_push_back (e, key, value);
 }
 
 void environment_set (struct environment *e,
@@ -138,7 +138,7 @@ static void environment_push_inner (struct environment *e,
 
     struct env_item *item = zhash_lookup (e->environment, key);
     if (!item) {
-        item = new_env_item();
+        item = new_env_item ();
         zhash_update (e->environment, key, (void *)item);
         zhash_freefn (e->environment, key, (zhash_free_fn *)free_env_item);
     }
@@ -148,9 +148,9 @@ static void environment_push_inner (struct environment *e,
         size_t split_value_len = 0;
         argz_create_sep (value, item->sep, &split_value, &split_value_len);
         char *entry = 0;
-        while((entry = argz_next (split_value, split_value_len, entry))) {
+        while ((entry = argz_next (split_value, split_value_len, entry))) {
             char *found;
-            if ((!strlen(entry)))
+            if ((!strlen (entry)))
                 continue;
             /*
              * If an existing entry is found matching this entry, and
@@ -162,9 +162,9 @@ static void environment_push_inner (struct environment *e,
             if (before)
                 argz_insert (&item->argz, &item->argz_len, item->argz, entry);
             else if (found == NULL)
-                argz_add(&item->argz, &item->argz_len, entry);
+                argz_add (&item->argz, &item->argz_len, entry);
         }
-        free(split_value);
+        free (split_value);
     } else {
         if (before) {
             argz_insert (&item->argz, &item->argz_len, item->argz, value);
@@ -174,16 +174,12 @@ static void environment_push_inner (struct environment *e,
     }
 }
 
-void environment_push (struct environment *e,
-                       const char *key,
-                       const char *value)
+void environment_push (struct environment *e, const char *key, const char *value)
 {
     environment_push_inner (e, key, value, true, true);
 }
 
-void environment_push_back (struct environment *e,
-                            const char *key,
-                            const char *value)
+void environment_push_back (struct environment *e, const char *key, const char *value)
 {
     environment_push_inner (e, key, value, false, true);
 }
@@ -213,9 +209,7 @@ void environment_from_env (struct environment *e,
     environment_set (e, key, env, separator);
 }
 
-void environment_set_separator (struct environment *e,
-                                const char *key,
-                                char separator)
+void environment_set_separator (struct environment *e, const char *key, char separator)
 {
     struct env_item *item = zhash_lookup (e->environment, key);
     if (item)

@@ -26,18 +26,23 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
     json_error_t error;
 
     /* Only one item per level allowed */
-    if (json_unpack_ex (o, &error, 0, "[{s:s,s:i,s?o}]",
-                       "type", &type,
-                       "count", &count,
-                       "with", &with) < 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                  "level %d: %s", level, error.text);
+    if (json_unpack_ex (o,
+                        &error,
+                        0,
+                        "[{s:s,s:i,s?o}]",
+                        "type",
+                        &type,
+                        "count",
+                        &count,
+                        "with",
+                        &with)
+        < 0) {
+        snprintf (jj->error, sizeof (jj->error) - 1, "level %d: %s", level, error.text);
         errno = EINVAL;
         return -1;
     }
     if (count <= 0) {
-        sprintf (jj->error, "Invalid count %d for type '%s'",
-                            count, type);
+        sprintf (jj->error, "Invalid count %d for type '%s'", count, type);
         errno = EINVAL;
         return -1;
     }
@@ -53,7 +58,7 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
         return -1;
     }
     if (with)
-        return jj_read_level (with, level+1, jj);
+        return jj_read_level (with, level + 1, jj);
     return 0;
 }
 
@@ -73,23 +78,29 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
     memset (jj, 0, sizeof (*jj));
 
     if ((o = json_loads (spec, 0, &error)) == NULL) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                  "JSON load: %s", error.text);
+        snprintf (jj->error, sizeof (jj->error) - 1, "JSON load: %s", error.text);
         errno = EINVAL;
         return -1;
     }
 
-    if (json_unpack_ex (o, &error, 0, "{s:i,s:o}",
-                        "version", &version,
-                        "resources", &resources) < 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                  "at top level: %s", error.text);
+    if (json_unpack_ex (o,
+                        &error,
+                        0,
+                        "{s:i,s:o}",
+                        "version",
+                        &version,
+                        "resources",
+                        &resources)
+        < 0) {
+        snprintf (jj->error, sizeof (jj->error) - 1, "at top level: %s", error.text);
         errno = EINVAL;
         goto err;
     }
     if (version != 1) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                 "Invalid version: expected 1, got %d", version);
+        snprintf (jj->error,
+                  sizeof (jj->error) - 1,
+                  "Invalid version: expected 1, got %d",
+                  version);
         errno = EINVAL;
         goto err;
     }
@@ -97,14 +108,12 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
         goto err;
 
     if (jj->nslots <= 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                 "Unable to determine slot count");
+        snprintf (jj->error, sizeof (jj->error) - 1, "Unable to determine slot count");
         errno = EINVAL;
         goto err;
     }
     if (jj->slot_size <= 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                 "Unable to determine slot size");
+        snprintf (jj->error, sizeof (jj->error) - 1, "Unable to determine slot size");
         errno = EINVAL;
         goto err;
     }
@@ -117,7 +126,6 @@ err:
     errno = saved_errno;
     return rc;
 }
-                       
 
 /* vi: ts=4 sw=4 expandtab
  */

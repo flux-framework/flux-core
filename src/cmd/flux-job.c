@@ -48,180 +48,226 @@ int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_drain (optparse_t *p, int argc, char **argv);
 int cmd_undrain (optparse_t *p, int argc, char **argv);
 
-static struct optparse_option global_opts[] =  {
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option global_opts[] = {OPTPARSE_TABLE_END};
 
-static struct optparse_option list_opts[] =  {
-    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
-      .usage = "Limit output to N jobs",
-    },
-    { .name = "suppress-header", .key = 's', .has_arg = 0,
-      .usage = "Suppress printing of header line",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option list_opts[] = {{
+                                                 .name = "count",
+                                                 .key = 'c',
+                                                 .has_arg = 1,
+                                                 .arginfo = "N",
+                                                 .usage = "Limit output to N jobs",
+                                             },
+                                             {
+                                                 .name = "suppress-header",
+                                                 .key = 's',
+                                                 .has_arg = 0,
+                                                 .usage = "Suppress printing of header "
+                                                          "line",
+                                             },
+                                             OPTPARSE_TABLE_END};
 
-static struct optparse_option raise_opts[] =  {
-    { .name = "severity", .key = 's', .has_arg = 1, .arginfo = "N",
-      .usage = "Set exception severity [0-7] (default=0)",
-    },
-    { .name = "type", .key = 't', .has_arg = 1, .arginfo = "TYPE",
-      .usage = "Set exception type (default=cancel)",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option raise_opts[] = {{
+                                                  .name = "severity",
+                                                  .key = 's',
+                                                  .has_arg = 1,
+                                                  .arginfo = "N",
+                                                  .usage = "Set exception severity "
+                                                           "[0-7] (default=0)",
+                                              },
+                                              {
+                                                  .name = "type",
+                                                  .key = 't',
+                                                  .has_arg = 1,
+                                                  .arginfo = "TYPE",
+                                                  .usage = "Set exception type "
+                                                           "(default=cancel)",
+                                              },
+                                              OPTPARSE_TABLE_END};
 
-static struct optparse_option submit_opts[] =  {
-    { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
-      .usage = "Set job priority (0-31, default=16)",
-    },
-    { .name = "flags", .key = 'f', .has_arg = 3,
-      .flags = OPTPARSE_OPT_AUTOSPLIT,
-      .usage = "Set submit comma-separated flags (e.g. debug)",
-    },
+static struct optparse_option submit_opts[] = {{
+                                                   .name = "priority",
+                                                   .key = 'p',
+                                                   .has_arg = 1,
+                                                   .arginfo = "N",
+                                                   .usage = "Set job priority (0-31, "
+                                                            "default=16)",
+                                               },
+                                               {
+                                                   .name = "flags",
+                                                   .key = 'f',
+                                                   .has_arg = 3,
+                                                   .flags = OPTPARSE_OPT_AUTOSPLIT,
+                                                   .usage = "Set submit "
+                                                            "comma-separated flags "
+                                                            "(e.g. debug)",
+                                               },
 #if HAVE_FLUX_SECURITY
-    { .name = "security-config", .key = 'c', .has_arg = 1, .arginfo = "pattern",
-      .usage = "Use non-default security config glob",
-    },
-    { .name = "sign-type", .key = 's', .has_arg = 1, .arginfo = "TYPE",
-      .usage = "Use non-default mechanism type to sign J",
-    },
+                                               {
+                                                   .name = "security-config",
+                                                   .key = 'c',
+                                                   .has_arg = 1,
+                                                   .arginfo = "pattern",
+                                                   .usage = "Use non-default security "
+                                                            "config glob",
+                                               },
+                                               {
+                                                   .name = "sign-type",
+                                                   .key = 's',
+                                                   .has_arg = 1,
+                                                   .arginfo = "TYPE",
+                                                   .usage = "Use non-default mechanism "
+                                                            "type to sign J",
+                                               },
 #endif
-    OPTPARSE_TABLE_END
-};
+                                               OPTPARSE_TABLE_END};
 
-static struct optparse_option id_opts[] =  {
-    { .name = "from", .key = 'f', .has_arg = 1,
-      .arginfo = "dec|kvs|words",
-      .usage = "Convert jobid from specified form",
-    },
-    { .name = "to", .key = 't', .has_arg = 1,
-      .arginfo = "dec|kvs|words",
-      .usage = "Convert jobid to specified form",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option id_opts[] = {{
+                                               .name = "from",
+                                               .key = 'f',
+                                               .has_arg = 1,
+                                               .arginfo = "dec|kvs|words",
+                                               .usage = "Convert jobid from specified "
+                                                        "form",
+                                           },
+                                           {
+                                               .name = "to",
+                                               .key = 't',
+                                               .has_arg = 1,
+                                               .arginfo = "dec|kvs|words",
+                                               .usage = "Convert jobid to specified "
+                                                        "form",
+                                           },
+                                           OPTPARSE_TABLE_END};
 
-static struct optparse_option eventlog_opts[] =  {
-    { .name = "format", .key = 'f', .has_arg = 1, .arginfo = "FORMAT",
-      .usage = "Specify output format: text, json",
-    },
-    { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
-      .usage = "Specify time format: raw, iso, offset",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option eventlog_opts[] = {{
+                                                     .name = "format",
+                                                     .key = 'f',
+                                                     .has_arg = 1,
+                                                     .arginfo = "FORMAT",
+                                                     .usage = "Specify output format: "
+                                                              "text, json",
+                                                 },
+                                                 {
+                                                     .name = "time-format",
+                                                     .key = 'T',
+                                                     .has_arg = 1,
+                                                     .arginfo = "FORMAT",
+                                                     .usage = "Specify time format: "
+                                                              "raw, iso, offset",
+                                                 },
+                                                 OPTPARSE_TABLE_END};
 
-static struct optparse_option wait_event_opts[] =  {
-    { .name = "format", .key = 'f', .has_arg = 1, .arginfo = "FORMAT",
-      .usage = "Specify output format: text, json",
-    },
-    { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
-      .usage = "Specify time format: raw, iso, offset",
-    },
-    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
-      .usage = "timeout after DURATION",
-    },
-    { .name = "match-context", .key = 'm', .has_arg = 1, .arginfo = "KEY=VAL",
-      .usage = "match key=val in context",
-    },
-    { .name = "quiet", .key = 'q', .has_arg = 0,
-      .usage = "Do not output matched event",
-    },
-    { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Output all events before matched event",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option wait_event_opts[] = {{
+                                                       .name = "format",
+                                                       .key = 'f',
+                                                       .has_arg = 1,
+                                                       .arginfo = "FORMAT",
+                                                       .usage = "Specify output "
+                                                                "format: text, json",
+                                                   },
+                                                   {
+                                                       .name = "time-format",
+                                                       .key = 'T',
+                                                       .has_arg = 1,
+                                                       .arginfo = "FORMAT",
+                                                       .usage = "Specify time format: "
+                                                                "raw, iso, offset",
+                                                   },
+                                                   {
+                                                       .name = "timeout",
+                                                       .key = 't',
+                                                       .has_arg = 1,
+                                                       .arginfo = "DURATION",
+                                                       .usage = "timeout after "
+                                                                "DURATION",
+                                                   },
+                                                   {
+                                                       .name = "match-context",
+                                                       .key = 'm',
+                                                       .has_arg = 1,
+                                                       .arginfo = "KEY=VAL",
+                                                       .usage = "match key=val in "
+                                                                "context",
+                                                   },
+                                                   {
+                                                       .name = "quiet",
+                                                       .key = 'q',
+                                                       .has_arg = 0,
+                                                       .usage = "Do not output matched "
+                                                                "event",
+                                                   },
+                                                   {
+                                                       .name = "verbose",
+                                                       .key = 'v',
+                                                       .has_arg = 0,
+                                                       .usage = "Output all events "
+                                                                "before matched event",
+                                                   },
+                                                   OPTPARSE_TABLE_END};
 
-static struct optparse_option drain_opts[] =  {
-    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
-      .usage = "timeout after DURATION",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option drain_opts[] = {{
+                                                  .name = "timeout",
+                                                  .key = 't',
+                                                  .has_arg = 1,
+                                                  .arginfo = "DURATION",
+                                                  .usage = "timeout after DURATION",
+                                              },
+                                              OPTPARSE_TABLE_END};
 
-static struct optparse_subcommand subcommands[] = {
-    { "list",
-      "[OPTIONS]",
-      "List active jobs",
-      cmd_list,
-      0,
-      list_opts
-    },
-    { "priority",
-      "[OPTIONS] id priority",
-      "Set job priority",
-      cmd_priority,
-      0,
-      NULL,
-    },
-    { "cancel",
-      "[OPTIONS] id [message ...]",
-      "Cancel a job",
-      cmd_cancel,
-      0,
-      NULL,
-    },
-    { "raise",
-      "[OPTIONS] id [message ...]",
-      "Raise exception for job",
-      cmd_raise,
-      0,
-      raise_opts,
-    },
-    { "submit",
-      "[OPTIONS] [jobspec]",
-      "Run job",
-      cmd_submit,
-      0,
-      submit_opts
-    },
-    { "id",
+static struct optparse_subcommand subcommands[] =
+    {{"list", "[OPTIONS]", "List active jobs", cmd_list, 0, list_opts},
+     {
+         "priority",
+         "[OPTIONS] id priority",
+         "Set job priority",
+         cmd_priority,
+         0,
+         NULL,
+     },
+     {
+         "cancel",
+         "[OPTIONS] id [message ...]",
+         "Cancel a job",
+         cmd_cancel,
+         0,
+         NULL,
+     },
+     {
+         "raise",
+         "[OPTIONS] id [message ...]",
+         "Raise exception for job",
+         cmd_raise,
+         0,
+         raise_opts,
+     },
+     {"submit", "[OPTIONS] [jobspec]", "Run job", cmd_submit, 0, submit_opts},
+     {"id",
       "[OPTIONS] [id ...]",
       "Convert jobid(s) to another form",
       cmd_id,
       0,
-      id_opts
-    },
-    { "eventlog",
+      id_opts},
+     {"eventlog",
       "[-f text|json] [-T raw|iso|offset] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
-      eventlog_opts
-    },
-    { "wait-event",
+      eventlog_opts},
+     {"wait-event",
       "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
-      wait_event_opts
-    },
-    { "info",
-      "id key ...",
-      "Display info for a job",
-      cmd_info,
-      0,
-      NULL
-    },
-    { "drain",
+      wait_event_opts},
+     {"info", "id key ...", "Display info for a job", cmd_info, 0, NULL},
+     {"drain",
       "[-t seconds]",
       "Disable job submissions and wait for queue to empty.",
       cmd_drain,
       0,
-      drain_opts
-    },
-    { "undrain",
-      NULL,
-      "Re-enable job submissions after drain.",
-      cmd_undrain,
-      0,
-      NULL
-    },
-    OPTPARSE_SUBCMD_END
-};
+      drain_opts},
+     {"undrain", NULL, "Re-enable job submissions after drain.", cmd_undrain, 0, NULL},
+     OPTPARSE_SUBCMD_END};
 
 int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
 {
@@ -269,8 +315,7 @@ int main (int argc, char *argv[])
     if ((optindex = optparse_parse_args (p, argc, argv)) < 0)
         exit (1);
 
-    if ((argc - optindex == 0)
-        || !optparse_get_subcommand (p, argv[optindex])) {
+    if ((argc - optindex == 0) || !optparse_get_subcommand (p, argv[optindex])) {
         usage (p, NULL, NULL);
         exit (1);
     }
@@ -335,8 +380,7 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_set_priority (h, id, priority)))
         log_err_exit ("flux_job_set_priority");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      flux_future_error_string (f));
+        log_msg_exit ("%llu: %s", (unsigned long long)id, flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     return 0;
@@ -366,8 +410,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_raise (h, id, type, severity, note)))
         log_err_exit ("flux_job_raise");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      flux_future_error_string (f));
+        log_msg_exit ("%llu: %s", (unsigned long long)id, flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -396,8 +439,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_cancel (h, id, note)))
         log_err_exit ("flux_job_cancel");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      flux_future_error_string (f));
+        log_msg_exit ("%llu: %s", (unsigned long long)id, flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -443,8 +485,13 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_list");
     if (!optparse_hasopt (p, "suppress-header"))
         printf ("%s\t\t%s\t%s\t%s\t%s\n",
-                "JOBID", "STATE", "USERID", "PRI", "T_SUBMIT");
-    json_array_foreach (jobs, index, value) {
+                "JOBID",
+                "STATE",
+                "USERID",
+                "PRI",
+                "T_SUBMIT");
+    json_array_foreach (jobs, index, value)
+    {
         flux_jobid_t id;
         int priority;
         uint32_t userid;
@@ -452,25 +499,33 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         char timestr[80];
         flux_job_state_t state;
 
-        if (json_unpack (value, "{s:I s:i s:i s:f s:i}",
-                                "id", &id,
-                                "priority", &priority,
-                                "userid", &userid,
-                                "t_submit", &t_submit,
-                                "state", &state) < 0)
+        if (json_unpack (value,
+                         "{s:I s:i s:i s:f s:i}",
+                         "id",
+                         &id,
+                         "priority",
+                         &priority,
+                         "userid",
+                         &userid,
+                         "t_submit",
+                         &t_submit,
+                         "state",
+                         &state)
+            < 0)
             log_msg_exit ("error parsing job data");
         if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
             log_err_exit ("time conversion error");
-        printf ("%llu\t%s\t%lu\t%d\t%s\n", (unsigned long long)id,
-                                       flux_job_statetostr (state, true),
-                                       (unsigned long)userid,
-                                       priority,
-                                       timestr);
+        printf ("%llu\t%s\t%lu\t%d\t%s\n",
+                (unsigned long long)id,
+                flux_job_statetostr (state, true),
+                (unsigned long)userid,
+                priority,
+                timestr);
     }
     flux_future_destroy (f);
     flux_close (h);
 
-   return (0);
+    return (0);
 }
 
 /* Read entire file 'name' ("-" for stdin).  Exit program on error.
@@ -532,8 +587,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     /* If any non-default security options are specified, create security
      * context so jobspec can be pre-signed before submission.
      */
-    if (optparse_hasopt (p, "security-config")
-                            || optparse_hasopt (p, "sign-type")) {
+    if (optparse_hasopt (p, "security-config") || optparse_hasopt (p, "sign-type")) {
         sec_config = optparse_get_str (p, "security-config", NULL);
         if (!(sec = flux_security_create (0)))
             log_err_exit ("security");
@@ -563,7 +617,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     printf ("%llu\n", (unsigned long long)id);
     flux_future_destroy (f);
 #if HAVE_FLUX_SECURITY
-    flux_security_destroy (sec); // invalidates J
+    flux_security_destroy (sec);  // invalidates J
 #endif
     flux_close (h);
     free (jobspec);
@@ -580,34 +634,28 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
      */
     if (!strcmp (from, "dec")) {
         id = parse_arg_unsigned (src, "input");
-    }
-    else if (!strcmp (from, "kvs")) {
+    } else if (!strcmp (from, "kvs")) {
         if (strncmp (src, "job.", 4) != 0)
             log_msg_exit ("%s: missing 'job.' prefix", src);
         if (fluid_decode (src + 4, &id, FLUID_STRING_DOTHEX) < 0)
             log_msg_exit ("%s: malformed input", src);
-    }
-    else if (!strcmp (from, "words")) {
+    } else if (!strcmp (from, "words")) {
         if (fluid_decode (src, &id, FLUID_STRING_MNEMONIC) < 0)
             log_msg_exit ("%s: malformed input", src);
-    }
-    else
+    } else
         log_msg_exit ("Unknown from=%s", from);
 
     /* id to dst
      */
     if (!strcmp (to, "dec")) {
         snprintf (dst, dstsz, "%llu", (unsigned long long)id);
-    }
-    else if (!strcmp (to, "kvs")) {
+    } else if (!strcmp (to, "kvs")) {
         if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
             log_msg_exit ("error encoding id");
-    }
-    else if (!strcmp (to, "words")) {
+    } else if (!strcmp (to, "words")) {
         if (fluid_encode (dst, dstsz, id, FLUID_STRING_MNEMONIC) < 0)
             log_msg_exit ("error encoding id");
-    }
-    else
+    } else
         log_msg_exit ("Unknown to=%s", to);
 }
 
@@ -637,8 +685,7 @@ int cmd_id (optparse_t *p, int argc, char **argv)
             id_convert (p, trim_string (src), dst, sizeof (dst));
             printf ("%s\n", dst);
         }
-    }
-    else {
+    } else {
         while (optindex < argc) {
             id_convert (p, argv[optindex++], dst, sizeof (dst));
             printf ("%s\n", dst);
@@ -656,12 +703,10 @@ struct entry_format {
 void entry_format_parse_options (optparse_t *p, struct entry_format *e)
 {
     e->format = optparse_get_str (p, "format", "text");
-    if (strcasecmp (e->format, "text")
-        && strcasecmp (e->format, "json"))
+    if (strcasecmp (e->format, "text") && strcasecmp (e->format, "json"))
         log_msg_exit ("invalid format type");
     e->time_format = optparse_get_str (p, "time-format", "raw");
-    if (strcasecmp (e->time_format, "raw")
-        && strcasecmp (e->time_format, "iso")
+    if (strcasecmp (e->time_format, "raw") && strcasecmp (e->time_format, "iso")
         && strcasecmp (e->time_format, "offset"))
         log_msg_exit ("invalid time-format type");
 }
@@ -675,16 +720,17 @@ struct eventlog_ctx {
 /* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
  * with microsecond precision
  */
-static int event_timestr (struct entry_format *e, double timestamp,
-                          char *buf, size_t size)
+static int event_timestr (struct entry_format *e,
+                          double timestamp,
+                          char *buf,
+                          size_t size)
 {
     if (!strcasecmp (e->time_format, "raw")) {
         if (snprintf (buf, size, "%lf", timestamp) >= size)
             return -1;
-    }
-    else if (!strcasecmp (e->time_format, "iso")) {
+    } else if (!strcasecmp (e->time_format, "iso")) {
         time_t sec = timestamp;
-        unsigned long usec = (timestamp - sec)*1E6;
+        unsigned long usec = (timestamp - sec) * 1E6;
         struct tm tm;
         if (!gmtime_r (&sec, &tm))
             return -1;
@@ -694,8 +740,7 @@ static int event_timestr (struct entry_format *e, double timestamp,
         buf += strlen (buf);
         if (snprintf (buf, size, ".%.6luZ", usec) >= size)
             return -1;
-    }
-    else { /* !strcasecmp (e->time_format, "offset") */
+    } else { /* !strcasecmp (e->time_format, "offset") */
         if (e->initial == 0.)
             e->initial = timestamp;
         timestamp -= e->initial;
@@ -723,9 +768,10 @@ void output_event_text (struct entry_format *e, json_t *event)
     if (context) {
         const char *key;
         json_t *value;
-        json_object_foreach (context, key, value) {
+        json_object_foreach (context, key, value)
+        {
             char *sval;
-            sval = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
+            sval = json_dumps (value, JSON_ENCODE_ANY | JSON_COMPACT);
             printf (" %s=%s", key, sval);
             free (sval);
         }
@@ -764,15 +810,15 @@ void eventlog_continuation (flux_future_t *f, void *arg)
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %lu not found", ctx->id);
-        }
-        else
+        } else
             log_err_exit ("flux_job_eventlog_lookup_get");
     }
 
     if (!(a = eventlog_decode (s)))
         log_err_exit ("eventlog_decode");
 
-    json_array_foreach (a, index, value) {
+    json_array_foreach (a, index, value)
+    {
         output_event (&ctx->e, value);
     }
 
@@ -801,11 +847,17 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     entry_format_parse_options (p, &ctx.e);
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:[s] s:i}",
-                             "id", ctx.id,
-                             "keys", "eventlog",
-                             "flags", 0)))
+                             "id",
+                             ctx.id,
+                             "keys",
+                             "eventlog",
+                             "flags",
+                             0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., eventlog_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -837,7 +889,7 @@ bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
         const char *key = json_object_iter_key (iter);
         json_t *value = json_object_iter_value (iter);
         if (!strcmp (key, ctx->context_key)) {
-            char *str = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
+            char *str = json_dumps (value, JSON_ENCODE_ANY | JSON_COMPACT);
             if (!strcmp (str, ctx->context_value))
                 match = true;
             free (str);
@@ -872,8 +924,7 @@ bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
         if (ctx->context_key) {
             if (context)
                 match = wait_event_test_context (ctx, context);
-        }
-        else
+        } else
             match = true;
     }
 
@@ -890,16 +941,13 @@ void wait_event_continuation (flux_future_t *f, void *arg)
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %lu not found", ctx->id);
-        }
-        else if (errno == ETIMEDOUT) {
+        } else if (errno == ETIMEDOUT) {
             flux_future_destroy (f);
-            log_msg_exit ("wait-event timeout on event '%s'\n",
-                          ctx->wait_event);
+            log_msg_exit ("wait-event timeout on event '%s'\n", ctx->wait_event);
         } else if (errno == ENODATA) {
             flux_future_destroy (f);
             if (!ctx->got_event)
-                log_msg_exit ("event '%s' never received",
-                              ctx->wait_event);
+                log_msg_exit ("event '%s' never received", ctx->wait_event);
             return;
         }
         /* else fallthrough and have `flux_job_event_watch_get'
@@ -985,8 +1033,7 @@ void info_output (flux_future_t *f, const char *suffix, flux_jobid_t id)
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %lu id or key not found", id);
-        }
-        else
+        } else
             log_err_exit ("flux_rpc_get_unpack");
     }
 
@@ -1000,7 +1047,8 @@ void info_continuation (flux_future_t *f, void *arg)
     size_t index;
     json_t *key;
 
-    json_array_foreach (ctx->keys, index, key) {
+    json_array_foreach (ctx->keys, index, key)
+    {
         const char *s = json_string_value (key);
         info_output (f, s, ctx->id);
     }
@@ -1038,11 +1086,17 @@ int cmd_info (optparse_t *p, int argc, char **argv)
         optindex++;
     }
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:O s:i}",
-                             "id", ctx.id,
-                             "keys", ctx.keys,
-                             "flags", 0)))
+                             "id",
+                             ctx.id,
+                             "keys",
+                             ctx.keys,
+                             "flags",
+                             0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., info_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -1070,8 +1124,8 @@ int cmd_drain (optparse_t *p, int argc, char **argv)
     if (!(f = flux_rpc (h, "job-manager.drain", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("flux_rpc");
     if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("drain: %s", errno == ETIMEDOUT
-                                   ? "timeout" : flux_future_error_string (f));
+        log_msg_exit ("drain: %s",
+                      errno == ETIMEDOUT ? "timeout" : flux_future_error_string (f));
     flux_future_destroy (f);
     flux_close (h);
     return (0);

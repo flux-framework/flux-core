@@ -45,8 +45,7 @@ char *xstrdup (const char *s)
     return cpy;
 }
 
-
-char *xvasprintf(const char *fmt, va_list ap)
+char *xvasprintf (const char *fmt, va_list ap)
 {
     char *s;
 

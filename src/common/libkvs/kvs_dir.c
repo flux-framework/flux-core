@@ -53,16 +53,17 @@ void flux_kvsdir_destroy (flux_kvsdir_t *dir)
 
 flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
 {
-    return kvsdir_create_fromobj (dir->handle, dir->rootref,
-                                  dir->key, dir->dirobj);
+    return kvsdir_create_fromobj (dir->handle, dir->rootref, dir->key, dir->dirobj);
 }
 
 /* If rootref is non-NULL, the kvsdir records the root reference
  * so that subsequent flux_kvsdir_get_* accesses can be relative to that
  * snapshot.  Otherwise, they are relative to the current root.
  */
-flux_kvsdir_t *flux_kvsdir_create (flux_t *h, const char *rootref,
-                                   const char *key, const char *json_str)
+flux_kvsdir_t *flux_kvsdir_create (flux_t *h,
+                                   const char *rootref,
+                                   const char *key,
+                                   const char *json_str)
 {
     flux_kvsdir_t *dir = NULL;
     json_t *dirobj = NULL;
@@ -134,7 +135,8 @@ flux_kvsitr_t *flux_kvsitr_create (const flux_kvsdir_t *dir)
     if (!(itr->keys = zlist_new ()))
         goto error;
     dirdata = treeobj_get_data (dir->dirobj);
-    json_object_foreach (dirdata, key, value) {
+    json_object_foreach (dirdata, key, value)
+    {
         if (zlist_push (itr->keys, (char *)key) < 0)
             goto error;
     }
@@ -196,7 +198,6 @@ bool flux_kvsdir_issymlink (const flux_kvsdir_t *dir, const char *name)
     return false;
 }
 
-
 char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *name)
 {
     char *s;
@@ -205,14 +206,12 @@ char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *name)
     if (!strcmp (dir->key, ".")) {
         if (!(s = strdup (name)))
             goto nomem;
-    }
-    else {
+    } else {
         len = strlen (dir->key);
         if (dir->key[len - 1] == '.') {
             if (asprintf (&s, "%s%s", dir->key, name) < 0)
                 goto nomem;
-        }
-        else {
+        } else {
             if (asprintf (&s, "%s.%s", dir->key, name) < 0)
                 goto nomem;
         }
@@ -225,13 +224,15 @@ nomem:
 
 /* kvs_txn_private.h */
 
-flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle, const char *rootref,
-                                      const char *key, json_t *treeobj)
+flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle,
+                                      const char *rootref,
+                                      const char *key,
+                                      json_t *treeobj)
 {
     flux_kvsdir_t *dir = NULL;
 
     if (!key || !treeobj || treeobj_validate (treeobj) < 0
-                         || !treeobj_is_dir (treeobj)) {
+        || !treeobj_is_dir (treeobj)) {
         errno = EINVAL;
         goto error;
     }

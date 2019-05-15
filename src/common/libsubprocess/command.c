@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <stdlib.h>
@@ -49,7 +49,7 @@ struct flux_command {
  *   freed and length (*argz_lenp) reset to 0, otherwise av is passed
  *   directly to argz_create(3).
  */
-static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
+static int init_argz (char **argzp, size_t *argz_lenp, char *const av[])
 {
     int e;
     if (*argzp != NULL) {
@@ -68,8 +68,7 @@ static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
  *  Same as init_argz, but pass argument count (ac) and verify that
  *   the argument vector av has NULL as its final element.
  */
-static int init_argz_count (char **argzp, size_t *argz_lenp,
-                            int ac, char * const av[])
+static int init_argz_count (char **argzp, size_t *argz_lenp, int ac, char *const av[])
 {
     if (av && (av[ac] != NULL)) {
         errno = EINVAL;
@@ -81,8 +80,7 @@ static int init_argz_count (char **argzp, size_t *argz_lenp,
 /*
  *  Append string defined by [fmt, ap] to argz vector in argzp
  */
-static int argz_appendv (char **argzp, size_t *argz_lenp,
-                         const char *fmt,  va_list ap)
+static int argz_appendv (char **argzp, size_t *argz_lenp, const char *fmt, va_list ap)
 {
     int e;
     char *s;
@@ -131,7 +129,7 @@ static char *env_entry_name (char *entry, char *dst, size_t len)
         p = entry + strlen (entry) + 1;
 
     /* Refuse to truncate */
-    if (len-1 < p - entry)
+    if (len - 1 < p - entry)
         return NULL;
 
     /* strncat(3): safer than strncpy(3), faster than by-hand: */
@@ -147,15 +145,15 @@ static char *env_entry_name (char *entry, char *dst, size_t len)
  *  If `entry` does not contain an '=' character, then it has no value
  *   and NULL is returned.
  */
-static const char * env_entry_value (const char *entry)
+static const char *env_entry_value (const char *entry)
 {
     char *p;
     if (!entry || !(p = strchr (entry, '=')))
         return NULL;
-    return p+1;
+    return p + 1;
 }
 
-static json_t * argz_tojson (const char *argz, size_t argz_len)
+static json_t *argz_tojson (const char *argz, size_t argz_len)
 {
     char *arg = NULL;
     json_t *o = json_array ();
@@ -185,7 +183,8 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
     if (!json_is_array (o))
         goto fail;
 
-    json_array_foreach (o, index, value) {
+    json_array_foreach (o, index, value)
+    {
         if (!json_is_string (value))
             goto fail;
         if (argz_add (argzp, argz_lenp, json_string_value (value)))
@@ -204,9 +203,9 @@ fail:
  *  Convert and envz array (argz with NAME=VALUE entries) to a json
  *   dictionary object.
  */
-static json_t * envz_tojson (const char *envz, size_t envz_len)
+static json_t *envz_tojson (const char *envz, size_t envz_len)
 {
-    char buf [1024];
+    char buf[1024];
     const char *name, *value;
     char *entry = NULL;
     json_t *o = json_object ();
@@ -241,7 +240,8 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
     if (!json_is_object (o))
         goto fail;
 
-    json_object_foreach (o, var, val) {
+    json_object_foreach (o, var, val)
+    {
         if (!json_is_string (val))
             goto fail;
         if (envz_add (envzp, envz_lenp, var, json_string_value (val)))
@@ -259,7 +259,7 @@ fail:
 /*
  *  Convert a hash with string keys,values to json string
  */
-static json_t * zhash_tojson (zhash_t *h)
+static json_t *zhash_tojson (zhash_t *h)
 {
     const char *val;
     json_t *o = json_object ();
@@ -299,10 +299,11 @@ static zhash_t *zhash_fromjson (json_t *o)
     h = zhash_new ();
     zhash_autofree (h);
 
-    json_object_foreach (o, key, val) {
+    json_object_foreach (o, key, val)
+    {
         if (!json_is_string (val))
             goto fail;
-        if (zhash_insert (h, key, (char *) json_string_value (val)) < 0) {
+        if (zhash_insert (h, key, (char *)json_string_value (val)) < 0) {
             /* Duplicate key. This can't happen unless json object is
              *  corrupt, so give up and return error (EINVAL)
              */
@@ -329,10 +330,11 @@ static zlist_t *zlist_fromjson (json_t *o)
     l = zlist_new ();
     zlist_autofree (l);
 
-    json_array_foreach (o, index, value) {
+    json_array_foreach (o, index, value)
+    {
         if (!json_is_string (value))
             goto fail;
-        if (zlist_append (l, (char *) json_string_value (value)) < 0) {
+        if (zlist_append (l, (char *)json_string_value (value)) < 0) {
             errnum = errno;
             goto fail;
         }
@@ -344,7 +346,7 @@ fail:
     return NULL;
 }
 
-static json_t * zlist_tojson (zlist_t *l)
+static json_t *zlist_tojson (zlist_t *l)
 {
     char *s = NULL;
     json_t *o = json_array ();
@@ -367,8 +369,7 @@ err:
     return NULL;
 }
 
-
-static const char * z_list_find (zlist_t *l, const char *s)
+static const char *z_list_find (zlist_t *l, const char *s)
 {
     const char *v = zlist_first (l);
     while (v != NULL) {
@@ -381,7 +382,7 @@ static const char * z_list_find (zlist_t *l, const char *s)
 
 /*  Version of zhash_dup() that duplicates both string keys and values
  */
-static zhash_t * z_hash_dup (zhash_t *src)
+static zhash_t *z_hash_dup (zhash_t *src)
 {
     zhash_t *new;
     zlist_t *keys = zhash_keys (src);
@@ -436,8 +437,7 @@ flux_cmd_t *flux_cmd_create (int argc, char *argv[], char **env)
         goto fail;
     }
 
-    if (!(cmd->opts = zhash_new ())
-       || !(cmd->channels = zlist_new ())) {
+    if (!(cmd->opts = zhash_new ()) || !(cmd->channels = zlist_new ())) {
         err = ENOMEM;
         goto fail;
     }
@@ -495,7 +495,9 @@ int flux_cmd_argv_append (flux_cmd_t *cmd, const char *fmt, ...)
     return (rc);
 }
 
-static int flux_cmd_setenv (flux_cmd_t *cmd, const char *k, const char *v,
+static int flux_cmd_setenv (flux_cmd_t *cmd,
+                            const char *k,
+                            const char *v,
                             int overwrite)
 {
     if (!overwrite && envz_entry (cmd->envz, cmd->envz_len, k)) {
@@ -509,8 +511,11 @@ static int flux_cmd_setenv (flux_cmd_t *cmd, const char *k, const char *v,
     return 0;
 }
 
-int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
-                      const char *name, const char *fmt, ...)
+int flux_cmd_setenvf (flux_cmd_t *cmd,
+                      int overwrite,
+                      const char *name,
+                      const char *fmt,
+                      ...)
 {
     va_list ap;
     char *val;
@@ -531,7 +536,7 @@ void flux_cmd_unsetenv (flux_cmd_t *cmd, const char *name)
     envz_remove (&cmd->envz, &cmd->envz_len, name);
 }
 
-const char * flux_cmd_getenv (const flux_cmd_t *cmd, const char *name)
+const char *flux_cmd_getenv (const flux_cmd_t *cmd, const char *name)
 {
     return (envz_get (cmd->envz, cmd->envz_len, name));
 }
@@ -547,7 +552,7 @@ int flux_cmd_setcwd (flux_cmd_t *cmd, const char *path)
     return 0;
 }
 
-const char * flux_cmd_getcwd (const flux_cmd_t *cmd)
+const char *flux_cmd_getcwd (const flux_cmd_t *cmd)
 {
     return cmd->cwd;
 }
@@ -561,7 +566,7 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name)
         return -1;
     }
     /* autofree is set on cmd->channels, so name is automatically strdup'd */
-    return zlist_append (cmd->channels, (char *) name);
+    return zlist_append (cmd->channels, (char *)name);
 }
 
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val)
@@ -571,7 +576,7 @@ int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val)
         return -1;
     }
     /* autofree is set on cmd->opts, so val is automatically strdup'd */
-    return zhash_insert (cmd->opts, var, (char *) val);
+    return zhash_insert (cmd->opts, var, (char *)val);
 }
 
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var)
@@ -579,7 +584,7 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var)
     return zhash_lookup (cmd->opts, var);
 }
 
-flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
+flux_cmd_t *flux_cmd_copy (const flux_cmd_t *src)
 {
     error_t e = 0;
     flux_cmd_t *cmd = calloc (1, sizeof (*cmd));
@@ -601,7 +606,7 @@ err:
     return NULL;
 }
 
-flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
+flux_cmd_t *flux_cmd_fromjson (const char *json_str, json_error_t *errp)
 {
     int errnum;
     json_t *o = NULL;
@@ -610,7 +615,8 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
     json_t *jopts = NULL;
     json_t *jchans = NULL;
     const char *cwd;
-    flux_cmd_t *cmd = NULL;;
+    flux_cmd_t *cmd = NULL;
+    ;
 
     if (!(o = json_loads (json_str, 0, errp))) {
         errnum = EPROTO;
@@ -620,12 +626,21 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
         errnum = ENOMEM;
         goto fail;
     }
-    if (json_unpack_ex (o, errp, 0, "{s:s, s:o, s:o, s:o, s:o}",
-                "cwd", &cwd,
-                "cmdline", &jargv,
-                "env", &jenv,
-                "opts", &jopts,
-                "channels", &jchans) < 0) {
+    if (json_unpack_ex (o,
+                        errp,
+                        0,
+                        "{s:s, s:o, s:o, s:o, s:o}",
+                        "cwd",
+                        &cwd,
+                        "cmdline",
+                        &jargv,
+                        "env",
+                        &jenv,
+                        "opts",
+                        &jopts,
+                        "channels",
+                        &jchans)
+        < 0) {
         errnum = EPROTO;
         goto fail;
     }
@@ -650,7 +665,7 @@ fail:
     return NULL;
 }
 
-char * flux_cmd_tojson (const flux_cmd_t *cmd)
+char *flux_cmd_tojson (const flux_cmd_t *cmd)
 {
     char *str = NULL;
     json_t *o = json_object ();

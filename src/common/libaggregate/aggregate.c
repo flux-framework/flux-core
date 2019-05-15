@@ -14,8 +14,8 @@
 
 static void aggregate_wait_set_errnum (flux_future_t *f, int errnum)
 {
-    if (flux_future_aux_set (f, "aggregate::errnum",
-                             (void *) (intptr_t) errnum, NULL) < 0) {
+    if (flux_future_aux_set (f, "aggregate::errnum", (void *)(intptr_t)errnum, NULL)
+        < 0) {
         /* Not much we can do here but immediately fulfill future and
          *  hope for the best.
          */
@@ -28,14 +28,14 @@ static intptr_t aggregate_wait_get_errnum (flux_future_t *f)
     void *v = flux_future_aux_get (f, "aggregate::errnum");
     if (v == NULL)
         return (0);
-    return ((intptr_t) v);
+    return ((intptr_t)v);
 }
 
 static void aggregate_fulfill_finalize (flux_future_t *f)
 {
     intptr_t errnum = aggregate_wait_get_errnum (f);
     if (errnum)
-        flux_future_fulfill_error (f, (int) errnum, NULL);
+        flux_future_fulfill_error (f, (int)errnum, NULL);
     else
         flux_future_fulfill (f, NULL, NULL);
 }
@@ -59,19 +59,17 @@ static void aggregate_check (flux_future_t *f, void *arg)
         }
         flux_kvs_lookup_cancel (f);
         aggregate_wait_set_errnum (f_orig, errno);
-    }
-    else if (!(o = json_loads (result, 0, NULL))
-            || (json_unpack (o, "{s:i,s:i}",
-                                "count", &count,
-                                "total", &total) < 0)) {
+    } else if (!(o = json_loads (result, 0, NULL))
+               || (json_unpack (o, "{s:i,s:i}", "count", &count, "total", &total)
+                   < 0)) {
         flux_kvs_lookup_cancel (f);
         aggregate_wait_set_errnum (f_orig, errno);
-    }
-    else if (count == total) {
-        flux_future_aux_set (f_orig, "aggregate::json_t",
-                             json_incref (o), (flux_free_f) json_decref);
-        flux_future_aux_set (f_orig, "aggregate::json_str",
-                             strdup (result), free);
+    } else if (count == total) {
+        flux_future_aux_set (f_orig,
+                             "aggregate::json_t",
+                             json_incref (o),
+                             (flux_free_f)json_decref);
+        flux_future_aux_set (f_orig, "aggregate::json_str", strdup (result), free);
         flux_kvs_lookup_cancel (f);
         /*  f_orig will be fulfilled by aggregate_fulfill_finalize() once
          *   flux_kvs_lookup_get() returns ENODATA. This ensures there
@@ -89,9 +87,8 @@ static void initialize_cb (flux_future_t *f, void *arg)
     flux_future_t *f2 = NULL;
     flux_t *h = flux_future_get_flux (f);
 
-    f2 = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH|FLUX_KVS_WAITCREATE, key);
-    if ((f2 == NULL)
-        || (flux_future_then (f2, -1., aggregate_check, f) < 0)) {
+    f2 = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE, key);
+    if ((f2 == NULL) || (flux_future_then (f2, -1., aggregate_check, f) < 0)) {
         flux_future_destroy (f2);
         flux_future_fulfill_error (f, errno, NULL);
     }
@@ -100,7 +97,7 @@ static void initialize_cb (flux_future_t *f, void *arg)
 flux_future_t *aggregate_wait (flux_t *h, const char *key)
 {
     char *s;
-    flux_future_t *f = flux_future_create (initialize_cb, (void *) key);
+    flux_future_t *f = flux_future_create (initialize_cb, (void *)key);
     if ((f == NULL) || !(s = strdup (key))) {
         flux_future_destroy (f);
         return NULL;
@@ -162,35 +159,54 @@ int aggregate_unpack_to_kvs (flux_future_t *f, const char *path)
     return (rc);
 }
 
-flux_future_t *aggregator_push_json (flux_t *h, int fwd_count, double timeout,
-                                     const char *key, json_t *o)
+flux_future_t *aggregator_push_json (flux_t *h,
+                                     int fwd_count,
+                                     double timeout,
+                                     const char *key,
+                                     json_t *o)
 {
     uint32_t size;
     uint32_t rank;
     int n;
-    char rankstr [16]; /* aggregator expects ranks as string */
+    char rankstr[16]; /* aggregator expects ranks as string */
 
-    if ((flux_get_size (h, &size) < 0)
-        || (flux_get_rank (h, &rank) < 0)
+    if ((flux_get_size (h, &size) < 0) || (flux_get_rank (h, &rank) < 0)
         || ((n = snprintf (rankstr, sizeof (rankstr), "%d", rank)) < 0)
         || (n >= sizeof (rankstr)))
         return NULL;
 
     if (timeout >= 0.)
-        return flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_ANY, 0,
-                             "{s:s,s:i,s:i,s:f,s:{s:o}}",
-                             "key", key,
-                             "total", size,
-                             "fwd_count", fwd_count,
-                             "timeout" , timeout,
-                             "entries", rankstr, o);
+        return flux_rpc_pack (h,
+                              "aggregator.push",
+                              FLUX_NODEID_ANY,
+                              0,
+                              "{s:s,s:i,s:i,s:f,s:{s:o}}",
+                              "key",
+                              key,
+                              "total",
+                              size,
+                              "fwd_count",
+                              fwd_count,
+                              "timeout",
+                              timeout,
+                              "entries",
+                              rankstr,
+                              o);
     else
-        return flux_rpc_pack (h, "aggregator.push", FLUX_NODEID_ANY, 0,
-                             "{s:s,s:i,s:i,s:{s:o}}",
-                             "key", key,
-                             "total", size,
-                             "fwd_count", fwd_count,
-                             "entries", rankstr, o);
+        return flux_rpc_pack (h,
+                              "aggregator.push",
+                              FLUX_NODEID_ANY,
+                              0,
+                              "{s:s,s:i,s:i,s:{s:o}}",
+                              "key",
+                              key,
+                              "total",
+                              size,
+                              "fwd_count",
+                              fwd_count,
+                              "entries",
+                              rankstr,
+                              o);
 }
 
 /* vi: ts=4 sw=4 expandtab

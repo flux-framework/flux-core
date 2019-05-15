@@ -13,10 +13,10 @@
 
 enum {
     EKV_SUCCESS = 0,
-    EKV_NOKEY = -1,         /* key cannot be found in input string */
-    EKV_VAL_LEN = -2,       /* value longer than provided 'len' argument */
-    EKV_VAL_NOMATCH = -3,   /* value does not match 'match' argument */
-    EKV_VAL_PARSE = -4,     /* error parsing value */
+    EKV_NOKEY = -1,       /* key cannot be found in input string */
+    EKV_VAL_LEN = -2,     /* value longer than provided 'len' argument */
+    EKV_VAL_NOMATCH = -3, /* value does not match 'match' argument */
+    EKV_VAL_PARSE = -4,   /* error parsing value */
 };
 
 /* Parse a null-terminated input string, interpreted a sequence of

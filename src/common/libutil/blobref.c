@@ -21,13 +21,13 @@
 #include "sha1.h"
 #include "sha256.h"
 
-#define SHA1_PREFIX_STRING  "sha1-"
-#define SHA1_PREFIX_LENGTH  5
-#define SHA1_STRING_SIZE    (SHA1_DIGEST_SIZE*2 + SHA1_PREFIX_LENGTH + 1)
+#define SHA1_PREFIX_STRING "sha1-"
+#define SHA1_PREFIX_LENGTH 5
+#define SHA1_STRING_SIZE (SHA1_DIGEST_SIZE * 2 + SHA1_PREFIX_LENGTH + 1)
 
-#define SHA256_PREFIX_STRING  "sha256-"
-#define SHA256_PREFIX_LENGTH  7
-#define SHA256_STRING_SIZE    (SHA256_BLOCK_SIZE*2 + SHA256_PREFIX_LENGTH + 1)
+#define SHA256_PREFIX_STRING "sha256-"
+#define SHA256_PREFIX_LENGTH 7
+#define SHA256_STRING_SIZE (SHA256_BLOCK_SIZE * 2 + SHA256_PREFIX_LENGTH + 1)
 
 #if BLOBREF_MAX_STRING_SIZE < SHA1_STRING_SIZE
 #error BLOBREF_MAX_STRING_SIZE is too small
@@ -48,19 +48,21 @@ static void sha256_hash (const void *data, int data_len, void *hash, int hash_le
 struct blobhash {
     char *name;
     int hashlen;
-    void (*hashfun)(const void *data, int data_len, void *hash, int hash_len);
+    void (*hashfun) (const void *data, int data_len, void *hash, int hash_len);
 };
 
 static struct blobhash blobtab[] = {
-    { .name = "sha1",
-      .hashlen = SHA1_DIGEST_SIZE,
-      .hashfun = sha1_hash,
+    {
+        .name = "sha1",
+        .hashlen = SHA1_DIGEST_SIZE,
+        .hashfun = sha1_hash,
     },
-    { .name = "sha256",
-      .hashlen = SHA256_BLOCK_SIZE,
-      .hashfun = sha256_hash,
+    {
+        .name = "sha256",
+        .hashlen = SHA256_BLOCK_SIZE,
+        .hashfun = sha256_hash,
     },
-    { NULL, 0, 0 },
+    {NULL, 0, 0},
 };
 
 static void sha1_hash (const void *data, int data_len, void *hash, int hash_len)
@@ -135,16 +137,16 @@ int blobref_strtohash (const char *blobref, void *hash, int size)
 
     if (!(bh = lookup_blobhash (blobref)) || size < bh->hashlen)
         goto inval;
-    if (strlen (blobref) != bh->hashlen*2 + strlen (bh->name) + 1)
+    if (strlen (blobref) != bh->hashlen * 2 + strlen (bh->name) + 1)
         goto inval;
     blobref += strlen (bh->name) + 1;
     for (i = 0; i < bh->hashlen; i++) {
-        if (!isxdigit_lower (blobref[i*2]))
+        if (!isxdigit_lower (blobref[i * 2]))
             goto inval;
-        ihash[i] = xtoint (blobref[i*2]) << 4;
-        if (!isxdigit_lower (blobref[i*2 + 1]))
+        ihash[i] = xtoint (blobref[i * 2]) << 4;
+        if (!isxdigit_lower (blobref[i * 2 + 1]))
             goto inval;
-        ihash[i] |= xtoint (blobref[i*2 + 1]);
+        ihash[i] |= xtoint (blobref[i * 2 + 1]);
     }
     return bh->hashlen;
 inval:
@@ -153,15 +155,16 @@ inval:
 }
 
 static int hashtostr (struct blobhash *bh,
-                      const void *hash, int len,
-                      char *blobref, int blobref_len)
+                      const void *hash,
+                      int len,
+                      char *blobref,
+                      int blobref_len)
 {
     uint8_t *ihash = (uint8_t *)hash;
     int i;
 
-    if (len != bh->hashlen
-        || !blobref
-        || blobref_len < bh->hashlen*2 + strlen (bh->name) + 2) {
+    if (len != bh->hashlen || !blobref
+        || blobref_len < bh->hashlen * 2 + strlen (bh->name) + 2) {
         errno = EINVAL;
         return -1;
     }
@@ -169,16 +172,18 @@ static int hashtostr (struct blobhash *bh,
     strcat (blobref, "-");
     blobref += strlen (bh->name) + 1;
     for (i = 0; i < bh->hashlen; i++) {
-        blobref[i*2] = inttox (ihash[i] >> 4);
-        blobref[i*2 + 1] = inttox (ihash[i] & 0xf);
+        blobref[i * 2] = inttox (ihash[i] >> 4);
+        blobref[i * 2 + 1] = inttox (ihash[i] & 0xf);
     }
-    blobref[i*2] = '\0';
+    blobref[i * 2] = '\0';
     return 0;
 }
 
 int blobref_hashtostr (const char *hashtype,
-                       const void *hash, int len,
-                       void *blobref, int blobref_len)
+                       const void *hash,
+                       int len,
+                       void *blobref,
+                       int blobref_len)
 {
     struct blobhash *bh;
 
@@ -189,10 +194,11 @@ int blobref_hashtostr (const char *hashtype,
     return hashtostr (bh, hash, len, blobref, blobref_len);
 }
 
-
 int blobref_hash (const char *hashtype,
-                  const void *data, int len,
-                  void *blobref, int blobref_len)
+                  const void *data,
+                  int len,
+                  void *blobref,
+                  int blobref_len)
 {
     struct blobhash *bh;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
@@ -210,7 +216,7 @@ int blobref_validate (const char *blobref)
     struct blobhash *bh;
 
     if (!blobref || !(bh = lookup_blobhash (blobref))
-                 || strlen (blobref) != bh->hashlen*2 + strlen (bh->name) + 1) {
+        || strlen (blobref) != bh->hashlen * 2 + strlen (bh->name) + 1) {
         errno = EINVAL;
         return -1;
     }

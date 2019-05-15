@@ -56,19 +56,19 @@ const int max_namespace_age = 1000;
 const bool event_includes_rootdir = true;
 
 typedef struct {
-    struct cache *cache;    /* blobref => cache_entry */
+    struct cache *cache; /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
-    int faults;                 /* for kvs.stats.get, etc. */
+    int faults; /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
-    int epoch;              /* tracks current heartbeat epoch */
+    int epoch; /* tracks current heartbeat epoch */
     flux_watcher_t *prep_w;
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
     int transaction_merge;
-    bool events_init;            /* flag */
+    bool events_init; /* flag */
     const char *hash_name;
-    unsigned int seq;           /* for commit transactions */
+    unsigned int seq; /* for commit transactions */
 } kvs_ctx_t;
 
 struct kvs_cb_data {
@@ -80,10 +80,14 @@ struct kvs_cb_data {
     char *sender;
 };
 
-static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                                 int revents, void *arg);
-static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                                  int revents, void *arg);
+static void transaction_prep_cb (flux_reactor_t *r,
+                                 flux_watcher_t *w,
+                                 int revents,
+                                 void *arg);
+static void transaction_check_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg);
 static void start_root_remove (kvs_ctx_t *ctx, const char *ns);
 
 /*
@@ -184,7 +188,6 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
      */
 
     if (!(ctx->events_init)) {
-
         /* These belong to all namespaces, subscribe once the first
          * time we init a namespace */
 
@@ -299,8 +302,7 @@ static int get_msg_cred (kvs_ctx_t *ctx,
     return 0;
 }
 
-static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
-                       const flux_msg_t *msg)
+static int check_user (kvs_ctx_t *ctx, struct kvsroot *root, const flux_msg_t *msg)
 {
     uint32_t rolemask;
     uint32_t userid;
@@ -315,8 +317,10 @@ static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
  * set/get root
  */
 
-static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
-                     const char *rootref, int rootseq)
+static void setroot (kvs_ctx_t *ctx,
+                     struct kvsroot *root,
+                     const char *rootref,
+                     int rootseq)
 {
     if (rootseq == 0 || rootseq > root->seq) {
         kvsroot_setroot (ctx->krm, root, rootref, rootseq);
@@ -339,18 +343,23 @@ static void getroot_completion (flux_future_t *f, void *arg)
     msg = flux_future_aux_get (f, "msg");
     assert (msg);
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
     /* N.B. owner read into uint32_t */
-    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i }",
-                             "owner", &owner,
-                             "rootseq", &rootseq,
-                             "rootref", &ref,
-                             "flags", &flags) < 0) {
+    if (flux_rpc_get_unpack (f,
+                             "{ s:i s:i s:s s:i }",
+                             "owner",
+                             &owner,
+                             "rootseq",
+                             &rootseq,
+                             "rootref",
+                             &ref,
+                             "flags",
+                             &flags)
+        < 0) {
         if (errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
@@ -359,7 +368,6 @@ static void getroot_completion (flux_future_t *f, void *arg)
     /* possible root initialized by another message before we got this
      * response.  Not relevant if namespace in process of being removed. */
     if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-
         if (!(root = kvsroot_mgr_create_root (ctx->krm,
                                               ctx->cache,
                                               ctx->hash_name,
@@ -412,9 +420,13 @@ static int getroot_request_send (kvs_ctx_t *ctx,
     flux_msg_t *msgcpy = NULL;
     int saved_errno;
 
-    if (!(f = flux_rpc_pack (ctx->h, "kvs.getroot", FLUX_NODEID_UPSTREAM, 0,
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "kvs.getroot",
+                             FLUX_NODEID_UPSTREAM,
+                             0,
                              "{ s:s }",
-                             "namespace", ns)))
+                             "namespace",
+                             ns)))
         goto error;
 
     if (!(msgcpy = flux_msg_copy (msg, true))) {
@@ -422,8 +434,7 @@ static int getroot_request_send (kvs_ctx_t *ctx,
         goto error;
     }
 
-    if (lh
-        && flux_msg_aux_set (msgcpy, "lookup_handle", lh, NULL) < 0) {
+    if (lh && flux_msg_aux_set (msgcpy, "lookup_handle", lh, NULL) < 0) {
         flux_log_error (ctx->h, "%s: flux_msg_aux_set", __FUNCTION__);
         goto error;
     }
@@ -446,7 +457,8 @@ error:
     return -1;
 }
 
-static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *ns,
+static struct kvsroot *getroot (kvs_ctx_t *ctx,
+                                const char *ns,
                                 flux_msg_handler_t *mh,
                                 const flux_msg_t *msg,
                                 lookup_t *lh,
@@ -461,8 +473,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *ns,
         if (ctx->rank == 0) {
             errno = ENOTSUP;
             return NULL;
-        }
-        else {
+        } else {
             if (getroot_request_send (ctx, ns, mh, msg, lh, cb) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
@@ -584,20 +595,17 @@ static int load (kvs_ctx_t *ctx, const char *ref, wait_t *wait, bool *stall)
      */
     if (!entry) {
         if (!(entry = cache_entry_create (ref))) {
-            flux_log_error (ctx->h, "%s: cache_entry_create",
-                            __FUNCTION__);
+            flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             return -1;
         }
         if (cache_insert (ctx->cache, entry) < 0) {
-            flux_log_error (ctx->h, "%s: cache_insert",
-                            __FUNCTION__);
+            flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
             cache_entry_destroy (entry);
             return -1;
         }
         if (content_load_request_send (ctx, ref) < 0) {
             saved_errno = errno;
-            flux_log_error (ctx->h, "%s: content_load_request_send",
-                            __FUNCTION__);
+            flux_log_error (ctx->h, "%s: content_load_request_send", __FUNCTION__);
             /* cache entry just created, should always work */
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);
@@ -659,13 +667,12 @@ static void content_store_completion (flux_future_t *f, void *arg)
      * N.B. perhaps this check is excessive and could be removed
      */
     if (strcmp (blobref, cache_blobref)) {
-        flux_log (ctx->h, LOG_ERR, "%s: inconsistent blobref returned",
-                  __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: inconsistent blobref returned", __FUNCTION__);
         errno = EPROTO;
         goto error;
     }
 
-    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
+    // flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     /* should be impossible for lookup to fail, cache entry created
      * earlier, and cache_expire_entries() could not have removed it
      * b/c it was dirty.  But check and log incase there is logic
@@ -684,8 +691,7 @@ static void content_store_completion (flux_future_t *f, void *arg)
      * work as well.
      */
     if (cache_entry_set_dirty (entry, false) < 0) {
-        flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
-                        __FUNCTION__);
+        flux_log_error (ctx->h, "%s: cache_entry_set_dirty", __FUNCTION__);
         goto error;
     }
 
@@ -715,7 +721,9 @@ error:
      * must call cache_entry_force_clear_dirty().  flushed.
      */
     if (cache_entry_set_errnum_on_notdirty (entry, errno) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: cache_entry_set_errnum_on_notdirty",
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: cache_entry_set_errnum_on_notdirty",
                   __FUNCTION__);
         ret = cache_entry_force_clear_dirty (entry);
         assert (ret == 0);
@@ -730,8 +738,10 @@ error:
         flux_log (ctx->h, LOG_ERR, "%s: cache_remove_entry", __FUNCTION__);
 }
 
-static int content_store_request_send (kvs_ctx_t *ctx, const char *blobref,
-                                       const void *data, int len)
+static int content_store_request_send (kvs_ctx_t *ctx,
+                                       const char *blobref,
+                                       const void *data,
+                                       int len)
 {
     flux_future_t *f;
     int saved_errno, rc = -1;
@@ -784,8 +794,7 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
     assert (cache_entry_get_dirty (entry));
 
     if (cache_entry_get_raw (entry, &storedata, &storedatalen) < 0) {
-        flux_log_error (cbd->ctx->h, "%s: cache_entry_get_raw",
-                        __FUNCTION__);
+        flux_log_error (cbd->ctx->h, "%s: cache_entry_get_raw", __FUNCTION__);
         kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
@@ -794,13 +803,9 @@ static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
     blobref = cache_entry_get_blobref (entry);
     assert (blobref);
 
-    if (content_store_request_send (cbd->ctx,
-                                    blobref,
-                                    storedata,
-                                    storedatalen) < 0) {
+    if (content_store_request_send (cbd->ctx, blobref, storedata, storedatalen) < 0) {
         cbd->errnum = errno;
-        flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
-                        __FUNCTION__);
+        flux_log_error (cbd->ctx->h, "%s: content_store_request_send", __FUNCTION__);
         kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
@@ -819,8 +824,10 @@ static void flux_msg_destroy_wrapper (void *arg)
     flux_msg_destroy (msg);
 }
 
-static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
-                               json_t *names, json_t *keys)
+static int setroot_event_send (kvs_ctx_t *ctx,
+                               struct kvsroot *root,
+                               json_t *names,
+                               json_t *keys)
 {
     const json_t *root_dir = NULL;
     json_t *nullobj = NULL;
@@ -835,9 +842,8 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
 
         if ((entry = cache_lookup (ctx->cache, root->ref, ctx->epoch)))
             root_dir = cache_entry_get_treeobj (entry);
-        assert (root_dir != NULL); // root entry is always in cache on rank 0
-    }
-    else {
+        assert (root_dir != NULL);  // root entry is always in cache on rank 0
+    } else {
         if (!(nullobj = json_null ())) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: json_null", __FUNCTION__);
@@ -854,13 +860,20 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
 
     if (!(msg = flux_event_pack (setroot_topic,
                                  "{ s:s s:i s:s s:O s:O s:O s:i}",
-                                 "namespace", root->ns_name,
-                                 "rootseq", root->seq,
-                                 "rootref", root->ref,
-                                 "names", names,
-                                 "rootdir", root_dir,
-                                 "keys", keys,
-                                 "owner", root->owner))) {
+                                 "namespace",
+                                 root->ns_name,
+                                 "rootseq",
+                                 root->seq,
+                                 "rootref",
+                                 root->ref,
+                                 "names",
+                                 names,
+                                 "rootdir",
+                                 root_dir,
+                                 "keys",
+                                 keys,
+                                 "owner",
+                                 root->owner))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
@@ -883,8 +896,7 @@ done:
     return rc;
 }
 
-static int error_event_send (kvs_ctx_t *ctx, const char *ns,
-                             json_t *names, int errnum)
+static int error_event_send (kvs_ctx_t *ctx, const char *ns, json_t *names, int errnum)
 {
     flux_msg_t *msg = NULL;
     char *error_topic = NULL;
@@ -896,10 +908,14 @@ static int error_event_send (kvs_ctx_t *ctx, const char *ns,
         goto done;
     }
 
-    if (!(msg = flux_event_pack (error_topic, "{ s:s s:O s:i }",
-                                 "namespace", ns,
-                                 "names", names,
-                                 "errnum", errnum))) {
+    if (!(msg = flux_event_pack (error_topic,
+                                 "{ s:s s:O s:i }",
+                                 "namespace",
+                                 ns,
+                                 "names",
+                                 names,
+                                 "errnum",
+                                 errnum))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
@@ -921,8 +937,10 @@ done:
     return rc;
 }
 
-static int error_event_send_to_name (kvs_ctx_t *ctx, const char *ns,
-                                     const char *name, int errnum)
+static int error_event_send_to_name (kvs_ctx_t *ctx,
+                                     const char *ns,
+                                     const char *name,
+                                     int errnum)
 {
     json_t *names = NULL;
     int rc = -1;
@@ -975,8 +993,7 @@ static void kvstxn_apply (kvstxn_t *kt)
     assert (root);
 
     if (root->remove) {
-        flux_log (ctx->h, LOG_DEBUG, "%s: namespace %s removed", __FUNCTION__,
-                  ns);
+        flux_log (ctx->h, LOG_DEBUG, "%s: namespace %s removed", __FUNCTION__, ns);
         errnum = ENOTSUP;
         goto done;
     }
@@ -984,9 +1001,7 @@ static void kvstxn_apply (kvstxn_t *kt)
     if ((errnum = kvstxn_get_aux_errnum (kt)))
         goto done;
 
-    if ((ret = kvstxn_process (kt,
-                               ctx->epoch,
-                               root->ref)) == KVSTXN_PROCESS_ERROR) {
+    if ((ret = kvstxn_process (kt, ctx->epoch, root->ref)) == KVSTXN_PROCESS_ERROR) {
         errnum = kvstxn_get_errnum (kt);
         goto done;
     }
@@ -1020,8 +1035,7 @@ static void kvstxn_apply (kvstxn_t *kt)
 
         assert (wait_get_usecount (wait) > 0);
         goto stall;
-    }
-    else if (ret == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES) {
+    } else if (ret == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES) {
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create ((wait_cb_f)kvstxn_apply, kt))) {
@@ -1064,8 +1078,11 @@ done:
         if ((count = json_array_size (names)) > 1) {
             int opcount = 0;
             opcount = json_array_size (kvstxn_get_ops (kt));
-            flux_log (ctx->h, LOG_DEBUG, "aggregated %d transactions (%d ops)",
-                      count, opcount);
+            flux_log (ctx->h,
+                      LOG_DEBUG,
+                      "aggregated %d transactions (%d ops)",
+                      count,
+                      opcount);
         }
         setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
         setroot_event_send (ctx, root, names, kvstxn_get_keys (kt));
@@ -1079,8 +1096,7 @@ done:
             fallback = false;
 
         if (!fallback)
-            error_event_send (ctx, root->ns_name, kvstxn_get_names (kt),
-                              errnum);
+            error_event_send (ctx, root->ns_name, kvstxn_get_names (kt), errnum);
     }
     wait_destroy (wait);
 
@@ -1110,11 +1126,13 @@ static int kvstxn_prep_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                                 int revents, void *arg)
+static void transaction_prep_cb (flux_reactor_t *r,
+                                 flux_watcher_t *w,
+                                 int revents,
+                                 void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
+    struct kvs_cb_data cbd = {.ctx = ctx, .ready = false};
 
     if (kvsroot_mgr_iter_roots (ctx->krm, kvstxn_prep_root_cb, &cbd) < 0) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
@@ -1155,11 +1173,13 @@ static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                                  int revents, void *arg)
+static void transaction_check_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
+    struct kvs_cb_data cbd = {.ctx = ctx, .ready = false};
 
     flux_watcher_stop (ctx->idle_w);
 
@@ -1173,8 +1193,10 @@ static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
  * rpc/event callbacks
  */
 
-static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
+static void dropcache_request_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
@@ -1187,10 +1209,8 @@ static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0) {
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
         goto error;
-    }
-    else
-        flux_log (h, LOG_ALERT, "dropped %d of %d cache entries",
-                  expcount, size);
+    } else
+        flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
@@ -1199,8 +1219,10 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                                const flux_msg_t *msg, void *arg)
+static void dropcache_event_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
@@ -1215,8 +1237,7 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
     if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
     else
-        flux_log (h, LOG_ALERT, "dropped %d of %d cache entries",
-                  expcount, size);
+        flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
 }
 
 static int heartbeat_root_cb (struct kvsroot *root, void *arg)
@@ -1224,40 +1245,35 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     kvs_ctx_t *ctx = arg;
 
     if (root->remove) {
-        if (!zlist_size (root->synclist)
-            && !treq_mgr_transactions_count (root->trm)
+        if (!zlist_size (root->synclist) && !treq_mgr_transactions_count (root->trm)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
-
             if (event_unsubscribe (ctx, root->ns_name) < 0)
-                flux_log_error (ctx->h, "%s: event_unsubscribe",
-                                __FUNCTION__);
+                flux_log_error (ctx->h, "%s: event_unsubscribe", __FUNCTION__);
 
             if (kvsroot_mgr_remove_root (ctx->krm, root->ns_name) < 0)
-                flux_log_error (ctx->h, "%s: kvsroot_mgr_remove_root",
-                                __FUNCTION__);
+                flux_log_error (ctx->h, "%s: kvsroot_mgr_remove_root", __FUNCTION__);
         }
-    }
-    else if (ctx->rank != 0
-             && !root->remove
-             && strcasecmp (root->ns_name, KVS_PRIMARY_NAMESPACE)
-             && (ctx->epoch - root->last_update_epoch) > max_namespace_age
-             && !zlist_size (root->synclist)
-             && !treq_mgr_transactions_count (root->trm)
-             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
+    } else if (ctx->rank != 0 && !root->remove
+               && strcasecmp (root->ns_name, KVS_PRIMARY_NAMESPACE)
+               && (ctx->epoch - root->last_update_epoch) > max_namespace_age
+               && !zlist_size (root->synclist)
+               && !treq_mgr_transactions_count (root->trm)
+               && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
          * on a follower node, and it does not have any watchers,
          * and no one is trying to write/change something.
          */
         start_root_remove (ctx, root->ns_name);
-    }
-    else /* "touch" root */
+    } else /* "touch" root */
         (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
 
     return 0;
 }
 
-static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void heartbeat_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     kvs_ctx_t *ctx = arg;
 
@@ -1295,8 +1311,10 @@ static void lookup_wait_error_cb (wait_t *w, int errnum, void *arg)
     lookup_set_aux_errnum (lh, errnum);
 }
 
-static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
-                                const flux_msg_t *msg, void *arg,
+static lookup_t *lookup_common (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg,
                                 flux_msg_handler_f replay_cb,
                                 bool *stall)
 {
@@ -1319,24 +1337,20 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         uint32_t rolemask, userid;
         int root_seq = -1;
 
-        if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
-                                 "key", &key,
-                                 "flags", &flags) < 0) {
+        if (flux_request_unpack (msg, NULL, "{ s:s s:i }", "key", &key, "flags", &flags)
+            < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
 
         /* namespace is optional */
-        (void)flux_request_unpack (msg, NULL, "{ s:s }",
-                                   "namespace", &ns);
+        (void)flux_request_unpack (msg, NULL, "{ s:s }", "namespace", &ns);
 
         /* rootdir is optional */
-        (void)flux_request_unpack (msg, NULL, "{ s:o }",
-                                   "rootdir", &root_dirent);
+        (void)flux_request_unpack (msg, NULL, "{ s:o }", "rootdir", &root_dirent);
 
         /* rootseq is optional */
-        (void)flux_request_unpack (msg, NULL, "{ s:i }",
-                                   "rootseq", &root_seq);
+        (void)flux_request_unpack (msg, NULL, "{ s:i }", "rootseq", &root_seq);
 
         /* either namespace or rootdir must be specified */
         if (!ns && !root_dirent) {
@@ -1348,8 +1362,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
          * 'root' directory.  Otherwise, use the current root.
          */
         if (root_dirent) {
-            if (treeobj_validate (root_dirent) < 0
-                || !treeobj_is_dirref (root_dirent)
+            if (treeobj_validate (root_dirent) < 0 || !treeobj_is_dirref (root_dirent)
                 || !(root_ref = treeobj_get_blobref (root_dirent, 0))) {
                 errno = EINVAL;
                 goto done;
@@ -1371,8 +1384,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
                                   flags,
                                   h)))
             goto done;
-    }
-    else {
+    } else {
         int err;
 
         /* error in prior load(), waited for in flight rpcs to complete */
@@ -1390,8 +1402,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
     if (lret == LOOKUP_PROCESS_ERROR) {
         errno = lookup_get_errnum (lh);
         goto done;
-    }
-    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
+    } else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
         bool stall = false;
         struct kvsroot *root;
 
@@ -1404,12 +1415,10 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         if (stall)
             goto stall;
         goto done;
-    }
-    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
+    } else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, ctx,
-                                              replay_cb)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, ctx, replay_cb)))
             goto done;
 
         if (wait_set_error_cb (wait, lookup_wait_error_cb, lh) < 0)
@@ -1455,15 +1464,16 @@ stall:
     return NULL;
 }
 
-static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void lookup_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     lookup_t *lh;
     json_t *val;
     bool stall = false;
 
-    if (!(lh = lookup_common (h, mh, msg, arg, lookup_request_cb,
-                              &stall))) {
+    if (!(lh = lookup_common (h, mh, msg, arg, lookup_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -1491,8 +1501,10 @@ error:
  * on lookups (including ENOENT failed lookups) to determine what
  * lookups can be considered to be read-your-writes consistency safe.
  */
-static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                    const flux_msg_t *msg, void *arg)
+static void lookup_plus_request_cb (flux_t *h,
+                                    flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg,
+                                    void *arg)
 {
     lookup_t *lh;
     json_t *val = NULL;
@@ -1500,8 +1512,7 @@ static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int root_seq;
     bool stall = false;
 
-    if (!(lh = lookup_common (h, mh, msg, arg, lookup_plus_request_cb,
-                              &stall))) {
+    if (!(lh = lookup_common (h, mh, msg, arg, lookup_plus_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -1513,17 +1524,28 @@ static void lookup_plus_request_cb (flux_t *h, flux_msg_handler_t *mh,
     assert (root_seq >= 0);
 
     if (!(val = lookup_get_value (lh))) {
-        if (flux_respond_pack (h, msg, "{ s:i s:i s:s }",
-                               "errno", ENOENT,
-                               "rootseq", root_seq,
-                               "rootref", root_ref) < 0)
+        if (flux_respond_pack (h,
+                               msg,
+                               "{ s:i s:i s:s }",
+                               "errno",
+                               ENOENT,
+                               "rootseq",
+                               root_seq,
+                               "rootref",
+                               root_ref)
+            < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-    }
-    else {
-        if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
-                               "val", val,
-                               "rootseq", root_seq,
-                               "rootref", root_ref) < 0)
+    } else {
+        if (flux_respond_pack (h,
+                               msg,
+                               "{ s:O s:i s:s }",
+                               "val",
+                               val,
+                               "rootseq",
+                               root_seq,
+                               "rootref",
+                               root_ref)
+            < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
     lookup_destroy (lh);
@@ -1534,34 +1556,37 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-
-static int finalize_transaction_req (treq_t *tr,
-                                     const flux_msg_t *req,
-                                     void *data)
+static int finalize_transaction_req (treq_t *tr, const flux_msg_t *req, void *data)
 {
     struct kvs_cb_data *cbd = data;
 
     if (cbd->errnum) {
         if (flux_respond_error (cbd->ctx->h, req, cbd->errnum, NULL) < 0)
             flux_log_error (cbd->ctx->h, "%s: flux_respond_error", __FUNCTION__);
-    }
-    else {
-        if (flux_respond_pack (cbd->ctx->h, req, "{ s:s s:i }",
-                               "rootref", cbd->root->ref,
-                               "rootseq", cbd->root->seq) < 0)
+    } else {
+        if (flux_respond_pack (cbd->ctx->h,
+                               req,
+                               "{ s:s s:i }",
+                               "rootref",
+                               cbd->root->ref,
+                               "rootseq",
+                               cbd->root->seq)
+            < 0)
             flux_log_error (cbd->ctx->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
     return 0;
 }
 
-static void finalize_transaction_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
-                                          json_t *names, int errnum)
+static void finalize_transaction_bynames (kvs_ctx_t *ctx,
+                                          struct kvsroot *root,
+                                          json_t *names,
+                                          int errnum)
 {
     int i, len;
     json_t *name;
     treq_t *tr;
-    struct kvs_cb_data cbd = { .ctx = ctx, .root = root, .errnum = errnum };
+    struct kvs_cb_data cbd = {.ctx = ctx, .root = root, .errnum = errnum};
 
     if (!(len = json_array_size (names))) {
         flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);
@@ -1577,7 +1602,8 @@ static void finalize_transaction_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
         if ((tr = treq_mgr_lookup_transaction (root->trm, nameval))) {
             treq_iter_request_copies (tr, finalize_transaction_req, &cbd);
             if (treq_mgr_remove_transaction (root->trm, nameval) < 0)
-                flux_log_error (ctx->h, "%s: treq_mgr_remove_transaction",
+                flux_log_error (ctx->h,
+                                "%s: treq_mgr_remove_transaction",
                                 __FUNCTION__);
         }
     }
@@ -1585,8 +1611,10 @@ static void finalize_transaction_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
 
 /* kvs.relaycommit (rank 0 only, no response).
  */
-static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                    const flux_msg_t *msg, void *arg)
+static void relaycommit_request_cb (flux_t *h,
+                                    flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg,
+                                    void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1595,26 +1623,31 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int flags;
     json_t *ops = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i }",
-                             "ops", &ops,
-                             "name", &name,
-                             "namespace", &ns,
-                             "flags", &flags) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:o s:s s:s s:i }",
+                             "ops",
+                             &ops,
+                             "name",
+                             &name,
+                             "namespace",
+                             &ns,
+                             "flags",
+                             &flags)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
 
     /* namespace must exist given we are on rank 0 */
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-        flux_log (h, LOG_ERR, "%s: namespace %s not available",
-                  __FUNCTION__, ns);
+        flux_log (h, LOG_ERR, "%s: namespace %s not available", __FUNCTION__, ns);
         errno = ENOTSUP;
         goto error;
     }
 
     if (kvstxn_mgr_add_transaction (root->ktm, name, ops, flags) < 0) {
-        flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
-                        __FUNCTION__);
+        flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
         goto error;
     }
 
@@ -1632,8 +1665,10 @@ error:
 /* kvs.commit
  * Sent from users to local kvs module.
  */
-static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void commit_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1643,21 +1678,21 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *ops = NULL;
     treq_t *tr;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i }",
-                             "ops", &ops,
-                             "namespace", &ns,
-                             "flags", &flags) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:o s:s s:i }",
+                             "ops",
+                             &ops,
+                             "namespace",
+                             &ns,
+                             "flags",
+                             &flags)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          commit_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, commit_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -1689,25 +1724,28 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
          */
         treq_set_processed (tr, true);
 
-        if (kvstxn_mgr_add_transaction (root->ktm,
-                                        treq_get_name (tr),
-                                        ops,
-                                        flags) < 0) {
-            flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
-                            __FUNCTION__);
+        if (kvstxn_mgr_add_transaction (root->ktm, treq_get_name (tr), ops, flags)
+            < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
             goto error;
         }
-    }
-    else {
+    } else {
         flux_future_t *f;
 
         /* route to rank 0 as instance owner */
-        if (!(f = flux_rpc_pack (h, "kvs.relaycommit", 0, FLUX_RPC_NORESPONSE,
+        if (!(f = flux_rpc_pack (h,
+                                 "kvs.relaycommit",
+                                 0,
+                                 FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i }",
-                                 "ops", ops,
-                                 "name", treq_get_name (tr),
-                                 "namespace", ns,
-                                 "flags", flags))) {
+                                 "ops",
+                                 ops,
+                                 "name",
+                                 treq_get_name (tr),
+                                 "namespace",
+                                 ns,
+                                 "flags",
+                                 flags))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
             goto error;
         }
@@ -1720,11 +1758,12 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-
 /* kvs.relayfence (rank 0 only, no response).
  */
-static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void relayfence_request_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1734,20 +1773,27 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *ops = NULL;
     treq_t *tr;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
-                             "ops", &ops,
-                             "name", &name,
-                             "namespace", &ns,
-                             "flags", &flags,
-                             "nprocs", &nprocs) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:o s:s s:s s:i s:i }",
+                             "ops",
+                             &ops,
+                             "name",
+                             &name,
+                             "namespace",
+                             &ns,
+                             "flags",
+                             &flags,
+                             "nprocs",
+                             &nprocs)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
 
     /* namespace must exist given we are on rank 0 */
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-        flux_log (h, LOG_ERR, "%s: namespace %s not available",
-                  __FUNCTION__, ns);
+        flux_log (h, LOG_ERR, "%s: namespace %s not available", __FUNCTION__, ns);
         errno = ENOTSUP;
         goto error;
     }
@@ -1766,8 +1812,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
-    if (treq_get_flags (tr) != flags
-        || treq_get_nprocs (tr) != nprocs) {
+    if (treq_get_flags (tr) != flags || treq_get_nprocs (tr) != nprocs) {
         errno = EINVAL;
         goto error;
     }
@@ -1778,7 +1823,6 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (treq_count_reached (tr)) {
-
         /* If user called fence > nprocs time, should have been caught
          * earlier */
         assert (!treq_get_processed (tr));
@@ -1790,9 +1834,9 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
                                         treq_get_ops (tr),
-                                        treq_get_flags (tr)) < 0) {
-            flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
-                            __FUNCTION__);
+                                        treq_get_flags (tr))
+            < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
             goto error;
         }
     }
@@ -1811,8 +1855,10 @@ error:
 /* kvs.fence
  * Sent from users to local kvs module.
  */
-static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void fence_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1823,23 +1869,25 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *ops = NULL;
     treq_t *tr;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
-                             "ops", &ops,
-                             "name", &name,
-                             "namespace", &ns,
-                             "flags", &flags,
-                             "nprocs", &nprocs) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:o s:s s:s s:i s:i }",
+                             "ops",
+                             &ops,
+                             "name",
+                             &name,
+                             "namespace",
+                             &ns,
+                             "flags",
+                             &flags,
+                             "nprocs",
+                             &nprocs)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          fence_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, fence_request_cb, &stall))) {
         if (stall)
             goto stall;
         goto error;
@@ -1859,8 +1907,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
-    if (treq_get_flags (tr) != flags
-        || treq_get_nprocs (tr) != nprocs) {
+    if (treq_get_flags (tr) != flags || treq_get_nprocs (tr) != nprocs) {
         errno = EINVAL;
         goto error;
     }
@@ -1876,14 +1923,12 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * relayfence_request_cb() here instead of sending an RPC
      */
     if (ctx->rank == 0) {
-
         if (treq_add_request_ops (tr, ops) < 0) {
             flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
             goto error;
         }
 
         if (treq_count_reached (tr)) {
-
             /* If user called fence > nprocs time, should have been caught
              * earlier */
             assert (!treq_get_processed (tr));
@@ -1895,24 +1940,31 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             if (kvstxn_mgr_add_transaction (root->ktm,
                                             treq_get_name (tr),
                                             treq_get_ops (tr),
-                                            treq_get_flags (tr)) < 0) {
-                flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
-                                __FUNCTION__);
+                                            treq_get_flags (tr))
+                < 0) {
+                flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
                 goto error;
             }
         }
-    }
-    else {
+    } else {
         flux_future_t *f;
 
         /* route to rank 0 as instance owner */
-        if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
+        if (!(f = flux_rpc_pack (h,
+                                 "kvs.relayfence",
+                                 0,
+                                 FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i s:i }",
-                                 "ops", ops,
-                                 "name", name,
-                                 "namespace", ns,
-                                 "flags", flags,
-                                 "nprocs", nprocs))) {
+                                 "ops",
+                                 ops,
+                                 "name",
+                                 name,
+                                 "namespace",
+                                 ns,
+                                 "flags",
+                                 flags,
+                                 "nprocs",
+                                 nprocs))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
             goto error;
         }
@@ -1929,8 +1981,10 @@ stall:
 
 /* For wait_version().
  */
-static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void sync_request_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns;
@@ -1938,15 +1992,19 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int rootseq;
     bool stall = false;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:s }",
-                             "rootseq", &rootseq,
-                             "namespace", &ns) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:s }",
+                             "rootseq",
+                             &rootseq,
+                             "namespace",
+                             &ns)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, sync_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, sync_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -1960,9 +2018,14 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
         return; /* stall */
     }
 
-    if (flux_respond_pack (h, msg, "{ s:i s:s }",
-                           "rootseq", root->seq,
-                           "rootref", root->ref) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{ s:i s:s }",
+                           "rootseq",
+                           root->seq,
+                           "rootref",
+                           root->ref)
+        < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 
     return;
@@ -1972,15 +2035,16 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                const flux_msg_t *msg, void *arg)
+static void getroot_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns;
     struct kvsroot *root;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -1995,14 +2059,12 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if (check_user (ctx, root, msg) < 0)
             goto error;
-    }
-    else {
+    } else {
         /* If root is not initialized, we have to intialize ourselves
          * first.
          */
         bool stall = false;
-        if (!(root = getroot (ctx, ns, mh, msg, NULL,
-                              getroot_request_cb, &stall))) {
+        if (!(root = getroot (ctx, ns, mh, msg, NULL, getroot_request_cb, &stall))) {
             if (stall)
                 return;
             goto error;
@@ -2010,11 +2072,18 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* N.B. owner cast into int */
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i }",
-                           "owner", root->owner,
-                           "rootseq", root->seq,
-                           "rootref", root->ref,
-                           "flags", root->flags) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{ s:i s:i s:s s:i }",
+                           "owner",
+                           root->owner,
+                           "rootseq",
+                           root->seq,
+                           "rootref",
+                           root->ref,
+                           "flags",
+                           root->flags)
+        < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
@@ -2022,8 +2091,10 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void error_event_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -2031,10 +2102,16 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *names = NULL;
     int errnum;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s s:o s:i }",
-                           "namespace", &ns,
-                           "names", &names,
-                           "errnum", &errnum) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{ s:s s:o s:i }",
+                           "namespace",
+                           &ns,
+                           "names",
+                           &names,
+                           "errnum",
+                           &errnum)
+        < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2044,8 +2121,11 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
      *   cleaning up lingering transactions.
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
-                  __FUNCTION__, ns);
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: received unknown namespace %s",
+                  __FUNCTION__,
+                  ns);
         return;
     }
 
@@ -2077,7 +2157,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         goto done;
     }
     if ((entry = cache_lookup (ctx->cache, ref, ctx->epoch)))
-        goto done; // already in cache, possibly dirty/invalid - we don't care
+        goto done;  // already in cache, possibly dirty/invalid - we don't care
     if (!(entry = cache_entry_create (ref))) {
         flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
         goto done;
@@ -2098,9 +2178,12 @@ done:
 
 /* Alter the (rootref, rootseq) in response to a setroot event.
  */
-static void setroot_event_process (kvs_ctx_t *ctx, struct kvsroot *root,
-                                   json_t *names, json_t *rootdir,
-                                   const char *rootref, int rootseq)
+static void setroot_event_process (kvs_ctx_t *ctx,
+                                   struct kvsroot *root,
+                                   json_t *names,
+                                   json_t *rootdir,
+                                   const char *rootref,
+                                   int rootseq)
 {
     int errnum = 0;
 
@@ -2125,8 +2208,10 @@ static void setroot_event_process (kvs_ctx_t *ctx, struct kvsroot *root,
     setroot (ctx, root, rootref, rootseq);
 }
 
-static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void setroot_event_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -2136,12 +2221,20 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *rootdir = NULL;
     json_t *names = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
-                           "namespace", &ns,
-                           "rootseq", &rootseq,
-                           "rootref", &rootref,
-                           "names", &names,
-                           "rootdir", &rootdir) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{ s:s s:i s:s s:o s:o }",
+                           "namespace",
+                           &ns,
+                           "rootseq",
+                           &rootseq,
+                           "rootref",
+                           &rootref,
+                           "names",
+                           &names,
+                           "rootdir",
+                           &rootdir)
+        < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2153,8 +2246,11 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
      *   namespace remove event received before setroot).
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
-                  __FUNCTION__, ns);
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: received unknown namespace %s",
+                  __FUNCTION__,
+                  ns);
         return;
     }
 
@@ -2173,10 +2269,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
             return;
         }
 
-        zlist_freefn (root->setroot_queue,
-                      msgcpy,
-                      flux_msg_destroy_wrapper,
-                      true);
+        zlist_freefn (root->setroot_queue, msgcpy, flux_msg_destroy_wrapper, true);
         return;
     }
 
@@ -2208,8 +2301,10 @@ static int disconnect_request_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void disconnect_request_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvs_cb_data cbd;
@@ -2243,7 +2338,8 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          treq_mgr_transactions_count (root->trm),
                          "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
-                         "store revision", root->seq))) {
+                         "store revision",
+                         root->seq))) {
         errno = ENOMEM;
         return -1;
     }
@@ -2252,15 +2348,17 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void stats_get_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *tstats = NULL;
     json_t *cstats = NULL;
     json_t *nsstats = NULL;
-    tstat_t ts = { .min = 0.0, .max = 0.0, .M = 0.0, .S = 0.0, .newM = 0.0,
-                   .newS = 0.0, .n = 0 };
+    tstat_t ts =
+        {.min = 0.0, .max = 0.0, .M = 0.0, .S = 0.0, .newM = 0.0, .newS = 0.0, .n = 0};
     int size = 0, incomplete = 0, dirty = 0;
     double scale = 1E-3;
 
@@ -2274,19 +2372,29 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!(tstats = json_pack ("{ s:i s:f s:f s:f s:f }",
-                              "count", tstat_count (&ts),
-                              "min", tstat_min (&ts)*scale,
-                              "mean", tstat_mean (&ts)*scale,
-                              "stddev", tstat_stddev (&ts)*scale,
-                              "max", tstat_max (&ts)*scale)))
+                              "count",
+                              tstat_count (&ts),
+                              "min",
+                              tstat_min (&ts) * scale,
+                              "mean",
+                              tstat_mean (&ts) * scale,
+                              "stddev",
+                              tstat_stddev (&ts) * scale,
+                              "max",
+                              tstat_max (&ts) * scale)))
         goto nomem;
 
     if (!(cstats = json_pack ("{ s:f s:O s:i s:i s:i }",
-                              "obj size total (MiB)", (double)size/1048576,
-                              "obj size (KiB)", tstats,
-                              "#obj dirty", dirty,
-                              "#obj incomplete", incomplete,
-                              "#faults", ctx->faults)))
+                              "obj size total (MiB)",
+                              (double)size / 1048576,
+                              "obj size (KiB)",
+                              tstats,
+                              "#obj dirty",
+                              dirty,
+                              "#obj incomplete",
+                              incomplete,
+                              "#faults",
+                              ctx->faults)))
         goto nomem;
 
     if (!(nsstats = json_object ()))
@@ -2297,16 +2405,20 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
             goto error;
         }
-    }
-    else {
+    } else {
         json_t *s;
 
         if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
-                             "#watchers", 0,
-                             "#no-op stores", 0,
-                             "#transactions", 0,
-                             "#readytransactions", 0,
-                             "store revision", 0)))
+                             "#watchers",
+                             0,
+                             "#no-op stores",
+                             0,
+                             "#transactions",
+                             0,
+                             "#readytransactions",
+                             0,
+                             "store revision",
+                             0)))
             goto nomem;
 
         if (json_object_set_new (nsstats, KVS_PRIMARY_NAMESPACE, s) < 0) {
@@ -2315,10 +2427,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
-    if (flux_respond_pack (h, msg,
-                           "{ s:O s:O }",
-                           "cache", cstats,
-                           "namespace", nsstats) < 0)
+    if (flux_respond_pack (h, msg, "{ s:O s:O }", "cache", cstats, "namespace", nsstats)
+        < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (tstats);
     json_decref (cstats);
@@ -2348,16 +2458,20 @@ static void stats_clear (kvs_ctx_t *ctx)
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
 }
 
-static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
+static void stats_clear_event_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     kvs_ctx_t *ctx = arg;
 
     stats_clear (ctx);
 }
 
-static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                    const flux_msg_t *msg, void *arg)
+static void stats_clear_request_cb (flux_t *h,
+                                    flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg,
+                                    void *arg)
 {
     kvs_ctx_t *ctx = arg;
 
@@ -2367,8 +2481,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int namespace_create (kvs_ctx_t *ctx, const char *ns,
-                             uint32_t owner, int flags)
+static int namespace_create (kvs_ctx_t *ctx, const char *ns, uint32_t owner, int flags)
 {
     struct kvsroot *root;
     json_t *rootdir = NULL;
@@ -2426,10 +2539,14 @@ static int namespace_create (kvs_ctx_t *ctx, const char *ns,
 
     if (!(msg = flux_event_pack (topic,
                                  "{ s:s s:i s:s s:i }",
-                                 "namespace", root->ns_name,
-                                 "rootseq", root->seq,
-                                 "rootref", root->ref,
-                                 "owner", root->owner))) {
+                                 "namespace",
+                                 root->ns_name,
+                                 "rootseq",
+                                 root->seq,
+                                 "rootref",
+                                 root->ref,
+                                 "owner",
+                                 root->owner))) {
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto cleanup;
     }
@@ -2455,8 +2572,10 @@ cleanup:
     return rv;
 }
 
-static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                         const flux_msg_t *msg, void *arg)
+static void namespace_create_request_cb (flux_t *h,
+                                         flux_msg_handler_t *mh,
+                                         const flux_msg_t *msg,
+                                         void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns;
@@ -2466,10 +2585,16 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
     assert (ctx->rank == 0);
 
     /* N.B. owner read into uint32_t */
-    if (flux_request_unpack (msg, NULL, "{ s:s s:i s:i }",
-                             "namespace", &ns,
-                             "owner", &owner,
-                             "flags", &flags) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:s s:i s:i }",
+                             "namespace",
+                             &ns,
+                             "owner",
+                             &owner,
+                             "flags",
+                             &flags)
+        < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -2517,7 +2642,7 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *ns)
 
     /* safe lookup, if root removal in process, let it continue */
     if ((root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-        struct kvs_cb_data cbd = { .ctx = ctx, .root = root };
+        struct kvs_cb_data cbd = {.ctx = ctx, .root = root};
 
         root->remove = true;
 
@@ -2538,10 +2663,10 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *ns)
          */
 
         if (treq_mgr_iter_transactions (root->trm,
-                                          root_remove_process_transactions,
-                                          &cbd) < 0)
-            flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions",
-                            __FUNCTION__);
+                                        root_remove_process_transactions,
+                                        &cbd)
+            < 0)
+            flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions", __FUNCTION__);
     }
 }
 
@@ -2588,16 +2713,17 @@ cleanup:
     return rc;
 }
 
-static void namespace_remove_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                         const flux_msg_t *msg, void *arg)
+static void namespace_remove_request_cb (flux_t *h,
+                                         flux_msg_handler_t *mh,
+                                         const flux_msg_t *msg,
+                                         void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns;
 
     assert (ctx->rank == 0);
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "namespace", &ns) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -2620,14 +2746,15 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void namespace_removed_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                                        const flux_msg_t *msg, void *arg)
+static void namespace_removed_event_cb (flux_t *h,
+                                        flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg,
+                                        void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s }",
-                           "namespace", &ns) < 0) {
+    if (flux_event_unpack (msg, NULL, "{ s:s }", "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2647,9 +2774,12 @@ static int namespace_list_cb (struct kvsroot *root, void *arg)
         return 0;
 
     if (!(o = json_pack ("{ s:s s:i s:i }",
-                         "namespace", root->ns_name,
-                         "owner", root->owner,
-                         "flags", root->flags))) {
+                         "namespace",
+                         root->ns_name,
+                         "owner",
+                         root->owner,
+                         "flags",
+                         root->flags))) {
         errno = ENOMEM;
         return -1;
     }
@@ -2658,8 +2788,10 @@ static int namespace_list_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void namespace_list_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                       const flux_msg_t *msg, void *arg)
+static void namespace_list_request_cb (flux_t *h,
+                                       flux_msg_handler_t *mh,
+                                       const flux_msg_t *msg,
+                                       void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *namespaces = NULL;
@@ -2667,15 +2799,12 @@ static void namespace_list_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(namespaces = json_array ()))
         goto nomem;
 
-    if (kvsroot_mgr_iter_roots (ctx->krm, namespace_list_cb,
-                                namespaces) < 0) {
+    if (kvsroot_mgr_iter_roots (ctx->krm, namespace_list_cb, namespaces) < 0) {
         flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
         goto error;
     }
 
-    if (flux_respond_pack (h, msg, "{ s:O }",
-                           "namespaces",
-                           namespaces) < 0)
+    if (flux_respond_pack (h, msg, "{ s:O }", "namespaces", namespaces) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (namespaces);
     return;
@@ -2694,27 +2823,22 @@ error:
  * to the KVS.  This can be used for testing purposes, such as testing
  * if read-your-writes consistency is working.
  */
-static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                      const flux_msg_t *msg, void *arg)
+static void setroot_pause_request_cb (flux_t *h,
+                                      flux_msg_handler_t *mh,
+                                      const flux_msg_t *msg,
+                                      void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns = NULL;
     struct kvsroot *root;
     bool stall = false;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          setroot_pause_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, setroot_pause_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2737,7 +2861,8 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void setroot_unpause_process_msg (kvs_ctx_t *ctx, struct kvsroot *root,
+static void setroot_unpause_process_msg (kvs_ctx_t *ctx,
+                                         struct kvsroot *root,
                                          flux_msg_t *msg)
 {
     const char *ns;
@@ -2746,12 +2871,20 @@ static void setroot_unpause_process_msg (kvs_ctx_t *ctx, struct kvsroot *root,
     json_t *rootdir = NULL;
     json_t *names = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
-                           "namespace", &ns,
-                           "rootseq", &rootseq,
-                           "rootref", &rootref,
-                           "names", &names,
-                           "rootdir", &rootdir) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{ s:s s:i s:s s:o s:o }",
+                           "namespace",
+                           &ns,
+                           "rootseq",
+                           &rootseq,
+                           "rootref",
+                           &rootref,
+                           "names",
+                           &names,
+                           "rootdir",
+                           &rootdir)
+        < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2765,8 +2898,10 @@ static void setroot_unpause_process_msg (kvs_ctx_t *ctx, struct kvsroot *root,
  * events that were received during a pause will be processed in the
  * order they were received.
  */
-static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                        const flux_msg_t *msg, void *arg)
+static void setroot_unpause_request_cb (flux_t *h,
+                                        flux_msg_handler_t *mh,
+                                        const flux_msg_t *msg,
+                                        void *arg)
 {
     kvs_ctx_t *ctx = arg;
     const char *ns = NULL;
@@ -2774,19 +2909,13 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_msg_t *m;
     bool stall = false;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "namespace", &ns) < 0) {
         flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          setroot_unpause_request_cb,
-                          &stall))) {
+    if (!(root =
+              getroot (ctx, ns, mh, msg, NULL, setroot_unpause_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2810,41 +2939,35 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot-*",  setroot_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error-*",    error_event_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
-                            getroot_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",
-                            sync_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.lookup",
-                            lookup_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.lookup-plus",
-                            lookup_plus_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.commit",
-                            commit_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.relaycommit", relaycommit_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",
-                            fence_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-create",
-                            namespace_create_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",
-                            namespace_remove_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-removed-*",
-                            namespace_removed_event_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
-                            namespace_list_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.setroot-pause",
-                            setroot_pause_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.setroot-unpause",
-                            setroot_unpause_request_cb, FLUX_ROLE_USER },
+    {FLUX_MSGTYPE_REQUEST, "kvs.stats.get", stats_get_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.stats.clear", stats_clear_request_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "kvs.stats.clear", stats_clear_event_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "kvs.setroot-*", setroot_event_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "kvs.error-*", error_event_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.getroot", getroot_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "kvs.dropcache", dropcache_request_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "kvs.dropcache", dropcache_event_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "hb", heartbeat_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.sync", sync_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "kvs.lookup", lookup_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "kvs.lookup-plus", lookup_plus_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "kvs.commit", commit_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "kvs.relaycommit", relaycommit_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.fence", fence_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.namespace-create", namespace_create_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove", namespace_remove_request_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "kvs.namespace-removed-*", namespace_removed_event_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "kvs.namespace-list", namespace_list_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST,
+     "kvs.setroot-pause",
+     setroot_pause_request_cb,
+     FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST,
+     "kvs.setroot-unpause",
+     setroot_unpause_request_cb,
+     FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -2854,7 +2977,7 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 
     for (i = 0; i < ac; i++) {
         if (strncmp (av[i], "transaction-merge=", 13) == 0)
-            ctx->transaction_merge = strtoul (av[i]+13, NULL, 10);
+            ctx->transaction_merge = strtoul (av[i] + 13, NULL, 10);
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
     }
@@ -2896,12 +3019,12 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, char *ref, int ref_len)
         }
     }
     if (!cache_entry_get_valid (entry)) {
-        if (cache_entry_set_raw (entry, data, len) < 0) { // makes entry valid
+        if (cache_entry_set_raw (entry, data, len) < 0) {  // makes entry valid
             flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
             goto error_uncache;
         }
         if (!(f = flux_content_store (ctx->h, data, len, 0))
-                || flux_content_store_get (f, &newref) < 0) {
+            || flux_content_store_get (f, &newref) < 0) {
             flux_log_error (ctx->h, "%s: flux_content_store", __FUNCTION__);
             goto error_uncache;
         }
@@ -2910,8 +3033,11 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, char *ref, int ref_len)
          */
         if (strcmp (newref, ref) != 0) {
             errno = EPROTO;
-            flux_log_error (ctx->h, "%s: hash mismatch kvs=%s content=%s",
-                            __FUNCTION__, ref, newref);
+            flux_log_error (ctx->h,
+                            "%s: hash mismatch kvs=%s content=%s",
+                            __FUNCTION__,
+                            ref,
+                            newref);
             goto error_uncache;
         }
     }
@@ -2956,9 +3082,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         /* primary namespace must always be there and not marked
          * for removal
          */
-        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm,
-                                                   KVS_PRIMARY_NAMESPACE))) {
-
+        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, KVS_PRIMARY_NAMESPACE))) {
             if (!(root = kvsroot_mgr_create_root (ctx->krm,
                                                   ctx->cache,
                                                   ctx->hash_name,

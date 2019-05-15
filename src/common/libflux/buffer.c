@@ -37,7 +37,7 @@ struct flux_buffer {
     int size;
     bool readonly;
     cbuf_t cbuf;
-    char *buf;                  /* internal buffer for user reads */
+    char *buf; /* internal buffer for user reads */
     int buflen;
     int cb_type;
     flux_buffer_cb cb;
@@ -167,15 +167,13 @@ static int set_cb (flux_buffer_t *fb,
         fb->cb = cb;
         fb->cb_len = cb_len;
         fb->cb_arg = cb_arg;
-    }
-    else if (fb->cb_type == cb_type) {
+    } else if (fb->cb_type == cb_type) {
         if (!cb) {
             fb->cb_type = FLUX_BUFFER_CB_TYPE_NONE;
             fb->cb = NULL;
             fb->cb_len = 0;
             fb->cb_arg = NULL;
-        }
-        else {
+        } else {
             if (cb_len < 0) {
                 errno = EINVAL;
                 return -1;
@@ -186,8 +184,7 @@ static int set_cb (flux_buffer_t *fb,
             fb->cb_len = cb_len;
             fb->cb_arg = cb_arg;
         }
-    }
-    else {
+    } else {
         errno = EEXIST;
         return -1;
     }
@@ -208,9 +205,7 @@ int flux_buffer_set_low_read_cb (flux_buffer_t *fb,
     return set_cb (fb, FLUX_BUFFER_CB_TYPE_READ, cb, low, arg);
 }
 
-int flux_buffer_set_read_line_cb (flux_buffer_t *fb,
-                                  flux_buffer_cb cb,
-                                  void *arg)
+int flux_buffer_set_read_line_cb (flux_buffer_t *fb, flux_buffer_cb cb, void *arg)
 {
     if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
         errno = EINVAL;
@@ -251,8 +246,7 @@ void check_read_cb (flux_buffer_t *fb)
          * reading data.  If the user isn't reading data, we're not
          * going to infinitely loop
          */
-        while (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ
-               && count > 0) {
+        while (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ && count > 0) {
             int tmp;
 
             fb->cb (fb, fb->cb_arg);
@@ -266,17 +260,15 @@ void check_read_cb (flux_buffer_t *fb)
                 break;
         }
 
-    }
-    else if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
-             && flux_buffer_lines (fb) > 0) {
+    } else if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
+               && flux_buffer_lines (fb) > 0) {
         int count = flux_buffer_lines (fb);
 
         /* we will iterate over all lines, but only if the user is
          * reading them.  If the user isn't reading lines, we're not
          * going to infinitely loop
          */
-        while (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
-               && count > 0) {
+        while (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE && count > 0) {
             int tmp;
 
             fb->cb (fb, fb->cb_arg);
@@ -365,10 +357,7 @@ int flux_buffer_write (flux_buffer_t *fb, const void *data, int len)
 {
     int ret;
 
-    if (!fb
-        || fb->magic != FLUX_BUFFER_MAGIC
-        || !data
-        || len < 0) {
+    if (!fb || fb->magic != FLUX_BUFFER_MAGIC || !data || len < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -493,9 +482,7 @@ int flux_buffer_write_line (flux_buffer_t *fb, const char *data)
 {
     int ret;
 
-    if (!fb
-        || fb->magic != FLUX_BUFFER_MAGIC
-        || !data) {
+    if (!fb || fb->magic != FLUX_BUFFER_MAGIC || !data) {
         errno = EINVAL;
         return -1;
     }

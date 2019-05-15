@@ -47,15 +47,17 @@ static int fence_nprocs;
 
 #define OPTIONS "f:sn:"
 static const struct option longopts[] = {
-   {"fence",   required_argument,   0, 'f'},
-   {"stats",   no_argument,         0, 's'},
-   {"nomerge", required_argument,   0, 'n'},
-   {0, 0, 0, 0},
+    {"fence", required_argument, 0, 'f'},
+    {"stats", no_argument, 0, 's'},
+    {"nomerge", required_argument, 0, 'n'},
+    {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: commit [--fence N] [--stats] [--nomerge N] nthreads count prefix\n");
+    fprintf (stderr,
+             "Usage: commit [--fence N] [--stats] [--nomerge N] nthreads count "
+             "prefix\n");
     exit (1);
 }
 
@@ -87,7 +89,7 @@ void *thread (void *arg)
     for (i = 0; i < count; i++) {
         if (!(txn = flux_kvs_txn_create ()))
             log_err_exit ("flux_kvs_txn_create");
-        key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
+        key = xasprintf ("%s.%" PRIu32 ".%d.%d", prefix, rank, t->n, i);
         if (fopt)
             fence_name = xasprintf ("%s-%d", prefix, i);
         if (sopt)
@@ -99,14 +101,13 @@ void *thread (void *arg)
         else
             flags = 0;
         if (fopt) {
-            if (!(f = flux_kvs_fence (t->h, NULL, flags, fence_name,
-                                                   fence_nprocs, txn))
-                    || flux_future_get (f, NULL) < 0)
+            if (!(f = flux_kvs_fence (t->h, NULL, flags, fence_name, fence_nprocs, txn))
+                || flux_future_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_fence");
             flux_future_destroy (f);
         } else {
             if (!(f = flux_kvs_commit (t->h, NULL, flags, txn))
-                    || flux_future_get (f, NULL) < 0)
+                || flux_future_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_commit");
             flux_future_destroy (f);
         }
@@ -200,16 +201,21 @@ int main (int argc, char *argv[])
 
         if (!(o = json_pack ("{s:{s:i s:f s:f s:f s:f} s:f}",
                              "put+commit times (sec)",
-                                 "count", tstat_count (&ts),
-                                 "min", tstat_min (&ts)*1E-3,
-                                 "mean", tstat_mean (&ts)*1E-3,
-                                 "stddev", tstat_stddev (&ts)*1E-3,
-                                 "max", tstat_max (&ts)*1E-3,
+                             "count",
+                             tstat_count (&ts),
+                             "min",
+                             tstat_min (&ts) * 1E-3,
+                             "mean",
+                             tstat_mean (&ts) * 1E-3,
+                             "stddev",
+                             tstat_stddev (&ts) * 1E-3,
+                             "max",
+                             tstat_max (&ts) * 1E-3,
                              "put+commit throughput (#/sec)",
-                             (double)(count*nthreads)
-                                    / (monotime_since (t0)*1E-3))))
+                             (double)(count * nthreads)
+                                 / (monotime_since (t0) * 1E-3))))
             log_err_exit ("json_pack");
-        if (!(s = json_dumps (o, JSON_INDENT(2))))
+        if (!(s = json_dumps (o, JSON_INDENT (2))))
             log_err_exit ("json_dumps");
         printf ("%s\n", s);
         json_decref (o);

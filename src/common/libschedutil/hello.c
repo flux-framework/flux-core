@@ -16,8 +16,7 @@
 
 #include "hello.h"
 
-static int schedutil_hello_job (flux_t *h, flux_jobid_t id,
-                                hello_f *cb, void *arg)
+static int schedutil_hello_job (flux_t *h, flux_jobid_t id, hello_f *cb, void *arg)
 {
     char key[64];
     flux_future_t *f;
@@ -36,8 +35,7 @@ static int schedutil_hello_job (flux_t *h, flux_jobid_t id,
     flux_future_destroy (f);
     return 0;
 error:
-    flux_log_error (h, "hello: error loading R for id=%llu",
-                    (unsigned long long)id);
+    flux_log_error (h, "hello: error loading R for id=%llu", (unsigned long long)id);
     flux_future_destroy (f);
     return -1;
 }
@@ -53,12 +51,12 @@ int schedutil_hello (flux_t *h, hello_f *cb, void *arg)
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_rpc (h, "job-manager.sched-hello",
-                        NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "job-manager.sched-hello", NULL, FLUX_NODEID_ANY, 0)))
         return -1;
     if (flux_rpc_get_unpack (f, "{s:o}", "alloc", &ids) < 0)
         goto error;
-    json_array_foreach (ids, index, id) {
+    json_array_foreach (ids, index, id)
+    {
         flux_jobid_t jobid = json_integer_value (id);
         if (schedutil_hello_job (h, jobid, cb, arg) < 0)
             goto error;

@@ -31,27 +31,32 @@
 typedef void PyObject;
 #endif
 
-PyObject * py_unicode_or_string(const char *str) {
+PyObject *py_unicode_or_string (const char *str)
+{
 #if PY_MAJOR_VERSION >= 3
-    return PyUnicode_FromString(str);
+    return PyUnicode_FromString (str);
 #else
-    return PyString_FromString(str);
+    return PyString_FromString (str);
 #endif
 }
 
-void add_if_not_present(PyObject *list, const char* path){
-    if(path){
-        PyObject *pymod_path = py_unicode_or_string(path);
-        if (!PySequence_Contains(list, pymod_path)){
-            PyList_Append(list, pymod_path);
-        }else{
-            Py_DECREF(pymod_path);
+void add_if_not_present (PyObject *list, const char *path)
+{
+    if (path) {
+        PyObject *pymod_path = py_unicode_or_string (path);
+        if (!PySequence_Contains (list, pymod_path)) {
+            PyList_Append (list, pymod_path);
+        } else {
+            Py_DECREF (pymod_path);
         }
     }
 }
 
-void print_usage(){
-    printf("pymod usage: flux module load pymod --module=<modname> [--path=<module path>] [--verbose] [--help]]\n");
+void print_usage ()
+{
+    printf (
+        "pymod usage: flux module load pymod --module=<modname> [--path=<module path>] "
+        "[--verbose] [--help]]\n");
 }
 
 zhash_t *zhash_fromargv (int argc, char **argv)
@@ -76,10 +81,19 @@ zhash_t *zhash_fromargv (int argc, char **argv)
 
 const char *usage_msg = "[OPTIONS] MODULE_NAME";
 static struct optparse_option opts[] = {
-    { .name = "verbose",    .key = 'v', .has_arg = 0,
-      .usage = "Be loud", },
-    { .name = "path",     .key = 'p', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Director{y,ies} to add to PYTHONPATH before finding your module", },
+    {
+        .name = "verbose",
+        .key = 'v',
+        .has_arg = 0,
+        .usage = "Be loud",
+    },
+    {
+        .name = "path",
+        .key = 'p',
+        .has_arg = 1,
+        .arginfo = "PATH",
+        .usage = "Director{y,ies} to add to PYTHONPATH before finding your module",
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -108,12 +122,12 @@ done:
 }
 
 // Based on code from https://bugs.python.org/issue17870
-PyObject* PyLong_FromUintptr_t(uintptr_t value)
+PyObject *PyLong_FromUintptr_t (uintptr_t value)
 {
-    if (sizeof(uintptr_t) == sizeof(long)) {
-        return PyLong_FromLong(value);
-    } else if (sizeof(uintptr_t) <= sizeof(PY_LONG_LONG)) {
-        return PyLong_FromLongLong((PY_LONG_LONG)value);
+    if (sizeof (uintptr_t) == sizeof (long)) {
+        return PyLong_FromLong (value);
+    } else if (sizeof (uintptr_t) <= sizeof (PY_LONG_LONG)) {
+        return PyLong_FromLongLong ((PY_LONG_LONG)value);
     } else {
         return NULL;
     }
@@ -128,72 +142,72 @@ int mod_main (flux_t *h, int argc, char **argv)
         log_msg_exit ("optparse_set usage");
     int option_index = optparse_parse_args (p, argc, argv);
 
-    if (option_index <= 0 || optparse_hasopt(p, "help") || option_index >= argc){
-        optparse_print_usage(p);
+    if (option_index <= 0 || optparse_hasopt (p, "help") || option_index >= argc) {
+        optparse_print_usage (p);
         return (option_index < 0);
     }
-    const char * module_name = argv[option_index];
+    const char *module_name = argv[option_index];
 
 #if PY_MAJOR_VERSION >= 3
     wchar_t *program = L"pymod";
 #else
     char *program = "pymod";
 #endif
-    Py_SetProgramName(program);
-    Py_Initialize();
+    Py_SetProgramName (program);
+    Py_Initialize ();
 
-    PyObject *search_path = PySys_GetObject("path");
+    PyObject *search_path = PySys_GetObject ("path");
     // Add installation search paths
-    add_if_not_present(search_path, optparse_get_str(p, "path", ""));
-    add_if_not_present(search_path, FLUX_PYTHON_PATH);
+    add_if_not_present (search_path, optparse_get_str (p, "path", ""));
+    add_if_not_present (search_path, FLUX_PYTHON_PATH);
 
-    PySys_SetObject("path", search_path);
-    if(optparse_hasopt(p, "verbose")){
-        PyObject_Print(search_path, stderr, 0);
+    PySys_SetObject ("path", search_path);
+    if (optparse_hasopt (p, "verbose")) {
+        PyObject_Print (search_path, stderr, 0);
     }
 
-    flux_log(h, LOG_INFO, "loading python module named: %s", module_name);
-    if (!dlopen (PYTHON_LIBRARY, RTLD_LAZY|RTLD_GLOBAL))
+    flux_log (h, LOG_INFO, "loading python module named: %s", module_name);
+    if (!dlopen (PYTHON_LIBRARY, RTLD_LAZY | RTLD_GLOBAL))
         flux_log_error (h, "Unable to dlopen libpython");
 
-    PyObject *module = PyImport_ImportModule("flux.core.trampoline");
-    if(!module){
-        PyErr_Print();
+    PyObject *module = PyImport_ImportModule ("flux.core.trampoline");
+    if (!module) {
+        PyErr_Print ();
         return EINVAL;
     }
     if (register_pymod_service_name (h, module_name) < 0)
         return -1;
 
-    PyObject *mod_main = PyObject_GetAttrString(module, "mod_main_trampoline");
-    if(mod_main && PyCallable_Check(mod_main)){
-        //maybe unpack args directly? probably easier to use a dict
-        PyObject *py_args = PyTuple_New(3);
-        PyObject *pystr_mod_name = py_unicode_or_string(module_name);
-        PyTuple_SetItem(py_args, 0, pystr_mod_name);
-        PyObject *py_flux_handle = PyLong_FromUintptr_t((uintptr_t)h);
+    PyObject *mod_main = PyObject_GetAttrString (module, "mod_main_trampoline");
+    if (mod_main && PyCallable_Check (mod_main)) {
+        // maybe unpack args directly? probably easier to use a dict
+        PyObject *py_args = PyTuple_New (3);
+        PyObject *pystr_mod_name = py_unicode_or_string (module_name);
+        PyTuple_SetItem (py_args, 0, pystr_mod_name);
+        PyObject *py_flux_handle = PyLong_FromUintptr_t ((uintptr_t)h);
         if (py_flux_handle == NULL)
-          return -1;
-        PyTuple_SetItem(py_args, 1, py_flux_handle);
+            return -1;
+        PyTuple_SetItem (py_args, 1, py_flux_handle);
 
-        //Convert zhash to native python dict, should preserve mods
-        //through switch to argc-style arguments
-        PyObject *arg_list = PyList_New(0);
-        char ** it = argv + option_index;
+        // Convert zhash to native python dict, should preserve mods
+        // through switch to argc-style arguments
+        PyObject *arg_list = PyList_New (0);
+        char **it = argv + option_index;
         int i;
-        for (i=0; *it; i++, it++){
-            PyList_Append(arg_list, py_unicode_or_string(*it));
+        for (i = 0; *it; i++, it++) {
+            PyList_Append (arg_list, py_unicode_or_string (*it));
         }
 
-        PyTuple_SetItem(py_args, 2, arg_list);
+        PyTuple_SetItem (py_args, 2, arg_list);
         // Call into trampoline
-        PyObject_CallObject(mod_main, py_args);
-        if(PyErr_Occurred()){
-            PyErr_Print();
+        PyObject_CallObject (mod_main, py_args);
+        if (PyErr_Occurred ()) {
+            PyErr_Print ();
         }
-        Py_DECREF(py_args);
-        Py_DECREF(arg_list);
+        Py_DECREF (py_args);
+        Py_DECREF (arg_list);
     }
-    Py_Finalize();
+    Py_Finalize ();
     return 0;
 }
 

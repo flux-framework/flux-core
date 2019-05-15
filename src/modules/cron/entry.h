@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef HAVE_CRON_ENTRY_H
-# define HAVE_CRON_ENTRY_H
+#define HAVE_CRON_ENTRY_H
 
 #include <czmq.h>
 #include <jansson.h>
@@ -39,46 +39,45 @@ struct cron_entry_ops {
 };
 
 struct cron_stats {
-    double     ctime;        /* entry creation time           */
-    double     lastrun;      /* last time task was launched   */
-    double     starttime;    /* last time entry was started   */
-    uint64_t   total;        /* total number of runs          */
-    uint64_t   count;        /* number of runs since start    */
-    uint64_t   failcount;    /* number failed runs since start*/
-    uint64_t   success;      /* number of successes           */
-    uint64_t   failure;      /* number of failures            */
-    uint64_t   deferred;     /* number of times deferred      */
+    double ctime;       /* entry creation time           */
+    double lastrun;     /* last time task was launched   */
+    double starttime;   /* last time entry was started   */
+    uint64_t total;     /* total number of runs          */
+    uint64_t count;     /* number of runs since start    */
+    uint64_t failcount; /* number failed runs since start*/
+    uint64_t success;   /* number of successes           */
+    uint64_t failure;   /* number of failures            */
+    uint64_t deferred;  /* number of times deferred      */
 };
 
-
 struct cron_entry {
-    cron_ctx_t    *     ctx;                /* cron ctx for this entry       */
-    int                 destroyed;          /* Entry is defunct              */
+    cron_ctx_t *ctx; /* cron ctx for this entry       */
+    int destroyed;   /* Entry is defunct              */
 
-    struct cron_stats   stats;              /* meta-stats for this entry     */
+    struct cron_stats stats; /* meta-stats for this entry     */
 
-    int64_t             id;                 /* Unique sequence number        */
-    int                 rank;               /* Optional rank on which to run */
-    char *              name;               /* Entry name, if given          */
-    char *              command;            /* Command to execute            */
-    char *              cwd;                /* Change working directory      */
-    json_t *            env;                /* Optional environment for cmd,
-                                               (encoded as json object)      */
+    int64_t id;    /* Unique sequence number        */
+    int rank;      /* Optional rank on which to run */
+    char *name;    /* Entry name, if given          */
+    char *command; /* Command to execute            */
+    char *cwd;     /* Change working directory      */
+    json_t *env;   /* Optional environment for cmd,
+                      (encoded as json object)      */
 
-    int                 repeat;             /* Total number of times to run  */
+    int repeat; /* Total number of times to run  */
 
-    unsigned int        stopped:1;          /* This entry is inactive        */
+    unsigned int stopped : 1; /* This entry is inactive        */
 
-    char *                 typename;        /* Name of this type             */
-    struct cron_entry_ops  ops;             /* Type-specific operations      */
-    void *                 data;            /* Entry type specific data      */
+    char *typename;            /* Name of this type             */
+    struct cron_entry_ops ops; /* Type-specific operations      */
+    void *data;                /* Entry type specific data      */
 
-    struct cron_task *  task;               /* Currently executing task      */
-    zlist_t          *  finished_tasks;     /* List of finished tasks       */
-    int                 task_history_count; /* Max # of tasks in history     */
-    int                 stop_on_failure;    /* Stop cron entry after failure */
+    struct cron_task *task;  /* Currently executing task      */
+    zlist_t *finished_tasks; /* List of finished tasks       */
+    int task_history_count;  /* Max # of tasks in history     */
+    int stop_on_failure;     /* Stop cron entry after failure */
 
-    double              timeout;            /* Max secs to allow task to run */
+    double timeout; /* Max secs to allow task to run */
 };
 
 /* Return type data ptr for cron_entry `e`

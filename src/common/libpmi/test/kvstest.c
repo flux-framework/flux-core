@@ -25,13 +25,13 @@
 
 #define OPTIONS "nN:l:"
 static const struct option longopts[] = {
-    {"n-squared",    no_argument,        0, 'n'},
-    {"key-count",    required_argument,  0, 'N'},
-    {"library",      required_argument,  0, 'l'},
+    {"n-squared", no_argument, 0, 'n'},
+    {"key-count", required_argument, 0, 'N'},
+    {"library", required_argument, 0, 'l'},
     {0, 0, 0, 0},
 };
 
-int main(int argc, char *argv[])
+int main (int argc, char *argv[])
 {
     struct timespec t;
     int rank, size;
@@ -44,13 +44,13 @@ int main(int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'n':   /* --n-squared */
+            case 'n': /* --n-squared */
                 nsquared = true;
                 break;
-            case 'N':   /* --key-count N */
+            case 'N': /* --key-count N */
                 keycount = strtoul (optarg, NULL, 10);
                 break;
-            case 'l':   /* --library */
+            case 'l': /* --library */
                 library = optarg;
                 break;
         }
@@ -79,16 +79,13 @@ int main(int argc, char *argv[])
         log_msg_exit ("%d: PMI_Get_size: %s", rank, pmi_strerror (e));
     e = PMI_KVS_Get_name_length_max (&kvsname_len);
     if (e != PMI_SUCCESS)
-        log_msg_exit ("%d: PMI_KVS_Get_name_length_max: %s",
-                      rank, pmi_strerror (e));
+        log_msg_exit ("%d: PMI_KVS_Get_name_length_max: %s", rank, pmi_strerror (e));
     e = PMI_KVS_Get_key_length_max (&key_len);
     if (e != PMI_SUCCESS)
-        log_msg_exit ("%d: PMI_KVS_Get_key_length_max: %s",
-                      rank, pmi_strerror (e));
+        log_msg_exit ("%d: PMI_KVS_Get_key_length_max: %s", rank, pmi_strerror (e));
     e = PMI_KVS_Get_value_length_max (&val_len);
     if (e != PMI_SUCCESS)
-        log_msg_exit ("%d: PMI_KVS_Get_value_length_max: %s",
-                      rank, pmi_strerror (e));
+        log_msg_exit ("%d: PMI_KVS_Get_value_length_max: %s", rank, pmi_strerror (e));
 
     kvsname = xzmalloc (kvsname_len);
     key = xzmalloc (key_len);
@@ -133,17 +130,18 @@ int main(int argc, char *argv[])
                     log_msg_exit ("%d: PMI_KVS_Get: %s", rank, pmi_strerror (e));
                 snprintf (val2, val_len, "sandwich.%d.%d", j, i);
                 if (strcmp (val, val2) != 0)
-                    log_msg_exit ("%d: PMI_KVS_Get: exp %s got %s\n",
-                             rank, val2, val);
+                    log_msg_exit ("%d: PMI_KVS_Get: exp %s got %s\n", rank, val2, val);
             }
         } else {
-            snprintf (key, key_len, "kvstest-%d-%d",
-                      rank > 0 ? rank - 1 : size - 1, i);
+            snprintf (key, key_len, "kvstest-%d-%d", rank > 0 ? rank - 1 : size - 1, i);
             e = PMI_KVS_Get (kvsname, key, val, val_len);
             if (e != PMI_SUCCESS)
                 log_msg_exit ("%d: PMI_IVS_Get: %s", rank, pmi_strerror (e));
-            snprintf (val2, val_len, "sandwich.%d.%d",
-                      rank > 0 ? rank - 1 : size - 1, i);
+            snprintf (val2,
+                      val_len,
+                      "sandwich.%d.%d",
+                      rank > 0 ? rank - 1 : size - 1,
+                      i);
             if (strcmp (val, val2) != 0)
                 log_msg_exit ("%d: PMI_KVS_Get: exp %s got %s\n", rank, val2, val);
         }

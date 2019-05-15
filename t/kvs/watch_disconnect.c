@@ -28,12 +28,17 @@ void send_watch_requests (flux_t *h, const char *key)
 {
     flux_mrpc_t *r;
 
-    if (!(r = flux_mrpc_pack (h, "kvs-watch.lookup", "all",
+    if (!(r = flux_mrpc_pack (h,
+                              "kvs-watch.lookup",
+                              "all",
                               FLUX_RPC_STREAMING,
                               "{s:s s:s s:i}",
-                              "key", key,
-                              "namespace", KVS_PRIMARY_NAMESPACE,
-                              "flags", FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE)))
+                              "key",
+                              key,
+                              "namespace",
+                              KVS_PRIMARY_NAMESPACE,
+                              "flags",
+                              FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE)))
         log_err_exit ("flux_mrpc kvs-watch.lookup");
 
     flux_mrpc_destroy (r);
@@ -69,7 +74,7 @@ int main (int argc, char **argv)
     int i, rankcount, w0, w1, w2;
 
     if (argc != 2)
-        usage();
+        usage ();
 
     rankcount = strtoul (argv[1], NULL, 10);
     if (!rankcount)
@@ -94,7 +99,6 @@ int main (int argc, char **argv)
     log_msg ("test watchers: %d", w1);
     flux_close (h);
     log_msg ("disconnected");
-
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");

@@ -30,8 +30,8 @@ struct lookup_ctx {
     int flags;
 
     json_t *treeobj;
-    char *treeobj_str; // json_dumps of tree object returned from lookup
-    void *val_data;    // result of base64 decode of val object data
+    char *treeobj_str;  // json_dumps of tree object returned from lookup
+    void *val_data;     // result of base64 decode of val object data
     int val_len;
     bool val_valid;
     json_t *val_obj;
@@ -40,9 +40,8 @@ struct lookup_ctx {
 
 static const char *auxkey = "flux::lookup_ctx";
 
-#define FLUX_KVS_WATCH_FLAGS (FLUX_KVS_WATCH_FULL \
-                              | FLUX_KVS_WATCH_UNIQ \
-                              | FLUX_KVS_WATCH_APPEND)
+#define FLUX_KVS_WATCH_FLAGS \
+    (FLUX_KVS_WATCH_FULL | FLUX_KVS_WATCH_UNIQ | FLUX_KVS_WATCH_APPEND)
 
 static void free_ctx (struct lookup_ctx *ctx)
 {
@@ -79,8 +78,7 @@ static int validate_lookup_flags (int flags, bool watch_ok)
 {
     if ((flags & FLUX_KVS_WATCH) && !watch_ok)
         return -1;
-    if ((flags & FLUX_KVS_WATCH_FLAGS)
-        && !(flags & FLUX_KVS_WATCH))
+    if ((flags & FLUX_KVS_WATCH_FLAGS) && !(flags & FLUX_KVS_WATCH))
         return -1;
     /* FLUX_KVS_WAITCREATE does not require FLUX_KVS_WATCH to be set,
      * but it requires that we be able to communicate with the
@@ -106,18 +104,14 @@ static int validate_lookup_flags (int flags, bool watch_ok)
     }
 }
 
-flux_future_t *flux_kvs_lookup (flux_t *h,
-                                const char *ns,
-                                int flags,
-                                const char *key)
+flux_future_t *flux_kvs_lookup (flux_t *h, const char *ns, int flags, const char *key)
 {
     struct lookup_ctx *ctx;
     flux_future_t *f;
     const char *topic = "kvs.lookup";
     int rpc_flags = 0;
 
-    if (!h || !key || strlen (key) == 0
-        || validate_lookup_flags (flags, true) < 0) {
+    if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags, true) < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -127,16 +121,21 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
     }
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
-    if ((flags & FLUX_KVS_WATCH)
-        || (flags & FLUX_KVS_WAITCREATE))
-        topic = "kvs-watch.lookup"; // redirect to kvs-watch module
+    if ((flags & FLUX_KVS_WATCH) || (flags & FLUX_KVS_WAITCREATE))
+        topic = "kvs-watch.lookup";  // redirect to kvs-watch module
     if ((flags & FLUX_KVS_WATCH))
         rpc_flags |= FLUX_RPC_STREAMING;
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             rpc_flags,
                              "{s:s s:s s:i}",
-                             "key", key,
-                             "namespace", ns,
-                             "flags", flags))) {
+                             "key",
+                             key,
+                             "namespace",
+                             ns,
+                             "flags",
+                             flags))) {
         free_ctx (ctx);
         return NULL;
     }
@@ -148,7 +147,9 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
     return f;
 }
 
-flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
+flux_future_t *flux_kvs_lookupat (flux_t *h,
+                                  int flags,
+                                  const char *key,
                                   const char *treeobj)
 {
     flux_future_t *f;
@@ -170,11 +171,17 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:O}",
-                             "key", key,
-                             "flags", flags,
-                             "rootdir", obj))) {
+                             "key",
+                             key,
+                             "flags",
+                             flags,
+                             "rootdir",
+                             obj))) {
         free_ctx (ctx);
         json_decref (obj);
         return NULL;
@@ -258,8 +265,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                              &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
         // N.B. val_data includes xtra 0 byte term not reflected in val_len
@@ -282,7 +288,7 @@ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
             return -1;
     }
     if (treeobj)
-        *treeobj= ctx->treeobj_str;
+        *treeobj = ctx->treeobj_str;
     return 0;
 }
 
@@ -297,14 +303,13 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                              &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
     }
     if (!ctx->val_obj) {
-        if (!(ctx->val_obj = json_loadb (ctx->val_data, ctx->val_len,
-                                         JSON_DECODE_ANY, NULL))) {
+        if (!(ctx->val_obj =
+                  json_loadb (ctx->val_data, ctx->val_len, JSON_DECODE_ANY, NULL))) {
             errno = EINVAL;
             return -1;
         }
@@ -326,8 +331,7 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                              &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
     }
@@ -347,8 +351,8 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->dir) {
-        if (!(ctx->dir = kvsdir_create_fromobj (ctx->h, ctx->atref,
-                                                ctx->key, ctx->treeobj)))
+        if (!(ctx->dir =
+                  kvsdir_create_fromobj (ctx->h, ctx->atref, ctx->key, ctx->treeobj)))
             return -1;
     }
     if (dirp)
@@ -356,9 +360,7 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     return 0;
 }
 
-int flux_kvs_lookup_get_symlink (flux_future_t *f,
-                                 const char **ns,
-                                 const char **target)
+int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **ns, const char **target)
 {
     struct lookup_ctx *ctx;
     const char *n = NULL, *t = NULL;
@@ -389,7 +391,6 @@ const char *flux_kvs_lookup_get_key (flux_future_t *f)
     return ctx->key;
 }
 
-
 /* This only applies with FLUX_KVS_WATCH.
  * Causes a stream of lookup responses to end with an ENODATA response.
  */
@@ -398,10 +399,8 @@ int flux_kvs_lookup_cancel (flux_future_t *f)
     struct lookup_ctx *ctx;
     flux_future_t *f2;
 
-    if (!f
-        || !(ctx = flux_future_aux_get (f, auxkey))
-        || (!(ctx->flags & FLUX_KVS_WATCH)
-            && !(ctx->flags & FLUX_KVS_WAITCREATE))) {
+    if (!f || !(ctx = flux_future_aux_get (f, auxkey))
+        || (!(ctx->flags & FLUX_KVS_WATCH) && !(ctx->flags & FLUX_KVS_WAITCREATE))) {
         errno = EINVAL;
         return -1;
     }
@@ -410,7 +409,8 @@ int flux_kvs_lookup_cancel (flux_future_t *f)
                               FLUX_NODEID_ANY,
                               FLUX_RPC_NORESPONSE,
                               "{s:i}",
-                              "matchtag", (int)flux_rpc_get_matchtag (f))))
+                              "matchtag",
+                              (int)flux_rpc_get_matchtag (f))))
         return -1;
     flux_future_destroy (f2);
     return 0;

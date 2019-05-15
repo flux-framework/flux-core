@@ -20,18 +20,9 @@
 void check_basic_create ()
 {
     char **av;
-    char * argv[] = {
-        "test",
-        "--option=foo",
-        "bar",
-        NULL
-    };
-    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
-    char * env[] = {
-        "FOO=bar",
-        "PATH=/bin",
-        NULL
-    };
+    char *argv[] = {"test", "--option=foo", "bar", NULL};
+    int argc = (sizeof (argv) / sizeof (argv[0])) - 1;
+    char *env[] = {"FOO=bar", "PATH=/bin", NULL};
     flux_cmd_t *cmd;
 
     diag ("simple flux_cmd_create (argc, argv, env)");
@@ -50,7 +41,6 @@ void check_basic_create ()
     flux_cmd_destroy (cmd);
 }
 
-
 void check_empty_cmd_attributes (flux_cmd_t *cmd)
 {
     char **argv, **env;
@@ -67,8 +57,7 @@ void check_empty_cmd_attributes (flux_cmd_t *cmd)
     ok (env[0] == NULL, "flux_cmd_env_expand properly terminates env");
     free (env);
 
-    ok (flux_cmd_getcwd (cmd) == NULL,
-        "flux_cmd_getcwd returns NULL");
+    ok (flux_cmd_getcwd (cmd) == NULL, "flux_cmd_getcwd returns NULL");
 }
 
 /*
@@ -79,32 +68,25 @@ void set_cmd_attributes (flux_cmd_t *cmd)
     assert (flux_cmd_argc (cmd) == 0);
 
     // Append to argv
-    ok (flux_cmd_argv_append (cmd, "command") >= 0,
-        "flux_cmd_argv_append");
-    ok (flux_cmd_argv_append (cmd, "foo") >= 0,
-        "flux_cmd_argv_append");
-    ok (flux_cmd_argv_append (cmd, "bar") >= 0,
-        "flux_cmd_argv_append");
+    ok (flux_cmd_argv_append (cmd, "command") >= 0, "flux_cmd_argv_append");
+    ok (flux_cmd_argv_append (cmd, "foo") >= 0, "flux_cmd_argv_append");
+    ok (flux_cmd_argv_append (cmd, "bar") >= 0, "flux_cmd_argv_append");
 
     // Test setenvf
     ok (flux_cmd_setenvf (cmd, 0, "PATH", "/bin:/usr/bin") >= 0,
         "flux_cmd_setenvf (PATH)");
 
-    ok (flux_cmd_setcwd (cmd, "/tmp") >= 0,
-        "flux_cmd_setcwd (/tmp)");
-    ok (flux_cmd_add_channel (cmd, "MY_FD") >= 0,
-        "flux_cmd_add_channel");
-    ok (flux_cmd_setopt (cmd, "OPTION", "VALUE") >= 0,
-        "flux_cmd_setopt");
+    ok (flux_cmd_setcwd (cmd, "/tmp") >= 0, "flux_cmd_setcwd (/tmp)");
+    ok (flux_cmd_add_channel (cmd, "MY_FD") >= 0, "flux_cmd_add_channel");
+    ok (flux_cmd_setopt (cmd, "OPTION", "VALUE") >= 0, "flux_cmd_setopt");
 }
 
 /* set alternate way, to ensure alternate ways also work */
 void set_cmd_attributes2 (flux_cmd_t *cmd)
 {
-    char *env[] = { "PATH=/bin:/usr/bin", NULL };
+    char *env[] = {"PATH=/bin:/usr/bin", NULL};
 
-    ok (flux_cmd_set_env (cmd, env) == 0,
-        "flux_cmd_set_env");
+    ok (flux_cmd_set_env (cmd, env) == 0, "flux_cmd_set_env");
 }
 
 void check_cmd_attributes (flux_cmd_t *cmd)
@@ -122,35 +104,27 @@ void check_cmd_attributes (flux_cmd_t *cmd)
     is (argv[2], "bar", "argv[2] is correct");
     free (argv);
 
-    ok (flux_cmd_arg (cmd, 3) == NULL
-        && errno == EINVAL,
+    ok (flux_cmd_arg (cmd, 3) == NULL && errno == EINVAL,
         "flux_cmd_arg returns EINVAL on bad range");
     arg = flux_cmd_arg (cmd, 0);
-    ok (arg != NULL
-        && !strcmp (arg, "command"),
+    ok (arg != NULL && !strcmp (arg, "command"),
         "flux_cmd_arg returns correct argv[0]");
     arg = flux_cmd_arg (cmd, 1);
-    ok (arg != NULL
-        && !strcmp (arg, "foo"),
-        "flux_cmd_arg returns correct argv[1]");
+    ok (arg != NULL && !strcmp (arg, "foo"), "flux_cmd_arg returns correct argv[1]");
     arg = flux_cmd_arg (cmd, 2);
-    ok (arg != NULL
-        && !strcmp (arg, "bar"),
-        "flux_cmd_arg returns correct argv[2]");
+    ok (arg != NULL && !strcmp (arg, "bar"), "flux_cmd_arg returns correct argv[2]");
 
-    is (flux_cmd_getenv (cmd, "PATH"), "/bin:/usr/bin",
-        "flux_cmd_getenv");
+    is (flux_cmd_getenv (cmd, "PATH"), "/bin:/usr/bin", "flux_cmd_getenv");
 
     env = flux_cmd_env_expand (cmd);
     ok (env != NULL, "flux_cmd_env_expand works");
     ok (env[1] == NULL, "flux_cmd_env_expand properly terminates env");
-    is (env[0], "PATH=/bin:/usr/bin",
-        "first entry of env is as expected");
+    is (env[0], "PATH=/bin:/usr/bin", "first entry of env is as expected");
     free (env);
 
-    is (flux_cmd_getcwd (cmd), "/tmp",
-        "flux_cmd_getcwd");
-    is (flux_cmd_getopt (cmd, "OPTION"), "VALUE",
+    is (flux_cmd_getcwd (cmd), "/tmp", "flux_cmd_getcwd");
+    is (flux_cmd_getopt (cmd, "OPTION"),
+        "VALUE",
         "flux_cmd_getopt (cmd, 'OPTION') == VALUE");
 }
 
@@ -182,25 +156,19 @@ int main (int argc, char *argv[])
 
     // Test unsetenv with throwaway var
     diag ("Test setenv/getenv/unsetenv");
-    ok (flux_cmd_setenvf (cmd, 1, "FOO", "%d", 42) >= 0,
-        "flux_cmd_setenvf (FOO=42)");
-    is (flux_cmd_getenv (cmd, "FOO"), "42",
-        "flux_cmd_getenv (FOO) == 42");
+    ok (flux_cmd_setenvf (cmd, 1, "FOO", "%d", 42) >= 0, "flux_cmd_setenvf (FOO=42)");
+    is (flux_cmd_getenv (cmd, "FOO"), "42", "flux_cmd_getenv (FOO) == 42");
     flux_cmd_unsetenv (cmd, "FOO");
-    ok (flux_cmd_getenv (cmd, "FOO") == NULL,
-        "flux_cmd_unsetenv works");
+    ok (flux_cmd_getenv (cmd, "FOO") == NULL, "flux_cmd_unsetenv works");
 
     // Test env overwrite
-    ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 42) >= 0,
-        "flux_cmd_setenvf (FOO=42)");
-    is (flux_cmd_getenv (cmd, "FOO"), "42",
-        "flux_cmd_getenv (FOO) == 42");
+    ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 42) >= 0, "flux_cmd_setenvf (FOO=42)");
+    is (flux_cmd_getenv (cmd, "FOO"), "42", "flux_cmd_getenv (FOO) == 42");
     ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 24) < 0,
         "flux_cmd_setenvf (FOO=24) no overwrite fails");
     ok (flux_cmd_setenvf (cmd, 1, "FOO", "%d", 24) >= 0,
         "flux_cmd_setenvf (FOO=24, overwrite=true)");
-    is (flux_cmd_getenv (cmd, "FOO"), "24",
-        "flux_cmd_getenv (FOO) == 24");
+    is (flux_cmd_getenv (cmd, "FOO"), "24", "flux_cmd_getenv (FOO) == 24");
     flux_cmd_unsetenv (cmd, "FOO");
 
     diag ("Copy a flux_cmd_t and and ensure it matches source cmd");
@@ -221,8 +189,7 @@ int main (int argc, char *argv[])
         if (copy) {
             check_cmd_attributes (copy);
             flux_cmd_destroy (copy);
-        }
-        else
+        } else
             diag ("%d:%d: %s", error.line, error.column, error.text);
     }
     flux_cmd_destroy (cmd);

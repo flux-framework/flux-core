@@ -17,7 +17,6 @@
 #include "event.h"
 #include "message.h"
 
-
 flux_msg_t *flux_heartbeat_encode (int epoch)
 {
     flux_msg_t *msg = NULL;

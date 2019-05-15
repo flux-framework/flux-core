@@ -25,17 +25,17 @@
 #include "src/common/libutil/log.h"
 
 struct ping_ctx {
-    double interval;    /* interval between sends, in seconds */
-    const char *rank;   /* target rank(s) if multiple or NULL */
-    uint32_t rank_count;/* number of ranks in rank */
-    char *topic;        /* target topic string */
-    char *pad;          /* pad string */
-    int count;          /* number of pings to send */
-    int send_count;     /* sending count */
-    bool batch;         /* begin receiving only after count sent */
+    double interval;     /* interval between sends, in seconds */
+    const char *rank;    /* target rank(s) if multiple or NULL */
+    uint32_t rank_count; /* number of ranks in rank */
+    char *topic;         /* target topic string */
+    char *pad;           /* pad string */
+    int count;           /* number of pings to send */
+    int send_count;      /* sending count */
+    bool batch;          /* begin receiving only after count sent */
     flux_t *h;
     flux_reactor_t *reactor;
-    bool userid;        /* include userid/rolemask in output */
+    bool userid; /* include userid/rolemask in output */
 };
 
 struct ping_data {
@@ -45,27 +45,54 @@ struct ping_data {
     unsigned int rpc_count;
 };
 
-static struct optparse_option cmdopts[] = {
-    { .name = "rank",     .key = 'r', .has_arg = 1, .arginfo = "NODESET",
-      .usage = "Find target on a specific broker rank(s)",
-    },
-    { .name = "pad",      .key = 'p', .has_arg = 1, .arginfo = "N",
-      .usage = "Include in the payload a string of length N bytes",
-    },
-    { .name = "interval", .key = 'i', .has_arg = 1, .arginfo = "N",
-      .usage = "Specify the delay, in seconds, between successive requests",
-    },
-    { .name = "count",    .key = 'c', .has_arg = 1, .arginfo = "N",
-      .usage = "Specify the number of requests to send",
-    },
-    { .name = "batch",    .key = 'b', .has_arg = 0,
-      .usage = "Begin processing responses after all requests are sent",
-    },
-    { .name = "userid",   .key = 'u', .has_arg = 0,
-      .usage = "Include userid and rolemask in ping output",
-    },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option cmdopts[] = {{
+                                               .name = "rank",
+                                               .key = 'r',
+                                               .has_arg = 1,
+                                               .arginfo = "NODESET",
+                                               .usage = "Find target on a specific "
+                                                        "broker rank(s)",
+                                           },
+                                           {
+                                               .name = "pad",
+                                               .key = 'p',
+                                               .has_arg = 1,
+                                               .arginfo = "N",
+                                               .usage = "Include in the payload a "
+                                                        "string of length N bytes",
+                                           },
+                                           {
+                                               .name = "interval",
+                                               .key = 'i',
+                                               .has_arg = 1,
+                                               .arginfo = "N",
+                                               .usage = "Specify the delay, in "
+                                                        "seconds, between successive "
+                                                        "requests",
+                                           },
+                                           {
+                                               .name = "count",
+                                               .key = 'c',
+                                               .has_arg = 1,
+                                               .arginfo = "N",
+                                               .usage = "Specify the number of "
+                                                        "requests to send",
+                                           },
+                                           {
+                                               .name = "batch",
+                                               .key = 'b',
+                                               .has_arg = 0,
+                                               .usage = "Begin processing responses "
+                                                        "after all requests are sent",
+                                           },
+                                           {
+                                               .name = "userid",
+                                               .key = 'u',
+                                               .has_arg = 0,
+                                               .usage = "Include userid and rolemask "
+                                                        "in ping output",
+                                           },
+                                           OPTPARSE_TABLE_END};
 
 void ping_data_free (void *ctx)
 {
@@ -92,14 +119,23 @@ void ping_continuation (flux_mrpc_t *mrpc, void *arg)
     tstat_t *tstat = pdata->tstat;
     uint32_t rolemask, userid;
 
-    if (flux_mrpc_get_unpack (mrpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
-                              "seq", &seq,
-                              "time.tv_sec", &sec,
-                              "time.tv_nsec", &nsec,
-                              "pad", &pad,
-                              "route", &route,
-                              "userid", &userid,
-                              "rolemask", &rolemask) < 0) {
+    if (flux_mrpc_get_unpack (mrpc,
+                              "{ s:i s:I s:I s:s s:s s:i s:i !}",
+                              "seq",
+                              &seq,
+                              "time.tv_sec",
+                              &sec,
+                              "time.tv_nsec",
+                              &nsec,
+                              "pad",
+                              &pad,
+                              "route",
+                              &route,
+                              "userid",
+                              &userid,
+                              "rolemask",
+                              &rolemask)
+        < 0) {
         log_err_exit ("%s!%s", ctx->rank, ctx->topic);
         goto done;
     }
@@ -123,23 +159,36 @@ done:
     if (flux_mrpc_next (mrpc) < 0) {
         if (pdata->rpc_count) {
             if (ctx->rank_count > 1) {
-                printf ("%s!%s pad=%zu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
-                        "stddev %0.3f\n",
-                        ctx->rank, ctx->topic, strlen (ctx->pad), pdata->seq,
-                        tstat_min (tstat), tstat_mean (tstat),
-                        tstat_max (tstat), tstat_stddev (tstat));
+                printf (
+                    "%s!%s pad=%zu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
+                    "stddev %0.3f\n",
+                    ctx->rank,
+                    ctx->topic,
+                    strlen (ctx->pad),
+                    pdata->seq,
+                    tstat_min (tstat),
+                    tstat_mean (tstat),
+                    tstat_max (tstat),
+                    tstat_stddev (tstat));
             } else {
                 char s[16] = {0};
                 char u[32] = {0};
                 if (strcmp (ctx->rank, "any"))
                     snprintf (s, sizeof (s), "%s!", ctx->rank);
                 if (ctx->userid)
-                    snprintf (u, sizeof (u),
+                    snprintf (u,
+                              sizeof (u),
                               " userid=%" PRIu32 " rolemask=0x%" PRIx32,
-                              userid, rolemask);
+                              userid,
+                              rolemask);
                 printf ("%s%s pad=%zu%s seq=%d time=%0.3f ms (%s)\n",
-                        s, ctx->topic, strlen (ctx->pad), u, pdata->seq,
-                        tstat_mean (tstat), pdata->route);
+                        s,
+                        ctx->topic,
+                        strlen (ctx->pad),
+                        u,
+                        pdata->seq,
+                        tstat_mean (tstat),
+                        pdata->route);
             }
         }
         flux_mrpc_destroy (mrpc);
@@ -159,12 +208,19 @@ void send_ping (struct ping_ctx *ctx)
 
     monotime (&t0);
 
-    mrpc = flux_mrpc_pack (ctx->h, ctx->topic, ctx->rank, 0,
+    mrpc = flux_mrpc_pack (ctx->h,
+                           ctx->topic,
+                           ctx->rank,
+                           0,
                            "{s:i s:I s:I s:s}",
-                           "seq", ctx->send_count,
-                           "time.tv_sec", (uint64_t)t0.tv_sec,
-                           "time.tv_nsec", (uint64_t)t0.tv_nsec,
-                           "pad", ctx->pad);
+                           "seq",
+                           ctx->send_count,
+                           "time.tv_sec",
+                           (uint64_t)t0.tv_sec,
+                           "time.tv_nsec",
+                           (uint64_t)t0.tv_nsec,
+                           "pad",
+                           ctx->pad);
     if (!mrpc)
         log_err_exit ("flux_mrpc_pack");
     if (flux_mrpc_aux_set (mrpc, "ping", pdata, ping_data_free) < 0)
@@ -258,13 +314,11 @@ int main (int argc, char *argv[])
             ctx.rank = target;
             target = "cmb";
             idset_destroy (ns);
-        } else if (!strcmp (target, "all")
-                   || !strcmp (target, "any")
+        } else if (!strcmp (target, "all") || !strcmp (target, "any")
                    || !strcmp (target, "upstream")) {
             ctx.rank = target;
             target = "cmb";
-        }
-        else
+        } else
             ctx.rank = "any";
     }
 
@@ -280,13 +334,11 @@ int main (int argc, char *argv[])
     if ((ns = idset_decode (ctx.rank))) {
         ctx.rank_count = idset_count (ns);
         idset_destroy (ns);
-    }
-    else {
+    } else {
         if (!strcmp (ctx.rank, "all")) {
             if (flux_get_size (ctx.h, &ctx.rank_count) < 0)
                 log_err_exit ("flux_get_size");
-        }
-        else
+        } else
             ctx.rank_count = 1;
     }
 
@@ -296,11 +348,10 @@ int main (int argc, char *argv[])
     if (ctx.batch) {
         while (ctx.send_count < ctx.count) {
             send_ping (&ctx);
-            usleep ((useconds_t)(ctx.interval * 1E6));
+            usleep ((useconds_t) (ctx.interval * 1E6));
         }
     } else {
-        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.interval,
-                                        timer_cb, &ctx);
+        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.interval, timer_cb, &ctx);
         if (!tw)
             log_err_exit ("error creating watchers");
         flux_watcher_start (tw);

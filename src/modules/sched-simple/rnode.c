@@ -35,8 +35,7 @@ struct rnode *rnode_create (uint32_t rank, const char *ids)
     if (n == NULL)
         return NULL;
     n->rank = rank;
-    if (!(n->ids = idset_decode (ids))
-        || !(n->avail = idset_copy (n->ids)))
+    if (!(n->ids = idset_decode (ids)) || !(n->avail = idset_copy (n->ids)))
         goto fail;
     return (n);
 fail:
@@ -50,8 +49,7 @@ struct rnode *rnode_create_idset (uint32_t rank, struct idset *ids)
     if (n == NULL)
         return NULL;
     n->rank = rank;
-    if (!(n->ids = idset_copy (ids))
-        || !(n->avail = idset_copy (ids)))
+    if (!(n->ids = idset_copy (ids)) || !(n->avail = idset_copy (ids)))
         goto fail;
     return (n);
 fail:
@@ -66,7 +64,7 @@ struct rnode *rnode_create_count (uint32_t rank, int count)
         return NULL;
     n->rank = rank;
     if (!(n->ids = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || (idset_range_set (n->ids, 0, count-1) < 0)
+        || (idset_range_set (n->ids, 0, count - 1) < 0)
         || !(n->avail = idset_copy (n->ids)))
         goto fail;
     return (n);
@@ -192,7 +190,6 @@ size_t rnode_count (const struct rnode *n)
 {
     return (idset_count (n->ids));
 }
-
 
 /* vi: ts=4 sw=4 expandtab
  */

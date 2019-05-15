@@ -47,8 +47,7 @@ done:
     return rc;
 }
 
-int flux_response_decode (const flux_msg_t *msg, const char **topicp,
-                          const char **sp)
+int flux_response_decode (const flux_msg_t *msg, const char **topicp, const char **sp)
 {
     const char *topic, *s;
     int rc = -1;
@@ -67,8 +66,10 @@ done:
     return rc;
 }
 
-int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
-                              const void **data, int *len)
+int flux_response_decode_raw (const flux_msg_t *msg,
+                              const char **topic,
+                              const void **data,
+                              int *len)
 {
     const char *ts;
     const void *d = NULL;
@@ -163,8 +164,7 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_response_encode_raw (const char *topic,
-                                      const void *data, int len)
+flux_msg_t *flux_response_encode_raw (const char *topic, const void *data, int len)
 {
     flux_msg_t *msg;
 
@@ -178,7 +178,8 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_response_encode_error (const char *topic, int errnum,
+flux_msg_t *flux_response_encode_error (const char *topic,
+                                        int errnum,
                                         const char *errstr)
 {
     flux_msg_t *msg;
@@ -239,8 +240,10 @@ error:
     return -1;
 }
 
-static int flux_respond_vpack (flux_t *h, const flux_msg_t *request,
-                               const char *fmt, va_list ap)
+static int flux_respond_vpack (flux_t *h,
+                               const flux_msg_t *request,
+                               const char *fmt,
+                               va_list ap)
 {
     flux_msg_t *msg = NULL;
 
@@ -262,8 +265,7 @@ error:
     return -1;
 }
 
-int flux_respond_pack (flux_t *h, const flux_msg_t *request,
-                       const char *fmt, ...)
+int flux_respond_pack (flux_t *h, const flux_msg_t *request, const char *fmt, ...)
 {
     int rc;
     va_list ap;
@@ -278,14 +280,13 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request,
     return rc;
 }
 
-int flux_respond_raw (flux_t *h, const flux_msg_t *request,
-                      const void *data, int len)
+int flux_respond_raw (flux_t *h, const flux_msg_t *request, const void *data, int len)
 {
     flux_msg_t *msg = NULL;
 
     if (!h || !request)
         goto inval;
-    msg  = derive_response (request, 0);
+    msg = derive_response (request, 0);
     if (!msg)
         goto error;
     if (data && flux_msg_set_payload (msg, data, len) < 0)
@@ -301,8 +302,10 @@ error:
     return -1;
 }
 
-int flux_respond_error (flux_t *h, const flux_msg_t *request,
-                        int errnum, const char *errstr)
+int flux_respond_error (flux_t *h,
+                        const flux_msg_t *request,
+                        int errnum,
+                        const char *errstr)
 {
     flux_msg_t *msg = NULL;
 

@@ -45,16 +45,12 @@ void test_simple_msg_handler (flux_t *h)
 
     ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, &mh)) != NULL,
         "handle created dispatcher on demand");
-    ok ((msg = flux_event_encode ("test", NULL)) != NULL,
-        "encoded event message");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent event message on loop connector");
+    ok ((msg = flux_event_encode ("test", NULL)) != NULL, "encoded event message");
+    ok (flux_send (h, msg, 0) == 0, "sent event message on loop connector");
     cb_called = 0;
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 0,
-        "message handler that was not started did not run");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 0, "message handler that was not started did not run");
     cb_called = 0;
     cb_h = NULL;
     cb_mh = NULL;
@@ -62,10 +58,8 @@ void test_simple_msg_handler (flux_t *h)
     flux_msg_handler_start (mh);
     diag ("started message handler");
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 1,
-        "message handler was called after being started");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 1, "message handler was called after being started");
     ok (cb_h == h && cb_mh == mh && cb_arg == &mh && cb_msg != NULL,
         "message handler was called with appropriate args");
     flux_msg_destroy (msg);
@@ -86,37 +80,26 @@ void test_fastpath (flux_t *h)
         "allocated matchtag");
     ok ((mh = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
-    ok ((msg = flux_response_encode ("foo", NULL)) != NULL,
-        "encoded response message");
-    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
-        "set matchtag in response");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent response message on loop connector");
+    ok ((msg = flux_response_encode ("foo", NULL)) != NULL, "encoded response message");
+    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0, "set matchtag in response");
+    ok (flux_send (h, msg, 0) == 0, "sent response message on loop connector");
     cb_called = 0;
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 0,
-        "message handler that was not started did not run");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 0, "message handler that was not started did not run");
     flux_msg_handler_start (mh);
     diag ("started message handler");
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 1,
-        "message handler was called after being started");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 1, "message handler was called after being started");
 
-    ok (flux_msg_enable_route (msg) == 0
-        && flux_msg_push_route (msg, "myuuid") == 0,
+    ok (flux_msg_enable_route (msg) == 0 && flux_msg_push_route (msg, "myuuid") == 0,
         "added route to message");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent response message on loop connector");
+    ok (flux_send (h, msg, 0) == 0, "sent response message on loop connector");
     cb_called = 0;
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 0,
-        "dispatch did not match response in wrong matchtag domain");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 0, "dispatch did not match response in wrong matchtag domain");
     ok (flux_recv (h, FLUX_MATCH_ANY, 0) == NULL,
         "unmatched message was discarded by dispatcher");
 
@@ -138,55 +121,43 @@ void test_cloned_dispatch (flux_t *orig)
     int type;
     uint32_t matchtag;
 
-    ok (flux_recv (orig, FLUX_MATCH_ANY, 0) == NULL,
-        "nothing up my sleve");
+    ok (flux_recv (orig, FLUX_MATCH_ANY, 0) == NULL, "nothing up my sleve");
 
     h = flux_clone (orig);
-    ok (h != NULL,
-        "cloned handle");
+    ok (h != NULL, "cloned handle");
     r = flux_reactor_create (0);
-    ok (r != NULL,
-        "created reactor");
-    ok (flux_set_reactor (h, r) == 0,
-        "set reactor in cloned handle");
+    ok (r != NULL, "created reactor");
+    ok (flux_set_reactor (h, r) == 0, "set reactor in cloned handle");
 
     /* event */
     ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
         "handle created dispatcher on demand");
     flux_msg_handler_start (mh);
-    ok ((msg = flux_event_encode ("test", NULL)) != NULL,
-        "encoded event message");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent event message on cloned connector");
+    ok ((msg = flux_event_encode ("test", NULL)) != NULL, "encoded event message");
+    ok (flux_send (h, msg, 0) == 0, "sent event message on cloned connector");
     flux_msg_destroy (msg);
     diag ("started event handler");
 
     /* response (matched) */
     m.matchtag = flux_matchtag_alloc (h, 0);
-    ok (m.matchtag != FLUX_MATCHTAG_NONE,
-        "allocated matchtag (%d)", m.matchtag); // 1
+    ok (m.matchtag != FLUX_MATCHTAG_NONE, "allocated matchtag (%d)", m.matchtag);  // 1
     ok ((mh2 = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
     flux_msg_handler_start (mh2);
-    ok ((msg = flux_response_encode ("foo", NULL)) != NULL,
-        "encoded response message");
-    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
-        "set matchtag in response");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent response message on cloned connector");
+    ok ((msg = flux_response_encode ("foo", NULL)) != NULL, "encoded response message");
+    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0, "set matchtag in response");
+    ok (flux_send (h, msg, 0) == 0, "sent response message on cloned connector");
     flux_msg_destroy (msg);
     diag ("started response handler");
 
     /* response (unmatched) */
     m2.matchtag = flux_matchtag_alloc (h, 0);
     ok (m2.matchtag != FLUX_MATCHTAG_NONE,
-        "allocated matchtag (%d)", m2.matchtag); // 2
-    ok ((msg = flux_response_encode ("bar", NULL)) != NULL,
-        "encoded response message");
-    ok (flux_msg_set_matchtag (msg, m2.matchtag) == 0,
-        "set matchtag in response");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent response message on cloned connector");
+        "allocated matchtag (%d)",
+        m2.matchtag);  // 2
+    ok ((msg = flux_response_encode ("bar", NULL)) != NULL, "encoded response message");
+    ok (flux_msg_set_matchtag (msg, m2.matchtag) == 0, "set matchtag in response");
+    ok (flux_send (h, msg, 0) == 0, "sent response message on cloned connector");
     flux_msg_destroy (msg);
 
     /* N.B. libev NOWAIT semantics don't guarantee that all pending
@@ -197,52 +168,39 @@ void test_cloned_dispatch (flux_t *orig)
     cb_called = 0;
     /* 1 */
     rc = flux_reactor_run (r, FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 1,
-        "one message handled on first reactor loop");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 1, "one message handled on first reactor loop");
     /* 2 */
     rc = flux_reactor_run (r, FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 2,
-        "another message handled on second reactor loop");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 2, "another message handled on second reactor loop");
     /* 3 (should get nothing) */
     rc = flux_reactor_run (r, FLUX_REACTOR_NOWAIT);
-    ok (rc >= 0,
-        "flux_reactor_run ran");
-    ok (cb_called == 2,
-        "no messages handled on third reactor loop");
+    ok (rc >= 0, "flux_reactor_run ran");
+    ok (cb_called == 2, "no messages handled on third reactor loop");
 
     /* requeue event and unmatched responses */
-    ok (flux_dispatch_requeue (h) == 0,
-        "requeued unconsumed messages in clone");
+    ok (flux_dispatch_requeue (h) == 0, "requeued unconsumed messages in clone");
 
     msg = flux_recv (orig, FLUX_MATCH_ANY, 0);
-    ok (msg != NULL,
-        "received first message on orig handle");
+    ok (msg != NULL, "received first message on orig handle");
     skip (msg == NULL, 2);
     rc = flux_msg_get_type (msg, &type);
-    ok (rc == 0 && type == FLUX_MSGTYPE_EVENT,
-        "and its the event");
+    ok (rc == 0 && type == FLUX_MSGTYPE_EVENT, "and its the event");
     flux_msg_destroy (msg);
     end_skip;
 
     msg = flux_recv (orig, FLUX_MATCH_ANY, 0);
-    ok (msg != NULL,
-        "received second message on orig handle");
+    ok (msg != NULL, "received second message on orig handle");
     skip (msg == NULL, 2);
     rc = flux_msg_get_type (msg, &type);
-    ok (rc == 0 && type == FLUX_MSGTYPE_RESPONSE,
-        "and its a response");
+    ok (rc == 0 && type == FLUX_MSGTYPE_RESPONSE, "and its a response");
     rc = flux_msg_get_matchtag (msg, &matchtag);
-    ok (rc == 0 && matchtag == 2,
-        "and matchtag=2 (%d)", matchtag);
+    ok (rc == 0 && matchtag == 2, "and matchtag=2 (%d)", matchtag);
     flux_msg_destroy (msg);
     end_skip;
 
-    ok (flux_recv (orig, FLUX_MATCH_ANY, 0) == NULL,
-        "there are no more messages");
+    ok (flux_recv (orig, FLUX_MATCH_ANY, 0) == NULL, "there are no more messages");
 
     /* close the clone */
     flux_msg_handler_destroy (mh);
@@ -263,19 +221,17 @@ int main (int argc, char *argv[])
 
     if (!(h = loopback_create (0)))
         BAIL_OUT ("can't continue without loopback handle");
-    ok ((r = flux_get_reactor (h)) != NULL,
-        "handle created reactor on demand");
+    ok ((r = flux_get_reactor (h)) != NULL, "handle created reactor on demand");
 
     test_simple_msg_handler (h);
     test_fastpath (h);
     test_cloned_dispatch (h);
 
     flux_close (h);
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

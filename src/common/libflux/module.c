@@ -89,8 +89,10 @@ static int mod_find_f (dirwalk_t *d, void *arg)
     return rc;
 }
 
-char *flux_modfind (const char *searchpath, const char *modname,
-                    flux_moderr_f *cb, void *arg)
+char *flux_modfind (const char *searchpath,
+                    const char *modname,
+                    flux_moderr_f *cb,
+                    void *arg)
 {
     char *result = NULL;
     zlist_t *l;

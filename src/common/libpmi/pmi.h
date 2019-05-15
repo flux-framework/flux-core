@@ -13,21 +13,21 @@
 #ifndef FLUX_PMI_H_INCLUDED
 #define FLUX_PMI_H_INCLUDED
 
-#define PMI_SUCCESS                  0
-#define PMI_FAIL                    -1
-#define PMI_ERR_INIT                 1
-#define PMI_ERR_NOMEM                2
-#define PMI_ERR_INVALID_ARG          3
-#define PMI_ERR_INVALID_KEY          4
-#define PMI_ERR_INVALID_KEY_LENGTH   5
-#define PMI_ERR_INVALID_VAL          6
-#define PMI_ERR_INVALID_VAL_LENGTH   7
-#define PMI_ERR_INVALID_LENGTH       8
-#define PMI_ERR_INVALID_NUM_ARGS     9
-#define PMI_ERR_INVALID_ARGS        10
-#define PMI_ERR_INVALID_NUM_PARSED  11
-#define PMI_ERR_INVALID_KEYVALP     12
-#define PMI_ERR_INVALID_SIZE        13
+#define PMI_SUCCESS 0
+#define PMI_FAIL -1
+#define PMI_ERR_INIT 1
+#define PMI_ERR_NOMEM 2
+#define PMI_ERR_INVALID_ARG 3
+#define PMI_ERR_INVALID_KEY 4
+#define PMI_ERR_INVALID_KEY_LENGTH 5
+#define PMI_ERR_INVALID_VAL 6
+#define PMI_ERR_INVALID_VAL_LENGTH 7
+#define PMI_ERR_INVALID_LENGTH 8
+#define PMI_ERR_INVALID_NUM_ARGS 9
+#define PMI_ERR_INVALID_ARGS 10
+#define PMI_ERR_INVALID_NUM_PARSED 11
+#define PMI_ERR_INVALID_KEYVALP 12
+#define PMI_ERR_INVALID_SIZE 13
 
 int PMI_Init (int *spawned);
 int PMI_Initialized (int *initialized);
@@ -49,8 +49,7 @@ int PMI_KVS_Get_key_length_max (int *length);
 int PMI_KVS_Get_value_length_max (int *length);
 
 int PMI_KVS_Put (const char kvsname[], const char key[], const char value[]);
-int PMI_KVS_Get (const char kvsname[], const char key[],
-                  char value[], int length);
+int PMI_KVS_Get (const char kvsname[], const char key[], char value[], int length);
 int PMI_KVS_Commit (const char kvsname[]);
 int PMI_Barrier (void);
 
@@ -59,20 +58,19 @@ int PMI_Unpublish_name (const char service_name[]);
 int PMI_Lookup_name (const char service_name[], char port[]);
 
 typedef struct {
-    const char * key;
-    char * val;
+    const char *key;
+    char *val;
 } PMI_keyval_t;
 
-int PMI_Spawn_multiple(int count,
-                       const char * cmds[],
-                       const char ** argvs[],
-                       const int maxprocs[],
-                       const int info_keyval_sizesp[],
-                       const PMI_keyval_t * info_keyval_vectors[],
-                       int preput_keyval_size,
-                       const PMI_keyval_t preput_keyval_vector[],
-                       int errors[]);
-
+int PMI_Spawn_multiple (int count,
+                        const char *cmds[],
+                        const char **argvs[],
+                        const int maxprocs[],
+                        const int info_keyval_sizesp[],
+                        const PMI_keyval_t *info_keyval_vectors[],
+                        int preput_keyval_size,
+                        const PMI_keyval_t preput_keyval_vector[],
+                        int errors[]);
 
 /* Old API funcs - signatures needed for ABI compliance.
  */
@@ -82,15 +80,26 @@ int PMI_Get_kvs_domain_id (char kvsname[], int length);
 
 int PMI_KVS_Create (char kvsname[], int length);
 int PMI_KVS_Destroy (const char kvsname[]);
-int PMI_KVS_Iter_first (const char kvsname[], char key[], int key_len,
-                        char val[], int val_len);
-int PMI_KVS_Iter_next (const char kvsname[], char key[], int key_len,
-                       char val[], int val_len);
+int PMI_KVS_Iter_first (const char kvsname[],
+                        char key[],
+                        int key_len,
+                        char val[],
+                        int val_len);
+int PMI_KVS_Iter_next (const char kvsname[],
+                       char key[],
+                       int key_len,
+                       char val[],
+                       int val_len);
 
-int PMI_Parse_option (int num_args, char *args[], int *num_parsed,
-                      PMI_keyval_t **keyvalp, int *size);
-int PMI_Args_to_keyval (int *argcp, char *((*argvp)[]),
-                        PMI_keyval_t **keyvalp, int *size);
+int PMI_Parse_option (int num_args,
+                      char *args[],
+                      int *num_parsed,
+                      PMI_keyval_t **keyvalp,
+                      int *size);
+int PMI_Args_to_keyval (int *argcp,
+                        char *((*argvp)[]),
+                        PMI_keyval_t **keyvalp,
+                        int *size);
 int PMI_Free_keyvals (PMI_keyval_t keyvalp[], int size);
 int PMI_Get_options (char *str, int *length);
 

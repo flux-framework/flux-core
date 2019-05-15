@@ -39,7 +39,7 @@ static struct idset *idset_all (uint32_t size)
 {
     struct idset *idset = NULL;
     if (!(idset = idset_create (size, 0))
-        || (idset_range_set (idset, 0, size-1) < 0)) {
+        || (idset_range_set (idset, 0, size - 1) < 0)) {
         idset_destroy (idset);
         return NULL;
     }
@@ -96,7 +96,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
 static int lookup_all_topo_xml (flux_t *h, char **xmls, struct idset *idset)
 {
     flux_future_t *f = NULL;
-    char key [1024];
+    char key[1024];
     int rank = idset_first (idset);
     int i = 0;
 
@@ -120,7 +120,7 @@ static int lookup_one_topo_xml (flux_t *h, char **valp, uint32_t rank)
     int rc;
     struct idset *idset = idset_create (0, IDSET_FLAG_AUTOGROW);
     if (!idset || idset_set (idset, rank) < 0) {
-       log_err ("idset_create/set rank=%d", rank);
+        log_err ("idset_create/set rank=%d", rank);
         return (-1);
     }
     rc = lookup_all_topo_xml (h, valp, idset);
@@ -136,21 +136,22 @@ static hwloc_topology_t global_hwloc_create (char **xml, int n)
     hwloc_topology_t global;
     int i;
 
-    if (hwloc_topology_init (&global) < 0
-        || hwloc_topology_set_custom (global) < 0)
+    if (hwloc_topology_init (&global) < 0 || hwloc_topology_set_custom (global) < 0)
         log_err_exit ("gather: unable to init topology");
 
     for (i = 0; i < n; i++) {
         hwloc_topology_t topo;
         if (hwloc_topology_init (&topo) < 0)
             log_err_exit ("hwloc_topology_init");
-        if (hwloc_topology_set_xmlbuffer (topo, xml[i], strlen(xml[i])+1) < 0)
+        if (hwloc_topology_set_xmlbuffer (topo, xml[i], strlen (xml[i]) + 1) < 0)
             log_err_exit ("hwloc_topology_set_xmlbuffer");
         if (hwloc_topology_load (topo) < 0)
             log_err_exit ("hwloc_topology_load");
         if (hwloc_custom_insert_topology (global,
                                           hwloc_get_root_obj (global),
-                                          topo, NULL) < 0)
+                                          topo,
+                                          NULL)
+            < 0)
             log_err_exit ("hwloc_custom_insert_topo");
         hwloc_topology_destroy (topo);
     }
@@ -167,7 +168,7 @@ static void string_array_destroy (char **arg, int n)
     free (arg);
 }
 
-char * flux_hwloc_global_xml (optparse_t *p)
+char *flux_hwloc_global_xml (optparse_t *p)
 {
     flux_t *h = NULL;
     uint32_t size;
@@ -242,7 +243,8 @@ static hwloc_topology_t local_topo_load (void)
 
     if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16))
         log_err_exit ("compiled for hwloc 0x%x but running against 0x%x\n",
-                      HWLOC_API_VERSION, hwloc_version);
+                      HWLOC_API_VERSION,
+                      hwloc_version);
 
     topo_init_common (&topo);
 
@@ -286,7 +288,7 @@ static char *flux_hwloc_xml (optparse_t *p)
 
 static int argz_appendf (char **argzp, size_t *argz_len, const char *fmt, ...)
 {
-    char s [4096];
+    char s[4096];
     int rc = -1;
     int n;
     va_list ap;
@@ -302,16 +304,17 @@ out:
     return (rc);
 }
 
-static void lstopo_argz_init (char *cmd, char **argzp, size_t *argz_lenp,
+static void lstopo_argz_init (char *cmd,
+                              char **argzp,
+                              size_t *argz_lenp,
                               char *extra_args[])
 {
     char *extra;
     size_t extra_len;
     int e;
-    char *argv[] = { cmd, "-i", "-", "--if", "xml",
-                     "--of", "console", NULL };
-    if (  (e = argz_create (argv, argzp, argz_lenp)) != 0
-       || (e = argz_create (extra_args, &extra, &extra_len)) != 0)
+    char *argv[] = {cmd, "-i", "-", "--if", "xml", "--of", "console", NULL};
+    if ((e = argz_create (argv, argzp, argz_lenp)) != 0
+        || (e = argz_create (extra_args, &extra, &extra_len)) != 0)
         log_msg_exit ("argz_create: %s", strerror (e));
 
     /*  Append any extra args in av[] */
@@ -323,29 +326,29 @@ static void lstopo_argz_init (char *cmd, char **argzp, size_t *argz_lenp,
 
 int argz_execp (char *argz, size_t argz_len)
 {
-    char *argv [argz_count (argz, argz_len) + 1];
+    char *argv[argz_count (argz, argz_len) + 1];
     argz_extract (argz, argz_len, argv);
     return execvp (argv[0], argv);
 }
 
-FILE * argz_popen (char *argz, size_t argz_len, pid_t *pidptr)
+FILE *argz_popen (char *argz, size_t argz_len, pid_t *pidptr)
 {
     int pfds[2];
     pid_t pid;
     if (pipe (pfds) < 0)
         log_err_exit ("pipe");
     switch ((pid = fork ())) {
-    case -1:
-        log_err_exit ("fork");
-    case  0:
-        close (pfds[1]);
-        dup2 (pfds[0], STDIN_FILENO);
-        argz_execp (argz, argz_len);
-        if (errno != ENOENT)
-            log_err ("exec");
-        exit (errno); /* So we can detect ENOENT.. Sorry */
-    default:
-        break;
+        case -1:
+            log_err_exit ("fork");
+        case 0:
+            close (pfds[1]);
+            dup2 (pfds[0], STDIN_FILENO);
+            argz_execp (argz, argz_len);
+            if (errno != ENOENT)
+                log_err ("exec");
+            exit (errno); /* So we can detect ENOENT.. Sorry */
+        default:
+            break;
     }
     close (pfds[0]);
     *pidptr = pid;
@@ -365,17 +368,17 @@ static int exec_lstopo (optparse_t *p, int ac, char *av[], const char *topo)
     char *argz;
     size_t argz_len;
     pid_t pid;
-    const char *cmds[] = { "lstopo", "lstopo-no-graphics", NULL };
+    const char *cmds[] = {"lstopo", "lstopo-no-graphics", NULL};
     const char **cp = cmds;
 
     /* Ignore SIGPIPE so we don't get killed when exec() fails */
     signal (SIGPIPE, SIG_IGN);
 
     /* Initialize argz with first command in cmds above: */
-    lstopo_argz_init ((char *) *cp, &argz, &argz_len, av+1);
+    lstopo_argz_init ((char *)*cp, &argz, &argz_len, av + 1);
 
     while (true) {
-        const char *next = *(cp+1);
+        const char *next = *(cp + 1);
         if (!(fp = argz_popen (argz, argz_len, &pid)))
             log_err_exit ("popen (lstopo)");
         fputs (topo, fp);
@@ -414,8 +417,9 @@ static int cmd_lstopo (optparse_t *p, int ac, char *av[])
                 log_msg_exit ("lstopo: Exited with %d", WEXITSTATUS (status));
         }
         if (WIFSIGNALED (status) && WTERMSIG (status) != SIGPIPE)
-            log_msg_exit ("lstopo: %s%s", strsignal (WTERMSIG (status)),
-                      WCOREDUMP (status) ? " (core dumped)" : "");
+            log_msg_exit ("lstopo: %s%s",
+                          strsignal (WTERMSIG (status)),
+                          WCOREDUMP (status) ? " (core dumped)" : "");
     }
 
     free (xml);
@@ -460,11 +464,14 @@ static int cmd_info (optparse_t *p, int ac, char *av[])
         log_msg_exit ("info: Failed to initialize topology from XML");
 
     int ncores = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_CORE);
-    int npu    = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
+    int npu = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
     int nnodes = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_MACHINE);
 
     printf ("%d Machine%s, %d Cores, %d PUs\n",
-            nnodes, nnodes > 1 ? "s" : "", ncores, npu);
+            nnodes,
+            nnodes > 1 ? "s" : "",
+            ncores,
+            npu);
 
     hwloc_topology_destroy (topo);
     free (xml);
@@ -476,11 +483,10 @@ static int cmd_info (optparse_t *p, int ac, char *av[])
 
 /*  Add hwloc xml string `xml` to kvs for rank `rank` to a kvs txn
  */
-static int kvs_txn_put_xml (flux_kvs_txn_t *txn, uint32_t rank,
-                             const char *xml)
+static int kvs_txn_put_xml (flux_kvs_txn_t *txn, uint32_t rank, const char *xml)
 {
-    char key [1024];
-    snprintf (key, sizeof (key), "%s.%ju", XML_BASEDIR, (uintmax_t) rank);
+    char key[1024];
+    snprintf (key, sizeof (key), "%s.%ju", XML_BASEDIR, (uintmax_t)rank);
     return (flux_kvs_txn_pack (txn, 0, key, "s", xml));
 }
 
@@ -489,10 +495,11 @@ static int kvs_txn_put_xml (flux_kvs_txn_t *txn, uint32_t rank,
  *   so that the common Flux hwloc flags may be applied,  and to check
  *   that the XML is valid before putting it in the kvs.
  */
-static flux_future_t *kvs_txn_put_xml_file (flux_kvs_txn_t *txn, int rank,
+static flux_future_t *kvs_txn_put_xml_file (flux_kvs_txn_t *txn,
+                                            int rank,
                                             const char *basedir)
 {
-    char path [8192];
+    char path[8192];
     int n, len;
     char *xml;
     hwloc_topology_t topo = NULL;
@@ -524,8 +531,7 @@ static flux_future_t *kvs_txn_put_xml_file (flux_kvs_txn_t *txn, int rank,
  *   rank: <basedir>/<rank>.xml. All KVS puts are performed under a
  *   single transaction.
  */
-flux_future_t * kvs_load_xml_idset (flux_t *h, const char *basedir,
-                                    struct idset *idset)
+flux_future_t *kvs_load_xml_idset (flux_t *h, const char *basedir, struct idset *idset)
 {
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
@@ -546,13 +552,15 @@ flux_future_t * kvs_load_xml_idset (flux_t *h, const char *basedir,
 
 static double seconds_since (struct timespec t)
 {
-    return (monotime_since (t)/1000.);
+    return (monotime_since (t) / 1000.);
 }
 
 /*  Execute flux-hwloc aggregate-load across all ranks, optionally
  *   reloading local hwloc XML on `reload_ranks`.
  */
-static int run_hwloc_aggregate (flux_t *h, const char *ranks, bool verbose,
+static int run_hwloc_aggregate (flux_t *h,
+                                const char *ranks,
+                                bool verbose,
                                 struct timespec t0)
 {
     const char *base = "resource.hwloc";
@@ -560,9 +568,7 @@ static int run_hwloc_aggregate (flux_t *h, const char *ranks, bool verbose,
     size_t argz_len = 0;
     uint32_t rank, size;
     double timeout = 5.;
-    char *argv[] = {
-        "flux", "exec", "-n", "-r", "all", NULL
-    };
+    char *argv[] = {"flux", "exec", "-n", "-r", "all", NULL};
 
     if (flux_get_rank (h, &rank) < 0)
         log_err_exit ("flux_get_rank");
@@ -571,7 +577,7 @@ static int run_hwloc_aggregate (flux_t *h, const char *ranks, bool verbose,
 
     /* XXX: scale timeout by size just in case.. */
     if (size > 512)
-        timeout = timeout + size/512.;
+        timeout = timeout + size / 512.;
 
     if ((errno = argz_create (argv, &argz, &argz_len)))
         log_err_exit ("exec aggregate-load: argz_create");
@@ -581,16 +587,22 @@ static int run_hwloc_aggregate (flux_t *h, const char *ranks, bool verbose,
         log_err_exit ("exec aggregate-load: argz_appendf");
 
     /*  Build flux hwloc aggregate-load command */
-    if ((argz_appendf (&argz, &argz_len,
-                "flux hwloc aggregate-load "
-                "--timeout=%.3f --unpack=%s.by_rank --key=%s.reload:%u-%u",
-                timeout, base, base, rank, getpid()) < 0)
+    if ((argz_appendf (&argz,
+                       &argz_len,
+                       "flux hwloc aggregate-load "
+                       "--timeout=%.3f --unpack=%s.by_rank --key=%s.reload:%u-%u",
+                       timeout,
+                       base,
+                       base,
+                       rank,
+                       getpid ())
+         < 0)
         || (ranks && (argz_appendf (&argz, &argz_len, "--rank=%s", ranks) < 0))
         || (verbose && argz_appendf (&argz, &argz_len, "--verbose")))
         log_err_exit ("argz_appendf flux-hwloc aggregate-load command");
 
     if (verbose) {
-        char copy [argz_len];
+        char copy[argz_len];
         memcpy (copy, argz, argz_len);
         argz_stringify (copy, argz_len, ' ');
         log_msg ("%.3fs: Running %s", seconds_since (t0), copy);
@@ -629,12 +641,15 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
 
     if (verbose)
         log_msg ("%.3fs: starting HWLOC reload on %ju ranks (%s)",
-                 seconds_since (t0), (uintmax_t) idset_count (idset), nodeset);
+                 seconds_since (t0),
+                 (uintmax_t)idset_count (idset),
+                 nodeset);
 
     if (dirpath) {
         if (verbose)
             log_msg ("%.3fs: starting load of XML from %s",
-                     seconds_since (t0), dirpath);
+                     seconds_since (t0),
+                     dirpath);
 
         flux_future_t *f = kvs_load_xml_idset (h, dirpath, idset);
         if (!f || flux_future_get (f, NULL) < 0)
@@ -644,13 +659,12 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
 
         if (verbose)
             log_msg ("%.3fs: XML load complete", seconds_since (t0));
-    }
-    else
+    } else
         reload_ranks = strdup (nodeset);
 
     if (verbose)
         log_msg ("%.3fs: executing aggregate-load across all ranks",
-                seconds_since (t0));
+                 seconds_since (t0));
     run_hwloc_aggregate (h, reload_ranks, optparse_hasopt (p, "verbose"), t0);
 
     // run_hwloc_aggregate doesn't return, but clean up anyway:
@@ -660,8 +674,6 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     flux_close (h);
     return (0);
 }
-
-
 
 /*  flux-hwloc aggregate-load:
  */
@@ -730,13 +742,11 @@ static json_t *topo_tojson (hwloc_topology_t topology)
             goto error;
     }
     if ((nobj = hwloc_gpu_count (topology))) {
-        if (!(v = json_integer (nobj))
-            || json_object_set_new (o, "GPU", v) < 0)
+        if (!(v = json_integer (nobj)) || json_object_set_new (o, "GPU", v) < 0)
             goto error;
     }
     if ((ids = hwloc_cpuset_idset_string (topology))) {
-        if (!(v = json_string (ids))
-            || json_object_set_new (o, "cpuset", v) < 0)
+        if (!(v = json_string (ids)) || json_object_set_new (o, "cpuset", v) < 0)
             goto error;
         free (ids);
     }
@@ -751,7 +761,7 @@ static int get_fwd_count (flux_t *h)
     const char *s = flux_attr_get (h, "tbon.descendants");
     long v = strtol (s, NULL, 10);
     if (v >= 0)
-        return ((int) v + 1);
+        return ((int)v + 1);
     return (0);
 }
 
@@ -788,8 +798,7 @@ static void aggregate_load_wait (optparse_t *p, flux_t *h, const char *key)
 
     timeout = optparse_get_duration (p, "timeout", 15.);
 
-    if (!(f = aggregate_wait (h, key))
-       || flux_future_wait_for (f, timeout) < 0)
+    if (!(f = aggregate_wait (h, key)) || flux_future_wait_for (f, timeout) < 0)
         log_err_exit ("aggregate_wait");
 
     if (optparse_getopt (p, "unpack", &unpack_path)
@@ -808,15 +817,16 @@ static void aggregate_load_wait (optparse_t *p, flux_t *h, const char *key)
 /*  Put xml string `xml` into hwloc xml entry in kvs for rank `rank`,
  *   and then perform synchronous kvs_fence for nprocs entries.
  */
-static int kvs_put_xml_fence (flux_t *h, int rank,
-                              const char *name, int nprocs,
+static int kvs_put_xml_fence (flux_t *h,
+                              int rank,
+                              const char *name,
+                              int nprocs,
                               const char *xml)
 {
     flux_future_t *f;
     flux_kvs_txn_t *txn = NULL;
 
-    if (!(txn = flux_kvs_txn_create ())
-        || (kvs_txn_put_xml (txn, rank, xml) < 0))
+    if (!(txn = flux_kvs_txn_create ()) || (kvs_txn_put_xml (txn, rank, xml) < 0))
         log_err_exit ("kvs put xml (rank=%d)", rank);
     if (!(f = flux_kvs_fence (h, NULL, 0, name, nprocs, txn))
         || flux_future_get (f, NULL) < 0)
@@ -884,8 +894,7 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
             log_err_exit ("Failed to store local XML in kvs");
         if (verbose)
             log_msg ("%.3fs: kvs fence complete", seconds_since (t0));
-    }
-    else if (lookup_one_topo_xml (h, &xml, rank) < 0)
+    } else if (lookup_one_topo_xml (h, &xml, rank) < 0)
         log_err_exit ("lookup topo XML for this rank (%d)", rank);
 
     if (verbose)
@@ -911,10 +920,9 @@ static int cmd_aggregate_load (optparse_t *p, int ac, char *av[])
     free (xml);
     flux_close (h);
     if (verbose)
-        log_msg ("%.3fs: done.", monotime_since (t0)/1000.);
+        log_msg ("%.3fs: done.", monotime_since (t0) / 1000.);
     return (0);
 }
-
 
 /*  flux-hwloc:
  */
@@ -928,80 +936,117 @@ int cmd_hwloc (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_option reload_opts[] = {
-    { .name = "verbose",  .key = 'v',  .has_arg = 0,
-      .usage = "Increase verbosity", },
-    { .name = "rank",  .key = 'r',  .has_arg = 1,
-      .usage = "Target specified nodeset, or \"all\" (default)", },
+    {
+        .name = "verbose",
+        .key = 'v',
+        .has_arg = 0,
+        .usage = "Increase verbosity",
+    },
+    {
+        .name = "rank",
+        .key = 'r',
+        .has_arg = 1,
+        .usage = "Target specified nodeset, or \"all\" (default)",
+    },
     OPTPARSE_TABLE_END,
 };
 
 static struct optparse_option topology_opts[] = {
-    { .name = "local", .key = 'l', .has_arg = 0,
-      .usage = "Dump topology XML for the local host only",
+    {
+        .name = "local",
+        .key = 'l',
+        .has_arg = 0,
+        .usage = "Dump topology XML for the local host only",
     },
-    { .name = "rank", .key = 'r', .has_arg = 1,
-      .usage = "Target specified nodeset, or \"all\" (default)",
+    {
+        .name = "rank",
+        .key = 'r',
+        .has_arg = 1,
+        .usage = "Target specified nodeset, or \"all\" (default)",
     },
     OPTPARSE_TABLE_END,
 };
 
 static struct optparse_option aggregate_load_opts[] = {
-    { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Increase verbosity (only affects rank 0)",
+    {
+        .name = "verbose",
+        .key = 'v',
+        .has_arg = 0,
+        .usage = "Increase verbosity (only affects rank 0)",
     },
-    { .name = "timeout", .key = 't', .has_arg = 1,
-      .usage = "Duration to wait for aggregate completion (default 15.0s)",
+    {
+        .name = "timeout",
+        .key = 't',
+        .has_arg = 1,
+        .usage = "Duration to wait for aggregate completion (default 15.0s)",
     },
-    { .name = "rank", .key = 'r', .has_arg = 1,
-      .usage = "ranks on which to perform a local topology reload",
+    {
+        .name = "rank",
+        .key = 'r',
+        .has_arg = 1,
+        .usage = "ranks on which to perform a local topology reload",
     },
-    { .name = "key", .key = 'k', .has_arg = 1,
-      .usage = "KVS key for aggregate",
+    {
+        .name = "key",
+        .key = 'k',
+        .has_arg = 1,
+        .usage = "KVS key for aggregate",
     },
-    { .name = "unpack", .key = 'u', .has_arg = 1,
-      .usage = "KVS key to which to optionally \"unpack\" aggregate",
+    {
+        .name = "unpack",
+        .key = 'u',
+        .has_arg = 1,
+        .usage = "KVS key to which to optionally \"unpack\" aggregate",
     },
-    { .name = "print-result", .key = 'p', .has_arg = 0,
-      .usage = "Print final aggregate on rank 0 upon completion",
+    {
+        .name = "print-result",
+        .key = 'p',
+        .has_arg = 0,
+        .usage = "Print final aggregate on rank 0 upon completion",
     },
     OPTPARSE_TABLE_END,
 };
 
 static struct optparse_subcommand hwloc_subcmds[] = {
-    { "reload",
-      "[OPTIONS] [DIR]",
-      "Reload hwloc XML, optionally from DIR/<rank>.xml files",
-      internal_hwloc_reload,
-      0,
-      reload_opts,
+    {
+        "reload",
+        "[OPTIONS] [DIR]",
+        "Reload hwloc XML, optionally from DIR/<rank>.xml files",
+        internal_hwloc_reload,
+        0,
+        reload_opts,
     },
-    { "lstopo",
-      "[lstopo-OPTIONS]",
-      "Show hwloc topology of the system",
-      cmd_lstopo,
-      OPTPARSE_SUBCMD_SKIP_OPTS,
-      NULL,
+    {
+        "lstopo",
+        "[lstopo-OPTIONS]",
+        "Show hwloc topology of the system",
+        cmd_lstopo,
+        OPTPARSE_SUBCMD_SKIP_OPTS,
+        NULL,
     },
-    { "topology",
-      NULL,
-      "Dump system topology XML to stdout",
-      cmd_topology,
-      0,
-      topology_opts,
+    {
+        "topology",
+        NULL,
+        "Dump system topology XML to stdout",
+        cmd_topology,
+        0,
+        topology_opts,
     },
-    { "info",
-      NULL,
-      "Short-form dump of instance resources",
-      cmd_info,
-      0,
-      topology_opts,
+    {
+        "info",
+        NULL,
+        "Short-form dump of instance resources",
+        cmd_info,
+        0,
+        topology_opts,
     },
-    { "aggregate-load",
-      "[OPTIONS]",
-      "aggregate hwloc summary with optional local topology reload",
-      cmd_aggregate_load,
-      OPTPARSE_SUBCMD_HIDDEN,
-      aggregate_load_opts,
+    {
+        "aggregate-load",
+        "[OPTIONS]",
+        "aggregate hwloc summary with optional local topology reload",
+        cmd_aggregate_load,
+        OPTPARSE_SUBCMD_HIDDEN,
+        aggregate_load_opts,
     },
     OPTPARSE_SUBCMD_END,
 };
@@ -1011,9 +1056,13 @@ int subcommand_hwloc_register (optparse_t *p)
     optparse_t *c;
     optparse_err_t e;
 
-    e = optparse_reg_subcommand (p, "hwloc", cmd_hwloc, NULL,
+    e = optparse_reg_subcommand (p,
+                                 "hwloc",
+                                 cmd_hwloc,
+                                 NULL,
                                  "Control/query resource-hwloc service",
-                                 0, NULL);
+                                 0,
+                                 NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
@@ -1022,7 +1071,6 @@ int subcommand_hwloc_register (optparse_t *p)
         return (-1);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

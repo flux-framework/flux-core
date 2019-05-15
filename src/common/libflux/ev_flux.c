@@ -17,7 +17,6 @@
 
 #include "ev_flux.h"
 
-
 /* Get flux poll events, converted to libev
  */
 static int get_pollevents (flux_t *h)
@@ -35,8 +34,8 @@ static int get_pollevents (flux_t *h)
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 {
-    struct ev_flux *fw = (struct ev_flux *)((char *)w
-                            - offsetof (struct ev_flux, prepare_w));
+    struct ev_flux *fw =
+        (struct ev_flux *)((char *)w - offsetof (struct ev_flux, prepare_w));
     int events = get_pollevents (fw->h);
 
     if ((events & fw->events) || (events & EV_ERROR))
@@ -47,8 +46,8 @@ static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 
 static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
 {
-    struct ev_flux *fw = (struct ev_flux *)((char *)w
-                            - offsetof (struct ev_flux, check_w));
+    struct ev_flux *fw =
+        (struct ev_flux *)((char *)w - offsetof (struct ev_flux, check_w));
     int events = get_pollevents (fw->h);
 
     ev_io_stop (loop, &fw->io_w);
@@ -91,4 +90,3 @@ void ev_flux_stop (struct ev_loop *loop, struct ev_flux *w)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

@@ -16,14 +16,13 @@
 #include <string.h>
 #include <errno.h>
 
-
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/unlink_recursive.h"
 #include "src/common/libutil/cleanup.h"
 
-int main(int argc, char** argv)
+int main (int argc, char** argv)
 {
-    const char *tmp = getenv ("TMPDIR");
+    const char* tmp = getenv ("TMPDIR");
     char file[PATH_MAX];
     char dir[PATH_MAX];
     char dir2[PATH_MAX];
@@ -50,10 +49,8 @@ int main(int argc, char** argv)
     cleanup_push_string (cleanup_file, file);
     cleanup_push_string (cleanup_directory, dir);
     cleanup_run ();
-    ok (stat (file, &sb) < 0 && errno == ENOENT,
-        "cleanup removed independent file");
-    ok (stat (dir, &sb) < 0 && errno == ENOENT,
-        "cleanup removed independent dir");
+    ok (stat (file, &sb) < 0 && errno == ENOENT, "cleanup removed independent file");
+    ok (stat (dir, &sb) < 0 && errno == ENOENT, "cleanup removed independent dir");
 
     /* This time put file inside directory
      */
@@ -73,10 +70,8 @@ int main(int argc, char** argv)
     cleanup_push_string (cleanup_directory, dir);
     cleanup_push_string (cleanup_file, file);
     cleanup_run ();
-    ok (stat (file, &sb) < 0 && errno == ENOENT,
-        "cleanup removed file pushed second");
-    ok (stat (dir, &sb) < 0 && errno == ENOENT,
-        "cleanup removed dir pushed first");
+    ok (stat (file, &sb) < 0 && errno == ENOENT, "cleanup removed file pushed second");
+    ok (stat (dir, &sb) < 0 && errno == ENOENT, "cleanup removed dir pushed first");
 
     /* Same but reverse push order
      */
@@ -96,8 +91,7 @@ int main(int argc, char** argv)
     cleanup_push_string (cleanup_file, file);
     cleanup_push_string (cleanup_directory, dir);
     cleanup_run ();
-    ok (stat (dir, &sb) == 0,
-        "cleanup failed to remove dir pushed first");
+    ok (stat (dir, &sb) == 0, "cleanup failed to remove dir pushed first");
     ok (stat (file, &sb) < 0 && errno == ENOENT,
         "cleanup removed file pushed second (1 deep)");
 
@@ -157,7 +151,7 @@ int main(int argc, char** argv)
     ok (stat (dir, &sb) < 0 && errno == ENOENT,
         "cleanup removed pushed dir recursively");
 
-    done_testing();
+    done_testing ();
 }
 
 /*

@@ -28,7 +28,7 @@ uint32_t kary_childof (int k, uint32_t size, uint32_t i, int j)
     uint32_t n;
 
     if (k > 0 && j >= 0 && j < k) {
-        n = k*(i + 1) - (k - 2) + j - 1;
+        n = k * (i + 1) - (k - 2) + j - 1;
         if (n < size)
             return n;
     }
@@ -91,7 +91,6 @@ uint32_t kary_child_route (int k, uint32_t size, uint32_t src, uint32_t dst)
     }
     return KARY_NONE;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -64,9 +64,12 @@ struct publisher *publisher_create (void)
     return pub;
 }
 
-static flux_msg_t *encode_event (const char *topic, int flags,
-                                 uint32_t rolemask, uint32_t userid,
-                                 uint32_t seq, const char *src)
+static flux_msg_t *encode_event (const char *topic,
+                                 int flags,
+                                 uint32_t rolemask,
+                                 uint32_t userid,
+                                 uint32_t seq,
+                                 const char *src)
 {
     flux_msg_t *msg;
     void *dst = NULL;
@@ -86,15 +89,21 @@ static flux_msg_t *encode_event (const char *topic, int flags,
         if (flux_msg_set_private (msg) < 0)
             goto error;
     }
-    if (src) { // optional payload
+    if (src) {  // optional payload
         int srclen = strlen (src);
         size_t dstlen = BASE64_DECODE_SIZE (srclen);
 
         if (!(dst = malloc (dstlen)))
             goto error;
-        if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
-                               NULL, &dstlen, NULL,
-                               sodium_base64_VARIANT_ORIGINAL) < 0) {
+        if (sodium_base642bin ((unsigned char *)dst,
+                               dstlen,
+                               src,
+                               srclen,
+                               NULL,
+                               &dstlen,
+                               NULL,
+                               sodium_base64_VARIANT_ORIGINAL)
+            < 0) {
             errno = EPROTO;
             goto error;
         }
@@ -124,26 +133,30 @@ static void send_event (struct publisher *pub, const flux_msg_t *msg)
     sender = zlist_first (pub->senders);
     while (sender != NULL) {
         if (sender->send (sender->arg, msg) < 0)
-            flux_log_error (pub->h, "%s: sender=%s",
-                            __FUNCTION__, sender->name);
+            flux_log_error (pub->h, "%s: sender=%s", __FUNCTION__, sender->name);
         sender = zlist_next (pub->senders);
     }
 }
 
-void pub_cb (flux_t *h, flux_msg_handler_t *mh,
-             const flux_msg_t *msg, void *arg)
+void pub_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     struct publisher *pub = arg;
     const char *topic;
-    const char *payload = NULL; // optional
+    const char *payload = NULL;  // optional
     int flags;
     uint32_t rolemask, userid;
     flux_msg_t *event = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s?:s}",
-                                        "topic", &topic,
-                                        "flags", &flags,
-                                        "payload", &payload) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i s?:s}",
+                             "topic",
+                             &topic,
+                             "flags",
+                             &flags,
+                             "payload",
+                             &payload)
+        < 0)
         goto error;
     if ((flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
         errno = EPROTO;
@@ -153,8 +166,7 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (flux_msg_get_userid (msg, &userid) < 0)
         goto error;
-    if (!(event = encode_event (topic, flags, rolemask, userid,
-                                ++pub->seq, payload)))
+    if (!(event = encode_event (topic, flags, rolemask, userid, ++pub->seq, payload)))
         goto error_restore_seq;
     send_event (pub, event);
     if (flux_respond_pack (h, msg, "{s:i}", "seq", pub->seq) < 0)
@@ -190,10 +202,9 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "event.pub",  pub_cb, FLUX_ROLE_USER },
+    {FLUX_MSGTYPE_REQUEST, "event.pub", pub_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
-
 
 int publisher_set_flux (struct publisher *pub, flux_t *h)
 {
@@ -203,8 +214,10 @@ int publisher_set_flux (struct publisher *pub, flux_t *h)
     return 0;
 }
 
-int publisher_set_sender (struct publisher *pub, const char *name,
-                          publisher_send_f cb, void *arg)
+int publisher_set_sender (struct publisher *pub,
+                          const char *name,
+                          publisher_send_f cb,
+                          void *arg)
 {
     struct sender *sender;
 

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -63,28 +63,28 @@ static void local_channel_flush (struct subprocess_channel *c)
     }
 }
 
-static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
 
     if (flux_buffer_write_watcher_is_closed (w, &err) == 1) {
         if (err)
-            log_msg ("flux_buffer_write_watcher close error: %s",
-                     strerror (err));
+            log_msg ("flux_buffer_write_watcher close error: %s", strerror (err));
         else
-            c->parent_fd = -1;  /* closed by reactor */
-        flux_watcher_stop (w);  /* c->buffer_write_w */
+            c->parent_fd = -1; /* closed by reactor */
+        flux_watcher_stop (w); /* c->buffer_write_w */
         local_channel_flush (c);
-    }
-    else
-        flux_log_error (c->p->h, "flux_buffer_write_watcher: stream %s: %d:",
-                        c->name, revents);
+    } else
+        flux_log_error (c->p->h,
+                        "flux_buffer_write_watcher: stream %s: %d:",
+                        c->name,
+                        revents);
 }
 
 static void local_output (struct subprocess_channel *c,
-                          flux_watcher_t *w, int revents,
+                          flux_watcher_t *w,
+                          int revents,
                           flux_subprocess_output_f output_cb)
 {
     bool eof_set = false;
@@ -92,7 +92,6 @@ static void local_output (struct subprocess_channel *c,
     if (revents & FLUX_POLLIN) {
         flux_buffer_t *fb;
         if (!c->eof_sent_to_caller) {
-
             if (!(fb = flux_buffer_read_watcher_get_buffer (w))) {
                 flux_log_error (c->p->h, "flux_buffer_read_watcher_get_buffer");
                 return;
@@ -108,14 +107,12 @@ static void local_output (struct subprocess_channel *c,
         output_cb (c->p, c->name);
 
         if (c->p->state == FLUX_SUBPROCESS_EXITED && !c->eof_sent_to_caller) {
-
             if (!(fb = flux_buffer_read_watcher_get_buffer (w))) {
                 flux_log_error (c->p->h, "flux_buffer_read_watcher_get_buffer");
                 return;
             }
 
             if (!flux_buffer_bytes (fb)) {
-
                 output_cb (c->p, c->name);
 
                 c->eof_sent_to_caller = true;
@@ -123,10 +120,11 @@ static void local_output (struct subprocess_channel *c,
                 c->p->channels_eof_sent++;
             }
         }
-    }
-    else
-        flux_log_error (c->p->h, "flux_buffer_read_watcher on %s: 0x%X:",
-                        c->name, revents);
+    } else
+        flux_log_error (c->p->h,
+                        "flux_buffer_read_watcher on %s: 0x%X:",
+                        c->name,
+                        revents);
 
     if (eof_set) {
         flux_watcher_stop (w);
@@ -146,22 +144,25 @@ static void local_output (struct subprocess_channel *c,
         subprocess_check_completed (c->p);
 }
 
-static void local_out_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void local_out_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_channel_out);
 }
 
-static void local_stdout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                               int revents, void *arg)
+static void local_stdout_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_stdout);
 }
 
-static void local_stderr_cb (flux_reactor_t *r, flux_watcher_t *w,
-                               int revents, void *arg)
+static void local_stderr_cb (flux_reactor_t *r,
+                             flux_watcher_t *w,
+                             int revents,
+                             void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_stderr);
@@ -176,7 +177,7 @@ static int channel_local_setup (flux_subprocess_t *p,
                                 int buffer_size)
 {
     struct subprocess_channel *c = NULL;
-    int fds[2] = { -1, -1 };
+    int fds[2] = {-1, -1};
     char *e = NULL;
     int save_errno;
     int fd_flags;
@@ -241,11 +242,7 @@ static int channel_local_setup (flux_subprocess_t *p,
 
         /* set overwrite flag, if caller recursively launches
          * another subprocess */
-        if (flux_cmd_setenvf (p->cmd,
-                              1,
-                              e,
-                              "%d",
-                              c->child_fd) < 0) {
+        if (flux_cmd_setenvf (p->cmd, 1, e, "%d", c->child_fd) < 0) {
             flux_log_error (p->h, "flux_cmd_setenvf");
             goto error;
         }
@@ -296,7 +293,8 @@ static int local_setup_stdio (flux_subprocess_t *p)
                              NULL,
                              "STDIN",
                              CHANNEL_WRITE,
-                             buffer_size) < 0)
+                             buffer_size)
+        < 0)
         return -1;
 
     if (p->ops.on_stdout) {
@@ -309,7 +307,8 @@ static int local_setup_stdio (flux_subprocess_t *p)
                                  local_stdout_cb,
                                  "STDOUT",
                                  CHANNEL_READ,
-                                 buffer_size) < 0)
+                                 buffer_size)
+            < 0)
             return -1;
     }
 
@@ -323,7 +322,8 @@ static int local_setup_stdio (flux_subprocess_t *p)
                                  local_stderr_cb,
                                  "STDERR",
                                  CHANNEL_READ,
-                                 buffer_size) < 0)
+                                 buffer_size)
+            < 0)
             return -1;
     }
 
@@ -361,7 +361,8 @@ static int local_setup_channels (flux_subprocess_t *p)
                                  p->ops.on_channel_out ? local_out_cb : NULL,
                                  name,
                                  channel_flags,
-                                 buffer_size) < 0)
+                                 buffer_size)
+            < 0)
             return -1;
         name = zlist_next (channels);
     }
@@ -391,8 +392,7 @@ static void close_fds (flux_subprocess_t *p, bool parent)
         if (parent && c->parent_fd != -1) {
             close (c->parent_fd);
             c->parent_fd = -1;
-        }
-        else if (!parent && c->child_fd != -1) {
+        } else if (!parent && c->child_fd != -1) {
             close (c->child_fd);
             c->child_fd = -1;
         }
@@ -419,7 +419,7 @@ static void closefd_child (void *arg, int fd)
     c = zhash_first (p->channels);
     while (c) {
         if (c->child_fd == fd) {
-            (void) fd_unset_cloexec (fd);
+            (void)fd_unset_cloexec (fd);
             return;
         }
         c = zhash_next (p->channels);
@@ -485,8 +485,7 @@ static int local_child (flux_subprocess_t *p)
                 flux_log_error (p->h, "dup2");
                 _exit (1);
             }
-        }
-        else
+        } else
             close (STDOUT_FILENO);
 
         if ((c = zhash_lookup (p->channels, "STDERR"))) {
@@ -494,8 +493,7 @@ static int local_child (flux_subprocess_t *p)
                 flux_log_error (p->h, "dup2");
                 _exit (1);
             }
-        }
-        else
+        } else
             close (STDERR_FILENO);
     }
 
@@ -511,7 +509,7 @@ static int local_child (flux_subprocess_t *p)
         _exit (1);
 
     // Close fds
-    if (fdwalk (closefd_child, (void *) p) < 0) {
+    if (fdwalk (closefd_child, (void *)p) < 0) {
         flux_log_error (p->h, "Failed closing all fds");
         _exit (1);
     }
@@ -554,8 +552,10 @@ static int subprocess_parent_wait_on_child (flux_subprocess_t *p)
     return 0;
 }
 
-static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
+static void child_watch_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
 {
     flux_subprocess_t *p = arg;
     int status;
@@ -568,7 +568,6 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
     p->status = status;
 
     if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
-
         /* remote/server code may have set EXEC_FAILED or
          * FAILED on fatal errors.
          */

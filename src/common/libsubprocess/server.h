@@ -19,7 +19,6 @@ void server_stop (flux_subprocess_server_t *s);
 
 int server_terminate_subprocesses (flux_subprocess_server_t *s);
 
-int server_terminate_by_uuid (flux_subprocess_server_t *s,
-                              const char *id);
+int server_terminate_by_uuid (flux_subprocess_server_t *s, const char *id);
 
 #endif /* !_SUBPROCESS_SERVER_H */

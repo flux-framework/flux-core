@@ -53,8 +53,7 @@ static struct copy_context *copy_context_create (const char *srcns,
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if ((srcns && !(ctx->srcns = strdup (srcns)))
-        || !(ctx->srckey = strdup (srckey))
+    if ((srcns && !(ctx->srcns = strdup (srcns))) || !(ctx->srckey = strdup (srckey))
         || (dstns && !(ctx->dstns = strdup (dstns)))
         || !(ctx->dstkey = strdup (dstkey))) {
         copy_context_destroy (ctx);
@@ -88,8 +87,7 @@ static void copy_continuation (flux_future_t *f, void *arg)
     if (ctx->srcns) {
         if (!(f2 = flux_kvs_commit (h, ctx->srcns, ctx->commit_flags, txn)))
             goto error;
-    }
-    else {
+    } else {
         if (!(f2 = flux_kvs_commit (h, NULL, ctx->commit_flags, txn)))
             goto error;
     }
@@ -128,8 +126,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     if (ctx->dstns) {
         if (!(f2 = flux_kvs_commit (h, ctx->dstns, ctx->commit_flags, txn)))
             goto error;
-    }
-    else {
+    } else {
         if (!(f2 = flux_kvs_commit (h, NULL, ctx->commit_flags, txn)))
             goto error;
     }
@@ -163,16 +160,11 @@ flux_future_t *flux_kvs_copy (flux_t *h,
     if (srcns) {
         if (!(f1 = flux_kvs_lookup (h, srcns, FLUX_KVS_TREEOBJ, srckey)))
             return NULL;
-    }
-    else {
+    } else {
         if (!(f1 = flux_kvs_lookup (h, NULL, FLUX_KVS_TREEOBJ, srckey)))
             return NULL;
     }
-    if (!(ctx = copy_context_create (srcns,
-                                     srckey,
-                                     dstns,
-                                     dstkey,
-                                     commit_flags)))
+    if (!(ctx = copy_context_create (srcns, srckey, dstns, dstkey, commit_flags)))
         goto error;
     if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);
@@ -203,11 +195,7 @@ flux_future_t *flux_kvs_move (flux_t *h,
     }
     if (!(f1 = flux_kvs_copy (h, srcns, srckey, dstns, dstkey, commit_flags)))
         return NULL;
-    if (!(ctx = copy_context_create (srcns,
-                                     srckey,
-                                     dstns,
-                                     dstkey,
-                                     commit_flags)))
+    if (!(ctx = copy_context_create (srcns, srckey, dstns, dstkey, commit_flags)))
         goto error;
     if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);

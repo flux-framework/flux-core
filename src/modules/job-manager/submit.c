@@ -43,12 +43,19 @@ int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
 
     if (!(job = job_create ()))
         return -1;
-    if (json_unpack (o, "{s:I s:i s:i s:f s:i}",
-                        "id", &job->id,
-                        "priority", &job->priority,
-                        "userid", &job->userid,
-                        "t_submit", &job->t_submit,
-                        "flags", &job->flags) < 0) {
+    if (json_unpack (o,
+                     "{s:I s:i s:i s:f s:i}",
+                     "id",
+                     &job->id,
+                     "priority",
+                     &job->priority,
+                     "userid",
+                     &job->userid,
+                     "t_submit",
+                     &job->t_submit,
+                     "flags",
+                     &job->flags)
+        < 0) {
         errno = EPROTO;
         job_decref (job);
         return -1;
@@ -99,7 +106,8 @@ zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs)
         errno = ENOMEM;
         return NULL;
     }
-    json_array_foreach (jobs, index, el) {
+    json_array_foreach (jobs, index, el)
+    {
         if (submit_enqueue_one_job (queue, newjobs, el) < 0)
             goto error;
     }
@@ -123,9 +131,12 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
     entry = eventlog_entry_pack (job->t_submit,
                                  "submit",
                                  "{ s:i s:i s:i }",
-                                 "userid", job->userid,
-                                 "priority", job->priority,
-                                 "flags", job->flags);
+                                 "userid",
+                                 job->userid,
+                                 "priority",
+                                 job->priority,
+                                 "flags",
+                                 job->flags);
     if (!entry)
         goto error;
     if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
@@ -135,7 +146,7 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
     if (event_job_action (event_ctx, job) < 0)
         goto error;
     rv = 0;
- error:
+error:
     json_decref (entry);
     return rv;
 }
@@ -145,8 +156,10 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
  * by the ingest module, and already instantiated in the KVS.
  * The user isn't handed the jobid though until we accept the job here.
  */
-static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void submit_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     struct submit_ctx *ctx = arg;
     json_t *jobs;
@@ -169,16 +182,21 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    flux_log (h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__,
-                            (int)zlist_size (newjobs));
+    flux_log (h,
+              LOG_DEBUG,
+              "%s: added %d jobs",
+              __FUNCTION__,
+              (int)zlist_size (newjobs));
 
     /* Submitting user is being responded to with jobid's.
      * Now walk the list of new jobs and advance their state.
      */
     while ((job = zlist_pop (newjobs))) {
         if (submit_post_event (ctx->event_ctx, job) < 0)
-            flux_log_error (h, "%s: submit_post_event id=%llu",
-                            __FUNCTION__, (unsigned long long)job->id);
+            flux_log_error (h,
+                            "%s: submit_post_event id=%llu",
+                            __FUNCTION__,
+                            (unsigned long long)job->id);
         job_decref (job);
     }
     zlist_destroy (&newjobs);
@@ -209,7 +227,7 @@ void submit_ctx_destroy (struct submit_ctx *ctx)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

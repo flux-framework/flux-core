@@ -36,31 +36,37 @@ struct job_manager_ctx {
     struct drain_ctx *drain_ctx;
 };
 
-static void list_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void list_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     struct job_manager_ctx *ctx = arg;
     list_handle_request (h, ctx->queue, msg);
 }
 
-static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void raise_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_manager_ctx *ctx = arg;
     raise_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
-static void priority_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+static void priority_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     struct job_manager_ctx *ctx = arg;
     priority_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-manager.list", list_cb, FLUX_ROLE_USER},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.raise", raise_cb, FLUX_ROLE_USER},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.priority", priority_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "job-manager.list", list_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "job-manager.raise", raise_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST, "job-manager.priority", priority_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -52,44 +52,42 @@ struct flux_msg {
  * PROTO consists of 4 byte prelude followed by a fixed length
  * array of u32's in network byte order.
  */
-#define PROTO_MAGIC         0x8e
-#define PROTO_VERSION       1
+#define PROTO_MAGIC 0x8e
+#define PROTO_VERSION 1
 
-#define PROTO_OFF_MAGIC     0 /* 1 byte */
-#define PROTO_OFF_VERSION   1 /* 1 byte */
-#define PROTO_OFF_TYPE      2 /* 1 byte */
-#define PROTO_OFF_FLAGS     3 /* 1 byte */
+#define PROTO_OFF_MAGIC 0   /* 1 byte */
+#define PROTO_OFF_VERSION 1 /* 1 byte */
+#define PROTO_OFF_TYPE 2    /* 1 byte */
+#define PROTO_OFF_FLAGS 3   /* 1 byte */
 #define PROTO_OFF_U32_ARRAY 4
 
-#define PROTO_IND_USERID    0
-#define PROTO_IND_ROLEMASK  1
-#define PROTO_IND_AUX1      2
-#define PROTO_IND_AUX2      3
+#define PROTO_IND_USERID 0
+#define PROTO_IND_ROLEMASK 1
+#define PROTO_IND_AUX1 2
+#define PROTO_IND_AUX2 3
 
-#define PROTO_U32_COUNT     4
-#define PROTO_SIZE          4 + (PROTO_U32_COUNT * 4)
+#define PROTO_U32_COUNT 4
+#define PROTO_SIZE 4 + (PROTO_U32_COUNT * 4)
 
 /* Helpful aliases */
-#define PROTO_IND_NODEID    PROTO_IND_AUX1 // request
-#define PROTO_IND_MATCHTAG  PROTO_IND_AUX2 // request, response
-#define PROTO_IND_SEQUENCE  PROTO_IND_AUX1 // event
-#define PROTO_IND_ERRNUM    PROTO_IND_AUX1 // response, keepalive
-#define PROTO_IND_STATUS    PROTO_IND_AUX2 // keepalive
+#define PROTO_IND_NODEID PROTO_IND_AUX1    // request
+#define PROTO_IND_MATCHTAG PROTO_IND_AUX2  // request, response
+#define PROTO_IND_SEQUENCE PROTO_IND_AUX1  // event
+#define PROTO_IND_ERRNUM PROTO_IND_AUX1    // response, keepalive
+#define PROTO_IND_STATUS PROTO_IND_AUX2    // keepalive
 
 static int proto_set_u32 (uint8_t *data, int len, int index, uint32_t val);
 
 static int proto_set_type (uint8_t *data, int len, int type)
 {
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (proto_set_u32 (data, len, PROTO_IND_NODEID,
-                               FLUX_NODEID_ANY) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_NODEID, FLUX_NODEID_ANY) < 0)
                 return -1;
-            if (proto_set_u32 (data, len, PROTO_IND_MATCHTAG,
-                               FLUX_MATCHTAG_NONE) < 0)
+            if (proto_set_u32 (data, len, PROTO_IND_MATCHTAG, FLUX_MATCHTAG_NONE) < 0)
                 return -1;
             break;
         case FLUX_MSGTYPE_RESPONSE:
@@ -118,7 +116,7 @@ static int proto_set_type (uint8_t *data, int len, int type)
 static int proto_get_type (uint8_t *data, int len, int *type)
 {
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
     *type = data[PROTO_OFF_TYPE];
     return 0;
@@ -126,7 +124,7 @@ static int proto_get_type (uint8_t *data, int len, int *type)
 static int proto_set_flags (uint8_t *data, int len, uint8_t flags)
 {
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
     data[PROTO_OFF_FLAGS] = flags;
     return 0;
@@ -134,7 +132,7 @@ static int proto_set_flags (uint8_t *data, int len, uint8_t flags)
 static int proto_get_flags (uint8_t *data, int len, uint8_t *val)
 {
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
     *val = data[PROTO_OFF_FLAGS];
     return 0;
@@ -145,8 +143,8 @@ static int proto_set_u32 (uint8_t *data, int len, int index, uint32_t val)
     int offset = PROTO_OFF_U32_ARRAY + index * 4;
 
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION
-                         || index < 0 || index >= PROTO_U32_COUNT)
+        || data[PROTO_OFF_VERSION] != PROTO_VERSION || index < 0
+        || index >= PROTO_U32_COUNT)
         return -1;
     memcpy (&data[offset], &x, sizeof (x));
     return 0;
@@ -157,8 +155,8 @@ static int proto_get_u32 (uint8_t *data, int len, int index, uint32_t *val)
     int offset = PROTO_OFF_U32_ARRAY + index * 4;
 
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-                         || data[PROTO_OFF_VERSION] != PROTO_VERSION
-                         || index < 0 || index >= PROTO_U32_COUNT)
+        || data[PROTO_OFF_VERSION] != PROTO_VERSION || index < 0
+        || index >= PROTO_U32_COUNT)
         return -1;
     memcpy (&x, &data[offset], sizeof (x));
     *val = ntohl (x);
@@ -214,7 +212,7 @@ void flux_msg_destroy (flux_msg_t *msg)
         int saved_errno = errno;
         json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
-        msg->magic =~ FLUX_MSG_MAGIC;
+        msg->magic = ~FLUX_MSG_MAGIC;
         aux_destroy (&msg->aux);
         free (msg);
         errno = saved_errno;
@@ -225,8 +223,10 @@ void flux_msg_destroy (flux_msg_t *msg)
  * allow msg to be "annotated" for convenience.
  * The message content is otherwise unchanged.
  */
-int flux_msg_aux_set (const flux_msg_t *const_msg, const char *name,
-                      void *aux, flux_free_f destroy)
+int flux_msg_aux_set (const flux_msg_t *const_msg,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy)
 {
     flux_msg_t *msg = (flux_msg_t *)const_msg;
     if (!msg) {
@@ -262,7 +262,6 @@ size_t flux_msg_encode_size (const flux_msg_t *msg)
     }
     return size;
 }
-
 
 int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
 {
@@ -357,8 +356,8 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
 int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 {
     const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
-                              | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
-                              | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING;
+                                | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
+                                | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING;
 
     if (!msg || (fl & ~valid_flags) != 0) {
         errno = EINVAL;
@@ -425,8 +424,9 @@ bool flux_msg_is_streaming (const flux_msg_t *msg)
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_USERID, userid) < 0) {
+    if (!zf
+        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_USERID, userid)
+               < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -436,8 +436,9 @@ int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_USERID, userid) < 0) {
+    if (!zf
+        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_USERID, userid)
+               < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -447,8 +448,12 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_ROLEMASK, rolemask) < 0) {
+    if (!zf
+        || proto_set_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_ROLEMASK,
+                          rolemask)
+               < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -458,8 +463,12 @@ int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_ROLEMASK, rolemask) < 0) {
+    if (!zf
+        || proto_get_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_ROLEMASK,
+                          rolemask)
+               < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -481,8 +490,8 @@ int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
         goto error;
     if (type != FLUX_MSGTYPE_REQUEST)
         goto error;
-    if (proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                       PROTO_IND_NODEID, nodeid) < 0)
+    if (proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_NODEID, nodeid)
+        < 0)
         goto error;
     return 0;
 error:
@@ -506,8 +515,8 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeidp)
         goto error;
     if (type != FLUX_MSGTYPE_REQUEST)
         goto error;
-    if (proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                       PROTO_IND_NODEID, &nodeid) < 0)
+    if (proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_NODEID, &nodeid)
+        < 0)
         goto error;
     *nodeidp = nodeid;
     return 0;
@@ -522,9 +531,9 @@ int flux_msg_set_errnum (flux_msg_t *msg, int e)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
-            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_ERRNUM, e) < 0) {
+        || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
+        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_ERRNUM, e)
+               < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -538,9 +547,9 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
     uint32_t xe;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
-            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_ERRNUM, &xe) < 0) {
+        || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
+        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_ERRNUM, &xe)
+               < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -554,9 +563,9 @@ int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_EVENT
-            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_SEQUENCE, seq) < 0) {
+        || type != FLUX_MSGTYPE_EVENT
+        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_SEQUENCE, seq)
+               < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -569,9 +578,9 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_EVENT
-            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_SEQUENCE, seq) < 0) {
+        || type != FLUX_MSGTYPE_EVENT
+        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_SEQUENCE, seq)
+               < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -584,9 +593,9 @@ int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_MATCHTAG, t) < 0) {
+        || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
+        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_MATCHTAG, t)
+               < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -599,9 +608,9 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_MATCHTAG, t) < 0) {
+        || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
+        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_MATCHTAG, t)
+               < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -614,9 +623,9 @@ int flux_msg_set_status (flux_msg_t *msg, int s)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_KEEPALIVE
-            || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_STATUS, s) < 0) {
+        || type != FLUX_MSGTYPE_KEEPALIVE
+        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_STATUS, s)
+               < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -630,9 +639,9 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
     uint32_t u;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_KEEPALIVE
-            || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_STATUS, &u) < 0) {
+        || type != FLUX_MSGTYPE_KEEPALIVE
+        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_STATUS, &u)
+               < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -648,8 +657,8 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
         return false; /* don't match in foreign matchtag domain */
     if (flux_msg_get_matchtag (msg, &tag) < 0)
         return false;
-    matchgroup = matchtag>>FLUX_MATCHTAG_GROUP_SHIFT;
-    if (matchgroup > 0 && (tag>>FLUX_MATCHTAG_GROUP_SHIFT) != matchgroup)
+    matchgroup = matchtag >> FLUX_MATCHTAG_GROUP_SHIFT;
+    if (matchgroup > 0 && (tag >> FLUX_MATCHTAG_GROUP_SHIFT) != matchgroup)
         return false;
     if (matchgroup == 0 && tag != matchtag)
         return false;
@@ -677,7 +686,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
             return false;
     }
     if (match.topic_glob && strlen (match.topic_glob) > 0
-                         && strcmp (match.topic_glob, "*") != 0) {
+        && strcmp (match.topic_glob, "*") != 0) {
         const char *topic = NULL;
         if (flux_msg_get_topic (msg, &topic) < 0)
             return false;
@@ -904,7 +913,7 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
         return NULL;
     }
     if ((hops = flux_msg_get_route_count (msg)) < 0
-                    || (len = flux_msg_get_route_size (msg)) < 0) {
+        || (len = flux_msg_get_route_size (msg)) < 0) {
         return NULL;
     }
     if (!(cp = buf = malloc (len + hops + 1))) {
@@ -932,7 +941,7 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
 static bool payload_overlap (const void *b, zframe_t *zf)
 {
     return ((char *)b >= (char *)zframe_data (zf)
-         && (char *)b <  (char *)zframe_data (zf) + zframe_size (zf));
+            && (char *)b < (char *)zframe_data (zf) + zframe_size (zf));
 }
 
 int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
@@ -945,7 +954,7 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
         errno = EINVAL;
         goto done;
     }
-    json_decref (msg->json);            /* invalidate cached json object */
+    json_decref (msg->json); /* invalidate cached json object */
     msg->json = NULL;
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto done;
@@ -956,15 +965,15 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
     zf = zmsg_first (msg->zmsg);
     if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
-            zf = zmsg_next (msg->zmsg);      /* skip route frame */
+            zf = zmsg_next (msg->zmsg); /* skip route frame */
         if (zf)
-            zf = zmsg_next (msg->zmsg);      /* skip route delim */
+            zf = zmsg_next (msg->zmsg); /* skip route delim */
     }
     if ((flags & FLUX_MSGFLAG_TOPIC)) {
         if (zf)
-            zf = zmsg_next (msg->zmsg);      /* skip topic frame */
+            zf = zmsg_next (msg->zmsg); /* skip topic frame */
     }
-    if (!zf) {                          /* must at least have proto frame */
+    if (!zf) { /* must at least have proto frame */
         errno = EPROTO;
         goto done;
     }
@@ -978,22 +987,22 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
             }
             zframe_reset (zf, buf, size);
         }
-    /* Case #2: add payload.
-     */
+        /* Case #2: add payload.
+         */
     } else if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
         zmsg_remove (msg->zmsg, zf);
         if (zmsg_addmem (msg->zmsg, buf, size) < 0
-                                        || zmsg_append (msg->zmsg, &zf) < 0) {
+            || zmsg_append (msg->zmsg, &zf) < 0) {
             errno = ENOMEM;
             goto done;
         }
         flags |= FLUX_MSGFLAG_PAYLOAD;
-    /* Case #3: remove payload.
-     */
+        /* Case #3: remove payload.
+         */
     } else if ((flags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
         zmsg_remove (msg->zmsg, zf);
         zframe_destroy (&zf);
-        flags &= ~(uint8_t)(FLUX_MSGFLAG_PAYLOAD);
+        flags &= ~(uint8_t) (FLUX_MSGFLAG_PAYLOAD);
     }
     if (flux_msg_set_flags (msg, flags) < 0)
         goto done;
@@ -1087,8 +1096,7 @@ int flux_msg_set_string (flux_msg_t *msg, const char *s)
 {
     if (s) {
         return flux_msg_set_payload (msg, s, strlen (s) + 1);
-    }
-    else
+    } else
         return flux_msg_set_payload (msg, NULL, 0);
 }
 
@@ -1136,7 +1144,7 @@ int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
         if (flux_msg_get_string (msg, &json_str) < 0)
             goto done;
         if (!json_str || !(msg->json = json_loads (json_str, 0, &error))
-                      || !json_is_object (msg->json)) {
+            || !json_is_object (msg->json)) {
             errno = EPROTO;
             goto done;
         }
@@ -1170,25 +1178,25 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto done;
     zf = zmsg_first (msg->zmsg);
-    if ((flags & FLUX_MSGFLAG_ROUTE)) {   /* skip over routing frames, if any */
+    if ((flags & FLUX_MSGFLAG_ROUTE)) { /* skip over routing frames, if any */
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (msg->zmsg);
         if (zf)
             zf = zmsg_next (msg->zmsg);
     }
-    if (!zf) {                          /* must at least have proto frame */
+    if (!zf) { /* must at least have proto frame */
         errno = EPROTO;
         goto done;
     }
-    if ((flags & FLUX_MSGFLAG_TOPIC) && topic) {        /* case 1: repl topic */
+    if ((flags & FLUX_MSGFLAG_TOPIC) && topic) { /* case 1: repl topic */
         zframe_reset (zf, topic, strlen (topic) + 1);
-    } else if (!(flags & FLUX_MSGFLAG_TOPIC) && topic) {/* case 2: add topic */
+    } else if (!(flags & FLUX_MSGFLAG_TOPIC) && topic) { /* case 2: add topic */
         zmsg_remove (msg->zmsg, zf);
         if ((flags & FLUX_MSGFLAG_PAYLOAD) && (zf2 = zmsg_next (msg->zmsg)))
             zmsg_remove (msg->zmsg, zf2);
         if (zmsg_addmem (msg->zmsg, topic, strlen (topic) + 1) < 0
-                                    || zmsg_append (msg->zmsg, &zf) < 0
-                                    || (zf2 && zmsg_append (msg->zmsg, &zf2) < 0)) {
+            || zmsg_append (msg->zmsg, &zf) < 0
+            || (zf2 && zmsg_append (msg->zmsg, &zf2) < 0)) {
             errno = ENOMEM;
             goto done;
         }
@@ -1313,13 +1321,12 @@ struct map_struct {
 };
 
 static struct map_struct msgtype_map[] = {
-    { "request", ">", FLUX_MSGTYPE_REQUEST },
-    { "response", "<", FLUX_MSGTYPE_RESPONSE},
-    { "event", "e", FLUX_MSGTYPE_EVENT},
-    { "keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
+    {"request", ">", FLUX_MSGTYPE_REQUEST},
+    {"response", "<", FLUX_MSGTYPE_RESPONSE},
+    {"event", "e", FLUX_MSGTYPE_EVENT},
+    {"keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
 };
-static const int msgtype_map_len = 
-                            sizeof (msgtype_map) / sizeof (msgtype_map[0]);
+static const int msgtype_map_len = sizeof (msgtype_map) / sizeof (msgtype_map[0]);
 
 const char *flux_msg_typestr (int type)
 {
@@ -1353,8 +1360,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         fprintf (f, "NULL");
         return;
     }
-    if (flux_msg_get_type (msg, &type) < 0
-            || (!(proto = zmsg_last (msg->zmsg)))) {
+    if (flux_msg_get_type (msg, &type) < 0 || (!(proto = zmsg_last (msg->zmsg)))) {
         fprintf (f, "malformed message");
         return;
     }
@@ -1406,8 +1412,7 @@ void flux_msg_iobuf_clean (struct flux_msg_iobuf *iobuf)
     memset (iobuf, 0, sizeof (*iobuf));
 }
 
-int flux_msg_sendfd (int fd, const flux_msg_t *msg,
-                     struct flux_msg_iobuf *iobuf)
+int flux_msg_sendfd (int fd, const flux_msg_t *msg, struct flux_msg_iobuf *iobuf)
 {
     struct flux_msg_iobuf local;
     struct flux_msg_iobuf *io = iobuf ? iobuf : &local;
@@ -1570,4 +1575,3 @@ int flux_msg_frames (const flux_msg_t *msg)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

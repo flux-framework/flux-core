@@ -27,16 +27,13 @@ int main (int argc, char *argv[])
 
     plan (19);
 
-    ok ((ml = msglist_create (free)) != NULL,
-        "msglist_create works");
+    ok ((ml = msglist_create (free)) != NULL, "msglist_create works");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == POLLOUT,
         "msglist_pollevents on empty msglist returns POLLOUT");
-    ok (msglist_append (ml, xstrdup ("foo")) == 0,
-        "msglist_append 'foo' works");
+    ok (msglist_append (ml, xstrdup ("foo")) == 0, "msglist_append 'foo' works");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == (POLLOUT | POLLIN),
         "msglist_pollevents on non-empty msglist returns POLLOUT | POLLIN");
-    ok (msglist_push (ml, xstrdup ("bar")) == 0,
-        "msglist_push 'bar' works");
+    ok (msglist_push (ml, xstrdup ("bar")) == 0, "msglist_push 'bar' works");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == (POLLOUT | POLLIN),
         "msglist_pollevents still returns POLLOUT | POLLIN");
     ok ((msg = msglist_pop (ml)) != NULL && !strcmp (msg, "bar"),
@@ -52,30 +49,22 @@ int main (int argc, char *argv[])
     // cppcheck-suppress doubleFree
     free (msg);
 
-    ok ((pfd.fd = msglist_pollfd (ml)) >= 0,
-        "msglist_pollfd works");
-    pfd.events = POLLIN,
-    pfd.revents = 0,
+    ok ((pfd.fd = msglist_pollfd (ml)) >= 0, "msglist_pollfd works");
+    pfd.events = POLLIN, pfd.revents = 0,
     ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
         "pollfd suggests we read pollevents");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == POLLOUT,
         "msglist_pollevents on empty msglist returns POLLOUT");
-    pfd.events = POLLIN,
-    pfd.revents = 0,
-    ok (poll (&pfd, 1, 0) == 0,
-        "pollfd is no longer ready");
-    ok (msglist_push (ml, xstrdup ("foo")) == 0,
-        "msglist_push 'foo' works");
-    pfd.events = POLLIN,
-    pfd.revents = 0,
+    pfd.events = POLLIN, pfd.revents = 0,
+    ok (poll (&pfd, 1, 0) == 0, "pollfd is no longer ready");
+    ok (msglist_push (ml, xstrdup ("foo")) == 0, "msglist_push 'foo' works");
+    pfd.events = POLLIN, pfd.revents = 0,
     ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
         "pollfd suggests we read pollevents");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == (POLLOUT | POLLIN),
         "msglist_pollevents on non-empty msglist returns POLLOUT | POLLIN");
-    pfd.events = POLLIN,
-    pfd.revents = 0,
-    ok (poll (&pfd, 1, 0) == 0,
-        "pollfd is no longer ready");
+    pfd.events = POLLIN, pfd.revents = 0,
+    ok (poll (&pfd, 1, 0) == 0, "pollfd is no longer ready");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == (POLLOUT | POLLIN),
         "msglist_pollevents still returns POLLOUT | POLLIN");
 

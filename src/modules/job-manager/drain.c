@@ -49,8 +49,10 @@ static void drain_complete_cb (struct queue *queue, void *arg)
     }
 }
 
-static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void drain_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct drain_ctx *ctx = arg;
     flux_msg_t *cpy;
@@ -73,8 +75,10 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+static void undrain_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     struct drain_ctx *ctx = arg;
     flux_msg_t *req;
@@ -86,8 +90,7 @@ static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     submit_enable (ctx->submit_ctx);
     while ((req = zlist_pop (ctx->requests))) {
-        if (flux_respond_error (ctx->h, req, EINVAL,
-                                "queue was re-enabled") < 0)
+        if (flux_respond_error (ctx->h, req, EINVAL, "queue was re-enabled") < 0)
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         flux_msg_destroy (req);
     }
@@ -103,10 +106,9 @@ void drain_ctx_destroy (struct drain_ctx *ctx)
         if (ctx->requests) {
             flux_msg_t *msg;
             while ((msg = zlist_pop (ctx->requests))) {
-                if (flux_respond_error (ctx->h, msg, ENOSYS,
-                                        "job-manager is unloading") < 0)
-                    flux_log_error (ctx->h, "%s: flux_respond_error",
-                                    __FUNCTION__);
+                if (flux_respond_error (ctx->h, msg, ENOSYS, "job-manager is unloading")
+                    < 0)
+                    flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
                 flux_msg_destroy (msg);
             }
             zlist_destroy (&ctx->requests);
@@ -117,12 +119,13 @@ void drain_ctx_destroy (struct drain_ctx *ctx)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-manager.drain", drain_cb, 0},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.undrain", undrain_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "job-manager.drain", drain_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "job-manager.undrain", undrain_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct drain_ctx *drain_ctx_create (flux_t *h, struct queue *queue,
+struct drain_ctx *drain_ctx_create (flux_t *h,
+                                    struct queue *queue,
                                     struct submit_ctx *submit_ctx)
 {
     struct drain_ctx *ctx;

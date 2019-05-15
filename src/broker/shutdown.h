@@ -26,7 +26,7 @@
  */
 
 typedef struct shutdown_struct shutdown_t;
-typedef void (*shutdown_cb_f)(shutdown_t *s, bool expired, void *arg);
+typedef void (*shutdown_cb_f) (shutdown_t *s, bool expired, void *arg);
 
 /* Create/destroy shutdown_t.
  */
@@ -62,13 +62,18 @@ void shutdown_disarm (shutdown_t *s);
 /* Shutdown event encode/decode
  * (used internally, exposed for testing)
  */
-flux_msg_t *shutdown_vencode (double grace, int rc, int rank,
-                              const char *fmt, va_list ap);
-flux_msg_t *shutdown_encode (double grace, int rc, int rank,
-                             const char *fmt, ...);
-int shutdown_decode (const flux_msg_t *msg, double *grace, int *rc, int *rank,
-                     char *reason, int reason_len);
-
+flux_msg_t *shutdown_vencode (double grace,
+                              int rc,
+                              int rank,
+                              const char *fmt,
+                              va_list ap);
+flux_msg_t *shutdown_encode (double grace, int rc, int rank, const char *fmt, ...);
+int shutdown_decode (const flux_msg_t *msg,
+                     double *grace,
+                     int *rc,
+                     int *rank,
+                     char *reason,
+                     int reason_len);
 
 #endif /* !_BROKER_SHUTDOWN_H */
 

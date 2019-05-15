@@ -32,16 +32,19 @@ struct pmi2_context {
     int rank;
     int appnum;
 };
-static struct pmi2_context ctx = { .initialized = 0, .rank = -1 };
+static struct pmi2_context ctx = {.initialized = 0, .rank = -1};
 
-#define DPRINTF(fmt,...) do { \
-        if (ctx.debug) fprintf (stderr, fmt, ##__VA_ARGS__); \
-} while (0)
+#define DPRINTF(fmt, ...)                         \
+    do {                                          \
+        if (ctx.debug)                            \
+            fprintf (stderr, fmt, ##__VA_ARGS__); \
+    } while (0)
 
-#define DRETURN(rc) do { \
+#define DRETURN(rc)                                               \
+    do {                                                          \
         DPRINTF ("%d: %s rc=%d\n", ctx.rank, __FUNCTION__, (rc)); \
-        return (rc); \
-} while (0);
+        return (rc);                                              \
+    } while (0);
 
 struct errmap {
     int pmi_error;
@@ -50,21 +53,21 @@ struct errmap {
 
 static struct errmap errmap[] = {
 
-    { PMI_SUCCESS,                  PMI2_SUCCESS },
-    { PMI_FAIL,                     PMI2_FAIL },
-    { PMI_ERR_INIT,                 PMI2_ERR_INIT },
-    { PMI_ERR_NOMEM,                PMI2_ERR_NOMEM },
-    { PMI_ERR_INVALID_ARG,          PMI2_ERR_INVALID_ARG },
-    { PMI_ERR_INVALID_KEY,          PMI2_ERR_INVALID_KEY },
-    { PMI_ERR_INVALID_KEY_LENGTH,   PMI2_ERR_INVALID_KEY_LENGTH },
-    { PMI_ERR_INVALID_VAL,          PMI2_ERR_INVALID_VAL },
-    { PMI_ERR_INVALID_VAL_LENGTH,   PMI2_ERR_INVALID_VAL_LENGTH },
-    { PMI_ERR_INVALID_LENGTH,       PMI2_ERR_INVALID_LENGTH },
-    { PMI_ERR_INVALID_NUM_ARGS,     PMI2_ERR_INVALID_NUM_ARGS },
-    { PMI_ERR_INVALID_ARGS,         PMI2_ERR_INVALID_ARGS },
-    { PMI_ERR_INVALID_NUM_PARSED,   PMI2_ERR_INVALID_NUM_PARSED },
-    { PMI_ERR_INVALID_KEYVALP,      PMI2_ERR_INVALID_KEYVALP },
-    { PMI_ERR_INVALID_SIZE,         PMI2_ERR_INVALID_SIZE },
+    {PMI_SUCCESS, PMI2_SUCCESS},
+    {PMI_FAIL, PMI2_FAIL},
+    {PMI_ERR_INIT, PMI2_ERR_INIT},
+    {PMI_ERR_NOMEM, PMI2_ERR_NOMEM},
+    {PMI_ERR_INVALID_ARG, PMI2_ERR_INVALID_ARG},
+    {PMI_ERR_INVALID_KEY, PMI2_ERR_INVALID_KEY},
+    {PMI_ERR_INVALID_KEY_LENGTH, PMI2_ERR_INVALID_KEY_LENGTH},
+    {PMI_ERR_INVALID_VAL, PMI2_ERR_INVALID_VAL},
+    {PMI_ERR_INVALID_VAL_LENGTH, PMI2_ERR_INVALID_VAL_LENGTH},
+    {PMI_ERR_INVALID_LENGTH, PMI2_ERR_INVALID_LENGTH},
+    {PMI_ERR_INVALID_NUM_ARGS, PMI2_ERR_INVALID_NUM_ARGS},
+    {PMI_ERR_INVALID_ARGS, PMI2_ERR_INVALID_ARGS},
+    {PMI_ERR_INVALID_NUM_PARSED, PMI2_ERR_INVALID_NUM_PARSED},
+    {PMI_ERR_INVALID_KEYVALP, PMI2_ERR_INVALID_KEYVALP},
+    {PMI_ERR_INVALID_SIZE, PMI2_ERR_INVALID_SIZE},
 };
 
 static int map_pmi_error (int errnum)
@@ -100,8 +103,7 @@ int PMI2_Init (int *spawned, int *size, int *rank, int *appnum)
         goto done;
     if ((e = PMI_KVS_Get_key_length_max (&ctx.key_length_max)) != PMI_SUCCESS)
         goto done;
-    if ((e = PMI_KVS_Get_value_length_max (&ctx.value_length_max))
-                                                            != PMI_SUCCESS)
+    if ((e = PMI_KVS_Get_value_length_max (&ctx.value_length_max)) != PMI_SUCCESS)
         goto done;
     if (!(ctx.kvs_name = calloc (1, ctx.name_length_max)))
         return PMI2_ERR_NOMEM;
@@ -109,8 +111,7 @@ int PMI2_Init (int *spawned, int *size, int *rank, int *appnum)
         free (ctx.kvs_name);
         return PMI2_ERR_NOMEM;
     }
-    if ((e = PMI_KVS_Get_my_name (ctx.kvs_name, ctx.name_length_max))
-                                                            != PMI_SUCCESS) {
+    if ((e = PMI_KVS_Get_my_name (ctx.kvs_name, ctx.name_length_max)) != PMI_SUCCESS) {
         free (ctx.kvs_name);
         free (ctx.value);
         goto done;
@@ -127,7 +128,7 @@ int PMI2_Finalize (void)
         free (ctx.kvs_name);
         ctx.initialized = 0;
     }
-    int e = PMI_Finalize();
+    int e = PMI_Finalize ();
     DRETURN (map_pmi_error (e));
 }
 
@@ -145,21 +146,24 @@ int PMI2_Abort (int flag, const char msg[])
         int e;
         e = PMI_Abort (1, msg);
         return map_pmi_error (e);
-    } else {    /* local abort */
+    } else { /* local abort */
         fprintf (stderr, "PMI2_Abort: %s\n", msg);
         exit (1);
     }
     /*NOTREACHED*/
 }
 
-int PMI2_Job_Spawn (int count, const char * cmds[],
-                    int argcs[], const char ** argvs[],
+int PMI2_Job_Spawn (int count,
+                    const char *cmds[],
+                    int argcs[],
+                    const char **argvs[],
                     const int maxprocs[],
                     const int info_keyval_sizes[],
                     const struct MPID_Info *info_keyval_vectors[],
                     int preput_keyval_size,
                     const struct MPID_Info *preput_keyval_vector[],
-                    char jobId[], int jobIdSize,
+                    char jobId[],
+                    int jobIdSize,
                     int errors[])
 {
     DRETURN (PMI2_FAIL);
@@ -176,7 +180,7 @@ done:
     DRETURN (map_pmi_error (e));
 }
 
-int PMI2_Job_GetRank (int* rank)
+int PMI2_Job_GetRank (int *rank)
 {
     DRETURN (PMI2_FAIL);
 }
@@ -202,21 +206,25 @@ done:
     DRETURN (map_pmi_error (e));
 }
 
-int PMI2_KVS_Get (const char *jobid, int src_pmi_id,
-                  const char key[], char value [], int maxvalue, int *vallen)
+int PMI2_KVS_Get (const char *jobid,
+                  int src_pmi_id,
+                  const char key[],
+                  char value[],
+                  int maxvalue,
+                  int *vallen)
 {
     int e = PMI_ERR_INIT;
     int len;
     if (!ctx.initialized)
         goto done;
     if ((e = PMI_KVS_Get (ctx.kvs_name, key, ctx.value, ctx.value_length_max))
-                                                    != PMI_SUCCESS)
+        != PMI_SUCCESS)
         goto done;
     len = strlen (ctx.value) + 1;
     if (len <= maxvalue) {
         *vallen = len;
     } else {
-        *vallen = -1*len;
+        *vallen = -1 * len;
         len = maxvalue;
     }
     memcpy (value, ctx.value, len);
@@ -237,21 +245,26 @@ done:
     DRETURN (map_pmi_error (e));
 }
 
-
-int PMI2_Info_GetSize (int* size)
+int PMI2_Info_GetSize (int *size)
 {
     /* FIXME: return #procs on local node */
     DRETURN (PMI2_FAIL);
 }
 
 int PMI2_Info_GetNodeAttr (const char name[],
-                           char value[], int valuelen, int *found, int waitfor)
+                           char value[],
+                           int valuelen,
+                           int *found,
+                           int waitfor)
 {
     DRETURN (PMI2_FAIL);
 }
 
-int PMI2_Info_GetNodeAttrIntArray (const char name[], int array[],
-                                   int arraylen, int *outlen, int *found)
+int PMI2_Info_GetNodeAttrIntArray (const char name[],
+                                   int array[],
+                                   int arraylen,
+                                   int *outlen,
+                                   int *found)
 {
     DRETURN (PMI2_FAIL);
 }
@@ -261,8 +274,7 @@ int PMI2_Info_PutNodeAttr (const char name[], const char value[])
     DRETURN (PMI2_FAIL);
 }
 
-int PMI2_Info_GetJobAttr (const char name[],
-                          char value[], int valuelen, int *found)
+int PMI2_Info_GetJobAttr (const char name[], char value[], int valuelen, int *found)
 {
     int e;
     if (strcmp (name, "PMI_process_mapping") != 0) {
@@ -277,21 +289,26 @@ done:
     DRETURN (map_pmi_error (e));
 }
 
-int PMI2_Info_GetJobAttrIntArray (const char name[], int array[],
-                                  int arraylen, int *outlen, int *found)
+int PMI2_Info_GetJobAttrIntArray (const char name[],
+                                  int array[],
+                                  int arraylen,
+                                  int *outlen,
+                                  int *found)
 {
     DRETURN (PMI2_FAIL);
 }
 
 int PMI2_Nameserv_publish (const char service_name[],
-                           const struct MPID_Info *info_ptr, const char port[])
+                           const struct MPID_Info *info_ptr,
+                           const char port[])
 {
     DRETURN (PMI2_FAIL);
 }
 
 int PMI2_Nameserv_lookup (const char service_name[],
                           const struct MPID_Info *info_ptr,
-                          char port[], int portLen)
+                          char port[],
+                          int portLen)
 {
     DRETURN (PMI2_FAIL);
 }

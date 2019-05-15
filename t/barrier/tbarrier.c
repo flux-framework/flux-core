@@ -23,19 +23,17 @@
 
 #define OPTIONS "hqn:t:"
 static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"quiet",      no_argument,        0, 'q'},
-    {"nprocs",     required_argument,  0, 'n'},
-    {"test-iterations", required_argument,  0, 't'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"quiet", no_argument, 0, 'q'},
+    {"nprocs", required_argument, 0, 'n'},
+    {"test-iterations", required_argument, 0, 't'},
+    {0, 0, 0, 0},
 };
-
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] [name]\n"
-);
+             "Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] [name]\n");
     exit (1);
 }
 
@@ -95,7 +93,9 @@ int main (int argc, char *argv[])
             log_err_exit ("barrier completion failed");
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
-                    tname ? tname : "NULL", nprocs, monotime_since (t0));
+                    tname ? tname : "NULL",
+                    nprocs,
+                    monotime_since (t0));
         free (tname);
         flux_future_destroy (f);
     }

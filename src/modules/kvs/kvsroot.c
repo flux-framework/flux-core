@@ -54,7 +54,7 @@ kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
     krm->arg = arg;
     return krm;
 
- error:
+error:
     kvsroot_mgr_destroy (krm);
     errno = saved_errno;
     return NULL;
@@ -120,11 +120,8 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
-    if (!(root->ktm = kvstxn_mgr_create (cache,
-                                         root->ns_name,
-                                         hash_name,
-                                         krm->h,
-                                         krm->arg))) {
+    if (!(root->ktm =
+              kvstxn_mgr_create (cache, root->ns_name, hash_name, krm->h, krm->arg))) {
         flux_log_error (krm->h, "kvstxn_mgr_create");
         goto error;
     }
@@ -158,7 +155,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
 
     return root;
 
- error:
+error:
     save_errnum = errno;
     kvsroot_destroy (root);
     errno = save_errnum;
@@ -182,20 +179,17 @@ int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns)
             errno = ENOMEM;
             return -1;
         }
-    }
-    else
+    } else
         zhash_delete (krm->roothash, ns);
     return 0;
 }
 
-struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm,
-                                         const char *ns)
+struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm, const char *ns)
 {
     return zhash_lookup (krm->roothash, ns);
 }
 
-struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
-                                              const char *ns)
+struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm, const char *ns)
 {
     struct kvsroot *root;
 
@@ -245,8 +239,10 @@ error:
 /* Convenience functions on struct kvsroot
  */
 
-void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
-                      const char *root_ref, int root_seq)
+void kvsroot_setroot (kvsroot_mgr_t *krm,
+                      struct kvsroot *root,
+                      const char *root_ref,
+                      int root_seq)
 {
     if (!root || !root_ref)
         return;
@@ -257,8 +253,10 @@ void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
     root->seq = root_seq;
 }
 
-int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
-                        uint32_t rolemask, uint32_t userid)
+int kvsroot_check_user (kvsroot_mgr_t *krm,
+                        struct kvsroot *root,
+                        uint32_t rolemask,
+                        uint32_t userid)
 {
     if (!root) {
         errno = EINVAL;

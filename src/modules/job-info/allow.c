@@ -24,8 +24,7 @@
 /* Parse the submit userid from the event log.
  * Assume "submit" is the first event.
  */
-static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
-                                int *useridp)
+static int eventlog_get_userid (struct info_ctx *ctx, const char *s, int *useridp)
 {
     json_t *a = NULL;
     json_t *entry = NULL;
@@ -60,8 +59,7 @@ error:
     return rv;
 }
 
-int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
-                    const char *s)
+int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg, const char *s)
 {
     uint32_t userid;
     uint32_t rolemask;

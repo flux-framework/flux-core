@@ -20,7 +20,6 @@
  */
 int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz);
 
-
 /* Get a list of all stringified ip addresses associated with interfaces on
  * the local host.  The result is appended to 'addrs', 'addrsz', an argz list
  * that must be initialized as described in argz_add(3).  Both AF_INET

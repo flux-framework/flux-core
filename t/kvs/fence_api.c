@@ -72,13 +72,12 @@ void *thread (void *arg)
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
 
-    key = xasprintf ("%s.%"PRIu32".%d", prefix, rank, t->n);
+    key = xasprintf ("%s.%" PRIu32 ".%d", prefix, rank, t->n);
 
     if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
         log_err_exit ("%s", key);
 
-    if (!(f = flux_kvs_fence (t->h, NULL, 0, fence_name,
-                              count, txn))
+    if (!(f = flux_kvs_fence (t->h, NULL, 0, fence_name, count, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_fence");
 
@@ -144,10 +143,12 @@ int main (int argc, char *argv[])
     for (i = 1; i < count; i++) {
         if (strcmp (thd[0].treeobj, thd[i].treeobj))
             log_msg_exit ("treeobj mismatch: %s != %s\n",
-                          thd[0].treeobj, thd[i].treeobj);
+                          thd[0].treeobj,
+                          thd[i].treeobj);
         if (thd[0].sequence != thd[i].sequence)
             log_msg_exit ("sequence mismatch: %d != %d\n",
-                          thd[0].sequence, thd[i].sequence);
+                          thd[0].sequence,
+                          thd[i].sequence);
     }
 
     for (i = 0; i < count; i++)

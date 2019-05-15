@@ -31,8 +31,7 @@ int fd_set_flags (int fd, int flags)
 static int fd_setfl (int fd, int flag, bool set)
 {
     int flags = fd_get_flags (fd);
-    if ((flags < 0)
-       || (fd_set_flags (fd, set ? flags|flag : flags & ~flag) < 0))
+    if ((flags < 0) || (fd_set_flags (fd, set ? flags | flag : flags & ~flag) < 0))
         return -1;
     return (flags);
 }
@@ -40,8 +39,7 @@ static int fd_setfl (int fd, int flag, bool set)
 static int fd_setfd (int fd, int flag, bool set)
 {
     int flags = fcntl (fd, F_GETFD);
-    if ((flags < 0)
-       || (fcntl (fd, F_SETFD, (set ? flags|flag : flags&~flag)) < 0))
+    if ((flags < 0) || (fcntl (fd, F_SETFD, (set ? flags | flag : flags & ~flag)) < 0))
         return -1;
     return (flags);
 }

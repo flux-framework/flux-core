@@ -29,8 +29,7 @@ json_t *eventlog_entry_decode (const char *entry);
 /* build an eventlog entry.  Specify timestamp = 0.0 to get current
  * time. context must be a json object.  Set context to NULL if no
  * context necessary.  */
-json_t *eventlog_entry_create (double timestamp, const char *name,
-                               const char *context);
+json_t *eventlog_entry_create (double timestamp, const char *name, const char *context);
 
 /* similar to above, but build an eventlog entry using jansson style
  * pack.  Can set context_fmt to NULL if no context necessary */
@@ -50,4 +49,3 @@ char *eventlog_entry_encode (json_t *entry);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

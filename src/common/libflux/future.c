@@ -41,7 +41,7 @@ struct then_context {
 };
 
 struct future_result {
-    bool is_error;             /* if should return value or errnum */
+    bool is_error; /* if should return value or errnum */
     int errnum;
     char *errnum_string;
     void *value;
@@ -66,12 +66,12 @@ struct flux_future {
     int refcount;
 };
 
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg);
-static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg);
-static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg);
+static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+static void then_timer_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg);
 
 /* "now" reactor context - used for flux_future_wait_on()
  * This is set up lazily; wait until the user calls flux_future_wait_on().
@@ -103,20 +103,18 @@ error:
     return NULL;
 }
 
-static int now_context_set_timeout (struct now_context *now,
-                                    double timeout, void *arg)
+static int now_context_set_timeout (struct now_context *now, double timeout, void *arg)
 {
     if (now) {
-        if (timeout < 0.)       // disable
+        if (timeout < 0.)  // disable
             flux_watcher_stop (now->timer);
         else {
             if (!now->timer) {  // set
-                now->timer = flux_timer_watcher_create (now->r, timeout, 0.,
-                                                        now_timer_cb, arg);
+                now->timer =
+                    flux_timer_watcher_create (now->r, timeout, 0., now_timer_cb, arg);
                 if (!now->timer)
                     return -1;
-            }
-            else {              // reset
+            } else {  // reset
                 flux_timer_watcher_reset (now->timer, timeout, 0.);
             }
             flux_watcher_start (now->timer);
@@ -166,7 +164,7 @@ error:
 
 static void then_context_start (struct then_context *then)
 {
-    flux_watcher_start (then->idle); // prevent reactor from blocking
+    flux_watcher_start (then->idle);  // prevent reactor from blocking
     flux_watcher_start (then->check);
 }
 
@@ -177,19 +175,22 @@ static void then_context_stop (struct then_context *then)
 }
 
 static int then_context_set_timeout (struct then_context *then,
-                                     double timeout, void *arg)
+                                     double timeout,
+                                     void *arg)
 {
     if (then) {
-        if (timeout < 0.)       // disable
+        if (timeout < 0.)  // disable
             flux_watcher_stop (then->timer);
         else {
-            if (!then->timer) { // set
-                then->timer = flux_timer_watcher_create (then->r, timeout, 0.,
-                                                         then_timer_cb, arg);
+            if (!then->timer) {  // set
+                then->timer = flux_timer_watcher_create (then->r,
+                                                         timeout,
+                                                         0.,
+                                                         then_timer_cb,
+                                                         arg);
                 if (!then->timer)
                     return -1;
-            }
-            else {              // reset
+            } else {  // reset
                 flux_timer_watcher_reset (then->timer, timeout, 0.);
             }
             flux_watcher_start (then->timer);
@@ -222,7 +223,8 @@ static void clear_result (struct future_result *fs)
     init_result (fs);
 }
 
-static void set_result_value (struct future_result *fs, void *value,
+static void set_result_value (struct future_result *fs,
+                              void *value,
                               flux_free_f value_free)
 {
     assert (fs->is_error == false);
@@ -230,8 +232,7 @@ static void set_result_value (struct future_result *fs, void *value,
     fs->value_free = value_free;
 }
 
-static int set_result_errnum (struct future_result *fs, int errnum,
-                              const char *errstr)
+static int set_result_errnum (struct future_result *fs, int errnum, const char *errstr)
 {
     assert (!fs->value && !fs->value_free);
     fs->errnum = errnum;
@@ -368,7 +369,6 @@ void flux_future_reset (flux_future_t *f)
     }
 }
 
-
 /* Set the flux reactor to be used for 'then' context.
  * In 'now' context, reactor will be a temporary one.
  */
@@ -392,8 +392,7 @@ flux_reactor_t *flux_future_get_reactor (flux_future_t *f)
         if (!f->r)
             goto inval;
         r = f->r;
-    }
-    else {
+    } else {
         if (!f->now->r)
             goto inval;
         r = f->now->r;
@@ -431,8 +430,7 @@ flux_t *flux_future_get_flux (flux_future_t *f)
     }
     if (!f->now || !f->now->running) {
         h = f->h;
-    }
-    else {
+    } else {
         if (!f->now->h) {
             if (!(f->now->h = flux_clone (f->h)))
                 goto done;
@@ -467,7 +465,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         return -1;
     }
     if (!future_is_ready (f)) {
-        if (timeout == 0.) { // don't setup 'now' context in this case
+        if (timeout == 0.) {  // don't setup 'now' context in this case
             errno = ETIMEDOUT;
             return -1;
         }
@@ -479,12 +477,12 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             return -1;
         f->now->running = true;
         if (f->init && !f->now->init_called) {
-            f->init (f, f->init_arg); // might set error
+            f->init (f, f->init_arg);  // might set error
             f->now->init_called = true;
         }
         if (!future_is_ready (f)) {
             if (flux_reactor_run (f->now->r, 0) < 0)
-                return -1; // errno set by now_timer_cb or other watcher
+                return -1;  // errno set by now_timer_cb or other watcher
         }
         if (f->now->h)
             flux_dispatch_requeue (f->now->h);
@@ -494,7 +492,6 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         return -1;
     return 0;
 }
-
 
 /* Return true if future is fulfilled and flux_future_get() will not block.
  */
@@ -510,7 +507,7 @@ bool flux_future_is_ready (flux_future_t *f)
  */
 int flux_future_get (flux_future_t *f, const void **result)
 {
-    if (flux_future_wait_for (f, -1.0) < 0) // no timeout
+    if (flux_future_wait_for (f, -1.0) < 0)  // no timeout
         return -1;
     if (f->fatal_errnum_valid) {
         errno = f->fatal_errnum;
@@ -520,8 +517,7 @@ int flux_future_get (flux_future_t *f, const void **result)
         if (f->result.is_error) {
             errno = f->result.errnum;
             return -1;
-        }
-        else {
+        } else {
             if (result)
                 (*result) = f->result.value;
         }
@@ -534,8 +530,10 @@ int flux_future_get (flux_future_t *f, const void **result)
  * If timer expires, fulfill the future with ETIMEDOUT error.
  * This function can only be called once.
  */
-int flux_future_then (flux_future_t *f, double timeout,
-                      flux_continuation_f cb, void *arg)
+int flux_future_then (flux_future_t *f,
+                      double timeout,
+                      flux_continuation_f cb,
+                      void *arg)
 {
     if (!f || !f->r || !cb) {
         errno = EINVAL;
@@ -552,7 +550,7 @@ int flux_future_then (flux_future_t *f, double timeout,
     f->then->continuation = cb;
     f->then->continuation_arg = arg;
     if (f->init && !f->then->init_called) {
-        f->init (f, f->init_arg); // might set error
+        f->init (f, f->init_arg);  // might set error
         f->then->init_called = true;
     }
     return 0;
@@ -574,8 +572,10 @@ void *flux_future_aux_get (flux_future_t *f, const char *name)
 
 /* Store 'aux' object by name.
  */
-int flux_future_aux_set (flux_future_t *f, const char *name,
-                         void *aux, flux_free_f destroy)
+int flux_future_aux_set (flux_future_t *f,
+                         const char *name,
+                         void *aux,
+                         flux_free_f destroy)
 {
     if (!f) {
         errno = EINVAL;
@@ -623,8 +623,7 @@ void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
                 future_result_destroy (fs);
                 return;
             }
-        }
-        else {
+        } else {
             set_result_value (&f->result, result, free_fn);
             f->result_valid = true;
         }
@@ -632,8 +631,7 @@ void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
     }
 }
 
-void flux_future_fulfill_error (flux_future_t *f, int errnum,
-                                const char *errstr)
+void flux_future_fulfill_error (flux_future_t *f, int errnum, const char *errstr)
 {
     if (f) {
         if (f->fatal_errnum_valid)
@@ -649,8 +647,7 @@ void flux_future_fulfill_error (flux_future_t *f, int errnum,
                 future_result_destroy (fs);
                 return;
             }
-        }
-        else {
+        } else {
             clear_result (&f->result);
             if (set_result_errnum (&f->result, errnum, errstr) < 0) {
                 flux_future_fatal_error (f, errno, NULL);
@@ -689,8 +686,7 @@ int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p)
     if (p->fatal_errnum_valid)
         flux_future_fatal_error (f, p->fatal_errnum, p->fatal_errnum_string);
     else if (p->result.is_error)
-        flux_future_fulfill_error (f, p->result.errnum,
-                                      p->result.errnum_string);
+        flux_future_fulfill_error (f, p->result.errnum, p->result.errnum_string);
     else {
         /*  Nornal result, if result has a free_fn registered, then we have
          *   to steal the reference for the result. We do this by copying
@@ -730,8 +726,7 @@ const char *flux_future_error_string (flux_future_t *f)
             if (f->fatal_errnum_string)
                 return f->fatal_errnum_string;
             return flux_strerror (f->fatal_errnum);
-        }
-        else if (f->result_valid) {
+        } else if (f->result_valid) {
             /* future contains a valid fulfillment.  The fulfillment
              * may be a valid error (with or without optional string) or
              * non-error (errnum == 0 passed to flux_strerror())
@@ -748,8 +743,7 @@ const char *flux_future_error_string (flux_future_t *f)
 /* timer - for flux_future_then() timeout
  * fulfill the future with an error
  */
-static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     flux_future_t *f = arg;
     flux_future_fulfill_error (f, ETIMEDOUT, NULL);
@@ -758,8 +752,7 @@ static void then_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 /* timer - for flux_future_wait_for() timeout
  * stop the reactor but don't fulfill the future
  */
-static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     errno = ETIMEDOUT;
     flux_reactor_stop_error (r);
@@ -767,8 +760,7 @@ static void now_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 /* check - if results are ready, call the continuation
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     flux_future_t *f = arg;
 
@@ -780,7 +772,6 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         f->then->continuation (f, f->then->continuation_arg);
     // N.B. callback might destroy future
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

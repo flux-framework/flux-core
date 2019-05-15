@@ -17,15 +17,15 @@ static void print_environment (struct environment *env)
 {
     const char *val;
     for (val = environment_first (env); val; val = environment_next (env))
-        printf("export %s=\"%s\"\n", environment_cursor (env), val);
-    fflush(stdout);
+        printf ("export %s=\"%s\"\n", environment_cursor (env), val);
+    fflush (stdout);
 }
 
 static int cmd_env (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
     if (av && av[n]) {
-        execvp (av[n], av+n); /* no return if sucessful */
+        execvp (av[n], av + n); /* no return if sucessful */
         log_err_exit ("execvp (%s)", av[n]);
     } else {
         struct environment *env = optparse_get_data (p, "env");
@@ -40,12 +40,13 @@ int subcommand_env_register (optparse_t *p)
 {
     optparse_err_t e;
     e = optparse_reg_subcommand (p,
-        "env",
-        cmd_env,
-        "[OPTIONS...] [COMMAND...]",
-        "Print the flux environment or execute COMMAND inside it",
-        0,
-        NULL);
+                                 "env",
+                                 cmd_env,
+                                 "[OPTIONS...] [COMMAND...]",
+                                 "Print the flux environment or execute COMMAND inside "
+                                 "it",
+                                 0,
+                                 NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 

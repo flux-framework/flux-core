@@ -21,10 +21,10 @@ typedef struct flux_reduce_struct flux_reduce_t;
 
 struct flux_reduce_ops {
     flux_free_f destroy;
-    void   (*reduce)(flux_reduce_t *r, int batchnum, void *arg);
-    void   (*sink)(flux_reduce_t *r, int batchnum, void *arg);
-    void   (*forward)(flux_reduce_t *r, int batchnum, void *arg);
-    int    (*itemweight)(void *item);
+    void (*reduce) (flux_reduce_t *r, int batchnum, void *arg);
+    void (*sink) (flux_reduce_t *r, int batchnum, void *arg);
+    void (*forward) (flux_reduce_t *r, int batchnum, void *arg);
+    int (*itemweight) (void *item);
 };
 
 enum {
@@ -39,8 +39,11 @@ enum {
     FLUX_REDUCE_OPT_WCOUNT = 4,
 };
 
-flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
-                                   double timeout, void *arg, int flags);
+flux_reduce_t *flux_reduce_create (flux_t *h,
+                                   struct flux_reduce_ops ops,
+                                   double timeout,
+                                   void *arg,
+                                   int flags);
 
 void flux_reduce_destroy (flux_reduce_t *r);
 

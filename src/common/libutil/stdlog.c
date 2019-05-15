@@ -52,8 +52,11 @@ static int next_str (char **p, char **result)
     return 0;
 }
 
-static int next_structured_data (const char *buf, int len, int *offp,
-                                 const char **sp, int *slenp)
+static int next_structured_data (const char *buf,
+                                 int len,
+                                 int *offp,
+                                 const char **sp,
+                                 int *slenp)
 {
     int off = *offp;
     int this = *offp;
@@ -78,9 +81,13 @@ static int next_structured_data (const char *buf, int len, int *offp,
     return 0;
 }
 
-int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
-                   const char **sdp, int *sdlenp,
-                   const char **msgp, int *msglenp)
+int stdlog_decode (const char *buf,
+                   int len,
+                   struct stdlog_header *hdr,
+                   const char **sdp,
+                   int *sdlenp,
+                   const char **msgp,
+                   int *msglenp)
 {
     int hdr_len = STDLOG_MAX_HEADER;
     char *p = &hdr->buf[0];
@@ -148,9 +155,9 @@ char *stdlog_split_message (const char *buf, int *len, const char *sep)
         return NULL;
     memcpy (xtra, msg + off, xtra_len);
     xtra[xtra_len] = '\0';
-    *len -= xtra_len; // truncate original (N.B. message is last, no \0 term)
+    *len -= xtra_len;  // truncate original (N.B. message is last, no \0 term)
     while (xtra_len > 0 && strchr (sep, xtra[0]))
-        memmove (xtra, xtra + 1, xtra_len--); // drop leading separator(s)
+        memmove (xtra, xtra + 1, xtra_len--);  // drop leading separator(s)
     if (xtra_len == 0) {
         free (xtra);
         return NULL;
@@ -158,19 +165,31 @@ char *stdlog_split_message (const char *buf, int *len, const char *sep)
     return xtra;
 }
 
-int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
-                     const char *sd, const char *fmt, va_list ap)
+int stdlog_vencodef (char *buf,
+                     int len,
+                     struct stdlog_header *hdr,
+                     const char *sd,
+                     const char *fmt,
+                     va_list ap)
 {
     int m, n, i;
-    int rc; // includes any overflow
+    int rc;  // includes any overflow
 
-    m = snprintf (buf, len, "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
-                  hdr->pri, hdr->version,
-                  STDLOG_MAX_TIMESTAMP, hdr->timestamp,
-                  STDLOG_MAX_HOSTNAME, hdr->hostname,
-                  STDLOG_MAX_APPNAME, hdr->appname,
-                  STDLOG_MAX_PROCID, hdr->procid,
-                  STDLOG_MAX_MSGID, hdr->msgid,
+    m = snprintf (buf,
+                  len,
+                  "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
+                  hdr->pri,
+                  hdr->version,
+                  STDLOG_MAX_TIMESTAMP,
+                  hdr->timestamp,
+                  STDLOG_MAX_HOSTNAME,
+                  hdr->hostname,
+                  STDLOG_MAX_APPNAME,
+                  hdr->appname,
+                  STDLOG_MAX_PROCID,
+                  hdr->procid,
+                  STDLOG_MAX_MSGID,
+                  hdr->msgid,
                   sd);
     rc = m;
     if (m > len)
@@ -181,7 +200,7 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
     if (n > len - m)
         n = len - m;
     for (i = 0; i < n; i++)
-        buf[m + i] &= 0x7f; // ensure only ascii chars are logged
+        buf[m + i] &= 0x7f;  // ensure only ascii chars are logged
     for (i = n - 1; i >= 0; i--) {
         if (buf[m + i] != '\r' && buf[m + i] != '\n')
             break;
@@ -191,8 +210,12 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
     return rc;
 }
 
-int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
-                    const char *sd, const char *fmt, ...)
+int stdlog_encodef (char *buf,
+                    int len,
+                    struct stdlog_header *hdr,
+                    const char *sd,
+                    const char *fmt,
+                    ...)
 {
     va_list ap;
     int rc;
@@ -203,8 +226,11 @@ int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
     return rc;
 }
 
-int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
-                   const char *sd, const char *msg)
+int stdlog_encode (char *buf,
+                   int len,
+                   struct stdlog_header *hdr,
+                   const char *sd,
+                   const char *msg)
 {
     return stdlog_encodef (buf, len, hdr, sd, "%s", msg);
 }
@@ -212,7 +238,7 @@ int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
 void stdlog_init (struct stdlog_header *hdr)
 {
     memset (hdr->buf, 0, STDLOG_MAX_HEADER + 1);
-    hdr->pri = ((LOG_INFO<<3) | LOG_USER);
+    hdr->pri = ((LOG_INFO << 3) | LOG_USER);
     hdr->version = 1;
     hdr->timestamp = STDLOG_NILVALUE;
     hdr->hostname = STDLOG_NILVALUE;
@@ -221,26 +247,24 @@ void stdlog_init (struct stdlog_header *hdr)
     hdr->msgid = STDLOG_NILVALUE;
 }
 
-
 struct matchtab {
     char *s;
     int n;
 };
 
 static struct matchtab severity_tab[] = {
-    { "emerg",  LOG_EMERG },
-    { "alert",  LOG_ALERT },
-    { "crit",   LOG_CRIT },
-    { "err",    LOG_ERR },
-    { "warning", LOG_WARNING },
-    { "notice", LOG_NOTICE },
-    { "info",   LOG_INFO },
-    { "debug",  LOG_DEBUG },
-    { NULL,     0},
+    {"emerg", LOG_EMERG},
+    {"alert", LOG_ALERT},
+    {"crit", LOG_CRIT},
+    {"err", LOG_ERR},
+    {"warning", LOG_WARNING},
+    {"notice", LOG_NOTICE},
+    {"info", LOG_INFO},
+    {"debug", LOG_DEBUG},
+    {NULL, 0},
 };
 
-const char *
-stdlog_severity_to_string (int n)
+const char *stdlog_severity_to_string (int n)
 {
     int i;
 
@@ -250,8 +274,7 @@ stdlog_severity_to_string (int n)
     return STDLOG_NILVALUE;
 }
 
-int
-stdlog_string_to_severity (const char *s)
+int stdlog_string_to_severity (const char *s)
 {
     int i;
 

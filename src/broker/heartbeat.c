@@ -30,10 +30,9 @@ struct heartbeat_struct {
     int epoch;
 };
 
-static const double min_heartrate = 0.01;   /* min seconds */
-static const double max_heartrate = 30;     /* max seconds */
+static const double min_heartrate = 0.01; /* min seconds */
+static const double max_heartrate = 30;   /* max seconds */
 static const double dfl_heartrate = 2;
-
 
 void heartbeat_destroy (heartbeat_t *hb)
 {
@@ -58,8 +57,11 @@ void heartbeat_set_flux (heartbeat_t *hb, flux_t *h)
 
 int heartbeat_set_attrs (heartbeat_t *hb, attr_t *attrs)
 {
-    if (attr_add_active_int (attrs, "heartbeat-epoch",
-                             &hb->epoch, FLUX_ATTRFLAG_READONLY) < 0)
+    if (attr_add_active_int (attrs,
+                             "heartbeat-epoch",
+                             &hb->epoch,
+                             FLUX_ATTRFLAG_READONLY)
+        < 0)
         return -1;
     return 0;
 }
@@ -96,8 +98,10 @@ int heartbeat_get_epoch (heartbeat_t *hb)
     return hb->epoch;
 }
 
-static void event_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void event_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     heartbeat_t *hb = arg;
     int epoch;
@@ -109,8 +113,7 @@ static void event_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static void timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     heartbeat_t *hb = arg;
     flux_msg_t *msg = NULL;
@@ -141,8 +144,8 @@ int heartbeat_start (heartbeat_t *hb)
     if (rank == 0) {
         flux_reactor_t *r = flux_get_reactor (hb->h);
         flux_reactor_now_update (r);
-        if (!(hb->timer = flux_timer_watcher_create (r, hb->rate, hb->rate,
-                                                     timer_cb, hb)))
+        if (!(hb->timer =
+                  flux_timer_watcher_create (r, hb->rate, hb->rate, timer_cb, hb)))
             return -1;
         flux_watcher_start (hb->timer);
     }

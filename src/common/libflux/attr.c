@@ -24,8 +24,8 @@ enum {
 };
 
 struct attr_cache {
-    zhashx_t *cache;        // immutable values
-    zhashx_t *temp;         // values that stay valid until next lookup
+    zhashx_t *cache;  // immutable values
+    zhashx_t *temp;   // values that stay valid until next lookup
 };
 
 static void attr_cache_destroy (struct attr_cache *c)
@@ -96,11 +96,9 @@ const char *flux_attr_get (flux_t *h, const char *name)
         return NULL;
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
-    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{s:s}",
-                                                                "name", name)))
+    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{s:s}", "name", name)))
         return NULL;
-    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val,
-                                             "flags", &flags) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val, "flags", &flags) < 0)
         goto done;
     if (!(cpy = strdup (val)))
         goto done;
@@ -122,12 +120,17 @@ int flux_attr_set (flux_t *h, const char *name, const char *val)
         return -1;
     }
     if (val)
-        f = flux_rpc_pack (h, "attr.set", FLUX_NODEID_ANY, 0, "{s:s s:s}",
-                                                              "name", name,
-                                                              "value", val);
+        f = flux_rpc_pack (h,
+                           "attr.set",
+                           FLUX_NODEID_ANY,
+                           0,
+                           "{s:s s:s}",
+                           "name",
+                           name,
+                           "value",
+                           val);
     else
-        f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{s:s}",
-                                                             "name", name);
+        f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{s:s}", "name", name);
     if (!f)
         return -1;
     if (flux_future_get (f, NULL) < 0) {
@@ -157,8 +160,7 @@ int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val)
         if (!(cpy = strdup (val)))
             return -1;
         zhashx_update (c->cache, name, cpy);
-    }
-    else
+    } else
         zhashx_delete (c->cache, name);
     return 0;
 }

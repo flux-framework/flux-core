@@ -51,7 +51,7 @@ ssize_t read_all (int fd, void **bufp)
     do {
         if (len - count == 0) {
             len += chunksize;
-            if (!(new = realloc (buf, len+1)))
+            if (!(new = realloc (buf, len + 1)))
                 goto error;
             buf = new;
         }
@@ -59,7 +59,7 @@ ssize_t read_all (int fd, void **bufp)
             goto error;
         count += n;
     } while (n != 0);
-    ((char*)buf)[count] = '\0';
+    ((char *)buf)[count] = '\0';
     *bufp = buf;
     return count;
 error:

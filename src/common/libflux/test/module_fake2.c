@@ -12,7 +12,7 @@
 
 int mod_main (int argc, char **argv)
 {
-     return 0;
+    return 0;
 }
 // leave undefined for unit test
-//MOD_NAME ("fake2");
+// MOD_NAME ("fake2");

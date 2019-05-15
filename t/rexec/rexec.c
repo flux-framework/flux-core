@@ -23,15 +23,24 @@
 
 extern char **environ;
 
-static struct optparse_option cmdopts[] = {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "rank",
-      .usage = "Specify rank for test" },
-    { .name = "outputstates", .key = 's', .has_arg = 0, .arginfo = "NONE",
-      .usage = "Output state changes as they occur" },
-    { .name = "stdin2stream", .key = 'i', .has_arg = 1, .arginfo = "CHANNEL",
-      .usage = "Read in stdin and forward to subprocess channel" },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option cmdopts[] = {{.name = "rank",
+                                            .key = 'r',
+                                            .has_arg = 1,
+                                            .arginfo = "rank",
+                                            .usage = "Specify rank for test"},
+                                           {.name = "outputstates",
+                                            .key = 's',
+                                            .has_arg = 0,
+                                            .arginfo = "NONE",
+                                            .usage = "Output state changes as they "
+                                                     "occur"},
+                                           {.name = "stdin2stream",
+                                            .key = 'i',
+                                            .has_arg = 1,
+                                            .arginfo = "CHANNEL",
+                                            .usage = "Read in stdin and forward to "
+                                                     "subprocess channel"},
+                                           OPTPARSE_TABLE_END};
 
 optparse_t *opts;
 
@@ -50,9 +59,9 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
     if (optparse_getopt (opts, "outputstates", NULL) > 0)
         printf ("%s\n", flux_subprocess_state_string (state));
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
-        fprintf (stderr, "rank %d: %s: %s\n",
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
+        fprintf (stderr,
+                 "rank %d: %s: %s\n",
                  flux_subprocess_rank (p),
                  flux_subprocess_state_string (state),
                  strerror (flux_subprocess_fail_errno (p)));
@@ -133,8 +142,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_cmd_setcwd");
 
     if (optparse_getopt (opts, "stdin2stream", &optargp) > 0) {
-        if (strcmp (optargp, "STDIN")
-            && strcmp (optargp, "STDOUT")
+        if (strcmp (optargp, "STDIN") && strcmp (optargp, "STDOUT")
             && strcmp (optargp, "STDERR")) {
             if (flux_cmd_add_channel (cmd, optargp) < 0)
                 log_err_exit ("flux_cmd_add_channel");

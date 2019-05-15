@@ -13,8 +13,8 @@
 /* Failure mode 1:
 ./issue1760 a
 2018-10-25T13:09:25.940817Z kvs.alert[0]: dropped 12 of 12 cache entries
-2018-10-25T13:09:25.941349Z kvs.err[0]: load: content_load_request_send: Invalid argument
-2018-10-25T13:09:25.941367Z kvs.err[0]: kvstxn_load_cb: load: Invalid argument
+2018-10-25T13:09:25.941349Z kvs.err[0]: load: content_load_request_send: Invalid
+argument 2018-10-25T13:09:25.941367Z kvs.err[0]: kvstxn_load_cb: load: Invalid argument
 issue1760: flux_future_get: Invalid argument
  */
 
@@ -22,9 +22,8 @@ issue1760: flux_future_get: Invalid argument
 ./issue1760 a.b.c
 2018-10-25T13:13:04.091577Z kvs.alert[0]: dropped 14 of 14 cache entries
 flux-broker: kvs.c:640: load: Assertion `ret == 1' failed.
-2018-10-25T13:13:04.092399Z kvs.err[0]: load: content_load_request_send: Invalid argument
-issue1760: flux_future_get: Success
-Aborted (core dumped)
+2018-10-25T13:13:04.092399Z kvs.err[0]: load: content_load_request_send: Invalid
+argument issue1760: flux_future_get: Success Aborted (core dumped)
 */
 
 #if HAVE_CONFIG_H

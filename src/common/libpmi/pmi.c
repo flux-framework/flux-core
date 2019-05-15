@@ -32,18 +32,23 @@ struct pmi_context {
     int rank; /* for debug */
 };
 
-static struct pmi_context ctx = { .rank = -1 };
+static struct pmi_context ctx = {.rank = -1};
 
-#define DPRINTF(fmt,...) do { \
-    if (ctx.debug) fprintf (stderr, fmt, ##__VA_ARGS__); \
-} while (0)
+#define DPRINTF(fmt, ...)                         \
+    do {                                          \
+        if (ctx.debug)                            \
+            fprintf (stderr, fmt, ##__VA_ARGS__); \
+    } while (0)
 
-#define DRETURN(rc) do { \
-    DPRINTF ("%d: %s rc=%d %s\n", ctx.rank, __FUNCTION__, (rc), \
-            rc == PMI_SUCCESS ? "" : pmi_strerror (rc)); \
-    return (rc); \
-} while (0);
-
+#define DRETURN(rc)                                           \
+    do {                                                      \
+        DPRINTF ("%d: %s rc=%d %s\n",                         \
+                 ctx.rank,                                    \
+                 __FUNCTION__,                                \
+                 (rc),                                        \
+                 rc == PMI_SUCCESS ? "" : pmi_strerror (rc)); \
+        return (rc);                                          \
+    } while (0);
 
 int PMI_Init (int *spawned)
 {
@@ -80,7 +85,7 @@ int PMI_Init (int *spawned)
      * If that fails, fall through to singleton.
      */
     else if (!getenv ("FLUX_PMI_SINGLETON")
-                    && (ctx.impl = pmi_wrap_create (NULL, &ctx.ops, false))) {
+             && (ctx.impl = pmi_wrap_create (NULL, &ctx.ops, false))) {
     }
     /* Singleton.
      */
@@ -184,11 +189,13 @@ int PMI_KVS_Get_my_name (char kvsname[], int length)
     if (ctx.impl && ctx.ops->kvs_get_my_name)
         result = ctx.ops->kvs_get_my_name (ctx.impl, kvsname, length);
     if (result == PMI_SUCCESS) {
-        DPRINTF ("%d: %s (\"%s\") rc=%d\n", ctx.rank, __FUNCTION__,
-                 kvsname, result);
+        DPRINTF ("%d: %s (\"%s\") rc=%d\n", ctx.rank, __FUNCTION__, kvsname, result);
     } else {
-        DPRINTF ("%d: %s rc=%d %s\n", ctx.rank, __FUNCTION__,
-                result, pmi_strerror (result));
+        DPRINTF ("%d: %s rc=%d %s\n",
+                 ctx.rank,
+                 __FUNCTION__,
+                 result,
+                 pmi_strerror (result));
     }
     return result;
 }
@@ -223,23 +230,34 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
     if (ctx.impl && ctx.ops->kvs_put)
         result = ctx.ops->kvs_put (ctx.impl, kvsname, key, value);
     DPRINTF ("%d: PMI_KVS_Put (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
-             ctx.rank, kvsname, key, value, result,
+             ctx.rank,
+             kvsname,
+             key,
+             value,
+             result,
              result == PMI_SUCCESS ? "" : pmi_strerror (result));
     return result;
 }
 
-int PMI_KVS_Get (const char kvsname[], const char key[],
-                 char value[], int length)
+int PMI_KVS_Get (const char kvsname[], const char key[], char value[], int length)
 {
     int result = PMI_ERR_INIT;
     if (ctx.impl && ctx.ops->kvs_get)
         result = ctx.ops->kvs_get (ctx.impl, kvsname, key, value, length);
     if (result == PMI_SUCCESS) {
         DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\", \"%s\") rc=%d\n",
-                 ctx.rank, kvsname, key, value, result);
+                 ctx.rank,
+                 kvsname,
+                 key,
+                 value,
+                 result);
     } else {
         DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\") rc=%d %s\n",
-                 ctx.rank, kvsname, key, result, pmi_strerror (result));
+                 ctx.rank,
+                 kvsname,
+                 key,
+                 result,
+                 pmi_strerror (result));
     }
     return result;
 }
@@ -264,7 +282,7 @@ int PMI_Publish_name (const char service_name[], const char port[])
 {
     int result = PMI_ERR_INIT;
     if (ctx.impl && ctx.ops->publish_name)
-        result  = ctx.ops->publish_name (ctx.impl, service_name, port);
+        result = ctx.ops->publish_name (ctx.impl, service_name, port);
     DRETURN (result);
 }
 
@@ -272,7 +290,7 @@ int PMI_Unpublish_name (const char service_name[])
 {
     int result = PMI_ERR_INIT;
     if (ctx.impl && ctx.ops->unpublish_name)
-        result  = ctx.ops->unpublish_name (ctx.impl, service_name);
+        result = ctx.ops->unpublish_name (ctx.impl, service_name);
     DRETURN (result);
 }
 
@@ -280,27 +298,32 @@ int PMI_Lookup_name (const char service_name[], char port[])
 {
     int result = PMI_ERR_INIT;
     if (ctx.impl && ctx.ops->lookup_name)
-        result  = ctx.ops->lookup_name (ctx.impl, service_name, port);
+        result = ctx.ops->lookup_name (ctx.impl, service_name, port);
     DRETURN (result);
 }
 
-int PMI_Spawn_multiple(int count,
-                       const char * cmds[],
-                       const char ** argvs[],
-                       const int maxprocs[],
-                       const int info_keyval_sizesp[],
-                       const PMI_keyval_t * info_keyval_vectors[],
-                       int preput_keyval_size,
-                       const PMI_keyval_t preput_keyval_vector[],
-                       int errors[])
+int PMI_Spawn_multiple (int count,
+                        const char *cmds[],
+                        const char **argvs[],
+                        const int maxprocs[],
+                        const int info_keyval_sizesp[],
+                        const PMI_keyval_t *info_keyval_vectors[],
+                        int preput_keyval_size,
+                        const PMI_keyval_t preput_keyval_vector[],
+                        int errors[])
 {
     int result = PMI_ERR_INIT;
     if (ctx.impl && ctx.ops->spawn_multiple)
-        result = ctx.ops->spawn_multiple (ctx.impl, count, cmds, argvs,
-                                          maxprocs, info_keyval_sizesp,
+        result = ctx.ops->spawn_multiple (ctx.impl,
+                                          count,
+                                          cmds,
+                                          argvs,
+                                          maxprocs,
+                                          info_keyval_sizesp,
                                           info_keyval_vectors,
                                           preput_keyval_size,
-                                          preput_keyval_vector, errors);
+                                          preput_keyval_vector,
+                                          errors);
     DRETURN (result);
 }
 
@@ -355,26 +378,37 @@ int PMI_KVS_Destroy (const char kvsname[])
     DRETURN (PMI_FAIL);
 }
 
-int PMI_KVS_Iter_first (const char kvsname[], char key[], int key_len,
-                        char val[], int val_len)
+int PMI_KVS_Iter_first (const char kvsname[],
+                        char key[],
+                        int key_len,
+                        char val[],
+                        int val_len)
 {
     DRETURN (PMI_FAIL);
 }
 
-int PMI_KVS_Iter_next (const char kvsname[], char key[], int key_len,
-                       char val[], int val_len)
+int PMI_KVS_Iter_next (const char kvsname[],
+                       char key[],
+                       int key_len,
+                       char val[],
+                       int val_len)
 {
     DRETURN (PMI_FAIL);
 }
 
-int PMI_Parse_option (int num_args, char *args[], int *num_parsed,
-                      PMI_keyval_t **keyvalp, int *size)
+int PMI_Parse_option (int num_args,
+                      char *args[],
+                      int *num_parsed,
+                      PMI_keyval_t **keyvalp,
+                      int *size)
 {
     DRETURN (PMI_FAIL);
 }
 
-int PMI_Args_to_keyval (int *argcp, char *((*argvp)[]),
-                        PMI_keyval_t **keyvalp, int *size)
+int PMI_Args_to_keyval (int *argcp,
+                        char *((*argvp)[]),
+                        PMI_keyval_t **keyvalp,
+                        int *size)
 {
     DRETURN (PMI_FAIL);
 }

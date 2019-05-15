@@ -17,21 +17,18 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/zsecurity.h"
 
-
 #define OPTIONS "hfpd:"
 static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"force",      no_argument,        0, 'f'},
-    {"plain",      no_argument,        0, 'p'},
-    {"secdir",     required_argument,  0, 'd'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"force", no_argument, 0, 'f'},
+    {"plain", no_argument, 0, 'p'},
+    {"secdir", required_argument, 0, 'd'},
+    {0, 0, 0, 0},
 };
 
 void usage (void)
 {
-    fprintf (stderr,
-"Usage: flux-keygen [--secdir DIR] [--force] [--plain]\n"
-);
+    fprintf (stderr, "Usage: flux-keygen [--secdir DIR] [--force] [--plain]\n");
     exit (1);
 }
 
@@ -67,7 +64,7 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
-     if (!(sec = zsecurity_create (typemask, secdir)))
+    if (!(sec = zsecurity_create (typemask, secdir)))
         log_err_exit ("zsecurity_create");
     if (zsecurity_keygen (sec) < 0)
         log_msg_exit ("%s", zsecurity_errstr (sec));

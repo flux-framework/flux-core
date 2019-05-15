@@ -21,7 +21,8 @@ struct event_ctx;
 struct start_ctx;
 
 void start_ctx_destroy (struct start_ctx *ctx);
-struct start_ctx *start_ctx_create (flux_t *h, struct queue *queue,
+struct start_ctx *start_ctx_create (flux_t *h,
+                                    struct queue *queue,
                                     struct event_ctx *event_ctx);
 
 int start_send_request (struct start_ctx *ctx, struct job *job);

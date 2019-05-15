@@ -19,7 +19,7 @@
  * c.f. http://cs.lmu.edu/~ray/notes/orderedtrees/
  */
 
-#define KARY_NONE   (~(uint32_t)0)
+#define KARY_NONE (~(uint32_t)0)
 
 /* Return the parent of i or KARY_NONE if i has no parent.
  */
@@ -46,7 +46,6 @@ uint32_t kary_parent_route (int k, uint32_t size, uint32_t src, uint32_t dst);
  * KARY_NONE if dst is a descendant of no child of src.
  */
 uint32_t kary_child_route (int k, uint32_t size, uint32_t src, uint32_t dst);
-
 
 #endif /* !_UTIL_KARY_H */
 

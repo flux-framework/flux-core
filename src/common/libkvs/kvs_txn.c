@@ -78,8 +78,10 @@ static int validate_flags (int flags, int allowed)
 /* Add an operation on dirent to the transaction.
  * Takes a reference on dirent so caller retains ownership.
  */
-static int append_op_to_txn (flux_kvs_txn_t *txn, int flags,
-                             const char *key, json_t *dirent)
+static int append_op_to_txn (flux_kvs_txn_t *txn,
+                             int flags,
+                             const char *key,
+                             json_t *dirent)
 {
     json_t *op = NULL;
     int saved_errno;
@@ -98,8 +100,11 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
-                          const char *key, const void *data, int len)
+int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn,
+                          int flags,
+                          const char *key,
+                          const void *data,
+                          int len)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -124,8 +129,10 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
-                              const char *key, const char *treeobj)
+int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn,
+                              int flags,
+                              const char *key,
+                              const char *treeobj)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -150,8 +157,10 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
-                      const char *key, const char *value)
+int flux_kvs_txn_put (flux_kvs_txn_t *txn,
+                      int flags,
+                      const char *key,
+                      const char *value)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -176,8 +185,11 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
-                        const char *key, const char *fmt, va_list ap)
+int flux_kvs_txn_vpack (flux_kvs_txn_t *txn,
+                        int flags,
+                        const char *key,
+                        const char *fmt,
+                        va_list ap)
 {
     json_t *val, *dirent = NULL;
     int saved_errno;
@@ -217,8 +229,11 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
-                       const char *key, const char *fmt, ...)
+int flux_kvs_txn_pack (flux_kvs_txn_t *txn,
+                       int flags,
+                       const char *key,
+                       const char *fmt,
+                       ...)
 {
     va_list ap;
     int rc;
@@ -233,8 +248,7 @@ int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
     return rc;
 }
 
-int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
-                        const char *key)
+int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags, const char *key)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -259,8 +273,7 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
-                         const char *key)
+int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags, const char *key)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -284,8 +297,10 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
-                          const char *key, const char *ns,
+int flux_kvs_txn_symlink (flux_kvs_txn_t *txn,
+                          int flags,
+                          const char *key,
+                          const char *ns,
                           const char *target)
 {
     json_t *dirent = NULL;
@@ -340,10 +355,15 @@ int txn_decode_op (json_t *op, const char **keyp, int *flagsp, json_t **direntp)
     int flags;
     json_t *dirent;
 
-    if (json_unpack (op, "{s:s s:i s:o !}",
-                         "key", &key,
-                         "flags", &flags,
-                         "dirent", &dirent) < 0) {
+    if (json_unpack (op,
+                     "{s:s s:i s:o !}",
+                     "key",
+                     &key,
+                     "flags",
+                     &flags,
+                     "dirent",
+                     &dirent)
+        < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -361,22 +381,24 @@ int txn_encode_op (const char *key, int flags, json_t *dirent, json_t **opp)
     json_t *op;
 
     if (!key || strlen (key) == 0 || !dirent
-             || (!json_is_null (dirent) && treeobj_validate (dirent) < 0)) {
+        || (!json_is_null (dirent) && treeobj_validate (dirent) < 0)) {
         errno = EINVAL;
         return -1;
     }
     if (validate_flags (flags, FLUX_KVS_APPEND) < 0)
         return -1;
     if (!(op = json_pack ("{s:s s:i s:O}",
-                          "key", key,
-                          "flags", flags,
-                          "dirent", dirent))) {
+                          "key",
+                          key,
+                          "flags",
+                          flags,
+                          "dirent",
+                          dirent))) {
         errno = ENOMEM;
         return -1;
     }
     *opp = op;
     return 0;
-
 }
 
 /*

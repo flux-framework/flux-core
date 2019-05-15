@@ -15,8 +15,7 @@
 
 #include "info.h"
 
-void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
-                const flux_msg_t *msg, void *arg);
+void lookup_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg);
 
 #endif /* ! _FLUX_JOB_INFO_LOOKUP_H */
 

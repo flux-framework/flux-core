@@ -37,20 +37,16 @@ int main (int argc, char *argv[])
     q = queue_create (true);
     if (!q)
         BAIL_OUT ("could not create queue");
-    ok (queue_size (q) == 0,
-        "queue_size returns 0");
+    ok (queue_size (q) == 0, "queue_size returns 0");
 
     /* insert 1,2,3 */
 
     job[0] = job_create_test (1, FLUX_JOB_PRIORITY_DEFAULT);
     job[1] = job_create_test (2, FLUX_JOB_PRIORITY_DEFAULT);
     job[2] = job_create_test (3, FLUX_JOB_PRIORITY_DEFAULT);
-    ok (queue_insert (q, job[0], &job[0]->queue_handle) == 0,
-        "queue_insert 1 pri=def");
-    ok (queue_insert (q, job[1], &job[1]->queue_handle) == 0,
-        "queue_insert 2 pri=def");
-    ok (queue_insert (q, job[2], &job[2]->queue_handle) == 0,
-        "queue_insert 3 pri=def");
+    ok (queue_insert (q, job[0], &job[0]->queue_handle) == 0, "queue_insert 1 pri=def");
+    ok (queue_insert (q, job[1], &job[1]->queue_handle) == 0, "queue_insert 2 pri=def");
+    ok (queue_insert (q, job[2], &job[2]->queue_handle) == 0, "queue_insert 3 pri=def");
 
     errno = 0;
     ok (queue_insert (q, job[2], &job[2]->queue_handle) < 0 && errno == EEXIST,
@@ -58,23 +54,20 @@ int main (int argc, char *argv[])
 
     /* queue size, refcounts */
 
-    ok (queue_size (q) == 3,
-        "queue_size returns 3");
+    ok (queue_size (q) == 3, "queue_size returns 3");
     ok (job[0]->refcount == 2 && job[1]->refcount == 2 && job[2]->refcount == 2,
         "queue took reference on inserted jobs");
 
     /* iterators */
 
     ok (queue_first (q) == job[0] && queue_next (q) == job[1]
-                                  && queue_next (q) == job[2]
-                                  && queue_next (q) == NULL,
+            && queue_next (q) == job[2] && queue_next (q) == NULL,
         "queue iterators return job 1,2,3,NULL");
 
     /* lookup_by_id */
 
-    ok (queue_lookup_by_id (q, 1) == job[0]
-        && queue_lookup_by_id (q, 2) == job[1]
-        && queue_lookup_by_id (q, 3) == job[2],
+    ok (queue_lookup_by_id (q, 1) == job[0] && queue_lookup_by_id (q, 2) == job[1]
+            && queue_lookup_by_id (q, 3) == job[2],
         "queue_lookup_by_id works for all three jobs");
     errno = 0;
     ok (queue_lookup_by_id (q, 42) == NULL && errno == ENOENT,
@@ -85,8 +78,7 @@ int main (int argc, char *argv[])
     njob[0] = job_create_test (100, FLUX_JOB_PRIORITY_MAX);
     ok (queue_insert (q, njob[0], &njob[0]->queue_handle) == 0,
         "queue_insert 100 pri=max");
-    ok (queue_first (q) == njob[0],
-        "queue_first returns high priority job");
+    ok (queue_first (q) == njob[0], "queue_first returns high priority job");
 
     /* insert low priority */
 
@@ -100,16 +92,14 @@ int main (int argc, char *argv[])
         j_prev = j;
         j = queue_next (q);
     }
-    ok (j_prev == njob[1],
-        "iterators find low priority job last");
+    ok (j_prev == njob[1], "iterators find low priority job last");
 
     /* set high priority and reorder
      *   review: queue contains 100,1,2,3,101
      */
-    job[2]->priority = FLUX_JOB_PRIORITY_MAX; // job 3
+    job[2]->priority = FLUX_JOB_PRIORITY_MAX;  // job 3
     queue_reorder (q, job[2], job[2]->queue_handle);
-    ok (queue_first (q) == job[2],
-        "reorder job 3 pri=max moves that job first");
+    ok (queue_first (q) == job[2], "reorder job 3 pri=max moves that job first");
 
     /* queue_delete */
 
@@ -126,8 +116,7 @@ int main (int argc, char *argv[])
     /* destroy */
 
     queue_destroy (q);
-    ok (job[0]->refcount == 1 && job[1]->refcount == 1
-                              && job[2]->refcount == 1,
+    ok (job[0]->refcount == 1 && job[1]->refcount == 1 && job[2]->refcount == 1,
         "queue dropped reference on jobs at destruction");
 
     job_decref (job[0]);

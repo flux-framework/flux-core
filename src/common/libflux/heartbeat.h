@@ -29,4 +29,3 @@ int flux_heartbeat_decode (const flux_msg_t *msg, int *epoch);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

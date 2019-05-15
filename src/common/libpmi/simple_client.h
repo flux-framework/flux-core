@@ -15,7 +15,6 @@
 
 void *pmi_simple_client_create (struct pmi_operations **ops);
 
-
 #endif /* _FLUX_CORE_PMI_SIMPLE_CLIENT_H */
 
 /*

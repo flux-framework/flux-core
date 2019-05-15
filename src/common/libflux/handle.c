@@ -29,7 +29,7 @@
 #include "connector.h"
 #include "message.h"
 #include "tagpool.h"
-#include "msg_handler.h" // for flux_sleep_on ()
+#include "msg_handler.h"  // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
 
@@ -56,23 +56,23 @@ struct profiling_context {
 #endif
 
 struct flux_handle_struct {
-    flux_t          *parent; // if FLUX_O_CLONE, my parent
+    flux_t *parent;  // if FLUX_O_CLONE, my parent
     struct aux_item *aux;
-    int             usecount;
-    int             flags;
+    int usecount;
+    int flags;
 
     /* element below are unused in cloned handles */
     const struct flux_handle_ops *ops;
-    void            *impl;
-    void            *dso;
-    msglist_t       *queue;
-    int             pollfd;
+    void *impl;
+    void *dso;
+    msglist_t *queue;
+    int pollfd;
 
-    struct tagpool  *tagpool;
+    struct tagpool *tagpool;
     flux_msgcounters_t msgcounters;
-    flux_fatal_f    fatal;
-    void            *fatal_arg;
-    bool            fatality;
+    flux_fatal_f fatal;
+    void *fatal_arg;
+    bool fatality;
 #if HAVE_CALIPER
     struct profiling_context prof;
 #endif
@@ -88,7 +88,7 @@ static flux_t *lookup_clone_ancestor (flux_t *h)
 void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags);
 
 #if HAVE_CALIPER
-void profiling_context_init (struct profiling_context* prof)
+void profiling_context_init (struct profiling_context *prof)
 {
     prof->msg_type = cali_create_attribute ("flux.message.type",
                                             CALI_TYPE_STRING,
@@ -126,28 +126,29 @@ void profiling_context_init (struct profiling_context* prof)
     prof->msg_match_glob = cali_create_attribute ("flux.message.match.glob",
                                                   CALI_TYPE_STRING,
                                                   CALI_ATTR_SKIP_EVENTS);
-    prof->initialized=1;
+    prof->initialized = 1;
 }
 
 static void profiling_msg_snapshot (flux_t *h,
-                          const flux_msg_t *msg,
-                          int flags,
-                          const char *msg_action)
+                                    const flux_msg_t *msg,
+                                    int flags,
+                                    const char *msg_action)
 {
     h = lookup_clone_ancestor (h);
     cali_id_t attributes[3];
-    const void * data[3];
+    const void *data[3];
     size_t size[3];
 
     // This can get called before the handle is really ready
-    if(! h->prof.initialized) return;
+    if (!h->prof.initialized)
+        return;
 
     int len = 0;
 
     if (msg_action) {
         attributes[len] = h->prof.msg_action;
         data[len] = msg_action;
-        size[len] = strlen(msg_action);
+        size[len] = strlen (msg_action);
         ++len;
     }
 
@@ -157,7 +158,7 @@ static void profiling_msg_snapshot (flux_t *h,
     if (msg_type) {
         attributes[len] = h->prof.msg_type;
         data[len] = msg_type;
-        size[len] = strlen(msg_type);
+        size[len] = strlen (msg_type);
         ++len;
     }
 
@@ -184,7 +185,6 @@ static void profiling_msg_snapshot (flux_t *h,
     if (type == FLUX_MSGTYPE_EVENT)
         cali_end (h->prof.msg_seq);
 }
-
 
 #endif
 
@@ -257,8 +257,7 @@ flux_t *flux_open (const char *uri, int flags)
     if (!uri)
         uri = getenv ("FLUX_URI");
     if (!uri) {
-        if (asprintf (&default_uri, "local://%s",
-                      flux_conf_get ("rundir", 0)) < 0)
+        if (asprintf (&default_uri, "local://%s", flux_conf_get ("rundir", 0)) < 0)
             goto done;
         uri = default_uri;
     }
@@ -283,12 +282,11 @@ flux_t *flux_open (const char *uri, int flags)
     }
     h->dso = dso;
 #if HAVE_CALIPER
-    profiling_context_init(&h->prof);
+    profiling_context_init (&h->prof);
 #endif
     if ((s = getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid,
-                                                      sizeof (userid)) < 0) {
+        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid, sizeof (userid)) < 0) {
             flux_handle_destroy (h);
             h = NULL;
             goto done;
@@ -296,8 +294,8 @@ flux_t *flux_open (const char *uri, int flags)
     }
     if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
         uint32_t rolemask = strtoul (s, NULL, 0);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask,
-                                                    sizeof (rolemask)) < 0) {
+        if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask, sizeof (rolemask))
+            < 0) {
             flux_handle_destroy (h);
             h = NULL;
             goto done;
@@ -361,14 +359,15 @@ nomem:
 
 static void report_leaked_matchtags (struct tagpool *tp)
 {
-    uint32_t reg = tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_SIZE) -
-                   tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_AVAIL);
-    uint32_t grp = tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_SIZE) -
-                   tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_AVAIL);
+    uint32_t reg = tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_SIZE)
+                   - tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_AVAIL);
+    uint32_t grp = tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_SIZE)
+                   - tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_AVAIL);
     if (reg > 0 || grp > 0)
         fprintf (stderr,
                  "MATCHDEBUG: pool destroy with reg=%d grp=%d allocated\n",
-                 reg, grp);
+                 reg,
+                 grp);
 }
 
 void flux_handle_destroy (flux_t *h)
@@ -376,9 +375,8 @@ void flux_handle_destroy (flux_t *h)
     if (h && --h->usecount == 0) {
         aux_destroy (&h->aux);
         if ((h->flags & FLUX_O_CLONE)) {
-            flux_handle_destroy (h->parent); // decr usecount
-        }
-        else {
+            flux_handle_destroy (h->parent);  // decr usecount
+        } else {
             if (h->ops->impl_destroy)
                 h->ops->impl_destroy (h->impl);
             if ((h->flags & FLUX_O_MATCHDEBUG))
@@ -494,8 +492,12 @@ void flux_clr_msgcounters (flux_t *h)
 void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags)
 {
     flux_t *h = arg;
-    flux_log (h, LOG_INFO, "tagpool-%s expanded from %u to %u entries",
-              (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal", old, new);
+    flux_log (h,
+              LOG_INFO,
+              "tagpool-%s expanded from %u to %u entries",
+              (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal",
+              old,
+              new);
 }
 
 uint32_t flux_matchtag_alloc (flux_t *h, int flags)
@@ -508,7 +510,9 @@ uint32_t flux_matchtag_alloc (flux_t *h, int flags)
         tpflags |= TAGPOOL_FLAG_GROUP;
     tag = tagpool_alloc (h->tagpool, tpflags);
     if (tag == FLUX_MATCHTAG_NONE) {
-        flux_log (h, LOG_ERR, "tagpool-%s temporarily out of tags",
+        flux_log (h,
+                  LOG_ERR,
+                  "tagpool-%s temporarily out of tags",
                   (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal");
         errno = EBUSY; /* appropriate error? */
     }
@@ -586,9 +590,9 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
             case FLUX_MSGTYPE_EVENT:
                 h->msgcounters.event_rx++;
                 break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            h->msgcounters.keepalive_rx++;
-            break;
+            case FLUX_MSGTYPE_KEEPALIVE:
+                h->msgcounters.keepalive_rx++;
+                break;
         }
     } else
         errno = 0;
@@ -608,7 +612,7 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     if (h->ops->send (h->impl, msg, flags) < 0)
         goto fatal;
 #if HAVE_CALIPER
-    profiling_msg_snapshot(h, msg, flags, "send");
+    profiling_msg_snapshot (h, msg, flags, "send");
 #endif
     return 0;
 fatal:

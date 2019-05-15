@@ -54,8 +54,12 @@ static void kvssync_destroy (void *data)
     }
 }
 
-int kvssync_add (struct kvsroot *root, flux_msg_handler_f cb, flux_t *h,
-                 flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg,
+int kvssync_add (struct kvsroot *root,
+                 flux_msg_handler_f cb,
+                 flux_t *h,
+                 flux_msg_handler_t *mh,
+                 const flux_msg_t *msg,
+                 void *arg,
                  int seq)
 {
     struct kvssync *ks = NULL;
@@ -114,9 +118,7 @@ void kvssync_process (struct kvsroot *root, bool all)
     }
 }
 
-int kvssync_remove_msg (struct kvsroot *root,
-                        kvssync_test_msg_f cmp,
-                        void *arg)
+int kvssync_remove_msg (struct kvsroot *root, kvssync_test_msg_f cmp, void *arg)
 {
     zlist_t *tmp = NULL;
     struct kvssync *ks;

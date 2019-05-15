@@ -33,7 +33,7 @@ struct restart_ctx {
 /* restart_map callback should return -1 on error to stop map with error,
  * or 0 on success.  'job' is only valid for the duration of the callback.
  */
-typedef int (*restart_map_f)(struct job *job, void *arg);
+typedef int (*restart_map_f) (struct job *job, void *arg);
 
 int restart_count_char (const char *s, char c)
 {
@@ -45,8 +45,11 @@ int restart_count_char (const char *s, char c)
     return count;
 }
 
-static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
-                               restart_map_f cb, void *arg)
+static int depthfirst_map_one (flux_t *h,
+                               const char *key,
+                               int dirskip,
+                               restart_map_f cb,
+                               void *arg)
 {
     flux_jobid_t id;
     flux_future_t *f;
@@ -80,8 +83,11 @@ done:
     return rc;
 }
 
-static int depthfirst_map (flux_t *h, const char *key,
-                           int dirskip, restart_map_f cb, void *arg)
+static int depthfirst_map (flux_t *h,
+                           const char *key,
+                           int dirskip,
+                           restart_map_f cb,
+                           void *arg)
 {
     flux_future_t *f;
     const flux_kvsdir_t *dir;
@@ -108,7 +114,7 @@ static int depthfirst_map (flux_t *h, const char *key,
             continue;
         if (!(nkey = flux_kvsdir_key_at (dir, name)))
             goto done_destroyitr;
-        if (path_level == 3) // orig 'key' = .A.B.C, thus 'nkey' is complete
+        if (path_level == 3)  // orig 'key' = .A.B.C, thus 'nkey' is complete
             n = depthfirst_map_one (h, nkey, dirskip, cb, arg);
         else
             n = depthfirst_map (h, nkey, dirskip, cb, arg);
@@ -140,16 +146,17 @@ static int restart_map_cb (struct job *job, void *arg)
     if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
         return -1;
     if (event_job_action (ctx->event_ctx, job) < 0) {
-        flux_log_error (ctx->h, "%s: event_job_action id=%llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h,
+                        "%s: event_job_action id=%llu",
+                        __FUNCTION__,
+                        (unsigned long long)job->id);
     }
     return 0;
 }
 
 /* Load any active jobs present in the KVS at startup.
  */
-int restart_from_kvs (flux_t *h, struct queue *queue,
-                      struct event_ctx *event_ctx)
+int restart_from_kvs (flux_t *h, struct queue *queue, struct event_ctx *event_ctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);

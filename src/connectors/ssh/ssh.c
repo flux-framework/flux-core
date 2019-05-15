@@ -28,7 +28,7 @@
 #include "src/common/libutil/popen2.h"
 #include "src/common/libutil/fdutils.h"
 
-#define CTX_MAGIC   0xe534babb
+#define CTX_MAGIC 0xe534babb
 typedef struct {
     int magic;
     int fd;
@@ -118,8 +118,13 @@ static int op_event_subscribe (void *impl, const char *topic)
     flux_future_t *f;
     int rc = 0;
 
-    if (!(f = flux_rpc_pack (c->h, "local.sub", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
+    if (!(f = flux_rpc_pack (c->h,
+                             "local.sub",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{ s:s }",
+                             "topic",
+                             topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -136,8 +141,13 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     flux_future_t *f;
     int rc = 0;
 
-    if (!(f = flux_rpc_pack (c->h, "local.unsub", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
+    if (!(f = flux_rpc_pack (c->h,
+                             "local.unsub",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{ s:s }",
+                             "topic",
+                             topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -179,7 +189,7 @@ static int parse_ssh_port (ssh_ctx_t *c, const char *path)
         if ((p = strchr (cpy, '/')) || (p = strchr (cpy, '?')))
             *p = '\0';
         if (argz_add (&c->ssh_argz, &c->ssh_argz_len, "-p") != 0
-         || argz_add (&c->ssh_argz, &c->ssh_argz_len, cpy) != 0) {
+            || argz_add (&c->ssh_argz, &c->ssh_argz_len, cpy) != 0) {
             errno = ENOMEM;
             goto done;
         }
@@ -200,8 +210,7 @@ static int parse_ssh_user_at_host (ssh_ctx_t *c, const char *path)
         errno = ENOMEM;
         goto done;
     }
-    if ((p = strchr (cpy, ':')) || (p = strchr (cpy, '/'))
-                                || (p = strchr (cpy, '?')))
+    if ((p = strchr (cpy, ':')) || (p = strchr (cpy, '/')) || (p = strchr (cpy, '?')))
         *p = '\0';
     if (argz_add (&c->ssh_argz, &c->ssh_argz_len, cpy) != 0) {
         errno = ENOMEM;
@@ -254,7 +263,7 @@ static char *which (const char *prog, char *buf, size_t size)
         while ((dir = strtok_r (a1, ":", &saveptr))) {
             snprintf (buf, size, "%s/%s", dir, prog);
             if (stat (buf, &sb) == 0 && S_ISREG (sb.st_mode)
-                                     && access (buf, X_OK) == 0) {
+                && access (buf, X_OK) == 0) {
                 result = buf;
                 break;
             }
@@ -284,8 +293,8 @@ static int parse_ssh_rcmd (ssh_ctx_t *c, const char *path)
     if (!flux_cmd)
         flux_cmd = "flux";
     if (argz_add (&proxy_argz, &proxy_argz_len, flux_cmd) != 0
-     || argz_add (&proxy_argz, &proxy_argz_len, "proxy") != 0
-     || argz_add (&proxy_argz, &proxy_argz_len, "--stdio") != 0) {
+        || argz_add (&proxy_argz, &proxy_argz_len, "proxy") != 0
+        || argz_add (&proxy_argz, &proxy_argz_len, "--stdio") != 0) {
         errno = ENOMEM;
         goto done;
     }
@@ -379,8 +388,7 @@ flux_t *connector_init (const char *path, int flags)
          * will just fail with errno = ENOENT, which is not all that helpful.
          * Emit a hint on stderr even though this is perhaps not ideal.
          */
-        fprintf (stderr, "ssh-connector: %s: %s\n",
-                 c->ssh_cmd, strerror (errno));
+        fprintf (stderr, "ssh-connector: %s: %s\n", c->ssh_cmd, strerror (errno));
         fprintf (stderr, "Hint: set FLUX_SSH in environment to override\n");
         goto error;
     }

@@ -41,7 +41,7 @@ static int clear_event (msglist_t *l)
 {
     if (l->pollfd >= 0 && l->event == 1) {
         if (read (l->pollfd, &l->event, sizeof (l->event)) < 0) {
-            if (errno != EAGAIN  && errno != EWOULDBLOCK)
+            if (errno != EAGAIN && errno != EWOULDBLOCK)
                 return -1;
             errno = 0;
         }
@@ -178,4 +178,3 @@ int msglist_pollevents (msglist_t *l)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

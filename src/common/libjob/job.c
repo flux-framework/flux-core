@@ -56,8 +56,7 @@ static flux_security_t *get_security_ctx (flux_t *h, flux_future_t **f_error)
             goto error;
         if (flux_security_configure (sec, NULL) < 0)
             goto error;
-        if (flux_aux_set (h, auxkey, sec,
-                          (flux_free_f)flux_security_destroy) < 0)
+        if (flux_aux_set (h, auxkey, sec, (flux_free_f)flux_security_destroy) < 0)
             goto error;
     }
     return sec;
@@ -68,8 +67,7 @@ error:
 }
 #endif
 
-flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
-                                int flags)
+flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority, int flags)
 {
     flux_future_t *f = NULL;
     const char *J;
@@ -92,16 +90,21 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
             goto error;
         J = s;
 #endif
-    }
-    else {
+    } else {
         J = jobspec;
-        flags &= ~FLUX_JOB_PRE_SIGNED; // client only flag
+        flags &= ~FLUX_JOB_PRE_SIGNED;  // client only flag
     }
-    if (!(f = flux_rpc_pack (h, "job-ingest.submit", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-ingest.submit",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:i}",
-                             "J", J,
-                             "priority", priority,
-                             "flags", flags)))
+                             "J",
+                             J,
+                             "priority",
+                             priority,
+                             "flags",
+                             flags)))
         goto error;
     return f;
 error:
@@ -119,8 +122,7 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *jobid)
         errno = EINVAL;
         return -1;
     }
-    if (flux_rpc_get_unpack (f, "{s:I}",
-                                "id", &id) < 0)
+    if (flux_rpc_get_unpack (f, "{s:I}", "id", &id) < 0)
         return -1;
     *jobid = id;
     return 0;
@@ -132,15 +134,19 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
     json_t *o = NULL;
     int saved_errno;
 
-    if (!h || max_entries < 0 || !json_str
-           || !(o = json_loads (json_str, 0, NULL))) {
+    if (!h || max_entries < 0 || !json_str || !(o = json_loads (json_str, 0, NULL))) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.list", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.list",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:i s:o}",
-                             "max_entries", max_entries,
-                             "attrs", o))) {
+                             "max_entries",
+                             max_entries,
+                             "attrs",
+                             o))) {
         saved_errno = errno;
         json_decref (o);
         errno = saved_errno;
@@ -149,8 +155,11 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
     return f;
 }
 
-flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
-                               const char *type, int severity, const char *note)
+flux_future_t *flux_job_raise (flux_t *h,
+                               flux_jobid_t id,
+                               const char *type,
+                               int severity,
+                               const char *note)
 {
     flux_future_t *f;
     json_t *o;
@@ -161,9 +170,12 @@ flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
         return NULL;
     }
     if (!(o = json_pack ("{s:I s:s s:i}",
-                         "id", id,
-                         "type", type,
-                         "severity", severity)))
+                         "id",
+                         id,
+                         "type",
+                         type,
+                         "severity",
+                         severity)))
         goto nomem;
     if (note) {
         json_t *o_note = json_string (note);
@@ -172,8 +184,7 @@ flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
             goto nomem;
         }
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.raise", FLUX_NODEID_ANY, 0,
-                                                                    "o", o)))
+    if (!(f = flux_rpc_pack (h, "job-manager.raise", FLUX_NODEID_ANY, 0, "o", o)))
         goto error;
     return f;
 nomem:
@@ -198,10 +209,15 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.priority", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.priority",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:i}",
-                             "id", id,
-                             "priority", priority)))
+                             "id",
+                             id,
+                             "priority",
+                             priority)))
         return NULL;
     return f;
 }
@@ -218,10 +234,7 @@ int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key)
 
     if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    len = snprintf (buf, bufsz, "job.%s%s%s",
-                    idstr,
-                    key ? "." : "",
-                    key ? key : "");
+    len = snprintf (buf, bufsz, "job.%s%s%s", idstr, key ? "." : "", key ? key : "");
     if (len >= bufsz) {
         errno = EOVERFLOW;
         return -1;
@@ -239,9 +252,7 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
-                             "{s:I}",
-                             "id", id)))
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags, "{s:I}", "id", id)))
         return NULL;
     return f;
 }
@@ -270,7 +281,8 @@ int flux_job_event_watch_cancel (flux_future_t *f)
                               FLUX_NODEID_ANY,
                               FLUX_RPC_NORESPONSE,
                               "{s:i}",
-                              "matchtag", (int)flux_rpc_get_matchtag (f))))
+                              "matchtag",
+                              (int)flux_rpc_get_matchtag (f))))
         return -1;
     flux_future_destroy (f2);
     return 0;
@@ -319,7 +331,6 @@ inval:
     errno = EINVAL;
     return -1;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -22,8 +22,8 @@
 /* Simple resource node object */
 struct rnode {
     uint32_t rank;
-    struct idset * ids;
-    struct idset * avail;
+    struct idset *ids;
+    struct idset *avail;
 };
 
 /*  Create a resource node object from an existing idset `set`

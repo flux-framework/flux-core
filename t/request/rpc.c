@@ -51,15 +51,16 @@ int main (int argc, char *argv[])
         if (expected_errno > 0) {
             if (errno != expected_errno)
                 log_msg_exit ("%s: failed with errno=%d != expected %d",
-                              topic, errno, expected_errno);
-        }
-        else
+                              topic,
+                              errno,
+                              expected_errno);
+        } else
             log_err_exit ("%s", topic);
-    }
-    else {
+    } else {
         if (expected_errno > 0)
             log_msg_exit ("%s: succeeded but expected failure errno=%d",
-                          topic, expected_errno);
+                          topic,
+                          expected_errno);
         if (write_all (STDOUT_FILENO, outbuf, outlen) < 0)
             log_err_exit ("write to stdout");
     }

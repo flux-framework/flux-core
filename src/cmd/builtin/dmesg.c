@@ -11,15 +11,26 @@
 #include "builtin.h"
 
 static struct optparse_option dmesg_opts[] = {
-    { .name = "clear",  .key = 'C',  .has_arg = 0,
-      .usage = "Clear the ring buffer", },
-    { .name = "read-clear",  .key = 'c',  .has_arg = 0,
-      .usage = "Clear the ring buffer contents after printing", },
-    { .name = "follow",  .key = 'f',  .has_arg = 0,
-      .usage = "Track new entries as are logged", },
+    {
+        .name = "clear",
+        .key = 'C',
+        .has_arg = 0,
+        .usage = "Clear the ring buffer",
+    },
+    {
+        .name = "read-clear",
+        .key = 'c',
+        .has_arg = 0,
+        .usage = "Clear the ring buffer contents after printing",
+    },
+    {
+        .name = "follow",
+        .key = 'f',
+        .has_arg = 0,
+        .usage = "Track new entries as are logged",
+    },
     OPTPARSE_TABLE_END,
 };
-
 
 static int cmd_dmesg (optparse_t *p, int ac, char *av[])
 {
@@ -49,12 +60,12 @@ int subcommand_dmesg_register (optparse_t *p)
 {
     optparse_err_t e;
     e = optparse_reg_subcommand (p,
-        "dmesg",
-        cmd_dmesg,
-        "[OPTIONS...]",
-        "Print or control log ring buffer",
-        0,
-        dmesg_opts);
+                                 "dmesg",
+                                 cmd_dmesg,
+                                 "[OPTIONS...]",
+                                 "Print or control log ring buffer",
+                                 0,
+                                 dmesg_opts);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 

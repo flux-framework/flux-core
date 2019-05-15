@@ -117,15 +117,14 @@ void event_batch_commit (struct event_ctx *ctx)
                 goto error;
             if (zlist_append (ctx->pending, batch) < 0)
                 goto nomem;
-        }
-        else { // just publish events and be done
+        } else {  // just publish events and be done
             event_batch_destroy (batch);
         }
     }
     return;
 nomem:
     errno = ENOMEM;
-error: // unlikely (e.g. ENOMEM)
+error:  // unlikely (e.g. ENOMEM)
     flux_log_error (ctx->h, "%s: aborting reactor", __FUNCTION__);
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
     event_batch_destroy (batch);
@@ -141,8 +140,12 @@ void event_publish_state (struct event_ctx *ctx, json_t *state_trans)
 {
     flux_future_t *f;
 
-    if (!(f = flux_event_publish_pack (ctx->h, "job-state", 0, "{s:O}",
-                                               "transitions", state_trans))) {
+    if (!(f = flux_event_publish_pack (ctx->h,
+                                       "job-state",
+                                       0,
+                                       "{s:O}",
+                                       "transitions",
+                                       state_trans))) {
         flux_log_error (ctx->h, "%s: flux_event_publish_pack", __FUNCTION__);
         goto error;
     }
@@ -209,7 +212,8 @@ int event_batch_start (struct event_ctx *ctx)
     return 0;
 }
 
-static int event_batch_commit_event (struct event_ctx *ctx, struct job *job,
+static int event_batch_commit_event (struct event_ctx *ctx,
+                                     struct job *job,
                                      json_t *entry)
 {
     char key[64];
@@ -237,8 +241,7 @@ int event_batch_pub_state (struct event_ctx *ctx, struct job *job)
 
     if (event_batch_start (ctx) < 0)
         goto error;
-    if (!(o = json_pack ("[I,s]", job->id,
-                         flux_job_statetostr (job->state, false))))
+    if (!(o = json_pack ("[I,s]", job->id, flux_job_statetostr (job->state, false))))
         goto nomem;
     if (json_array_append_new (ctx->batch->state_trans, o)) {
         json_decref (o);
@@ -283,11 +286,8 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
             }
             /* Post cleanup event when cleanup is complete.
              */
-            if (!job->alloc_queued && !job->alloc_pending
-                                   && !job->free_pending
-                                   && !job->start_pending
-                                   && !job->has_resources) {
-
+            if (!job->alloc_queued && !job->alloc_pending && !job->free_pending
+                && !job->start_pending && !job->has_resources) {
                 if (event_job_post_pack (ctx, job, "clean", NULL) < 0)
                     return -1;
             }
@@ -304,10 +304,15 @@ int event_submit_context_decode (json_t *context,
                                  uint32_t *userid,
                                  int *flags)
 {
-    if (json_unpack (context, "{ s:i s:i s:i }",
-                     "priority", priority,
-                     "userid", userid,
-                     "flags", flags) < 0) {
+    if (json_unpack (context,
+                     "{ s:i s:i s:i }",
+                     "priority",
+                     priority,
+                     "userid",
+                     userid,
+                     "flags",
+                     flags)
+        < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -315,8 +320,7 @@ int event_submit_context_decode (json_t *context,
     return 0;
 }
 
-int event_priority_context_decode (json_t *context,
-                                   int *priority)
+int event_priority_context_decode (json_t *context, int *priority)
 {
     if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
         errno = EPROTO;
@@ -326,8 +330,7 @@ int event_priority_context_decode (json_t *context,
     return 0;
 }
 
-int event_exception_context_decode (json_t *context,
-                                    int *severity)
+int event_exception_context_decode (json_t *context, int *severity)
 {
     if (json_unpack (context, "{ s:i }", "severity", severity) < 0) {
         errno = EPROTO;
@@ -337,8 +340,7 @@ int event_exception_context_decode (json_t *context,
     return 0;
 }
 
-int event_release_context_decode (json_t *context,
-                                  int *final)
+int event_release_context_decode (json_t *context, int *final)
 {
     *final = 0;
 
@@ -366,7 +368,8 @@ int event_job_update (struct job *job, json_t *event)
         if (event_submit_context_decode (context,
                                          &job->priority,
                                          &job->userid,
-                                         &job->flags) < 0)
+                                         &job->flags)
+            < 0)
             goto error;
         job->state = FLUX_JOB_DEPEND;
     }
@@ -374,12 +377,10 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_DEPEND)
             goto inval;
         job->state = FLUX_JOB_SCHED;
-    }
-    else if (!strcmp (name, "priority")) {
+    } else if (!strcmp (name, "priority")) {
         if (event_priority_context_decode (context, &job->priority) < 0)
             goto error;
-    }
-    else if (!strcmp (name, "exception")) {
+    } else if (!strcmp (name, "exception")) {
         int severity;
         if (job->state == FLUX_JOB_NEW || job->state == FLUX_JOB_INACTIVE)
             goto inval;
@@ -387,26 +388,22 @@ int event_job_update (struct job *job, json_t *event)
             goto error;
         if (severity == 0)
             job->state = FLUX_JOB_CLEANUP;
-    }
-    else if (!strcmp (name, "alloc")) {
+    } else if (!strcmp (name, "alloc")) {
         if (job->state != FLUX_JOB_SCHED && job->state != FLUX_JOB_CLEANUP)
             goto inval;
         job->has_resources = 1;
         if (job->state == FLUX_JOB_SCHED)
             job->state = FLUX_JOB_RUN;
-    }
-    else if (!strcmp (name, "free")) {
+    } else if (!strcmp (name, "free")) {
         if (job->state != FLUX_JOB_CLEANUP)
             goto inval;
         job->has_resources = 0;
-    }
-    else if (!strcmp (name, "finish")) {
+    } else if (!strcmp (name, "finish")) {
         if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
             goto inval;
         if (job->state == FLUX_JOB_RUN)
             job->state = FLUX_JOB_CLEANUP;
-    }
-    else if (!strcmp (name, "release")) {
+    } else if (!strcmp (name, "release")) {
         int final;
         if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
             goto inval;
@@ -414,8 +411,7 @@ int event_job_update (struct job *job, json_t *event)
             goto error;
         if (final && job->state == FLUX_JOB_RUN)
             goto inval;
-    }
-    else if (!strcmp (name, "clean")) {
+    } else if (!strcmp (name, "clean")) {
         if (job->state != FLUX_JOB_CLEANUP)
             goto inval;
         job->state = FLUX_JOB_INACTIVE;
@@ -427,8 +423,11 @@ error:
     return -1;
 }
 
-int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         const char *name, const char *context_fmt, ...)
+int event_job_post_pack (struct event_ctx *ctx,
+                         struct job *job,
+                         const char *name,
+                         const char *context_fmt,
+                         ...)
 {
     va_list ap;
     json_t *entry = NULL;
@@ -438,7 +437,7 @@ int event_job_post_pack (struct event_ctx *ctx, struct job *job,
     va_start (ap, context_fmt);
     if (!(entry = eventlog_entry_vpack (0., name, context_fmt, ap)))
         return -1;
-    if (event_job_update (job, entry) < 0) // modifies job->state
+    if (event_job_update (job, entry) < 0)  // modifies job->state
         goto error;
     if (event_batch_commit_event (ctx, job, entry) < 0)
         goto error;
@@ -459,14 +458,12 @@ error:
     return -1;
 }
 
-void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
-                              struct alloc_ctx *alloc_ctx)
+void event_ctx_set_alloc_ctx (struct event_ctx *ctx, struct alloc_ctx *alloc_ctx)
 {
     ctx->alloc_ctx = alloc_ctx;
 }
 
-void event_ctx_set_start_ctx (struct event_ctx *ctx,
-                              struct start_ctx *start_ctx)
+void event_ctx_set_start_ctx (struct event_ctx *ctx, struct start_ctx *start_ctx)
 {
     ctx->start_ctx = start_ctx;
 }
@@ -482,7 +479,7 @@ void event_ctx_destroy (struct event_ctx *ctx)
         if (ctx->pending) {
             struct event_batch *batch;
             while ((batch = zlist_pop (ctx->pending)))
-                event_batch_destroy (batch); // N.B. can append to pub_futures
+                event_batch_destroy (batch);  // N.B. can append to pub_futures
         }
         zlist_destroy (&ctx->pending);
         if (ctx->pub_futures) {
@@ -507,8 +504,8 @@ struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue)
         return NULL;
     ctx->h = h;
     ctx->queue = queue;
-    if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
-                                                  0., 0., timer_cb, ctx)))
+    if (!(ctx->timer =
+              flux_timer_watcher_create (flux_get_reactor (h), 0., 0., timer_cb, ctx)))
         goto error;
     if (!(ctx->pending = zlist_new ()))
         goto nomem;
@@ -525,4 +522,3 @@ error:
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

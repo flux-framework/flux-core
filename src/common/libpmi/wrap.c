@@ -32,153 +32,158 @@ struct pmi_wrap {
 static int pmi_wrap_init (void *impl, int *spawned)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Init");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Init");
     return f ? f (spawned) : PMI_FAIL;
 }
 
 static int pmi_wrap_initialized (void *impl, int *initialized)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Initialized");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Initialized");
     return f ? f (initialized) : PMI_FAIL;
 }
 
 static int pmi_wrap_finalize (void *impl)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(void) = dlsym (pmi->dso, "PMI_Finalize");
+    int (*f) (void) = dlsym (pmi->dso, "PMI_Finalize");
     return f ? f () : PMI_FAIL;
 }
 
 static int pmi_wrap_get_size (void *impl, int *size)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Get_size");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Get_size");
     return f ? f (size) : PMI_FAIL;
 }
 
 static int pmi_wrap_get_rank (void *impl, int *rank)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Get_rank");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Get_rank");
     return f ? f (rank) : PMI_FAIL;
 }
 
 static int pmi_wrap_get_universe_size (void *impl, int *size)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Get_universe_size");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Get_universe_size");
     return f ? f (size) : PMI_FAIL;
 }
 
 static int pmi_wrap_get_appnum (void *impl, int *appnum)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Get_appnum");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Get_appnum");
     return f ? f (appnum) : PMI_FAIL;
 }
 
 static int pmi_wrap_barrier (void *impl)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(void) = dlsym (pmi->dso, "PMI_Barrier");
+    int (*f) (void) = dlsym (pmi->dso, "PMI_Barrier");
     return f ? f () : PMI_FAIL;
 }
 
 static int pmi_wrap_abort (void *impl, int exit_code, const char *error_msg)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int, const char *) = dlsym (pmi->dso, "PMI_Abort");
+    int (*f) (int, const char *) = dlsym (pmi->dso, "PMI_Abort");
     return f ? f (exit_code, error_msg) : PMI_FAIL;
 }
 
 static int pmi_wrap_kvs_get_my_name (void *impl, char *kvsname, int length)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(char *, int) = dlsym (pmi->dso, "PMI_KVS_Get_my_name");
+    int (*f) (char *, int) = dlsym (pmi->dso, "PMI_KVS_Get_my_name");
     return f ? f (kvsname, length) : PMI_FAIL;
 }
 
 static int pmi_wrap_kvs_get_name_length_max (void *impl, int *length)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_KVS_Get_name_length_max");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_KVS_Get_name_length_max");
     return f ? f (length) : PMI_FAIL;
 }
 
 static int pmi_wrap_kvs_get_key_length_max (void *impl, int *length)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_KVS_Get_key_length_max");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_KVS_Get_key_length_max");
     return f ? f (length) : PMI_FAIL;
 }
 
 static int pmi_wrap_kvs_get_value_length_max (void *impl, int *length)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_KVS_Get_value_length_max");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_KVS_Get_value_length_max");
     return f ? f (length) : PMI_FAIL;
 }
 
-static int pmi_wrap_kvs_put (void *impl, const char *kvsname,
-                             const char *key, const char *value)
+static int pmi_wrap_kvs_put (void *impl,
+                             const char *kvsname,
+                             const char *key,
+                             const char *value)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(const char *, const char *, const char *) = dlsym (pmi->dso,
-                                                                "PMI_KVS_Put");
+    int (*f) (const char *, const char *, const char *) =
+        dlsym (pmi->dso, "PMI_KVS_Put");
     return f ? f (kvsname, key, value) : PMI_FAIL;
 }
 
 static int pmi_wrap_kvs_commit (void *impl, const char *kvsname)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(const char *) = dlsym (pmi->dso, "PMI_KVS_Commit");
+    int (*f) (const char *) = dlsym (pmi->dso, "PMI_KVS_Commit");
     return f ? f (kvsname) : PMI_FAIL;
 }
 
-static int pmi_wrap_kvs_get (void *impl, const char *kvsname,
-                             const char *key, char *value, int len)
+static int pmi_wrap_kvs_get (void *impl,
+                             const char *kvsname,
+                             const char *key,
+                             char *value,
+                             int len)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(const char *, const char *, char *, int) = dlsym (pmi->dso,
-                                                               "PMI_KVS_Get");
+    int (*f) (const char *, const char *, char *, int) =
+        dlsym (pmi->dso, "PMI_KVS_Get");
     return f ? f (kvsname, key, value, len) : PMI_FAIL;
 }
 
 static int pmi_wrap_get_clique_size (void *impl, int *size)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *) = dlsym (pmi->dso, "PMI_Get_clique_size");
+    int (*f) (int *) = dlsym (pmi->dso, "PMI_Get_clique_size");
     return f ? f (size) : PMI_FAIL;
 }
 
 static int pmi_wrap_get_clique_ranks (void *impl, int *ranks, int length)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int *, int) = dlsym (pmi->dso, "PMI_Get_clique_ranks");
+    int (*f) (int *, int) = dlsym (pmi->dso, "PMI_Get_clique_ranks");
     return f ? f (ranks, length) : PMI_FAIL;
 }
 
 static int pmi_wrap_publish_name (void *impl,
-                                  const char *service_name, const char *port)
+                                  const char *service_name,
+                                  const char *port)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(const char *, const char *) = dlsym (pmi->dso, "PMI_Publish_name");
+    int (*f) (const char *, const char *) = dlsym (pmi->dso, "PMI_Publish_name");
     return f ? f (service_name, port) : PMI_FAIL;
 }
 
 static int pmi_wrap_unpublish_name (void *impl, const char *service_name)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(const char *) = dlsym (pmi->dso, "PMI_Unpublish_name");
+    int (*f) (const char *) = dlsym (pmi->dso, "PMI_Unpublish_name");
     return f ? f (service_name) : PMI_FAIL;
 }
 
-static int pmi_wrap_lookup_name (void *impl,
-                                 const char *service_name, char *port)
+static int pmi_wrap_lookup_name (void *impl, const char *service_name, char *port)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(const char *, const char *) = dlsym (pmi->dso, "PMI_Lookup_name");
+    int (*f) (const char *, const char *) = dlsym (pmi->dso, "PMI_Lookup_name");
     return f ? f (service_name, port) : PMI_FAIL;
 }
 
@@ -194,15 +199,27 @@ static int pmi_wrap_spawn_multiple (void *impl,
                                     int errors[])
 {
     struct pmi_wrap *pmi = impl;
-    int (*f)(int, const char **, const char ***, const int *, const int *,
-             const PMI_keyval_t **, int, const PMI_keyval_t *, int *);
+    int (*f) (int,
+              const char **,
+              const char ***,
+              const int *,
+              const int *,
+              const PMI_keyval_t **,
+              int,
+              const PMI_keyval_t *,
+              int *);
     if ((f = dlsym (pmi->dso, "PMI_Lookup_name")))
-        return f (count, cmds, argvs, maxprocs, info_keyval_sizesp,
-                  info_keyval_vectors, preput_keyval_size, preput_keyval_vector,
+        return f (count,
+                  cmds,
+                  argvs,
+                  maxprocs,
+                  info_keyval_sizesp,
+                  info_keyval_vectors,
+                  preput_keyval_size,
+                  preput_keyval_vector,
                   errors);
     return PMI_FAIL;
 }
-
 
 static int liblist_append_from_environment (zlist_t *libs, const char *libname)
 {
@@ -259,14 +276,15 @@ static void trim_end (char *s, int ch)
 static int liblist_append_from_ldconfig (zlist_t *libs, const char *libname)
 {
     FILE *f;
-    const char *cmd = "ldconfig -p | sed -e 's/([^(]*)[\t ]*//'" \
-                      "            | awk -F\" => \" '{print $1 \":\" $2};'";
+    const char *cmd =
+        "ldconfig -p | sed -e 's/([^(]*)[\t ]*//'"
+        "            | awk -F\" => \" '{print $1 \":\" $2};'";
     char line[1024];
     int rc = -1;
 
     if (!(f = popen (cmd, "r")))
         goto done;
-    while  (fgets (line, sizeof (line), f) != NULL) {
+    while (fgets (line, sizeof (line), f) != NULL) {
         char *name, *path, *cpy;
         if (split2 (line, ':', &name, &path) < 0)
             continue;
@@ -327,7 +345,6 @@ error:
     return NULL;
 }
 
-
 static void pmi_wrap_destroy (void *impl)
 {
     struct pmi_wrap *pmi = impl;
@@ -339,36 +356,37 @@ static void pmi_wrap_destroy (void *impl)
 }
 
 static struct pmi_operations pmi_wrap_operations = {
-    .init                       = pmi_wrap_init,
-    .initialized                = pmi_wrap_initialized,
-    .finalize                   = pmi_wrap_finalize,
-    .get_size                   = pmi_wrap_get_size,
-    .get_rank                   = pmi_wrap_get_rank,
-    .get_appnum                 = pmi_wrap_get_appnum,
-    .get_universe_size          = pmi_wrap_get_universe_size,
-    .publish_name               = pmi_wrap_publish_name,
-    .unpublish_name             = pmi_wrap_unpublish_name,
-    .lookup_name                = pmi_wrap_lookup_name,
-    .barrier                    = pmi_wrap_barrier,
-    .abort                      = pmi_wrap_abort,
-    .kvs_get_my_name            = pmi_wrap_kvs_get_my_name,
-    .kvs_get_name_length_max    = pmi_wrap_kvs_get_name_length_max,
-    .kvs_get_key_length_max     = pmi_wrap_kvs_get_key_length_max,
-    .kvs_get_value_length_max   = pmi_wrap_kvs_get_value_length_max,
-    .kvs_put                    = pmi_wrap_kvs_put,
-    .kvs_commit                 = pmi_wrap_kvs_commit,
-    .kvs_get                    = pmi_wrap_kvs_get,
-    .get_clique_size            = pmi_wrap_get_clique_size,
-    .get_clique_ranks           = pmi_wrap_get_clique_ranks,
-    .spawn_multiple             = pmi_wrap_spawn_multiple,
-    .destroy                    = pmi_wrap_destroy,
+    .init = pmi_wrap_init,
+    .initialized = pmi_wrap_initialized,
+    .finalize = pmi_wrap_finalize,
+    .get_size = pmi_wrap_get_size,
+    .get_rank = pmi_wrap_get_rank,
+    .get_appnum = pmi_wrap_get_appnum,
+    .get_universe_size = pmi_wrap_get_universe_size,
+    .publish_name = pmi_wrap_publish_name,
+    .unpublish_name = pmi_wrap_unpublish_name,
+    .lookup_name = pmi_wrap_lookup_name,
+    .barrier = pmi_wrap_barrier,
+    .abort = pmi_wrap_abort,
+    .kvs_get_my_name = pmi_wrap_kvs_get_my_name,
+    .kvs_get_name_length_max = pmi_wrap_kvs_get_name_length_max,
+    .kvs_get_key_length_max = pmi_wrap_kvs_get_key_length_max,
+    .kvs_get_value_length_max = pmi_wrap_kvs_get_value_length_max,
+    .kvs_put = pmi_wrap_kvs_put,
+    .kvs_commit = pmi_wrap_kvs_commit,
+    .kvs_get = pmi_wrap_kvs_get,
+    .get_clique_size = pmi_wrap_get_clique_size,
+    .get_clique_ranks = pmi_wrap_get_clique_ranks,
+    .spawn_multiple = pmi_wrap_spawn_multiple,
+    .destroy = pmi_wrap_destroy,
 };
 
 /* Notes:
  * - Use RTLD_GLOBAL due to issue #432
  */
 
-void *pmi_wrap_create (const char *libname, struct pmi_operations **ops,
+void *pmi_wrap_create (const char *libname,
+                       struct pmi_operations **ops,
                        bool allow_self_wrap)
 {
     struct pmi_wrap *pmi = calloc (1, sizeof (*pmi));
@@ -383,7 +401,8 @@ void *pmi_wrap_create (const char *libname, struct pmi_operations **ops,
         debug = strtoul (s, NULL, 0);
     if (!(libs = liblist_create (libname)))
         goto error;
-    FOREACH_ZLIST (libs, name) {
+    FOREACH_ZLIST (libs, name)
+    {
         dlerror ();
         if (!(pmi->dso = dlopen (name, RTLD_NOW | RTLD_GLOBAL))) {
             if (debug) {
@@ -391,17 +410,14 @@ void *pmi_wrap_create (const char *libname, struct pmi_operations **ops,
                 if (errstr)
                     fprintf (stderr, "%s: %s\n", __FUNCTION__, errstr);
                 else
-                    fprintf (stderr, "%s: dlopen %s failed\n",
-                             __FUNCTION__, name);
+                    fprintf (stderr, "%s: dlopen %s failed\n", __FUNCTION__, name);
             }
-        }
-        else if (!allow_self_wrap && dlsym (pmi->dso, "flux_pmi_library")) {
+        } else if (!allow_self_wrap && dlsym (pmi->dso, "flux_pmi_library")) {
             if (debug)
                 fprintf (stderr, "%s: skipping %s\n", __FUNCTION__, name);
             dlclose (pmi->dso);
             pmi->dso = NULL;
-        }
-        else {
+        } else {
             if (debug)
                 fprintf (stderr, "%s: using %s\n", __FUNCTION__, name);
             break;

@@ -27,7 +27,7 @@
 #include "src/common/libutil/macros.h"
 #include "src/common/libutil/fdutils.h"
 
-#define CTX_MAGIC   0xf434aaab
+#define CTX_MAGIC 0xf434aaab
 typedef struct {
     int magic;
     int fd;
@@ -110,13 +110,12 @@ done:
     return rc;
 }
 
-
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     local_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     if (c->testing_userid != FLUX_USERID_UNKNOWN
-                                || c->testing_rolemask != FLUX_ROLE_NONE)
+        || c->testing_rolemask != FLUX_ROLE_NONE)
         return send_testing (c, msg, flags);
     else
         return send_normal (c, msg, flags);
@@ -140,8 +139,13 @@ static int op_event (void *impl, const char *topic, const char *msg_topic)
 
     assert (c->magic == CTX_MAGIC);
 
-    if (!(f = flux_rpc_pack (c->h, msg_topic, FLUX_NODEID_ANY, 0,
-                             "{s:s}", "topic", topic)))
+    if (!(f = flux_rpc_pack (c->h,
+                             msg_topic,
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "topic",
+                             topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -161,8 +165,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     return op_event (impl, topic, "local.unsub");
 }
 
-static int op_setopt (void *impl, const char *option,
-                      const void *val, size_t size)
+static int op_setopt (void *impl, const char *option, const void *val, size_t size)
 {
     local_ctx_t *ctx = impl;
     assert (ctx->magic == CTX_MAGIC);
@@ -231,7 +234,7 @@ static int connect_sock_with_retry (int fd, const char *file, int retries)
         if (connect (fd, (struct sockaddr *)&addr, sizeof (addr)) == 0)
             return 0;
         if (s < maxdelay)
-            s = 2*s < maxdelay ? 2*s : maxdelay;
+            s = 2 * s < maxdelay ? 2 * s : maxdelay;
     } while ((++count <= retries) && (usleep (s) == 0));
     return -1;
 }
@@ -241,7 +244,7 @@ static int connect_sock_with_retry (int fd, const char *file, int retries)
 flux_t *connector_init (const char *path, int flags)
 {
     local_ctx_t *c = NULL;
-    char sockfile [SIZEOF_FIELD (struct sockaddr_un, sun_path)];
+    char sockfile[SIZEOF_FIELD (struct sockaddr_un, sun_path)];
     int n;
     int retries = env_getint ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT", 5);
 

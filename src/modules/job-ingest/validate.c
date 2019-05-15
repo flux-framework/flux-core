@@ -53,8 +53,6 @@ const int worker_queue_threshold = 32;
  */
 const double worker_inactivity_timeout = 5.0;
 
-
-
 struct validate {
     flux_t *h;
     struct worker *worker[MAX_WORKER_COUNT];
@@ -92,8 +90,7 @@ struct validate *validate_create (flux_t *h)
     assert (argv[0] != NULL);
     assert (argv[2] != NULL);
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
-        if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout,
-                                            3, argv)))
+        if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout, 3, argv)))
             goto error;
     }
     return v;
@@ -113,11 +110,10 @@ struct worker *select_best_worker (struct validate *v)
 
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
         if (worker_is_running (v->worker[i])) {
-            if (!best || (worker_queue_depth (v->worker[i])
-                        < worker_queue_depth (best)))
+            if (!best
+                || (worker_queue_depth (v->worker[i]) < worker_queue_depth (best)))
                 best = v->worker[i];
-        }
-        else if (!idle)
+        } else if (!idle)
             idle = v->worker[i];
     }
     if (idle && (!best || worker_queue_depth (best) >= worker_queue_threshold))
@@ -144,8 +140,8 @@ flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len)
         if (!(f = flux_future_create (NULL, NULL)))
             return NULL;
         flux_future_set_flux (f, v->h);
-        (void)snprintf (errbuf, sizeof (errbuf),
-                       "jobspec: invalid JSON: %s", error.text);
+        (void)
+            snprintf (errbuf, sizeof (errbuf), "jobspec: invalid JSON: %s", error.text);
         flux_future_fulfill_error (f, EINVAL, errbuf);
         return f;
     }

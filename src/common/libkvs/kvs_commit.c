@@ -23,7 +23,7 @@
 static const char *auxkey = "flux::commit_ctx";
 
 struct commit_ctx {
-    char *treeobj;      /* cached treeobj */
+    char *treeobj; /* cached treeobj */
 };
 
 static void free_ctx (struct commit_ctx *ctx)
@@ -44,8 +44,11 @@ static struct commit_ctx *alloc_ctx (void)
     return ctx;
 }
 
-flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
-                               const char *name, int nprocs,
+flux_future_t *flux_kvs_fence (flux_t *h,
+                               const char *ns,
+                               int flags,
+                               const char *name,
+                               int nprocs,
                                flux_kvs_txn_t *txn)
 {
     flux_future_t *f;
@@ -70,13 +73,21 @@ flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
     if (!(ctx = alloc_ctx ()))
         return NULL;
 
-    if (!(f = flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.fence",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:s s:i s:O}",
-                             "name", name,
-                             "nprocs", nprocs,
-                             "namespace", ns,
-                             "flags", flags,
-                             "ops", ops)))
+                             "name",
+                             name,
+                             "nprocs",
+                             nprocs,
+                             "namespace",
+                             ns,
+                             "flags",
+                             flags,
+                             "ops",
+                             ops)))
         goto error;
 
     if (flux_future_aux_set (f, auxkey, ctx, (flux_free_f)free_ctx) < 0)
@@ -91,7 +102,9 @@ error:
     return NULL;
 }
 
-flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
+flux_future_t *flux_kvs_commit (flux_t *h,
+                                const char *ns,
+                                int flags,
                                 flux_kvs_txn_t *txn)
 {
     flux_future_t *f;
@@ -116,11 +129,17 @@ flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
     if (!(ctx = alloc_ctx ()))
         return NULL;
 
-    if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.commit",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:O}",
-                             "namespace", ns,
-                             "flags", flags,
-                             "ops", ops)))
+                             "namespace",
+                             ns,
+                             "flags",
+                             flags,
+                             "ops",
+                             ops)))
         goto error;
 
     if (flux_future_aux_set (f, auxkey, ctx, (flux_free_f)free_ctx) < 0)
@@ -135,15 +154,13 @@ error:
     return NULL;
 }
 
-static int decode_response (flux_future_t *f, const char **rootrefp,
-                            int *rootseqp)
+static int decode_response (flux_future_t *f, const char **rootrefp, int *rootseqp)
 {
     const char *rootref;
     int rootseq;
 
-    if (flux_rpc_get_unpack (f, "{s:s s:i}",
-                             "rootref", &rootref,
-                             "rootseq", &rootseq) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s s:i}", "rootref", &rootref, "rootseq", &rootseq)
+        < 0)
         return -1;
     if (rootrefp)
         *rootrefp = rootref;

@@ -23,7 +23,7 @@ struct idset {
 };
 
 #define IDSET_ENCODE_CHUNK 1024
-#define IDSET_DEFAULT_SIZE 1024 // default idset size if size=0
+#define IDSET_DEFAULT_SIZE 1024  // default idset size if size=0
 
 int validate_idset_flags (int flags, int allowed);
 

@@ -21,7 +21,8 @@ struct ping_context {
 
 static char *make_json_response_payload (const char *request_payload,
                                          const char *route,
-                                         uint32_t userid, uint32_t rolemask)
+                                         uint32_t userid,
+                                         uint32_t rolemask)
 {
     json_t *o = NULL;
     json_t *add = NULL;
@@ -31,9 +32,13 @@ static char *make_json_response_payload (const char *request_payload,
         errno = EPROTO;
         goto done;
     }
-    if (!(add = json_pack ("{s:s s:i s:i}", "route", route,
-                                            "userid", userid,
-                                            "rolemask", rolemask))) {
+    if (!(add = json_pack ("{s:s s:i s:i}",
+                           "route",
+                           route,
+                           "userid",
+                           userid,
+                           "rolemask",
+                           rolemask))) {
         errno = ENOMEM;
         goto done;
     }
@@ -51,8 +56,10 @@ done:
     return result;
 }
 
-static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void ping_request_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     const char *json_str;
     char *route_str = NULL;
@@ -74,8 +81,10 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = ENOMEM;
         goto error;
     }
-    if (!(resp_str = make_json_response_payload (json_str, full_route_str,
-                                                 userid, rolemask))) {
+    if (!(resp_str = make_json_response_payload (json_str,
+                                                 full_route_str,
+                                                 userid,
+                                                 rolemask))) {
         goto error;
     }
     if (flux_respond (h, msg, resp_str) < 0)

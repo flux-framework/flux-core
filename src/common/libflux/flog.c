@@ -89,7 +89,6 @@ void flux_log_set_procid (flux_t *h, const char *s)
         snprintf (ctx->procid, sizeof (ctx->procid), "%s", s);
 }
 
-
 void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg)
 {
     logctx_t *ctx = getctx (h);
@@ -159,8 +158,7 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     hdr.appname = ctx->appname;
     hdr.procid = ctx->procid;
 
-    len = stdlog_vencodef (ctx->buf, sizeof (ctx->buf), &hdr,
-                           STDLOG_NILVALUE, fmt, ap);
+    len = stdlog_vencodef (ctx->buf, sizeof (ctx->buf), &hdr, STDLOG_NILVALUE, fmt, ap);
     if (len >= sizeof (ctx->buf))
         len = sizeof (ctx->buf);
     /* If log message contains multiple lines, log the first
@@ -221,8 +219,7 @@ static int dmesg_clear (flux_t *h, int seq)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (h, "log.clear", FLUX_NODEID_ANY, 0,
-                             "{s:i}", "seq", seq)))
+    if (!(f = flux_rpc_pack (h, "log.clear", FLUX_NODEID_ANY, 0, "{s:i}", "seq", seq)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -234,8 +231,15 @@ done:
 
 static flux_future_t *dmesg_rpc (flux_t *h, int seq, bool follow)
 {
-    return flux_rpc_pack (h, "log.dmesg", FLUX_NODEID_ANY, 0,
-                          "{s:i s:b}", "seq", seq, "follow", follow);
+    return flux_rpc_pack (h,
+                          "log.dmesg",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:i s:b}",
+                          "seq",
+                          seq,
+                          "follow",
+                          follow);
 }
 
 static int dmesg_rpc_get (flux_future_t *f, int *seq, flux_log_f fun, void *arg)
@@ -298,12 +302,14 @@ void flux_log_fprint (const char *buf, int len, void *arg)
         else {
             nodeid = strtoul (hdr.hostname, NULL, 10);
             severity = STDLOG_SEVERITY (hdr.pri);
-            fprintf (f, "%s %s.%s[%" PRIu32 "]: %.*s\n",
+            fprintf (f,
+                     "%s %s.%s[%" PRIu32 "]: %.*s\n",
                      hdr.timestamp,
                      hdr.appname,
                      stdlog_severity_to_string (severity),
                      nodeid,
-                     msglen, msg);
+                     msglen,
+                     msg);
         }
         fflush (f);
     }

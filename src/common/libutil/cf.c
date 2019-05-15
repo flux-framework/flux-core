@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#  include <config.h>
+#include <config.h>
 #endif /* HAVE_CONFIG_H */
 #include <errno.h>
 #include <string.h>
@@ -55,10 +55,11 @@ cf_t *cf_copy (const cf_t *cf)
     return cpy;
 }
 
-static void __attribute__ ((format (printf, 4, 5)))
-errprintf (struct cf_error *error,
-           const char *filename, int lineno,
-            const char *fmt, ...)
+static void __attribute__ ((format (printf, 4, 5))) errprintf (struct cf_error *error,
+                                                               const char *filename,
+                                                               int lineno,
+                                                               const char *fmt,
+                                                               ...)
 {
     va_list ap;
     int saved_errno = errno;
@@ -81,13 +82,13 @@ struct typedesc {
 };
 
 static const struct typedesc typetab[] = {
-    { CF_INT64, "int64" },
-    { CF_DOUBLE, "double" },
-    { CF_BOOL, "bool" },
-    { CF_STRING, "string" },
-    { CF_TIMESTAMP, "timestamp" },
-    { CF_TABLE, "table" },
-    { CF_ARRAY, "array" },
+    {CF_INT64, "int64"},
+    {CF_DOUBLE, "double"},
+    {CF_BOOL, "bool"},
+    {CF_STRING, "string"},
+    {CF_TIMESTAMP, "timestamp"},
+    {CF_TABLE, "table"},
+    {CF_ARRAY, "array"},
 };
 const int typetablen = sizeof (typetab) / sizeof (typetab[0]);
 
@@ -139,7 +140,6 @@ const cf_t *cf_get_in (const cf_t *cf, const char *key)
         return NULL;
     }
     return val;
-
 }
 
 const cf_t *cf_get_at (const cf_t *cf, int index)
@@ -198,7 +198,8 @@ int cf_array_size (const cf_t *cf)
  */
 static int update_object (cf_t *cf,
                           const char *filename,
-                          const char *buf, int len,
+                          const char *buf,
+                          int len,
                           struct cf_error *error)
 {
     struct tomltk_error toml_error;
@@ -216,12 +217,18 @@ static int update_object (cf_t *cf,
     else
         tab = tomltk_parse (buf, len, &toml_error);
     if (!tab) {
-        errprintf (error, toml_error.filename, toml_error.lineno,
-                   "%s", toml_error.errbuf);
+        errprintf (error,
+                   toml_error.filename,
+                   toml_error.lineno,
+                   "%s",
+                   toml_error.errbuf);
         goto error;
     }
     if (!(obj = tomltk_table_to_json (tab))) {
-        errprintf (error, filename, -1, "converting TOML to JSON: %s",
+        errprintf (error,
+                   filename,
+                   -1,
+                   "converting TOML to JSON: %s",
                    strerror (errno));
         goto error;
     }
@@ -293,7 +300,7 @@ int cf_update_glob (cf_t *cf, const char *pattern, struct cf_error *error)
      *  If glob sucessfully processed at least one file, update
      *   caller's cf object with all new date in tmp object:
      */
-    if ((count > 0) &&  json_object_update (cf, tmp) < 0) {
+    if ((count > 0) && json_object_update (cf, tmp) < 0) {
         errprintf (error, pattern, -1, "updating JSON object: out of memory");
         errno = ENOMEM;
         count = -1;
@@ -306,9 +313,7 @@ int cf_update_glob (cf_t *cf, const char *pattern, struct cf_error *error)
 static bool is_end_marker (struct cf_option opt)
 {
     const struct cf_option end = CF_OPTIONS_TABLE_END;
-    return (opt.key == end.key
-            && opt.type == end.type
-            && opt.required == end.required);
+    return (opt.key == end.key && opt.type == end.type && opt.required == end.required);
 }
 
 static const struct cf_option *find_option (const struct cf_option opts[],
@@ -328,7 +333,8 @@ static const struct cf_option *find_option (const struct cf_option opts[],
  * If 'anytab' is true, keys representing tables need not be known.
  */
 static int check_unknown_keys (const cf_t *cf,
-                               const struct cf_option opts[], bool anytab,
+                               const struct cf_option opts[],
+                               bool anytab,
                                struct cf_error *error)
 {
     void *iter;
@@ -369,8 +375,12 @@ static int check_expected_keys (const cf_t *cf,
                 return -1;
             }
             if (obj && cf_typeof (obj) != opts[i].type) {
-                errprintf (error, NULL, -1, "'%s' must be of type %s",
-                           opts[i].key, cf_typedesc (opts[i].type));
+                errprintf (error,
+                           NULL,
+                           -1,
+                           "'%s' must be of type %s",
+                           opts[i].key,
+                           cf_typedesc (opts[i].type));
                 errno = EINVAL;
                 return -1;
             }
@@ -380,7 +390,8 @@ static int check_expected_keys (const cf_t *cf,
 }
 
 int cf_check (const cf_t *cf,
-              const struct cf_option opts[], int flags,
+              const struct cf_option opts[],
+              int flags,
               struct cf_error *error)
 {
     if (!cf || json_typeof ((json_t *)cf) != JSON_OBJECT) {

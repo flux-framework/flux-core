@@ -37,9 +37,9 @@ struct lru_cache {
     struct lru_entry *first, *last;
 };
 
-
-static struct lru_entry *
-lru_entry_create (lru_cache_t *lru, const char *key, void *item)
+static struct lru_entry *lru_entry_create (lru_cache_t *lru,
+                                           const char *key,
+                                           void *item)
 {
     struct lru_entry *l = malloc (sizeof (*l));
     if (!l || !(l->key = strdup (key))) {
@@ -51,7 +51,6 @@ lru_entry_create (lru_cache_t *lru, const char *key, void *item)
     l->prev = l->next = NULL;
     return (l);
 }
-
 
 static void lru_entry_destroy (struct lru_entry *l)
 {
@@ -109,8 +108,7 @@ static void lru_purge_last (lru_cache_t *lru)
     lru_entry_purge (lru, lru->last);
 }
 
-static void *
-lru_entry_enqueue (lru_cache_t *lru, const char *key, void *value)
+static void *lru_entry_enqueue (lru_cache_t *lru, const char *key, void *value)
 {
     struct lru_entry *l = lru_entry_create (lru, key, value);
     if (!l)
@@ -124,13 +122,12 @@ lru_entry_enqueue (lru_cache_t *lru, const char *key, void *value)
     /* Place entry on hash, and add cleanup function */
     if (zhash_insert (lru->entries, key, l) < 0)
         abort ();
-    zhash_freefn (lru->entries, key, (zhash_free_fn *) lru_entry_destroy);
+    zhash_freefn (lru->entries, key, (zhash_free_fn *)lru_entry_destroy);
 
     return (l->item);
 }
 
-static void *
-lru_entry_requeue (lru_cache_t *lru, struct lru_entry *l)
+static void *lru_entry_requeue (lru_cache_t *lru, struct lru_entry *l)
 {
     /*  If item is already at front of list, there is nothing to do */
     if (lru->first != l) {
@@ -178,7 +175,7 @@ void lru_cache_destroy (lru_cache_t *lru)
     free (lru);
 }
 
-lru_cache_t * lru_cache_create (int maxsize)
+lru_cache_t *lru_cache_create (int maxsize)
 {
     lru_cache_t *lru = NULL;
     zhash_t *zh = NULL;

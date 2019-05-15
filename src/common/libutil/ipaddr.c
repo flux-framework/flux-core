@@ -42,12 +42,20 @@ int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz)
 
     if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL) {
         if (errstr)
-            snprintf (errstr, errstrsz, "getaddrinfo %s: %s",
-                      hostname, gai_strerror (e));
+            snprintf (errstr,
+                      errstrsz,
+                      "getaddrinfo %s: %s",
+                      hostname,
+                      gai_strerror (e));
         return -1;
     }
-    if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, buf, len,
-                          NULL, 0, NI_NUMERICHOST))) {
+    if ((e = getnameinfo (res->ai_addr,
+                          res->ai_addrlen,
+                          buf,
+                          len,
+                          NULL,
+                          0,
+                          NI_NUMERICHOST))) {
         if (errstr)
             snprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (e));
         freeaddrinfo (res);
@@ -81,12 +89,14 @@ int ipaddr_getall (char **addrs, size_t *addrssz, char *errstr, int errstrsz)
         e = getnameinfo (ifa->ifa_addr,
                          family == AF_INET ? sizeof (struct sockaddr_in)
                                            : sizeof (struct sockaddr_in6),
-                         host, NI_MAXHOST,
-                         NULL, 0, NI_NUMERICHOST);
+                         host,
+                         NI_MAXHOST,
+                         NULL,
+                         0,
+                         NI_NUMERICHOST);
         if (e != 0) {
             if (errstr)
-                snprintf (errstr, errstrsz, "getnameinfo: %s",
-                          gai_strerror (e));
+                snprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (e));
             goto done;
         }
         if ((e = argz_add (addrs, addrssz, host)) != 0) {

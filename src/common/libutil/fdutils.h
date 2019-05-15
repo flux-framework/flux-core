@@ -46,4 +46,3 @@ int fd_set_flags (int fd, int flags);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

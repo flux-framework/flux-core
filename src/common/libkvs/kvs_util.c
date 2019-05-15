@@ -29,12 +29,11 @@ char *kvs_util_normalize_key (const char *key, bool *want_directory)
     if (cpy) {
         /* Transform duplicate path separators into a single one.
          */
-        for (i = 0; i < len; ) {
+        for (i = 0; i < len;) {
             if (cpy[i] == sep && cpy[i + 1] == sep) {
                 memmove (&cpy[i], &cpy[i + 1], len - i - 1);
                 len--;
-            }
-            else
+            } else
                 i++;
         }
         /* Eliminate leading path separator

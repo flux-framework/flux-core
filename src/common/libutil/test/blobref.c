@@ -16,10 +16,10 @@
 #include "src/common/libutil/sha256.h"
 
 const char *badref[] = {
-    "nerf-4d4ed591f7d26abd8145650f334d283bdb661765", // unknown hash
-    "sha14d4ed591f7d26abd8145650f334d283bdb661765",  // missing prefix sep
-    "sha256-4d4ed591f7d26abd8145650f334d283bdb661765", // runt
-    "sha1-4d4ed591f7d26abd8145650f334d283bdb66176x", // suffix chars not hex */
+    "nerf-4d4ed591f7d26abd8145650f334d283bdb661765",    // unknown hash
+    "sha14d4ed591f7d26abd8145650f334d283bdb661765",     // missing prefix sep
+    "sha256-4d4ed591f7d26abd8145650f334d283bdb661765",  // runt
+    "sha1-4d4ed591f7d26abd8145650f334d283bdb66176x",    // suffix chars not hex */
     NULL,
 };
 
@@ -29,7 +29,7 @@ const char *goodref[] = {
     NULL,
 };
 
-int main(int argc, char** argv)
+int main (int argc, char **argv)
 {
     char ref[BLOBREF_MAX_STRING_SIZE];
     char ref2[BLOBREF_MAX_STRING_SIZE];
@@ -43,58 +43,47 @@ int main(int argc, char** argv)
     /* invalid args */
     errno = 0;
     ok (blobref_hash ("nerf", data, sizeof (data), ref, sizeof (ref)) < 0
-        && errno == EINVAL,
+            && errno == EINVAL,
         "blobref_hash fails EINVAL with unknown hash name");
     errno = 0;
-    ok (blobref_hash ("sha1", data, sizeof (data), NULL, 0) < 0
-        && errno == EINVAL,
+    ok (blobref_hash ("sha1", data, sizeof (data), NULL, 0) < 0 && errno == EINVAL,
         "blobref_hash fails EINVAL with NULL ref pointer");
     errno = 0;
-    ok (blobref_hash ("sha1", data, sizeof (data), ref, 1) < 0
-        && errno == EINVAL,
+    ok (blobref_hash ("sha1", data, sizeof (data), ref, 1) < 0 && errno == EINVAL,
         "blobref_hash fails EINVAL with invalid ref length");
 
     errno = 0;
-    ok (blobref_strtohash (badref[0], digest, sizeof (digest)) < 0
-        && errno == EINVAL,
+    ok (blobref_strtohash (badref[0], digest, sizeof (digest)) < 0 && errno == EINVAL,
         "blobref_strtohash fails EINVAL with unknown hash prefix");
     errno = 0;
-    ok (blobref_strtohash (badref[1], digest, sizeof (digest)) < 0
-        && errno == EINVAL,
+    ok (blobref_strtohash (badref[1], digest, sizeof (digest)) < 0 && errno == EINVAL,
         "blobref_strtohash fails EINVAL with missing hash prefix separator");
     errno = 0;
-    ok (blobref_strtohash (badref[2], digest, sizeof (digest)) < 0
-        && errno == EINVAL,
+    ok (blobref_strtohash (badref[2], digest, sizeof (digest)) < 0 && errno == EINVAL,
         "blobref_strtohash fails EINVAL with wrong blobref length for prefix");
     errno = 0;
-    ok (blobref_strtohash (badref[3], digest, sizeof (digest)) < 0
-        && errno == EINVAL,
+    ok (blobref_strtohash (badref[3], digest, sizeof (digest)) < 0 && errno == EINVAL,
         "blobref_strtohash fails EINVAL with out of range blobref chars");
     errno = 0;
-    ok (blobref_strtohash (goodref[0], digest, 2) < 0
-        && errno == EINVAL,
+    ok (blobref_strtohash (goodref[0], digest, 2) < 0 && errno == EINVAL,
         "blobref_strtohash fails EINVAL with runt digest size");
 
     memset (digest, 6, sizeof (digest));
     errno = 0;
-    ok (blobref_hashtostr ("nerf", digest, SHA1_DIGEST_SIZE, ref,
-                           sizeof (ref)) < 0
-        && errno == EINVAL,
+    ok (blobref_hashtostr ("nerf", digest, SHA1_DIGEST_SIZE, ref, sizeof (ref)) < 0
+            && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with unknown hash");
     errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA256_BLOCK_SIZE, ref,
-                           sizeof (ref)) < 0
-        && errno == EINVAL,
+    ok (blobref_hashtostr ("sha1", digest, SHA256_BLOCK_SIZE, ref, sizeof (ref)) < 0
+            && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with wrong digest size for hash");
     errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, NULL,
-                           sizeof (ref)) < 0
-        && errno == EINVAL,
+    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, NULL, sizeof (ref)) < 0
+            && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with NULL ref pointer");
     errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref,
-                           1) < 0
-        && errno == EINVAL,
+    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref, 1) < 0
+            && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with invalid ref length");
 
     /* sha1 */
@@ -107,12 +96,10 @@ int main(int argc, char** argv)
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA1_DIGEST_SIZE,
         "blobref_strtohash returns expected size hash");
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref2,
-                           sizeof (ref2)) == 0,
+    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref2, sizeof (ref2)) == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
-    ok (strcmp (ref, ref2) == 0,
-        "and blobrefs match");
+    ok (strcmp (ref, ref2) == 0, "and blobrefs match");
 
     /* sha256 */
     ok (blobref_hash ("sha256", NULL, 0, ref, sizeof (ref)) == 0,
@@ -124,26 +111,25 @@ int main(int argc, char** argv)
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA256_BLOCK_SIZE,
         "blobref_strtohash returns expected size hash");
-    ok (blobref_hashtostr ("sha256", digest, SHA256_BLOCK_SIZE, ref2,
-                           sizeof (ref2)) == 0,
+    ok (blobref_hashtostr ("sha256", digest, SHA256_BLOCK_SIZE, ref2, sizeof (ref2))
+            == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
-    ok (strcmp (ref, ref2) == 0,
-        "and blobrefs match");
+    ok (strcmp (ref, ref2) == 0, "and blobrefs match");
 
     /* blobref_validate */
     const char **pp;
     pp = &goodref[0];
     while (*pp) {
-        ok (blobref_validate (*pp) == 0,
-            "blobref_validate: %s", *pp);
+        ok (blobref_validate (*pp) == 0, "blobref_validate: %s", *pp);
         pp++;
     }
     pp = &badref[0];
     while (*pp) {
         errno = 0;
         ok (blobref_validate (*pp) < 0 && errno == EINVAL,
-            "blobref_validate not: %s", *pp);
+            "blobref_validate not: %s",
+            *pp);
         pp++;
     }
 
@@ -157,7 +143,7 @@ int main(int argc, char** argv)
     ok (blobref_validate_hashtype (NULL) == -1,
         "blobref_validate_hashtype NULL is invalid");
 
-    done_testing();
+    done_testing ();
 }
 
 /*

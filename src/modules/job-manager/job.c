@@ -64,7 +64,8 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
     if (!(a = eventlog_decode (s)))
         goto error;
 
-    json_array_foreach (a, index, event) {
+    json_array_foreach (a, index, event)
+    {
         if (event_job_update (job, event) < 0)
             goto error;
     }
@@ -85,4 +86,3 @@ error:
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

@@ -27,7 +27,7 @@ int fsd_parse_duration (const char *s, double *dp)
         return -1;
     }
     d = strtod (s, &p);
-    if ((d < 0.) || (*p && *(p+1))) {
+    if ((d < 0.) || (*p && *(p + 1))) {
         errno = EINVAL;
         return -1;
     }

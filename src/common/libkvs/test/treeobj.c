@@ -29,7 +29,7 @@ json_t *create_large_dir (void)
     for (i = 0; i < large_dir_entries; i++) {
         snprintf (name, sizeof (name), "entry-%.10d", i);
         if (!(ent = treeobj_create_symlink (NULL, "a.b.c.d"))
-                        || treeobj_insert_entry (dir, name, ent) < 0) {
+            || treeobj_insert_entry (dir, name, ent) < 0) {
             json_decref (dir);
             return NULL;
         }
@@ -40,7 +40,7 @@ json_t *create_large_dir (void)
 
 void diag_json (json_t *o)
 {
-    char *s = json_dumps (o, JSON_INDENT(4));
+    char *s = json_dumps (o, JSON_INDENT (4));
     diag ("%s", s ? s : "nil");
     free (s);
 }
@@ -53,24 +53,23 @@ void test_codec (void)
     if (!dir)
         BAIL_OUT ("could not create %d-entry dir", large_dir_entries);
 
-    ok (treeobj_decode (NULL) == NULL,
-        "treeobj_decode fails on bad input");
-    ok (treeobj_decodeb (NULL, 0) == NULL,
-        "treeobj_decodeb fails on bad input");
+    ok (treeobj_decode (NULL) == NULL, "treeobj_decode fails on bad input");
+    ok (treeobj_decodeb (NULL, 0) == NULL, "treeobj_decodeb fails on bad input");
 
     s = treeobj_encode (dir);
-    ok (s != NULL,
-        "encoded %d-entry dir", large_dir_entries);
+    ok (s != NULL, "encoded %d-entry dir", large_dir_entries);
     if (!s)
         BAIL_OUT ("could not encode %d-entry dir", large_dir_entries);
 
     ok ((cpy1 = treeobj_decode (s)) != NULL,
-        "decoded %d-entry dir via treeobj_decode", large_dir_entries);
+        "decoded %d-entry dir via treeobj_decode",
+        large_dir_entries);
     if (!cpy1)
         diag ("%m");
 
     ok ((cpy2 = treeobj_decodeb (s, strlen (s))) != NULL,
-        "decoded %d-entry dir via treeobj_decodeb", large_dir_entries);
+        "decoded %d-entry dir via treeobj_decodeb",
+        large_dir_entries);
     if (!cpy2)
         diag ("%m");
 
@@ -81,10 +80,8 @@ void test_codec (void)
         BAIL_OUT ("could not continue");
 
     p = treeobj_encode (cpy1);
-    ok (p != NULL,
-        "re-encoded %d-entry dir", large_dir_entries);
-    ok (strcmp (p, s) == 0,
-        "and they match");
+    ok (p != NULL, "re-encoded %d-entry dir", large_dir_entries);
+    ok (strcmp (p, s) == 0, "and they match");
     free (p);
 
     free (s);
@@ -110,8 +107,7 @@ void test_valref (void)
     errno = 0;
     ok (treeobj_validate (valref) < 0 && errno == EINVAL,
         "treeobj_validate rejects valref with no blobrefs");
-    ok (treeobj_is_valref (valref),
-        "treeobj_is_valref returns true");
+    ok (treeobj_is_valref (valref), "treeobj_is_valref returns true");
     ok ((val = treeobj_get_data (valref)) != NULL && json_is_array (val),
         "treeobj_get_data returns JSON_ARRAY type");
     errno = 0;
@@ -121,17 +117,14 @@ void test_valref (void)
         "treeobj_append_blobref returns EINVAL on bad blobref");
     ok (treeobj_append_blobref (valref, blobrefs[0]) == 0,
         "treeobj_append_blobref works");
-    ok (treeobj_validate (valref) == 0,
-        "treeobj_validate likes valref now");
-    ok (treeobj_get_count (valref) == 1,
-        "treeobj_get_count returns 1");
+    ok (treeobj_validate (valref) == 0, "treeobj_validate likes valref now");
+    ok (treeobj_get_count (valref) == 1, "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (valref, 0);
     ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
     ok (treeobj_append_blobref (valref, blobrefs[1]) == 0,
         "treeobj_append_blobref works on 2nd blobref");
-    ok (treeobj_get_count (valref) == 2,
-        "treeobj_get_count returns 1");
+    ok (treeobj_get_count (valref) == 2, "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (valref, 0);
     ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] still returns expected blobref");
@@ -143,10 +136,8 @@ void test_valref (void)
 
     ok ((valref = treeobj_create_valref (blobrefs[0])) != NULL,
         "treeobj_create_valref works with blobref arg");
-    ok (treeobj_validate (valref) == 0,
-        "treeobj_validate likes valref");
-    ok (treeobj_get_count (valref) == 1,
-        "treeobj_get_count returns 1");
+    ok (treeobj_validate (valref) == 0, "treeobj_validate likes valref");
+    ok (treeobj_get_count (valref) == 1, "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (valref, 0);
     ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
@@ -160,23 +151,20 @@ void test_valref (void)
     ok ((valref = treeobj_create_valref_buf ("sha1", 256, buf, sizeof (buf))) != NULL,
         "treeobj_create_valref_buf works on 1024 byte blob");
     diag_json (valref);
-    ok (treeobj_get_count (valref) == 4,
-        "and maxblob 256 split blob into 4 blobrefs");
+    ok (treeobj_get_count (valref) == 4, "and maxblob 256 split blob into 4 blobrefs");
     blobref = treeobj_get_blobref (valref, 0);
     for (i = 1; i < 4; i++) {
         blobref2 = treeobj_get_blobref (valref, i);
         if (!blobref || !blobref2 || strcmp (blobref, blobref2) != 0)
             break;
     }
-    ok (i == 4,
-        "and the four blobrefs are identical");
+    ok (i == 4, "and the four blobrefs are identical");
     json_decref (valref);
 
     ok ((valref = treeobj_create_valref_buf ("sha256", 0, NULL, 0)) != NULL,
         "treeobj_create_valref_buf works on empty buf");
     diag_json (valref);
-    ok (treeobj_get_count (valref) == 1,
-        "and valref contains one blobref");
+    ok (treeobj_get_count (valref) == 1, "and valref contains one blobref");
     json_decref (valref);
 }
 
@@ -192,36 +180,28 @@ void test_val (void)
     ok ((val = treeobj_create_val (buf, sizeof (buf))) != NULL,
         "treeobj_create_val works");
     diag_json (val);
-    ok (treeobj_is_val (val),
-        "treeobj_is_value returns true");
-    ok (treeobj_get_count (val) == 1,
-        "treeobj_get_count returns 1");
+    ok (treeobj_is_val (val), "treeobj_is_value returns true");
+    ok (treeobj_get_count (val) == 1, "treeobj_get_count returns 1");
     ok (treeobj_decode_val (val, (void **)&outbuf, &outlen) == 0,
         "treeobj_decode_val works");
-    ok (outlen == sizeof (buf),
-        "and returned size same as input");
-    ok (memcmp (buf, outbuf, outlen) == 0,
-        "and returned data same as input");
-    ok (outbuf[outlen] == '\0',
-        "and includes an extra null terminator");
+    ok (outlen == sizeof (buf), "and returned size same as input");
+    ok (memcmp (buf, outbuf, outlen) == 0, "and returned data same as input");
+    ok (outbuf[outlen] == '\0', "and includes an extra null terminator");
     free (outbuf);
     ok (treeobj_decode_val (val, (void **)&outbuf, NULL) == 0,
         "treeobj_decode_val works w/o len input");
     free (outbuf);
     ok (treeobj_decode_val (val, NULL, &outlen) == 0,
         "treeobj_decode_val works w/o data pointer input");
-    ok (outlen == sizeof (buf),
-        "and returned size same as input");
+    ok (outlen == sizeof (buf), "and returned size same as input");
 
     ok ((val2 = treeobj_create_val (NULL, 0)) != NULL,
         "treeobj_create_val NULL, 0 works");
     diag_json (val2);
     ok (treeobj_decode_val (val2, (void **)&outbuf, &outlen) == 0,
         "treeobj_decode_val works");
-    ok (outlen == 0,
-        "and returned size = 0");
-    ok (outbuf == NULL,
-        "and returned data = NULL");
+    ok (outlen == 0, "and returned size = 0");
+    ok (outbuf == NULL, "and returned data = NULL");
 
     json_decref (val);
     json_decref (val2);
@@ -238,8 +218,7 @@ void test_dirref (void)
     errno = 0;
     ok (treeobj_validate (dirref) < 0 && errno == EINVAL,
         "treeobj_validate rejects dirref with no blobrefs");
-    ok (treeobj_is_dirref (dirref),
-        "treeobj_is_dirref returns true");
+    ok (treeobj_is_dirref (dirref), "treeobj_is_dirref returns true");
     ok ((val = treeobj_get_data (dirref)) != NULL && json_is_array (val),
         "treeobj_get_data returns JSON_ARRAY type");
     errno = 0;
@@ -249,17 +228,14 @@ void test_dirref (void)
         "treeobj_append_blobref returns EINVAL on bad blobref");
     ok (treeobj_append_blobref (dirref, blobrefs[0]) == 0,
         "treeobj_append_blobref works");
-    ok (treeobj_validate (dirref) == 0,
-        "treeobj_validate likes dirref now");
-    ok (treeobj_get_count (dirref) == 1,
-        "treeobj_get_count returns 1");
+    ok (treeobj_validate (dirref) == 0, "treeobj_validate likes dirref now");
+    ok (treeobj_get_count (dirref) == 1, "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (dirref, 0);
     ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
     ok (treeobj_append_blobref (dirref, blobrefs[1]) == 0,
         "treeobj_append_blobref works on 2nd blobref");
-    ok (treeobj_get_count (dirref) == 2,
-        "treeobj_get_count returns 1");
+    ok (treeobj_get_count (dirref) == 2, "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (dirref, 0);
     ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] still returns expected blobref");
@@ -271,10 +247,8 @@ void test_dirref (void)
 
     ok ((dirref = treeobj_create_dirref (blobrefs[0])) != NULL,
         "treeobj_create_dirref works with blobref arg");
-    ok (treeobj_validate (dirref) == 0,
-        "treeobj_validate likes dirref");
-    ok (treeobj_get_count (dirref) == 1,
-        "treeobj_get_count returns 1");
+    ok (treeobj_validate (dirref) == 0, "treeobj_validate likes dirref");
+    ok (treeobj_get_count (dirref) == 1, "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (dirref, 0);
     ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
@@ -298,39 +272,29 @@ void test_dir (void)
     if (!val1 || !val2 || !val3)
         BAIL_OUT ("can't continue without test values");
 
-    ok ((dir = treeobj_create_dir ()) != NULL,
-        "treeobj_create_dir works");
-    ok (treeobj_validate (dir) == 0,
-        "treeobj_validate likes empty dir");
-    ok (treeobj_is_dir (dir),
-        "treeobj_is_dir returns true");
+    ok ((dir = treeobj_create_dir ()) != NULL, "treeobj_create_dir works");
+    ok (treeobj_validate (dir) == 0, "treeobj_validate likes empty dir");
+    ok (treeobj_is_dir (dir), "treeobj_is_dir returns true");
     ok ((val = treeobj_get_data (dir)) != NULL && json_is_object (val),
         "treeobj_get_data returns JSON_OBJECT type");
 
-    ok (treeobj_get_count (dir) == 0,
-        "treeobj_get_count returns 0");
-    ok (treeobj_insert_entry (dir, "foo", val1) == 0
-            && treeobj_get_count (dir) == 1
+    ok (treeobj_get_count (dir) == 0, "treeobj_get_count returns 0");
+    ok (treeobj_insert_entry (dir, "foo", val1) == 0 && treeobj_get_count (dir) == 1
             && treeobj_get_entry (dir, "foo") == val1,
         "treeobj_insert_entry works");
-    ok (treeobj_insert_entry (dir, "bar", val1) == 0
-            && treeobj_get_count (dir) == 2
+    ok (treeobj_insert_entry (dir, "bar", val1) == 0 && treeobj_get_count (dir) == 2
             && treeobj_get_entry (dir, "bar") == val1,
         "treeobj_insert_entry same value different key works");
-    ok (treeobj_insert_entry (dir, "bar", val2) == 0
-            && treeobj_get_count (dir) == 2
+    ok (treeobj_insert_entry (dir, "bar", val2) == 0 && treeobj_get_count (dir) == 2
             && treeobj_get_entry (dir, "foo") == val1
             && treeobj_get_entry (dir, "bar") == val2,
         "treeobj_insert_entry same key replaces entry");
-    ok (treeobj_delete_entry (dir, "bar") == 0
-            && treeobj_get_count (dir) == 1,
+    ok (treeobj_delete_entry (dir, "bar") == 0 && treeobj_get_count (dir) == 1,
         "treeobj_delete_entry works");
-    ok (treeobj_insert_entry (dir, "nil", val3) == 0
-            && treeobj_get_count (dir) == 2
+    ok (treeobj_insert_entry (dir, "nil", val3) == 0 && treeobj_get_count (dir) == 2
             && treeobj_get_entry (dir, "nil") == val3,
         "treeobj_insert_entry accepts json_null value");
-    ok (treeobj_validate (dir) == 0,
-        "treeobj_validate likes populated dir");
+    ok (treeobj_validate (dir) == 0, "treeobj_validate likes populated dir");
 
     errno = 0;
     ok (treeobj_get_entry (val1, "foo") == NULL && errno == EINVAL,
@@ -381,15 +345,11 @@ void test_dir_peek (void)
     if (!val)
         BAIL_OUT ("can't continue without test values");
 
-    ok ((dir = treeobj_create_dir ()) != NULL,
-        "treeobj_create_dir works");
+    ok ((dir = treeobj_create_dir ()) != NULL, "treeobj_create_dir works");
 
-    ok (treeobj_insert_entry (dir, "foo", val) == 0,
-        "treeobj_insert_entry works");
-    ok ((result = treeobj_peek_entry (dir, "foo")) != NULL,
-        "treeobj_peek_entry works");
-    ok (result == val,
-        "treeobj_peek_entry returns correct pointer");
+    ok (treeobj_insert_entry (dir, "foo", val) == 0, "treeobj_insert_entry works");
+    ok ((result = treeobj_peek_entry (dir, "foo")) != NULL, "treeobj_peek_entry works");
+    ok (result == val, "treeobj_peek_entry returns correct pointer");
 
     json_decref (val);
     json_decref (dir);
@@ -403,8 +363,7 @@ void test_copy (void)
 
     /* First, some corner case tests */
 
-    ok (treeobj_copy (NULL) == NULL,
-        "tree_copy fails on bad input");
+    ok (treeobj_copy (NULL) == NULL, "tree_copy fails on bad input");
 
     /* Test val copy */
 
@@ -412,8 +371,7 @@ void test_copy (void)
     if (!val)
         BAIL_OUT ("can't continue without test val");
 
-    ok ((valcpy = treeobj_copy (val)) != NULL,
-        "treeobj_copy worked on val");
+    ok ((valcpy = treeobj_copy (val)) != NULL, "treeobj_copy worked on val");
 
     ok (val != valcpy && json_equal (val, valcpy) == 1,
         "treeobj_copy returned duplicate val copy");
@@ -457,8 +415,7 @@ void test_copy (void)
     if (!dirref)
         BAIL_OUT ("can't continue without test dirref");
 
-    ok ((dirrefcpy = treeobj_copy (dirref)) != NULL,
-        "treeobj_copy worked on dirref");
+    ok ((dirrefcpy = treeobj_copy (dirref)) != NULL, "treeobj_copy worked on dirref");
 
     ok (dirref != dirrefcpy && json_equal (dirref, dirrefcpy) == 1,
         "treeobj_copy returned duplicate dirref copy");
@@ -478,8 +435,7 @@ void test_copy (void)
     if (!valref)
         BAIL_OUT ("can't continue without test valref");
 
-    ok ((valrefcpy = treeobj_copy (valref)) != NULL,
-        "treeobj_copy worked on valref");
+    ok ((valrefcpy = treeobj_copy (valref)) != NULL, "treeobj_copy worked on valref");
 
     ok (valref != valrefcpy && json_equal (valref, valrefcpy) == 1,
         "treeobj_copy returned duplicate valref copy");
@@ -501,21 +457,17 @@ void test_copy (void)
     if (!dir || !val1 || !val2)
         BAIL_OUT ("can't continue without test dir");
 
-    ok (treeobj_insert_entry (dir, "a", val1) == 0,
-        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (dir, "a", val1) == 0, "treeobj_insert_entry works");
 
-    ok ((dircpy = treeobj_copy (dir)) != NULL,
-        "treeobj_copy worked on dir");
+    ok ((dircpy = treeobj_copy (dir)) != NULL, "treeobj_copy worked on dir");
 
     ok (dir != dircpy && json_equal (dir, dircpy) == 1,
         "treeobj_copy returned duplicate dir copy");
 
     /* change "a" to "b" in main dir */
-    ok (treeobj_insert_entry (dir, "a", val2) == 0,
-        "treeobj_insert_entry success");
+    ok (treeobj_insert_entry (dir, "a", val2) == 0, "treeobj_insert_entry success");
 
-    ok (json_equal (dir, dircpy) == 0,
-        "change to one dir did not affect other");
+    ok (json_equal (dir, dircpy) == 0, "change to one dir did not affect other");
 
     json_decref (dir);
     json_decref (dircpy);
@@ -531,21 +483,17 @@ void test_copy (void)
     if (!dir || !val1 || !val2)
         BAIL_OUT ("can't continue without test dir");
 
-    ok (treeobj_insert_entry (dir, "a", val1) == 0,
-        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (dir, "a", val1) == 0, "treeobj_insert_entry works");
 
-    ok ((dircpy = json_copy (dir)) != NULL,
-        "json_copy worked on dir");
+    ok ((dircpy = json_copy (dir)) != NULL, "json_copy worked on dir");
 
     ok (dir != dircpy && json_equal (dir, dircpy) == 1,
         "json_copy returned duplicate dir copy");
 
     /* change "a" to "b" in main dir */
-    ok (treeobj_insert_entry (dir, "a", val2) == 0,
-        "treeobj_insert_entry success");
+    ok (treeobj_insert_entry (dir, "a", val2) == 0, "treeobj_insert_entry success");
 
-    ok (json_equal (dir, dircpy) == 1,
-        "change to one dir did affect other");
+    ok (json_equal (dir, dircpy) == 1, "change to one dir did affect other");
 
     json_decref (dir);
     json_decref (dircpy);
@@ -560,28 +508,24 @@ void test_deep_copy (void)
 
     /* First, some corner case tests */
 
-    ok (treeobj_deep_copy (NULL) == NULL,
-        "tree_copy fails on bad input");
+    ok (treeobj_deep_copy (NULL) == NULL, "tree_copy fails on bad input");
 
     /* Test dir copy */
 
     dir = treeobj_create_dir ();
-    subdir = treeobj_create_dir();
+    subdir = treeobj_create_dir ();
     val1 = treeobj_create_val ("a", 1);
     val2 = treeobj_create_val ("b", 1);
     val3 = treeobj_create_val ("c", 1);
     if (!dir || !subdir || !val1 || !val2 || !val3)
         BAIL_OUT ("can't continue without test dir");
 
-    ok (treeobj_insert_entry (dir, "a", val1) == 0,
-        "treeobj_insert_entry works");
-    ok (treeobj_insert_entry (subdir, "b", val2) == 0,
-        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (dir, "a", val1) == 0, "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (subdir, "b", val2) == 0, "treeobj_insert_entry works");
     ok (treeobj_insert_entry (dir, "subdir", subdir) == 0,
         "treeobj_insert_entry works");
 
-    ok ((dircpy = treeobj_deep_copy (dir)) != NULL,
-        "treeobj_deep_copy worked on dir");
+    ok ((dircpy = treeobj_deep_copy (dir)) != NULL, "treeobj_deep_copy worked on dir");
 
     ok (dir != dircpy && json_equal (dir, dircpy) == 1,
         "treeobj_deep_copy returned duplicate dir copy");
@@ -592,11 +536,9 @@ void test_deep_copy (void)
         "treeobj_get_entry got subdir");
 
     /* change "b" to "c" in one subdir */
-    ok (treeobj_insert_entry (subdir1, "b", val3) == 0,
-        "treeobj_insert_entry success");
+    ok (treeobj_insert_entry (subdir1, "b", val3) == 0, "treeobj_insert_entry success");
 
-    ok (json_equal (dir, dircpy) == 0,
-        "change to one dir did not affect other");
+    ok (json_equal (dir, dircpy) == 0, "change to one dir did not affect other");
 
     json_decref (dir);
     json_decref (dircpy);
@@ -608,22 +550,19 @@ void test_deep_copy (void)
     /* Test dir copy compared to shallow copy function */
 
     dir = treeobj_create_dir ();
-    subdir = treeobj_create_dir();
+    subdir = treeobj_create_dir ();
     val1 = treeobj_create_val ("a", 1);
     val2 = treeobj_create_val ("b", 1);
     val3 = treeobj_create_val ("c", 1);
     if (!dir || !subdir || !val1 || !val2 || !val3)
         BAIL_OUT ("can't continue without test dir");
 
-    ok (treeobj_insert_entry (dir, "a", val1) == 0,
-        "treeobj_insert_entry works");
-    ok (treeobj_insert_entry (subdir, "b", val2) == 0,
-        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (dir, "a", val1) == 0, "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (subdir, "b", val2) == 0, "treeobj_insert_entry works");
     ok (treeobj_insert_entry (dir, "subdir", subdir) == 0,
         "treeobj_insert_entry works");
 
-    ok ((dircpy = treeobj_copy (dir)) != NULL,
-        "treeobj_copy worked on dir");
+    ok ((dircpy = treeobj_copy (dir)) != NULL, "treeobj_copy worked on dir");
 
     ok (dir != dircpy && json_equal (dir, dircpy) == 1,
         "treeobj_copy returned duplicate dir copy");
@@ -634,11 +573,11 @@ void test_deep_copy (void)
         "treeobj_get_entry got subdir");
 
     /* change "b" to "c" in one subdir */
-    ok (treeobj_insert_entry (subdir1, "b", val3) == 0,
-        "treeobj_insert_entry success");
+    ok (treeobj_insert_entry (subdir1, "b", val3) == 0, "treeobj_insert_entry success");
 
     ok (json_equal (dir, dircpy) == 1,
-        "change to one dir *did* affect other, b/c treeobj_copy does only a 1 level copy");
+        "change to one dir *did* affect other, b/c treeobj_copy does only a 1 level "
+        "copy");
 
     json_decref (dir);
     json_decref (dircpy);
@@ -653,34 +592,28 @@ void test_symlink (void)
     json_t *o, *data;
     const char *ns_str, *target_str;
 
-    ok (treeobj_create_symlink (NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (treeobj_create_symlink (NULL, NULL) == NULL && errno == EINVAL,
         "treeobj_create_symlink fails on bad input with EINVAL");
     o = treeobj_create_symlink (NULL, "a.b.c");
-    ok (o != NULL,
-        "treeobj_create_symlink works");
+    ok (o != NULL, "treeobj_create_symlink works");
     diag_json (o);
-    ok (treeobj_is_symlink (o),
-        "treeobj_is_symlink returns true");
+    ok (treeobj_is_symlink (o), "treeobj_is_symlink returns true");
     ok ((data = treeobj_get_data (o)) != NULL && json_is_object (data),
         "treeobj_get_data returned string");
     ok (treeobj_get_symlink (NULL, NULL, NULL) < 0,
         "treeobj_get_symlink fails on bad input");
     ok (treeobj_get_symlink (o, &ns_str, &target_str) == 0,
         "treeobj_get_symlink works on symlink without namespace");
-    ok (ns_str == NULL,
-        "treeobj_get_symlink returns NULL for namespace");
+    ok (ns_str == NULL, "treeobj_get_symlink returns NULL for namespace");
     ok (!strcmp (target_str, "a.b.c"),
         "treeobj_get_symlink returns correct string for target");
 
     json_decref (o);
 
     o = treeobj_create_symlink ("ns", "d.e.f");
-    ok (o != NULL,
-        "treeobj_create_symlink works");
+    ok (o != NULL, "treeobj_create_symlink works");
     diag_json (o);
-    ok (treeobj_is_symlink (o),
-        "treeobj_is_symlink returns true");
+    ok (treeobj_is_symlink (o), "treeobj_is_symlink returns true");
     ok ((data = treeobj_get_data (o)) != NULL && json_is_object (data),
         "treeobj_get_data returned string");
     ok (treeobj_get_symlink (o, &ns_str, &target_str) == 0,
@@ -752,8 +685,7 @@ void test_corner_cases (void)
     if (!dir)
         BAIL_OUT ("can't continue without test value");
 
-    ok (treeobj_decode_val (dir, (void **)&outbuf, &outlen) < 0
-        && errno == EINVAL,
+    ok (treeobj_decode_val (dir, (void **)&outbuf, &outlen) < 0 && errno == EINVAL,
         "treeobj_decode_val returns EINVAL on non-val treeobj");
 
     /* Modify valref to have bad blobref */
@@ -785,7 +717,7 @@ void test_corner_cases (void)
     json_decref (symlink);
 }
 
-int main(int argc, char** argv)
+int main (int argc, char **argv)
 {
     plan (NO_PLAN);
 
@@ -801,7 +733,7 @@ int main(int argc, char** argv)
 
     test_codec ();
 
-    done_testing();
+    done_testing ();
 }
 
 /*

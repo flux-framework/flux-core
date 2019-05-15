@@ -99,7 +99,7 @@ json_t *service_list_byuuid (struct service_switch *sw, const char *uuid)
     svc = zhash_first (sw->services);
     while (svc) {
         if (uuid && svc->uuid && !strcmp (uuid, svc->uuid)) {
-            json_t *name = json_string  (zhash_cursor (sw->services));
+            json_t *name = json_string (zhash_cursor (sw->services));
             if (!name)
                 goto error;
             if (json_array_append_new (svcs, name) < 0) {
@@ -142,8 +142,11 @@ void service_remove_byuuid (struct service_switch *sw, const char *uuid)
     }
 }
 
-int service_add (struct service_switch *sh, const char *name,
-                 const char *uuid, service_send_f cb, void *arg)
+int service_add (struct service_switch *sh,
+                 const char *name,
+                 const char *uuid,
+                 service_send_f cb,
+                 void *arg)
 {
     struct service *svc = NULL;
 
@@ -173,7 +176,8 @@ error:
  * Avoid an extra malloc here if the substring is short.
  */
 static struct service *service_lookup_subtopic (struct service_switch *sw,
-                                                const char *topic, int length)
+                                                const char *topic,
+                                                int length)
 {
     char buf[16];
     char *cpy = NULL;

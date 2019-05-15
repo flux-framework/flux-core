@@ -46,8 +46,10 @@ error:
     flux_future_destroy (f);
 }
 
-static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void alloc_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct ops_context *ctx = arg;
     flux_jobid_t id;
@@ -65,8 +67,11 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error_future;
-    if (flux_future_aux_set (f, "flux::alloc_request",
-                             cpy, (flux_free_f)flux_msg_destroy) < 0) {
+    if (flux_future_aux_set (f,
+                             "flux::alloc_request",
+                             cpy,
+                             (flux_free_f)flux_msg_destroy)
+        < 0) {
         flux_msg_destroy (cpy);
         goto error_future;
     }
@@ -101,8 +106,10 @@ error:
     flux_future_destroy (f);
 }
 
-static void free_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+static void free_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     struct ops_context *ctx = arg;
     flux_jobid_t id;
@@ -120,8 +127,11 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error_future;
-    if (flux_future_aux_set (f, "flux::free_request",
-                             cpy, (flux_free_f)flux_msg_destroy) < 0) {
+    if (flux_future_aux_set (f,
+                             "flux::free_request",
+                             cpy,
+                             (flux_free_f)flux_msg_destroy)
+        < 0) {
         flux_msg_destroy (cpy);
         goto error_future;
     }
@@ -136,18 +146,26 @@ error:
         flux_log_error (h, "sched.free respond_error");
 }
 
-static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void exception_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct ops_context *ctx = arg;
     flux_jobid_t id;
     const char *type;
     int severity;
 
-    if (flux_event_unpack (msg, NULL, "{s:I s:s s:i}",
-                                      "id", &id,
-                                      "type", &type,
-                                      "severity", &severity) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{s:I s:s s:i}",
+                           "id",
+                           &id,
+                           "type",
+                           &type,
+                           "severity",
+                           &severity)
+        < 0) {
         flux_log_error (h, "job-exception event");
         return;
     }
@@ -155,9 +173,9 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "sched.alloc", alloc_cb, 0},
-    { FLUX_MSGTYPE_REQUEST,  "sched.free", free_cb, 0},
-    { FLUX_MSGTYPE_EVENT,  "job-exception", exception_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "sched.alloc", alloc_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "sched.free", free_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "job-exception", exception_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -228,7 +246,6 @@ error:
     schedutil_ops_unregister (ctx);
     return NULL;
 }
-
 
 void schedutil_ops_unregister (struct ops_context *ctx)
 {

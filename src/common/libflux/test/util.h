@@ -28,14 +28,13 @@
  * If callback is NULL, a default callback is run that logs each
  * message received with diag().
  */
-typedef int (*test_server_f)(flux_t *h, void *arg);
+typedef int (*test_server_f) (flux_t *h, void *arg);
 
 flux_t *test_server_create (test_server_f cb, void *arg);
 
 int test_server_stop (flux_t *c);
 
 void test_server_environment_init (const char *test_name);
-
 
 /* Create a loopback connector for testing.
  * The net effect is much the same as flux_open("local://") except

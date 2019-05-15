@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -59,15 +59,12 @@ int cmd_option_bufsize (flux_subprocess_t *p, const char *name)
         char *endptr;
         errno = 0;
         rv = strtol (val, &endptr, 10);
-        if (errno
-            || endptr[0] != '\0'
-            || rv <= 0) {
+        if (errno || endptr[0] != '\0' || rv <= 0) {
             rv = -1;
             errno = EINVAL;
             goto cleanup;
         }
-    }
-    else
+    } else
         rv = SUBPROCESS_DEFAULT_BUFSIZE;
 
 cleanup:

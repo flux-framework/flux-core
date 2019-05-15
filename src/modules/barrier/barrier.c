@@ -46,8 +46,7 @@ typedef struct _barrier_struct {
 } barrier_t;
 
 static int exit_event_send (flux_t *h, const char *name, int errnum);
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg);
+static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 
 static void freectx (void *arg)
 {
@@ -75,7 +74,10 @@ static barrier_ctx_t *getctx (flux_t *h)
             goto error;
         }
         if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
-                       barrier_reduction_timeout_sec, 0., timeout_cb, ctx) )) {
+                                                      barrier_reduction_timeout_sec,
+                                                      0.,
+                                                      timeout_cb,
+                                                      ctx))) {
             flux_log_error (h, "flux_timer_watacher_create");
             goto error;
         }
@@ -89,8 +91,10 @@ error:
     return NULL;
 }
 
-static void debug_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
+static void debug_timer_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
 {
     barrier_t *b = arg;
     flux_log (b->ctx->h, LOG_DEBUG, "debug %s %d", b->name, b->nprocs);
@@ -129,14 +133,15 @@ static barrier_t *barrier_create (barrier_ctx_t *ctx, const char *name, int npro
     if (ctx->rank == 0) {
         flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
         b->debug_timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
-                                                    1.0, 1.0,
-                                                    debug_timer_cb, b);
+                                                    1.0,
+                                                    1.0,
+                                                    debug_timer_cb,
+                                                    b);
         if (!b->debug_timer) {
             flux_log_error (ctx->h, "flux_timer_watcher_create");
             goto done;
         }
         flux_watcher_start (b->debug_timer);
-
     }
 done:
     return b;
@@ -155,12 +160,19 @@ static void send_enter_request (barrier_ctx_t *ctx, barrier_t *b)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
-                             FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
-                             "name", b->name,
-                             "count", b->count,
-                             "nprocs", b->nprocs,
-                             "internal", true))) {
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "barrier.enter",
+                             FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:s s:i s:i s:b}",
+                             "name",
+                             b->name,
+                             "count",
+                             b->count,
+                             "nprocs",
+                             b->nprocs,
+                             "internal",
+                             true))) {
         flux_log_error (ctx->h, "sending barrier.enter request");
         goto done;
     }
@@ -175,8 +187,10 @@ done:
  * notification upon barrier termination.
  */
 
-static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void enter_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     barrier_ctx_t *ctx = arg;
     barrier_t *b;
@@ -184,12 +198,19 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *name;
     int count, nprocs, internal;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:b !}",
-                             "name", &name,
-                             "count", &count,
-                             "nprocs", &nprocs,
-                             "internal", &internal) < 0
-                || flux_msg_get_route_first (msg, &sender) < 0) {
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i s:i s:b !}",
+                             "name",
+                             &name,
+                             "count",
+                             &count,
+                             "nprocs",
+                             &nprocs,
+                             "internal",
+                             &internal)
+            < 0
+        || flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         flux_respond_error (ctx->h, msg, errno, NULL);
         goto done;
@@ -204,9 +225,11 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (internal == false) {
         if (barrier_add_client (b, sender, msg) < 0) {
             flux_respond_error (ctx->h, msg, EEXIST, NULL);
-            flux_log (ctx->h, LOG_ERR,
-                        "abort %s due to double entry by client %s",
-                        name, sender);
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "abort %s due to double entry by client %s",
+                      name,
+                      sender);
             if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
                 flux_log_error (ctx->h, "exit_event_send");
             goto done;
@@ -234,8 +257,10 @@ done:
  * participating in.
  */
 
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void disconnect_request_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     barrier_ctx_t *ctx = arg;
     char *sender;
@@ -244,7 +269,8 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    FOREACH_ZHASH (ctx->barriers, key, b) {
+    FOREACH_ZHASH (ctx->barriers, key, b)
+    {
         if (zhash_lookup (b->clients, sender)) {
             if (exit_event_send (h, b->name, ECONNABORTED) < 0)
                 flux_log_error (h, "exit_event_send");
@@ -258,9 +284,12 @@ static int exit_event_send (flux_t *h, const char *name, int errnum)
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!(msg = flux_event_pack ("barrier.exit", "{s:s s:i}",
-                                 "name", name,
-                                 "errnum", errnum)))
+    if (!(msg = flux_event_pack ("barrier.exit",
+                                 "{s:s s:i}",
+                                 "name",
+                                 name,
+                                 "errnum",
+                                 errnum)))
         goto done;
     if (flux_send (h, msg, 0) < 0)
         goto done;
@@ -270,8 +299,10 @@ done:
     return rc;
 }
 
-static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void exit_event_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     barrier_ctx_t *ctx = arg;
     barrier_t *b;
@@ -280,15 +311,15 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *key;
     flux_msg_t *req;
 
-    if (flux_event_unpack (msg, NULL, "{s:s s:i !}",
-                           "name", &name,
-                           "errnum", &errnum) < 0) {
+    if (flux_event_unpack (msg, NULL, "{s:s s:i !}", "name", &name, "errnum", &errnum)
+        < 0) {
         flux_log_error (h, "%s: decoding event", __FUNCTION__);
         return;
     }
     if ((b = zhash_lookup (ctx->barriers, name))) {
         b->errnum = errnum;
-        FOREACH_ZHASH (b->clients, key, req) {
+        FOREACH_ZHASH (b->clients, key, req)
+        {
             int rc;
             if (b->errnum == 0)
                 rc = flux_respond (h, req, NULL);
@@ -301,8 +332,7 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     barrier_ctx_t *ctx = arg;
     const char *key;
@@ -311,7 +341,8 @@ static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
     assert (ctx->rank != 0);
     ctx->timer_armed = false; /* one shot */
 
-    FOREACH_ZHASH (ctx->barriers, key, b) {
+    FOREACH_ZHASH (ctx->barriers, key, b)
+    {
         if (b->count > 0) {
             send_enter_request (ctx, b);
             b->count = 0;
@@ -320,9 +351,9 @@ static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "barrier.enter",       enter_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "barrier.disconnect",  disconnect_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "barrier.exit",        exit_event_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "barrier.enter", enter_request_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "barrier.disconnect", disconnect_request_cb, 0},
+    {FLUX_MSGTYPE_EVENT, "barrier.exit", exit_event_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

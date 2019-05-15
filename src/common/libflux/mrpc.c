@@ -79,14 +79,13 @@ static void flux_mrpc_usecount_decr (flux_mrpc_t *mrpc)
          */
         if (mrpc->m.matchtag != FLUX_MATCHTAG_NONE) {
             if (mrpc->rx_count < mrpc->rx_expected)
-                log_matchtag_leak (mrpc->h, "incomplete MRPC",
-                                   mrpc->m.matchtag);
+                log_matchtag_leak (mrpc->h, "incomplete MRPC", mrpc->m.matchtag);
             else
                 flux_matchtag_free (mrpc->h, mrpc->m.matchtag);
         }
         flux_msg_destroy (mrpc->rx_msg);
         aux_destroy (&mrpc->aux);
-        mrpc->magic =~ MRPC_MAGIC;
+        mrpc->magic = ~MRPC_MAGIC;
         free (mrpc);
     }
 }
@@ -127,8 +126,7 @@ static flux_mrpc_t *mrpc_create (flux_t *h, int rx_expected)
     return mrpc;
 }
 
-static int mrpc_request_prepare (flux_mrpc_t *mrpc, flux_msg_t *msg,
-                                uint32_t nodeid)
+static int mrpc_request_prepare (flux_mrpc_t *mrpc, flux_msg_t *msg, uint32_t nodeid)
 {
     int rc = -1;
     uint32_t matchtag = mrpc->m.matchtag & ~FLUX_MATCHTAG_GROUP_MASK;
@@ -168,8 +166,9 @@ done:
     return rc;
 }
 
-static int mrpc_request_prepare_send (flux_mrpc_t *mrpc, flux_msg_t *msg,
-                                     uint32_t nodeid)
+static int mrpc_request_prepare_send (flux_mrpc_t *mrpc,
+                                      flux_msg_t *msg,
+                                      uint32_t nodeid)
 {
     if (mrpc_request_prepare (mrpc, msg, nodeid) < 0)
         return -1;
@@ -307,8 +306,10 @@ done:
  * For the multi-response case, overwrite previous message if
  * flux_mrpc_next () was not called.
  */
-static void mrpc_cb (flux_t *h, flux_msg_handler_t *mh,
-                    const flux_msg_t *msg, void *arg)
+static void mrpc_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     flux_mrpc_t *mrpc = arg;
     assert (mrpc->then_cb != NULL);
@@ -337,8 +338,7 @@ int flux_mrpc_then (flux_mrpc_t *mrpc, flux_mrpc_continuation_f cb, void *arg)
     }
     if (cb && !mrpc->then_cb) {
         if (!mrpc->mh) {
-            if (!(mrpc->mh = flux_msg_handler_create (mrpc->h, mrpc->m,
-                                                      mrpc_cb, mrpc)))
+            if (!(mrpc->mh = flux_msg_handler_create (mrpc->h, mrpc->m, mrpc_cb, mrpc)))
                 goto done;
         }
         flux_msg_handler_start (mrpc->mh);
@@ -403,10 +403,7 @@ error:
     return NULL;
 }
 
-static flux_mrpc_t *mrpc (flux_t *h,
-                          const char *nodeset,
-                          int flags,
-                          flux_msg_t *msg)
+static flux_mrpc_t *mrpc (flux_t *h, const char *nodeset, int flags, flux_msg_t *msg)
 {
     struct idset *ns = NULL;
     flux_mrpc_t *mrpc = NULL;
@@ -420,15 +417,9 @@ static flux_mrpc_t *mrpc (flux_t *h,
         goto error;
     }
     if (!strcmp (nodeset, "any"))
-        return mrpc_request (h,
-                             FLUX_NODEID_ANY,
-                             flags,
-                             msg);
+        return mrpc_request (h, FLUX_NODEID_ANY, flags, msg);
     if (!strcmp (nodeset, "upstream"))
-        return mrpc_request (h,
-                             FLUX_NODEID_UPSTREAM,
-                             flags,
-                             msg);
+        return mrpc_request (h, FLUX_NODEID_UPSTREAM, flags, msg);
     if (!strcmp (nodeset, "all")) {
         if (flux_get_size (h, &count) < 0)
             goto error;
@@ -527,8 +518,10 @@ void *flux_mrpc_aux_get (flux_mrpc_t *mrpc, const char *name)
     return aux_get (mrpc->aux, name);
 }
 
-int flux_mrpc_aux_set (flux_mrpc_t *mrpc, const char *name,
-                      void *aux, flux_free_f destroy)
+int flux_mrpc_aux_set (flux_mrpc_t *mrpc,
+                       const char *name,
+                       void *aux,
+                       flux_free_f destroy)
 {
     if (!mrpc) {
         errno = EINVAL;

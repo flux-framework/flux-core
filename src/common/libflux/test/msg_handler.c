@@ -29,8 +29,10 @@ static flux_t *open_fake (void)
 
 /* NO-OP message handler
  */
-static void dummy_msg_handler (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void dummy_msg_handler (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
 }
 
@@ -41,28 +43,26 @@ void test_msg_handler_create (flux_t *h)
     /* ensure we can create message handler with dummy flux_t
      */
     mh = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy_msg_handler, NULL);
-    ok (mh != NULL,
-        "able to creat fake message handler");
+    ok (mh != NULL, "able to creat fake message handler");
     flux_msg_handler_destroy (mh);
 
     /* invalid arguments
      */
     errno = 0;
-    ok (flux_msg_handler_create (NULL, FLUX_MATCH_ANY,
-                                 dummy_msg_handler, NULL) == NULL
-        && errno == EINVAL,
+    ok (flux_msg_handler_create (NULL, FLUX_MATCH_ANY, dummy_msg_handler, NULL) == NULL
+            && errno == EINVAL,
         "flux_msg_handler_create h=NULL fails with EINVAL");
     errno = 0;
     ok (flux_msg_handler_create (h, FLUX_MATCH_ANY, NULL, NULL) == NULL
-        && errno == EINVAL,
+            && errno == EINVAL,
         "flux_msg_handler_create msg_handler=NULL fails with EINVAL");
 }
 
 void test_msg_handler_addvec (flux_t *h)
 {
     static struct flux_msg_handler_spec tab[] = {
-        { FLUX_MSGTYPE_REQUEST,  "sid", dummy_msg_handler, 0 },
-        { FLUX_MSGTYPE_REQUEST,  "nancy", dummy_msg_handler, 0 },
+        {FLUX_MSGTYPE_REQUEST, "sid", dummy_msg_handler, 0},
+        {FLUX_MSGTYPE_REQUEST, "nancy", dummy_msg_handler, 0},
         FLUX_MSGHANDLER_TABLE_END,
     };
     flux_msg_handler_t **handlers = NULL;
@@ -76,16 +76,13 @@ void test_msg_handler_addvec (flux_t *h)
     /* invalid arguments
      */
     errno = 0;
-    ok (flux_msg_handler_addvec (NULL, tab, NULL, &handlers) < 0
-        && errno == EINVAL,
+    ok (flux_msg_handler_addvec (NULL, tab, NULL, &handlers) < 0 && errno == EINVAL,
         "flux_msg_handler_addvec h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_msg_handler_addvec (h, NULL, NULL, &handlers) < 0
-        && errno == EINVAL,
+    ok (flux_msg_handler_addvec (h, NULL, NULL, &handlers) < 0 && errno == EINVAL,
         "flux_msg_handler_addvec tab=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_msg_handler_addvec (h, tab, NULL, NULL) < 0
-        && errno == EINVAL,
+    ok (flux_msg_handler_addvec (h, tab, NULL, NULL) < 0 && errno == EINVAL,
         "flux_msg_handler_addvec hp=NULL fails with EINVAL");
 }
 
@@ -102,7 +99,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    h = open_fake();
+    h = open_fake ();
 
     test_msg_handler_create (h);
     test_msg_handler_addvec (h);
@@ -110,10 +107,9 @@ int main (int argc, char *argv[])
 
     flux_close (h);
 
-    done_testing();
+    done_testing ();
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

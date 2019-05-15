@@ -31,38 +31,37 @@ void test_ctor_dtor (void)
     zsecurity_t *sec;
     const char *s;
 
-    lives_ok ({zsecurity_destroy (NULL);},
-            "zsecurity_destroy accepts a NULL argument");
+    lives_ok ({ zsecurity_destroy (NULL); },
+              "zsecurity_destroy accepts a NULL argument");
 
     ok ((sec = zsecurity_create (0, "/tmp")) != NULL,
-            "zsecurity_create with no selected method works");
+        "zsecurity_create with no selected method works");
     ok ((s = zsecurity_errstr (sec)) != NULL && !strcmp (s, "Success"),
-            "zsecurity_errstr returns 'Success'");
+        "zsecurity_errstr returns 'Success'");
     ok ((s = zsecurity_get_directory (sec)) != NULL && !strcmp (s, "/tmp"),
-            "zsecurity_get_directory returns configured confdir");
+        "zsecurity_get_directory returns configured confdir");
     ok (zsecurity_type_enabled (sec, ZSECURITY_TYPE_PLAIN) == false,
-            "zsecurity_type_enabled ZSECURITY_TYPE_PLAIN false");
+        "zsecurity_type_enabled ZSECURITY_TYPE_PLAIN false");
     ok (zsecurity_type_enabled (sec, ZSECURITY_TYPE_CURVE) == false,
-            "zsecurity_type_enabled ZSECURITY_TYPE_CURVE false");
+        "zsecurity_type_enabled ZSECURITY_TYPE_CURVE false");
     zsecurity_destroy (sec);
 
     ok ((sec = zsecurity_create (0, NULL)) != NULL,
-            "zsecurity_create with NULL confdir works");
+        "zsecurity_create with NULL confdir works");
     ok (zsecurity_get_directory (sec) == NULL,
-            "zsecurity_get_directory returns configured NULL");
+        "zsecurity_get_directory returns configured NULL");
     zsecurity_destroy (sec);
 
     errno = 0;
     sec = zsecurity_create (ZSECURITY_TYPE_CURVE | ZSECURITY_TYPE_PLAIN, NULL);
-    ok (sec == NULL && errno == EINVAL,
-            "zsecurity_create PLAIN|CURVE returns EINVAL");
+    ok (sec == NULL && errno == EINVAL, "zsecurity_create PLAIN|CURVE returns EINVAL");
 
     ok ((sec = zsecurity_create (ZSECURITY_TYPE_PLAIN, NULL)) != NULL,
-            "zsecurity_create PLAIN works");
+        "zsecurity_create PLAIN works");
     ok (zsecurity_type_enabled (sec, ZSECURITY_TYPE_PLAIN) == true,
-            "zsecurity_type_enabled ZSECURITY_TYPE_PLAIN true");
+        "zsecurity_type_enabled ZSECURITY_TYPE_PLAIN true");
     ok (zsecurity_type_enabled (sec, ZSECURITY_TYPE_CURVE) == false,
-            "zsecurity_type_enabled ZSECURITY_TYPE_CURVE false");
+        "zsecurity_type_enabled ZSECURITY_TYPE_CURVE false");
     zsecurity_destroy (sec);
 }
 
@@ -80,7 +79,7 @@ void test_keygen (void)
         BAIL_OUT ("zsecurity_create failed");
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno == EINVAL,
-            "zsecurity_keygen fails with EINVAL if confdir not set");
+        "zsecurity_keygen fails with EINVAL if confdir not set");
     zsecurity_destroy (sec);
 
     /* Nonexistent confdir.
@@ -93,7 +92,7 @@ void test_keygen (void)
         BAIL_OUT ("zsecurity_create failed");
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno != 0,
-            "zsecurity_keygen fails with errno != 0 if confdir does not exist");
+        "zsecurity_keygen fails with errno != 0 if confdir does not exist");
     zsecurity_destroy (sec);
 
     /* Same with FORCE flag.
@@ -103,7 +102,7 @@ void test_keygen (void)
         BAIL_OUT ("zsecurity_create failed");
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno != 0,
-            "zsecurity_keygen (force) fails with errno != 0 if confdir does not exist");
+        "zsecurity_keygen (force) fails with errno != 0 if confdir does not exist");
     zsecurity_destroy (sec);
 
     /* No security modes selected.
@@ -114,13 +113,11 @@ void test_keygen (void)
     sec = zsecurity_create (0, path);
     if (!sec)
         BAIL_OUT ("zsecurity_create failed");
-    ok (zsecurity_keygen (sec) == 0,
-            "zsecurity_keygen with no security modes works");
+    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen with no security modes works");
     ok ((stat (path, &sb) == 0 && S_ISDIR (sb.st_mode)
-                && (sb.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) == 0700),
-            "confdir is a directory with mode 0700");
-    ok (unlink_recursive (path) == 1,
-            "unlinked 1 file/dir");
+         && (sb.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0700),
+        "confdir is a directory with mode 0700");
+    ok (unlink_recursive (path) == 1, "unlinked 1 file/dir");
     zsecurity_destroy (sec);
 
     /* Wrong confdir perms
@@ -135,9 +132,8 @@ void test_keygen (void)
         BAIL_OUT ("chmod %s: %s", path, strerror (errno));
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno == EPERM,
-            "zsecurity_keygen with bad mode confdir fails with EPERM");
-    ok (unlink_recursive (path) == 1,
-            "unlinked 1 file/dir");
+        "zsecurity_keygen with bad mode confdir fails with EPERM");
+    ok (unlink_recursive (path) == 1, "unlinked 1 file/dir");
     zsecurity_destroy (sec);
 
     /* PLAIN
@@ -148,10 +144,8 @@ void test_keygen (void)
     sec = zsecurity_create (ZSECURITY_TYPE_PLAIN, path);
     if (!sec)
         BAIL_OUT ("zsecurity_create failed");
-    ok (zsecurity_keygen (sec) == 0,
-            "zsecurity_keygen PLAIN works");
-    ok (unlink_recursive (path) == 2,
-            "unlinked 2 file/dir");
+    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen PLAIN works");
+    ok (unlink_recursive (path) == 2, "unlinked 2 file/dir");
     zsecurity_destroy (sec);
 
     /* CURVE
@@ -162,10 +156,8 @@ void test_keygen (void)
     sec = zsecurity_create (ZSECURITY_TYPE_CURVE, path);
     if (!sec)
         BAIL_OUT ("zsecurity_create failed");
-    ok (zsecurity_keygen (sec) == 0,
-            "zsecurity_keygen CURVE works");
-    ok (unlink_recursive (path) == 6,
-            "unlinked 6 file/dir");
+    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen CURVE works");
+    ok (unlink_recursive (path) == 6, "unlinked 6 file/dir");
     zsecurity_destroy (sec);
 
     /* CURVE overwrite
@@ -180,9 +172,8 @@ void test_keygen (void)
         BAIL_OUT ("zsecurity_keygen CURVE failed");
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno == EEXIST,
-            "zsecurity_keygen CURVE-overwrite fails with EEXIST");
-    ok (unlink_recursive (path) == 6,
-            "unlinked 6 file/dir");
+        "zsecurity_keygen CURVE-overwrite fails with EEXIST");
+    ok (unlink_recursive (path) == 6, "unlinked 6 file/dir");
     zsecurity_destroy (sec);
 
     /* Same with FORCE
@@ -196,10 +187,8 @@ void test_keygen (void)
     if (zsecurity_keygen (sec) < 0)
         BAIL_OUT ("zsecurity_keygen CURVE failed");
     errno = 0;
-    ok (zsecurity_keygen (sec) == 0,
-            "zsecurity_keygen (force) CURVE-overwrite works");
-    ok (unlink_recursive (path) == 6,
-            "unlinked 6 file/dir");
+    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen (force) CURVE-overwrite works");
+    ok (unlink_recursive (path) == 6, "unlinked 6 file/dir");
     zsecurity_destroy (sec);
 
     /* PLAIN overwrite
@@ -214,9 +203,8 @@ void test_keygen (void)
         BAIL_OUT ("zsecurity_keygen PLAIN failed");
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno == EEXIST,
-            "zsecurity_keygen PLAIN-overwrite fails with EEXIST");
-    ok (unlink_recursive (path) == 2,
-            "unlinked 2 file/dir");
+        "zsecurity_keygen PLAIN-overwrite fails with EEXIST");
+    ok (unlink_recursive (path) == 2, "unlinked 2 file/dir");
     zsecurity_destroy (sec);
 
     /* Same with FORCE
@@ -230,10 +218,8 @@ void test_keygen (void)
     if (zsecurity_keygen (sec) < 0)
         BAIL_OUT ("zsecurity_keygen PLAIN failed");
     errno = 0;
-    ok (zsecurity_keygen (sec) == 0,
-            "zsecurity_keygen (force) PLAIN-overwrite works");
-    ok (unlink_recursive (path) == 2,
-            "unlinked 2 file/dir");
+    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen (force) PLAIN-overwrite works");
+    ok (unlink_recursive (path) == 2, "unlinked 2 file/dir");
     zsecurity_destroy (sec);
 }
 
@@ -255,36 +241,30 @@ void test_plain (void)
         BAIL_OUT ("zsecurity_create PLAIN failed");
     if (zsecurity_keygen (sec) < 0)
         BAIL_OUT ("zsecurity_keygen PLAIN failed");
-    ok (zsecurity_comms_init (sec) == 0,
-            "zsecurity_comms_init PLAIN works");
+    ok (zsecurity_comms_init (sec) == 0, "zsecurity_comms_init PLAIN works");
 
     /* set up server */
     if (!(srv = zsock_new_pull (NULL)))
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
-    ok (zsecurity_ssockinit (sec, srv) == 0,
-            "zsecurity_ssockinit works");
+    ok (zsecurity_ssockinit (sec, srv) == 0, "zsecurity_ssockinit works");
     srv_port = zsock_bind (srv, "tcp://127.0.0.1:*");
-    ok (srv_port >= 0,
-            "server bound to localhost on port %d", srv_port);
+    ok (srv_port >= 0, "server bound to localhost on port %d", srv_port);
     if (!(srv_poller = zpoller_new (srv, NULL)))
         BAIL_OUT ("poller_new failed");
 
     /* set up client */
     if (!(cli = zsock_new_push (NULL)))
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
-    ok (zsecurity_csockinit (sec, cli) == 0,
-            "zsecurity_csockinit works");
+    ok (zsecurity_csockinit (sec, cli) == 0, "zsecurity_csockinit works");
     ok (zsock_connect (cli, "tcp://127.0.0.1:%d", srv_port) >= 0,
-            "client connected to server");
-    ok (zstr_sendx (cli, "Hi", NULL) == 0,
-            "client sent Hi");
+        "client connected to server");
+    ok (zstr_sendx (cli, "Hi", NULL) == 0, "client sent Hi");
     rdy = zpoller_wait (srv_poller, 1000);
-    ok (rdy == srv,
-            "server ready within 1s timeout");
+    ok (rdy == srv, "server ready within 1s timeout");
     s = NULL;
-    ok (rdy != NULL && zstr_recvx (srv, &s, NULL) == 1
-            && s != NULL && !strcmp (s, "Hi"),
-            "server received Hi");
+    ok (rdy != NULL && zstr_recvx (srv, &s, NULL) == 1 && s != NULL
+            && !strcmp (s, "Hi"),
+        "server received Hi");
     free (s);
 
     /* rogue client tries to send with no security setup */
@@ -292,11 +272,10 @@ void test_plain (void)
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
     ok (zsock_connect (rogue, "tcp://127.0.0.1:%d", srv_port) >= 0,
         "rogue connected to server with no security");
-    ok (zstr_sendx (rogue, "Blimey!", NULL) == 0,
-            "rogue sent Blimey!");
+    ok (zstr_sendx (rogue, "Blimey!", NULL) == 0, "rogue sent Blimey!");
     rdy = zpoller_wait (srv_poller, 200);
     ok (rdy == NULL && zpoller_expired (srv_poller),
-            "server not ready within 0.2s timeout");
+        "server not ready within 0.2s timeout");
     zsock_destroy (&rogue);
 
     /* rogue client tries to send with wrong PLAIN password */
@@ -306,11 +285,10 @@ void test_plain (void)
     zsock_set_plain_password (rogue, "not-the-correct-password");
     ok (zsock_connect (rogue, "tcp://127.0.0.1:%d", srv_port) >= 0,
         "rogue connected to server using wrong password");
-    ok (zstr_sendx (rogue, "Skallywag!", NULL) == 0,
-            "rogue sent Skallywag!");
+    ok (zstr_sendx (rogue, "Skallywag!", NULL) == 0, "rogue sent Skallywag!");
     rdy = zpoller_wait (srv_poller, 200);
     ok (rdy == NULL && zpoller_expired (srv_poller),
-            "server not ready within 0.2s timeout");
+        "server not ready within 0.2s timeout");
     zsock_destroy (&rogue);
 
     zsock_destroy (&cli);
@@ -339,38 +317,32 @@ void test_curve (void)
         BAIL_OUT ("zsecurity_create CURVE failed");
     if (zsecurity_keygen (sec) < 0)
         BAIL_OUT ("zsecurity_keygen CURVE failed");
-    ok (zsecurity_comms_init (sec) == 0,
-            "zsecurity_comms_init CURVE works");
+    ok (zsecurity_comms_init (sec) == 0, "zsecurity_comms_init CURVE works");
 
     /* set up server */
     if (!(srv = zsock_new_pull (NULL)))
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
-    ok (zsecurity_ssockinit (sec, srv) == 0,
-            "zsecurity_ssockinit works");
+    ok (zsecurity_ssockinit (sec, srv) == 0, "zsecurity_ssockinit works");
     srv_port = zsock_bind (srv, "tcp://127.0.0.1:*");
-    ok (srv_port >= 0,
-            "server bound to localhost on port %d", srv_port);
+    ok (srv_port >= 0, "server bound to localhost on port %d", srv_port);
     if (!(srv_poller = zpoller_new (srv, NULL)))
         BAIL_OUT ("poller_new failed");
 
     /* set up client */
     if (!(cli = zsock_new_push (NULL)))
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
-    ok (zsecurity_csockinit (sec, cli) == 0,
-            "zsecurity_csockinit works");
+    ok (zsecurity_csockinit (sec, cli) == 0, "zsecurity_csockinit works");
     ok (zsock_connect (cli, "tcp://127.0.0.1:%d", srv_port) >= 0,
-            "client connected to server");
+        "client connected to server");
 
     /* client sends Greetings! */
-    ok (zstr_sendx (cli, "Greetings!", NULL) == 0,
-            "client sent Greetings!");
+    ok (zstr_sendx (cli, "Greetings!", NULL) == 0, "client sent Greetings!");
     rdy = zpoller_wait (srv_poller, 1000);
-    ok (rdy == srv,
-            "server ready within 1s timeout");
+    ok (rdy == srv, "server ready within 1s timeout");
     s = NULL;
-    ok (rdy != NULL && zstr_recvx (srv, &s, NULL) == 1
-            && s != NULL && !strcmp (s, "Greetings!"),
-            "server received Greetings!");
+    ok (rdy != NULL && zstr_recvx (srv, &s, NULL) == 1 && s != NULL
+            && !strcmp (s, "Greetings!"),
+        "server received Greetings!");
     free (s);
 
     /* rogue client tries to send with no security setup */
@@ -378,11 +350,10 @@ void test_curve (void)
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
     ok (zsock_connect (rogue, "tcp://127.0.0.1:%d", srv_port) >= 0,
         "rogue connected to server with no security");
-    ok (zstr_sendx (rogue, "Avast!", NULL) == 0,
-            "rogue sent Avast");
+    ok (zstr_sendx (rogue, "Avast!", NULL) == 0, "rogue sent Avast");
     rdy = zpoller_wait (srv_poller, 200);
     ok (rdy == NULL && zpoller_expired (srv_poller),
-            "server not ready within 0.2s timeout");
+        "server not ready within 0.2s timeout");
     zsock_destroy (&rogue);
 
     /* rogue client tries to send with correct server public key,
@@ -392,7 +363,7 @@ void test_curve (void)
         BAIL_OUT ("zcert_new: %s", zmq_strerror (errno));
     if (!(rogue = zsock_new_push (NULL)))
         BAIL_OUT ("zsock_new: %s", zmq_strerror (errno));
-    zsock_set_zap_domain (rogue, "flux"); // same as zsecurity_t hardwired
+    zsock_set_zap_domain (rogue, "flux");  // same as zsecurity_t hardwired
     zcert_apply (rogue_cert, rogue);
     /* read server public key from file */
     char server_file[PATH_MAX];
@@ -408,11 +379,10 @@ void test_curve (void)
     /* now connect */
     ok (zsock_connect (rogue, "tcp://127.0.0.1:%d", srv_port) >= 0,
         "rogue connected to server using right server, wrong client key");
-    ok (zstr_sendx (rogue, "Haar!", NULL) == 0,
-            "rogue sent Haar!");
+    ok (zstr_sendx (rogue, "Haar!", NULL) == 0, "rogue sent Haar!");
     rdy = zpoller_wait (srv_poller, 200);
     ok (rdy == NULL && zpoller_expired (srv_poller),
-            "server not ready within 0.2s timeout");
+        "server not ready within 0.2s timeout");
     zcert_destroy (&rogue_cert);
     zcert_destroy (&server_cert);
     zsock_destroy (&rogue);

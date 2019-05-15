@@ -18,8 +18,8 @@
 
 typedef struct module_struct module_t;
 typedef struct modhash_struct modhash_t;
-typedef void (*modpoller_cb_f)(module_t *p, void *arg);
-typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
+typedef void (*modpoller_cb_f) (module_t *p, void *arg);
+typedef void (*module_status_cb_f) (module_t *p, int prev_status, void *arg);
 
 /* Hash-o-modules, keyed by uuid
  */
@@ -37,7 +37,7 @@ void module_remove (modhash_t *mh, module_t *p);
 
 /* Set arguments to module main().  Call before module_start().
  */
-void module_set_args (module_t *p, int argc, char * const argv[]);
+void module_set_args (module_t *p, int argc, char *const argv[]);
 void module_add_arg (module_t *p, const char *arg);
 
 /* Get module name.

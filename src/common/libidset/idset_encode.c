@@ -63,8 +63,12 @@ error:
     return -1;
 }
 
-static int catrange (char **s, size_t *sz, size_t *len,
-                     unsigned int lo, unsigned int hi, const char *sep)
+static int catrange (char **s,
+                     size_t *sz,
+                     size_t *len,
+                     unsigned int lo,
+                     unsigned int hi,
+                     const char *sep)
 {
     int rc;
     if (lo == hi)
@@ -77,8 +81,7 @@ static int catrange (char **s, size_t *sz, size_t *len,
 /* Return value: count of id's in set, or -1 on failure.
  * N.B. if count is more than INT_MAX, return value is INT_MAX.
  */
-static int encode_ranged (const struct idset *idset,
-                          char **s, size_t *sz, size_t *len)
+static int encode_ranged (const struct idset *idset, char **s, size_t *sz, size_t *len)
 {
     int count = 0;
     unsigned int id;
@@ -88,19 +91,20 @@ static int encode_ranged (const struct idset *idset,
 
     lo = hi = id = vebsucc (idset->T, 0);
     while (id < idset->T.M) {
-        unsigned int next = vebsucc (idset->T, id + 1);;
+        unsigned int next = vebsucc (idset->T, id + 1);
+        ;
         bool last = (next == idset->T.M);
 
-        if (first)                  // first iteration
+        if (first)  // first iteration
             first = false;
-        else if (id == hi + 1)      // id is in range
+        else if (id == hi + 1)  // id is in range
             hi++;
-        else {                      // id is NOT in range
+        else {  // id is NOT in range
             if (catrange (s, sz, len, lo, hi, ",") < 0)
                 return -1;
             lo = hi = id;
         }
-        if (last) {                 // last iteration
+        if (last) {  // last iteration
             if (catrange (s, sz, len, lo, hi, last ? "" : ",") < 0)
                 return -1;
         }
@@ -114,8 +118,7 @@ static int encode_ranged (const struct idset *idset,
 /* Return value: count of id's in set, or -1 on failure.
  * N.B. if count is more than INT_MAX, return value is INT_MAX.
  */
-static int encode_simple (const struct idset *idset,
-                          char **s, size_t *sz, size_t *len)
+static int encode_simple (const struct idset *idset, char **s, size_t *sz, size_t *len)
 {
     int count = 0;
     unsigned int id;
@@ -140,14 +143,13 @@ char *idset_encode (const struct idset *idset, int flags)
     size_t strlength = 0;
     int count;
 
-    if (validate_idset_flags (flags, IDSET_FLAG_BRACKETS
-                                   | IDSET_FLAG_RANGE) < 0)
+    if (validate_idset_flags (flags, IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE) < 0)
         return NULL;
     if (!idset) {
         errno = EINVAL;
         return NULL;
     }
-    if ((flags & IDSET_FLAG_BRACKETS)) {    // add open brace, if requested
+    if ((flags & IDSET_FLAG_BRACKETS)) {  // add open brace, if requested
         if (catprintf (&str, &strsz, &strlength, "[") < 0)
             goto error;
     }
@@ -157,7 +159,7 @@ char *idset_encode (const struct idset *idset, int flags)
         count = encode_simple (idset, &str, &strsz, &strlength);
     if (count < 0)
         goto error;
-    if ((flags & IDSET_FLAG_BRACKETS) && count > 1) { // add close brace
+    if ((flags & IDSET_FLAG_BRACKETS) && count > 1) {  // add close brace
         if (catprintf (&str, &strsz, &strlength, "]") < 0)
             goto error;
     }

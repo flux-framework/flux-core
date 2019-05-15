@@ -40,9 +40,7 @@ int flux_buffer_set_low_read_cb (flux_buffer_t *fb,
  * callback type has already been set, EEXIST is the errno returned.
  * Setting [cb] to NULL disables the callback.
  */
-int flux_buffer_set_read_line_cb (flux_buffer_t *fb,
-                                  flux_buffer_cb cb,
-                                  void *arg);
+int flux_buffer_set_read_line_cb (flux_buffer_t *fb, flux_buffer_cb cb, void *arg);
 
 /* Call [cb] when the number of bytes stored falls less than
  * [high] bytes.  Setting [cb] to NULL disables the callback.

@@ -21,8 +21,8 @@ typedef struct zsecurity_struct zsecurity_t;
 
 enum {
     /* enabled security modes */
-    ZSECURITY_TYPE_PLAIN = 1, // cannot be used with CURVE
-    ZSECURITY_TYPE_CURVE = 2, // cannot be used with PLAIN
+    ZSECURITY_TYPE_PLAIN = 1,  // cannot be used with CURVE
+    ZSECURITY_TYPE_CURVE = 2,  // cannot be used with PLAIN
 
     /* flags */
     ZSECURITY_VERBOSE = 0x20,

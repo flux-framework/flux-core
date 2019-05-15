@@ -29,16 +29,14 @@ void simple (void)
     s = sign_none_wrap ("foo", 4, 1000);
     if (!s)
         BAIL_OUT ("sign_none_wrap returned NULL");
-    ok (s != NULL,
-        "sign_none_wrap works");
+    ok (s != NULL, "sign_none_wrap works");
     diag (s);
 
     userid = 0;
     payload = NULL;
     payloadsz = 0;
     rc = sign_none_unwrap (s, &payload, &payloadsz, &userid);
-    ok (rc == 0 && userid == 1000
-        && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
+    ok (rc == 0 && userid == 1000 && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
         "sign_none_unwrap works");
 
     free (s);
@@ -46,12 +44,14 @@ void simple (void)
 
 char *encode_base64 (const void *src, int srclen)
 {
-    int dstlen = sodium_base64_encoded_len (srclen,
-                                            sodium_base64_VARIANT_ORIGINAL);
+    int dstlen = sodium_base64_encoded_len (srclen, sodium_base64_VARIANT_ORIGINAL);
     char *dst = calloc (1, dstlen);
     if (!dst)
         BAIL_OUT ("calloc failed");
-    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
+    return sodium_bin2base64 (dst,
+                              dstlen,
+                              (unsigned char *)src,
+                              srclen,
                               sodium_base64_VARIANT_ORIGINAL);
 }
 
@@ -89,8 +89,7 @@ void decode_good (void)
     payloadsz = 0;
     diag ("test 1: %s", good1);
     rc = sign_none_unwrap (good1, &payload, &payloadsz, &userid);
-    ok (rc == 0 && userid == 1000
-        && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
+    ok (rc == 0 && userid == 1000 && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
         "dummy encode 1 decodes as expected");
 
     userid = 0;
@@ -192,23 +191,19 @@ void decode_bad_header (void)
 
     errno = 0;
     rc = sign_none_unwrap (bad8, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap bad mech value fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap bad mech value fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (bad9, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap bad mech type fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap bad mech type fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (bad10, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap missing mech fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap missing mech fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (bad11, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap extra seprator fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap extra seprator fails with EINVAL");
 
     free (bad1);
     free (bad2);
@@ -227,15 +222,17 @@ void decode_bad_other (void)
 {
     const char *good = "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.Zm9vAA==.none";
     /* wrong suffix */
-    const char *bad1  = "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.Zm9vAA==.wrong";
+    const char *bad1 =
+        "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.Zm9vAA==."
+        "wrong";
     /* missing field */
-    const char *bad2  = "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.none";
+    const char *bad2 = "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.none";
     /* two missing fields */
-    const char *bad3  = "none";
+    const char *bad3 = "none";
     /* invalid base64 payload (% character) */
-    const char *bad4  = "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.%m9vAA==.none";
+    const char *bad4 = "dmVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.%m9vAA==.none";
     /* invalid base64 header (% character) */
-    const char *bad5  = "%mVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.Zm9vAA==.none";
+    const char *bad5 = "%mVyc2lvbgBpMQB1c2VyaWQAaTEwMDAAbWVjaABzbm9uZQA=.Zm9vAA==.none";
 
     uint32_t userid;
     void *payload;
@@ -245,20 +242,17 @@ void decode_bad_other (void)
     /* Double check good input, the basis for bad input.
      */
     rc = sign_none_unwrap (good, &payload, &payloadsz, &userid);
-    ok (rc == 0,
-        "sign_none_unwrap baseline for bad input tests works");
+    ok (rc == 0, "sign_none_unwrap baseline for bad input tests works");
     if (rc == 0)
         free (payload);
 
     errno = 0;
     rc = sign_none_unwrap (bad1, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap wrong suffix fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap wrong suffix fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (bad2, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap missing field fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap missing field fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (bad3, &payload, &payloadsz, &userid);
@@ -277,10 +271,8 @@ void decode_bad_other (void)
 
     errno = 0;
     rc = sign_none_unwrap ("", &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap emtpy input fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap emtpy input fails with EINVAL");
 }
-
 
 void badarg (void)
 {
@@ -297,23 +289,19 @@ void badarg (void)
 
     errno = 0;
     rc = sign_none_unwrap (NULL, &payload, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap input=NULL fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap input=NULL fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (good1, NULL, &payloadsz, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap payload=NULL fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap payload=NULL fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (good1, &payload, NULL, &userid);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap payloadsz=NULL fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap payloadsz=NULL fails with EINVAL");
 
     errno = 0;
     rc = sign_none_unwrap (good1, &payload, &payloadsz, NULL);
-    ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap userid=NULL fails with EINVAL");
+    ok (rc < 0 && errno == EINVAL, "sign_none_unwrap userid=NULL fails with EINVAL");
 
     free (good1);
 
@@ -326,9 +314,7 @@ void badarg (void)
 
     errno = 0;
     s = sign_none_wrap ("foo", -1, 1000);
-    ok (s == NULL && errno == EINVAL,
-        "sign_none_wrap payloadsz=-1 fails with EINVAL");
-
+    ok (s == NULL && errno == EINVAL, "sign_none_wrap payloadsz=-1 fails with EINVAL");
 }
 
 int main (int argc, char *argv[])

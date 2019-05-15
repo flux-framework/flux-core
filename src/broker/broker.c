@@ -36,11 +36,11 @@
 #include <sys/syscall.h>
 #endif
 #if HAVE_VALGRIND
-# if HAVE_VALGRIND_H
-#  include <valgrind.h>
-# elif HAVE_VALGRIND_VALGRIND_H
-#  include <valgrind/valgrind.h>
-# endif
+#if HAVE_VALGRIND_H
+#include <valgrind.h>
+#elif HAVE_VALGRIND_VALGRIND_H
+#include <valgrind/valgrind.h>
+#endif
 #endif
 
 #include "src/common/libutil/log.h"
@@ -85,7 +85,7 @@ typedef enum {
 typedef struct {
     /* 0MQ
      */
-    zsecurity_t *sec;             /* security context (MT-safe) */
+    zsecurity_t *sec; /* security context (MT-safe) */
 
     /* Reactor
      */
@@ -99,7 +99,7 @@ typedef struct {
     /* Session parameters
      */
     attr_t *attrs;
-    uint32_t userid;            /* instance owner */
+    uint32_t userid; /* instance owner */
     uint32_t rolemask;
 
     /* Modules
@@ -113,7 +113,7 @@ typedef struct {
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
-    zlist_t *subscriptions;     /* subscripts for internal services */
+    zlist_t *subscriptions; /* subscripts for internal services */
     content_cache_t *cache;
     struct publisher *publisher;
     int tbon_k;
@@ -128,7 +128,8 @@ typedef struct {
 
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
+static int broker_request_sendmsg (broker_ctx_t *ctx,
+                                   const flux_msg_t *msg,
                                    request_error_mode_t errmode);
 
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
@@ -137,25 +138,34 @@ static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg);
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
-static int load_module_byname (broker_ctx_t *ctx, const char *name,
-                               const char *argz, size_t argz_len,
+static int load_module_byname (broker_ctx_t *ctx,
+                               const char *name,
+                               const char *argz,
+                               size_t argz_len,
                                const flux_msg_t *request);
-static int unload_module_byname (broker_ctx_t *ctx, const char *name,
-                                 const flux_msg_t *request, bool async);
+static int unload_module_byname (broker_ctx_t *ctx,
+                                 const char *name,
+                                 const flux_msg_t *request,
+                                 bool async);
 
 static void set_proctitle (uint32_t rank);
-static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
-                         const char *state, void *arg);
-static void runlevel_io_cb (runlevel_t *r, const char *name,
-                            const char *msg, void *arg);
+static void runlevel_cb (runlevel_t *r,
+                         int level,
+                         int rc,
+                         double elapsed,
+                         const char *state,
+                         void *arg);
+static void runlevel_io_cb (runlevel_t *r,
+                            const char *name,
+                            const char *msg,
+                            void *arg);
 
 static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
@@ -172,33 +182,35 @@ static int exit_rc = 0;
 
 #define OPTIONS "+vM:X:k:s:g:EIS:"
 static const struct option longopts[] = {
-    {"verbose",         no_argument,        0, 'v'},
-    {"security",        required_argument,  0, 's'},
-    {"module-path",     required_argument,  0, 'X'},
-    {"k-ary",           required_argument,  0, 'k'},
-    {"heartrate",       required_argument,  0, 'H'},
-    {"shutdown-grace",  required_argument,  0, 'g'},
-    {"setattr",         required_argument,  0, 'S'},
+    {"verbose", no_argument, 0, 'v'},
+    {"security", required_argument, 0, 's'},
+    {"module-path", required_argument, 0, 'X'},
+    {"k-ary", required_argument, 0, 'k'},
+    {"heartrate", required_argument, 0, 'H'},
+    {"shutdown-grace", required_argument, 0, 'g'},
+    {"setattr", required_argument, 0, 'S'},
     {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-broker OPTIONS [initial-command ...]\n"
-" -v,--verbose                 Be annoyingly verbose\n"
-" -X,--module-path PATH        Set module search path (colon separated)\n"
-" -s,--security=plain|curve|none    Select security mode (default: curve)\n"
-" -k,--k-ary K                 Wire up in a k-ary tree\n"
-" -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
-" -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -S,--setattr ATTR=VAL        Set broker attribute\n"
-);
+             "Usage: flux-broker OPTIONS [initial-command ...]\n"
+             " -v,--verbose                 Be annoyingly verbose\n"
+             " -X,--module-path PATH        Set module search path (colon separated)\n"
+             " -s,--security=plain|curve|none    Select security mode (default: "
+             "curve)\n"
+             " -k,--k-ary K                 Wire up in a k-ary tree\n"
+             " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
+             " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
+             " -S,--setattr ATTR=VAL        Set broker attribute\n");
     exit (1);
 }
 
-void parse_command_line_arguments(int argc, char *argv[],
-                                  broker_ctx_t *ctx, int *sec_typemask)
+void parse_command_line_arguments (int argc,
+                                   char *argv[],
+                                   broker_ctx_t *ctx,
+                                   int *sec_typemask)
 {
     int c;
     int e;
@@ -206,61 +218,63 @@ void parse_command_line_arguments(int argc, char *argv[],
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-        case 's':   /* --security=MODE */
-            if (!strcmp (optarg, "none")) {
-                *sec_typemask = 0;
-            } else if (!strcmp (optarg, "plain")) {
-                *sec_typemask |= ZSECURITY_TYPE_PLAIN;
-                *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
-            } else if (!strcmp (optarg, "curve")) {
-                *sec_typemask |= ZSECURITY_TYPE_CURVE;
-                *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
-            } else {
-                log_msg_exit ("--security arg must be none|plain|curve");
+            case 's': /* --security=MODE */
+                if (!strcmp (optarg, "none")) {
+                    *sec_typemask = 0;
+                } else if (!strcmp (optarg, "plain")) {
+                    *sec_typemask |= ZSECURITY_TYPE_PLAIN;
+                    *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
+                } else if (!strcmp (optarg, "curve")) {
+                    *sec_typemask |= ZSECURITY_TYPE_CURVE;
+                    *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
+                } else {
+                    log_msg_exit ("--security arg must be none|plain|curve");
+                }
+                break;
+            case 'v': /* --verbose */
+                ctx->verbose = true;
+                break;
+            case 'X': /* --module-path PATH */
+                if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
+                    log_err_exit ("setting conf.module_path attribute");
+                break;
+            case 'k': /* --k-ary k */
+                errno = 0;
+                ctx->tbon_k = strtoul (optarg, &endptr, 10);
+                if (errno || *endptr != '\0')
+                    log_err_exit ("k-ary '%s'", optarg);
+                if (ctx->tbon_k < 1)
+                    usage ();
+                break;
+            case 'H': /* --heartrate SECS */
+                if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
+                    log_err_exit ("heartrate `%s'", optarg);
+                break;
+            case 'g': /* --shutdown-grace SECS */
+                if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
+                    log_err_exit ("shutdown-grace '%s'", optarg);
+                    usage ();
+                }
+                break;
+            case 'S': { /* --setattr ATTR=VAL */
+                char *val, *attr = xstrdup (optarg);
+                if ((val = strchr (attr, '=')))
+                    *val++ = '\0';
+                if (attr_add (ctx->attrs, attr, val, 0) < 0)
+                    if (attr_set (ctx->attrs, attr, val, true) < 0)
+                        log_err_exit ("setattr %s=%s", attr, val);
+                free (attr);
+                break;
             }
-            break;
-        case 'v':   /* --verbose */
-            ctx->verbose = true;
-            break;
-        case 'X':   /* --module-path PATH */
-            if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
-                log_err_exit ("setting conf.module_path attribute");
-            break;
-        case 'k':   /* --k-ary k */
-            errno = 0;
-            ctx->tbon_k = strtoul (optarg, &endptr, 10);
-            if (errno || *endptr != '\0')
-                log_err_exit ("k-ary '%s'", optarg);
-            if (ctx->tbon_k < 1)
+            default:
                 usage ();
-            break;
-        case 'H':   /* --heartrate SECS */
-            if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
-                log_err_exit ("heartrate `%s'", optarg);
-            break;
-        case 'g':   /* --shutdown-grace SECS */
-            if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
-                log_err_exit ("shutdown-grace '%s'", optarg);
-                usage ();
-            }
-            break;
-        case 'S': { /* --setattr ATTR=VAL */
-            char *val, *attr = xstrdup (optarg);
-            if ((val = strchr (attr, '=')))
-                *val++ = '\0';
-            if (attr_add (ctx->attrs, attr, val, 0) < 0)
-                if (attr_set (ctx->attrs, attr, val, true) < 0)
-                    log_err_exit ("setattr %s=%s", attr, val);
-            free (attr);
-            break;
-        }
-        default:
-            usage ();
         }
     }
     if (optind < argc) {
-        if ((e = argz_create (argv + optind, &ctx->init_shell_cmd,
-                              &ctx->init_shell_cmd_len)) != 0)
+        if ((e = argz_create (argv + optind,
+                              &ctx->init_shell_cmd,
+                              &ctx->init_shell_cmd_len))
+            != 0)
             log_errn_exit (e, "argz_create");
     }
 }
@@ -316,9 +330,9 @@ int main (int argc, char *argv[])
     if (!(ctx.publisher = publisher_create ()))
         oom ();
 
-    init_attrs (ctx.attrs, getpid());
+    init_attrs (ctx.attrs, getpid ());
 
-    parse_command_line_arguments(argc, argv, &ctx, &sec_typemask);
+    parse_command_line_arguments (argc, argv, &ctx, &sec_typemask);
 
     /* Record the instance owner: the effective uid of the broker.
      * Set default rolemask for messages sent with flux_send()
@@ -393,8 +407,11 @@ int main (int argc, char *argv[])
      */
     if (publisher_set_flux (ctx.publisher, ctx.h) < 0)
         log_err_exit ("publisher_set_flux");
-    if (publisher_set_sender (ctx.publisher, "handle_event",
-                              (publisher_send_f)handle_event, &ctx) < 0)
+    if (publisher_set_sender (ctx.publisher,
+                              "handle_event",
+                              (publisher_send_f)handle_event,
+                              &ctx)
+        < 0)
         log_err_exit ("publisher_set_sender");
 
     if (create_rundir (ctx.attrs) < 0)
@@ -418,8 +435,7 @@ int main (int argc, char *argv[])
     if (!strcmp (boot_method, "config")) {
         if (boot_config (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
             log_msg_exit ("bootstrap failed");
-    }
-    else if (!strcmp (boot_method, "pmi")) {
+    } else if (!strcmp (boot_method, "pmi")) {
         double elapsed_sec;
         struct timespec start_time;
         monotime (&start_time);
@@ -428,11 +444,10 @@ int main (int argc, char *argv[])
         elapsed_sec = monotime_since (start_time) / 1000;
         flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", elapsed_sec);
 
-    }
-    else
+    } else
         log_err_exit ("unknown boot method: %s", boot_method);
-    uint32_t rank = overlay_get_rank(ctx.overlay);
-    uint32_t size = overlay_get_size(ctx.overlay);
+    uint32_t rank = overlay_get_rank (ctx.overlay);
+    uint32_t size = overlay_get_size (ctx.overlay);
 
     assert (size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
@@ -472,7 +487,7 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (overlay_register_attrs(ctx.overlay, ctx.attrs) < 0)
+    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0)
         log_err_exit ("registering overlay attributes");
     if (hello_register_attrs (ctx.hello, ctx.attrs) < 0)
         log_err_exit ("configuring attributes");
@@ -598,7 +613,7 @@ int main (int argc, char *argv[])
         log_err_exit ("heartbeat_start");
     if (rank == 0 && ctx.verbose)
         log_msg ("installing session heartbeat: T=%0.1fs",
-                  heartbeat_get_rate (ctx.heartbeat));
+                 heartbeat_get_rate (ctx.heartbeat));
 
     /* Send hello message to parent.
      * N.B. uses tbon topology attributes set above.
@@ -678,20 +693,20 @@ int main (int argc, char *argv[])
 struct attrmap {
     const char *env;
     const char *attr;
-    uint8_t required:1;
+    uint8_t required : 1;
 };
 
 static struct attrmap attrmap[] = {
-    { "FLUX_EXEC_PATH",         "conf.exec_path",           1 },
-    { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1 },
-    { "FLUX_MODULE_PATH",       "conf.module_path",         1 },
-    { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1 },
-    { "FLUX_RC1_PATH",          "broker.rc1_path",          1 },
-    { "FLUX_RC3_PATH",          "broker.rc3_path",          1 },
-    { "FLUX_SEC_DIRECTORY",     "security.keydir",          1 },
+    {"FLUX_EXEC_PATH", "conf.exec_path", 1},
+    {"FLUX_CONNECTOR_PATH", "conf.connector_path", 1},
+    {"FLUX_MODULE_PATH", "conf.module_path", 1},
+    {"FLUX_PMI_LIBRARY_PATH", "conf.pmi_library_path", 1},
+    {"FLUX_RC1_PATH", "broker.rc1_path", 1},
+    {"FLUX_RC3_PATH", "broker.rc3_path", 1},
+    {"FLUX_SEC_DIRECTORY", "security.keydir", 1},
 
-    { "FLUX_URI",               "parent-uri",               0 },
-    { NULL, NULL, 0 },
+    {"FLUX_URI", "parent-uri", 0},
+    {NULL, NULL, 0},
 };
 
 static void init_attrs_from_environment (attr_t *attrs)
@@ -715,10 +730,7 @@ static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
     char *pidval;
 
     pidval = xasprintf ("%u", pid);
-    if (attr_add (attrs,
-                  attrname,
-                  pidval,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, attrname, pidval, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add %s", attrname);
     free (pidval);
 }
@@ -732,8 +744,8 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     /* Initialize other miscellaneous attrs
      */
     init_attrs_broker_pid (attrs, pid);
-    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
-                                            FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING, FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         log_err_exit ("attr_add version");
 }
 
@@ -742,17 +754,23 @@ static void hello_update_cb (hello_t *hello, void *arg)
     broker_ctx_t *ctx = arg;
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (complete) %.1fs",
-                  hello_get_count (hello), overlay_get_size(ctx->overlay),
+        flux_log (ctx->h,
+                  LOG_INFO,
+                  "wireup: %d/%d (complete) %.1fs",
+                  hello_get_count (hello),
+                  overlay_get_size (ctx->overlay),
                   hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         overlay_set_idle_warning (ctx->overlay, 3);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
         /* FIXME: shutdown hello protocol */
-    } else  {
-        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (incomplete) %.1fs",
-                  hello_get_count (hello), overlay_get_size(ctx->overlay),
+    } else {
+        flux_log (ctx->h,
+                  LOG_INFO,
+                  "wireup: %d/%d (incomplete) %.1fs",
+                  hello_get_count (hello),
+                  overlay_get_size (ctx->overlay),
                   hello_get_time (hello));
     }
 }
@@ -763,7 +781,7 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     broker_ctx_t *ctx = arg;
     if (expired) {
-        if (overlay_get_rank(ctx->overlay) == 0)
+        if (overlay_get_rank (ctx->overlay) == 0)
             exit_rc = shutdown_get_rc (s);
         flux_reactor_stop (flux_get_reactor (ctx->h));
     }
@@ -772,14 +790,13 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 static void set_proctitle (uint32_t rank)
 {
     static char proctitle[32];
-    snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
+    snprintf (proctitle, sizeof (proctitle), "flux-broker-%" PRIu32, rank);
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static void runlevel_io_cb (runlevel_t *r, const char *name,
-                            const char *msg, void *arg)
+static void runlevel_io_cb (runlevel_t *r, const char *name, const char *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int loglevel = !strcmp (name, "STDERR") ? LOG_ERR : LOG_INFO;
@@ -790,28 +807,43 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 /* Handle completion of runlevel subprocess.
  */
-static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
-                         const char *exit_string, void *arg)
+static void runlevel_cb (runlevel_t *r,
+                         int level,
+                         int rc,
+                         double elapsed,
+                         const char *exit_string,
+                         void *arg)
 {
     broker_ctx_t *ctx = arg;
     int new_level = -1;
 
-    flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
-              "Run level %d %s (rc=%d) %.1fs", level, exit_string, rc, elapsed);
+    flux_log (ctx->h,
+              rc == 0 ? LOG_INFO : LOG_ERR,
+              "Run level %d %s (rc=%d) %.1fs",
+              level,
+              exit_string,
+              rc,
+              elapsed);
 
     switch (level) {
         case 1: /* init completed */
             if (rc != 0) {
                 new_level = 3;
-                shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
-                              rc, "run level 1 %s", exit_string);
+                shutdown_arm (ctx->shutdown,
+                              ctx->shutdown_grace,
+                              rc,
+                              "run level 1 %s",
+                              exit_string);
             } else
                 new_level = 2;
             break;
         case 2: /* initial program completed */
             new_level = 3;
-            shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
-                          rc, "run level 2 %s", exit_string);
+            shutdown_arm (ctx->shutdown,
+                          ctx->shutdown_grace,
+                          rc,
+                          "run level 2 %s",
+                          exit_string);
             break;
         case 3: /* finalization completed */
             break;
@@ -826,12 +858,12 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
 {
     char *s;
-    s = xasprintf ("%"PRIu32, rank);
+    s = xasprintf ("%" PRIu32, rank);
     if (flux_attr_set_cacheonly (h, "rank", s) < 0)
         return -1;
     free (s);
 
-    s = xasprintf ("%"PRIu32, size);
+    s = xasprintf ("%" PRIu32, size);
     if (flux_attr_set_cacheonly (h, "size", s) < 0)
         return -1;
     free (s);
@@ -870,8 +902,7 @@ static int create_rundir (attr_t *attrs)
             goto done;
         if (attr_add (attrs, "rundir", run_dir, 0) < 0)
             goto done;
-    }
-    else if (mkdir (run_dir, 0700) < 0) {
+    } else if (mkdir (run_dir, 0700) < 0) {
         if (errno != EEXIST)
             goto done;
         /* Do not cleanup directory if we did not create it here
@@ -922,8 +953,7 @@ void create_broker_rundir (overlay_t *ov, void *arg)
         log_err_exit ("create_broker_rundir: asprintf");
     if (mkdir (broker_rundir, 0700) < 0)
         log_err_exit ("create_broker_rundir: mkdir (%s)", broker_rundir);
-    if (attr_add (attrs, "broker.rundir", broker_rundir,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "broker.rundir", broker_rundir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("create_broker_rundir: attr_add broker.rundir");
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
@@ -951,8 +981,8 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
     int rc = -1;
 
     if (rank > 0) {
-        (void) attr_delete (attrs, "persist-filesystem", true);
-        (void) attr_delete (attrs, "persist-directory", true);
+        (void)attr_delete (attrs, "persist-filesystem", true);
+        (void)attr_delete (attrs, "persist-directory", true);
         goto done_success;
     }
     if (attr_get (attrs, attr, &persist_dir, NULL) == 0) {
@@ -973,7 +1003,7 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
             errno = EINVAL;
             goto done;
         }
-        if (attr_get (attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
+        if (attr_get (attrs, "persist-filesystem", &persist_fs, NULL) < 0) {
             goto done_success;
         }
         if (stat (persist_fs, &sb) < 0)
@@ -986,8 +1016,7 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (attrs, "persist-filesystem",
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs, "persist-filesystem", FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         tmpl = xasprintf ("%s/fluxP-%s-XXXXXX", persist_fs, sid);
         if (!(dir = mkdtemp (tmpl)))
@@ -997,13 +1026,11 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
     }
 done_success:
     if (attr_get (attrs, "persist-filesystem", NULL, NULL) < 0) {
-        if (attr_add (attrs, "persist-filesystem", NULL,
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, "persist-filesystem", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
     if (attr_get (attrs, "persist-directory", NULL, NULL) < 0) {
-        if (attr_add (attrs, "persist-directory", NULL,
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, "persist-directory", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
     rc = 0;
@@ -1044,9 +1071,10 @@ static void module_dlerror (const char *errmsg, void *arg)
     flux_log (h, LOG_DEBUG, "flux_modname: %s", errmsg);
 }
 
-
-static int load_module_bypath (broker_ctx_t *ctx, const char *path,
-                               const char *argz, size_t argz_len,
+static int load_module_bypath (broker_ctx_t *ctx,
+                               const char *path,
+                               const char *argz,
+                               size_t argz_len,
                                const flux_msg_t *request)
 {
     module_t *p = NULL;
@@ -1058,8 +1086,12 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto error;
-    if (service_add (ctx->services, module_get_name (p),
-                                    module_get_uuid (p), mod_svc_cb, p) < 0)
+    if (service_add (ctx->services,
+                     module_get_name (p),
+                     module_get_uuid (p),
+                     mod_svc_cb,
+                     p)
+        < 0)
         goto module_remove;
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
@@ -1068,7 +1100,7 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     }
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
-    if (request && module_push_insmod (p, request) < 0) // response deferred
+    if (request && module_push_insmod (p, request) < 0)  // response deferred
         goto service_remove;
     if (module_start (p) < 0)
         goto service_remove;
@@ -1084,8 +1116,10 @@ error:
     return -1;
 }
 
-static int load_module_byname (broker_ctx_t *ctx, const char *name,
-                               const char *argz, size_t argz_len,
+static int load_module_byname (broker_ctx_t *ctx,
+                               const char *name,
+                               const char *argz,
+                               size_t argz_len,
                                const flux_msg_t *request)
 {
     const char *modpath;
@@ -1115,8 +1149,10 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
  * from handling other events.  If 'async' is false, do all that
  * teardown synchronously here.
  */
-static int unload_module_byname (broker_ctx_t *ctx, const char *name,
-                                 const flux_msg_t *request, bool async)
+static int unload_module_byname (broker_ctx_t *ctx,
+                                 const char *name,
+                                 const flux_msg_t *request,
+                                 bool async)
 {
     module_t *p;
 
@@ -1140,8 +1176,7 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
 
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 {
-    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
-                      SIGALRM };
+    int i, sigs[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE, SIGALRM};
     flux_watcher_t *w;
 
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
@@ -1173,8 +1208,10 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
  * N.B. unload_module_byname() handles response, unless it fails early
  * and returns -1.
  */
-static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void cmb_rmmod_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1193,8 +1230,10 @@ error:
  * Message format is defined by RFC 5.
  * N.B. load_module_bypath() handles response, unless it returns -1.
  */
-static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void cmb_insmod_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *path;
@@ -1205,12 +1244,12 @@ static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
     size_t argz_len = 0;
     error_t e;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
-                                                     "args", &args) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path, "args", &args) < 0)
         goto error;
     if (!json_is_array (args))
         goto proto;
-    json_array_foreach (args, index, value) {
+    json_array_foreach (args, index, value)
+    {
         if (!json_is_string (value))
             goto proto;
         if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
@@ -1233,8 +1272,10 @@ error:
 /* Load a comms module by name.
  * Message format is defined by RFC 5.
  */
-static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void cmb_lsmod_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     broker_ctx_t *ctx = arg;
     json_t *mods = NULL;
@@ -1252,8 +1293,10 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void cmb_lspeer_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     broker_ctx_t *ctx = arg;
     char *out;
@@ -1272,15 +1315,16 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
 void __gcov_flush (void);
 #endif
 
-static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void cmb_panic_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     const char *reason;
-    int flags; // reserved
+    int flags;  // reserved
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
-                             "reason", &reason,
-                             "flags", &flags) < 0) {
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "reason", &reason, "flags", &flags)
+        < 0) {
         flux_log_error (h, "malformed cmb.panic request");
         return;
     }
@@ -1292,8 +1336,10 @@ static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
     /*NOTREACHED*/
 }
 
-static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void cmb_disconnect_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     char *sender = NULL;
 
@@ -1304,8 +1350,10 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     /* no response */
 }
 
-static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+static void cmb_sub_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     broker_ctx_t *ctx = arg;
     char *uuid = NULL;
@@ -1331,8 +1379,10 @@ error:
     free (uuid);
 }
 
-static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void cmb_unsub_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     broker_ctx_t *ctx = arg;
     char *uuid = NULL;
@@ -1370,8 +1420,10 @@ static int route_to_handle (const flux_msg_t *msg, void *arg)
  * These handlers need to appear in broker.c so that they have
  *  access to broker internals like modhash
  */
-static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
-                            const flux_msg_t *msg, void *arg)
+static void service_add_cb (flux_t *h,
+                            flux_msg_handler_t *w,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name = NULL;
@@ -1398,8 +1450,10 @@ error:
     free (sender);
 }
 
-static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
+static void service_remove_cb (flux_t *h,
+                               flux_msg_handler_t *w,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1429,18 +1483,17 @@ error:
     free (sender);
 }
 
-
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "service.add",    service_add_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "service.remove", service_remove_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "cmb.rmmod", cmb_rmmod_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.insmod", cmb_insmod_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.lsmod", cmb_lsmod_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.lspeer", cmb_lspeer_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.panic", cmb_panic_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.sub", cmb_sub_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "cmb.unsub", cmb_unsub_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "service.add", service_add_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "service.remove", service_remove_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1450,16 +1503,19 @@ struct internal_service {
 };
 
 static struct internal_service services[] = {
-    { "cmb",                NULL }, // kind of a catch-all, slowly deprecating
-    { "log",                NULL },
-    { "seq",                "[0]" },
-    { "content",            NULL },
-    { "hello",              NULL },
-    { "attr",               NULL },
-    { "heaptrace",          NULL },
-    { "event",              "[0]" },
-    { "service",            NULL },
-    { NULL, NULL, },
+    {"cmb", NULL},  // kind of a catch-all, slowly deprecating
+    {"log", NULL},
+    {"seq", "[0]"},
+    {"content", NULL},
+    {"hello", NULL},
+    {"attr", NULL},
+    {"heaptrace", NULL},
+    {"event", "[0]"},
+    {"service", NULL},
+    {
+        NULL,
+        NULL,
+    },
 };
 
 /* Register builtin services (sharing ctx->h and broker thread).
@@ -1471,10 +1527,9 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
     flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
-        if (!nodeset_member (svc->nodeset, overlay_get_rank(ctx->overlay)))
+        if (!nodeset_member (svc->nodeset, overlay_get_rank (ctx->overlay)))
             continue;
-        if (service_add (ctx->services, svc->name, NULL,
-                          route_to_handle, ctx) < 0)
+        if (service_add (ctx->services, svc->name, NULL, route_to_handle, ctx) < 0)
             log_err_exit ("error registering service for %s", svc->name);
     }
 
@@ -1493,7 +1548,6 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
 /**
  ** reactor callbacks
  **/
-
 
 /* Handle requests from overlay peers.
  */
@@ -1551,13 +1605,12 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     uint32_t seq;
     const char *topic, *s;
 
-    if (flux_msg_get_seq (msg, &seq) < 0
-            || flux_msg_get_topic (msg, &topic) < 0) {
+    if (flux_msg_get_seq (msg, &seq) < 0 || flux_msg_get_topic (msg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
     if (seq <= ctx->event_recv_seq) {
-        //flux_log (ctx->h, LOG_DEBUG, "dropping duplicate event %d", seq);
+        // flux_log (ctx->h, LOG_DEBUG, "dropping duplicate event %d", seq);
         return -1;
     }
     if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
@@ -1620,7 +1673,10 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
             (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         default:
-            flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "%s: unexpected %s",
+                      __FUNCTION__,
                       flux_msg_typestr (type));
             break;
     }
@@ -1650,14 +1706,17 @@ static void module_cb (module_t *p, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, msg) < 0) {
-                flux_log_error (ctx->h, "%s(%s): broker_event_sendmsg %s",
-                                __FUNCTION__, module_get_name (p),
+                flux_log_error (ctx->h,
+                                "%s(%s): broker_event_sendmsg %s",
+                                __FUNCTION__,
+                                module_get_name (p),
                                 flux_msg_typestr (type));
             }
             break;
         case FLUX_MSGTYPE_KEEPALIVE:
             if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
-                flux_log_error (ctx->h, "%s: flux_keepalive_decode",
+                flux_log_error (ctx->h,
+                                "%s: flux_keepalive_decode",
                                 module_get_name (p));
                 break;
             }
@@ -1666,8 +1725,11 @@ static void module_cb (module_t *p, void *arg)
             module_set_status (p, ka_status);
             break;
         default:
-            flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
-                      __FUNCTION__, module_get_name (p),
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "%s(%s): unexpected %s",
+                      __FUNCTION__,
+                      module_get_name (p),
                       flux_msg_typestr (type));
             break;
     }
@@ -1718,14 +1780,17 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     }
 }
 
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
 
-    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
-                  "signal %d (%s)", signum, strsignal (signum));
+    shutdown_arm (ctx->shutdown,
+                  ctx->shutdown_grace,
+                  0,
+                  "signal %d (%s)",
+                  signum,
+                  strsignal (signum));
 }
 
 /* TRICKY:  Fix up ROUTER socket used in reverse direction.
@@ -1738,7 +1803,8 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
  * sending end by pushing the identity of the sender onto the stack,
  * followed by the identity of the peer we want to route the message to.
  */
-static int subvert_sendmsg_child (broker_ctx_t *ctx, const flux_msg_t *msg,
+static int subvert_sendmsg_child (broker_ctx_t *ctx,
+                                  const flux_msg_t *msg,
                                   uint32_t nodeid)
 {
     flux_msg_t *cpy = flux_msg_copy (msg, true);
@@ -1746,10 +1812,10 @@ static int subvert_sendmsg_child (broker_ctx_t *ctx, const flux_msg_t *msg,
     char uuid[16];
     int rc = -1;
 
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, overlay_get_rank(ctx->overlay));
+    snprintf (uuid, sizeof (uuid), "%" PRIu32, overlay_get_rank (ctx->overlay));
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
+    snprintf (uuid, sizeof (uuid), "%" PRIu32, nodeid);
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
     if (overlay_sendmsg_child (ctx->overlay, cpy) < 0)
@@ -1771,14 +1837,15 @@ done:
  *    any local errors do not trigger a response, and function
  *    returns -1 with errno set.
  */
-static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
+static int broker_request_sendmsg (broker_ctx_t *ctx,
+                                   const flux_msg_t *msg,
                                    request_error_mode_t errmode)
 {
     uint32_t nodeid, gw;
     uint8_t flags;
     int rc = -1;
-    uint32_t rank = overlay_get_rank(ctx->overlay);
-    uint32_t size = overlay_get_size(ctx->overlay);
+    uint32_t rank = overlay_get_rank (ctx->overlay);
+    uint32_t size = overlay_get_size (ctx->overlay);
     const char *topic;
     char errbuf[64];
     const char *errstr = NULL;
@@ -1815,8 +1882,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
         rc = service_send (ctx->services, msg);
         if (rc < 0)
             goto error;
-    } else if ((gw = kary_child_route (ctx->tbon_k, size, rank, nodeid))
-               != KARY_NONE) {
+    } else if ((gw = kary_child_route (ctx->tbon_k, size, rank, nodeid)) != KARY_NONE) {
         rc = subvert_sendmsg_child (ctx, msg, gw);
         if (rc < 0)
             goto error;
@@ -1828,8 +1894,10 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
     return 0;
 nosys:
     errno = ENOSYS;
-    (void)snprintf (errbuf, sizeof (errbuf),
-                    "No service matching %s is registered", topic);
+    (void)snprintf (errbuf,
+                    sizeof (errbuf),
+                    "No service matching %s is registered",
+                    topic);
     errstr = errbuf;
 error:
     if (errmode == ERROR_MODE_RETURN)
@@ -1856,8 +1924,8 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    parent = kary_parentof (ctx->tbon_k, overlay_get_rank(ctx->overlay));
-    snprintf (puuid, sizeof (puuid), "%"PRIu32, parent);
+    parent = kary_parentof (ctx->tbon_k, overlay_get_rank (ctx->overlay));
+    snprintf (puuid, sizeof (puuid), "%" PRIu32, parent);
 
     /* See if it should go to the parent (backwards!)
      * (receiving end will compensate for reverse ROUTER behavior)
@@ -1884,8 +1952,7 @@ done:
  */
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
-
-    if (overlay_get_rank(ctx->overlay) > 0) {
+    if (overlay_get_rank (ctx->overlay) > 0) {
         flux_msg_t *cpy;
         if (!(cpy = flux_msg_copy (msg, true)))
             return -1;
@@ -1992,11 +2059,12 @@ static const struct flux_handle_ops broker_handle_ops = {
     .event_unsubscribe = broker_unsubscribe,
 };
 
-
 #if HAVE_VALGRIND
 /* Disable dlclose() during valgrind operation
  */
-void I_WRAP_SONAME_FNNAME_ZZ(Za,dlclose)(void *dso) {}
+void I_WRAP_SONAME_FNNAME_ZZ (Za, dlclose) (void *dso)
+{
+}
 #endif
 
 /*

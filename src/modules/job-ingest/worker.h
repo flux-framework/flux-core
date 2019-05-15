@@ -21,9 +21,10 @@ int worker_queue_depth (struct worker *w);
 bool worker_is_running (struct worker *w);
 
 void worker_destroy (struct worker *w);
-struct worker *worker_create (flux_t *h, double inactivity_timeout,
-                              int argc, char **argv);
-
+struct worker *worker_create (flux_t *h,
+                              double inactivity_timeout,
+                              int argc,
+                              char **argv);
 
 #endif /* !_JOB_INGEST_VALIDATE_H */
 

@@ -15,17 +15,17 @@
 #include <flux/core.h>
 
 enum {
-    FLUX_ATTRFLAG_IMMUTABLE = 1,    /* attribute is cacheable */
-    FLUX_ATTRFLAG_READONLY = 2,     /* attribute cannot be written */
-                                    /*   but may change on broker */
-    FLUX_ATTRFLAG_ACTIVE = 4,       /* attribute has get and/or set callbacks */
+    FLUX_ATTRFLAG_IMMUTABLE = 1, /* attribute is cacheable */
+    FLUX_ATTRFLAG_READONLY = 2,  /* attribute cannot be written */
+                                 /*   but may change on broker */
+    FLUX_ATTRFLAG_ACTIVE = 4,    /* attribute has get and/or set callbacks */
 };
 
 /* Callbacks for active values.  Return 0 on succes, -1 on eror with
  * errno set.  Errors are propagated to the return of attr_set() and attr_get().
  */
-typedef int (*attr_get_f)(const char *name, const char **val, void *arg);
-typedef int (*attr_set_f)(const char *name, const char *val, void *arg);
+typedef int (*attr_get_f) (const char *name, const char **val, void *arg);
+typedef int (*attr_set_f) (const char *name, const char *val, void *arg);
 
 typedef struct attr_struct attr_t;
 
@@ -51,8 +51,7 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags);
  *  to a string on the caller's behalf.
  */
 int attr_add_int (attr_t *attrs, const char *name, int val, int flags);
-int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val,
-                     int flags);
+int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val, int flags);
 
 /* Get/set an attribute.
  */
@@ -66,15 +65,17 @@ int attr_set_flags (attr_t *attrs, const char *name, int flags);
 
 /* Add an attribute with callbacks for get/set.
  */
-int attr_add_active (attr_t *attrs, const char *name, int flags,
-                     attr_get_f get, attr_set_f set, void *arg);
+int attr_add_active (attr_t *attrs,
+                     const char *name,
+                     int flags,
+                     attr_get_f get,
+                     attr_set_f set,
+                     void *arg);
 
 /* Add an attribute that tracks an integer value
  */
-int attr_add_active_int (attr_t *attrs, const char *name, int *val,
-                         int flags);
-int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,
-                            int flags);
+int attr_add_active_int (attr_t *attrs, const char *name, int *val, int flags);
+int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val, int flags);
 
 /* Iterate over attribute names with internal cursor.
  */

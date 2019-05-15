@@ -38,39 +38,38 @@ struct watcher {
     int flags;                  // kvs_lookup flags
     zlist_t *lookups;           // list of futures, in commit order
 
-    struct ns_monitor *nsm;     // back pointer for removal
-    json_t *prev;               // previous watch value for KVS_WATCH_FULL/UNIQ
-    int append_offset;          // offset for KVS_WATCH_APPEND
+    struct ns_monitor *nsm;  // back pointer for removal
+    json_t *prev;            // previous watch value for KVS_WATCH_FULL/UNIQ
+    int append_offset;       // offset for KVS_WATCH_APPEND
 };
 
 /* Current KVS root.
  */
 struct commit {
-    char *rootref;              // current root blobref
-    int rootseq;                // current root sequence number
-    json_t *keys;               // keys changed by commit
-                                //  empty if data originates from getroot RPC
-                                //  or kvs.namespace-created event
+    char *rootref;  // current root blobref
+    int rootseq;    // current root sequence number
+    json_t *keys;   // keys changed by commit
+                    //  empty if data originates from getroot RPC
+                    //  or kvs.namespace-created event
 };
-
 
 /* State for monitoring a KVS namespace.
  */
 struct ns_monitor {
-    char *ns_name;              // namespace name, hash key for ctx->namespaces
-    uint32_t owner;             // namespace owner (userid)
-    struct commit *commit;      // current commit data
-    int fatal_errnum;           // non-skippable error pending for all watchers
-    int errnum;                 // if non-zero, error pending for all watchers
-    struct watch_ctx *ctx;      // back-pointer to watch_ctx
-    zlist_t *watchers;          // list of watchers of this namespace
-    char *setroot_topic;        // topic string for setroot subscription
-    bool setroot_subscribed;    // setroot subscription active
-    char *created_topic;        // topic string for kvs.namespace-created
-    bool created_subscribed;    // kvs.namespace-created subscription active
-    char *removed_topic;        // topic string for kvs.namespace-removed
-    bool removed_subscribed;    // kvs.namespace-removed subscription active
-    flux_future_t *getrootf;    // initial getroot future
+    char *ns_name;            // namespace name, hash key for ctx->namespaces
+    uint32_t owner;           // namespace owner (userid)
+    struct commit *commit;    // current commit data
+    int fatal_errnum;         // non-skippable error pending for all watchers
+    int errnum;               // if non-zero, error pending for all watchers
+    struct watch_ctx *ctx;    // back-pointer to watch_ctx
+    zlist_t *watchers;        // list of watchers of this namespace
+    char *setroot_topic;      // topic string for setroot subscription
+    bool setroot_subscribed;  // setroot subscription active
+    char *created_topic;      // topic string for kvs.namespace-created
+    bool created_subscribed;  // kvs.namespace-created subscription active
+    char *removed_topic;      // topic string for kvs.namespace-removed
+    bool removed_subscribed;  // kvs.namespace-removed subscription active
+    flux_future_t *getrootf;  // initial getroot future
 };
 
 /* Module state.
@@ -78,7 +77,7 @@ struct ns_monitor {
 struct watch_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
-    zhash_t *namespaces;        // hash of monitored namespaces
+    zhash_t *namespaces;  // hash of monitored namespaces
 };
 
 static void watcher_destroy (struct watcher *w)
@@ -99,7 +98,8 @@ static void watcher_destroy (struct watcher *w)
     }
 }
 
-static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
+static struct watcher *watcher_create (const flux_msg_t *msg,
+                                       const char *key,
                                        int flags)
 {
     struct watcher *w;
@@ -109,7 +109,7 @@ static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
     if (!(w->request = flux_msg_copy (msg, true)))
         goto error;
     if (flux_msg_get_rolemask (msg, &w->rolemask) < 0
-            || flux_msg_get_userid (msg, &w->userid) < 0)
+        || flux_msg_get_userid (msg, &w->userid) < 0)
         goto error;
     if (!(w->key = kvs_util_normalize_key (key, NULL)))
         goto error;
@@ -137,8 +137,7 @@ static void commit_destroy (struct commit *commit)
     }
 }
 
-static struct commit *commit_create (const char *rootref, int rootseq,
-                                     json_t *keys)
+static struct commit *commit_create (const char *rootref, int rootseq, json_t *keys)
 {
     struct commit *commit = calloc (1, sizeof (*commit));
     if (!commit)
@@ -180,8 +179,7 @@ static void namespace_destroy (struct ns_monitor *nsm)
     }
 }
 
-static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
-                                            const char *ns)
+static struct ns_monitor *namespace_create (struct watch_ctx *ctx, const char *ns)
 {
     struct ns_monitor *nsm = calloc (1, sizeof (*nsm));
     if (!nsm)
@@ -218,7 +216,8 @@ error:
  * All others are denied (return -1, errno == EPERM).
  */
 static int check_authorization (struct ns_monitor *nsm,
-                                uint32_t rolemask, uint32_t userid)
+                                uint32_t rolemask,
+                                uint32_t userid)
 {
     if ((rolemask & FLUX_ROLE_OWNER))
         return 0;
@@ -236,7 +235,8 @@ static bool array_match (json_t *a, const char *key)
     size_t index;
     json_t *value;
 
-    json_array_foreach (a, index, value) {
+    json_array_foreach (a, index, value)
+    {
         const char *s = json_string_value (value);
         if (s && !strcmp (s, key))
             return true;
@@ -252,8 +252,7 @@ static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
         watcher_destroy (w);
     }
     /* if nsm->getrootf, destroy when getroot_continuation completes */
-    if (zlist_size (nsm->watchers) == 0
-        && !nsm->getrootf)
+    if (zlist_size (nsm->watchers) == 0 && !nsm->getrootf)
         zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
 
@@ -264,14 +263,11 @@ static int handle_initial_response (flux_t *h,
 {
     /* this is the first response case, store the first response
      * val */
-    if ((w->flags & FLUX_KVS_WATCH_FULL)
-        || (w->flags & FLUX_KVS_WATCH_UNIQ))
+    if ((w->flags & FLUX_KVS_WATCH_FULL) || (w->flags & FLUX_KVS_WATCH_UNIQ))
         w->prev = json_incref (val);
 
     if ((w->flags & FLUX_KVS_WATCH_APPEND)) {
-        if (treeobj_decode_val (val,
-                                NULL,
-                                &w->append_offset) < 0) {
+        if (treeobj_decode_val (val, NULL, &w->append_offset) < 0) {
             flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
             return -1;
         }
@@ -287,9 +283,7 @@ static int handle_initial_response (flux_t *h,
     return 0;
 }
 
-static int handle_compare_response (flux_t *h,
-                                    struct watcher *w,
-                                    json_t *val)
+static int handle_compare_response (flux_t *h, struct watcher *w, json_t *val)
 {
     if (!w->responded) {
         /* this is the first response case, store the first response
@@ -303,8 +297,7 @@ static int handle_compare_response (flux_t *h,
         }
 
         w->responded = true;
-    }
-    else {
+    } else {
         /* not first response case, compare to previous to see if
          * respond should be done, update if necessary */
         if (json_equal (w->prev, val))
@@ -322,17 +315,13 @@ static int handle_compare_response (flux_t *h,
     return 0;
 }
 
-static int handle_append_response (flux_t *h,
-                                    struct watcher *w,
-                                    json_t *val)
+static int handle_append_response (flux_t *h, struct watcher *w, json_t *val)
 {
     if (!w->responded) {
         /* this is the first response case, store the first response
          * info.  This is here b/c initial response could have been
          * ENOENT case */
-        if (treeobj_decode_val (val,
-                                NULL,
-                                &w->append_offset) < 0) {
+        if (treeobj_decode_val (val, NULL, &w->append_offset) < 0) {
             flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
             return -1;
         }
@@ -343,15 +332,12 @@ static int handle_append_response (flux_t *h,
         }
 
         w->responded = true;
-    }
-    else {
+    } else {
         json_t *new_val = NULL;
         void *new_data = NULL;
         int new_offset;
 
-        if (treeobj_decode_val (val,
-                                &new_data,
-                                &new_offset) < 0) {
+        if (treeobj_decode_val (val, &new_data, &new_offset) < 0) {
             flux_log_error (h, "%s: treeobj_decode_val", __FUNCTION__);
             return -1;
         }
@@ -388,9 +374,7 @@ static int handle_append_response (flux_t *h,
     return 0;
 }
 
-static int handle_normal_response (flux_t *h,
-                                   struct watcher *w,
-                                   json_t *val)
+static int handle_normal_response (flux_t *h, struct watcher *w, json_t *val)
 {
     if (flux_respond_pack (h, w->request, "{ s:O }", "val", val) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
@@ -408,8 +392,7 @@ static int handle_normal_response (flux_t *h,
  * Special handling done for FLUX_KVS_WATCH_FULL/UNIQ/APPEND, must do
  * some comparisons before returning.
  */
-static void handle_lookup_response (flux_future_t *f,
-                                    struct watcher *w)
+static void handle_lookup_response (flux_future_t *f, struct watcher *w)
 {
     flux_t *h = flux_future_get_flux (f);
     int errnum;
@@ -417,16 +400,17 @@ static void handle_lookup_response (flux_future_t *f,
     json_t *val;
 
     if (flux_future_aux_get (f, "initial")) {
-
         w->initial_rpc_received = true;
 
         /* First check for ENOENT */
-        if (!flux_rpc_get_unpack (f, "{ s:i s:i }",
-                                  "errno", &errnum,
-                                  "rootseq", &root_seq)) {
+        if (!flux_rpc_get_unpack (f,
+                                  "{ s:i s:i }",
+                                  "errno",
+                                  &errnum,
+                                  "rootseq",
+                                  &root_seq)) {
             assert (errnum == ENOENT);
-            if ((w->flags & FLUX_KVS_WAITCREATE)
-                && w->responded == false) {
+            if ((w->flags & FLUX_KVS_WAITCREATE) && w->responded == false) {
                 w->initial_rootseq = root_seq;
                 return;
             }
@@ -434,9 +418,8 @@ static void handle_lookup_response (flux_future_t *f,
             goto error;
         }
 
-        if (flux_rpc_get_unpack (f, "{ s:o s:i }",
-                                 "val", &val,
-                                 "rootseq", &root_seq) < 0) {
+        if (flux_rpc_get_unpack (f, "{ s:o s:i }", "val", &val, "rootseq", &root_seq)
+            < 0) {
             /* It is worth mentioning ENOTSUP error conditions here.
              *
              * Recall that in namespace_monitor(), an initial getroot
@@ -459,20 +442,21 @@ static void handle_lookup_response (flux_future_t *f,
 
         if (handle_initial_response (h, w, val, root_seq) < 0)
             goto error;
-    }
-    else {
+    } else {
         /* First check for ENOENT */
-        if (!flux_rpc_get_unpack (f, "{ s:i s:i }",
-                                  "errno", &errnum,
-                                  "rootseq", &root_seq)) {
+        if (!flux_rpc_get_unpack (f,
+                                  "{ s:i s:i }",
+                                  "errno",
+                                  &errnum,
+                                  "rootseq",
+                                  &root_seq)) {
             assert (errnum == ENOENT);
             errno = errnum;
             goto error;
         }
 
-        if (flux_rpc_get_unpack (f, "{ s:o s:i }",
-                                 "val", &val,
-                                 "rootseq", &root_seq) < 0)
+        if (flux_rpc_get_unpack (f, "{ s:o s:i }", "val", &val, "rootseq", &root_seq)
+            < 0)
             goto error;
 
         /* if we got some setroots before the initial rpc returned,
@@ -481,16 +465,13 @@ static void handle_lookup_response (flux_future_t *f,
             return;
 
         if (!w->mute) {
-            if ((w->flags & FLUX_KVS_WATCH_FULL)
-                || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
+            if ((w->flags & FLUX_KVS_WATCH_FULL) || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
                 if (handle_compare_response (h, w, val) < 0)
                     goto error;
-            }
-            else if (w->flags & FLUX_KVS_WATCH_APPEND) {
+            } else if (w->flags & FLUX_KVS_WATCH_APPEND) {
                 if (handle_append_response (h, w, val) < 0)
                     goto error;
-            }
-            else {
+            } else {
                 if (handle_normal_response (h, w, val) < 0)
                     goto error;
             }
@@ -523,8 +504,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
          * one response and being done.  We can use the responded flag
          * to indicate that condition.
          */
-        if (w->responded
-            && (w->flags & FLUX_KVS_WAITCREATE)
+        if (w->responded && (w->flags & FLUX_KVS_WAITCREATE)
             && !(w->flags & FLUX_KVS_WATCH))
             w->finished = true;
     }
@@ -554,20 +534,30 @@ static flux_future_t *lookupat (flux_t *h,
     if (!(msg = flux_request_encode ("kvs.lookup-plus", NULL)))
         return NULL;
     if (!w->initial_rpc_sent) {
-        if (flux_msg_pack (msg, "{s:s s:s s:i}",
-                           "key", w->key,
-                           "namespace", ns,
-                           "flags", w->flags) < 0)
+        if (flux_msg_pack (msg,
+                           "{s:s s:s s:i}",
+                           "key",
+                           w->key,
+                           "namespace",
+                           ns,
+                           "flags",
+                           w->flags)
+            < 0)
             goto error;
-    }
-    else {
+    } else {
         if (!(o = treeobj_create_dirref (blobref)))
             goto error;
-        if (flux_msg_pack (msg, "{s:s s:i s:i s:O}",
-                           "key", w->key,
-                           "flags", w->flags,
-                           "rootseq", root_seq,
-                           "rootdir", o) < 0)
+        if (flux_msg_pack (msg,
+                           "{s:s s:i s:i s:O}",
+                           "key",
+                           w->key,
+                           "flags",
+                           w->flags,
+                           "rootseq",
+                           root_seq,
+                           "rootdir",
+                           o)
+            < 0)
             goto error;
     }
     /* N.B. Since this module is authenticated to the shmem:// connector
@@ -648,8 +638,7 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
     if (nsm->errnum != 0) {
         /* if namespace not yet created, don't return error to user if
          * they want to wait */
-        if ((w->flags & FLUX_KVS_WAITCREATE)
-            && nsm->errnum == ENOTSUP
+        if ((w->flags & FLUX_KVS_WAITCREATE) && nsm->errnum == ENOTSUP
             && w->responded == false) {
             nsm->errnum = 0;
             return;
@@ -685,8 +674,7 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
      * Note on FLUX_KVS_WATCH_FULL: A lookup / comparison is done on every
      * change.
      */
-    if (w->rootseq == -1
-        || (w->flags & FLUX_KVS_WATCH_FULL)
+    if (w->rootseq == -1 || (w->flags & FLUX_KVS_WATCH_FULL)
         || array_match (nsm->commit->keys, w->key)) {
         if (process_lookup_response (nsm, w) < 0)
             goto error_respond;
@@ -719,8 +707,7 @@ static void watcher_respond_ns (struct ns_monitor *nsm)
             w = zlist_next (l);
         }
         zlist_destroy (&l);
-    }
-    else
+    } else
         flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
@@ -728,15 +715,17 @@ static void watcher_respond_ns (struct ns_monitor *nsm)
  * matchtag=FLUX_MATCHTAG_NONE matches any matchtag.
  * If 'mute' is true, suppress response (e.g. for disconnect handling).
  */
-static void watcher_cancel (struct ns_monitor *nsm, struct watcher *w,
-                            const char *sender, uint32_t matchtag,
+static void watcher_cancel (struct ns_monitor *nsm,
+                            struct watcher *w,
+                            const char *sender,
+                            uint32_t matchtag,
                             bool mute)
 {
     uint32_t t;
     char *s;
 
     if (matchtag != FLUX_MATCHTAG_NONE
-            && (flux_msg_get_matchtag (w->request, &t) < 0 || matchtag != t))
+        && (flux_msg_get_matchtag (w->request, &t) < 0 || matchtag != t))
         return;
     if (flux_msg_get_route_first (w->request, &s) < 0)
         return;
@@ -752,7 +741,8 @@ static void watcher_cancel (struct ns_monitor *nsm, struct watcher *w,
  * If 'mute' is true, suppress response.
  */
 static void watcher_cancel_ns (struct ns_monitor *nsm,
-                               const char *sender, uint32_t matchtag,
+                               const char *sender,
+                               uint32_t matchtag,
                                bool mute)
 {
     zlist_t *l;
@@ -765,8 +755,7 @@ static void watcher_cancel_ns (struct ns_monitor *nsm,
             w = zlist_next (l);
         }
         zlist_destroy (&l);
-    }
-    else
+    } else
         flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
@@ -774,7 +763,8 @@ static void watcher_cancel_ns (struct ns_monitor *nsm,
  * If 'mute' is true, suppress response.
  */
 static void watcher_cancel_all (struct watch_ctx *ctx,
-                                const char *sender, uint32_t matchtag,
+                                const char *sender,
+                                uint32_t matchtag,
                                 bool mute)
 {
     zlist_t *l;
@@ -789,16 +779,17 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
             name = zlist_next (l);
         }
         zlist_destroy (&l);
-    }
-    else
+    } else
         flux_log_error (ctx->h, "%s: zhash_keys", __FUNCTION__);
 }
 
 /* kvs.namespace-removed-* event
  * A namespace has been removed.  All watchers should receive ENOTSUP.
  */
-static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+static void removed_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     struct watch_ctx *ctx = arg;
     const char *ns;
@@ -818,8 +809,10 @@ static void removed_cb (flux_t *h, flux_msg_handler_t *mh,
  * Update namespace with new namespace info.
  * N.B. commit->keys is empty in this case, in contrast setroot_cb().
  */
-static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
+static void namespace_created_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     struct watch_ctx *ctx = arg;
     struct ns_monitor *nsm;
@@ -829,16 +822,22 @@ static void namespace_created_cb (flux_t *h, flux_msg_handler_t *mh,
     int owner;
     struct commit *commit;
 
-    if (flux_event_unpack (msg, NULL, "{s:s s:i s:s s:i}",
-                           "namespace", &ns,
-                           "rootseq", &rootseq,
-                           "rootref", &rootref,
-                           "owner", &owner) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{s:s s:i s:s s:i}",
+                           "namespace",
+                           &ns,
+                           "rootseq",
+                           &rootseq,
+                           "rootref",
+                           &rootref,
+                           "owner",
+                           &owner)
+        < 0) {
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    if (!(nsm = zhash_lookup (ctx->namespaces, ns))
-        || nsm->commit)
+    if (!(nsm = zhash_lookup (ctx->namespaces, ns)) || nsm->commit)
         return;
     if (!(commit = commit_create (rootref, rootseq, NULL))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
@@ -856,8 +855,10 @@ done:
  * Update namespace with new commit info.
  * Subscribe/unsubscribe is tied to 'struct ns_monitor' create/destroy.
  */
-static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
+static void setroot_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     struct watch_ctx *ctx = arg;
     struct ns_monitor *nsm;
@@ -868,17 +869,25 @@ static void setroot_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *keys;
     struct commit *commit;
 
-    if (flux_event_unpack (msg, NULL, "{s:s s:i s:s s:i s:o}",
-                           "namespace", &ns,
-                           "rootseq", &rootseq,
-                           "rootref", &rootref,
-                           "owner", &owner,
-                           "keys", &keys) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{s:s s:i s:s s:i s:o}",
+                           "namespace",
+                           &ns,
+                           "rootseq",
+                           &rootseq,
+                           "rootref",
+                           &rootref,
+                           "owner",
+                           &owner,
+                           "keys",
+                           &keys)
+        < 0) {
         flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
     if (!(nsm = zhash_lookup (ctx->namespaces, ns))
-            || (nsm->commit && rootseq <= nsm->commit->rootseq))
+        || (nsm->commit && rootseq <= nsm->commit->rootseq))
         return;
     if (!(commit = commit_create (rootref, rootseq, keys))) {
         flux_log_error (h, "%s: error creating commit", __FUNCTION__);
@@ -916,8 +925,8 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
         return;
     }
     if (flux_kvs_getroot_get_sequence (f, &rootseq) < 0
-            || flux_kvs_getroot_get_blobref (f, &rootref) < 0
-            || flux_kvs_getroot_get_owner (f, &owner) < 0) {
+        || flux_kvs_getroot_get_blobref (f, &rootref) < 0
+        || flux_kvs_getroot_get_owner (f, &owner) < 0) {
         if (errno != ENOTSUP && errno != EPERM)
             flux_log_error (nsm->ctx->h, "%s: kvs_getroot", __FUNCTION__);
         nsm->errnum = errno;
@@ -943,8 +952,7 @@ done:
  * send a getroot RPC to the kvs so first response need not wait
  * for the next commit to occur in the arbitrarily distant future.
  */
-struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
-                                      const char *ns)
+struct ns_monitor *namespace_monitor (struct watch_ctx *ctx, const char *ns)
 {
     struct ns_monitor *nsm;
 
@@ -955,16 +963,15 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
             namespace_destroy (nsm);
             return NULL;
         }
-        zhash_freefn (ctx->namespaces, ns,
-                      (zhash_free_fn *)namespace_destroy);
+        zhash_freefn (ctx->namespaces, ns, (zhash_free_fn *)namespace_destroy);
         /* store future in namespace, so namespace can be destroyed
          * appropriately to avoid matchtag leak */
         if (!(nsm->getrootf = flux_kvs_getroot (ctx->h, ns, 0))) {
             zhash_delete (ctx->namespaces, ns);
             return NULL;
         }
-        if (flux_future_then (nsm->getrootf, -1.,
-                              namespace_getroot_continuation, nsm) < 0) {
+        if (flux_future_then (nsm->getrootf, -1., namespace_getroot_continuation, nsm)
+            < 0) {
             zhash_delete (ctx->namespaces, ns);
             return NULL;
         }
@@ -972,8 +979,10 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
     return nsm;
 }
 
-static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void lookup_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     struct watch_ctx *ctx = arg;
     const char *ns;
@@ -983,10 +992,16 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     struct watcher *w;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:s s:i}",
-                             "namespace", &ns,
-                             "key", &key,
-                             "flags", &flags) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s s:i}",
+                             "namespace",
+                             &ns,
+                             "key",
+                             &key,
+                             "flags",
+                             &flags)
+        < 0)
         goto error;
     if ((flags & FLUX_KVS_WATCH) && !flux_msg_is_streaming (msg)) {
         errno = EPROTO;
@@ -1023,8 +1038,10 @@ error:
  * watcher that is to be cancelled.  The watcher will receive an ENODATA
  * response message.
  */
-static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void cancel_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     struct watch_ctx *ctx = arg;
     uint32_t matchtag;
@@ -1046,8 +1063,10 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
  * This is sent automatically upon local connector disconnect.
  * The disconnect sender is used to find any watchers to be cancelled.
  */
-static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     struct watch_ctx *ctx = arg;
     char *sender;
@@ -1066,25 +1085,29 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
 
 /* kvs-watch.stats.get request
  */
-static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void stats_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct watch_ctx *ctx = arg;
     struct ns_monitor *nsm;
     json_t *stats;
     int watchers = 0;
 
-    if (!(stats = json_object()))
+    if (!(stats = json_object ()))
         goto nomem;
     nsm = zhash_first (ctx->namespaces);
     while (nsm) {
         json_t *o = json_pack ("{s:i s:i s:s s:i}",
-                               "owner", (int)nsm->owner,
-                               "rootseq", nsm->commit ? nsm->commit->rootseq
-                                                      : -1,
-                               "rootref", nsm->commit ? nsm->commit->rootref
-                                                      : "(null)",
-                               "watchers", (int)zlist_size (nsm->watchers));
+                               "owner",
+                               (int)nsm->owner,
+                               "rootseq",
+                               nsm->commit ? nsm->commit->rootseq : -1,
+                               "rootref",
+                               nsm->commit ? nsm->commit->rootref : "(null)",
+                               "watchers",
+                               (int)zlist_size (nsm->watchers));
         if (!o)
             goto nomem;
         if (json_object_set_new (stats, nsm->ns_name, o) < 0) {
@@ -1094,10 +1117,16 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
         watchers += zlist_size (nsm->watchers);
         nsm = zhash_next (ctx->namespaces);
     }
-    if (flux_respond_pack (h, msg, "{s:i s:i s:O}",
-                           "watchers", watchers,
-                           "namespace-count", (int)zhash_size (ctx->namespaces),
-                           "namespaces", stats) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i s:O}",
+                           "watchers",
+                           watchers,
+                           "namespace-count",
+                           (int)zhash_size (ctx->namespaces),
+                           "namespaces",
+                           stats)
+        < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (stats);
     return;
@@ -1108,41 +1137,34 @@ nomem:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.namespace-removed-*",
-      .cb           = removed_cb,
-      .rolemask     = 0
-    },
-    { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.namespace-created-*",
-      .cb           = namespace_created_cb,
-      .rolemask     = 0
-    },
-    { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.setroot-*",
-      .cb           = setroot_cb,
-      .rolemask     = 0
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "kvs-watch.stats.get",
-      .cb           = stats_cb,
-      .rolemask     = 0
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "kvs-watch.lookup",
-      .cb           = lookup_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "kvs-watch.cancel",
-      .cb           = cancel_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "kvs-watch.disconnect",
-      .cb           = disconnect_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
+    {.typemask = FLUX_MSGTYPE_EVENT,
+     .topic_glob = "kvs.namespace-removed-*",
+     .cb = removed_cb,
+     .rolemask = 0},
+    {.typemask = FLUX_MSGTYPE_EVENT,
+     .topic_glob = "kvs.namespace-created-*",
+     .cb = namespace_created_cb,
+     .rolemask = 0},
+    {.typemask = FLUX_MSGTYPE_EVENT,
+     .topic_glob = "kvs.setroot-*",
+     .cb = setroot_cb,
+     .rolemask = 0},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "kvs-watch.stats.get",
+     .cb = stats_cb,
+     .rolemask = 0},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "kvs-watch.lookup",
+     .cb = lookup_cb,
+     .rolemask = FLUX_ROLE_USER},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "kvs-watch.cancel",
+     .cb = cancel_cb,
+     .rolemask = FLUX_ROLE_USER},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "kvs-watch.disconnect",
+     .cb = disconnect_cb,
+     .rolemask = FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

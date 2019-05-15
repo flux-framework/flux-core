@@ -26,8 +26,7 @@ struct cron_event {
     char *event;
 };
 
-static void ev_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void ev_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     cron_entry_t *e = arg;
     struct cron_event *ev = cron_entry_type_data (e);
@@ -37,8 +36,10 @@ static void ev_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     ev->paused = 0;
 }
 
-static void event_handler (flux_t *h, flux_msg_handler_t *w,
-                           const flux_msg_t *msg, void *arg)
+static void event_handler (flux_t *h,
+                           flux_msg_handler_t *w,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     cron_entry_t *e = arg;
     struct cron_event *ev = cron_entry_type_data (e);
@@ -63,8 +64,11 @@ static void event_handler (flux_t *h, flux_msg_handler_t *w,
         if (remaining > 1e-5) {
             flux_reactor_t *r = flux_get_reactor (h);
             flux_watcher_t *w;
-            if (!(w = flux_timer_watcher_create (r, remaining, 0.,
-                                                 ev_timer_cb, (void *) e)))
+            if (!(w = flux_timer_watcher_create (r,
+                                                 remaining,
+                                                 0.,
+                                                 ev_timer_cb,
+                                                 (void *)e)))
                 flux_log_error (h, "timer_watcher_create");
             else {
                 /* Pause the event watcher. Continue to count events but
@@ -72,9 +76,11 @@ static void event_handler (flux_t *h, flux_msg_handler_t *w,
                  */
                 ev->paused = 1;
                 flux_watcher_start (w);
-                flux_log (h, LOG_DEBUG,
+                flux_log (h,
+                          LOG_DEBUG,
                           "cron-%ju: delaying %4.03fs due to min interval",
-                          e->id, remaining);
+                          e->id,
+                          remaining);
             }
             return;
         }
@@ -91,7 +97,7 @@ static void cron_event_destroy (void *arg)
     if (ev->mh)
         flux_msg_handler_destroy (ev->mh);
     if (ev->h && ev->event)
-        (void) flux_event_unsubscribe (ev->h, ev->event);
+        (void)flux_event_unsubscribe (ev->h, ev->event);
     free (ev->event);
     free (ev);
 }
@@ -105,11 +111,17 @@ static void *cron_event_create (flux_t *h, cron_entry_t *e, json_t *arg)
     const char *event;
     struct flux_match match = FLUX_MATCH_EVENT;
 
-    if (json_unpack (arg, "{ s:s, s?i, s?i, s?F }",
-                          "topic", &event,
-                          "nth",   &nth,
-                          "after", &after,
-                          "min_interval", &min_interval) < 0) {
+    if (json_unpack (arg,
+                     "{ s:s, s?i, s?i, s?F }",
+                     "topic",
+                     &event,
+                     "nth",
+                     &nth,
+                     "after",
+                     &after,
+                     "min_interval",
+                     &min_interval)
+        < 0) {
         flux_log_error (h, "cron event: json_unpack");
         errno = EPROTO;
         return NULL;
@@ -169,17 +181,20 @@ static json_t *cron_event_to_json (void *arg)
 {
     struct cron_event *ev = arg;
     return json_pack ("{ s:s, s:i, s:i, s:i, s:f }",
-                      "topic", ev->event,
-                      "nth", ev->nth,
-                      "after", ev->after,
-                      "counter", ev->counter,
-                      "min_interval", ev->min_interval);
+                      "topic",
+                      ev->event,
+                      "nth",
+                      ev->nth,
+                      "after",
+                      ev->after,
+                      "counter",
+                      ev->counter,
+                      "min_interval",
+                      ev->min_interval);
 }
 
-struct cron_entry_ops cron_event_operations = {
-    .create =  cron_event_create,
-    .destroy = cron_event_destroy,
-    .start =   cron_event_start,
-    .stop =    cron_event_stop,
-    .tojson =  cron_event_to_json
-};
+struct cron_entry_ops cron_event_operations = {.create = cron_event_create,
+                                               .destroy = cron_event_destroy,
+                                               .start = cron_event_start,
+                                               .stop = cron_event_stop,
+                                               .tojson = cron_event_to_json};

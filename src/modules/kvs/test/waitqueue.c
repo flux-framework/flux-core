@@ -30,12 +30,10 @@ void iter_cb (wait_t *w, void *arg)
     (*count)++;
 
     /* what "foobar" is set to not important, just set to count */
-    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0,
-        "wait_msg_aux_set works");
+    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0, "wait_msg_aux_set works");
 }
 
-void msghand (flux_t *h, flux_msg_handler_t *mh,
-              const flux_msg_t *msg, void *arg)
+void msghand (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     int *count = arg;
     (*count)++;
@@ -78,53 +76,40 @@ int main (int argc, char *argv[])
     /* Create/destroy wait_t
      */
     count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
+    ok ((w = wait_create (wait_cb, &count)) != NULL, "wait_create works");
     wait_destroy (w);
-    ok (count == 0,
-        "wait_destroy didn't run callback");
+    ok (count == 0, "wait_destroy didn't run callback");
 
     /* corner case checks */
 
     ok (wait_msg_aux_set (NULL, NULL, NULL, NULL) < 0,
         "wait_msg_aux_set returns -1 on bad input");
-    ok (!wait_msg_aux_get (NULL, NULL),
-        "wait_msg_aux_set returns NULL on bad input");
-    ok (wait_aux_get_errnum (NULL) < 0,
-        "wait_aux_get_errnum returns -1 on bad input");
+    ok (!wait_msg_aux_get (NULL, NULL), "wait_msg_aux_set returns NULL on bad input");
+    ok (wait_aux_get_errnum (NULL) < 0, "wait_aux_get_errnum returns -1 on bad input");
 
     /* Create/destroy wait_t with msg handler, and set/get aux data
      */
     count = 0;
     msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-    ok (msg != NULL,
-        "flux_msg_create works");
+    ok (msg != NULL, "flux_msg_create works");
     w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand);
-    ok (w != NULL,
-        "wait_create_msg_handler with non-NULL msg works");
-    ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0,
-        "wait_msg_aux_set works");
+    ok (w != NULL, "wait_create_msg_handler with non-NULL msg works");
+    ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0, "wait_msg_aux_set works");
     str = wait_msg_aux_get (w, "aux");
     ok (str && !strcmp (str, "val"),
         "wait_msg_aux_get works and returns correct value");
     flux_msg_destroy (msg);
     wait_destroy (w);
-    ok (count == 0,
-        "wait_destroy didn't run callback");
+    ok (count == 0, "wait_destroy didn't run callback");
 
     /* Create/destroy wait_t, and set/run error cb
      */
     errnum = 0;
-    ok ((w = wait_create (wait_cb, NULL)) != NULL,
-        "wait_create works");
-    ok (wait_aux_get_errnum (w) == 0,
-        "wait_aux_get_errnum returns 0 initially");
-    ok (wait_set_error_cb (w, error_cb, &errnum) == 0,
-        "wait_set_error_cb works");
-    ok (wait_aux_set_errnum (w, ENOTSUP) == 0,
-        "wait_aux_set_errnum works");
-    ok (errnum == ENOTSUP,
-        "error cb called correctly");
+    ok ((w = wait_create (wait_cb, NULL)) != NULL, "wait_create works");
+    ok (wait_aux_get_errnum (w) == 0, "wait_aux_get_errnum returns 0 initially");
+    ok (wait_set_error_cb (w, error_cb, &errnum) == 0, "wait_set_error_cb works");
+    ok (wait_aux_set_errnum (w, ENOTSUP) == 0, "wait_aux_set_errnum works");
+    ok (errnum == ENOTSUP, "error cb called correctly");
     ok (wait_aux_get_errnum (w) == ENOTSUP,
         "wait_aux_get_errnum returns errnum correctly");
     wait_destroy (w);
@@ -132,28 +117,19 @@ int main (int argc, char *argv[])
     /* Create/destroy waitqueue_t with msgs, iterate over them */
     count = 0;
     msg1 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-    ok (msg1 != NULL,
-        "flux_msg_create works");
+    ok (msg1 != NULL, "flux_msg_create works");
     msg2 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-    ok (msg2 != NULL,
-        "flux_msg_create works");
+    ok (msg2 != NULL, "flux_msg_create works");
     w1 = wait_create_msg_handler (NULL, NULL, msg1, NULL, NULL);
-    ok (w1 != NULL,
-        "wait_create_msg_handler works");
+    ok (w1 != NULL, "wait_create_msg_handler works");
     w2 = wait_create_msg_handler (NULL, NULL, msg1, NULL, NULL);
-    ok (w2 != NULL,
-        "wait_create_msg_handler works");
+    ok (w2 != NULL, "wait_create_msg_handler works");
     q = wait_queue_create ();
-    ok (q != NULL,
-        "wait_queue_create works");
-    ok (wait_addqueue (q, w1) == 0,
-        "wait_addqueue works");
-    ok (wait_addqueue (q, w2) == 0,
-        "wait_addqueue works");
-    ok (wait_queue_iter (q, iter_cb, &count) == 0,
-        "wait_queue_iter works");
-    ok (count == 2,
-        "wait_queue_iter iterated the correct number of times");
+    ok (q != NULL, "wait_queue_create works");
+    ok (wait_addqueue (q, w1) == 0, "wait_addqueue works");
+    ok (wait_addqueue (q, w2) == 0, "wait_addqueue works");
+    ok (wait_queue_iter (q, iter_cb, &count) == 0, "wait_queue_iter works");
+    ok (count == 2, "wait_queue_iter iterated the correct number of times");
     ok (wait_msg_aux_get (w1, "foobar") != NULL,
         "wait_queue_iter callback set aux correctly");
     ok (wait_msg_aux_get (w2, "foobar") != NULL,
@@ -165,20 +141,13 @@ int main (int argc, char *argv[])
     /* Create wait_t, add to queue, run queue, destroy queue.
      */
     count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok ((q = wait_queue_create ()) != NULL,
-        "wait_queue_create works");
-    ok (wait_addqueue (q, w) == 0,
-        "wait_addqueue works");
-    ok (wait_get_usecount (w) == 1,
-        "wait_get_usecount 1 after wait_addqueue");
-    ok (count == 0,
-        "wait_t callback not run");
-    ok (wait_runqueue (q) == 0,
-        "wait_runqueue success");
-    ok (count == 1,
-        "wait_runqueue ran callback");
+    ok ((w = wait_create (wait_cb, &count)) != NULL, "wait_create works");
+    ok ((q = wait_queue_create ()) != NULL, "wait_queue_create works");
+    ok (wait_addqueue (q, w) == 0, "wait_addqueue works");
+    ok (wait_get_usecount (w) == 1, "wait_get_usecount 1 after wait_addqueue");
+    ok (count == 0, "wait_t callback not run");
+    ok (wait_runqueue (q) == 0, "wait_runqueue success");
+    ok (count == 1, "wait_runqueue ran callback");
     wait_queue_destroy (q);
 
     /**
@@ -187,8 +156,7 @@ int main (int argc, char *argv[])
 
     q = wait_queue_create ();
     q2 = wait_queue_create ();
-    ok (q && q2,
-        "wait_queue_create works");
+    ok (q && q2, "wait_queue_create works");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 0,
         "wait_queue_length 0 on new queue");
 
@@ -197,41 +165,29 @@ int main (int argc, char *argv[])
      */
     count = 0;
     msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-    ok (msg != NULL,
-        "flux_msg_create works");
+    ok (msg != NULL, "flux_msg_create works");
     w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand);
-    ok (w != NULL,
-        "wait_create_msg_handler with non-NULL msg works");
+    ok (w != NULL, "wait_create_msg_handler with non-NULL msg works");
     flux_msg_destroy (msg);
 
-    ok (wait_get_usecount (w) == 0,
-        "wait_usecount 0 initially");
-    ok (wait_addqueue (q, w) == 0,
-        "wait_addqueue works");
-    ok (wait_get_usecount (w) == 1,
-        "wait_usecount 1 after adding to one queue");
-    ok (wait_addqueue (q2, w) == 0,
-        "wait_addqueue works");
-    ok (wait_get_usecount (w) == 2,
-        "wait_usecount 2 after adding to second queue");
+    ok (wait_get_usecount (w) == 0, "wait_usecount 0 initially");
+    ok (wait_addqueue (q, w) == 0, "wait_addqueue works");
+    ok (wait_get_usecount (w) == 1, "wait_usecount 1 after adding to one queue");
+    ok (wait_addqueue (q2, w) == 0, "wait_addqueue works");
+    ok (wait_get_usecount (w) == 2, "wait_usecount 2 after adding to second queue");
     ok (wait_queue_length (q) == 1 && wait_queue_length (q2) == 1,
         "wait_queue_length of each queue is 1");
 
-    ok (wait_runqueue (q) == 0,
-        "wait_runqueue success");
+    ok (wait_runqueue (q) == 0, "wait_runqueue success");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 1,
         "wait_runqueue dequeued wait_t from first queue");
-    ok (wait_get_usecount (w) == 1,
-        "wait_usecount 1 after one run");
-    ok (count == 0,
-        "wait_t callback has not run");
+    ok (wait_get_usecount (w) == 1, "wait_usecount 1 after one run");
+    ok (count == 0, "wait_t callback has not run");
 
-    ok (wait_runqueue (q2) == 0,
-        "wait_runqueue success");
+    ok (wait_runqueue (q2) == 0, "wait_runqueue success");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 0,
         "wait_runqueue dequeued wait_t from second queue");
-    ok (count == 1,
-        "wait_t callback has run");
+    ok (count == 1, "wait_t callback has run");
 
     /* Add 20 waiters to queue, selectively destroy, callbacks not run
      */
@@ -250,24 +206,18 @@ int main (int argc, char *argv[])
         if (wait_addqueue (q, w) < 0)
             break;
     }
-    ok (wait_queue_length (q) == 20,
-        "wait_queue_length 20 after 20 wait_addqueues");
-    ok (count == 0,
-        "wait_t callback has not run");
+    ok (wait_queue_length (q) == 20, "wait_queue_length 20 after 20 wait_addqueues");
+    ok (count == 0, "wait_t callback has not run");
 
     ok ((i = wait_destroy_msg (q, msgcmp, NULL)) == 3,
         "wait_destroy_msg found 3 matches");
-    ok (wait_queue_length (q) == 17,
-        "wait_queue_length 17 after 3 deletions");
-    ok (count == 0,
-        "wait_t callback has not run");
+    ok (wait_queue_length (q) == 17, "wait_queue_length 17 after 3 deletions");
+    ok (count == 0, "wait_t callback has not run");
 
     ok ((i = wait_destroy_msg (q, msgcmp2, NULL)) == 17,
         "wait_destroy_msg found 17 matches");
-    ok (wait_queue_length (q) == 0,
-        "wait_queue_length 0 after 17 deletions");
-    ok (count == 0,
-        "wait_t callback has not run");
+    ok (wait_queue_length (q) == 0, "wait_queue_length 0 after 17 deletions");
+    ok (count == 0, "wait_t callback has not run");
 
     wait_queue_destroy (q);
     wait_queue_destroy (q2);
@@ -276,8 +226,6 @@ int main (int argc, char *argv[])
     return (0);
 }
 
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

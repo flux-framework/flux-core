@@ -26,19 +26,19 @@ extern "C" {
 /* Module states, for embedding in keepalive messages (rfc 5)
  */
 enum {
-    FLUX_MODSTATE_INIT           = 0,
-    FLUX_MODSTATE_SLEEPING       = 1,
-    FLUX_MODSTATE_RUNNING        = 2,
-    FLUX_MODSTATE_FINALIZING     = 3,
-    FLUX_MODSTATE_EXITED         = 4,
+    FLUX_MODSTATE_INIT = 0,
+    FLUX_MODSTATE_SLEEPING = 1,
+    FLUX_MODSTATE_RUNNING = 2,
+    FLUX_MODSTATE_FINALIZING = 3,
+    FLUX_MODSTATE_EXITED = 4,
 };
 
 /* Mandatory symbols for modules
  */
 #define MOD_NAME(x) const char *mod_name = x
-typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
+typedef int(mod_main_f) (flux_t *h, int argc, char *argv[]);
 
-typedef void (flux_moderr_f)(const char *errmsg, void *arg);
+typedef void(flux_moderr_f) (const char *errmsg, void *arg);
 
 /* Read the value of 'mod_name' from the specified module filename.
  * Caller must free the returned name.  Returns NULL on failure.
@@ -51,8 +51,10 @@ char *flux_modname (const char *filename, flux_moderr_f *cb, void *arg);
  * Caller must free the returned path.
  * If 'cb' is non-NULL, any dlopen/dlsym errors are reported via callback.
  */
-char *flux_modfind (const char *searchpath, const char *modname,
-                    flux_moderr_f *cb, void *arg);
+char *flux_modfind (const char *searchpath,
+                    const char *modname,
+                    flux_moderr_f *cb,
+                    void *arg);
 
 #ifdef __cplusplus
 }

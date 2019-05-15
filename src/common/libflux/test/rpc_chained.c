@@ -13,8 +13,10 @@
 #include "src/common/libtap/tap.h"
 #include "util.h"
 
-void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+void rpctest_incr_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     int counter;
 
@@ -29,7 +31,7 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",   rpctest_incr_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "rpctest.incr", rpctest_incr_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -57,8 +59,7 @@ void fatal_err (const char *message, void *arg)
 
 flux_future_t *incr (flux_t *h, int n)
 {
-    return flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
-                          "{s:i}", "counter", n);
+    return flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0, "{s:i}", "counter", n);
 }
 
 int incr_get (flux_future_t *f, int *n)
@@ -71,9 +72,7 @@ void test_sanity_now (flux_t *h)
     flux_future_t *f;
     int count;
 
-    ok ((f = incr (h, 0)) != NULL
-        && incr_get (f, &count) == 0
-        && count == 1,
+    ok ((f = incr (h, 0)) != NULL && incr_get (f, &count) == 0 && count == 1,
         "sanity checked test RPC (now mode)");
     flux_future_destroy (f);
 }
@@ -93,9 +92,8 @@ void test_sanity_then (flux_t *h)
     int count = 0;
 
     ok ((f = incr (h, 0)) != NULL
-        && flux_future_then (f, -1., sanity_continuation, &count) == 0
-        && flux_reactor_run (flux_get_reactor (h), 0) == 0
-        && count == 1,
+            && flux_future_then (f, -1., sanity_continuation, &count) == 0
+            && flux_reactor_run (flux_get_reactor (h), 0) == 0 && count == 1,
         "sanity checked test RPC (then mode)");
     /* future destroyed in continuation */
 }
@@ -148,12 +146,9 @@ void test_chained_now (flux_t *h)
     flux_future_t *f;
     int count;
 
-    ok ((f = incr2 (h, 0)) != NULL,
-        "chained-now: request sent");
-    ok (incr_get (f, &count) == 0,
-        "chained-now: response received");
-    ok (count == 2,
-        "chained-now: result is correct");
+    ok ((f = incr2 (h, 0)) != NULL, "chained-now: request sent");
+    ok (incr_get (f, &count) == 0, "chained-now: response received");
+    ok (count == 2, "chained-now: result is correct");
     flux_future_destroy (f);
 }
 
@@ -175,23 +170,18 @@ void test_chained_then (flux_t *h)
     int count = 0;
     int rc;
 
-    ok ((f = incr2 (h, 0)) != NULL,
-        "chained-then: request sent");
+    ok ((f = incr2 (h, 0)) != NULL, "chained-then: request sent");
     rc = flux_future_then (f, -1., chained_continuation, &count);
-    ok (rc == 0,
-        "chained-then: continuation registered");
+    ok (rc == 0, "chained-then: continuation registered");
     if (rc < 0)
         diag ("flux_future_then: %s", flux_strerror (errno));
     skip (rc < 0, 2);
     rc = flux_reactor_run (flux_get_reactor (h), 0);
-    ok (rc >= 0,
-        "chained-then: reactor returned success");
-    ok (rc == 0,
-        "chained-then: reactor had no watchers");
+    ok (rc >= 0, "chained-then: reactor returned success");
+    ok (rc == 0, "chained-then: reactor had no watchers");
     if (rc > 0)
         diag ("there were %d watchers", rc);
-    ok (count == 2,
-        "chained-then: result is correct");
+    ok (count == 2, "chained-then: result is correct");
     end_skip;
     /* future destroyed in continuation */
 }
@@ -221,8 +211,10 @@ void test_chained_then_harder (flux_t *h)
     cmp_ok (rc, "==", 0, "chained-then-harder: flux_future_then (f3)");
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
-    cmp_ok (rc, "==", 0,
-           "chained-then-harder: reactor returned success with no watchers");
+    cmp_ok (rc,
+            "==",
+            0,
+            "chained-then-harder: reactor returned success with no watchers");
     cmp_ok (count, "==", 3, "chained-then-harder: result is correct");
     return;
 }
@@ -247,8 +239,7 @@ void test_chained_now_harder (flux_t *h)
         return;
     }
     pass ("chained-now-harder: created future-and-then 3 levels deep");
-    cmp_ok (incr_get (f3, &count), "==", 0,
-            "chained-now-harder: response received");
+    cmp_ok (incr_get (f3, &count), "==", 0, "chained-now-harder: response received");
     cmp_ok (count, "==", 3, "chained-now-harder: result is correct");
     flux_future_destroy (f3);
     return;
@@ -297,8 +288,7 @@ void test_or_then (flux_t *h)
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
     errmsg = flux_future_error_string (f2);
-    ok (!strcmp (errmsg, "Protocol error"),
-        "or-then: error string reported correctly");
+    ok (!strcmp (errmsg, "Protocol error"), "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }
 
@@ -333,8 +323,7 @@ void test_or_then_error_string (flux_t *h)
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
     errmsg = flux_future_error_string (f2);
-    ok (!strcmp (errmsg, "my errstr"),
-        "or-then: error string reported correctly");
+    ok (!strcmp (errmsg, "my errstr"), "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }
 
@@ -347,8 +336,7 @@ int main (int argc, char *argv[])
     test_server_environment_init ("rpc-chained-test");
 
     h = test_server_create (test_server, NULL);
-    ok (h != NULL,
-        "created test server thread");
+    ok (h != NULL, "created test server thread");
     if (!h)
         BAIL_OUT ("can't continue without test server");
     flux_fatal_set (h, fatal_err, NULL);
@@ -362,15 +350,13 @@ int main (int argc, char *argv[])
     test_or_then (h);
     test_or_then_error_string (h);
 
-    ok (test_server_stop (h) == 0,
-        "stopped test server thread");
-    flux_close (h); // destroys test server
+    ok (test_server_stop (h) == 0, "stopped test server thread");
+    flux_close (h);  // destroys test server
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

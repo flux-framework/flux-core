@@ -16,10 +16,10 @@
 
 /* Handle a 'priority' request - job priority adjustment
  */
-void priority_handle_request (flux_t *h, struct queue *queue,
+void priority_handle_request (flux_t *h,
+                              struct queue *queue,
                               struct event_ctx *event_ctx,
                               const flux_msg_t *msg);
-
 
 #endif /* ! _FLUX_JOB_MANAGER_PRIORITY_H */
 /*

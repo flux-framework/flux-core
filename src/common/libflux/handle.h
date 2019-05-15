@@ -35,22 +35,22 @@ typedef struct {
     int keepalive_rx;
 } flux_msgcounters_t;
 
-typedef void (*flux_fatal_f)(const char *msg, void *arg);
+typedef void (*flux_fatal_f) (const char *msg, void *arg);
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
 enum {
-    FLUX_O_TRACE = 1,   /* send message trace to stderr */
-    FLUX_O_CLONE = 2,   /* handle was created with flux_clone() */
-    FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
-    FLUX_O_MATCHDEBUG = 8,/* enable matchtag debugging */
+    FLUX_O_TRACE = 1,      /* send message trace to stderr */
+    FLUX_O_CLONE = 2,      /* handle was created with flux_clone() */
+    FLUX_O_NONBLOCK = 4,   /* handle should not block on send/recv */
+    FLUX_O_MATCHDEBUG = 8, /* enable matchtag debugging */
 };
 
 /* Flags for flux_requeue().
  */
 enum {
-    FLUX_RQ_HEAD = 1,   /* requeue message at head of queue */
-    FLUX_RQ_TAIL = 2,   /* requeue message at tail of queue */
+    FLUX_RQ_HEAD = 1, /* requeue message at head of queue */
+    FLUX_RQ_TAIL = 2, /* requeue message at tail of queue */
 };
 
 /* Flags for flux_pollevents().
@@ -70,8 +70,8 @@ enum {
 /* Options for flux_setopt().
  * (Connectors may define custom option names)
  */
-#define FLUX_OPT_TESTING_USERID     "flux::testing_userid"
-#define FLUX_OPT_TESTING_ROLEMASK   "flux::testing_rolemask"
+#define FLUX_OPT_TESTING_USERID "flux::testing_userid"
+#define FLUX_OPT_TESTING_ROLEMASK "flux::testing_rolemask"
 
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a connector to dynamically load.
@@ -108,9 +108,10 @@ void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg);
  * The fatal error handler will only be called once.
  */
 void flux_fatal_error (flux_t *h, const char *fun, const char *msg);
-#define FLUX_FATAL(h) do { \
-    flux_fatal_error((h),__FUNCTION__,(strerror (errno))); \
-} while (0)
+#define FLUX_FATAL(h)                                             \
+    do {                                                          \
+        flux_fatal_error ((h), __FUNCTION__, (strerror (errno))); \
+    } while (0)
 
 /* Return true if the handle 'h' has encountered a fatal error.
  */

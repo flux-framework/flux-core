@@ -25,19 +25,27 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
 
-static struct optparse_option cmdopts[] = {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET",
-      .usage = "Specify specific target ranks.  Default is \"all\"" },
-    { .name = "dir", .key = 'd', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Set the working directory to PATH" },
-    { .name = "labelio", .key = 'l', .has_arg = 0,
-      .usage = "Label lines of output with the source RANK" },
-    { .name = "noinput", .key = 'n', .has_arg = 0,
-      .usage = "Redirect stdin from /dev/null" },
-    { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Run with more verbosity." },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option cmdopts[] =
+    {{.name = "rank",
+      .key = 'r',
+      .has_arg = 1,
+      .arginfo = "NODESET",
+      .usage = "Specify specific target ranks.  Default is \"all\""},
+     {.name = "dir",
+      .key = 'd',
+      .has_arg = 1,
+      .arginfo = "PATH",
+      .usage = "Set the working directory to PATH"},
+     {.name = "labelio",
+      .key = 'l',
+      .has_arg = 0,
+      .usage = "Label lines of output with the source RANK"},
+     {.name = "noinput",
+      .key = 'n',
+      .has_arg = 0,
+      .usage = "Redirect stdin from /dev/null"},
+     {.name = "verbose", .key = 'v', .has_arg = 0, .usage = "Run with more verbosity."},
+     OPTPARSE_TABLE_END};
 
 extern char **environ;
 
@@ -127,15 +135,13 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
         started++;
         /* see FLUX_SUBPROCESS_FAILED case below */
         (void)flux_subprocess_aux_set (p, "started", p, NULL);
-    }
-    else if (state == FLUX_SUBPROCESS_EXITED)
+    } else if (state == FLUX_SUBPROCESS_EXITED)
         exited++;
     else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
         /* EXEC_FAILED means RUNNING never reached, so must increment started */
         started++;
         exited++;
-    }
-    else if (state == FLUX_SUBPROCESS_FAILED) {
+    } else if (state == FLUX_SUBPROCESS_FAILED) {
         /* FLUX_SUBPROCESS_FAILED is a catch all error case, no way to
          * know if process started or not.  So we cheat with a
          * subprocess context setting.
@@ -152,8 +158,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             flux_watcher_stop (stdin_w);
     }
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
         int errnum = flux_subprocess_fail_errno (p);
         int ec = 1;
 
@@ -185,9 +190,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
 
     /* if process exited, read remaining stuff or EOF, otherwise
      * wait for future newline */
-    if (!lenp
-        && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
-
+    if (!lenp && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp)))
             log_err_exit ("flux_subprocess_read");
     }
@@ -199,8 +202,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
     flux_subprocess_t *p;
@@ -221,8 +223,7 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
             }
             p = zlist_next (subprocesses);
         }
-    }
-    else {
+    } else {
         p = zlist_first (subprocesses);
         while (p) {
             if (flux_subprocess_close (p, "STDIN") < 0)
@@ -247,8 +248,7 @@ static void signal_cb (int signum)
                 if (!(idset_str = idset_encode (hanging, flags)))
                     log_err_exit ("idset_encode");
 
-                fprintf (stderr, "%s: command still running at exit\n",
-                         idset_str);
+                fprintf (stderr, "%s: command still running at exit\n", idset_str);
                 free (idset_str);
                 exit (1);
             }
@@ -256,16 +256,20 @@ static void signal_cb (int signum)
     }
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
-        fprintf (stderr, "sending signal %d to %d running processes\n",
-                 signum, started - exited);
+        fprintf (stderr,
+                 "sending signal %d to %d running processes\n",
+                 signum,
+                 started - exited);
 
     while (p) {
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
             flux_future_t *f = flux_subprocess_kill (p, signum);
             if (!f) {
                 if (optparse_getopt (opts, "verbose", NULL) > 0)
-                    fprintf (stderr, "failed to signal rank %d: %s\n",
-                             flux_subprocess_rank (p), strerror (errno));
+                    fprintf (stderr,
+                             "failed to signal rank %d: %s\n",
+                             flux_subprocess_rank (p),
+                             strerror (errno));
             }
             /* don't care about response */
             flux_future_destroy (f);
@@ -338,8 +342,7 @@ int main (int argc, char *argv[])
     if (optparse_getopt (opts, "dir", &optargp) > 0) {
         if (!(cwd = strdup (optargp)))
             log_err_exit ("strdup");
-    }
-    else {
+    } else {
         if (!(cwd = get_current_dir_name ()))
             log_err_exit ("get_current_dir_name");
     }
@@ -353,14 +356,12 @@ int main (int argc, char *argv[])
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
 
-    if (optparse_getopt (opts, "rank", &optargp) > 0
-        && strcmp (optargp, "all")) {
+    if (optparse_getopt (opts, "rank", &optargp) > 0 && strcmp (optargp, "all")) {
         if (!(ns = idset_decode (optargp)))
             log_err_exit ("idset_decode");
         if (flux_get_size (h, &rank_count) < 0)
             log_err_exit ("flux_get_size");
-    }
-    else {
+    } else {
         if (flux_get_size (h, &rank_count) < 0)
             log_err_exit ("flux_get_size");
         if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
@@ -375,12 +376,14 @@ int main (int argc, char *argv[])
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
-        char *nodeset = idset_encode (ns, IDSET_FLAG_RANGE
-                                        | IDSET_FLAG_BRACKETS);
+        char *nodeset = idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
         if (!nodeset)
             log_err_exit ("idset_encode");
-        fprintf (stderr, "%03fms: Starting %s on %s\n",
-                 monotime_since (t0), argv0, nodeset);
+        fprintf (stderr,
+                 "%03fms: Starting %s on %s\n",
+                 monotime_since (t0),
+                 argv0,
+                 nodeset);
         free (nodeset);
     }
 
@@ -425,9 +428,12 @@ int main (int argc, char *argv[])
             log_err_exit ("atexit");
         if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
             log_err_exit ("fcntl F_SETFL stdin");
-        if (!(stdin_w = flux_buffer_read_watcher_create (r, STDIN_FILENO,
-                                                         1 << 20, stdin_cb,
-                                                         0, NULL)))
+        if (!(stdin_w = flux_buffer_read_watcher_create (r,
+                                                         STDIN_FILENO,
+                                                         1 << 20,
+                                                         stdin_cb,
+                                                         0,
+                                                         NULL)))
             log_err_exit ("flux_buffer_read_watcher_create");
     }
     if (signal (SIGINT, signal_cb) == SIG_ERR)
@@ -440,8 +446,11 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_reactor_run");
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
-        fprintf (stderr, "%03fms: %d tasks complete with code %d\n",
-                 monotime_since (t0), exited, exit_code);
+        fprintf (stderr,
+                 "%03fms: %d tasks complete with code %d\n",
+                 monotime_since (t0),
+                 exited,
+                 exit_code);
 
     /* output message on any tasks that exited non-zero */
     if (zhashx_size (exitsets) > 0) {

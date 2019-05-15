@@ -19,14 +19,13 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-
 #define OPTIONS "p:w:h:D"
 static const struct option longopts[] = {
-    {"prefix",          required_argument,  0, 'p'},
-    {"width",           required_argument,  0, 'w'},
-    {"height",          required_argument,  0, 'h'},
-    {"mkdir",           no_argument,        0, 'D'},
-    { 0, 0, 0, 0 },
+    {"prefix", required_argument, 0, 'p'},
+    {"width", required_argument, 0, 'w'},
+    {"height", required_argument, 0, 'h'},
+    {"mkdir", no_argument, 0, 'D'},
+    {0, 0, 0, 0},
 };
 
 void dtree (flux_kvs_txn_t *txn, const char *prefix, int width, int height);
@@ -35,20 +34,19 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height);
 void usage (void)
 {
     fprintf (stderr,
-"Usage: dtree [--mkdir] [--prefix NAME] [--width N] [--height N]\n"
-);
+             "Usage: dtree [--mkdir] [--prefix NAME] [--width N] [--height N]\n");
     exit (1);
 }
 
-void setup_dir (flux_t *h, const char *dir) {
+void setup_dir (flux_t *h, const char *dir)
+{
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_mkdir (txn, 0, dir) < 0)
         log_err_exit ("flux_kvs_txn_mkdir %s", dir);
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -97,7 +95,7 @@ int main (int argc, char *argv[])
         setup_dir (h, prefix);
 
         if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, prefix))
-                || flux_kvs_lookup_get_dir (f, &dir) < 0)
+            || flux_kvs_lookup_get_dir (f, &dir) < 0)
             log_err_exit ("flux_kvs_lookup %s", prefix);
 
         dtree_mkdir (h, dir, width, height);
@@ -110,9 +108,8 @@ int main (int argc, char *argv[])
         if (!(txn = flux_kvs_txn_create ()))
             log_err_exit ("flux_kvs_txn_create");
         dtree (txn, prefix, width, height);
-        if (!(f = flux_kvs_commit (h, NULL, 0, txn))
-            || flux_future_get (f, NULL) < 0)
-           log_err_exit ("flux_kvs_commit");
+        if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
+            log_err_exit ("flux_kvs_commit");
         flux_future_destroy (f);
         flux_kvs_txn_destroy (txn);
     }
@@ -142,8 +139,7 @@ void dtree (flux_kvs_txn_t *txn, const char *prefix, int width, int height)
  * using flux_kvsdir_t objects.  This is a less efficient method but provides
  * alternate code coverage.
  */
-void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
-                  int width, int height)
+void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height)
 {
     int i;
     char key[16];
@@ -184,11 +180,9 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir,
 
             rootref = flux_kvsdir_rootref (dir);
             if (rootref) {
-                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, keyat,
-                                             rootref)))
+                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, keyat, rootref)))
                     log_err_exit ("flux_kvs_lookupat");
-            }
-            else {
+            } else {
                 if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, keyat)))
                     log_err_exit ("flux_kvs_lookup");
             }

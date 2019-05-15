@@ -21,15 +21,23 @@ int schedutil_alloc_request_decode (const flux_msg_t *msg,
                                     uint32_t *userid,
                                     double *t_submit)
 {
-    return flux_request_unpack (msg, NULL, "{s:I s:i s:i s:f}",
-                                           "id", id,
-                                           "priority", priority,
-                                           "userid", userid,
-                                           "t_submit", t_submit);
+    return flux_request_unpack (msg,
+                                NULL,
+                                "{s:I s:i s:i s:f}",
+                                "id",
+                                id,
+                                "priority",
+                                priority,
+                                "userid",
+                                userid,
+                                "t_submit",
+                                t_submit);
 }
 
-static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
-                                    int type, const char *note)
+static int schedutil_alloc_respond (flux_t *h,
+                                    const flux_msg_t *msg,
+                                    int type,
+                                    const char *note)
 {
     flux_jobid_t id;
     int rc;
@@ -37,25 +45,26 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         return -1;
     if (note)
-        rc = flux_respond_pack (h, msg, "{s:I s:i s:s}",
-                                        "id", id,
-                                        "type", type,
-                                        "note", note);
+        rc = flux_respond_pack (h,
+                                msg,
+                                "{s:I s:i s:s}",
+                                "id",
+                                id,
+                                "type",
+                                type,
+                                "note",
+                                note);
     else
-        rc = flux_respond_pack (h, msg, "{s:I s:i}",
-                                        "id", id,
-                                        "type", type);
+        rc = flux_respond_pack (h, msg, "{s:I s:i}", "id", id, "type", type);
     return rc;
 }
 
-int schedutil_alloc_respond_note (flux_t *h, const flux_msg_t *msg,
-                                  const char *note)
+int schedutil_alloc_respond_note (flux_t *h, const flux_msg_t *msg, const char *note)
 {
     return schedutil_alloc_respond (h, msg, 1, note);
 }
 
-int schedutil_alloc_respond_denied (flux_t *h, const flux_msg_t *msg,
-                                    const char *note)
+int schedutil_alloc_respond_denied (flux_t *h, const flux_msg_t *msg, const char *note)
 {
     return schedutil_alloc_respond (h, msg, 2, note);
 }
@@ -78,7 +87,8 @@ static void alloc_destroy (struct alloc *ctx)
     }
 }
 
-static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
+static struct alloc *alloc_create (const flux_msg_t *msg,
+                                   const char *R,
                                    const char *note)
 {
     struct alloc *ctx;
@@ -124,13 +134,15 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     return;
 error:
-    flux_reactor_stop_error (flux_get_reactor (h)); // XXX
+    flux_reactor_stop_error (flux_get_reactor (h));  // XXX
     alloc_destroy (ctx);
     flux_future_destroy (f);
 }
 
-int schedutil_alloc_respond_R (flux_t *h, const flux_msg_t *msg,
-                               const char *R, const char *note)
+int schedutil_alloc_respond_R (flux_t *h,
+                               const flux_msg_t *msg,
+                               const char *R,
+                               const char *note)
 {
     struct alloc *ctx;
     flux_future_t *f;

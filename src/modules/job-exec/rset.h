@@ -19,12 +19,10 @@ struct resource_set *resource_set_create (const char *R, json_error_t *errp);
 
 void resource_set_destroy (struct resource_set *rset);
 
-const struct idset * resource_set_ranks (struct resource_set *rset);
+const struct idset *resource_set_ranks (struct resource_set *rset);
 
 double resource_set_starttime (struct resource_set *rset);
 
 double resource_set_expiration (struct resource_set *rset);
 
 #endif /* !HAVE_JOB_EXEC_RSET_H */
-
-

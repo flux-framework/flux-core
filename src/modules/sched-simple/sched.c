@@ -27,9 +27,9 @@ struct jobreq {
 };
 
 struct simple_sched {
-    char *mode;             /* allocation mode */
-    struct rlist *rlist;    /* list of resources */
-    struct jobreq *job;     /* currently processed job */
+    char *mode;          /* allocation mode */
+    struct rlist *rlist; /* list of resources */
+    struct jobreq *job;  /* currently processed job */
     struct ops_context *ops;
 };
 
@@ -41,8 +41,7 @@ static void jobreq_destroy (struct jobreq *job)
     }
 }
 
-static struct jobreq *
-jobreq_create (const flux_msg_t *msg, const char *jobspec)
+static struct jobreq *jobreq_create (const flux_msg_t *msg, const char *jobspec)
 {
     struct jobreq *job = calloc (1, sizeof (*job));
     int pri;
@@ -51,8 +50,7 @@ jobreq_create (const flux_msg_t *msg, const char *jobspec)
 
     if (job == NULL)
         return NULL;
-    if (schedutil_alloc_request_decode (msg, &job->id,
-                            &pri, &uid, &t_submit) < 0)
+    if (schedutil_alloc_request_decode (msg, &job->id, &pri, &uid, &t_submit) < 0)
         goto err;
     if (!(job->msg = flux_msg_copy (msg, true)))
         goto err;
@@ -76,7 +74,7 @@ static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
     free (ss);
 }
 
-static struct simple_sched * simple_sched_create (void)
+static struct simple_sched *simple_sched_create (void)
 {
     struct simple_sched *ss = calloc (1, sizeof (*ss));
     if (ss == NULL)
@@ -104,8 +102,7 @@ static void try_alloc (flux_t *h, struct simple_sched *ss)
     if (!ss->job)
         return;
     jj = &ss->job->jj;
-    alloc = rlist_alloc (ss->rlist, ss->mode,
-                         jj->nnodes, jj->nslots, jj->slot_size);
+    alloc = rlist_alloc (ss->rlist, ss->mode, jj->nnodes, jj->nslots, jj->slot_size);
     if (!alloc) {
         const char *note = "unable to allocate provided jobspec";
         if (errno == ENOSPC)
@@ -123,7 +120,7 @@ static void try_alloc (flux_t *h, struct simple_sched *ss)
     if (R && schedutil_alloc_respond_R (h, ss->job->msg, R, s) < 0)
         flux_log_error (h, "schedutil_alloc_respond_R");
 
-    flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) ss->job->id, s);
+    flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t)ss->job->id, s);
 
 out:
     jobreq_destroy (ss->job);
@@ -133,14 +130,17 @@ out:
     free (s);
 }
 
-void exception_cb (flux_t *h, flux_jobid_t id,
-                   const char *type, int severity, void *arg)
+void exception_cb (flux_t *h,
+                   flux_jobid_t id,
+                   const char *type,
+                   int severity,
+                   void *arg)
 {
-    char note [80];
+    char note[80];
     struct simple_sched *ss = arg;
     if (ss->job == NULL || ss->job->id != id || severity > 0)
         return;
-    flux_log (h, LOG_DEBUG, "alloc aborted: id=%ju", (uintmax_t) id);
+    flux_log (h, LOG_DEBUG, "alloc aborted: id=%ju", (uintmax_t)id);
     snprintf (note, sizeof (note) - 1, "alloc aborted due to exception");
     if (schedutil_alloc_respond_denied (h, ss->job->msg, note) < 0)
         flux_log_error (h, "alloc_respond_denied");
@@ -183,8 +183,7 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
     try_alloc (h, ss);
 }
 
-static void alloc_cb (flux_t *h, const flux_msg_t *msg,
-                      const char *jobspec, void *arg)
+static void alloc_cb (flux_t *h, const flux_msg_t *msg, const char *jobspec, void *arg)
 {
     struct simple_sched *ss = arg;
 
@@ -203,9 +202,13 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
         ss->job = NULL;
         return;
     }
-    flux_log (h, LOG_DEBUG, "req: %ju: spec={%d,%d,%d}",
-                            (uintmax_t) ss->job->id, ss->job->jj.nnodes,
-                            ss->job->jj.nslots, ss->job->jj.slot_size);
+    flux_log (h,
+              LOG_DEBUG,
+              "req: %ju: spec={%d,%d,%d}",
+              (uintmax_t)ss->job->id,
+              ss->job->jj.nnodes,
+              ss->job->jj.nslots,
+              ss->job->jj.slot_size);
     try_alloc (h, ss);
     return;
 err:
@@ -234,8 +237,10 @@ static int hello_cb (flux_t *h, const char *R, void *arg)
     return 0;
 }
 
-static void status_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void status_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     struct simple_sched *ss = arg;
     json_t *o = NULL;
@@ -265,8 +270,10 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     const char *by_rank = NULL;
 
     /* synchronously lookup by_rank for initialization */
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE,
-                                  "resource.hwloc.by_rank"))) {
+    if (!(f = flux_kvs_lookup (h,
+                               NULL,
+                               FLUX_KVS_WAITCREATE,
+                               "resource.hwloc.by_rank"))) {
         flux_log_error (h, "lookup resource.hwloc.by_rank");
         goto out;
     }
@@ -289,8 +296,12 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     s = rlist_dumps (ss->rlist);
-    flux_log (h, LOG_DEBUG, "ready: %d of %d cores: %s",
-                            ss->rlist->avail, ss->rlist->total, s);
+    flux_log (h,
+              LOG_DEBUG,
+              "ready: %d of %d cores: %s",
+              ss->rlist->avail,
+              ss->rlist->total,
+              s);
     free (s);
     rc = 0;
 out:
@@ -298,26 +309,23 @@ out:
     return rc;
 }
 
-static char * get_alloc_mode (flux_t *h, const char *mode)
+static char *get_alloc_mode (flux_t *h, const char *mode)
 {
-    if (strcmp (mode, "worst-fit") == 0
-       || strcmp (mode, "first-fit") == 0
-       || strcmp (mode, "best-fit") == 0)
+    if (strcmp (mode, "worst-fit") == 0 || strcmp (mode, "first-fit") == 0
+        || strcmp (mode, "best-fit") == 0)
         return strdup (mode);
     flux_log_error (h, "unknown allocation mode: %s\n", mode);
     return NULL;
 }
 
-static int process_args (flux_t *h, struct simple_sched *ss,
-                         int argc, char *argv[])
+static int process_args (flux_t *h, struct simple_sched *ss, int argc, char *argv[])
 {
     int i;
     for (i = 0; i < argc; i++) {
         if (strncmp ("mode=", argv[i], 5) == 0) {
             free (ss->mode);
-            ss->mode = get_alloc_mode (h, argv[i]+5);
-        }
-        else {
+            ss->mode = get_alloc_mode (h, argv[i] + 5);
+        } else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
             return -1;
         }
@@ -326,7 +334,7 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "sched-simple.status", status_cb, FLUX_ROLE_USER },
+    {FLUX_MSGTYPE_REQUEST, "sched-simple.status", status_cb, FLUX_ROLE_USER},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

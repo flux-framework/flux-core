@@ -13,17 +13,17 @@
 
 #include "subprocess.h"
 
-#define SUBPROCESS_MAGIC           0xbeefcafe
+#define SUBPROCESS_MAGIC 0xbeefcafe
 
-#define SUBPROCESS_SERVER_MAGIC    0xbeefbeef
+#define SUBPROCESS_SERVER_MAGIC 0xbeefbeef
 
 #define SUBPROCESS_DEFAULT_BUFSIZE 1048576
 
-#define CHANNEL_MAGIC    0xcafebeef
+#define CHANNEL_MAGIC 0xcafebeef
 
-#define CHANNEL_READ  0x01
+#define CHANNEL_READ 0x01
 #define CHANNEL_WRITE 0x02
-#define CHANNEL_FD    0x04
+#define CHANNEL_FD 0x04
 
 struct subprocess_channel {
     int magic;
@@ -34,7 +34,7 @@ struct subprocess_channel {
     int flags;
 
     /* caller info */
-    bool eof_sent_to_caller;       /* eof sent to user */
+    bool eof_sent_to_caller; /* eof sent to user */
     bool closed;
 
     /* local */
@@ -63,24 +63,24 @@ struct flux_subprocess {
     flux_reactor_t *reactor;
     uint32_t rank;
     int flags;
-    bool local;                     /* This is a local process, not remote. */
+    bool local; /* This is a local process, not remote. */
 
     int refcount;
     pid_t pid;
     bool pid_set;
 
-    flux_subprocess_ops_t ops;      /* Callbacks registered for this proc */
+    flux_subprocess_ops_t ops; /* Callbacks registered for this proc */
 
-    flux_cmd_t *cmd;                /* readonly/o copy of the command     */
+    flux_cmd_t *cmd; /* readonly/o copy of the command     */
 
-    struct aux_item *aux;           /* auxillary data                     */
+    struct aux_item *aux; /* auxillary data                     */
 
-    zhash_t *channels;              /* hash index by name to channel info */
-    int channels_eof_expected;      /* number of eofs to expect */
-    int channels_eof_sent;          /* counter to avoid loop checks */
+    zhash_t *channels;         /* hash index by name to channel info */
+    int channels_eof_expected; /* number of eofs to expect */
+    int channels_eof_sent;     /* counter to avoid loop checks */
 
-    int status;      /* Raw status from waitpid(2), valid if exited       */
-    int exec_failed_errno;  /* Holds errno from exec(2) if exec() failed  */
+    int status;            /* Raw status from waitpid(2), valid if exited       */
+    int exec_failed_errno; /* Holds errno from exec(2) if exec() failed  */
 
     flux_subprocess_state_t state;
     flux_subprocess_state_t state_reported; /* for on_state_change */
@@ -88,7 +88,7 @@ struct flux_subprocess {
     flux_watcher_t *state_idle_w;
     flux_watcher_t *state_check_w;
 
-    bool completed;             /* process has exited and i/o is complete */
+    bool completed; /* process has exited and i/o is complete */
     flux_watcher_t *completed_prep_w;
     flux_watcher_t *completed_idle_w;
     flux_watcher_t *completed_check_w;
@@ -96,14 +96,14 @@ struct flux_subprocess {
     /* local */
 
     /* fds[0] is parent/user, fds[1] is child */
-    int sync_fds[2];                /* socketpair for fork/exec sync      */
+    int sync_fds[2]; /* socketpair for fork/exec sync      */
     flux_watcher_t *child_w;
 
     /* remote */
 
-    flux_future_t *f;           /* primary future reactor */
-    bool remote_completed;      /* if remote has completed */
-    int failed_errno;           /* Holds errno if FAILED state reached */
+    flux_future_t *f;      /* primary future reactor */
+    bool remote_completed; /* if remote has completed */
+    int failed_errno;      /* Holds errno if FAILED state reached */
 };
 
 struct flux_subprocess_server {

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -141,13 +141,13 @@ static void subprocess_free (flux_subprocess_t *p)
     }
 }
 
-static flux_subprocess_t * subprocess_create (flux_t *h,
-                                              flux_reactor_t *r,
-                                              int flags,
-                                              const flux_cmd_t *cmd,
-                                              const flux_subprocess_ops_t *ops,
-                                              int rank,
-                                              bool local)
+static flux_subprocess_t *subprocess_create (flux_t *h,
+                                             flux_reactor_t *r,
+                                             int flags,
+                                             const flux_cmd_t *cmd,
+                                             const flux_subprocess_ops_t *ops,
+                                             int rank,
+                                             bool local)
 {
     flux_subprocess_t *p = calloc (1, sizeof (*p));
     int save_errno;
@@ -319,8 +319,7 @@ void flux_standard_output (flux_subprocess_t *p, const char *stream)
 
     /* if process exited, read remaining stuff or EOF, otherwise
      * wait for future newline */
-    if (!lenp
-        && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
+    if (!lenp && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
             log_err ("flux_standard_output: read_line");
             return;
@@ -377,23 +376,23 @@ static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
     assert (p->state != FLUX_SUBPROCESS_FAILED);
 
     switch (p->state_reported) {
-    case FLUX_SUBPROCESS_INIT:
-        /* next state to report must be STARTED */
-        return FLUX_SUBPROCESS_STARTED;
-    case FLUX_SUBPROCESS_STARTED:
-        /* next state must be RUNNING or EXEC_FAILED */
-        if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
-            return FLUX_SUBPROCESS_EXEC_FAILED;
-        else /* p->state == FLUX_SUBPROCESS_RUNNING
-                || p->state == FLUX_SUBPROCESS_EXITED */
-            return FLUX_SUBPROCESS_RUNNING;
-    case FLUX_SUBPROCESS_RUNNING:
-        /* next state is EXITED */
-        return FLUX_SUBPROCESS_EXITED;
-    case FLUX_SUBPROCESS_EXEC_FAILED:
-    case FLUX_SUBPROCESS_EXITED:
-    case FLUX_SUBPROCESS_FAILED:
-        break;
+        case FLUX_SUBPROCESS_INIT:
+            /* next state to report must be STARTED */
+            return FLUX_SUBPROCESS_STARTED;
+        case FLUX_SUBPROCESS_STARTED:
+            /* next state must be RUNNING or EXEC_FAILED */
+            if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
+                return FLUX_SUBPROCESS_EXEC_FAILED;
+            else /* p->state == FLUX_SUBPROCESS_RUNNING
+                    || p->state == FLUX_SUBPROCESS_EXITED */
+                return FLUX_SUBPROCESS_RUNNING;
+        case FLUX_SUBPROCESS_RUNNING:
+            /* next state is EXITED */
+            return FLUX_SUBPROCESS_EXITED;
+        case FLUX_SUBPROCESS_EXEC_FAILED:
+        case FLUX_SUBPROCESS_EXITED:
+        case FLUX_SUBPROCESS_FAILED:
+            break;
     }
 
     /* shouldn't be possible to reach here */
@@ -433,8 +432,7 @@ static void state_change_check_cb (flux_reactor_t *r,
         || p->state_reported == FLUX_SUBPROCESS_FAILED) {
         flux_watcher_stop (p->state_prep_w);
         flux_watcher_stop (p->state_check_w);
-    }
-    else if (p->state == p->state_reported) {
+    } else if (p->state == p->state_reported) {
         flux_watcher_stop (p->state_prep_w);
         flux_watcher_stop (p->state_check_w);
     }
@@ -448,25 +446,21 @@ static void state_change_check_cb (flux_reactor_t *r,
 static int subprocess_setup_state_change (flux_subprocess_t *p)
 {
     if (p->ops.on_state_change) {
-        p->state_prep_w = flux_prepare_watcher_create (p->reactor,
-                                                       state_change_prep_cb,
-                                                       p);
+        p->state_prep_w =
+            flux_prepare_watcher_create (p->reactor, state_change_prep_cb, p);
         if (!p->state_prep_w) {
             log_err ("flux_prepare_watcher_create");
             return -1;
         }
 
-        p->state_idle_w = flux_idle_watcher_create (p->reactor,
-                                                    NULL,
-                                                    p);
+        p->state_idle_w = flux_idle_watcher_create (p->reactor, NULL, p);
         if (!p->state_idle_w) {
             log_err ("flux_idle_watcher_create");
             return -1;
         }
 
-        p->state_check_w = flux_check_watcher_create (p->reactor,
-                                                      state_change_check_cb,
-                                                      p);
+        p->state_check_w =
+            flux_check_watcher_create (p->reactor, state_change_check_cb, p);
         if (!p->state_check_w) {
             log_err ("flux_check_watcher_create");
             return -1;
@@ -476,9 +470,9 @@ static int subprocess_setup_state_change (flux_subprocess_t *p)
 }
 
 static void completed_prep_cb (flux_reactor_t *r,
-                                  flux_watcher_t *w,
-                                  int revents,
-                                  void *arg)
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
 {
     flux_subprocess_t *p = arg;
 
@@ -509,8 +503,7 @@ static void completed_check_cb (flux_reactor_t *r,
      * If no state change callback was specified, we must have reached
      * state FLUX_SUBPROCESS_EXITED to have reached this point.
      */
-    if (!p->ops.on_state_change
-        || p->state_reported == FLUX_SUBPROCESS_EXITED) {
+    if (!p->ops.on_state_change || p->state_reported == FLUX_SUBPROCESS_EXITED) {
         if (p->ops.on_completion)
             (*p->ops.on_completion) (p);
 
@@ -524,25 +517,21 @@ static void completed_check_cb (flux_reactor_t *r,
 static int subprocess_setup_completed (flux_subprocess_t *p)
 {
     if (p->ops.on_completion) {
-        p->completed_prep_w = flux_prepare_watcher_create (p->reactor,
-                                                           completed_prep_cb,
-                                                           p);
+        p->completed_prep_w =
+            flux_prepare_watcher_create (p->reactor, completed_prep_cb, p);
         if (!p->completed_prep_w) {
             log_err ("flux_prepare_watcher_create");
             return -1;
         }
 
-        p->completed_idle_w = flux_idle_watcher_create (p->reactor,
-                                                        NULL,
-                                                        p);
+        p->completed_idle_w = flux_idle_watcher_create (p->reactor, NULL, p);
         if (!p->completed_idle_w) {
             log_err ("flux_idle_watcher_create");
             return -1;
         }
 
-        p->completed_check_w = flux_check_watcher_create (p->reactor,
-                                                          completed_check_cb,
-                                                          p);
+        p->completed_check_w =
+            flux_check_watcher_create (p->reactor, completed_check_cb, p);
         if (!p->completed_check_w) {
             log_err ("flux_check_watcher_create");
             return -1;
@@ -553,13 +542,15 @@ static int subprocess_setup_completed (flux_subprocess_t *p)
     return 0;
 }
 
-static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int flags,
-                                           const flux_cmd_t *cmd,
-                                           const flux_subprocess_ops_t *ops)
+static flux_subprocess_t *flux_exec_wrap (flux_t *h,
+                                          flux_reactor_t *r,
+                                          int flags,
+                                          const flux_cmd_t *cmd,
+                                          const flux_subprocess_ops_t *ops)
 {
     flux_subprocess_t *p = NULL;
-    int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
-                       | FLUX_SUBPROCESS_FLAGS_SETPGRP);
+    int valid_flags =
+        (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH | FLUX_SUBPROCESS_FLAGS_SETPGRP);
     int save_errno;
 
     if (!r || !cmd) {
@@ -595,9 +586,10 @@ error:
     return NULL;
 }
 
-flux_subprocess_t * flux_exec (flux_t *h, int flags,
-                               const flux_cmd_t *cmd,
-                               const flux_subprocess_ops_t *ops)
+flux_subprocess_t *flux_exec (flux_t *h,
+                              int flags,
+                              const flux_cmd_t *cmd,
+                              const flux_subprocess_ops_t *ops)
 {
     flux_reactor_t *r;
 
@@ -612,14 +604,17 @@ flux_subprocess_t * flux_exec (flux_t *h, int flags,
     return flux_exec_wrap (h, r, flags, cmd, ops);
 }
 
-flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
-                                     const flux_cmd_t *cmd,
-                                     const flux_subprocess_ops_t *ops)
+flux_subprocess_t *flux_local_exec (flux_reactor_t *r,
+                                    int flags,
+                                    const flux_cmd_t *cmd,
+                                    const flux_subprocess_ops_t *ops)
 {
     return flux_exec_wrap (NULL, r, flags, cmd, ops);
 }
 
-flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
+flux_subprocess_t *flux_rexec (flux_t *h,
+                               int rank,
+                               int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops)
 {
@@ -627,10 +622,7 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
     flux_reactor_t *r;
     int save_errno;
 
-    if (!h
-        || (rank < 0
-            && rank != FLUX_NODEID_ANY
-            && rank != FLUX_NODEID_UPSTREAM)
+    if (!h || (rank < 0 && rank != FLUX_NODEID_ANY && rank != FLUX_NODEID_UPSTREAM)
         || !cmd) {
         errno = EINVAL;
         return NULL;
@@ -681,8 +673,10 @@ error:
     return NULL;
 }
 
-int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
-                           const char *buf, size_t len)
+int flux_subprocess_write (flux_subprocess_t *p,
+                           const char *stream,
+                           const char *buf,
+                           size_t len)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -727,10 +721,8 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
             log_err ("flux_buffer_write");
             return -1;
         }
-    }
-    else {
-        if (p->state != FLUX_SUBPROCESS_INIT
-            && p->state != FLUX_SUBPROCESS_STARTED
+    } else {
+        if (p->state != FLUX_SUBPROCESS_INIT && p->state != FLUX_SUBPROCESS_STARTED
             && p->state != FLUX_SUBPROCESS_RUNNING) {
             errno = EPIPE;
             return -1;
@@ -778,8 +770,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
            || p->state == FLUX_SUBPROCESS_FAILED
         */
         c->closed = true;
-    }
-    else {
+    } else {
         /* doesn't matter about state, b/c reactors will send closed.
          * If those reactors are already turned off, it's b/c
          * subprocess failed/exited.
@@ -792,7 +783,8 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
 
 static const char *subprocess_read (flux_subprocess_t *p,
                                     const char *stream,
-                                    int len, int *lenp,
+                                    int len,
+                                    int *lenp,
                                     bool read_line,
                                     bool trimmed)
 {
@@ -822,21 +814,18 @@ static const char *subprocess_read (flux_subprocess_t *p,
     if (p->local) {
         if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
             return NULL;
-    }
-    else
+    } else
         fb = c->read_buffer;
 
     if (read_line) {
         if (trimmed) {
             if (!(ptr = flux_buffer_read_trimmed_line (fb, lenp)))
                 return NULL;
-        }
-        else {
+        } else {
             if (!(ptr = flux_buffer_read_line (fb, lenp)))
                 return NULL;
         }
-    }
-    else {
+    } else {
         if (!(ptr = flux_buffer_read (fb, len, lenp)))
             return NULL;
     }
@@ -846,7 +835,8 @@ static const char *subprocess_read (flux_subprocess_t *p,
 
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
-                                  int len, int *lenp)
+                                  int len,
+                                  int *lenp)
 {
     return subprocess_read (p, stream, len, lenp, false, false);
 }
@@ -891,8 +881,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
             flux_future_fulfill_error (f, errno, NULL);
         else
             flux_future_fulfill (f, NULL, NULL);
-    }
-    else {
+    } else {
         if (!(f = remote_kill (p, signum))) {
             int save_errno = errno;
             f = flux_future_create (NULL, NULL);
@@ -927,20 +916,19 @@ flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)
 
 const char *flux_subprocess_state_string (flux_subprocess_state_t state)
 {
-    switch (state)
-    {
-    case FLUX_SUBPROCESS_INIT:
-        return "Init";
-    case FLUX_SUBPROCESS_STARTED:
-        return "Started";
-    case FLUX_SUBPROCESS_EXEC_FAILED:
-        return "Exec Failed";
-    case FLUX_SUBPROCESS_RUNNING:
-        return "Running";
-    case FLUX_SUBPROCESS_EXITED:
-        return "Exited";
-    case FLUX_SUBPROCESS_FAILED:
-        return "Failed";
+    switch (state) {
+        case FLUX_SUBPROCESS_INIT:
+            return "Init";
+        case FLUX_SUBPROCESS_STARTED:
+            return "Started";
+        case FLUX_SUBPROCESS_EXEC_FAILED:
+            return "Exec Failed";
+        case FLUX_SUBPROCESS_RUNNING:
+            return "Running";
+        case FLUX_SUBPROCESS_EXITED:
+            return "Exited";
+        case FLUX_SUBPROCESS_FAILED:
+            return "Failed";
     }
     return NULL;
 }
@@ -964,8 +952,7 @@ int flux_subprocess_fail_errno (flux_subprocess_t *p)
         errno = EINVAL;
         return -1;
     }
-    if (p->state != FLUX_SUBPROCESS_EXEC_FAILED
-        && p->state != FLUX_SUBPROCESS_FAILED) {
+    if (p->state != FLUX_SUBPROCESS_EXEC_FAILED && p->state != FLUX_SUBPROCESS_FAILED) {
         errno = EINVAL;
         return -1;
     }
@@ -1039,7 +1026,7 @@ pid_t flux_subprocess_pid (flux_subprocess_t *p)
     return p->pid;
 }
 
-flux_cmd_t * flux_subprocess_get_cmd (flux_subprocess_t *p)
+flux_cmd_t *flux_subprocess_get_cmd (flux_subprocess_t *p)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;
@@ -1048,7 +1035,7 @@ flux_cmd_t * flux_subprocess_get_cmd (flux_subprocess_t *p)
     return p->cmd;
 }
 
-flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p)
+flux_reactor_t *flux_subprocess_get_reactor (flux_subprocess_t *p)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;
@@ -1058,7 +1045,9 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p)
 }
 
 int flux_subprocess_aux_set (flux_subprocess_t *p,
-                             const char *name, void *x, flux_free_f free_fn)
+                             const char *name,
+                             void *x,
+                             flux_free_f free_fn)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;
@@ -1067,7 +1056,7 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
     return aux_set (&p->aux, name, x, free_fn);
 }
 
-void * flux_subprocess_aux_get (flux_subprocess_t *p, const char *name)
+void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name)
 {
     if (!p || p->magic != SUBPROCESS_MAGIC) {
         errno = EINVAL;

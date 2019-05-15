@@ -11,7 +11,6 @@
 /* An idset is an internally sorted set of non-negative integers  (0,1,2,3...).
  */
 
-
 #ifndef FLUX_IDSET_H
 #define FLUX_IDSET_H
 
@@ -20,12 +19,12 @@
 #include <stdbool.h>
 
 enum idset_flags {
-    IDSET_FLAG_AUTOGROW = 1, // allow idset size to automatically grow
-    IDSET_FLAG_BRACKETS = 2, // encode non-singleton idset with brackets
-    IDSET_FLAG_RANGE = 4,    // encode with ranges ("2,3,4,8" -> "2-4,8")
+    IDSET_FLAG_AUTOGROW = 1,  // allow idset size to automatically grow
+    IDSET_FLAG_BRACKETS = 2,  // encode non-singleton idset with brackets
+    IDSET_FLAG_RANGE = 4,     // encode with ranges ("2,3,4,8" -> "2-4,8")
 };
 
-#define IDSET_INVALID_ID    (UINT_MAX - 1)
+#define IDSET_INVALID_ID (UINT_MAX - 1)
 
 /* Create/destroy an idset.
  * Set the initial size to 'size' (0 means implementation uses a default size).

@@ -46,9 +46,9 @@ void signal_result (flux_future_t *f, void *arg)
 
 void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
-        fprintf (stderr, "rank %d: %s: %s\n",
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
+        fprintf (stderr,
+                 "rank %d: %s: %s\n",
                  flux_subprocess_rank (p),
                  flux_subprocess_state_string (state),
                  strerror (flux_subprocess_fail_errno (p)));
@@ -72,8 +72,7 @@ void io_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp;
 
-    if (strcasecmp (stream, "STDOUT")
-        && strcasecmp (stream, "STDERR")) {
+    if (strcasecmp (stream, "STDOUT") && strcasecmp (stream, "STDERR")) {
         fprintf (stderr, "unexpected stream %s\n", stream);
         exit (1);
     }

@@ -32,7 +32,7 @@
 typedef struct wait_struct wait_t;
 typedef struct waitqueue_struct waitqueue_t;
 
-typedef void (*wait_cb_f)(void *arg);
+typedef void (*wait_cb_f) (void *arg);
 
 /* Create/destroy/get usecount of a wait_t.
  * Normally a wait_t is destroyed via wait_runqueue().
@@ -52,7 +52,7 @@ int wait_queue_length (waitqueue_t *q);
  */
 int wait_addqueue (waitqueue_t *q, wait_t *wait);
 
-typedef void (*wait_iter_cb_f)(wait_t *w, void *arg);
+typedef void (*wait_iter_cb_f) (wait_t *w, void *arg);
 int wait_queue_iter (waitqueue_t *q, wait_iter_cb_f cb, void *arg);
 
 /* Remove all wait_t's from the specified queue.
@@ -68,13 +68,14 @@ int wait_runqueue (waitqueue_t *q);
  * The message handler will be reinvoked once the wait_t usecount reaches zero.
  * Message will be copied and destroyed with the wait_t.
  */
-wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg, void *arg,
+wait_t *wait_create_msg_handler (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg,
                                  flux_msg_handler_f cb);
 
 /* Set/get auxiliary data to the flux message stored in a wait_t */
-int wait_msg_aux_set (wait_t *w, const char *name, void *aux,
-                      flux_free_f destroy);
+int wait_msg_aux_set (wait_t *w, const char *name, void *aux, flux_free_f destroy);
 void *wait_msg_aux_get (wait_t *w, const char *name);
 
 /* Get/set an aux errnum on a wait that can be retrieved later.
@@ -85,14 +86,14 @@ void *wait_msg_aux_get (wait_t *w, const char *name);
  */
 int wait_aux_set_errnum (wait_t *w, int errnum);
 int wait_aux_get_errnum (wait_t *w);
-typedef void (*wait_error_f)(wait_t *w, int errnum, void *arg);
+typedef void (*wait_error_f) (wait_t *w, int errnum, void *arg);
 int wait_set_error_cb (wait_t *w, wait_error_f cb, void *arg);
 
 /* Destroy all wait_t's fitting message match critieria, tested with
  * wait_test_msg_f callback.
  * On error, the waitqueue is unaltered.
  */
-typedef bool (*wait_test_msg_f)(const flux_msg_t *msg, void *arg);
+typedef bool (*wait_test_msg_f) (const flux_msg_t *msg, void *arg);
 int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg);
 
 #endif /* !_FLUX_KVS_WAITQUEUE_H */
@@ -100,4 +101,3 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg);
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

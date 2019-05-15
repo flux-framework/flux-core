@@ -55,7 +55,7 @@ size_t rlist_nnodes (struct rlist *rl);
  *  Serialize a resource list into v1 "R" format. This encodes only the
  *   "available" ids in each resource node into execution.R_lite
  */
-json_t * rlist_to_R (struct rlist *rl);
+json_t *rlist_to_R (struct rlist *rl);
 
 /*
  *  Dump short form description of rlist `rl` as a single line string.
@@ -83,9 +83,11 @@ struct rlist *rlist_from_R (const char *R);
  *   ENOSPC - unable to fulfill allocation.
  *   EINVAL - An argument was invalid.
  */
-struct rlist * rlist_alloc (struct rlist *rl, const char *mode,
-                            int nnodes, int slot_size, int nslots);
-
+struct rlist *rlist_alloc (struct rlist *rl,
+                           const char *mode,
+                           int nnodes,
+                           int slot_size,
+                           int nslots);
 
 /*  Remove rlist "alloc" from rlist "rl".
  */

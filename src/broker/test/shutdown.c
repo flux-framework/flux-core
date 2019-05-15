@@ -25,15 +25,12 @@ void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     int rc = shutdown_get_rc (s);
 
-    ok (rc == 42,
-        "shutowon callback retrieved exitcode");
+    ok (rc == 42, "shutowon callback retrieved exitcode");
 }
 
-void log_request_cb (flux_t *h, flux_msg_handler_t *w,
-                     const flux_msg_t *msg, void *arg)
+void log_request_cb (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg, void *arg)
 {
-    ok (msg != NULL,
-        "shutdown log message from rank 0 received");
+    ok (msg != NULL, "shutdown log message from rank 0 received");
     flux_msg_handler_stop (w);
 }
 
@@ -47,8 +44,7 @@ void check_codec (void)
     ok ((msg = shutdown_encode (3.14, 69, 41, "%s", "foo")) != NULL,
         "shutdown_encode works");
     ok (shutdown_decode (msg, &grace, &exitcode, &rank, r, sizeof (r)) == 0
-        && grace == 3.14 && exitcode == 69 && rank ==41 
-        && !strcmp (r, "foo"),
+            && grace == 3.14 && exitcode == 69 && rank == 41 && !strcmp (r, "foo"),
         "shutdown_decode works");
 
     flux_msg_destroy (msg);
@@ -66,22 +62,20 @@ int main (int argc, char **argv)
     check_codec ();
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE),
+                  0);
+    ok ((h = flux_open ("loop://", 0)) != NULL, "opened loop connector");
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
     flux_fatal_set (h, fatal_err, NULL);
 
-    ok ((sh = shutdown_create ()) != NULL,
-        "shutdown_create works");
+    ok ((sh = shutdown_create ()) != NULL, "shutdown_create works");
     shutdown_set_handle (sh, h);
     shutdown_set_callback (sh, shutdown_cb, NULL);
 
     matchlog.topic_glob = "log.append";
     log_w = flux_msg_handler_create (h, matchlog, log_request_cb, sh);
-    ok (log_w != NULL,
-        "created log.append watcher");
+    ok (log_w != NULL, "created log.append watcher");
     flux_msg_handler_start (log_w);
 
     ok (shutdown_arm (sh, 0.1, 42, "testing %d %d %d", 1, 2, 3) == 0,

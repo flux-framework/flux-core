@@ -40,22 +40,22 @@ void test_clog (flux_t *h, uint32_t nodeid);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t *h, uint32_t nodeid);
+    void (*fun) (flux_t *h, uint32_t nodeid);
 } test_t;
 
 static test_t tests[] = {
-    { "null",   &test_null },
-    { "echo",   &test_echo },
-    { "err",    &test_err },
-    { "src",    &test_src },
-    { "sink",   &test_sink },
-    { "nsrc",   &test_nsrc },
-    { "putmsg", &test_putmsg },
-    { "pingzero", &test_pingzero},
-    { "pingself", &test_pingself},
-    { "pingupstream", &test_pingupstream},
-    { "flush", &test_flush},
-    { "clog", &test_clog},
+    {"null", &test_null},
+    {"echo", &test_echo},
+    {"err", &test_err},
+    {"src", &test_src},
+    {"sink", &test_sink},
+    {"nsrc", &test_nsrc},
+    {"putmsg", &test_putmsg},
+    {"pingzero", &test_pingzero},
+    {"pingself", &test_pingself},
+    {"pingupstream", &test_pingupstream},
+    {"flush", &test_flush},
+    {"clog", &test_clog},
 };
 
 test_t *test_lookup (const char *name)
@@ -69,16 +69,16 @@ test_t *test_lookup (const char *name)
 
 #define OPTIONS "hr:"
 static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"rank",       required_argument,  0, 'r'},
-    { 0, 0, 0, 0 },
+    {"help", no_argument, 0, 'h'},
+    {"rank", required_argument, 0, 'r'},
+    {0, 0, 0, 0},
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingupstream | clog | flush}\n"
-);
+             "Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | "
+             "pingzero | pingself | pingupstream | clog | flush}\n");
     exit (1);
 }
 
@@ -125,7 +125,7 @@ void test_null (flux_t *h, uint32_t nodeid)
     flux_future_t *f;
 
     if (!(f = flux_rpc (h, "req.null", NULL, nodeid, 0))
-             || flux_future_get (f, NULL) < 0)
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("req.null");
     flux_future_destroy (f);
 }
@@ -135,9 +135,8 @@ void test_echo (flux_t *h, uint32_t nodeid)
     const char *s;
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (h, "req.echo", nodeid, 0,
-                             "{s:s}", "mumble", "burble"))
-             || flux_rpc_get_unpack (f, "{s:s}", "mumble", &s) < 0)
+    if (!(f = flux_rpc_pack (h, "req.echo", nodeid, 0, "{s:s}", "mumble", "burble"))
+        || flux_rpc_get_unpack (f, "{s:s}", "mumble", &s) < 0)
         log_err_exit ("%s", __FUNCTION__);
     if (strcmp (s, "burble") != 0)
         log_msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
@@ -163,7 +162,7 @@ void test_src (flux_t *h, uint32_t nodeid)
     int i;
 
     if (!(f = flux_rpc (h, "req.src", NULL, nodeid, 0))
-             || flux_rpc_get_unpack (f, "{s:i}", "wormz", &i) < 0)
+        || flux_rpc_get_unpack (f, "{s:i}", "wormz", &i) < 0)
         log_err_exit ("%s", __FUNCTION__);
     if (i != 42)
         log_msg_exit ("%s: didn't get expected payload", __FUNCTION__);
@@ -175,7 +174,7 @@ void test_sink (flux_t *h, uint32_t nodeid)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (h, "req.sink", nodeid, 0, "{s:f}", "pi", 3.14))
-             || flux_future_get (f, NULL) < 0)
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
 }
@@ -188,9 +187,13 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
     int i, seq = -1;
     json_t *o;
 
-    if (!(f = flux_rpc_pack (h, "req.nsrc",
-                             FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE,
-                             "{s:i}", "count", count)))
+    if (!(f = flux_rpc_pack (h,
+                             "req.nsrc",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:i}",
+                             "count",
+                             count)))
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
     for (i = 0; i < count; i++) {
@@ -200,7 +203,7 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
         if (flux_response_decode (msg, NULL, &json_str) < 0)
             log_msg_exit ("%s: decode %d", __FUNCTION__, i);
         if (!json_str || !(o = json_loads (json_str, 0, NULL))
-                      || json_unpack (o, "{s:i}", "seq", &seq) < 0)
+            || json_unpack (o, "{s:i}", "seq", &seq) < 0)
             log_msg_exit ("%s: decode %d payload", __FUNCTION__, i);
         if (seq != i)
             log_msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
@@ -230,9 +233,13 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
     if (!defer)
         oom ();
 
-    if (!(f = flux_rpc_pack (h, "req.nsrc",
-                             FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE,
-                             "{s:i}", "count", count)))
+    if (!(f = flux_rpc_pack (h,
+                             "req.nsrc",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:i}",
+                             "count",
+                             count)))
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
     do {
@@ -242,7 +249,7 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
         if (flux_response_decode (msg, NULL, &json_str) < 0)
             log_msg_exit ("%s: decode", __FUNCTION__);
         if (!json_str || !(o = json_loads (json_str, 0, NULL))
-                      || json_unpack (o, "{s:i}", "seq", &seq) < 0)
+            || json_unpack (o, "{s:i}", "seq", &seq) < 0)
             log_msg_exit ("%s: decode - payload", __FUNCTION__);
         json_decref (o);
         if (seq >= defer_start && seq < defer_start + defer_count && !popped) {
@@ -284,9 +291,16 @@ static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc
     flux_future_t *f;
     const char *route;
 
-    if (!(f = flux_rpc_pack (h, "req.xping", nodeid, 0,
-                             "{s:i s:s}", "rank", xnodeid, "service", svc))
-            || flux_rpc_get_unpack (f, "{s:s}", "route", &route) < 0)
+    if (!(f = flux_rpc_pack (h,
+                             "req.xping",
+                             nodeid,
+                             0,
+                             "{s:i s:s}",
+                             "rank",
+                             xnodeid,
+                             "service",
+                             svc))
+        || flux_rpc_get_unpack (f, "{s:s}", "route", &route) < 0)
         log_err_exit ("req.xping");
     printf ("hops=%d\n", count_hops (route));
     flux_future_destroy (f);
@@ -311,7 +325,7 @@ void test_flush (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
     if (!(f = flux_rpc (h, "req.flush", NULL, nodeid, 0))
-             || flux_future_get (f, NULL) < 0)
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("req.flush");
     flux_future_destroy (f);
 }
@@ -319,8 +333,7 @@ void test_flush (flux_t *h, uint32_t nodeid)
 void test_clog (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
-    if (!(f = flux_rpc (h, "req.clog", NULL, nodeid, 0))
-             || flux_rpc_get (f, NULL) < 0)
+    if (!(f = flux_rpc (h, "req.clog", NULL, nodeid, 0)) || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("req.clog");
     flux_future_destroy (f);
 }

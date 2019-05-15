@@ -41,7 +41,7 @@ int fluid_init (struct fluid_generator *gen, uint32_t id)
 {
     if (current_ds (&gen->epoch) < 0)
         return -1;
-    if (id >= (1ULL<<bits_per_id))
+    if (id >= (1ULL << bits_per_id))
         return -1;
     gen->id = id;
     gen->seq = 0;
@@ -61,14 +61,14 @@ int fluid_generate (struct fluid_generator *gen, fluid_t *fluid)
         gen->seq = 0;
         gen->last_ds = s;
     }
-    if ((s - gen->epoch) >= (1ULL<<bits_per_ts))
+    if ((s - gen->epoch) >= (1ULL << bits_per_ts))
         return -1;
-    if (gen->seq >= (1ULL<<bits_per_seq)) {
+    if (gen->seq >= (1ULL << bits_per_seq)) {
         usleep (200);
         return fluid_generate (gen, fluid);
     }
     *fluid = ((s - gen->epoch) << (bits_per_seq + bits_per_id)
-                    | (gen->id << bits_per_seq) | gen->seq);
+              | (gen->id << bits_per_seq) | gen->seq);
     return 0;
 }
 
@@ -93,18 +93,19 @@ static int fluid_encode_dothex (char *buf, int bufsz, fluid_t fluid)
 {
     int rc;
 
-    rc = snprintf (buf, bufsz, "%04x.%04x.%04x.%04x",
-                   (unsigned int)(fluid>>48) & 0xffff,
-                   (unsigned int)(fluid>>32) & 0xffff,
-                   (unsigned int)(fluid>>16) & 0xffff,
+    rc = snprintf (buf,
+                   bufsz,
+                   "%04x.%04x.%04x.%04x",
+                   (unsigned int)(fluid >> 48) & 0xffff,
+                   (unsigned int)(fluid >> 32) & 0xffff,
+                   (unsigned int)(fluid >> 16) & 0xffff,
                    (unsigned int)fluid & 0xffff);
     if (rc < 0 || rc >= bufsz)
         return -1;
     return 0;
 }
 
-int fluid_encode (char *buf, int bufsz, fluid_t fluid,
-                  fluid_string_type_t type)
+int fluid_encode (char *buf, int bufsz, fluid_t fluid, fluid_string_type_t type)
 {
     switch (type) {
         case FLUID_STRING_DOTHEX:
@@ -112,8 +113,8 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
                 return -1;
             break;
         case FLUID_STRING_MNEMONIC:
-            if (mn_encode ((void *)&fluid, sizeof (fluid_t),
-                            buf, bufsz, MN_FDEFAULT) != MN_OK)
+            if (mn_encode ((void *)&fluid, sizeof (fluid_t), buf, bufsz, MN_FDEFAULT)
+                != MN_OK)
                 return -1;
             break;
     }
@@ -123,14 +124,14 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
 static int fluid_validate (fluid_t fluid)
 {
     unsigned long long ts = fluid >> (bits_per_seq + bits_per_id);
-    unsigned int id = (fluid >> bits_per_seq) & ((1<<bits_per_id) - 1);
-    unsigned int seq = fluid & ((1<<bits_per_seq) - 1);
+    unsigned int id = (fluid >> bits_per_seq) & ((1 << bits_per_id) - 1);
+    unsigned int seq = fluid & ((1 << bits_per_seq) - 1);
 
-    if (ts >= (1ULL<<bits_per_ts))
+    if (ts >= (1ULL << bits_per_ts))
         return -1;
-    if (id >= (1<<bits_per_id))
+    if (id >= (1 << bits_per_id))
         return -1;
-    if (seq >= (1<<bits_per_seq))
+    if (seq >= (1 << bits_per_seq))
         return -1;
     return 0;
 }

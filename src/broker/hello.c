@@ -42,14 +42,15 @@ struct hello_struct {
     flux_reduce_t *reduce;
 };
 
-static void join_request (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg);
+static void join_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg);
 
 static void r_reduce (flux_reduce_t *r, int batch, void *arg);
 static void r_sink (flux_reduce_t *r, int batch, void *arg);
 static void r_forward (flux_reduce_t *r, int batch, void *arg);
 static int r_itemweight (void *item);
-
 
 struct flux_reduce_ops reduce_ops = {
     .destroy = NULL,
@@ -116,7 +117,7 @@ int hello_register_attrs (hello_t *hello, attr_t *attrs)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "hello.join",     join_request, 0 },
+    {FLUX_MSGTYPE_REQUEST, "hello.join", join_request, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -157,12 +158,11 @@ int hello_start (hello_t *hello)
     const char *s;
 
     if (flux_get_rank (hello->h, &hello->rank) < 0
-                        || flux_get_size (hello->h, &hello->size) < 0) {
+        || flux_get_size (hello->h, &hello->size) < 0) {
         log_err ("hello: error getting rank/size");
         goto done;
     }
-    if (flux_msg_handler_addvec (hello->h, htab, hello,
-                                 &hello->handlers) < 0) {
+    if (flux_msg_handler_addvec (hello->h, htab, hello, &hello->handlers) < 0) {
         log_err ("hello: adding message handlers");
         goto done;
     }
@@ -183,13 +183,13 @@ int hello_start (hello_t *hello)
         flags |= FLUX_REDUCE_TIMEDFLUSH;
     if (hwm > 0)
         flags |= FLUX_REDUCE_HWMFLUSH;
-    if (!(hello->reduce = flux_reduce_create (hello->h, reduce_ops,
-                                              timeout, hello, flags))) {
+    if (!(hello->reduce =
+              flux_reduce_create (hello->h, reduce_ops, timeout, hello, flags))) {
         log_err ("hello: creating reduction handle");
         goto done;
     }
-    if (flux_reduce_opt_set (hello->reduce, FLUX_REDUCE_OPT_HWM,
-                             &hwm, sizeof (hwm)) < 0) {
+    if (flux_reduce_opt_set (hello->reduce, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm))
+        < 0) {
         log_err ("hello: setting FLUX_REDUCE_OPT_HWM");
         goto done;
     }
@@ -206,15 +206,16 @@ done:
 
 /* handle a message sent from downstream via downstream's r_forward op.
  */
-static void join_request (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void join_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     hello_t *hello = arg;
     int count, batch;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
-                             "count", &count,
-                             "batch", &batch) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:i s:i }", "count", &count, "batch", &batch)
+        < 0)
         log_err_exit ("hello: flux_request_unpack");
     if (batch != 0 || count <= 0)
         log_msg_exit ("hello: error decoding join request");
@@ -275,10 +276,15 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
     assert (batch == 0);
     assert (count > 0);
 
-    if (!(f = flux_rpc_pack (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
-                             FLUX_RPC_NORESPONSE, "{ s:i s:i }",
-                             "count", count,
-                             "batch", batch)))
+    if (!(f = flux_rpc_pack (hello->h,
+                             "hello.join",
+                             FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE,
+                             "{ s:i s:i }",
+                             "count",
+                             count,
+                             "batch",
+                             batch)))
         log_err_exit ("hello: flux_rpc_pack");
     flux_future_destroy (f);
 }

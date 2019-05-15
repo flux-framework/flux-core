@@ -48,14 +48,12 @@ int fluid_generate (struct fluid_generator *gen, fluid_t *fluid);
 /* Convert 'fluid' to NULL-terminated string 'buf' of specified type.
  * Return 0 on success, -1 on failure.
  */
-int fluid_encode (char *buf, int bufsz, fluid_t fluid,
-                  fluid_string_type_t type);
+int fluid_encode (char *buf, int bufsz, fluid_t fluid, fluid_string_type_t type);
 
 /* Convert NULL-terminated string 's' of specified 'type' to 'fluid'.
  * Return 0 on success, -1 on failure.
  */
-int fluid_decode (const char *s, fluid_t *fluid,
-                  fluid_string_type_t type);
+int fluid_decode (const char *s, fluid_t *fluid, fluid_string_type_t type);
 
 #endif /* !_UTIL_FLUID_H */
 

@@ -42,8 +42,7 @@ static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
     if (h >= l) {
         *hi = h;
         *lo = l;
-    }
-    else {
+    } else {
         *hi = l;
         *lo = h;
     }

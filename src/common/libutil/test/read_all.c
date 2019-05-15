@@ -56,8 +56,8 @@ void test_readback (size_t sz)
 
     /* Create tmpfile
      */
-    if (snprintf (tmpfile, sizeof (tmpfile), "%s/read_all.XXXXXX",
-                  t ? t : "/tmp") >= sizeof (tmpfile))
+    if (snprintf (tmpfile, sizeof (tmpfile), "%s/read_all.XXXXXX", t ? t : "/tmp")
+        >= sizeof (tmpfile))
         BAIL_OUT ("tmpfile overflow");
     if ((fd = mkstemp (tmpfile)) < 0)
         BAIL_OUT ("mkstemp: %s", strerror (errno));
@@ -70,14 +70,11 @@ void test_readback (size_t sz)
 
     /* Write, read, verify by fd
      */
-    ok (write_all (fd, buf, sz) == sz,
-        "write_all wrote %lu bytes", sz);
+    ok (write_all (fd, buf, sz) == sz, "write_all wrote %lu bytes", sz);
     if (lseek (fd, 0, SEEK_SET) < 0)
         BAIL_OUT ("lseek: %s", strerror (errno));
-    ok ((sz2 = read_all (fd, &buf2)) == sz,
-        "read_all read %lu bytes", sz);
-    ok (memcmp (buf2, buf, sz2) == 0,
-        "and data matches what was written");
+    ok ((sz2 = read_all (fd, &buf2)) == sz, "read_all read %lu bytes", sz);
+    ok (memcmp (buf2, buf, sz2) == 0, "and data matches what was written");
 
     if (close (fd) < 0)
         BAIL_OUT ("close: %s", strerror (errno));
@@ -88,11 +85,10 @@ void test_readback (size_t sz)
 
 int main (int argc, char *argv[])
 {
-
     plan (NO_PLAN);
 
     test_readback (33);
-    test_readback (8192); // more than internal chunk size
+    test_readback (8192);  // more than internal chunk size
 
     test_badargs ();
 

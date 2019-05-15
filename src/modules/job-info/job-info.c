@@ -19,8 +19,10 @@
 #include "lookup.h"
 #include "watch.h"
 
-static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     struct info_ctx *ctx = arg;
     char *sender;
@@ -37,14 +39,21 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     free (sender);
 }
 
-static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void stats_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct info_ctx *ctx = arg;
 
-    if (flux_respond_pack (h, msg, "{s:i s:i}",
-                           "lookups", zlist_size (ctx->lookups),
-                           "watchers", zlist_size (ctx->watchers)) < 0) {
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i}",
+                           "lookups",
+                           zlist_size (ctx->lookups),
+                           "watchers",
+                           zlist_size (ctx->watchers))
+        < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -56,31 +65,26 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.lookup",
-      .cb           = lookup_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.eventlog-watch",
-      .cb           = watch_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.eventlog-watch-cancel",
-      .cb           = watch_cancel_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.disconnect",
-      .cb           = disconnect_cb,
-      .rolemask     = 0
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.stats.get",
-      .cb           = stats_cb,
-      .rolemask     = 0
-    },
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "job-info.lookup",
+     .cb = lookup_cb,
+     .rolemask = FLUX_ROLE_USER},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "job-info.eventlog-watch",
+     .cb = watch_cb,
+     .rolemask = FLUX_ROLE_USER},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "job-info.eventlog-watch-cancel",
+     .cb = watch_cancel_cb,
+     .rolemask = FLUX_ROLE_USER},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "job-info.disconnect",
+     .cb = disconnect_cb,
+     .rolemask = 0},
+    {.typemask = FLUX_MSGTYPE_REQUEST,
+     .topic_glob = "job-info.stats.get",
+     .cb = stats_cb,
+     .rolemask = 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

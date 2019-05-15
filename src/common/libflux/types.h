@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-typedef void (*flux_free_f)(void *arg);
+typedef void (*flux_free_f) (void *arg);
 
 #ifdef __cplusplus
 }

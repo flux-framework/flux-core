@@ -42,22 +42,25 @@ struct flux_reduce_struct {
     bool flushed;
 };
 
-
 static void flush_current (flux_reduce_t *r);
 
-
-static void timer_cb (flux_reactor_t *reactor, flux_watcher_t *w,
-                      int revents, void *arg)
+static void timer_cb (flux_reactor_t *reactor,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     flux_reduce_t *r = arg;
     flush_current (r);
 }
 
-flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
-                                   double timeout, void *arg, int flags)
+flux_reduce_t *flux_reduce_create (flux_t *h,
+                                   struct flux_reduce_ops ops,
+                                   double timeout,
+                                   void *arg,
+                                   int flags)
 {
     if (!h || ((flags & FLUX_REDUCE_HWMFLUSH) && !ops.itemweight)
-           || ((flags & FLUX_REDUCE_TIMEDFLUSH) && timeout <= 0)) {
+        || ((flags & FLUX_REDUCE_TIMEDFLUSH) && timeout <= 0)) {
         errno = EINVAL;
         return NULL;
     }
@@ -84,8 +87,7 @@ flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
         return NULL;
     }
     if ((flags & FLUX_REDUCE_TIMEDFLUSH)) {
-        if (!(r->timer = flux_timer_watcher_create (r->reactor, 0., 0.,
-                                                    timer_cb, r))) {
+        if (!(r->timer = flux_timer_watcher_create (r->reactor, 0., 0., timer_cb, r))) {
             flux_reduce_destroy (r);
             return NULL;
         }
@@ -209,7 +211,7 @@ int flux_reduce_append (flux_reduce_t *r, void *item, int batchnum)
             }
         }
         if (!(r->flags & FLUX_REDUCE_HWMFLUSH)
-                && !(r->flags & FLUX_REDUCE_TIMEDFLUSH)) {
+            && !(r->flags & FLUX_REDUCE_TIMEDFLUSH)) {
             flush_current (r);
         }
     }
@@ -247,14 +249,14 @@ int flux_reduce_opt_get (flux_reduce_t *r, int option, void *val, size_t size)
                 goto invalid;
             memcpy (val, &r->hwm, size);
             break;
-        case FLUX_REDUCE_OPT_COUNT : {
+        case FLUX_REDUCE_OPT_COUNT: {
             unsigned int count = zlist_size (r->items);
             if (size != sizeof (count))
                 goto invalid;
             memcpy (val, &count, size);
             break;
         }
-        case FLUX_REDUCE_OPT_WCOUNT : {
+        case FLUX_REDUCE_OPT_WCOUNT: {
             unsigned int count = 0;
             void *item = zlist_first (r->items);
             while (item) {

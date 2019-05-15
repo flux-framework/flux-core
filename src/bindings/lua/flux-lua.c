@@ -53,12 +53,11 @@ static int lua_flux_obj_ref_create (lua_State *L, int index)
     lua_setmetatable (L, -2);
 
     lua_pushvalue (L, i);
-    lua_rawseti (L, -2, 1);  /* t[1] = userdata */
+    lua_rawseti (L, -2, 1); /* t[1] = userdata */
 
     /* Return new flux obj reference table on top of stack */
     return (1);
 }
-
 
 /*
  *  The flux 'reftable' is a table of references to flux C userdata
@@ -127,12 +126,12 @@ static int lua_push_flux_handle (lua_State *L, flux_t *f)
     lua_pushliteral (L, "flux"); /* [ flux, reftable, ... ] */
     lua_rawget (L, -2);          /* [ value, reftable, ... ] */
     if (lua_istable (L, -1)) {
-        lua_rawgeti (L, -1, 1);  /* [ userdata, table, reftable, ... ] */
+        lua_rawgeti (L, -1, 1); /* [ userdata, table, reftable, ... ] */
 
         if (lua_isuserdata (L, -1)) {
             /* Restore stack with userdata on top */
-            lua_replace (L, top+1);  /* [ table, userdata, ... ] */
-            lua_settop (L, top+1);   /* [ userdata, .... ] */
+            lua_replace (L, top + 1); /* [ table, userdata, ... ] */
+            lua_settop (L, top + 1);  /* [ userdata, .... ] */
             return (1);
         }
         /* If we didn't find a userdata (partial initialization?)
@@ -170,12 +169,12 @@ static int lua_push_flux_handle (lua_State *L, flux_t *f)
      *        ...
      *   }
      */
-    l_get_flux_reftable (L, f);     /* [ table, udata, ... ] */
-    lua_pushliteral (L, "flux");    /* [ 'flux', table, udata, ... ]     */
-    lua_flux_obj_ref_create (L, -3);/* [ objref, 'flux', t, udata, ... ] */
-    lua_rawset (L, -3);             /* reftable.flux = ...               */
-                                    /*  [ t, udata, ... ]                */
-    lua_pop (L, 1);                 /* pop reftable leaving userdata     */
+    l_get_flux_reftable (L, f);      /* [ table, udata, ... ] */
+    lua_pushliteral (L, "flux");     /* [ 'flux', table, udata, ... ]     */
+    lua_flux_obj_ref_create (L, -3); /* [ objref, 'flux', t, udata, ... ] */
+    lua_rawset (L, -3);              /* reftable.flux = ...               */
+                                     /*  [ t, udata, ... ]                */
+    lua_pop (L, 1);                  /* pop reftable leaving userdata     */
 
     /* Return userdata as flux object */
     return (1);
@@ -266,8 +265,11 @@ static int l_flux_index (lua_State *L)
     return 1;
 }
 
-static int send_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
-                              const char *topic, const char *json_str)
+static int send_json_request (flux_t *h,
+                              uint32_t nodeid,
+                              uint32_t matchtag,
+                              const char *topic,
+                              const char *json_str)
 {
     flux_msg_t *msg;
     int rc = -1;
@@ -348,8 +350,9 @@ static int l_flux_recv (lua_State *L)
     if (flux_msg_get_errnum (msg, &errnum) < 0)
         goto error;
 
-    if (errnum == 0 && (flux_msg_get_topic (msg, &topic) < 0
-                     || flux_msg_get_string (msg, &json_str) < 0))
+    if (errnum == 0
+        && (flux_msg_get_topic (msg, &topic) < 0
+            || flux_msg_get_string (msg, &json_str) < 0))
         goto error;
 
     if (json_str)
@@ -419,7 +422,7 @@ static int l_flux_rpc (lua_State *L)
         rc = lua_pusherror (L, (char *)flux_strerror (errno));
         goto done;
     }
-    if (json_object_string_to_lua (L, s ? : "{}") < 0) {
+    if (json_object_string_to_lua (L, s ?: "{}") < 0) {
         rc = lua_pusherror (L, "response JSON conversion error");
         goto done;
     }
@@ -528,10 +531,10 @@ static int l_flux_recv_event (lua_State *L)
  *  Reactor:
  */
 struct l_flux_ref {
-    lua_State *L;    /* Copy of this lua state */
-    flux_t *flux;    /* Copy of flux handle for flux reftable lookup */
-    void   *arg;     /* optional argument */
-    int    ref;      /* reference into flux reftable                 */
+    lua_State *L; /* Copy of this lua state */
+    flux_t *flux; /* Copy of flux handle for flux reftable lookup */
+    void *arg;    /* optional argument */
+    int ref;      /* reference into flux reftable                 */
 };
 
 /*
@@ -563,12 +566,14 @@ void l_flux_ref_destroy (struct l_flux_ref *r, const char *type)
     lua_settop (L, top);
 }
 
-struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t *f,
-        int index, const char *type)
+struct l_flux_ref *l_flux_ref_create (lua_State *L,
+                                      flux_t *f,
+                                      int index,
+                                      const char *type)
 {
     int ref;
     struct l_flux_ref *mh;
-    char metatable [1024];
+    char metatable[1024];
 
     /*
      *  Store the table argument at index into the flux.<type> array
@@ -616,7 +621,6 @@ struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t *f,
     lua_setfield (L, index, "userdata");
 
     return (mh);
-
 }
 
 /*
@@ -634,13 +638,15 @@ static int l_flux_ref_gettable (struct l_flux_ref *r, const char *name)
     lua_rawgeti (L, -1, r->ref);
     assert (lua_istable (L, -1));
 
-    lua_replace (L, top+1);
-    lua_settop (L, top+1);
+    lua_replace (L, top + 1);
+    lua_settop (L, top + 1);
     return (1);
 }
 
 static int l_f_zi_resp_cb (lua_State *L,
-    struct zmsg_info *zi, const char *json_str, void *arg)
+                           struct zmsg_info *zi,
+                           const char *json_str,
+                           void *arg)
 {
     flux_t *f = arg;
     flux_msg_t **msgp = zmsg_info_zmsg (zi);
@@ -650,10 +656,12 @@ static int l_f_zi_resp_cb (lua_State *L,
 }
 
 static int create_and_push_zmsg_info (lua_State *L,
-        flux_t *f, int typemask, flux_msg_t **msg)
+                                      flux_t *f,
+                                      int typemask,
+                                      flux_msg_t **msg)
 {
-    struct zmsg_info * zi = zmsg_info_create (msg, typemask);
-    zmsg_info_register_resp_cb (zi, (zi_resp_f) l_f_zi_resp_cb, (void *) f);
+    struct zmsg_info *zi = zmsg_info_create (msg, typemask);
+    zmsg_info_register_resp_cb (zi, (zi_resp_f)l_f_zi_resp_cb, (void *)f);
     return lua_push_zmsg_info (L, zi);
 }
 
@@ -678,8 +686,10 @@ static int l_flux_recvmsg (lua_State *L)
     return (1);
 }
 
-static void msg_handler_cb (flux_t *f, flux_msg_handler_t *fmh,
-                            const flux_msg_t *msg, void *arg)
+static void msg_handler_cb (flux_t *f,
+                            flux_msg_handler_t *fmh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     int rc;
     int t;
@@ -761,7 +771,7 @@ static int l_msghandler_add (lua_State *L)
     lua_getfield (L, 2, "pattern");
     if (lua_isnil (L, -1))
         return lua_pusherror (L, "Mandatory table argument 'pattern' missing");
-    match.topic_glob = (char *) lua_tostring (L, -1);
+    match.topic_glob = (char *)lua_tostring (L, -1);
     lua_pop (L, 1);
 
     lua_getfield (L, 2, "handler");
@@ -782,8 +792,9 @@ static int l_msghandler_add (lua_State *L)
     fmh = flux_msg_handler_create (f, match, msg_handler_cb, (void *)mh);
     if (fmh == NULL) {
         l_flux_ref_destroy (mh, "msghandler");
-        return lua_pusherror (L, "flux_msg_handler_create: %s",
-                             (char *)flux_strerror (errno));
+        return lua_pusherror (L,
+                              "flux_msg_handler_create: %s",
+                              (char *)flux_strerror (errno));
     }
     flux_msg_handler_start (fmh);
     /* Save flux_msg_handler_t * in mh ref table */
@@ -858,8 +869,7 @@ void push_stat_table (lua_State *L, struct stat *s)
     lua_setfield (L, t, "st_blocks");
 }
 
-void stat_watcher_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+void stat_watcher_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct stat st, prev;
     int rc, t;
@@ -910,13 +920,17 @@ static int l_stat_watcher_add (lua_State *L)
     lua_pop (L, 1);
 
     sw = l_flux_ref_create (L, f, 2, "watcher");
-    w = flux_stat_watcher_create (flux_get_reactor (f), path, interval,
-                                  stat_watcher_cb, (void *) sw);
+    w = flux_stat_watcher_create (flux_get_reactor (f),
+                                  path,
+                                  interval,
+                                  stat_watcher_cb,
+                                  (void *)sw);
     sw->arg = w;
     if (w == NULL) {
         l_flux_ref_destroy (sw, "watcher");
-        return lua_pusherror (L, "flux_stat_watcher_create: %s",
-                                 (char *)flux_strerror (errno));
+        return lua_pusherror (L,
+                              "flux_stat_watcher_create: %s",
+                              (char *)flux_strerror (errno));
     }
 
     flux_watcher_start (w);
@@ -965,8 +979,7 @@ static int l_watcher_index (lua_State *L)
     return (1);
 }
 
-static void
-timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     int rc;
     int t;
@@ -1025,11 +1038,14 @@ static int l_timeout_handler_add (lua_State *L)
 
     to = l_flux_ref_create (L, f, 2, "watcher");
     w = flux_timer_watcher_create (flux_get_reactor (f),
-                                   ms/1000., oneshot ? 0 : ms/1000.,
-                                   timeout_cb, (void *) to);
+                                   ms / 1000.,
+                                   oneshot ? 0 : ms / 1000.,
+                                   timeout_cb,
+                                   (void *)to);
     if (w == NULL) {
         l_flux_ref_destroy (to, "watcher");
-        return lua_pusherror (L, "flux_timer_watcher_create: %s",
+        return lua_pusherror (L,
+                              "flux_timer_watcher_create: %s",
                               (char *)flux_strerror (errno));
     }
     to->arg = w;
@@ -1041,7 +1057,7 @@ static int l_timeout_handler_add (lua_State *L)
      *   we use the pointer as a unique identifier.
      */
     l_flux_ref_gettable (to, "watcher");
-    lua_pushnumber (L, (intptr_t) w);
+    lua_pushnumber (L, (intptr_t)w);
     lua_setfield (L, -2, "id");
 
     /*
@@ -1096,53 +1112,45 @@ static int l_flux_reactor_stop_error (lua_State *L)
     return 0;
 }
 
-static const struct luaL_Reg flux_functions [] = {
-    { "new",             l_flux_new         },
-    { NULL,              NULL              }
-};
+static const struct luaL_Reg flux_functions[] = {{"new", l_flux_new}, {NULL, NULL}};
 
-static const struct luaL_Reg flux_methods [] = {
-    { "__gc",            l_flux_destroy     },
-    { "__index",         l_flux_index       },
-    { "send",            l_flux_send        },
-    { "recv",            l_flux_recv        },
-    { "recvmsg",         l_flux_recvmsg     },
-    { "rpc",             l_flux_rpc         },
-    { "sendevent",       l_flux_send_event  },
-    { "recv_event",      l_flux_recv_event },
-    { "subscribe",       l_flux_subscribe   },
-    { "unsubscribe",     l_flux_unsubscribe },
-    { "getattr",         l_flux_getattr     },
-    { "msghandler",      l_msghandler_add    },
-    { "statwatcher",     l_stat_watcher_add  },
-    { "timer",           l_timeout_handler_add },
-    { "reactor",         l_flux_reactor_start },
-    { "reactor_stop",    l_flux_reactor_stop },
-    { "reactor_stop_error",
-                         l_flux_reactor_stop_error },
-    { NULL,              NULL               }
-};
+static const struct luaL_Reg flux_methods[] = {{"__gc", l_flux_destroy},
+                                               {"__index", l_flux_index},
+                                               {"send", l_flux_send},
+                                               {"recv", l_flux_recv},
+                                               {"recvmsg", l_flux_recvmsg},
+                                               {"rpc", l_flux_rpc},
+                                               {"sendevent", l_flux_send_event},
+                                               {"recv_event", l_flux_recv_event},
+                                               {"subscribe", l_flux_subscribe},
+                                               {"unsubscribe", l_flux_unsubscribe},
+                                               {"getattr", l_flux_getattr},
+                                               {"msghandler", l_msghandler_add},
+                                               {"statwatcher", l_stat_watcher_add},
+                                               {"timer", l_timeout_handler_add},
+                                               {"reactor", l_flux_reactor_start},
+                                               {"reactor_stop", l_flux_reactor_stop},
+                                               {"reactor_stop_error",
+                                                l_flux_reactor_stop_error},
+                                               {NULL, NULL}};
 
-static const struct luaL_Reg msghandler_methods [] = {
-    { "__index",         l_msghandler_index    },
-    { "__newindex",      l_msghandler_newindex },
-    { "remove",          l_msghandler_remove   },
-    { NULL,              NULL                  }
-};
+static const struct luaL_Reg msghandler_methods[] = {{"__index", l_msghandler_index},
+                                                     {"__newindex",
+                                                      l_msghandler_newindex},
+                                                     {"remove", l_msghandler_remove},
+                                                     {NULL, NULL}};
 
-static const struct luaL_Reg watcher_methods [] = {
-    { "__gc",            l_watcher_destroy  },
-    { "__index",         l_watcher_index    },
-    { "remove",          l_watcher_remove   },
-    { NULL,              NULL                  }
-};
+static const struct luaL_Reg watcher_methods[] = {{"__gc", l_watcher_destroy},
+                                                  {"__index", l_watcher_index},
+                                                  {"remove", l_watcher_remove},
+                                                  {NULL, NULL}};
 
-#define FLUX_CONSTANT_SET(L, name) do { \
-  lua_pushlstring(L, #name, sizeof(#name)-1); \
-  lua_pushnumber(L, FLUX_ ## name); \
-  lua_settable(L, -3); \
-} while (0);
-
+#define FLUX_CONSTANT_SET(L, name)                      \
+    do {                                                \
+        lua_pushlstring (L, #name, sizeof (#name) - 1); \
+        lua_pushnumber (L, FLUX_##name);                \
+        lua_settable (L, -3);                           \
+    } while (0);
 
 int luaopen_flux (lua_State *L)
 {

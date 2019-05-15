@@ -58,9 +58,7 @@ json_t *treeobj_get_data (json_t *obj);
 
 /* get convenience functions, operate on type specific objects
  */
-int treeobj_get_symlink (const json_t *obj,
-                         const char **ns,
-                         const char **target);
+int treeobj_get_symlink (const json_t *obj, const char **ns, const char **target);
 
 /* get decoded val data.
  * If len == 0, data will be NULL.
@@ -116,8 +114,10 @@ const char *treeobj_get_blobref (const json_t *obj, int index);
  * 'hashtype' hash algorithm (e.g. "sha1").  If 'maxblob' > 0, split the
  * blob into maxblob size chunks.
  */
-json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
-                                   void *data, int len);
+json_t *treeobj_create_valref_buf (const char *hashtype,
+                                   int maxblob,
+                                   void *data,
+                                   int len);
 
 /* Convert a treeobj to/from string.
  * The return value of treeobj_decode must be destroyed with json_decref().

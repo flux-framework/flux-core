@@ -25,8 +25,7 @@ int main (int argc, char **argv)
 
     plan (53);
 
-    ok ((attrs = attr_create ()) != NULL,
-        "attr_create works");
+    ok ((attrs = attr_create ()) != NULL, "attr_create works");
 
     /* attr_get, attr_set on unknown fails
      */
@@ -39,8 +38,7 @@ int main (int argc, char **argv)
 
     /* attr_add, attr_get works
      */
-    ok ((attr_add (attrs, "foo", "bar", 0) == 0),
-        "attr_add works");
+    ok ((attr_add (attrs, "foo", "bar", 0) == 0), "attr_add works");
     errno = 0;
     ok ((attr_add (attrs, "foo", "bar", 0) < 0 && errno == EEXIST),
         "attr_add on existing attr fails with EEXIST");
@@ -49,13 +47,12 @@ int main (int argc, char **argv)
     val = NULL;
     flags = 0;
     ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "bar")
-        && flags == 0,
+            && flags == 0,
         "attr_get on new attr works returns correct val,flags");
 
     /* attr_delete works
      */
-    ok (attr_delete (attrs, "foo", false) == 0,
-        "attr_delete works");
+    ok (attr_delete (attrs, "foo", false) == 0, "attr_delete works");
     errno = 0;
     ok (attr_get (attrs, "foo", NULL, NULL) < 0 && errno == ENOENT,
         "attr_get on deleted attr fails with errno == ENOENT");
@@ -68,7 +65,7 @@ int main (int argc, char **argv)
     flags = 0;
     val = NULL;
     ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "baz")
-        && flags == FLUX_ATTRFLAG_READONLY,
+            && flags == FLUX_ATTRFLAG_READONLY,
         "attr_get returns correct value and flags");
     errno = 0;
     ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == EPERM,
@@ -92,13 +89,13 @@ int main (int argc, char **argv)
     flags = 0;
     val = NULL;
     ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "baz")
-        && flags == FLUX_ATTRFLAG_IMMUTABLE,
+            && flags == FLUX_ATTRFLAG_IMMUTABLE,
         "attr_get returns correct value and flags");
     errno = 0;
     ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == EPERM,
         "attr_set on immutable attr fails with EPERM");
     errno = 0;
-    ok (attr_set (attrs, "foo", "baz", true)  < 0 && errno == EPERM,
+    ok (attr_set (attrs, "foo", "baz", true) < 0 && errno == EPERM,
         "attr_set (force) on immutable fails with EPERM");
     errno = 0;
     ok (attr_delete (attrs, "foo", false) < 0 && errno == EPERM,
@@ -111,37 +108,27 @@ int main (int argc, char **argv)
      * initial hash contents: foo=bar
      */
     val = attr_first (attrs);
-    ok (val && !strcmp (val, "foo"),
-        "attr_first returned foo");
-    ok (attr_next (attrs) == NULL,
-        "attr_next returned NULL");
-    ok (attr_add (attrs, "foo1", "42", 0) == 0
-        && attr_add (attrs, "foo2", "43", 0) == 0
-        && attr_add (attrs, "foo3", "44", 0) == 0
-        && attr_add (attrs, "foo4", "44", 0) == 0,
+    ok (val && !strcmp (val, "foo"), "attr_first returned foo");
+    ok (attr_next (attrs) == NULL, "attr_next returned NULL");
+    ok (attr_add (attrs, "foo1", "42", 0) == 0 && attr_add (attrs, "foo2", "43", 0) == 0
+            && attr_add (attrs, "foo3", "44", 0) == 0
+            && attr_add (attrs, "foo4", "44", 0) == 0,
         "attr_add foo1, foo2, foo3, foo4 works");
     val = attr_first (attrs);
-    ok (val && !strncmp (val, "foo", 3),
-        "attr_first returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3), "attr_first returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
-        "attr_next returned foo-prefixed attr");
-    ok (attr_next (attrs) == NULL,
-        "attr_next returned NULL");
+    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
+    ok (attr_next (attrs) == NULL, "attr_next returned NULL");
 
     /* attr_add_active (int helper)
      */
-    ok (attr_add_active_int (attrs, "a", &a, 0) == 0,
-        "attr_add_active_int works");
+    ok (attr_add_active_int (attrs, "a", &a, 0) == 0, "attr_add_active_int works");
     a = 0;
     ok (attr_get (attrs, "a", &val, NULL) == 0 && val && !strcmp (val, "0"),
         "attr_get on active int tracks val=0");
@@ -152,12 +139,10 @@ int main (int argc, char **argv)
     ok (attr_get (attrs, "a", &val, NULL) == 0 && !strcmp (val, "-1"),
         "attr_get on active int tracks val=-1");
     a = INT_MAX - 1;
-    ok (attr_get (attrs, "a", &val, NULL) == 0
-        && strtol (val, NULL, 10) == INT_MAX - 1,
+    ok (attr_get (attrs, "a", &val, NULL) == 0 && strtol (val, NULL, 10) == INT_MAX - 1,
         "attr_get on active int tracks val=INT_MAX-1");
     a = INT_MIN + 1;
-    ok (attr_get (attrs, "a", &val, NULL) == 0
-        && strtol (val, NULL, 10) == INT_MIN + 1,
+    ok (attr_get (attrs, "a", &val, NULL) == 0 && strtol (val, NULL, 10) == INT_MIN + 1,
         "attr_get on active int tracks val=INT_MIN+1");
 
     ok (attr_set (attrs, "a", "0", false) == 0 && a == 0,
@@ -184,7 +169,7 @@ int main (int argc, char **argv)
         "attr_get on active uint32_t tracks val=1");
     b = UINT_MAX - 1;
     ok (attr_get (attrs, "b", &val, NULL) == 0
-        && strtoul (val, NULL, 10) == UINT_MAX - 1,
+            && strtoul (val, NULL, 10) == UINT_MAX - 1,
         "attr_get on active uint32_t tracks val=UINT_MAX-1");
 
     ok (attr_set (attrs, "b", "0", false) == 0 && b == 0,

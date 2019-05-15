@@ -39,7 +39,7 @@ struct dirwalk {
 
     zlist_t *results;
 
-    unsigned int stopped:1;
+    unsigned int stopped : 1;
     int errnum;
 };
 
@@ -59,8 +59,7 @@ static void direntry_destroy (struct direntry *e)
  *  Create a direntry under parent dirfd `fd` and path `dir`, from
  *   directory entry `dent`.
  */
-static struct direntry *direntry_create (int fd, const char *dir,
-                                         struct dirent *dent)
+static struct direntry *direntry_create (int fd, const char *dir, struct dirent *dent)
 {
     struct direntry *e = calloc (1, sizeof (*e));
     if (!e)
@@ -89,7 +88,7 @@ static struct direntry *direntry_create_dir (const char *dirpath)
     e->path = strdup (dirpath);
     if (asprintf (&parent, "%s/..", dirpath) < 0)
         goto out_err;
-    if ((e->dirfd = open (parent, O_DIRECTORY|O_RDONLY)) < 0)
+    if ((e->dirfd = open (parent, O_DIRECTORY | O_RDONLY)) < 0)
         goto out_err;
     e->close_dirfd = 1;
 
@@ -123,7 +122,6 @@ static void dirwalk_destroy (dirwalk_t *d)
     }
 }
 
-
 static dirwalk_t *dirwalk_create ()
 {
     dirwalk_t *d = calloc (1, sizeof (*d));
@@ -141,7 +139,7 @@ static int dirwalk_set_flags (dirwalk_t *d, int flags)
     return old;
 }
 
-const char * dirwalk_name (dirwalk_t *d)
+const char *dirwalk_name (dirwalk_t *d)
 {
     if (!d->current)
         return NULL;
@@ -150,14 +148,14 @@ const char * dirwalk_name (dirwalk_t *d)
     return d->current->basename;
 }
 
-const char * dirwalk_path (dirwalk_t *d)
+const char *dirwalk_path (dirwalk_t *d)
 {
     if (!d->current)
         return NULL;
     return d->current->path;
 }
 
-const struct stat * dirwalk_stat (dirwalk_t *d)
+const struct stat *dirwalk_stat (dirwalk_t *d)
 {
     if (!d->current)
         return NULL;
@@ -231,10 +229,9 @@ static int dirwalk_traverse (dirwalk_t *d, dirwalk_filter_f fn, void *arg)
              *  Save current direntry onto stack and call traverse()
              */
             zlist_push (d->dirstack, d->current);
-            (void) dirwalk_traverse (d, fn, arg);
+            (void)dirwalk_traverse (d, fn, arg);
             d->current = zlist_pop (d->dirstack);
-        }
-        else /* Not A directory, simply visit this file */
+        } else /* Not A directory, simply visit this file */
             dirwalk_visit (d, fn, arg);
         direntry_destroy (d->current);
         d->current = NULL;
@@ -262,8 +259,7 @@ void dirwalk_stop (dirwalk_t *d, int errnum)
     d->errnum = errnum;
 }
 
-int dirwalk (const char *path, int flags,
-             dirwalk_filter_f fn, void *arg)
+int dirwalk (const char *path, int flags, dirwalk_filter_f fn, void *arg)
 {
     char *dirpath = NULL;
     int count = -1;
@@ -285,9 +281,8 @@ int dirwalk (const char *path, int flags,
      *   then force "current" dir to the path at which we want to
      *   start traversal.
      */
-    if ((dirwalk_set_flags (d, flags) < 0)
-     || !(d->current = direntry_create_dir (path))
-     || (dirwalk_traverse (d, fn, arg) < 0))
+    if ((dirwalk_set_flags (d, flags) < 0) || !(d->current = direntry_create_dir (path))
+        || (dirwalk_traverse (d, fn, arg) < 0))
         goto out;
     count = d->count;
 out:
@@ -314,22 +309,24 @@ static int find_f (dirwalk_t *d, void *arg)
     if (fnmatch (a->pattern, dirwalk_name (d), 0) == 0) {
         if (a->fn && ((*a->fn) (d, a->arg) <= 0))
             return 0;
-        zlist_append (a->results, (char *) dirwalk_path (d));
+        zlist_append (a->results, (char *)dirwalk_path (d));
         if (a->count && zlist_size (a->results) == a->count)
             dirwalk_stop (d, 0);
     }
     return 0;
 }
 
-zlist_t *dirwalk_find (const char *searchpath, int flags,
-                       const char *pattern, int count,
-                       dirwalk_filter_f fn, void *uarg)
+zlist_t *dirwalk_find (const char *searchpath,
+                       int flags,
+                       const char *pattern,
+                       int count,
+                       dirwalk_filter_f fn,
+                       void *uarg)
 {
     int saved_errno;
     char *copy = NULL;
     char *s, *dirpath, *sptr = NULL;
-    struct find_arg arg = { .count = count, .pattern = pattern,
-                            .fn = fn, .arg = uarg };
+    struct find_arg arg = {.count = count, .pattern = pattern, .fn = fn, .arg = uarg};
 
     if (!(arg.results = zlist_new ()))
         return NULL;
@@ -344,8 +341,7 @@ zlist_t *dirwalk_find (const char *searchpath, int flags,
             /* Ignore missing and inaccessible paths */
             if ((errno != ENOENT) && (errno != EACCES))
                 goto err;
-        }
-        else if (count && zlist_size (arg.results) == count)
+        } else if (count && zlist_size (arg.results) == count)
             break;
         s = NULL;
     }

@@ -23,12 +23,11 @@ int main (int ac, char *av[])
     char *s;
     struct jj_counts jj;
     log_init ("jj-reader");
-    if (read_all (STDIN_FILENO, (void **) &s) < 0)
+    if (read_all (STDIN_FILENO, (void **)&s) < 0)
         log_err_exit ("Failed to read stdin");
     if (libjj_get_counts (s, &jj) < 0)
         log_msg_exit ("%s", jj.error);
-    printf ("nnodes=%d nslots=%d slot_size=%d\n",
-            jj.nnodes, jj.nslots, jj.slot_size);
+    printf ("nnodes=%d nslots=%d slot_size=%d\n", jj.nnodes, jj.nslots, jj.slot_size);
     log_fini ();
     free (s);
     return 0;

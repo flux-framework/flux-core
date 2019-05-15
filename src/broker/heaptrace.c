@@ -13,11 +13,11 @@
 #endif
 #if WITH_TCMALLOC
 #if HAVE_GPERFTOOLS_HEAP_PROFILER_H
-  #include <gperftools/heap-profiler.h>
+#include <gperftools/heap-profiler.h>
 #elif HAVE_GOOGLE_HEAP_PROFILER_H
-  #include <google/heap-profiler.h>
+#include <google/heap-profiler.h>
 #else
-  #error gperftools headers not configured
+#error gperftools headers not configured
 #endif
 #endif /* WITH_TCMALLOC */
 
@@ -26,8 +26,10 @@
 
 static flux_msg_handler_t **handlers = NULL;
 
-static void start_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void start_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     const char *filename;
 
@@ -51,8 +53,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-static void dump_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+static void dump_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     const char *reason;
 
@@ -76,8 +80,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-static void stop_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+static void stop_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -86,7 +92,7 @@ static void stop_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto error;
     }
-    HeapProfilerStop();
+    HeapProfilerStop ();
 #else
     errno = ENOSYS;
     goto error;
@@ -100,9 +106,9 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.start",  start_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.dump",   dump_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.stop",   stop_cb, 0 },
+    {FLUX_MSGTYPE_REQUEST, "heaptrace.start", start_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "heaptrace.dump", dump_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "heaptrace.stop", stop_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

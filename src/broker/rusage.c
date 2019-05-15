@@ -20,8 +20,10 @@ struct rusage_context {
     flux_msg_handler_t *mh;
 };
 
-static void rusage_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void rusage_request_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     struct rusage ru;
 
@@ -31,24 +33,43 @@ static void rusage_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (getrusage (RUSAGE_THREAD, &ru) < 0)
         goto error;
-    if (flux_respond_pack (h, msg,
-            "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i}",
-            "utime", (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec,
-            "stime", (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec,
-            "maxrss", ru.ru_maxrss,
-            "ixrss", ru.ru_ixrss,
-            "idrss", ru.ru_idrss,
-            "isrss", ru.ru_isrss,
-            "minflt", ru.ru_minflt,
-            "majflt", ru.ru_majflt,
-            "nswap", ru.ru_nswap,
-            "inblock", ru.ru_inblock,
-            "oublock", ru.ru_oublock,
-            "msgsnd", ru.ru_msgsnd,
-            "msgrcv", ru.ru_msgrcv,
-            "nsignals", ru.ru_nsignals,
-            "nvcsw", ru.ru_nvcsw,
-            "nivcsw", ru.ru_nivcsw) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i "
+                           "s:i s:i}",
+                           "utime",
+                           (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec,
+                           "stime",
+                           (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec,
+                           "maxrss",
+                           ru.ru_maxrss,
+                           "ixrss",
+                           ru.ru_ixrss,
+                           "idrss",
+                           ru.ru_idrss,
+                           "isrss",
+                           ru.ru_isrss,
+                           "minflt",
+                           ru.ru_minflt,
+                           "majflt",
+                           ru.ru_majflt,
+                           "nswap",
+                           ru.ru_nswap,
+                           "inblock",
+                           ru.ru_inblock,
+                           "oublock",
+                           ru.ru_oublock,
+                           "msgsnd",
+                           ru.ru_msgsnd,
+                           "msgrcv",
+                           ru.ru_msgrcv,
+                           "nsignals",
+                           ru.ru_nsignals,
+                           "nvcsw",
+                           ru.ru_nvcsw,
+                           "nivcsw",
+                           ru.ru_nivcsw)
+        < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:

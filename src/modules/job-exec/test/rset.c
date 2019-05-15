@@ -18,76 +18,83 @@ struct resource_set_test {
     const char *descr;
     const char *input;
     const char *expected_ranks;
-    double      starttime;
-    double      expiration;
+    double starttime;
+    double expiration;
     const char *error_string;
 };
 
-#define RESOURCE_SET_TEST_END { NULL, NULL, NULL, 0., 0., NULL }
+#define RESOURCE_SET_TEST_END          \
+    {                                  \
+        NULL, NULL, NULL, 0., 0., NULL \
+    }
 
-#define BASIC_R \
-    "{ \"version\": 1," \
-    "  \"execution\": { " \
-    "    \"starttime\":  12345, " \
-    "    \"expiration\": 12445, " \
-    "    \"R_lite\": " \
-    "       [ {\"rank\": \"0-2\", " \
+#define BASIC_R                                      \
+    "{ \"version\": 1,"                              \
+    "  \"execution\": { "                            \
+    "    \"starttime\":  12345, "                    \
+    "    \"expiration\": 12445, "                    \
+    "    \"R_lite\": "                               \
+    "       [ {\"rank\": \"0-2\", "                  \
     "          \"children\": { \"core\": \"0-3\" } " \
-    "         } " \
-    "       ] " \
-    "    } " \
+    "         } "                                    \
+    "       ] "                                      \
+    "    } "                                         \
     "}"
 
-#define BAD_VERSION \
-    "{ \"version\": 2," \
-    "  \"execution\": { " \
-    "    \"starttime\":  12345, " \
-    "    \"expiration\": 12445, " \
-    "    \"R_lite\": " \
-    "       [ {\"rank\": \"0-2\", " \
+#define BAD_VERSION                                  \
+    "{ \"version\": 2,"                              \
+    "  \"execution\": { "                            \
+    "    \"starttime\":  12345, "                    \
+    "    \"expiration\": 12445, "                    \
+    "    \"R_lite\": "                               \
+    "       [ {\"rank\": \"0-2\", "                  \
     "          \"children\": { \"core\": \"0-3\" } " \
-    "         } " \
-    "       ] " \
-    "    } " \
+    "         } "                                    \
+    "       ] "                                      \
+    "    } "                                         \
     "}"
 
-#define BAD_IDSET \
-    "{ \"version\": 1," \
-    "  \"execution\": { " \
-    "    \"starttime\":  12345, " \
-    "    \"expiration\": 12445, " \
-    "    \"R_lite\": " \
-    "       [ {\"rank\": \"-2\", " \
+#define BAD_IDSET                                    \
+    "{ \"version\": 1,"                              \
+    "  \"execution\": { "                            \
+    "    \"starttime\":  12345, "                    \
+    "    \"expiration\": 12445, "                    \
+    "    \"R_lite\": "                               \
+    "       [ {\"rank\": \"-2\", "                   \
     "          \"children\": { \"core\": \"0-3\" } " \
-    "         } " \
-    "       ] " \
-    "    } " \
+    "         } "                                    \
+    "       ] "                                      \
+    "    } "                                         \
     "}"
 
 struct resource_set_test tests[] = {
 
-    { "no R_lite",
-     "{\"version\":1,\"execution\":{\"starttime\":0,\"expiration\":0}}",
-      NULL, 0., 0.,
-      "Object item not found: R_lite",
+    {
+        "no R_lite",
+        "{\"version\":1,\"execution\":{\"starttime\":0,\"expiration\":0}}",
+        NULL,
+        0.,
+        0.,
+        "Object item not found: R_lite",
     },
-    { "invalid version",
-      BAD_VERSION,
-      NULL, 0., 0.,
-      "invalid version: 2",
+    {
+        "invalid version",
+        BAD_VERSION,
+        NULL,
+        0.,
+        0.,
+        "invalid version: 2",
     },
-    { "invalid R_lite idset",
-      BAD_IDSET,
-      NULL, 0., 0.,
-      "R_lite: failed to read target rank list",
+    {
+        "invalid R_lite idset",
+        BAD_IDSET,
+        NULL,
+        0.,
+        0.,
+        "R_lite: failed to read target rank list",
     },
-    { "basic R check",
-      BASIC_R,
-      "0-2", 12345., 12445.,
-      NULL
-    },
-    RESOURCE_SET_TEST_END
-};
+    {"basic R check", BASIC_R, "0-2", 12345., 12445., NULL},
+    RESOURCE_SET_TEST_END};
 
 int main (int ac, char *av[])
 {
@@ -99,13 +106,10 @@ int main (int ac, char *av[])
     while (e && e->descr) {
         json_error_t err;
         struct resource_set *r = resource_set_create (e->input, &err);
-        if (e->expected_ranks == NULL) { // Expected failure
-            ok (r == NULL,
-                "%s: resource_set_create expected failure", e->descr);
-            is (err.text, e->error_string,
-                "%s: got expected error text", e->descr);
-        }
-        else {
+        if (e->expected_ranks == NULL) {  // Expected failure
+            ok (r == NULL, "%s: resource_set_create expected failure", e->descr);
+            is (err.text, e->error_string, "%s: got expected error text", e->descr);
+        } else {
             if (r) {
                 const struct idset *ids = resource_set_ranks (r);
                 double starttime = resource_set_starttime (r);
@@ -113,21 +117,26 @@ int main (int ac, char *av[])
                 if (ids == NULL)
                     fail ("%s: resource_set_ranks() failed", e->descr);
                 else {
-                    char * ranks = idset_encode (ids, IDSET_FLAG_RANGE);
-                    is (ranks, e->expected_ranks,
-                        "%s: expect target ranks (%s)", e->descr, ranks);
+                    char *ranks = idset_encode (ids, IDSET_FLAG_RANGE);
+                    is (ranks,
+                        e->expected_ranks,
+                        "%s: expect target ranks (%s)",
+                        e->descr,
+                        ranks);
                     free (ranks);
                 }
                 ok (starttime == e->starttime,
-                    "%s: expect starttime %.2f (got %.2f)", e->descr,
-                    e->starttime, starttime);
+                    "%s: expect starttime %.2f (got %.2f)",
+                    e->descr,
+                    e->starttime,
+                    starttime);
                 ok (expiration == e->expiration,
-                    "%s: expect expiration %.2f (got %.2f)", e->descr,
-                    e->expiration, expiration);
-            }
-            else {
-                fail ("%s: %d:[%s]",
-                      e->descr, err.position, err.text);
+                    "%s: expect expiration %.2f (got %.2f)",
+                    e->descr,
+                    e->expiration,
+                    expiration);
+            } else {
+                fail ("%s: %d:[%s]", e->descr, err.position, err.text);
             }
         }
         resource_set_destroy (r);

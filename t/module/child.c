@@ -19,7 +19,7 @@
 int mod_main (void *ctx, int argc, char *argv[])
 {
     if (argc != 2 || strcmp (argv[0], "foo=42") != 0
-                  || strcmp (argv[1], "bar=abcd") != 0)
+        || strcmp (argv[1], "bar=abcd") != 0)
         return -1;
     return 0;
 }

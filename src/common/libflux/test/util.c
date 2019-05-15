@@ -32,12 +32,9 @@ struct test_server {
     zuuid_t *uuid;
 };
 
-static flux_t *test_connector_create (const char *shmem_name,
-                                      bool server, int flags);
+static flux_t *test_connector_create (const char *shmem_name, bool server, int flags);
 
-
-void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                  const flux_msg_t *msg, void *arg)
+void shutdown_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
@@ -74,8 +71,10 @@ int test_server_stop (flux_t *c)
     return rc;
 }
 
-static void diag_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+static void diag_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     int msgtype;
     const char *topic = NULL;
@@ -86,8 +85,10 @@ static void diag_cb (flux_t *h, flux_msg_handler_t *mh,
         if (flux_msg_get_topic (msg, &topic) < 0)
             goto badmsg;
     }
-    diag ("server: < %s%s%s", flux_msg_typestr (msgtype),
-           topic ? " " : "", topic ? topic : "");
+    diag ("server: < %s%s%s",
+          flux_msg_typestr (msgtype),
+          topic ? " " : "",
+          topic ? topic : "");
     return;
 badmsg:
     diag ("server: malformed message:", flux_strerror (errno));
@@ -119,8 +120,8 @@ flux_t *test_server_create (test_server_f cb, void *arg)
 {
     int e;
     struct test_server *a;
-    int cflags = 0; // client connector flags
-    int sflags = 0; // server connector flags
+    int cflags = 0;  // client connector flags
+    int sflags = 0;  // server connector flags
 
     if (!(a = calloc (1, sizeof (*a))))
         BAIL_OUT ("calloc");
@@ -144,8 +145,7 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      * N.B. this has to go in before shutdown else shutdown will be masked.
      */
     if (!a->cb) {
-        if (!(a->diag_mh = flux_msg_handler_create (a->s, FLUX_MATCH_ANY,
-                                                    diag_cb, a)))
+        if (!(a->diag_mh = flux_msg_handler_create (a->s, FLUX_MATCH_ANY, diag_cb, a)))
             BAIL_OUT ("flux_msg_handler_create");
         flux_msg_handler_start (a->diag_mh);
         a->cb = diag_server;
@@ -155,8 +155,7 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      */
     struct flux_match match = FLUX_MATCH_REQUEST;
     match.topic_glob = "shutdown";
-    if (!(a->shutdown_mh = flux_msg_handler_create (a->s, match,
-                                                    shutdown_cb, a)))
+    if (!(a->shutdown_mh = flux_msg_handler_create (a->s, match, shutdown_cb, a)))
         BAIL_OUT ("flux_msg_handler_create");
     flux_msg_handler_start (a->shutdown_mh);
 
@@ -164,8 +163,7 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      */
     if ((e = pthread_create (&a->thread, NULL, thread_wrapper, a)) != 0)
         BAIL_OUT ("pthread_create");
-    if (flux_aux_set (a->c, "test_server", a,
-                      (flux_free_f)test_server_destroy) < 0)
+    if (flux_aux_set (a->c, "test_server", a, (flux_free_f)test_server_destroy) < 0)
         BAIL_OUT ("flux_aux_set");
     return a->c;
 }
@@ -176,7 +174,7 @@ void test_server_environment_init (const char *test_name)
     zsys_set_logstream (stderr);
     zsys_set_logident (test_name);
     zsys_handler_set (NULL);
-    zsys_set_linger (5); // msec
+    zsys_set_linger (5);  // msec
 }
 
 /* Test connector implementation
@@ -274,8 +272,7 @@ static const struct flux_handle_ops handle_ops = {
     .impl_destroy = test_connector_fini,
 };
 
-static flux_t *test_connector_create (const char *shmem_name,
-                                      bool server, int flags)
+static flux_t *test_connector_create (const char *shmem_name, bool server, int flags)
 {
     struct test_connector *tcon;
 
@@ -289,8 +286,7 @@ static flux_t *test_connector_create (const char *shmem_name,
     if (server) {
         if (zsock_bind (tcon->sock, "inproc://%s", shmem_name) < 0)
             BAIL_OUT ("zsock_bind %s", shmem_name);
-    }
-    else {
+    } else {
         if (zsock_connect (tcon->sock, "inproc://%s", shmem_name) < 0)
             BAIL_OUT ("zsock_connect %s", shmem_name);
     }
@@ -336,8 +332,7 @@ static int loopback_connector_pollfd (void *impl)
     return msglist_pollfd (lcon->queue);
 }
 
-static int loopback_connector_send (void *impl, const flux_msg_t *msg,
-                                    int flags)
+static int loopback_connector_send (void *impl, const flux_msg_t *msg, int flags)
 {
     struct loopback_connector *lcon = impl;
     uint32_t userid;
@@ -358,7 +353,7 @@ static int loopback_connector_send (void *impl, const flux_msg_t *msg,
         if (flux_msg_set_rolemask (cpy, lcon->rolemask) < 0)
             goto error;
     }
-    if (msglist_append (lcon->queue, cpy) < 0) // steals 'cpy'
+    if (msglist_append (lcon->queue, cpy) < 0)  // steals 'cpy'
         goto error;
     return 0;
 error:
@@ -378,8 +373,10 @@ static flux_msg_t *loopback_connector_recv (void *impl, int flags)
     return msg;
 }
 
-static int loopback_connector_getopt (void *impl, const char *option,
-                                      void *val, size_t size)
+static int loopback_connector_getopt (void *impl,
+                                      const char *option,
+                                      void *val,
+                                      size_t size)
 {
     struct loopback_connector *lcon = impl;
 
@@ -387,13 +384,11 @@ static int loopback_connector_getopt (void *impl, const char *option,
         if (size != sizeof (lcon->userid))
             goto error;
         memcpy (val, &lcon->userid, size);
-    }
-    else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
         if (size != sizeof (lcon->rolemask))
             goto error;
         memcpy (val, &lcon->rolemask, size);
-    }
-    else
+    } else
         goto error;
     return 0;
 error:
@@ -401,8 +396,10 @@ error:
     return -1;
 }
 
-static int loopback_connector_setopt (void *impl, const char *option,
-                                      const void *val, size_t size)
+static int loopback_connector_setopt (void *impl,
+                                      const char *option,
+                                      const void *val,
+                                      size_t size)
 {
     struct loopback_connector *lcon = impl;
     size_t val_size;
@@ -412,14 +409,12 @@ static int loopback_connector_setopt (void *impl, const char *option,
         if (size != val_size)
             goto error;
         memcpy (&lcon->userid, val, val_size);
-    }
-    else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (lcon->rolemask);
         if (size != val_size)
             goto error;
         memcpy (&lcon->rolemask, val, val_size);
-    }
-    else
+    } else
         goto error;
     return 0;
 error:

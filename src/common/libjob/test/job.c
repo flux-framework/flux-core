@@ -23,15 +23,18 @@ struct jobkey_input {
 };
 
 struct jobkey_input jobkeytab[] = {
-    { 1, NULL,           "job.0000.0000.0000.0001" },
-    { 2, "foo",          "job.0000.0000.0000.0002.foo" },
-    { 3, "a.b.c",        "job.0000.0000.0000.0003.a.b.c" },
-    { 0xdeadbeef, NULL,  "job.0000.0000.dead.beef" },
+    {1, NULL, "job.0000.0000.0000.0001"},
+    {2, "foo", "job.0000.0000.0000.0002.foo"},
+    {3, "a.b.c", "job.0000.0000.0000.0003.a.b.c"},
+    {0xdeadbeef, NULL, "job.0000.0000.dead.beef"},
 
     /* expected failure: overflow */
-    { 4, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", NULL },
+    {4,
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxx",
+     NULL},
 
-    { 0, NULL, NULL },
+    {0, NULL, NULL},
 };
 bool is_jobkeytab_end (struct jobkey_input *try)
 {
@@ -50,11 +53,9 @@ void check_one_jobkey (struct jobkey_input *try)
     len = flux_job_kvs_key (path, sizeof (path), try->id, try->key);
 
     if (try->expected) {
-        if (len >= 0 && len == strlen (try->expected)
-                     && !strcmp (path, try->expected))
+        if (len >= 0 && len == strlen (try->expected) && !strcmp (path, try->expected))
             valid = true;
-    }
-    else { // expected failure
+    } else {  // expected failure
         if (len < 0)
             valid = true;
     }
@@ -78,7 +79,7 @@ void check_jobkey (void)
 
 void check_corner_case (void)
 {
-    flux_t *h = (flux_t *)(uintptr_t)42; // fake but non-NULL
+    flux_t *h = (flux_t *)(uintptr_t)42;  // fake but non-NULL
 
     /* flux_job_submit */
 
@@ -130,25 +131,21 @@ void check_corner_case (void)
     /* flux_job_kvs_key */
 
     errno = 0;
-    ok (flux_job_kvs_key (NULL, 0, 0, NULL) < 0
-        && errno == EINVAL,
+    ok (flux_job_kvs_key (NULL, 0, 0, NULL) < 0 && errno == EINVAL,
         "flux_job_kvs_key fails with errno == EINVAL");
 
     /* flux_job_eventlog_watch */
 
     errno = 0;
-    ok (!flux_job_event_watch (NULL, 0)
-        && errno == EINVAL,
+    ok (!flux_job_event_watch (NULL, 0) && errno == EINVAL,
         "flux_job_event_watch fails with EINVAL on bad input");
 
     errno = 0;
-    ok (flux_job_event_watch_get (NULL, NULL) < 0
-        && errno == EINVAL,
+    ok (flux_job_event_watch_get (NULL, NULL) < 0 && errno == EINVAL,
         "flux_job_event_watch_get fails with EINVAL on bad input");
 
     errno = 0;
-    ok (flux_job_event_watch_cancel (NULL) < 0
-        && errno == EINVAL,
+    ok (flux_job_event_watch_cancel (NULL) < 0 && errno == EINVAL,
         "flux_job_event_watch_cancel fails with EINVAL on bad input");
 }
 
@@ -159,16 +156,16 @@ struct ss {
 };
 
 struct ss sstab[] = {
-    { FLUX_JOB_NEW,     "N", "NEW" },
-    { FLUX_JOB_DEPEND,  "D", "DEPEND" },
-    { FLUX_JOB_SCHED,   "S", "SCHED" },
-    { FLUX_JOB_RUN,     "R", "RUN" },
-    { FLUX_JOB_CLEANUP, "C", "CLEANUP" },
-    { FLUX_JOB_INACTIVE,"I", "INACTIVE" },
-    { -1, NULL, NULL },
+    {FLUX_JOB_NEW, "N", "NEW"},
+    {FLUX_JOB_DEPEND, "D", "DEPEND"},
+    {FLUX_JOB_SCHED, "S", "SCHED"},
+    {FLUX_JOB_RUN, "R", "RUN"},
+    {FLUX_JOB_CLEANUP, "C", "CLEANUP"},
+    {FLUX_JOB_INACTIVE, "I", "INACTIVE"},
+    {-1, NULL, NULL},
 };
 
-void check_statestr(void)
+void check_statestr (void)
 {
     struct ss *ss;
 
@@ -176,23 +173,30 @@ void check_statestr(void)
         const char *s = flux_job_statetostr (ss->state, true);
         const char *s_long = flux_job_statetostr (ss->state, false);
         ok (s && !strcmp (s, ss->s),
-            "flux_job_statetostr (%d, true) = %s", ss->state, ss->s);
+            "flux_job_statetostr (%d, true) = %s",
+            ss->state,
+            ss->s);
         ok (s_long && !strcmp (s_long, ss->s_long),
-            "flux_job_statetostr (%d, false) = %s", ss->state, ss->s_long);
+            "flux_job_statetostr (%d, false) = %s",
+            ss->state,
+            ss->s_long);
     }
     for (ss = &sstab[0]; ss->s != NULL; ss++) {
         flux_job_state_t state;
         ok (flux_job_strtostate (ss->s, &state) == 0 && state == ss->state,
-            "flux_job_strtostate (%s) = %d", ss->s, ss->state);
+            "flux_job_strtostate (%s) = %d",
+            ss->s,
+            ss->state);
         ok (flux_job_strtostate (ss->s_long, &state) == 0 && state == ss->state,
-            "flux_job_strtostate (%s) = %d", ss->s_long, ss->state);
+            "flux_job_strtostate (%s) = %d",
+            ss->s_long,
+            ss->state);
     }
     ok (flux_job_statetostr (0, true) != NULL,
         "flux_job_statetostr (0, true) returned non-NULL");
     ok (flux_job_statetostr (0, false) != NULL,
         "flux_job_statetostr (0, false) returned non-NULL");
 }
-
 
 int main (int argc, char *argv[])
 {

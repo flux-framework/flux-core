@@ -30,7 +30,7 @@ struct dispatch {
     flux_t *h;
     zlist_t *handlers;
     zlist_t *handlers_new;
-    zhashx_t *handlers_rpc; // hashed by matchtag
+    zhashx_t *handlers_rpc;  // hashed by matchtag
     flux_watcher_t *w;
     int running_count;
     int usecount;
@@ -50,11 +50,10 @@ struct flux_msg_handler {
     uint32_t rolemask;
     flux_msg_handler_f fn;
     void *arg;
-    uint8_t running:1;
+    uint8_t running : 1;
 };
 
-static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg);
+static void handle_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 static void free_msg_handler (flux_msg_handler_t *mh);
 
 static size_t matchtag_hasher (const void *key);
@@ -99,7 +98,6 @@ static void dispatch_usecount_incr (struct dispatch *d)
 {
     d->usecount++;
 }
-
 
 static void dispatch_destroy (void *arg)
 {
@@ -185,8 +183,7 @@ static size_t matchtag_hasher (const void *key)
     return matchtag;
 }
 
-static int copy_match (struct flux_match *dst,
-                       const struct flux_match src)
+static int copy_match (struct flux_match *dst, const struct flux_match src)
 {
     if (dst->topic_glob)
         free (dst->topic_glob);
@@ -206,8 +203,8 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
         return;
     if (!(rolemask & mh->rolemask)) {
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
-                        && flux_msg_get_matchtag (msg, &matchtag) == 0
-                        && matchtag != FLUX_MATCHTAG_NONE) {
+            && flux_msg_get_matchtag (msg, &matchtag) == 0
+            && matchtag != FLUX_MATCHTAG_NONE) {
             (void)flux_respond_error (mh->d->h, msg, EPERM, NULL);
         }
         return;
@@ -215,8 +212,7 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
     mh->fn (mh->d->h, mh, msg, mh->arg);
 }
 
-static bool dispatch_message (struct dispatch *d,
-                              const flux_msg_t *msg, int type)
+static bool dispatch_message (struct dispatch *d, const flux_msg_t *msg, int type)
 {
     flux_msg_handler_t *mh;
     bool match = false;
@@ -225,17 +221,17 @@ static bool dispatch_message (struct dispatch *d,
     if (type == FLUX_MSGTYPE_RESPONSE) {
         uint32_t matchtag;
         if (flux_msg_get_matchtag (msg, &matchtag) == 0
-                && matchtag != FLUX_MATCHTAG_NONE
-                && (mh = zhashx_lookup (d->handlers_rpc, &matchtag))
-                && mh->running
-                && flux_msg_cmp (msg, mh->match)) {
+            && matchtag != FLUX_MATCHTAG_NONE
+            && (mh = zhashx_lookup (d->handlers_rpc, &matchtag)) && mh->running
+            && flux_msg_cmp (msg, mh->match)) {
             call_handler (mh, msg);
             match = true;
         }
     }
     /* other */
     if (!match) {
-        FOREACH_ZLIST (d->handlers, mh) {
+        FOREACH_ZLIST (d->handlers, mh)
+        {
             if (!mh->running)
                 continue;
             if (flux_msg_cmp (msg, mh->match)) {
@@ -262,12 +258,12 @@ static void handle_late_response (struct dispatch *d, const flux_msg_t *msg)
     if (flux_msg_get_matchtag (msg, &matchtag) < 0)
         return;
     if (matchtag == FLUX_MATCHTAG_NONE)
-        return; // no matchtag was allocated
+        return;  // no matchtag was allocated
     if (flux_matchtag_group (matchtag))
-        return; // no way to tell here if an mrpc is complete
+        return;  // no way to tell here if an mrpc is complete
     if (flux_msg_is_streaming (msg)) {
         if (flux_msg_get_errnum (msg, &errnum) < 0 || errnum == 0)
-            return; // streaming RPC is only terminated with an error response
+            return;  // streaming RPC is only terminated with an error response
     }
     flux_matchtag_free (d->h, matchtag);
     if (flux_flags_get (d->h) & FLUX_O_MATCHDEBUG)
@@ -290,10 +286,7 @@ done:
     return rc;
 }
 
-static void handle_cb (flux_reactor_t *r,
-                       flux_watcher_t *hw,
-                       int revents,
-                       void *arg)
+static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw, int revents, void *arg)
 {
     struct dispatch *d = arg;
     flux_msg_t *msg = NULL;
@@ -354,9 +347,8 @@ static void handle_cb (flux_reactor_t *r,
                 errno = ENOMEM;
                 goto done;
             }
-            msg = NULL; // prevent destruction below
-        }
-        else {
+            msg = NULL;  // prevent destruction below
+        } else {
             switch (type) {
                 case FLUX_MSGTYPE_REQUEST:
                     if (flux_respond_error (d->h, msg, ENOSYS, NULL))
@@ -449,7 +441,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
         int saved_errno = errno;
         assert (mh->magic == HANDLER_MAGIC);
         if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
-                            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
+            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
             zhashx_delete (mh->d->handlers_rpc, &mh->match.matchtag);
         } else {
             zlist_remove (mh->d->handlers_new, mh);
@@ -464,7 +456,8 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
 
 flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
                                              const struct flux_match match,
-                                             flux_msg_handler_f cb, void *arg)
+                                             flux_msg_handler_f cb,
+                                             void *arg)
 {
     struct dispatch *d;
     flux_msg_handler_t *mh;
@@ -485,7 +478,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
     mh->arg = arg;
     mh->d = d;
     if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
-                            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
+        && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
         if (zhashx_insert (d->handlers_rpc, &mh->match.matchtag, mh) < 0) {
             errno = EEXIST;
             goto error;
@@ -507,10 +500,8 @@ static bool at_end (struct flux_msg_handler_spec spec)
 {
     struct flux_msg_handler_spec end = FLUX_MSGHANDLER_TABLE_END;
 
-    return (spec.typemask == end.typemask
-            && spec.topic_glob == end.topic_glob
-            && spec.cb == end.cb
-            && spec.rolemask == end.rolemask);
+    return (spec.typemask == end.typemask && spec.topic_glob == end.topic_glob
+            && spec.cb == end.cb && spec.rolemask == end.rolemask);
 }
 
 int flux_msg_handler_addvec (flux_t *h,

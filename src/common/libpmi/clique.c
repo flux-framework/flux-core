@@ -39,7 +39,8 @@ static int parse_block (const char *s, struct pmi_map_block *block)
 }
 
 int pmi_process_mapping_parse (const char *s,
-                               struct pmi_map_block **blocksp, int *nblocksp)
+                               struct pmi_map_block **blocksp,
+                               int *nblocksp)
 {
     char *argz = NULL;
     size_t argz_len;
@@ -90,8 +91,10 @@ error:
     return rc;
 }
 
-int pmi_process_mapping_find_nodeid (struct pmi_map_block *blocks, int nblocks,
-                                     int rank, int *nodeid)
+int pmi_process_mapping_find_nodeid (struct pmi_map_block *blocks,
+                                     int nblocks,
+                                     int rank,
+                                     int *nodeid)
 {
     int i;
     int brank = 0;
@@ -109,8 +112,11 @@ int pmi_process_mapping_find_nodeid (struct pmi_map_block *blocks, int nblocks,
     return PMI_FAIL;
 }
 
-int pmi_process_mapping_find_nranks (struct pmi_map_block *blocks, int nblocks,
-                                     int nodeid, int size, int *nranksp)
+int pmi_process_mapping_find_nranks (struct pmi_map_block *blocks,
+                                     int nblocks,
+                                     int nodeid,
+                                     int size,
+                                     int *nranksp)
 {
     int i, j;
     int brank = 0, nranks = 0;
@@ -129,9 +135,12 @@ int pmi_process_mapping_find_nranks (struct pmi_map_block *blocks, int nblocks,
     return PMI_SUCCESS;
 }
 
-int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks, int nblocks,
-                                    int nodeid, int size,
-                                    int *ranks, int nranks)
+int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks,
+                                    int nblocks,
+                                    int nodeid,
+                                    int size,
+                                    int *ranks,
+                                    int nranks)
 {
     int i, j, k, nx = 0;
     int brank = 0;
@@ -143,7 +152,7 @@ int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks, int nblocks,
                 lsize -= (brank - size);
             if (blocks[i].nodeid + j == nodeid) {
                 for (k = 0; k < lsize; k++) {
-                    if (nx >=  nranks)
+                    if (nx >= nranks)
                         return PMI_ERR_INVALID_SIZE;
                     ranks[nx++] = brank + k;
                 }
@@ -200,15 +209,17 @@ static int clique_context_init (struct clique_context *ctx)
     rc = PMI_KVS_Get_my_name (ctx->kvsname, ctx->name_max);
     if (rc != PMI_SUCCESS)
         goto done;
-    rc = PMI_KVS_Get (ctx->kvsname, "PMI_process_mapping",
-                      ctx->value, ctx->val_max);
+    rc = PMI_KVS_Get (ctx->kvsname, "PMI_process_mapping", ctx->value, ctx->val_max);
     if (rc != PMI_SUCCESS)
         goto done;
     rc = pmi_process_mapping_parse (ctx->value, &ctx->blocks, &ctx->nblocks);
     if (rc != PMI_SUCCESS)
         goto done;
-    if (pmi_process_mapping_find_nodeid (ctx->blocks, ctx->nblocks, ctx->rank,
-                                         &ctx->nodeid) != PMI_SUCCESS) {
+    if (pmi_process_mapping_find_nodeid (ctx->blocks,
+                                         ctx->nblocks,
+                                         ctx->rank,
+                                         &ctx->nodeid)
+        != PMI_SUCCESS) {
         ctx->nodeid = -1; /* not found - not an error */
     }
 done:
@@ -242,8 +253,11 @@ int pmi_process_mapping_get_clique_size (int *size)
     if (ctx.nodeid == -1) {
         *size = 1;
     } else {
-        rc = pmi_process_mapping_find_nranks (ctx.blocks, ctx.nblocks,
-                                              ctx.nodeid, ctx.size, size);
+        rc = pmi_process_mapping_find_nranks (ctx.blocks,
+                                              ctx.nblocks,
+                                              ctx.nodeid,
+                                              ctx.size,
+                                              size);
     }
 done:
     clique_context_finalize (&ctx);
@@ -265,9 +279,12 @@ int pmi_process_mapping_get_clique_ranks (int ranks[], int length)
         }
         *ranks = ctx.rank;
     } else {
-        rc = pmi_process_mapping_find_ranks (ctx.blocks, ctx.nblocks,
-                                             ctx.nodeid, ctx.size,
-                                             ranks, length);
+        rc = pmi_process_mapping_find_ranks (ctx.blocks,
+                                             ctx.nblocks,
+                                             ctx.nodeid,
+                                             ctx.size,
+                                             ranks,
+                                             length);
     }
 done:
     clique_context_finalize (&ctx);

@@ -30,23 +30,24 @@ int main (int argc, char *argv[])
 
     /* Send request
      */
-    ok (flux_panic (h, 0, 0, "fubar") == 0,
-        "flux_panic works");
+    ok (flux_panic (h, 0, 0, "fubar") == 0, "flux_panic works");
 
     /* Receive request on the loopback
      */
     msg = flux_recv (h, FLUX_MATCH_ANY, 0);
-    ok (msg != NULL,
-        "flux_recv received message on loop");
-    ok (flux_request_unpack (msg, &topic, "{s:s s:i}",
-                             "reason", &reason, "flags", &flags) == 0,
+    ok (msg != NULL, "flux_recv received message on loop");
+    ok (flux_request_unpack (msg,
+                             &topic,
+                             "{s:s s:i}",
+                             "reason",
+                             &reason,
+                             "flags",
+                             &flags)
+            == 0,
         "flux_request_unpack worked on panic request");
-    ok (topic != NULL && !strcmp (topic, "cmb.panic"),
-        "topic string is correct");
-    ok (!strcmp (reason, "fubar"),
-        "reason is correct");
-    ok (flags == 0,
-        "flags is correct");
+    ok (topic != NULL && !strcmp (topic, "cmb.panic"), "topic string is correct");
+    ok (!strcmp (reason, "fubar"), "reason is correct");
+    ok (flags == 0, "flags is correct");
     flux_msg_destroy (msg);
 
     /* invalid arguments
@@ -63,11 +64,10 @@ int main (int argc, char *argv[])
 
     flux_close (h);
 
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

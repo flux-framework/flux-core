@@ -38,9 +38,9 @@ int main (int argc, char **argv)
     plan (NO_PLAN);
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", 0)) != NULL,
-        "opened loop connector");
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE),
+                  0);
+    ok ((h = flux_open ("loop://", 0)) != NULL, "opened loop connector");
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
     flux_fatal_set (h, fatal_err, NULL);
@@ -51,27 +51,18 @@ int main (int argc, char **argv)
      */
     flux_attr_set_cacheonly (h, "size", "1");
     flux_attr_set_cacheonly (h, "rank", "0");
-    ok (flux_get_size (h, &size) == 0 && size == 1,
-        "size == 1");
-    ok (flux_get_rank (h, &rank) == 0 && rank == 0,
-        "rank == 0");
+    ok (flux_get_size (h, &size) == 0 && size == 1, "size == 1");
+    ok (flux_get_rank (h, &rank) == 0 && rank == 0, "rank == 0");
 
-    ok ((hello = hello_create ()) != NULL,
-        "hello_create works");
+    ok ((hello = hello_create ()) != NULL, "hello_create works");
     hello_set_flux (hello, h);
     hello_set_callback (hello, hello_cb, &cb_counter);
-    ok (hello_get_count (hello) == 0,
-        "hello_get_count returned 0");
-    ok (hello_complete (hello) == 0,
-        "hello_complete returned false");
-    ok (hello_start (hello) == 0,
-        "hello_start works");
-    ok (cb_counter == 1,
-        "callback was called");
-    ok (hello_get_count (hello) == 1,
-        "hello_get_count returned 1");
-    ok (hello_complete (hello) != 0,
-        "hello_complete returned true");
+    ok (hello_get_count (hello) == 0, "hello_get_count returned 0");
+    ok (hello_complete (hello) == 0, "hello_complete returned false");
+    ok (hello_start (hello) == 0, "hello_start works");
+    ok (cb_counter == 1, "callback was called");
+    ok (hello_get_count (hello) == 1, "hello_get_count returned 1");
+    ok (hello_complete (hello) != 0, "hello_complete returned true");
     hello_destroy (hello);
 
     /* Simulate a 2 node session.
@@ -79,28 +70,19 @@ int main (int argc, char **argv)
      */
     flux_attr_set_cacheonly (h, "size", "3");
     flux_attr_set_cacheonly (h, "rank", "0");
-    ok (flux_get_size (h, &size) == 0 && size == 3,
-        "size == 1");
-    ok (flux_get_rank (h, &rank) == 0 && rank == 0,
-        "rank == 0");
+    ok (flux_get_size (h, &size) == 0 && size == 3, "size == 1");
+    ok (flux_get_rank (h, &rank) == 0 && rank == 0, "rank == 0");
 
     cb_counter = 0;
-    ok ((hello = hello_create ()) != NULL,
-        "hello_create works");
+    ok ((hello = hello_create ()) != NULL, "hello_create works");
     hello_set_flux (hello, h);
     hello_set_callback (hello, hello_cb, &cb_counter);
-    ok (hello_get_count (hello) == 0,
-        "hello_get_count returned 0");
-    ok (hello_complete (hello) == 0,
-        "hello_complete returned false");
-    ok (hello_start (hello) == 0,
-        "hello_start works");
-    ok (cb_counter == 1,
-        "callback was called once (for self)");
-    ok (hello_get_count (hello) == 1,
-        "hello_get_count returned 1");
-    ok (hello_complete (hello) == 0,
-        "hello_complete returned false");
+    ok (hello_get_count (hello) == 0, "hello_get_count returned 0");
+    ok (hello_complete (hello) == 0, "hello_complete returned false");
+    ok (hello_start (hello) == 0, "hello_start works");
+    ok (cb_counter == 1, "callback was called once (for self)");
+    ok (hello_get_count (hello) == 1, "hello_get_count returned 1");
+    ok (hello_complete (hello) == 0, "hello_complete returned false");
     hello_destroy (hello);
 
     flux_close (h);

@@ -26,8 +26,7 @@ void eventlog_entry_parsing (void)
     const char *str;
 
     errno = 0;
-    ok (eventlog_entry_parse (NULL, NULL, NULL, NULL) < 0
-        && errno == EINVAL,
+    ok (eventlog_entry_parse (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "eventlog_entry_parse fails with EINVAL on bad input");
 
     event = json_pack ("{ s:s }", "foo", "bar");
@@ -35,94 +34,89 @@ void eventlog_entry_parsing (void)
         BAIL_OUT ("Error creating test json object");
 
     errno = 0;
-    ok (eventlog_entry_parse (event, NULL, NULL, NULL) < 0
-        && errno == EINVAL,
+    ok (eventlog_entry_parse (event, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "eventlog_entry_parse fails with EINVAL on bad event");
     json_decref (event);
 
     event = json_pack ("{ s:f s:s s:[s] }",
-                       "timestamp", 52.0,
-                       "name", "bar",
+                       "timestamp",
+                       52.0,
+                       "name",
+                       "bar",
                        "context",
-                       "foo", "bar");
+                       "foo",
+                       "bar");
     if (!event)
         BAIL_OUT ("Error creating test json object");
 
     errno = 0;
-    ok (eventlog_entry_parse (event, NULL, NULL, NULL) < 0
-        && errno == EINVAL,
+    ok (eventlog_entry_parse (event, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "eventlog_entry_parse fails with EINVAL on bad context");
     json_decref (event);
 
-    event = json_pack ("{ s:f s:s }",
-                       "timestamp", 42.0,
-                       "name", "foo");
+    event = json_pack ("{ s:f s:s }", "timestamp", 42.0, "name", "foo");
     if (!event)
         BAIL_OUT ("Error creating test json object");
 
     ok (eventlog_entry_parse (event, &timestamp, &name, &context) == 0
-        && timestamp == 42.0
-        && !strcmp (name, "foo")
-        && !context,
+            && timestamp == 42.0 && !strcmp (name, "foo") && !context,
         "eventlog_entry_parse on event w/o context works");
     json_decref (event);
 
     event = json_pack ("{ s:f s:s s:{ s:s } }",
-                       "timestamp", 52.0,
-                       "name", "bar",
+                       "timestamp",
+                       52.0,
+                       "name",
+                       "bar",
                        "context",
-                       "foo", "bar");
+                       "foo",
+                       "bar");
     if (!event)
         BAIL_OUT ("Error creating test json object");
 
     ok (eventlog_entry_parse (event, &timestamp, &name, &context) == 0
-        && timestamp == 52.0
-        && !strcmp (name, "bar")
-        && context
-        && json_is_object (context)
-        && (jstr = json_object_get (context, "foo"))
-        && (str = json_string_value (jstr))
-        && !strcmp (str, "bar"),
+            && timestamp == 52.0 && !strcmp (name, "bar") && context
+            && json_is_object (context) && (jstr = json_object_get (context, "foo"))
+            && (str = json_string_value (jstr)) && !strcmp (str, "bar"),
         "eventlog_entry_parse on event w/ context works");
     json_decref (event);
 }
 
-const char *goodevent[] = {
-    "{\"timestamp\":42.0,\"name\":\"foo\"}\n",
-    "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":16}}\n",
-    NULL
-};
+const char *goodevent[] = {"{\"timestamp\":42.0,\"name\":\"foo\"}\n",
+                           "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":"
+                           "16}}\n",
+                           NULL};
 
-const char *badevent[] = {
-    "\n",
-    "\n\n",
-    "foo",
-    "foo\n",
-    /* no newline end */
-    "{\"timestamp\":42.0,\"name\":\"foo\"}",
-    /* no newline end */
-    "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":16}}",
-    /* double newline end */
-    "{\"timestamp\":42.0,\"name\":\"foo\"}\n\n",
-    /* prefix newline */
-    "\n{\"timestamp\":42.0,\"name\":\"foo\"}",
-    /* timestamp bad */
-    "{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
-    /* name bad */
-    "{\"timestamp\":42.0,\"name\":18}\n",
-    /* no name field */
-    "{\"timestamp\":42.0}\n",
-    /* no timestamp field */
-    "{\"name\":\"foo\"}\n",
-    /* context not object */
-    "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":\"bar\"}",
-    NULL
-};
+const char *badevent[] = {"\n",
+                          "\n\n",
+                          "foo",
+                          "foo\n",
+                          /* no newline end */
+                          "{\"timestamp\":42.0,\"name\":\"foo\"}",
+                          /* no newline end */
+                          "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":"
+                          "16}}",
+                          /* double newline end */
+                          "{\"timestamp\":42.0,\"name\":\"foo\"}\n\n",
+                          /* prefix newline */
+                          "\n{\"timestamp\":42.0,\"name\":\"foo\"}",
+                          /* timestamp bad */
+                          "{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
+                          /* name bad */
+                          "{\"timestamp\":42.0,\"name\":18}\n",
+                          /* no name field */
+                          "{\"timestamp\":42.0}\n",
+                          /* no timestamp field */
+                          "{\"name\":\"foo\"}\n",
+                          /* context not object */
+                          "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":\"bar\"}",
+                          NULL};
 
 const char *goodlog[] = {
-    "",                         /* empty log is acceptable */
+    "", /* empty log is acceptable */
     "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":\"foo\"}\n",
-    "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":16}}\n",
+    "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":\"foo\","
+    "\"context\":{\"bar\":16}}\n",
     NULL,
 };
 
@@ -142,16 +136,16 @@ char *printable (char *output, const char *input)
 
     for (ip = input, op = output; *ip != '\0'; ip++, op++) {
         switch (*ip) {
-        case '\n':
-            *op++ = '\\';
-            *op = 'n';
-            break;
-        case '\r':
-            *op++ = '\\';
-            *op = 'r';
-            break;
-        default:
-            *op = *ip;
+            case '\n':
+                *op++ = '\\';
+                *op = 'n';
+                break;
+            case '\r':
+                *op++ = '\\';
+                *op = 'r';
+                break;
+            default:
+                *op = *ip;
         }
     }
     *op = '\0';
@@ -188,23 +182,20 @@ void eventlog_decoding_errors (void)
     int i;
 
     errno = EINVAL;
-    ok (eventlog_decode (NULL) == NULL
-        && errno == EINVAL,
+    ok (eventlog_decode (NULL) == NULL && errno == EINVAL,
         "eventlog_decode fails with EINVAL on bad input");
 
     /* all bad events are also bad logs */
     for (i = 0; badevent[i] != NULL; i++) {
         errno = 0;
-        ok (eventlog_decode (badevent[i]) == NULL
-            && errno == EINVAL,
+        ok (eventlog_decode (badevent[i]) == NULL && errno == EINVAL,
             "eventlog_decode event=\"%s\" fails with EINVAL",
             printable (buf, badevent[i]));
     }
 
     for (i = 0; badlog[i] != NULL; i++) {
         errno = 0;
-        ok (eventlog_decode (badlog[i]) == NULL
-            && errno == EINVAL,
+        ok (eventlog_decode (badlog[i]) == NULL && errno == EINVAL,
             "eventlog_decode log=\"%s\" fails with EINVAL",
             printable (buf, badlog[i]));
     }
@@ -231,26 +222,25 @@ void eventlog_entry_decoding_errors (void)
     int i;
 
     errno = 0;
-    ok (eventlog_entry_decode (NULL) == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_decode (NULL) == NULL && errno == EINVAL,
         "eventlog_entry_decode fails with EINVAL on bad input");
 
     /* special case - empty string is bad input */
     errno = 0;
-    ok (eventlog_entry_decode ("") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_decode ("") == NULL && errno == EINVAL,
         "eventlog_entry_decode event=\"\" fails with EINVAL");
 
     for (i = 0; badevent[i] != NULL; i++) {
         errno = 0;
-        ok (eventlog_entry_decode (badevent[i]) == NULL
-            && errno == EINVAL,
+        ok (eventlog_entry_decode (badevent[i]) == NULL && errno == EINVAL,
             "eventlog_entry_decode event=\"%s\" fails with EINVAL",
             printable (buf, badevent[i]));
     }
 }
 
-void eventlog_entry_check (json_t *entry, double xtimestamp, const char *xname,
+void eventlog_entry_check (json_t *entry,
+                           double xtimestamp,
+                           const char *xname,
                            const char *xcontext)
 {
     char buf[512];
@@ -266,12 +256,12 @@ void eventlog_entry_check (json_t *entry, double xtimestamp, const char *xname,
      * work correctly too */
 
     s = eventlog_entry_encode (entry);
-    ok (s != NULL,
-        "eventlog_entry_encode - encoded entry correctly");
+    ok (s != NULL, "eventlog_entry_encode - encoded entry correctly");
 
     e = eventlog_entry_decode (s);
     ok (e != NULL,
-        "eventlog_entry_decode - decoded \"%s\" correctly", printable (buf, s));
+        "eventlog_entry_decode - decoded \"%s\" correctly",
+        printable (buf, s));
 
     ok (eventlog_entry_parse (e, &timestamp, &name, &context) == 0,
         "eventlog_entry_parse - decoded event successfully");
@@ -280,11 +270,13 @@ void eventlog_entry_check (json_t *entry, double xtimestamp, const char *xname,
         context_str = json_dumps (context, JSON_COMPACT);
 
     ok ((xtimestamp == 0. || timestamp == xtimestamp)
-        && (!xname || !strcmp (name, xname))
-        && ((!xcontext && !context)
-            || (context_str && !strcmp (context_str, xcontext))),
+            && (!xname || !strcmp (name, xname))
+            && ((!xcontext && !context)
+                || (context_str && !strcmp (context_str, xcontext))),
         "eventlog_entry_parse time=%llu name=%s context=%s",
-        (unsigned long long)xtimestamp, xname, xcontext);
+        (unsigned long long)xtimestamp,
+        xname,
+        xcontext);
 
     free (context_str);
     json_decref (e);
@@ -293,7 +285,8 @@ void eventlog_entry_check (json_t *entry, double xtimestamp, const char *xname,
 
 json_t *test_eventlog_entry_vpack (double timestamp,
                                    const char *name,
-                                   const char *fmt, ...)
+                                   const char *fmt,
+                                   ...)
 {
     va_list ap;
     json_t *e;
@@ -309,90 +302,76 @@ void eventlog_entry_encoding (void)
     json_t *e;
 
     e = eventlog_entry_create (0., "foo", NULL);
-    ok (e != NULL,
-        "eventlog_entry_create timestamp=0. works");
+    ok (e != NULL, "eventlog_entry_create timestamp=0. works");
     eventlog_entry_check (e, 0., "foo", NULL);
     json_decref (e);
 
     e = eventlog_entry_create (1., "foo", NULL);
-    ok (e != NULL,
-        "eventlog_entry_create context=NULL works");
+    ok (e != NULL, "eventlog_entry_create context=NULL works");
     eventlog_entry_check (e, 1., "foo", NULL);
     json_decref (e);
 
     e = eventlog_entry_create (1., "a a", NULL);
-    ok (e != NULL,
-        "eventlog_entry_create name=\"a a\" works");
+    ok (e != NULL, "eventlog_entry_create name=\"a a\" works");
     eventlog_entry_check (e, 1., "a a", NULL);
     json_decref (e);
 
     e = eventlog_entry_create (1., "foo\n", NULL);
-    ok (e != NULL,
-        "eventlog_entry_create name=\"foo\\n\" works");
+    ok (e != NULL, "eventlog_entry_create name=\"foo\\n\" works");
     eventlog_entry_check (e, 1., "foo\n", NULL);
     json_decref (e);
 
     e = eventlog_entry_create (1., "foo", "{\"data\":\"foo\"}");
-    ok (e != NULL,
-        "eventlog_entry_create context=\"{\"data\":\"foo\"}\" works");
+    ok (e != NULL, "eventlog_entry_create context=\"{\"data\":\"foo\"}\" works");
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = eventlog_entry_create (1., "foo", "{\"data\":\"foo\"}\n");
-    ok (e != NULL,
-        "eventlog_entry_create context=\"{\"data\":\"foo\"}\\n\" works");
+    ok (e != NULL, "eventlog_entry_create context=\"{\"data\":\"foo\"}\\n\" works");
     /* newline should be stripped in check */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = eventlog_entry_pack (1., "foo", NULL);
-    ok (e != NULL,
-        "eventlog_entry_pack context=NULL works");
+    ok (e != NULL, "eventlog_entry_pack context=NULL works");
     eventlog_entry_check (e, 1., "foo", NULL);
     json_decref (e);
 
     e = eventlog_entry_pack (1., "foo", "{ s:s }", "data", "foo");
-    ok (e != NULL,
-        "eventlog_entry_pack context=\"{\"data\":\"foo\"}\" works");
+    ok (e != NULL, "eventlog_entry_pack context=\"{\"data\":\"foo\"}\" works");
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = eventlog_entry_pack (1., "foo", "{ s:s }\n", "data", "foo");
-    ok (e != NULL,
-        "eventlog_entry_pack context=\"{\"data\":\"foo\"}\\n\" works");
+    ok (e != NULL, "eventlog_entry_pack context=\"{\"data\":\"foo\"}\\n\" works");
     /* newline should be stripped in check */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = eventlog_entry_pack (1., "foo", "{ s:s }", "data", "foo\n");
-    ok (e != NULL,
-        "eventlog_entry_pack context=\"{\"data\":\"foo\\n\"}\" works");
+    ok (e != NULL, "eventlog_entry_pack context=\"{\"data\":\"foo\\n\"}\" works");
     /* newline is serialized */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\\n\"}");
     json_decref (e);
 
     e = test_eventlog_entry_vpack (1., "foo", NULL);
-    ok (e != NULL,
-        "eventlog_entry_vpack context=NULL works");
+    ok (e != NULL, "eventlog_entry_vpack context=NULL works");
     eventlog_entry_check (e, 1., "foo", NULL);
     json_decref (e);
 
     e = test_eventlog_entry_vpack (1., "foo", "{ s:s }", "data", "foo");
-    ok (e != NULL,
-        "eventlog_entry_vpack context=\"{\"data\":\"foo\"}\" works");
+    ok (e != NULL, "eventlog_entry_vpack context=\"{\"data\":\"foo\"}\" works");
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = test_eventlog_entry_vpack (1., "foo", "{ s:s }\n", "data", "foo");
-    ok (e != NULL,
-        "eventlog_entry_vpack context=\"{\"data\":\"foo\"}\\n\" works");
+    ok (e != NULL, "eventlog_entry_vpack context=\"{\"data\":\"foo\"}\\n\" works");
     /* newline should be stripped in check */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = test_eventlog_entry_vpack (1., "foo", "{ s:s }", "data", "foo\n");
-    ok (e != NULL,
-        "eventlog_entry_vpack context=\"{\"data\":\"foo\\n\"}\" works");
+    ok (e != NULL, "eventlog_entry_vpack context=\"{\"data\":\"foo\\n\"}\" works");
     /* newline is serialized */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\\n\"}");
     json_decref (e);
@@ -405,68 +384,55 @@ void eventlog_entry_encoding_errors (void)
         "eventlog_entry_encode fails with EINVAL on bad input");
 
     errno = 0;
-    ok (eventlog_entry_create (1., NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_create (1., NULL, NULL) == NULL && errno == EINVAL,
         "eventlog_entry_create name=NULL fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_create (1., "", NULL) == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_create (1., "", NULL) == NULL && errno == EINVAL,
         "eventlog_entry_create name=\"\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_create (1., "foo", "") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_create (1., "foo", "") == NULL && errno == EINVAL,
         "eventlog_entry_create context=\"\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_create (1., "foo", "foo") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_create (1., "foo", "foo") == NULL && errno == EINVAL,
         "eventlog_entry_create context=\"foo\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_create (1., "foo", "[\"foo\"]") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_create (1., "foo", "[\"foo\"]") == NULL && errno == EINVAL,
         "eventlog_entry_create context=\"[\"foo\"]\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_pack (1., NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_pack (1., NULL, NULL) == NULL && errno == EINVAL,
         "eventlog_entry_pack name=NULL fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_pack (1., "foo", "") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_pack (1., "foo", "") == NULL && errno == EINVAL,
         "eventlog_entry_pack context=\"\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_pack (1., "foo", "foo") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_pack (1., "foo", "foo") == NULL && errno == EINVAL,
         "eventlog_entry_pack context=\"foo\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_pack (1., "foo", "[s]", "foo") == NULL
-        && errno == EINVAL,
+    ok (eventlog_entry_pack (1., "foo", "[s]", "foo") == NULL && errno == EINVAL,
         "eventlog_entry_pack context=\"[\"foo\"]\" fails with EINVAL");
 
     errno = 0;
-    ok (test_eventlog_entry_vpack (1., NULL, NULL) == NULL
-        && errno == EINVAL,
+    ok (test_eventlog_entry_vpack (1., NULL, NULL) == NULL && errno == EINVAL,
         "eventlog_entry_vpack name=NULL fails with EINVAL");
 
     errno = 0;
-    ok (test_eventlog_entry_vpack (1., "foo", "") == NULL
-        && errno == EINVAL,
+    ok (test_eventlog_entry_vpack (1., "foo", "") == NULL && errno == EINVAL,
         "eventlog_entry_vpack context=\"\" fails with EINVAL");
 
     errno = 0;
-    ok (test_eventlog_entry_vpack (1., "foo", "foo") == NULL
-        && errno == EINVAL,
+    ok (test_eventlog_entry_vpack (1., "foo", "foo") == NULL && errno == EINVAL,
         "eventlog_entry_vpack context=\"foo\" fails with EINVAL");
 
     errno = 0;
-    ok (test_eventlog_entry_vpack (1., "foo", "[s]", "foo") == NULL
-        && errno == EINVAL,
+    ok (test_eventlog_entry_vpack (1., "foo", "[s]", "foo") == NULL && errno == EINVAL,
         "eventlog_entry_vpack context=\"[\"foo\"]\" fails with EINVAL");
 }
 

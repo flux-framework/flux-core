@@ -34,32 +34,39 @@ struct aggregate_args {
 };
 
 static const char usage[] = "[OPTIONS] KEY [JSON VALUE]";
-static const char doc[] = "\n\
+static const char doc[] =
+    "\n\
 Front end test utility for creating \"aggregate\" JSON objects in the kvs. \
 Must be run across all ranks, i.e. as `flux exec flux aggregate ...`. \
 If JSON_VALUE is not supplied on the command line, reads value from stdin.\n\
 ";
 
-static struct optparse_option opts[] = {
-    { .name = "timeout", .key = 't', .arginfo = "T", .has_arg = 1,
-      .usage = "Set reduction timeout to T seconds." },
-    { .name = "fwd-count", .key = 'c', .arginfo = "N", .has_arg = 1,
-      .usage = "Forward aggregate upstream after N" },
-    { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Verbose operation" },
-    OPTPARSE_TABLE_END
-};
+static struct optparse_option opts[] =
+    {{.name = "timeout",
+      .key = 't',
+      .arginfo = "T",
+      .has_arg = 1,
+      .usage = "Set reduction timeout to T seconds."},
+     {.name = "fwd-count",
+      .key = 'c',
+      .arginfo = "N",
+      .has_arg = 1,
+      .usage = "Forward aggregate upstream after N"},
+     {.name = "verbose", .key = 'v', .has_arg = 0, .usage = "Verbose operation"},
+     OPTPARSE_TABLE_END};
 
 static void verbose (struct aggregate_args *args, const char *fmt, ...)
 {
-    char buf [4096];
+    char buf[4096];
     va_list ap;
     if (!args->verbose)
         return;
     va_start (ap, fmt);
     vsnprintf (buf, sizeof (buf), fmt, ap);
-    fprintf (stderr, "flux-aggregate: %.3fs: %s\n",
-                     monotime_since (args->t0)/1000., buf);
+    fprintf (stderr,
+             "flux-aggregate: %.3fs: %s\n",
+             monotime_since (args->t0) / 1000.,
+             buf);
     va_end (ap);
 }
 
@@ -112,19 +119,22 @@ static void unlink_aggregate_key (struct aggregate_args *args)
     flux_kvs_txn_destroy (txn);
 }
 
-static void abort_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void abort_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct aggregate_args *args = arg;
-    fprintf (stderr, "flux-aggregate: %.3fs: aggregate aborted\n",
-                     monotime_since (args->t0)/1000.);
+    fprintf (stderr,
+             "flux-aggregate: %.3fs: aggregate aborted\n",
+             monotime_since (args->t0) / 1000.);
     exit (1);
 }
 
 static flux_msg_handler_t *abort_msg_handler_create (struct aggregate_args *arg)
 {
     int n;
-    char buf [1024];
+    char buf[1024];
     struct flux_match match = FLUX_MATCH_EVENT;
     flux_msg_handler_t *mh = NULL;
 
@@ -133,7 +143,7 @@ static flux_msg_handler_t *abort_msg_handler_create (struct aggregate_args *arg)
         log_err_exit ("creating event name for key=%s", arg->key);
 
     match.topic_glob = buf;
-    if (!(mh = flux_msg_handler_create (arg->h, match, abort_cb, (void *) arg)))
+    if (!(mh = flux_msg_handler_create (arg->h, match, abort_cb, (void *)arg)))
         log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (mh);
 
@@ -147,8 +157,9 @@ void print_entries (json_t *entries)
 {
     const char *key;
     json_t *value;
-    json_object_foreach (entries, key, value) {
-        char *s = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
+    json_object_foreach (entries, key, value)
+    {
+        char *s = json_dumps (value, JSON_ENCODE_ANY | JSON_COMPACT);
         printf ("%s: %s\n", key, s);
         free (s);
     }
@@ -190,8 +201,11 @@ static void barrier_continue (flux_future_t *f, void *arg)
     struct aggregate_args *args = arg;
     flux_future_t *f2 = NULL;
     verbose (args, "barrier complete, calling aggregate.push");
-    if (!(f2 = aggregator_push_json (args->h, args->fwd_count, args->timeout,
-                                     args->key, args->o))
+    if (!(f2 = aggregator_push_json (args->h,
+                                     args->fwd_count,
+                                     args->timeout,
+                                     args->key,
+                                     args->o))
         || (flux_future_then (f2, -1., aggregate_push_continue, arg) < 0))
         log_err_exit ("aggregator_push_json");
     flux_future_destroy (f);
@@ -239,10 +253,10 @@ int main (int argc, char *argv[])
     args.verbose = (args.rank == 0 && args.verbose);
 
     args.key = argv[optindex];
-    if ((argc - optindex) == 1) // read from stdin
+    if ((argc - optindex) == 1)  // read from stdin
         args.o = json_from_stdin ();
     else
-        args.o = json_from_string (argv [optindex+1]);
+        args.o = json_from_string (argv[optindex + 1]);
 
     verbose (&args, "starting aggregate on %d ranks", args.size);
 
@@ -264,7 +278,7 @@ int main (int argc, char *argv[])
     flux_msg_handler_destroy (mh);
     flux_close (args.h);
     optparse_destroy (p);
-    log_fini();
+    log_fini ();
     return (0);
 }
 

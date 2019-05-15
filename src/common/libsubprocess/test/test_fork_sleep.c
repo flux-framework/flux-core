@@ -15,8 +15,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-int
-main (int argc, char *argv[])
+int main (int argc, char *argv[])
 {
     int len = 30;
     pid_t pid;
@@ -32,8 +31,7 @@ main (int argc, char *argv[])
     if ((pid = fork ()) == 0) {
         sleep (len);
         exit (0);
-    }
-    else {
+    } else {
         printf ("%d\n", getpid ());
         printf ("%d\n", pid);
         fflush (stdout);

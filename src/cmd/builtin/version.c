@@ -15,7 +15,6 @@
 #include <flux/security/version.h>
 #endif
 
-
 static void print_broker_version (optparse_t *p)
 {
     const char *uri = getenv ("FLUX_URI");
@@ -42,9 +41,9 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
      * The inner #ifdef may be removed after configure is enforcing a
      * pkg-config minimum version for flux-security.
      */
-# ifdef FLUX_SECURITY_VERSION_STRING
+#ifdef FLUX_SECURITY_VERSION_STRING
     printf ("libflux-security:\t%s\n", flux_security_version_string ());
-# endif
+#endif
 #endif
     print_broker_version (p);
 
@@ -55,12 +54,12 @@ int subcommand_version_register (optparse_t *p)
 {
     optparse_err_t e;
     e = optparse_reg_subcommand (p,
-        "version",
-        cmd_version,
-        NULL,
-        "Display flux version information",
-        0,
-        NULL);
+                                 "version",
+                                 cmd_version,
+                                 NULL,
+                                 "Display flux version information",
+                                 0,
+                                 NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 

@@ -18,7 +18,7 @@
  * Failure of the callback aborts iteration and causes schedutil_hello()
  * to return -1 with errno passed through.
  */
-typedef int (hello_f)(flux_t *h, const char *R, void *arg);
+typedef int(hello_f) (flux_t *h, const char *R, void *arg);
 
 /* Send hello announcement to job-manager.
  * The job-manager responds with a list of jobs that have resources assigned.

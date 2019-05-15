@@ -60,29 +60,21 @@ int main (int argc, char *argv[])
     /* list_job_array */
 
     o = list_job_array (q, 0, attrs);
-    ok (o != NULL && json_is_array (o),
-        "list_job_array returns array");
-    ok (json_array_size (o) == q_size,
-        "array has expected size");
+    ok (o != NULL && json_is_array (o), "list_job_array returns array");
+    ok (json_array_size (o) == q_size, "array has expected size");
     json_decref (o);
 
     o = list_job_array (q, 4, attrs);
-    ok (o != NULL && json_is_array (o),
-        "list_job_array max_entries=4 returns array");
-    ok (json_array_size (o) == 4,
-        "array has expected size");
+    ok (o != NULL && json_is_array (o), "list_job_array max_entries=4 returns array");
+    ok (json_array_size (o) == 4, "array has expected size");
     el = json_array_get (o, 1);
-    ok (el != NULL && json_is_object (el),
-        "array[1] is an object");
-    ok ((id_o = json_object_get (el, "id")) != NULL,
-        "array[1] id is set");
+    ok (el != NULL && json_is_object (el), "array[1] is an object");
+    ok ((id_o = json_object_get (el, "id")) != NULL, "array[1] id is set");
     id = json_integer_value (id_o);
-    ok (id == 1,
-        "array[1] id=1");
+    ok (id == 1, "array[1] id=1");
     if (id != 1)
         diag ("id=%d", (int)id);
-    ok (json_object_size (el) == 1,
-        "array[1] size=1");
+    ok (json_object_size (el) == 1, "array[1] size=1");
     json_decref (o);
 
     errno = 0;
@@ -110,7 +102,6 @@ int main (int argc, char *argv[])
     ok (list_one_job (j, badattrs) == NULL && errno == EPROTO,
         "list_one_job attrs=[42] fails with EPROTO");
     json_decref (badattrs);
-
 
     json_decref (attrs);
     queue_destroy (q);

@@ -72,54 +72,74 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
     return ctx;
 }
 
-static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void stats_get_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     flux_msgcounters_t mcs;
 
     flux_get_msgcounters (h, &mcs);
 
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
-                           "#request (tx)", mcs.request_tx,
-                           "#request (rx)", mcs.request_rx,
-                           "#response (tx)", mcs.response_tx,
-                           "#response (rx)", mcs.response_rx,
-                           "#event (tx)", mcs.event_tx,
-                           "#event (rx)", mcs.event_rx,
-                           "#keepalive (tx)", mcs.keepalive_tx,
-                           "#keepalive (rx)", mcs.keepalive_rx) < 0)
-      FLUX_LOG_ERROR (h);
+    if (flux_respond_pack (h,
+                           msg,
+                           "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
+                           "#request (tx)",
+                           mcs.request_tx,
+                           "#request (rx)",
+                           mcs.request_rx,
+                           "#response (tx)",
+                           mcs.response_tx,
+                           "#response (rx)",
+                           mcs.response_rx,
+                           "#event (tx)",
+                           mcs.event_tx,
+                           "#event (rx)",
+                           mcs.event_rx,
+                           "#keepalive (tx)",
+                           mcs.keepalive_tx,
+                           "#keepalive (rx)",
+                           mcs.keepalive_rx)
+        < 0)
+        FLUX_LOG_ERROR (h);
 }
 
-static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
+static void stats_clear_event_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     flux_clr_msgcounters (h);
 }
 
-static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                    const flux_msg_t *msg, void *arg)
+static void stats_clear_request_cb (flux_t *h,
+                                    flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg,
+                                    void *arg)
 {
     flux_clr_msgcounters (h);
     if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
 }
 
-static void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+static void shutdown_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void debug_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     int flags;
     int *debug_flags;
     const char *op;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op,
-                                                     "flags", &flags) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op, "flags", &flags) < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
         if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
@@ -150,8 +170,7 @@ error:
 
 /* Reactor loop is about to block.
  */
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     modservice_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_SLEEPING);
@@ -162,8 +181,7 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 /* Reactor loop just unblocked.
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     modservice_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING);
@@ -172,7 +190,8 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_msg_destroy (msg);
 }
 
-static void register_event (modservice_ctx_t *ctx, const char *name,
+static void register_event (modservice_ctx_t *ctx,
+                            const char *name,
                             flux_msg_handler_f cb)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
@@ -185,13 +204,14 @@ static void register_event (modservice_ctx_t *ctx, const char *name,
     if (zlist_append (ctx->handlers, mh) < 0)
         oom ();
     if (flux_event_subscribe (ctx->h, match.topic_glob) < 0)
-        log_err_exit ("%s: flux_event_subscribe %s",
-                  __FUNCTION__, match.topic_glob);
+        log_err_exit ("%s: flux_event_subscribe %s", __FUNCTION__, match.topic_glob);
     free (match.topic_glob);
 }
 
-static void register_request (modservice_ctx_t *ctx, const char *name,
-                              flux_msg_handler_f cb, uint32_t rolemask)
+static void register_request (modservice_ctx_t *ctx,
+                              const char *name,
+                              flux_msg_handler_f cb,
+                              uint32_t rolemask)
 {
     struct flux_match match = FLUX_MATCH_REQUEST;
     flux_msg_handler_t *mh;
@@ -221,7 +241,7 @@ void modservice_register (flux_t *h, module_t *p)
     if (rusage_initialize (h, module_get_name (ctx->p)) < 0)
         log_err_exit ("rusage_initialize");
 
-    register_event   (ctx, "stats.clear", stats_clear_event_cb);
+    register_event (ctx, "stats.clear", stats_clear_event_cb);
 
     if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx)))
         log_err_exit ("flux_prepare_watcher_create");

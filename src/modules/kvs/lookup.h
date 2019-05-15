@@ -27,9 +27,7 @@ typedef enum {
 /* ref - missing reference
  * raw_data - true if reference points to raw data
  */
-typedef int (*lookup_ref_f)(lookup_t *c,
-                            const char *ref,
-                            void *data);
+typedef int (*lookup_ref_f) (lookup_t *c, const char *ref, void *data);
 
 /* Initialize a lookup handle
  *

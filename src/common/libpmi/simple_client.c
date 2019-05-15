@@ -56,7 +56,7 @@ static int pmi_simple_client_init (void *impl, int *spawned)
         goto done;
     }
     if (keyval_parse_uint (buf, "pmi_version", &vers) < 0
-            || keyval_parse_uint (buf, "pmi_subversion", &subvers) < 0)
+        || keyval_parse_uint (buf, "pmi_subversion", &subvers) < 0)
         goto done;
     if (vers != 1 || subvers != 1)
         goto done;
@@ -72,11 +72,11 @@ static int pmi_simple_client_init (void *impl, int *spawned)
         goto done;
     }
     if (keyval_parse_uint (buf, "kvsname_max", &pmi->kvsname_max) < 0
-            || keyval_parse_uint (buf, "keylen_max", &pmi->keylen_max) < 0
-            || keyval_parse_uint (buf, "vallen_max", &pmi->vallen_max) < 0)
+        || keyval_parse_uint (buf, "keylen_max", &pmi->keylen_max) < 0
+        || keyval_parse_uint (buf, "vallen_max", &pmi->vallen_max) < 0)
         goto done;
     pmi->buflen = pmi->keylen_max + pmi->vallen_max + pmi->kvsname_max
-                                  + SIMPLE_MAX_PROTO_OVERHEAD;
+                  + SIMPLE_MAX_PROTO_OVERHEAD;
     if (!(pmi->buf = calloc (1, pmi->buflen))) {
         result = PMI_ERR_NOMEM;
         goto done;
@@ -192,14 +192,14 @@ static int pmi_simple_client_publish_name (void *impl,
     return PMI_FAIL;
 }
 
-static int pmi_simple_client_unpublish_name (void *impl,
-                                             const char *service_name)
+static int pmi_simple_client_unpublish_name (void *impl, const char *service_name)
 {
     return PMI_FAIL;
 }
 
 static int pmi_simple_client_lookup_name (void *impl,
-                                          const char *service_name, char *port)
+                                          const char *service_name,
+                                          char *port)
 {
     return PMI_FAIL;
 }
@@ -227,8 +227,7 @@ done:
     return result;
 }
 
-static int pmi_simple_client_abort (void *impl,
-                                    int exit_code, const char *error_msg)
+static int pmi_simple_client_abort (void *impl, int exit_code, const char *error_msg)
 {
     fprintf (stderr, "PMI_Abort: %s\n", error_msg);
     exit (exit_code);
@@ -236,8 +235,7 @@ static int pmi_simple_client_abort (void *impl,
     return PMI_SUCCESS;
 }
 
-static int pmi_simple_client_kvs_get_my_name (void *impl,
-                                              char *kvsname, int length)
+static int pmi_simple_client_kvs_get_my_name (void *impl, char *kvsname, int length)
 {
     struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
@@ -290,7 +288,8 @@ static int pmi_simple_client_kvs_get_value_length_max (void *impl, int *length)
 }
 
 static int pmi_simple_client_kvs_put (void *impl,
-                                      const char *kvsname, const char *key,
+                                      const char *kvsname,
+                                      const char *key,
                                       const char *value)
 {
     struct pmi_simple_client *pmi = impl;
@@ -299,8 +298,8 @@ static int pmi_simple_client_kvs_put (void *impl,
 
     if (!pmi->initialized)
         goto done;
-    if (dprintf (pmi->fd, "cmd=put kvsname=%s key=%s value=%s\n",
-                 kvsname, key, value) < 0)
+    if (dprintf (pmi->fd, "cmd=put kvsname=%s key=%s value=%s\n", kvsname, key, value)
+        < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
@@ -322,7 +321,9 @@ static int pmi_simple_client_kvs_commit (void *impl, const char *kvsname)
 
 static int pmi_simple_client_kvs_get (void *impl,
                                       const char *kvsname,
-                                      const char *key, char *value, int len)
+                                      const char *key,
+                                      char *value,
+                                      int len)
 {
     struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
@@ -374,29 +375,29 @@ static void pmi_simple_client_destroy (void *impl)
 }
 
 static struct pmi_operations pmi_simple_operations = {
-    .init                       = pmi_simple_client_init,
-    .initialized                = pmi_simple_client_initialized,
-    .finalize                   = pmi_simple_client_finalize,
-    .get_size                   = pmi_simple_client_get_size,
-    .get_rank                   = pmi_simple_client_get_rank,
-    .get_appnum                 = pmi_simple_client_get_appnum,
-    .get_universe_size          = pmi_simple_client_get_universe_size,
-    .publish_name               = pmi_simple_client_publish_name,
-    .unpublish_name             = pmi_simple_client_unpublish_name,
-    .lookup_name                = pmi_simple_client_lookup_name,
-    .barrier                    = pmi_simple_client_barrier,
-    .abort                      = pmi_simple_client_abort,
-    .kvs_get_my_name            = pmi_simple_client_kvs_get_my_name,
-    .kvs_get_name_length_max    = pmi_simple_client_kvs_get_name_length_max,
-    .kvs_get_key_length_max     = pmi_simple_client_kvs_get_key_length_max,
-    .kvs_get_value_length_max   = pmi_simple_client_kvs_get_value_length_max,
-    .kvs_put                    = pmi_simple_client_kvs_put,
-    .kvs_commit                 = pmi_simple_client_kvs_commit,
-    .kvs_get                    = pmi_simple_client_kvs_get,
-    .get_clique_size            = NULL,
-    .get_clique_ranks           = NULL,
-    .spawn_multiple             = pmi_simple_client_spawn_multiple,
-    .destroy                    = pmi_simple_client_destroy,
+    .init = pmi_simple_client_init,
+    .initialized = pmi_simple_client_initialized,
+    .finalize = pmi_simple_client_finalize,
+    .get_size = pmi_simple_client_get_size,
+    .get_rank = pmi_simple_client_get_rank,
+    .get_appnum = pmi_simple_client_get_appnum,
+    .get_universe_size = pmi_simple_client_get_universe_size,
+    .publish_name = pmi_simple_client_publish_name,
+    .unpublish_name = pmi_simple_client_unpublish_name,
+    .lookup_name = pmi_simple_client_lookup_name,
+    .barrier = pmi_simple_client_barrier,
+    .abort = pmi_simple_client_abort,
+    .kvs_get_my_name = pmi_simple_client_kvs_get_my_name,
+    .kvs_get_name_length_max = pmi_simple_client_kvs_get_name_length_max,
+    .kvs_get_key_length_max = pmi_simple_client_kvs_get_key_length_max,
+    .kvs_get_value_length_max = pmi_simple_client_kvs_get_value_length_max,
+    .kvs_put = pmi_simple_client_kvs_put,
+    .kvs_commit = pmi_simple_client_kvs_commit,
+    .kvs_get = pmi_simple_client_kvs_get,
+    .get_clique_size = NULL,
+    .get_clique_ranks = NULL,
+    .spawn_multiple = pmi_simple_client_spawn_multiple,
+    .destroy = pmi_simple_client_destroy,
 };
 
 void *pmi_simple_client_create (struct pmi_operations **ops)

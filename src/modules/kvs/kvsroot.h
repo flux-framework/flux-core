@@ -38,7 +38,7 @@ struct kvsroot {
 };
 
 /* return -1 on error, 0 on success, 1 on success & to stop iterating */
-typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
+typedef int (*kvsroot_root_f) (struct kvsroot *root, void *arg);
 
 /* flux_t optional, if NULL logging will go to stderr */
 /* void *arg passed as arg value to kvstxn_mgr_create() internally */
@@ -58,24 +58,26 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
 int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *ns);
 
 /* returns NULL if not found */
-struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm,
-                                         const char *ns);
+struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm, const char *ns);
 
 /* safe lookup, will return NULL if root in process of being removed,
  * i.e. remove flag set to true */
-struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
-                                              const char *ns);
+struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm, const char *ns);
 
 int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
 
 /* Convenience functions on struct kvsroot
  */
 
-void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
-                      const char *root_ref, int root_seq);
+void kvsroot_setroot (kvsroot_mgr_t *krm,
+                      struct kvsroot *root,
+                      const char *root_ref,
+                      int root_seq);
 
-int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
-                        uint32_t rolemask, uint32_t userid);
+int kvsroot_check_user (kvsroot_mgr_t *krm,
+                        struct kvsroot *root,
+                        uint32_t rolemask,
+                        uint32_t userid);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 

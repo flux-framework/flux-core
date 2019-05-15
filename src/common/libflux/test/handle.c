@@ -76,8 +76,7 @@ int main (int argc, char *argv[])
      */
     flux_fatal_set (h, fatal_err, NULL);
     flux_fatal_error (h, __FUNCTION__, "Foo");
-    ok (fatal_tested == true,
-        "flux_fatal function is called on fatal error");
+    ok (fatal_tested == true, "flux_fatal function is called on fatal error");
 
     /* Test flux_opt_set, flux_opt_get.
      */
@@ -91,23 +90,18 @@ int main (int argc, char *argv[])
     /* Test flux_aux_get, flux_aux_set
      */
     s = flux_aux_get (h, "handletest::thing1");
-    ok (s == NULL,
-        "flux_aux_get returns NULL on unknown key");
+    ok (s == NULL, "flux_aux_get returns NULL on unknown key");
     flux_aux_set (h, "handletest::thing1", xstrdup ("hello"), aux_free);
     s = flux_aux_get (h, "handletest::thing1");
-    ok (s != NULL && !strcmp (s, "hello"),
-        "flux_aux_get returns what was set");
+    ok (s != NULL && !strcmp (s, "hello"), "flux_aux_get returns what was set");
     flux_aux_set (h, "handletest::thing1", NULL, NULL);
-    ok (aux_destroyed,
-        "flux_aux_set key to NULL invokes destructor");
+    ok (aux_destroyed, "flux_aux_set key to NULL invokes destructor");
     s = flux_aux_get (h, "handletest::thing1");
-    ok (s == NULL,
-        "flux_aux_get returns NULL on destroyed key");
+    ok (s == NULL, "flux_aux_get returns NULL on destroyed key");
 
     /* Test flux_flags_set, flux_flags_unset, flux_flags_get
      */
-    ok (flux_flags_get (h) == 0,
-        "flux_flags_get returns flags handle was opened with");
+    ok (flux_flags_get (h) == 0, "flux_flags_get returns flags handle was opened with");
     flux_flags_set (h, (FAKE_FLAG1 | FAKE_FLAG2));
     ok (flux_flags_get (h) == (FAKE_FLAG1 | FAKE_FLAG2),
         "flux_flags_set sets specified flags");
@@ -124,27 +118,24 @@ int main (int argc, char *argv[])
     ok (flux_flags_get (h) == (FAKE_FLAG1 | FAKE_FLAG2),
         "flux_flags_unset (0) has no effect");
     flux_flags_unset (h, ~0);
-    ok (flux_flags_get (h) == 0,
-        "flux_flags_unset (~0) clears all flags");
+    ok (flux_flags_get (h) == 0, "flux_flags_unset (~0) clears all flags");
 
     /* Test flux_send, flux_recv, flux_requeue
      * Check flux_pollevents along the way.
      */
     ok (flux_pollevents (h) == FLUX_POLLOUT,
-       "flux_pollevents returns only FLUX_POLLOUT on empty queue");
+        "flux_pollevents returns only FLUX_POLLOUT on empty queue");
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_send (h, msg, 0) == 0,
-        "flux_send works");
+    ok (flux_send (h, msg, 0) == 0, "flux_send works");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
-       "flux_pollevents shows FLUX_POLLIN set on non-empty queue");
+        "flux_pollevents shows FLUX_POLLIN set on non-empty queue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "foo"),
         "flux_recv works and sent message was received");
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
-       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
     /* flux_requeue bad flags */
     errno = 0;
@@ -155,54 +146,46 @@ int main (int argc, char *argv[])
     /* flux_requeue: add foo, bar to HEAD; then receive bar, foo */
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
-        "flux_requeue foo HEAD works");
+    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0, "flux_requeue foo HEAD works");
     flux_msg_destroy (msg);
     if (!(msg = flux_request_encode ("bar", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
-        "flux_requeue bar HEAD works");
+    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0, "flux_requeue bar HEAD works");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
-       "flux_pollevents shows FLUX_POLLIN set after requeue");
+        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "bar"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
-       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
     /* flux_requeue: add foo, bar to TAIL; then receive foo, bar */
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0,
-        "flux_requeue foo TAIL works");
+    ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0, "flux_requeue foo TAIL works");
     flux_msg_destroy (msg);
     if (!(msg = flux_request_encode ("bar", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0,
-        "flux_requeue bar TAIL works");
+    ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0, "flux_requeue bar TAIL works");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
-       "flux_pollevents shows FLUX_POLLIN set after requeue");
+        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "bar"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
-       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
     /* flux_requeue_nocopy bad flags */
     if (!(msg = flux_request_encode ("foo", NULL)))
@@ -222,19 +205,17 @@ int main (int argc, char *argv[])
     ok (flux_requeue_nocopy (h, msg, FLUX_RQ_HEAD) == 0,
         "flux_requeue_nocopy bar HEAD works");
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
-       "flux_pollevents shows FLUX_POLLIN set after requeue");
+        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "bar"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
-       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
     /* flux_requeue_nocopy: add foo, bar to TAIL; then receive foo, bar */
     if (!(msg = flux_request_encode ("foo", NULL)))
@@ -246,41 +227,34 @@ int main (int argc, char *argv[])
     ok (flux_requeue_nocopy (h, msg, FLUX_RQ_TAIL) == 0,
         "flux_requeue_nocopy bar TAIL works");
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
-       "flux_pollevents shows FLUX_POLLIN set after requeue");
+        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
-        && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "bar"),
+            && flux_request_decode (msg, &topic, NULL) == 0 && !strcmp (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
-       "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
+        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
     /* matchtags */
     matchtag = flux_matchtag_alloc (h, 0);
-    ok (matchtag != FLUX_MATCHTAG_NONE,
-        "flux_matchtag_alloc (regular) works");
-    ok (flux_matchtag_group (matchtag) == false,
-        "matchtag is regular type");
+    ok (matchtag != FLUX_MATCHTAG_NONE, "flux_matchtag_alloc (regular) works");
+    ok (flux_matchtag_group (matchtag) == false, "matchtag is regular type");
     flux_matchtag_free (h, matchtag);
 
     matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
-    ok (matchtag != FLUX_MATCHTAG_NONE,
-        "flux_matchtag_alloc (group) works");
-    ok (flux_matchtag_group (matchtag) == true,
-        "matchtag is group type");
+    ok (matchtag != FLUX_MATCHTAG_NONE, "flux_matchtag_alloc (group) works");
+    ok (flux_matchtag_group (matchtag) == true, "matchtag is group type");
     flux_matchtag_free (h, matchtag);
 
     flux_close (h);
-    done_testing();
+    done_testing ();
     return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

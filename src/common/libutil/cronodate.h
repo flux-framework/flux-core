@@ -45,7 +45,7 @@ const char *tm_month_string (int w);
 /* Create an empty cronodate object that will not
  *  match any date-time
  */
-cronodate_t * cronodate_create (void);
+cronodate_t *cronodate_create (void);
 void cronodate_destroy (cronodate_t *);
 
 /*  Fill cronodate structure will all values, or

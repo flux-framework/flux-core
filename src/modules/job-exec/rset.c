@@ -69,7 +69,8 @@ static struct idset *rset_ranks (struct resource_set *r)
     }
     if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
         return NULL;
-    json_array_foreach (r->R_lite, i, entry) {
+    json_array_foreach (r->R_lite, i, entry)
+    {
         if ((json_unpack_ex (entry, NULL, 0, "{s:s}", "rank", &ranks) < 0)
             || (idset_set_string (idset, ranks) < 0))
             goto err;
@@ -89,37 +90,48 @@ static int rset_read_time_window (struct resource_set *r, json_error_t *errp)
     /*  Default values: < 0 indicates "unset"
      */
     r->expiration = -1.;
-    r-> starttime = -1.;
-    if (json_unpack_ex (r->R, errp, 0,
+    r->starttime = -1.;
+    if (json_unpack_ex (r->R,
+                        errp,
+                        0,
                         "{s:{s?F s?F}}",
                         "execution",
-                        "starttime",  &r->starttime,
-                        "expiration", &r->expiration) < 0)
+                        "starttime",
+                        &r->starttime,
+                        "expiration",
+                        &r->expiration)
+        < 0)
         return -1;
     return 0;
 }
 
-struct resource_set * resource_set_create (const char *R, json_error_t *errp)
+struct resource_set *resource_set_create (const char *R, json_error_t *errp)
 {
     int version = 0;
     struct resource_set *r = calloc (1, sizeof (*r));
     if (!(r->R = json_loads (R, 0, errp)))
         goto err;
-    if (json_unpack_ex (r->R, errp, 0, "{s:i s:{s:o}}",
-                                       "version", &version,
-                                       "execution",
-                                       "R_lite", &r->R_lite) < 0)
+    if (json_unpack_ex (r->R,
+                        errp,
+                        0,
+                        "{s:i s:{s:o}}",
+                        "version",
+                        &version,
+                        "execution",
+                        "R_lite",
+                        &r->R_lite)
+        < 0)
         goto err;
     if (version != 1) {
         if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                    "invalid version: %d", version);
+            snprintf (errp->text, sizeof (errp->text), "invalid version: %d", version);
         goto err;
     }
     if (!(r->ranks = rset_ranks (r))) {
         if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                    "R_lite: failed to read target rank list");
+            snprintf (errp->text,
+                      sizeof (errp->text),
+                      "R_lite: failed to read target rank list");
         goto err;
     }
     if (rset_read_time_window (r, errp) < 0)
@@ -130,7 +142,7 @@ err:
     return NULL;
 }
 
-const struct idset * resource_set_ranks (struct resource_set *r)
+const struct idset *resource_set_ranks (struct resource_set *r)
 {
     return r->ranks;
 }
@@ -144,7 +156,6 @@ double resource_set_expiration (struct resource_set *r)
 {
     return r->expiration;
 }
-
 
 /* vi: ts=4 sw=4 expandtab
  */

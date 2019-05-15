@@ -41,8 +41,7 @@ done:
     return rc;
 }
 
-int flux_request_decode (const flux_msg_t *msg, const char **topicp,
-                         const char **sp)
+int flux_request_decode (const flux_msg_t *msg, const char **topicp, const char **sp)
 {
     const char *topic, *s;
     int rc = -1;
@@ -60,8 +59,10 @@ done:
     return rc;
 }
 
-int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
-                             const void **data, int *len)
+int flux_request_decode_raw (const flux_msg_t *msg,
+                             const char **topic,
+                             const void **data,
+                             int *len)
 {
     const char *ts;
     const void *d = NULL;
@@ -88,8 +89,10 @@ done:
     return rc;
 }
 
-static int flux_request_vunpack (const flux_msg_t *msg, const char **topic,
-                                 const char *fmt, va_list ap)
+static int flux_request_vunpack (const flux_msg_t *msg,
+                                 const char **topic,
+                                 const char *fmt,
+                                 va_list ap)
 {
     const char *ts;
     int rc = -1;
@@ -109,8 +112,10 @@ done:
     return rc;
 }
 
-int flux_request_unpack (const flux_msg_t *msg, const char **topic,
-                         const char *fmt, ...)
+int flux_request_unpack (const flux_msg_t *msg,
+                         const char **topic,
+                         const char *fmt,
+                         ...)
 {
     va_list ap;
     int rc;
@@ -155,8 +160,7 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_request_encode_raw (const char *topic,
-                                     const void *data, int len)
+flux_msg_t *flux_request_encode_raw (const char *topic, const void *data, int len)
 {
     flux_msg_t *msg = request_encode (topic);
 
