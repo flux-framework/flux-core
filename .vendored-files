@@ -1,0 +1,11 @@
+src/common/libev//*
+src/common/liblsd/*
+src/common/liboptparse/getopt(_int)?.*
+src/common/libtap/*
+src/common/libtomlc99/*
+src/common/libutil/veb.*
+src/common/libutil/sds(alloc)?.*
+src/common/libutil/mnemonic.*
+src/common/libutil/sha(1|256).*
+src/common/libutil/fdwalk.*
+src/bindings/lua/lalarm.c

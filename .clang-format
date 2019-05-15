@@ -17,6 +17,9 @@ PenaltyBreakBeforeFirstCallParameter : 10000000
 PenaltyReturnTypeOnItsOwnLine : 65000
 PenaltyBreakString : 10
 
+# do not make build-breaking changes
+SortIncludes : false
+
 # These improve formatting results but require clang 3.6/7 or higher
 BreakBeforeBinaryOperators : NonAssignment
 AlignAfterOpenBracket: true

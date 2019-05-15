@@ -1,5 +1,17 @@
 #!/bin/bash
 
+declare -i EXITCODE=0
+
+GITROOT=$(git rev-parse --show-toplevel)
+cd $GITROOT
+
+if command -v clang-format 2>&1 > /dev/null ; then
+    find src t -name "*.c" -o -name "*.h" | grep -v -Ef .vendored-files | xargs clang-format -style=file -i
+else
+    echo "clang-format not found, C left unformatted"
+    EXITCODE=1
+fi
+
 if command -v black 2>&1 > /dev/null ; then
     # awk cmd copied from:
     # https://unix.stackexchange.com/questions/66097/find-all-files-with-a-python-shebang
@@ -8,5 +20,8 @@ if command -v black 2>&1 > /dev/null ; then
          -exec awk ' /^#!.*python/{print FILENAME} {nextfile}' {} + \) \
         | xargs black
 else
-  echo "black not found, python left unformatted"
+    echo "black not found, python left unformatted"
+    EXITCODE=1
 fi
+
+exit $EXITCODE

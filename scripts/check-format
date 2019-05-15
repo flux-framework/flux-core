@@ -1,5 +1,17 @@
 #!/bin/bash
-set -e
+set -e # Exit immediately if a command exits with a non-zero status.
+
+GITROOT=$(git rev-parse --show-toplevel)
+cd $GITROOT
+
+if command -v clang-format 2>&1 > /dev/null ; then
+    find src t -name "*.c" -o -name "*.h" | grep -v -Ef .vendored-files \
+        | xargs clang-format -style=file -output-replacements-xml \
+        | ( ! grep -c "<replacement " >/dev/null )
+else
+    echo "clang-format not found, failing"
+    exit 1
+fi
 
 if command -v black 2>&1 > /dev/null ; then
     # awk cmd copied from:
