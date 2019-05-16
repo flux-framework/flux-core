@@ -740,9 +740,8 @@ const char *flux_future_error_string (flux_future_t *f)
                 return f->result.errnum_string;
             return flux_strerror (f->result.errnum);
         }
-        return "future not fulfilled";
     }
-    return "future NULL";
+    return NULL;
 }
 
 /* timer - for flux_future_then() timeout

@@ -824,17 +824,14 @@ void test_error_string (void)
     flux_future_t *f;
     const char *str;
 
-    ok ((str = flux_future_error_string (NULL)) != NULL
-        && !strcmp (str, "future NULL"),
-        "flux_future_error_string returns \"future NULL\" on NULL input");
+    ok (flux_future_error_string (NULL) == NULL,
+        "flux_future_error_string returns NULL on NULL input");
 
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
 
-    ok ((str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "future not fulfilled"),
-        "flux_future_error_string returns \"future not fulfilled\" on "
-        "unfulfilled future");
+    ok (flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL on unfulfilled future");
 
     flux_future_fulfill (f, "Hello", NULL);
 

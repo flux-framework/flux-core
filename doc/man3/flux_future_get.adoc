@@ -78,12 +78,12 @@ another `flux_future_then()`, if desired.
 `flux_future_destroy()` destroys a future, including any result contained
 within.
 
-`flux_future_error_string()` returns the error string associated with
-a future.  If the future was fulfilled with an optional error string,
+`flux_future_error_string()` returns the error string stored in a
+future.  If the future was fulfilled with an optional error string,
 `flux_future_error_string()` will return that string.  Otherwise, it
 will return the string associated with the error number set in a
-future.  If the future is not fulfilled or a NULL pointer is passed
-in, an appropriate error message is returned to indicate the issue.
+future.  If the future is a NULL pointer or is not fulfilled, NULL is
+returned.
 
 RETURN VALUE
 ------------
