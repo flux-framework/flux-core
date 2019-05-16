@@ -82,8 +82,8 @@ within.
 future.  If the future was fulfilled with an optional error string,
 `flux_future_error_string()` will return that string.  Otherwise, it
 will return the string associated with the error number set in a
-future.  If the future is a NULL pointer or is not fulfilled, NULL is
-returned.
+future.  If the future is a NULL pointer, not fulfilled, or fulfilled
+with a non-error, NULL is returned.
 
 RETURN VALUE
 ------------

@@ -836,9 +836,8 @@ void test_error_string (void)
     flux_future_fulfill (f, "Hello", NULL);
 
     ok (flux_future_get (f, NULL) == 0
-        && (str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "Success"),
-        "flux_future_error_string returns \"Success\" when future fulfilled "
+        && flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL when future fulfilled "
         "with non-error result");
 
     flux_future_destroy (f);
