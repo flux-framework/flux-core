@@ -336,7 +336,7 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_set_priority");
     if (flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      flux_future_error_string (f));
+                      future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     return 0;
@@ -367,7 +367,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_raise");
     if (flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      flux_future_error_string (f));
+                      future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -397,7 +397,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_cancel");
     if (flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      flux_future_error_string (f));
+                      future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -558,7 +558,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_submit (h, J ? J : jobspec, priority, flags)))
         log_err_exit ("flux_job_submit");
     if (flux_job_submit_get_id (f, &id) < 0) {
-        log_msg_exit ("%s", flux_future_error_string (f));
+        log_msg_exit ("%s", future_strerror (f, errno));
     }
     printf ("%llu\n", (unsigned long long)id);
     flux_future_destroy (f);
@@ -1071,7 +1071,7 @@ int cmd_drain (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_rpc");
     if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("drain: %s", errno == ETIMEDOUT
-                                   ? "timeout" : flux_future_error_string (f));
+                                   ? "timeout" : future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     return (0);
@@ -1092,7 +1092,7 @@ int cmd_undrain (optparse_t *p, int argc, char **argv)
     if (!(f = flux_rpc (h, "job-manager.undrain", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("flux_rpc");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("undrain: %s", flux_future_error_string (f));
+        log_msg_exit ("undrain: %s", future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     return (0);

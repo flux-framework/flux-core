@@ -140,7 +140,7 @@ void submitbench_continuation (flux_future_t *f, void *arg)
         if (errno == ENOSYS)
             log_msg_exit ("submit: job-ingest module is not loaded");
         else
-            log_msg_exit ("submit: %s", flux_future_error_string (f));
+            log_msg_exit ("submit: %s", future_strerror (f, errno));
     }
     printf ("%llu\n", (unsigned long long)id);
     flux_future_destroy (f);

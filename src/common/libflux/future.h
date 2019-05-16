@@ -15,6 +15,7 @@
 #include "types.h"
 #include "handle.h"
 #include "msg_handler.h"
+#include "flog.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +60,12 @@ void flux_future_fulfill_error (flux_future_t *f, int errnum, const char *errstr
 int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p);
 
 void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr);
+
+/* Convenience macro */
+#define future_strerror(__f, __errno) \
+    (flux_future_has_error ((__f)) ? \
+     flux_future_error_string ((__f)) : \
+     flux_strerror ((__errno)))
 
 bool flux_future_has_error (flux_future_t *f);
 const char *flux_future_error_string (flux_future_t *f);
