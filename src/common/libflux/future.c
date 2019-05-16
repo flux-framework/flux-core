@@ -721,6 +721,24 @@ void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr)
     }
 }
 
+bool flux_future_has_error (flux_future_t *f)
+{
+    if (f) {
+        /* fatal errnum take precedence over any future
+         * fulfillments */
+        if (f->fatal_errnum_valid)
+            return true;
+        else if (f->result_valid) {
+            /* future contains a valid fulfillment, must check if it
+             * is a error fulfillment.
+             */
+            if (f->result.is_error)
+                return true;
+        }
+    }
+    return false;
+}
+
 const char *flux_future_error_string (flux_future_t *f)
 {
     if (f) {

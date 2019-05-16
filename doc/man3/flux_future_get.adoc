@@ -25,6 +25,8 @@ SYNOPSIS
 
  void flux_future_destroy (flux_future_t *f);
 
+ bool flux_future_has_error (flux_future_t *f);
+
  const char *flux_future_error_string (flux_future_t *f);
 
 OVERVIEW
@@ -77,6 +79,11 @@ another `flux_future_then()`, if desired.
 
 `flux_future_destroy()` destroys a future, including any result contained
 within.
+
+`flux_future_has_error()` tests if an error exists in the future or not.
+It can be useful for determining if an error exists in a future or in
+other parts of code that may wrap around a future.  It is commonly
+called before calling `flux_future_error_string()`.
 
 `flux_future_error_string()` returns the error string stored in a
 future.  If the future was fulfilled with an optional error string,
