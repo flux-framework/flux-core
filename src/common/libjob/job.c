@@ -115,14 +115,15 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *jobid)
 {
     flux_jobid_t id;
 
-    if (!f || !jobid) {
+    if (!f) {
         errno = EINVAL;
         return -1;
     }
     if (flux_rpc_get_unpack (f, "{s:I}",
                                 "id", &id) < 0)
         return -1;
-    *jobid = id;
+    if (jobid)
+        *jobid = id;
     return 0;
 }
 
