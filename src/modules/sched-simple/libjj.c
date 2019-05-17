@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <errno.h>
@@ -37,7 +37,11 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
                         "with",
                         &with)
         < 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1, "level %d: %s", level, error.text);
+        snprintf (jj->error,
+                  sizeof (jj->error) - 1,
+                  "level %d: %s",
+                  level,
+                  error.text);
         errno = EINVAL;
         return -1;
     }
@@ -78,7 +82,10 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
     memset (jj, 0, sizeof (*jj));
 
     if ((o = json_loads (spec, 0, &error)) == NULL) {
-        snprintf (jj->error, sizeof (jj->error) - 1, "JSON load: %s", error.text);
+        snprintf (jj->error,
+                  sizeof (jj->error) - 1,
+                  "JSON load: %s",
+                  error.text);
         errno = EINVAL;
         return -1;
     }
@@ -92,7 +99,10 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
                         "resources",
                         &resources)
         < 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1, "at top level: %s", error.text);
+        snprintf (jj->error,
+                  sizeof (jj->error) - 1,
+                  "at top level: %s",
+                  error.text);
         errno = EINVAL;
         goto err;
     }
@@ -108,12 +118,16 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
         goto err;
 
     if (jj->nslots <= 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1, "Unable to determine slot count");
+        snprintf (jj->error,
+                  sizeof (jj->error) - 1,
+                  "Unable to determine slot count");
         errno = EINVAL;
         goto err;
     }
     if (jj->slot_size <= 0) {
-        snprintf (jj->error, sizeof (jj->error) - 1, "Unable to determine slot size");
+        snprintf (jj->error,
+                  sizeof (jj->error) - 1,
+                  "Unable to determine slot size");
         errno = EINVAL;
         goto err;
     }

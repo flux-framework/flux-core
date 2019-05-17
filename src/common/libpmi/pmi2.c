@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -103,7 +103,8 @@ int PMI2_Init (int *spawned, int *size, int *rank, int *appnum)
         goto done;
     if ((e = PMI_KVS_Get_key_length_max (&ctx.key_length_max)) != PMI_SUCCESS)
         goto done;
-    if ((e = PMI_KVS_Get_value_length_max (&ctx.value_length_max)) != PMI_SUCCESS)
+    if ((e = PMI_KVS_Get_value_length_max (&ctx.value_length_max))
+        != PMI_SUCCESS)
         goto done;
     if (!(ctx.kvs_name = calloc (1, ctx.name_length_max)))
         return PMI2_ERR_NOMEM;
@@ -111,7 +112,8 @@ int PMI2_Init (int *spawned, int *size, int *rank, int *appnum)
         free (ctx.kvs_name);
         return PMI2_ERR_NOMEM;
     }
-    if ((e = PMI_KVS_Get_my_name (ctx.kvs_name, ctx.name_length_max)) != PMI_SUCCESS) {
+    if ((e = PMI_KVS_Get_my_name (ctx.kvs_name, ctx.name_length_max))
+        != PMI_SUCCESS) {
         free (ctx.kvs_name);
         free (ctx.value);
         goto done;
@@ -274,7 +276,10 @@ int PMI2_Info_PutNodeAttr (const char name[], const char value[])
     DRETURN (PMI2_FAIL);
 }
 
-int PMI2_Info_GetJobAttr (const char name[], char value[], int valuelen, int *found)
+int PMI2_Info_GetJobAttr (const char name[],
+                          char value[],
+                          int valuelen,
+                          int *found)
 {
     int e;
     if (strcmp (name, "PMI_process_mapping") != 0) {

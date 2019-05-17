@@ -11,7 +11,7 @@
 /* allow.c - handle eventlog access checks */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 #include <flux/core.h>
@@ -24,7 +24,9 @@
 /* Parse the submit userid from the event log.
  * Assume "submit" is the first event.
  */
-static int eventlog_get_userid (struct info_ctx *ctx, const char *s, int *useridp)
+static int eventlog_get_userid (struct info_ctx *ctx,
+                                const char *s,
+                                int *useridp)
 {
     json_t *a = NULL;
     json_t *entry = NULL;

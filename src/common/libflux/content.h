@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_CONTENT_H
-#define _FLUX_CORE_CONTENT_H
+#    define _FLUX_CORE_CONTENT_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* flags */
 enum {
@@ -36,7 +36,10 @@ int flux_content_load_get (flux_future_t *f, const void **buf, int *len);
 
 /* Send request to store blob.
  */
-flux_future_t *flux_content_store (flux_t *h, const void *buf, int len, int flags);
+flux_future_t *flux_content_store (flux_t *h,
+                                   const void *buf,
+                                   int len,
+                                   int flags);
 
 /* Get result of store request (blobref).
  * Storage for 'blobref' belongs to 'f' and is valid until 'f' is destroyed.
@@ -44,9 +47,9 @@ flux_future_t *flux_content_store (flux_t *h, const void *buf, int len, int flag
  */
 int flux_content_store_get (flux_future_t *f, const char **blobref);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_CONTENT_H */
 

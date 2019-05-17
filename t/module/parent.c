@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -161,12 +161,18 @@ static void insmod_request_cb (flux_t *h,
     module_t *m = NULL;
     error_t e;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path, "args", &args) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:o}",
+                             "path",
+                             &path,
+                             "args",
+                             &args)
+        < 0)
         goto error;
     if (!json_is_array (args))
         goto proto;
-    json_array_foreach (args, index, value)
-    {
+    json_array_foreach (args, index, value) {
         if (!json_is_string (value))
             goto proto;
         if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {

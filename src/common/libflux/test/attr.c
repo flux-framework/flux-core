@@ -52,7 +52,10 @@ static bool lookup_hardwired (const char *key, const char **val, int *flags)
  * all other values come from the hash and are returned with (flags = 0)
  */
 static volatile int get_count = 0;
-void get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void get_cb (flux_t *h,
+             flux_msg_handler_t *mh,
+             const flux_msg_t *msg,
+             void *arg)
 {
     zhashx_t *attrs = arg;
     const char *name;
@@ -67,7 +70,8 @@ void get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg
         goto error;
     }
     diag ("attr.get: %s=%s (flags=%d)", name, value, flags);
-    if (flux_respond_pack (h, msg, "{s:s s:i}", "value", value, "flags", flags) < 0)
+    if (flux_respond_pack (h, msg, "{s:s s:i}", "value", value, "flags", flags)
+        < 0)
         BAIL_OUT ("flux_respond failed");
     return;
 error:
@@ -75,12 +79,21 @@ error:
         BAIL_OUT ("flux_respond_error failed");
 }
 
-void set_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void set_cb (flux_t *h,
+             flux_msg_handler_t *mh,
+             const flux_msg_t *msg,
+             void *arg)
 {
     zhashx_t *attrs = arg;
     const char *name;
     const char *value;
-    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name, "value", &value)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name",
+                             &name,
+                             "value",
+                             &value)
         < 0)
         goto error;
     if (lookup_hardwired (name, NULL, NULL)) {
@@ -177,7 +190,8 @@ int main (int argc, char *argv[])
 
     errno = 0;
     get_count = 0;
-    ok (flux_attr_get (h, "notakey") == NULL && errno == ENOENT && get_count == 1,
+    ok (flux_attr_get (h, "notakey") == NULL && errno == ENOENT
+            && get_count == 1,
         "flux_attr_get name=notakey fails with ENOENT (with rpc)");
 
     /* set, get */

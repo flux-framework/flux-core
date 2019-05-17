@@ -79,7 +79,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
@@ -299,7 +299,9 @@ static int jobid_respond_error (flux_t *h,
                               note);
 }
 
-static int jobinfo_respond_error (struct jobinfo *job, int errnum, const char *msg)
+static int jobinfo_respond_error (struct jobinfo *job,
+                                  int errnum,
+                                  const char *msg)
 {
     return jobid_respond_error (job->ctx->h, job->id, job->req, errnum, msg);
 }
@@ -422,7 +424,10 @@ static void jobinfo_fatal_verror (struct jobinfo *job,
     }
 }
 
-static void jobinfo_fatal_error (struct jobinfo *job, int errnum, const char *fmt, ...)
+static void jobinfo_fatal_error (struct jobinfo *job,
+                                 int errnum,
+                                 const char *fmt,
+                                 ...)
 {
     flux_t *h = job->ctx->h;
     int saved_errno = errno;
@@ -592,7 +597,9 @@ static void jobinfo_cleanup (flux_future_t *fprev, void *arg)
     while (fn) {
         const char *name = zhashx_cursor (job->cleanup);
         if (!(f = (*fn) (job))) {
-            flux_log_error (h, "%s", (const char *)zhashx_cursor (job->cleanup));
+            flux_log_error (h,
+                            "%s",
+                            (const char *)zhashx_cursor (job->cleanup));
             goto error;
         }
         flux_future_push (cf, name, f);
@@ -626,7 +633,11 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
                                      "note",
                                      strerror (errno));
     else
-        f = jobinfo_emit_event_pack (job, "cleanup.finish", "{ s:i }", "rc", rc);
+        f = jobinfo_emit_event_pack (job,
+                                     "cleanup.finish",
+                                     "{ s:i }",
+                                     "rc",
+                                     rc);
 
     if (!f)
         flux_future_continue_error (prev, errno, NULL);
@@ -703,7 +714,8 @@ static int jobinfo_finalize (struct jobinfo *job)
 
     if (!(f = jobinfo_start_cleanup (job)))
         goto error;
-    if (job->has_namespace && !(fnext = flux_future_and_then (f, namespace_move, job)))
+    if (job->has_namespace
+        && !(fnext = flux_future_and_then (f, namespace_move, job)))
         goto error;
     if (flux_future_then (fnext, -1., jobinfo_release, job) < 0)
         goto error;
@@ -752,14 +764,21 @@ static int jobinfo_start_timer (struct jobinfo *job)
         }
         flux_watcher_start (job->timer);
         snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
-        jobinfo_emit_event_pack_nowait (job, "running", "{ s:s }", "timer", timebuf);
+        jobinfo_emit_event_pack_nowait (job,
+                                        "running",
+                                        "{ s:s }",
+                                        "timer",
+                                        timebuf);
         job->running = 1;
     } else
         return -1;
     return 0;
 }
 
-void epilog_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+void epilog_timer_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     flux_future_fulfill ((flux_future_t *)arg, NULL, NULL);
     flux_watcher_destroy (w);
@@ -939,7 +958,9 @@ error:
     flux_future_destroy (fprev);
 }
 
-static flux_future_t *ns_create_and_link (flux_t *h, struct jobinfo *job, int flags)
+static flux_future_t *ns_create_and_link (flux_t *h,
+                                          struct jobinfo *job,
+                                          int flags)
 {
     flux_future_t *f = NULL;
     flux_future_t *f2 = NULL;
@@ -968,7 +989,8 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "jobspec"))
         || flux_future_push (f, "jobspec", f_kvs) < 0)
         goto err;
-    if (!(f_kvs = ns_create_and_link (h, job, 0)) || flux_future_push (f, "ns", f_kvs))
+    if (!(f_kvs = ns_create_and_link (h, job, 0))
+        || flux_future_push (f, "ns", f_kvs))
         goto err;
 
     /* Increase refcount during init phase in case job is canceled:

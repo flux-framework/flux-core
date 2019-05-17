@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <lua.h>
 #include <lauxlib.h>
@@ -99,16 +99,16 @@ static int l_zmsg_info_destroy (lua_State *L)
 static const char *zmsg_type_string (int type)
 {
     switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            return ("request");
-        case FLUX_MSGTYPE_EVENT:
-            return ("event");
-        case FLUX_MSGTYPE_RESPONSE:
-            return ("response");
-        case FLUX_MSGTYPE_ANY:
-            return ("all");
-        default:
-            break;
+    case FLUX_MSGTYPE_REQUEST:
+        return ("request");
+    case FLUX_MSGTYPE_EVENT:
+        return ("event");
+    case FLUX_MSGTYPE_RESPONSE:
+        return ("response");
+    case FLUX_MSGTYPE_ANY:
+        return ("all");
+    default:
+        break;
     }
     return ("Unknown");
 }
@@ -139,7 +139,8 @@ static int l_zmsg_info_index (lua_State *L)
     if (strcmp (key, "errnum") == 0) {
         int errnum;
         if (!(zi->typemask & FLUX_MSGTYPE_RESPONSE))
-            return lua_pusherror (L, "zmsg: errnum requested for non-respose msg");
+            return lua_pusherror (L,
+                                  "zmsg: errnum requested for non-respose msg");
         flux_msg_get_errnum (zi->msg, &errnum);
         lua_pushnumber (L, errnum);
         return (1);

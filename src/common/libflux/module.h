@@ -9,19 +9,19 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_MODULE_H
-#define _FLUX_CORE_MODULE_H
+#    define _FLUX_CORE_MODULE_H
 
 /* Module management messages are constructed according to Flux RFC 5.
  * https://github.com/flux-framework/rfc/blob/master/spec_5.adoc
  */
 
-#include <stdint.h>
+#    include <stdint.h>
 
-#include "handle.h"
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Module states, for embedding in keepalive messages (rfc 5)
  */
@@ -35,7 +35,7 @@ enum {
 
 /* Mandatory symbols for modules
  */
-#define MOD_NAME(x) const char *mod_name = x
+#    define MOD_NAME(x) const char *mod_name = x
 typedef int(mod_main_f) (flux_t *h, int argc, char *argv[]);
 
 typedef void(flux_moderr_f) (const char *errmsg, void *arg);
@@ -56,9 +56,9 @@ char *flux_modfind (const char *searchpath,
                     flux_moderr_f *cb,
                     void *arg);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !FLUX_CORE_MODULE_H */
 

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,7 +94,8 @@ static void optparse_option_destroy (struct optparse_option *o)
     free (o);
 }
 
-static struct optparse_option *optparse_option_dup (const struct optparse_option *src)
+static struct optparse_option *optparse_option_dup (
+    const struct optparse_option *src)
 {
     struct optparse_option *o = malloc (sizeof (*o));
     if (o != NULL) {
@@ -220,7 +221,8 @@ static optparse_err_t optparse_set_log_fn (optparse_t *p, opt_log_f fn)
     return (0);
 }
 
-static optparse_err_t optparse_set_fatalerr_fn (optparse_t *p, opt_fatalerr_f fn)
+static optparse_err_t optparse_set_fatalerr_fn (optparse_t *p,
+                                                opt_fatalerr_f fn)
 {
     p->fatalerr_fn = fn;
     return (0);
@@ -424,7 +426,9 @@ static int get_term_columns ()
     return (cols);
 }
 
-static void optparse_doc_print (optparse_t *p, struct optparse_option *o, int columns)
+static void optparse_doc_print (optparse_t *p,
+                                struct optparse_option *o,
+                                int columns)
 {
     char seg[128];
     char buf[4096];
@@ -613,7 +617,9 @@ static int print_usage (optparse_t *p)
     return optparse_print_options (p);
 }
 
-static int display_help (optparse_t *p, struct optparse_option *o, const char *optarg)
+static int display_help (optparse_t *p,
+                         struct optparse_option *o,
+                         const char *optarg)
 {
     optparse_fatal_usage (p, 0, NULL);
     /* noreturn */
@@ -699,7 +705,9 @@ optparse_t *optparse_create (const char *prog)
      *  Register -h, --help
      */
     if (optparse_add_option (p, &help) != OPTPARSE_SUCCESS) {
-        fprintf (stderr, "failed to register --help option: %s\n", strerror (errno));
+        fprintf (stderr,
+                 "failed to register --help option: %s\n",
+                 strerror (errno));
         optparse_destroy (p);
         return (NULL);
     }
@@ -757,9 +765,12 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
     new = optparse_add_subcommand (p, name, cb);
     if (new == NULL)
         return OPTPARSE_NOMEM;
-    if ((usage && (e = optparse_set (new, OPTPARSE_USAGE, usage)) != OPTPARSE_SUCCESS)
+    if ((usage
+         && (e = optparse_set (new, OPTPARSE_USAGE, usage)) != OPTPARSE_SUCCESS)
         || (doc && (e = optparse_add_doc (new, doc, -1)) != OPTPARSE_SUCCESS)
-        || (opts && (e = optparse_add_option_table (new, opts) != OPTPARSE_SUCCESS))) {
+        || (opts
+            && (e = optparse_add_option_table (new, opts)
+                    != OPTPARSE_SUCCESS))) {
         optparse_destroy (new);
         return (e);
     }
@@ -860,7 +871,9 @@ badarg:
     return -1;
 }
 
-double optparse_get_double (optparse_t *p, const char *name, double default_value)
+double optparse_get_double (optparse_t *p,
+                            const char *name,
+                            double default_value)
 {
     int n;
     double d;
@@ -893,7 +906,9 @@ badarg:
     return -1;
 }
 
-double optparse_get_duration (optparse_t *p, const char *name, double default_value)
+double optparse_get_duration (optparse_t *p,
+                              const char *name,
+                              double default_value)
 {
     int n;
     double d;
@@ -964,7 +979,8 @@ int optparse_getopt_iterator_reset (optparse_t *p, const char *name)
     return (list_count (c->optargs));
 }
 
-optparse_err_t optparse_add_option (optparse_t *p, const struct optparse_option *o)
+optparse_err_t optparse_add_option (optparse_t *p,
+                                    const struct optparse_option *o)
 {
     struct option_info *c;
 
@@ -987,8 +1003,9 @@ optparse_err_t optparse_remove_option (optparse_t *p, const char *name)
 {
     optparse_err_t rc = OPTPARSE_SUCCESS;
 
-    int n =
-        list_delete_all (p->option_list, (ListFindF)option_info_cmp_name, (void *)name);
+    int n = list_delete_all (p->option_list,
+                             (ListFindF)option_info_cmp_name,
+                             (void *)name);
 
     if (n != 1)
         rc = OPTPARSE_FAILURE;
@@ -1037,55 +1054,55 @@ optparse_err_t optparse_set (optparse_t *p, int item, ...)
 
     va_start (vargs, item);
     switch (item) {
-        case OPTPARSE_USAGE:
-            e = optparse_set_usage (p, va_arg (vargs, char *));
-            break;
-        case OPTPARSE_LOG_FN:
-            e = optparse_set_log_fn (p, va_arg (vargs, void *));
-            break;
-        case OPTPARSE_FATALERR_FN:
-            e = optparse_set_fatalerr_fn (p, va_arg (vargs, void *));
-            break;
-        case OPTPARSE_FATALERR_HANDLE:
-            e = optparse_set_fatalerr_handle (p, va_arg (vargs, void *));
-            break;
-        case OPTPARSE_LEFT_MARGIN:
-            n = va_arg (vargs, int);
-            if ((n < 0) || (n > 1000))
-                e = OPTPARSE_BAD_ARG;
-            else
-                p->left_margin = n;
-            break;
-        case OPTPARSE_OPTION_CB:
-            str = va_arg (vargs, char *);
-            cb = va_arg (vargs, void *);
-            e = optparse_set_option_cb (p, str, cb);
-            break;
-        case OPTPARSE_OPTION_WIDTH:
-            n = va_arg (vargs, int);
-            if ((n < 0) || (n > 1000))
-                e = OPTPARSE_BAD_ARG;
-            else
-                p->option_width = n;
-            break;
-        case OPTPARSE_PRINT_SUBCMDS:
-            n = va_arg (vargs, int);
-            p->skip_subcmds = !n;
-            break;
-        case OPTPARSE_SUBCMD_NOOPTS:
-            n = va_arg (vargs, int);
-            p->no_options = n;
-            break;
-        case OPTPARSE_SUBCMD_HIDE:
-            n = va_arg (vargs, int);
-            p->hidden = n;
-            break;
-        case OPTPARSE_POSIXLY_CORRECT:
-            n = va_arg (vargs, int);
-            p->posixly_correct = n;
-            break;
-        default:
+    case OPTPARSE_USAGE:
+        e = optparse_set_usage (p, va_arg (vargs, char *));
+        break;
+    case OPTPARSE_LOG_FN:
+        e = optparse_set_log_fn (p, va_arg (vargs, void *));
+        break;
+    case OPTPARSE_FATALERR_FN:
+        e = optparse_set_fatalerr_fn (p, va_arg (vargs, void *));
+        break;
+    case OPTPARSE_FATALERR_HANDLE:
+        e = optparse_set_fatalerr_handle (p, va_arg (vargs, void *));
+        break;
+    case OPTPARSE_LEFT_MARGIN:
+        n = va_arg (vargs, int);
+        if ((n < 0) || (n > 1000))
             e = OPTPARSE_BAD_ARG;
+        else
+            p->left_margin = n;
+        break;
+    case OPTPARSE_OPTION_CB:
+        str = va_arg (vargs, char *);
+        cb = va_arg (vargs, void *);
+        e = optparse_set_option_cb (p, str, cb);
+        break;
+    case OPTPARSE_OPTION_WIDTH:
+        n = va_arg (vargs, int);
+        if ((n < 0) || (n > 1000))
+            e = OPTPARSE_BAD_ARG;
+        else
+            p->option_width = n;
+        break;
+    case OPTPARSE_PRINT_SUBCMDS:
+        n = va_arg (vargs, int);
+        p->skip_subcmds = !n;
+        break;
+    case OPTPARSE_SUBCMD_NOOPTS:
+        n = va_arg (vargs, int);
+        p->no_options = n;
+        break;
+    case OPTPARSE_SUBCMD_HIDE:
+        n = va_arg (vargs, int);
+        p->hidden = n;
+        break;
+    case OPTPARSE_POSIXLY_CORRECT:
+        n = va_arg (vargs, int);
+        p->posixly_correct = n;
+        break;
+    default:
+        e = OPTPARSE_BAD_ARG;
     }
     va_end (vargs);
     return e;
@@ -1112,21 +1129,21 @@ optparse_err_t optparse_get (optparse_t *p, int item, ...)
 
     va_start (vargs, item);
     switch (item) {
-        /*
-         *  Not implemented yet...
-         */
-        case OPTPARSE_USAGE:
-        case OPTPARSE_LOG_FN:
-        case OPTPARSE_FATALERR_FN:
-        case OPTPARSE_FATALERR_HANDLE:
-        case OPTPARSE_LEFT_MARGIN:
-        case OPTPARSE_OPTION_CB:
-        case OPTPARSE_OPTION_WIDTH:
-            e = OPTPARSE_NOT_IMPL;
-            break;
+    /*
+     *  Not implemented yet...
+     */
+    case OPTPARSE_USAGE:
+    case OPTPARSE_LOG_FN:
+    case OPTPARSE_FATALERR_FN:
+    case OPTPARSE_FATALERR_HANDLE:
+    case OPTPARSE_LEFT_MARGIN:
+    case OPTPARSE_OPTION_CB:
+    case OPTPARSE_OPTION_WIDTH:
+        e = OPTPARSE_NOT_IMPL;
+        break;
 
-        default:
-            e = OPTPARSE_BAD_ARG;
+    default:
+        e = OPTPARSE_BAD_ARG;
     }
     va_end (vargs);
     return e;
@@ -1317,14 +1334,21 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     memset (&d, 0, sizeof (d));
 
-    while (
-        (c = getopt_long_r (argc, argv, optstring, optz, &li, &d, p->posixly_correct))
-        >= 0) {
+    while ((c = getopt_long_r (argc,
+                               argv,
+                               optstring,
+                               optz,
+                               &li,
+                               &d,
+                               p->posixly_correct))
+           >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == '?') {
             if (d.optopt != '\0')
-                (*p->log_fn) ("%s: unrecognized option '-%c'\n", fullname, d.optopt);
+                (*p->log_fn) ("%s: unrecognized option '-%c'\n",
+                              fullname,
+                              d.optopt);
             else
                 (*p->log_fn) ("%s: unrecognized option '%s'\n",
                               fullname,
@@ -1347,7 +1371,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
         /* Reset li for next iteration */
         li = -1;
         if (opt == NULL) {
-            (*p->log_fn) ("ugh, didn't find option associated with char %c\n", c);
+            (*p->log_fn) ("ugh, didn't find option associated with char %c\n",
+                          c);
             continue;
         }
 
@@ -1395,7 +1420,10 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
         return optparse_fatalerr (sp, 1);
 
     if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {
-        return optparse_fatalmsg (p, 1, "subcommand %s: failed to lookup callback!\n");
+        return optparse_fatalmsg (p,
+                                  1,
+                                  "subcommand %s: failed to lookup "
+                                  "callback!\n");
     }
 
     return ((*cb) (sp, ac, av));

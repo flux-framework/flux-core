@@ -61,16 +61,16 @@ typedef enum {
  *  Set of item types for optparse_get and optparse_set:
  */
 typedef enum {
-    OPTPARSE_USAGE,           /* Set usage message in --help output (char *)   */
-    OPTPARSE_LOG_FN,          /* Set log function (default fprintf(stderr,..)) */
-    OPTPARSE_FATALERR_FN,     /* Set fatal err function (default: exit() )     */
+    OPTPARSE_USAGE,       /* Set usage message in --help output (char *)   */
+    OPTPARSE_LOG_FN,      /* Set log function (default fprintf(stderr,..)) */
+    OPTPARSE_FATALERR_FN, /* Set fatal err function (default: exit() )     */
     OPTPARSE_FATALERR_HANDLE, /* Set handle passed to fatalerr function    */
-    OPTPARSE_OPTION_CB,       /* Change option cb function (char *,optparse_cb_f) */
-    OPTPARSE_OPTION_WIDTH,    /* Width allotted to options in --help output    */
-    OPTPARSE_LEFT_MARGIN,     /* Left pad for option output (default = 2)      */
-    OPTPARSE_PRINT_SUBCMDS,   /* Print all subcommands in --help (default = T  */
-    OPTPARSE_SUBCMD_NOOPTS,   /* Don't parse options for this subcommand       */
-    OPTPARSE_SUBCMD_HIDE,     /* Don't output this subcmd in --help output     */
+    OPTPARSE_OPTION_CB, /* Change option cb function (char *,optparse_cb_f) */
+    OPTPARSE_OPTION_WIDTH,  /* Width allotted to options in --help output    */
+    OPTPARSE_LEFT_MARGIN,   /* Left pad for option output (default = 2)      */
+    OPTPARSE_PRINT_SUBCMDS, /* Print all subcommands in --help (default = T  */
+    OPTPARSE_SUBCMD_NOOPTS, /* Don't parse options for this subcommand       */
+    OPTPARSE_SUBCMD_HIDE,   /* Don't output this subcmd in --help output     */
     OPTPARSE_POSIXLY_CORRECT, /* Set POSIXLY_CORRECT value                  */
 } optparse_item_t;
 
@@ -235,7 +235,8 @@ void optparse_reset (optparse_t *p);
  *    OPTPARSE_EEXIST: An attempt to register a duplicate option was detected.
  *    OPTPARSE_EINVAL: The optparse_t *object is currupt or invalid.
  */
-optparse_err_t optparse_add_option (optparse_t *p, const struct optparse_option *o);
+optparse_err_t optparse_add_option (optparse_t *p,
+                                    const struct optparse_option *o);
 
 /*
  *   Remove option [name] from parser [p].
@@ -372,14 +373,18 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value);
  *   default_value. If there was an error parsing the duration string,
  *   call the fatal error function.
  */
-double optparse_get_duration (optparse_t *p, const char *name, double default_value);
+double optparse_get_duration (optparse_t *p,
+                              const char *name,
+                              double default_value);
 
 /*
  *   Return the option argument as a double if 'name' was used,
  *    'default_value' if not.  If the option is unknown, or the argument
  *    could not be converted to a double, call the fatal error function.
  */
-double optparse_get_double (optparse_t *p, const char *name, double default_value);
+double optparse_get_double (optparse_t *p,
+                            const char *name,
+                            double default_value);
 
 /*
  *   Return the option argument as a string if 'name' was used, 'default_value'

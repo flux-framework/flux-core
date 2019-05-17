@@ -24,7 +24,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <stdbool.h>
@@ -84,31 +84,32 @@ static int proto_set_type (uint8_t *data, int len, int type)
         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
     switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            if (proto_set_u32 (data, len, PROTO_IND_NODEID, FLUX_NODEID_ANY) < 0)
-                return -1;
-            if (proto_set_u32 (data, len, PROTO_IND_MATCHTAG, FLUX_MATCHTAG_NONE) < 0)
-                return -1;
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            /* N.B. don't clobber matchtag from request on set_type */
-            if (proto_set_u32 (data, len, PROTO_IND_ERRNUM, 0) < 0)
-                return -1;
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            if (proto_set_u32 (data, len, PROTO_IND_SEQUENCE, 0) < 0)
-                return -1;
-            if (proto_set_u32 (data, len, PROTO_IND_AUX2, 0) < 0)
-                return -1;
-            break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (proto_set_u32 (data, len, PROTO_IND_STATUS, 0) < 0)
-                return -1;
-            if (proto_set_u32 (data, len, PROTO_IND_ERRNUM, 0) < 0)
-                return -1;
-            break;
-        default:
+    case FLUX_MSGTYPE_REQUEST:
+        if (proto_set_u32 (data, len, PROTO_IND_NODEID, FLUX_NODEID_ANY) < 0)
             return -1;
+        if (proto_set_u32 (data, len, PROTO_IND_MATCHTAG, FLUX_MATCHTAG_NONE)
+            < 0)
+            return -1;
+        break;
+    case FLUX_MSGTYPE_RESPONSE:
+        /* N.B. don't clobber matchtag from request on set_type */
+        if (proto_set_u32 (data, len, PROTO_IND_ERRNUM, 0) < 0)
+            return -1;
+        break;
+    case FLUX_MSGTYPE_EVENT:
+        if (proto_set_u32 (data, len, PROTO_IND_SEQUENCE, 0) < 0)
+            return -1;
+        if (proto_set_u32 (data, len, PROTO_IND_AUX2, 0) < 0)
+            return -1;
+        break;
+    case FLUX_MSGTYPE_KEEPALIVE:
+        if (proto_set_u32 (data, len, PROTO_IND_STATUS, 0) < 0)
+            return -1;
+        if (proto_set_u32 (data, len, PROTO_IND_ERRNUM, 0) < 0)
+            return -1;
+        break;
+    default:
+        return -1;
     }
     data[PROTO_OFF_TYPE] = type;
     return 0;
@@ -425,7 +426,10 @@ int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf
-        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_USERID, userid)
+        || proto_set_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_USERID,
+                          userid)
                < 0) {
         errno = EINVAL;
         return -1;
@@ -437,7 +441,10 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf
-        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_USERID, userid)
+        || proto_get_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_USERID,
+                          userid)
                < 0) {
         errno = EPROTO;
         return -1;
@@ -490,7 +497,10 @@ int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
         goto error;
     if (type != FLUX_MSGTYPE_REQUEST)
         goto error;
-    if (proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_NODEID, nodeid)
+    if (proto_set_u32 (zframe_data (zf),
+                       zframe_size (zf),
+                       PROTO_IND_NODEID,
+                       nodeid)
         < 0)
         goto error;
     return 0;
@@ -515,7 +525,10 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeidp)
         goto error;
     if (type != FLUX_MSGTYPE_REQUEST)
         goto error;
-    if (proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_NODEID, &nodeid)
+    if (proto_get_u32 (zframe_data (zf),
+                       zframe_size (zf),
+                       PROTO_IND_NODEID,
+                       &nodeid)
         < 0)
         goto error;
     *nodeidp = nodeid;
@@ -532,7 +545,10 @@ int flux_msg_set_errnum (flux_msg_t *msg, int e)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
-        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_ERRNUM, e)
+        || proto_set_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_ERRNUM,
+                          e)
                < 0) {
         errno = EINVAL;
         return -1;
@@ -548,7 +564,10 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
-        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_ERRNUM, &xe)
+        || proto_get_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_ERRNUM,
+                          &xe)
                < 0) {
         errno = EPROTO;
         return -1;
@@ -564,7 +583,10 @@ int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || type != FLUX_MSGTYPE_EVENT
-        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_SEQUENCE, seq)
+        || proto_set_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_SEQUENCE,
+                          seq)
                < 0) {
         errno = EINVAL;
         return -1;
@@ -579,7 +601,10 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || type != FLUX_MSGTYPE_EVENT
-        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_SEQUENCE, seq)
+        || proto_get_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_SEQUENCE,
+                          seq)
                < 0) {
         errno = EPROTO;
         return -1;
@@ -594,7 +619,10 @@ int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_MATCHTAG, t)
+        || proto_set_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_MATCHTAG,
+                          t)
                < 0) {
         errno = EINVAL;
         return -1;
@@ -609,7 +637,10 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_MATCHTAG, t)
+        || proto_get_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_MATCHTAG,
+                          t)
                < 0) {
         errno = EPROTO;
         return -1;
@@ -624,7 +655,10 @@ int flux_msg_set_status (flux_msg_t *msg, int s)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || type != FLUX_MSGTYPE_KEEPALIVE
-        || proto_set_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_STATUS, s)
+        || proto_set_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_STATUS,
+                          s)
                < 0) {
         errno = EINVAL;
         return -1;
@@ -640,7 +674,10 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
         || type != FLUX_MSGTYPE_KEEPALIVE
-        || proto_get_u32 (zframe_data (zf), zframe_size (zf), PROTO_IND_STATUS, &u)
+        || proto_get_u32 (zframe_data (zf),
+                          zframe_size (zf),
+                          PROTO_IND_STATUS,
+                          &u)
                < 0) {
         errno = EPROTO;
         return -1;
@@ -1326,7 +1363,8 @@ static struct map_struct msgtype_map[] = {
     {"event", "e", FLUX_MSGTYPE_EVENT},
     {"keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
 };
-static const int msgtype_map_len = sizeof (msgtype_map) / sizeof (msgtype_map[0]);
+static const int msgtype_map_len =
+    sizeof (msgtype_map) / sizeof (msgtype_map[0]);
 
 const char *flux_msg_typestr (int type)
 {
@@ -1360,7 +1398,8 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         fprintf (f, "NULL");
         return;
     }
-    if (flux_msg_get_type (msg, &type) < 0 || (!(proto = zmsg_last (msg->zmsg)))) {
+    if (flux_msg_get_type (msg, &type) < 0
+        || (!(proto = zmsg_last (msg->zmsg)))) {
         fprintf (f, "malformed message");
         return;
     }
@@ -1412,7 +1451,9 @@ void flux_msg_iobuf_clean (struct flux_msg_iobuf *iobuf)
     memset (iobuf, 0, sizeof (*iobuf));
 }
 
-int flux_msg_sendfd (int fd, const flux_msg_t *msg, struct flux_msg_iobuf *iobuf)
+int flux_msg_sendfd (int fd,
+                     const flux_msg_t *msg,
+                     struct flux_msg_iobuf *iobuf)
 {
     struct flux_msg_iobuf local;
     struct flux_msg_iobuf *io = iobuf ? iobuf : &local;

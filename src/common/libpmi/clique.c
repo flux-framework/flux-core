@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <errno.h>
@@ -209,7 +209,10 @@ static int clique_context_init (struct clique_context *ctx)
     rc = PMI_KVS_Get_my_name (ctx->kvsname, ctx->name_max);
     if (rc != PMI_SUCCESS)
         goto done;
-    rc = PMI_KVS_Get (ctx->kvsname, "PMI_process_mapping", ctx->value, ctx->val_max);
+    rc = PMI_KVS_Get (ctx->kvsname,
+                      "PMI_process_mapping",
+                      ctx->value,
+                      ctx->val_max);
     if (rc != PMI_SUCCESS)
         goto done;
     rc = pmi_process_mapping_parse (ctx->value, &ctx->blocks, &ctx->nblocks);

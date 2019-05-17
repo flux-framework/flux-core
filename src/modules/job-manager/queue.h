@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_QUEUE_H
-#define _FLUX_JOB_MANAGER_QUEUE_H
+#    define _FLUX_JOB_MANAGER_QUEUE_H
 
-#include <stdbool.h>
-#include "src/common/libjob/job.h"
-#include "job.h"
+#    include <stdbool.h>
+#    include "src/common/libjob/job.h"
+#    include "job.h"
 
 struct queue;
 

@@ -11,7 +11,7 @@
 /* dummy job manager for test */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include <jansson.h>
@@ -101,8 +101,7 @@ static flux_kvs_txn_t *create_eventlog_txn (json_t *jobs)
 
     if (!(txn = flux_kvs_txn_create ()))
         return NULL;
-    json_array_foreach (jobs, index, job)
-    {
+    json_array_foreach (jobs, index, job) {
         char *event = create_eventlog_entry (job);
         if (!event)
             goto error;

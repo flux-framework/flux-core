@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_PMI_OPERATIONS_H
-#define _FLUX_CORE_PMI_OPERATIONS_H
+#    define _FLUX_CORE_PMI_OPERATIONS_H
 
-#include "src/common/libpmi/pmi.h"
+#    include "src/common/libpmi/pmi.h"
 
 struct pmi_operations {
     int (*init) (void *impl, int *spawned);
@@ -21,7 +21,9 @@ struct pmi_operations {
     int (*get_rank) (void *impl, int *rank);
     int (*get_appnum) (void *impl, int *appnum);
     int (*get_universe_size) (void *impl, int *universe_size);
-    int (*publish_name) (void *impl, const char *service_name, const char *port);
+    int (*publish_name) (void *impl,
+                         const char *service_name,
+                         const char *port);
     int (*unpublish_name) (void *impl, const char *service_name);
     int (*lookup_name) (void *impl, const char *service_name, char *port);
     int (*barrier) (void *impl);

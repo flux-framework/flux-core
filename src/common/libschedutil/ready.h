@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _FLUX_SCHEDUTIL_READY_H
-#define _FLUX_SCHEDUTIL_READY_H
+#    define _FLUX_SCHEDUTIL_READY_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 /* Send ready request to job-manager, selecting interface 'mode'
  * ("single", "unlimited", ...).  'queue_depth', if non-NULL,

@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_CONF_H
-#define _FLUX_CORE_CONF_H
+#    define _FLUX_CORE_CONF_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 enum {
     CONF_FLAG_INTREE = 1,
@@ -21,9 +21,9 @@ enum {
 
 const char *flux_conf_get (const char *name, int flags);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_CONF_H */
 

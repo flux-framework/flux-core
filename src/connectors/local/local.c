@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
@@ -61,19 +61,19 @@ static int op_pollevents (void *impl)
     };
     int revents = 0;
     switch (poll (&pfd, 1, 0)) {
-        case 1:
-            if (pfd.revents & POLLIN)
-                revents |= FLUX_POLLIN;
-            if (pfd.revents & POLLOUT)
-                revents |= FLUX_POLLOUT;
-            if ((pfd.revents & POLLERR) || (pfd.revents & POLLHUP))
-                revents |= FLUX_POLLERR;
-            break;
-        case 0:
-            break;
-        default: /* -1 */
+    case 1:
+        if (pfd.revents & POLLIN)
+            revents |= FLUX_POLLIN;
+        if (pfd.revents & POLLOUT)
+            revents |= FLUX_POLLOUT;
+        if ((pfd.revents & POLLERR) || (pfd.revents & POLLHUP))
             revents |= FLUX_POLLERR;
-            break;
+        break;
+    case 0:
+        break;
+    default: /* -1 */
+        revents |= FLUX_POLLERR;
+        break;
     }
     return revents;
 }
@@ -165,7 +165,10 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     return op_event (impl, topic, "local.unsub");
 }
 
-static int op_setopt (void *impl, const char *option, const void *val, size_t size)
+static int op_setopt (void *impl,
+                      const char *option,
+                      const void *val,
+                      size_t size)
 {
     local_ctx_t *ctx = impl;
     assert (ctx->magic == CTX_MAGIC);

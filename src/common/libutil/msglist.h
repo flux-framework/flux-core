@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _UTIL_MSGLIST_H
-#define _UTIL_MSGLIST_H
+#    define _UTIL_MSGLIST_H
 
-#include <poll.h>
+#    include <poll.h>
 
 typedef struct msglist_struct msglist_t;
 

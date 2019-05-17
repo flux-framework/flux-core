@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 
@@ -59,12 +59,16 @@ static int schedutil_alloc_respond (flux_t *h,
     return rc;
 }
 
-int schedutil_alloc_respond_note (flux_t *h, const flux_msg_t *msg, const char *note)
+int schedutil_alloc_respond_note (flux_t *h,
+                                  const flux_msg_t *msg,
+                                  const char *note)
 {
     return schedutil_alloc_respond (h, msg, 1, note);
 }
 
-int schedutil_alloc_respond_denied (flux_t *h, const flux_msg_t *msg, const char *note)
+int schedutil_alloc_respond_denied (flux_t *h,
+                                    const flux_msg_t *msg,
+                                    const char *note)
 {
     return schedutil_alloc_respond (h, msg, 2, note);
 }

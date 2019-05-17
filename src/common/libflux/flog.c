@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <stdbool.h>
@@ -158,7 +158,12 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     hdr.appname = ctx->appname;
     hdr.procid = ctx->procid;
 
-    len = stdlog_vencodef (ctx->buf, sizeof (ctx->buf), &hdr, STDLOG_NILVALUE, fmt, ap);
+    len = stdlog_vencodef (ctx->buf,
+                           sizeof (ctx->buf),
+                           &hdr,
+                           STDLOG_NILVALUE,
+                           fmt,
+                           ap);
     if (len >= sizeof (ctx->buf))
         len = sizeof (ctx->buf);
     /* If log message contains multiple lines, log the first
@@ -219,7 +224,13 @@ static int dmesg_clear (flux_t *h, int seq)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (h, "log.clear", FLUX_NODEID_ANY, 0, "{s:i}", "seq", seq)))
+    if (!(f = flux_rpc_pack (h,
+                             "log.clear",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i}",
+                             "seq",
+                             seq)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;

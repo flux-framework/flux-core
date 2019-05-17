@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,14 +38,15 @@ void setup_keydir (struct environment *env, int flags);
 static void print_environment (struct environment *env);
 static void register_builtin_subcommands (optparse_t *p);
 
-static struct optparse_option opts[] = {{
-                                            .name = "verbose",
-                                            .key = 'v',
-                                            .has_arg = 0,
-                                            .usage = "Be verbose about environment and "
-                                                     "command search",
-                                        },
-                                        OPTPARSE_TABLE_END};
+static struct optparse_option opts[] =
+    {{
+         .name = "verbose",
+         .key = 'v',
+         .has_arg = 0,
+         .usage = "Be verbose about environment and "
+                  "command search",
+     },
+     OPTPARSE_TABLE_END};
 
 static const char *default_cmdhelp_pattern (optparse_t *p)
 {
@@ -168,7 +169,9 @@ int main (int argc, char *argv[])
     }
 
     environment_from_env (env, "FLUX_EXEC_PATH", "", ':');
-    environment_push (env, "FLUX_EXEC_PATH", flux_conf_get ("exec_path", flags));
+    environment_push (env,
+                      "FLUX_EXEC_PATH",
+                      flux_conf_get ("exec_path", flags));
     environment_push (env, "FLUX_EXEC_PATH", getenv ("FLUX_EXEC_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_CONNECTOR_PATH", "", ':');
@@ -180,8 +183,12 @@ int main (int argc, char *argv[])
                       getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_MODULE_PATH", "", ':');
-    environment_push (env, "FLUX_MODULE_PATH", flux_conf_get ("module_path", flags));
-    environment_push (env, "FLUX_MODULE_PATH", getenv ("FLUX_MODULE_PATH_PREPEND"));
+    environment_push (env,
+                      "FLUX_MODULE_PATH",
+                      flux_conf_get ("module_path", flags));
+    environment_push (env,
+                      "FLUX_MODULE_PATH",
+                      getenv ("FLUX_MODULE_PATH_PREPEND"));
 
     /* Set FLUX_SEC_DIRECTORY, possibly to $HOME/.flux.
      */
@@ -190,8 +197,14 @@ int main (int argc, char *argv[])
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
 
-    environment_from_env (env, "FLUX_RC1_PATH", flux_conf_get ("rc1_path", flags), 0);
-    environment_from_env (env, "FLUX_RC3_PATH", flux_conf_get ("rc3_path", flags), 0);
+    environment_from_env (env,
+                          "FLUX_RC1_PATH",
+                          flux_conf_get ("rc1_path", flags),
+                          0);
+    environment_from_env (env,
+                          "FLUX_RC3_PATH",
+                          flux_conf_get ("rc3_path", flags),
+                          0);
     environment_from_env (env,
                           "FLUX_PMI_LIBRARY_PATH",
                           flux_conf_get ("pmi_library_path", flags),
@@ -343,7 +356,10 @@ void exec_subcommand_py (bool vopt,
     free (path);
 }
 
-void exec_subcommand_dir (bool vopt, const char *dir, char *argv[], const char *prefix)
+void exec_subcommand_dir (bool vopt,
+                          const char *dir,
+                          char *argv[],
+                          const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s",
                             dir ? dir : "",
@@ -374,7 +390,8 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
+        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'",
+                      argv[0]);
     }
 }
 

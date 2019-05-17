@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
@@ -205,7 +205,9 @@ int flux_buffer_set_low_read_cb (flux_buffer_t *fb,
     return set_cb (fb, FLUX_BUFFER_CB_TYPE_READ, cb, low, arg);
 }
 
-int flux_buffer_set_read_line_cb (flux_buffer_t *fb, flux_buffer_cb cb, void *arg)
+int flux_buffer_set_read_line_cb (flux_buffer_t *fb,
+                                  flux_buffer_cb cb,
+                                  void *arg)
 {
     if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
         errno = EINVAL;

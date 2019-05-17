@@ -36,10 +36,25 @@ struct rlist_test_entry {
     }
 
 struct rlist_test_entry test_2n_4c[] = {
-    {"too large of slot returns EOVERFLOW", NULL, {0, 1, 5}, NULL, EOVERFLOW, false},
+    {"too large of slot returns EOVERFLOW",
+     NULL,
+     {0, 1, 5},
+     NULL,
+     EOVERFLOW,
+     false},
     {"too many slots returns error", NULL, {0, 9, 1}, NULL, EOVERFLOW, false},
-    {"invalid number of nodes returns error", NULL, {-1, 1, 1}, NULL, EINVAL, false},
-    {"invalid number of slots return error", NULL, {0, 0, 1}, NULL, EINVAL, false},
+    {"invalid number of nodes returns error",
+     NULL,
+     {-1, 1, 1},
+     NULL,
+     EINVAL,
+     false},
+    {"invalid number of slots return error",
+     NULL,
+     {0, 0, 1},
+     NULL,
+     EINVAL,
+     false},
     {"invalid slot size returns error", NULL, {0, 1, -1}, NULL, EINVAL, false},
     {"allocating a single core gets expected result",
      NULL,
@@ -71,7 +86,12 @@ struct rlist_test_entry test_2n_4c[] = {
      NULL,
      ENOSPC,
      false},
-    {"allocate remaining 2 cores", NULL, {0, 1, 2}, "rank0/core[2-3]", 0, false},
+    {"allocate remaining 2 cores",
+     NULL,
+     {0, 1, 2},
+     "rank0/core[2-3]",
+     0,
+     false},
     RLIST_TEST_END,
 };
 
@@ -117,7 +137,12 @@ struct rlist_test_entry test_1024n_4c[] = {
      "rank[512-1023]/core[0-3]",
      0,
      true},
-    {"large: 1 core on 10 nodes", NULL, {10, 10, 1}, "rank[512-521]/core0", 0, false},
+    {"large: 1 core on 10 nodes",
+     NULL,
+     {10, 10, 1},
+     "rank[512-521]/core0",
+     0,
+     false},
     {"large: alloc 2 cores on 128 nodes with free",
      NULL,
      {128, 256, 1},
@@ -163,7 +188,8 @@ err:
     return NULL;
 }
 
-static struct rlist *rlist_testalloc (struct rlist *rl, struct rlist_test_entry *e)
+static struct rlist *rlist_testalloc (struct rlist *rl,
+                                      struct rlist_test_entry *e)
 {
     return rlist_alloc (rl,
                         e->mode,
@@ -232,7 +258,8 @@ static void test_simple (void)
     ok (rl->total == 8 && rl->avail == 8, "rlist: avail and total == 4");
     ok ((alloc = rlist_alloc (rl, NULL, 0, 8, 1)) != NULL,
         "rlist: alloc all cores works");
-    ok (alloc->total == 8 && alloc->avail == 8, "rlist: alloc: avail = 8, total == 8");
+    ok (alloc->total == 8 && alloc->avail == 8,
+        "rlist: alloc: avail = 8, total == 8");
     ok (rl->total == 8 && rl->avail == 0, "rlist: avail == 0, total == 8");
     ok ((copy = rlist_copy_empty (rl)) != NULL, "rlist: rlist_copy_empty");
     ok (copy->total == 8 && copy->avail == 8,

@@ -9,17 +9,17 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_MESSAGE_H
-#define _FLUX_CORE_MESSAGE_H
+#    define _FLUX_CORE_MESSAGE_H
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include "types.h"
+#    include <stdbool.h>
+#    include <stdint.h>
+#    include <stdarg.h>
+#    include <stdio.h>
+#    include "types.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 typedef struct flux_msg flux_msg_t;
 
@@ -56,30 +56,30 @@ struct flux_match {
     char *topic_glob;  /* glob matching topic string (or NULL) */
 };
 
-#define FLUX_MATCH_ANY                                                \
-    (struct flux_match)                                               \
-    {                                                                 \
-        .typemask = FLUX_MSGTYPE_ANY, .matchtag = FLUX_MATCHTAG_NONE, \
-        .topic_glob = NULL,                                           \
-    }
-#define FLUX_MATCH_EVENT                                                \
-    (struct flux_match)                                                 \
-    {                                                                   \
-        .typemask = FLUX_MSGTYPE_EVENT, .matchtag = FLUX_MATCHTAG_NONE, \
-        .topic_glob = NULL,                                             \
-    }
-#define FLUX_MATCH_REQUEST                                                \
-    (struct flux_match)                                                   \
-    {                                                                     \
-        .typemask = FLUX_MSGTYPE_REQUEST, .matchtag = FLUX_MATCHTAG_NONE, \
-        .topic_glob = NULL,                                               \
-    }
-#define FLUX_MATCH_RESPONSE                                                \
-    (struct flux_match)                                                    \
-    {                                                                      \
-        .typemask = FLUX_MSGTYPE_RESPONSE, .matchtag = FLUX_MATCHTAG_NONE, \
-        .topic_glob = NULL,                                                \
-    }
+#    define FLUX_MATCH_ANY                                                \
+        (struct flux_match)                                               \
+        {                                                                 \
+            .typemask = FLUX_MSGTYPE_ANY, .matchtag = FLUX_MATCHTAG_NONE, \
+            .topic_glob = NULL,                                           \
+        }
+#    define FLUX_MATCH_EVENT                                                \
+        (struct flux_match)                                                 \
+        {                                                                   \
+            .typemask = FLUX_MSGTYPE_EVENT, .matchtag = FLUX_MATCHTAG_NONE, \
+            .topic_glob = NULL,                                             \
+        }
+#    define FLUX_MATCH_REQUEST                                                \
+        (struct flux_match)                                                   \
+        {                                                                     \
+            .typemask = FLUX_MSGTYPE_REQUEST, .matchtag = FLUX_MATCHTAG_NONE, \
+            .topic_glob = NULL,                                               \
+        }
+#    define FLUX_MATCH_RESPONSE                                                \
+        (struct flux_match)                                                    \
+        {                                                                      \
+            .typemask = FLUX_MSGTYPE_RESPONSE, .matchtag = FLUX_MATCHTAG_NONE, \
+            .topic_glob = NULL,                                                \
+        }
 
 struct flux_msg_iobuf {
     uint8_t *buf;
@@ -128,7 +128,9 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size);
  * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int flux_msg_sendfd (int fd, const flux_msg_t *msg, struct flux_msg_iobuf *iobuf);
+int flux_msg_sendfd (int fd,
+                     const flux_msg_t *msg,
+                     struct flux_msg_iobuf *iobuf);
 
 /* Receive message from file descriptor.
  * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
@@ -315,7 +317,8 @@ int flux_msg_pop_route (flux_msg_t *msg, char **id);
  * For requests, this is the sender; for responses, this is the recipient.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
-int flux_msg_get_route_first (const flux_msg_t *msg, char **id); /* closest to delim */
+int flux_msg_get_route_first (const flux_msg_t *msg,
+                              char **id); /* closest to delim */
 
 /* Copy the last routing frame (farthest from delimiter) contents (or NULL)
  * to 'id'.  Caller must free 'id'.
@@ -338,9 +341,9 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

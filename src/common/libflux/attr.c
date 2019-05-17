@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <stdbool.h>
@@ -96,9 +96,16 @@ const char *flux_attr_get (flux_t *h, const char *name)
         return NULL;
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
-    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{s:s}", "name", name)))
+    if (!(f = flux_rpc_pack (h,
+                             "attr.get",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "name",
+                             name)))
         return NULL;
-    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val, "flags", &flags) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val, "flags", &flags)
+        < 0)
         goto done;
     if (!(cpy = strdup (val)))
         goto done;
@@ -130,7 +137,13 @@ int flux_attr_set (flux_t *h, const char *name, const char *val)
                            "value",
                            val);
     else
-        f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{s:s}", "name", name);
+        f = flux_rpc_pack (h,
+                           "attr.rm",
+                           FLUX_NODEID_ANY,
+                           0,
+                           "{s:s}",
+                           "name",
+                           name);
     if (!f)
         return -1;
     if (flux_future_get (f, NULL) < 0) {

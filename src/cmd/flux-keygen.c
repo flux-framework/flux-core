@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <getopt.h>
 #include <flux/core.h>
@@ -43,22 +43,22 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'f': /* --force */
-                typemask |= ZSECURITY_KEYGEN_FORCE;
-                break;
-            case 'p': /* --plain */
-                typemask |= ZSECURITY_TYPE_PLAIN;
-                typemask &= ~ZSECURITY_TYPE_CURVE;
-                break;
-            case 'd': /* --secdir */
-                secdir = optarg;
-                break;
-            default:
-                usage ();
-                break;
+        case 'h': /* --help */
+            usage ();
+            break;
+        case 'f': /* --force */
+            typemask |= ZSECURITY_KEYGEN_FORCE;
+            break;
+        case 'p': /* --plain */
+            typemask |= ZSECURITY_TYPE_PLAIN;
+            typemask &= ~ZSECURITY_TYPE_CURVE;
+            break;
+        case 'd': /* --secdir */
+            secdir = optarg;
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if (optind < argc)

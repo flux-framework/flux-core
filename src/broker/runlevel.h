@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _BROKER_RUNLEVEL_H
-#define _BROKER_RUNLEVEL_H
+#    define _BROKER_RUNLEVEL_H
 
-#include "attr.h"
+#    include "attr.h"
 
-#include <stdint.h>
-#include <stddef.h>  // for size_t
+#    include <stdint.h>
+#    include <stddef.h>  // for size_t
 
 typedef struct runlevel runlevel_t;
 

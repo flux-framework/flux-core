@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _UTIL_FSD_H
-#define _UTIL_FSD_H
+#    define _UTIL_FSD_H
 
-#include <stddef.h>
+#    include <stddef.h>
 
 /*  Attempt to parse a string duration 's' as Flux Standard Duration
  *   string (floating point seconds with optional suffix).

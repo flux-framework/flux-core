@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <getopt.h>
 #include <assert.h>
@@ -77,7 +77,8 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-             "Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | "
+             "Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | "
+             "putmsg | "
              "pingzero | pingself | pingupstream | clog | flush}\n");
     exit (1);
 }
@@ -93,15 +94,15 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'r': /* --rank N */
-                nodeid = strtoul (optarg, NULL, 10);
-                break;
-            default:
-                usage ();
-                break;
+        case 'h': /* --help */
+            usage ();
+            break;
+        case 'r': /* --rank N */
+            nodeid = strtoul (optarg, NULL, 10);
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if (optind == argc)
@@ -135,7 +136,13 @@ void test_echo (flux_t *h, uint32_t nodeid)
     const char *s;
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (h, "req.echo", nodeid, 0, "{s:s}", "mumble", "burble"))
+    if (!(f = flux_rpc_pack (h,
+                             "req.echo",
+                             nodeid,
+                             0,
+                             "{s:s}",
+                             "mumble",
+                             "burble"))
         || flux_rpc_get_unpack (f, "{s:s}", "mumble", &s) < 0)
         log_err_exit ("%s", __FUNCTION__);
     if (strcmp (s, "burble") != 0)
@@ -206,7 +213,10 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
             || json_unpack (o, "{s:i}", "seq", &seq) < 0)
             log_msg_exit ("%s: decode %d payload", __FUNCTION__, i);
         if (seq != i)
-            log_msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
+            log_msg_exit ("%s: decode %d - seq mismatch %d",
+                          __FUNCTION__,
+                          i,
+                          seq);
         json_decref (o);
         flux_msg_destroy (msg);
     }
@@ -286,7 +296,10 @@ static int count_hops (const char *s)
     return count;
 }
 
-static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
+static void xping (flux_t *h,
+                   uint32_t nodeid,
+                   uint32_t xnodeid,
+                   const char *svc)
 {
     flux_future_t *f;
     const char *route;
@@ -333,7 +346,8 @@ void test_flush (flux_t *h, uint32_t nodeid)
 void test_clog (flux_t *h, uint32_t nodeid)
 {
     flux_future_t *f;
-    if (!(f = flux_rpc (h, "req.clog", NULL, nodeid, 0)) || flux_rpc_get (f, NULL) < 0)
+    if (!(f = flux_rpc (h, "req.clog", NULL, nodeid, 0))
+        || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("req.clog");
     flux_future_destroy (f);
 }

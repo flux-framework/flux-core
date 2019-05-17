@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef BROKER_BOOT_CONFIG_H
-#define BROKER_BOOT_CONFIG_H
+#    define BROKER_BOOT_CONFIG_H
 
 /* boot_config - bootstrap broker/overlay from config file */
 
@@ -34,8 +34,8 @@
  *   size = 3
  */
 
-#include "attr.h"
-#include "overlay.h"
+#    include "attr.h"
+#    include "overlay.h"
 
 /* Broker attributes read/written directly by this method:
  *   boot.config_file (r)

@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_START_H
-#define _FLUX_JOB_MANAGER_START_H
+#    define _FLUX_JOB_MANAGER_START_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-#include "queue.h"
-#include "job.h"
-#include "event.h"
+#    include "queue.h"
+#    include "job.h"
+#    include "event.h"
 
 struct event_ctx;
 struct start_ctx;

@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _BROKER_HEARTBEAT_H
-#define _BROKER_HEARTBEAT_H
+#    define _BROKER_HEARTBEAT_H
 
-#include "attr.h"
+#    include "attr.h"
 
 /* Manage the session heartbeat.
  *

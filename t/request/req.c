@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include <czmq.h>
@@ -79,7 +79,11 @@ void count_request_cb (flux_t *h,
 {
     t_req_ctx_t *ctx = getctx (h);
 
-    if (flux_respond_pack (h, msg, "{s:i}", "count", zlist_size (ctx->clog_requests))
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i}",
+                           "count",
+                           zlist_size (ctx->clog_requests))
         < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 }
@@ -221,7 +225,13 @@ void xping_request_cb (flux_t *h,
     char *hashkey = NULL;
     flux_msg_t *cpy;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:s}", "rank", &rank, "service", &service)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:s}",
+                             "rank",
+                             &rank,
+                             "service",
+                             &service)
         < 0)
         goto error;
     flux_log (h, LOG_DEBUG, "Rxping rank=%d service=%s", rank, service);
@@ -242,7 +252,9 @@ void xping_request_cb (flux_t *h,
         goto error;
     hashkey = xasprintf ("%d", seq);
     zhash_update (ctx->ping_requests, hashkey, cpy);
-    zhash_freefn (ctx->ping_requests, hashkey, (zhash_free_fn *)flux_msg_destroy);
+    zhash_freefn (ctx->ping_requests,
+                  hashkey,
+                  (zhash_free_fn *)flux_msg_destroy);
     free (hashkey);
     return;
 error:
@@ -340,7 +352,11 @@ void null_request_cb (flux_t *h,
         goto error;
     }
     if (flux_msg_get_payload (msg, &buf, &size) == 0) {
-        flux_log (h, LOG_ERR, "%s: unexpected payload size %d", __FUNCTION__, size);
+        flux_log (h,
+                  LOG_ERR,
+                  "%s: unexpected payload size %d",
+                  __FUNCTION__,
+                  size);
         goto error;
     }
     if (errno != EPROTO) {

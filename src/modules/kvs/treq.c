@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,7 +94,9 @@ int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr)
         goto error;
     }
 
-    zhash_freefn (trm->transactions, treq_get_name (tr), (zhash_free_fn *)treq_destroy);
+    zhash_freefn (trm->transactions,
+                  treq_get_name (tr),
+                  (zhash_free_fn *)treq_destroy);
     return 0;
 error:
     return -1;
@@ -230,7 +232,10 @@ error:
     return NULL;
 }
 
-treq_t *treq_create_rank (uint32_t rank, unsigned int seq, int nprocs, int flags)
+treq_t *treq_create_rank (uint32_t rank,
+                          unsigned int seq,
+                          int nprocs,
+                          int flags)
 {
     treq_t *tr = NULL;
     int saved_errno;

@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _BROKER_SERVICE_H
-#define _BROKER_SERVICE_H
+#    define _BROKER_SERVICE_H
 
-#include <jansson.h>
+#    include <jansson.h>
 
 typedef int (*service_send_f) (const flux_msg_t *msg, void *arg);
 

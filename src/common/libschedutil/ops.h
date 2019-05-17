@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _FLUX_SCHEDUTIL_OPS_H
-#define _FLUX_SCHEDUTIL_OPS_H
+#    define _FLUX_SCHEDUTIL_OPS_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 /* Callback for an alloc request.  jobspec is looked up as a convenience.
  * Decode msg with schedutil_alloc_request_decode().
@@ -30,7 +30,10 @@ typedef void(op_alloc_f) (flux_t *h,
  * You should either respond to the request immediately (see free.h),
  * or cache this information for later response.
  */
-typedef void(op_free_f) (flux_t *h, const flux_msg_t *msg, const char *R, void *arg);
+typedef void(op_free_f) (flux_t *h,
+                         const flux_msg_t *msg,
+                         const char *R,
+                         void *arg);
 
 /* An exception occurred for job 'id'.
  * If the severity is zero, and there is an allocation pending for 'id',

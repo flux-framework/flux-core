@@ -57,7 +57,9 @@ static bool cronodate_check_match (struct cronodate *d, char *s)
     return cronodate_match (d, &tm);
 }
 
-static bool cronodate_check_next (struct cronodate *d, char *start, char *expected)
+static bool cronodate_check_next (struct cronodate *d,
+                                  char *start,
+                                  char *expected)
 {
     char buf[256];
     time_t t, t_exp;
@@ -171,27 +173,33 @@ int main (int argc, char *argv[])
     ok (d != NULL, "cronodate_create()");
     /* match all dates */
     cronodate_fillset (d);
-    ok (cronodate_check_match (d, "2001-01-01 12:45:33"), "date matches after fillset");
+    ok (cronodate_check_match (d, "2001-01-01 12:45:33"),
+        "date matches after fillset");
 
     ok (cronodate_set (d, TM_SEC, "5") >= 0, "cronodate_set, sec=5");
     ok (cronodate_check_match (d, "2001-10-10 00:00:05"), "date matches");
-    ok (!cronodate_check_match (d, "2001-10-10 00:00:06"), "date doesn't match");
+    ok (!cronodate_check_match (d, "2001-10-10 00:00:06"),
+        "date doesn't match");
 
     ok (cronodate_set (d, TM_MIN, "5") >= 0, "cronodate_set, min=5");
     ok (cronodate_check_match (d, "2001-10-10 00:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "2001-10-10 00:06:05"), "date doesn't match");
+    ok (!cronodate_check_match (d, "2001-10-10 00:06:05"),
+        "date doesn't match");
 
     ok (cronodate_set (d, TM_HOUR, "5") >= 0, "cronodate_set, hour=5");
     ok (cronodate_check_match (d, "2001-10-10 05:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "2001-10-10 06:05:05"), "date doesn't match");
+    ok (!cronodate_check_match (d, "2001-10-10 06:05:05"),
+        "date doesn't match");
 
     ok (cronodate_set (d, TM_MDAY, "10") >= 0, "cronodate_set, mday = 10");
     ok (cronodate_check_match (d, "2001-10-10 05:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "2001-10-11 05:05:05"), "date doesn't match");
+    ok (!cronodate_check_match (d, "2001-10-11 05:05:05"),
+        "date doesn't match");
 
     ok (cronodate_set (d, TM_MON, "9") >= 0, "cronodate_set MON=9 (Oct)");
     ok (cronodate_check_match (d, "2001-10-10 05:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "2001-01-10 05:05:05"), "date doesn't match");
+    ok (!cronodate_check_match (d, "2001-01-10 05:05:05"),
+        "date doesn't match");
 
     cronodate_fillset (d);
 
@@ -230,7 +238,8 @@ int main (int argc, char *argv[])
     ok (cronodate_set_integer (d, TM_SEC, 0) >= 0, "set integer, sec = 0");
     ok (cronodate_set_integer (d, TM_MIN, 0) >= 0, "set integer, min = 0");
     ok (cronodate_set_integer (d, TM_HOUR, 8) >= 0, "set integer, hour = 0");
-    ok (cronodate_set_integer (d, TM_WDAY, 1) >= 0, "set integer, wday = 1 (Mon)");
+    ok (cronodate_set_integer (d, TM_WDAY, 1) >= 0,
+        "set integer, wday = 1 (Mon)");
     ok (cronodate_check_next (d, "2016-06-01 10:45:00", "2016-06-06 08:00:00"),
         "cronodate_next worked for next monday");
     ok (cronodate_check_next (d, "2016-06-06 08:00:00", "2016-06-13 08:00:00"),

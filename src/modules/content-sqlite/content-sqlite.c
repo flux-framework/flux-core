@@ -11,7 +11,7 @@
 /* content-sqlite.c - content addressable storage with sqlite back end */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sqlite3.h>
 #include <czmq.h>
@@ -74,26 +74,26 @@ static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
 static void set_errno_from_sqlite_error (sqlite_ctx_t *ctx)
 {
     switch (sqlite3_errcode (ctx->db)) {
-        case SQLITE_IOERR: /* os io error */
-            errno = EIO;
-            break;
-        case SQLITE_NOMEM: /* cannot allocate memory */
-            errno = ENOMEM;
-            break;
-        case SQLITE_ABORT:    /* statment is not authorized */
-        case SQLITE_PERM:     /* access mode for new db cannot be provided */
-        case SQLITE_READONLY: /* attempt to alter data with no permission */
-            errno = EPERM;
-            break;
-        case SQLITE_TOOBIG: /* blob too large */
-            errno = EFBIG;
-            break;
-        case SQLITE_FULL: /* file system full */
-            errno = ENOSPC;
-            break;
-        default:
-            errno = EINVAL;
-            break;
+    case SQLITE_IOERR: /* os io error */
+        errno = EIO;
+        break;
+    case SQLITE_NOMEM: /* cannot allocate memory */
+        errno = ENOMEM;
+        break;
+    case SQLITE_ABORT:    /* statment is not authorized */
+    case SQLITE_PERM:     /* access mode for new db cannot be provided */
+    case SQLITE_READONLY: /* attempt to alter data with no permission */
+        errno = EPERM;
+        break;
+    case SQLITE_TOOBIG: /* blob too large */
+        errno = EFBIG;
+        break;
+    case SQLITE_FULL: /* file system full */
+        errno = ENOSPC;
+        break;
+    default:
+        errno = EINVAL;
+        break;
     }
 }
 
@@ -120,7 +120,8 @@ static void freectx (void *arg)
 
 static sqlite_ctx_t *getctx (flux_t *h)
 {
-    sqlite_ctx_t *ctx = (sqlite_ctx_t *)flux_aux_get (h, "flux::content-sqlite");
+    sqlite_ctx_t *ctx =
+        (sqlite_ctx_t *)flux_aux_get (h, "flux::content-sqlite");
     const char *dir;
     const char *tmp;
     bool cleanup = false;
@@ -166,14 +167,23 @@ static sqlite_ctx_t *getctx (flux_t *h)
         }
         if (sqlite3_exec (ctx->db, "PRAGMA journal_mode=OFF", NULL, NULL, NULL)
                 != SQLITE_OK
-            || sqlite3_exec (ctx->db, "PRAGMA synchronous=OFF", NULL, NULL, NULL)
+            || sqlite3_exec (ctx->db,
+                             "PRAGMA synchronous=OFF",
+                             NULL,
+                             NULL,
+                             NULL)
                    != SQLITE_OK
-            || sqlite3_exec (ctx->db, "PRAGMA locking_mode=EXCLUSIVE", NULL, NULL, NULL)
+            || sqlite3_exec (ctx->db,
+                             "PRAGMA locking_mode=EXCLUSIVE",
+                             NULL,
+                             NULL,
+                             NULL)
                    != SQLITE_OK) {
             log_sqlite_error (ctx, "setting sqlite pragmas");
             goto error_sqlite;
         }
-        if (sqlite3_exec (ctx->db, sql_create_table, NULL, NULL, NULL) != SQLITE_OK) {
+        if (sqlite3_exec (ctx->db, sql_create_table, NULL, NULL, NULL)
+            != SQLITE_OK) {
             log_sqlite_error (ctx, "creating table");
             goto error_sqlite;
         }
@@ -218,7 +228,10 @@ int grow_lzo_buf (sqlite_ctx_t *ctx, size_t size)
     return 0;
 }
 
-void load_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void load_cb (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
 {
     sqlite_ctx_t *ctx = arg;
     const char *blobref = "-";
@@ -233,7 +246,10 @@ void load_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *ar
     // delay cancellation to ensure lock-correctness in sqlite
     pthread_setcancelstate (PTHREAD_CANCEL_DISABLE, &old_state);
 
-    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref, &blobref_size)
+    if (flux_request_decode_raw (msg,
+                                 NULL,
+                                 (const void **)&blobref,
+                                 &blobref_size)
         < 0) {
         flux_log_error (h, "load: request decode failed");
         goto done;
@@ -248,7 +264,11 @@ void load_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *ar
         flux_log_error (h, "load: unexpected foreign blobref");
         goto done;
     }
-    if (sqlite3_bind_text (ctx->load_stmt, 1, (char *)hash, hash_len, SQLITE_STATIC)
+    if (sqlite3_bind_text (ctx->load_stmt,
+                           1,
+                           (char *)hash,
+                           hash_len,
+                           SQLITE_STATIC)
         != SQLITE_OK) {
         log_sqlite_error (ctx, "load: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -276,7 +296,8 @@ void load_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *ar
         if (ctx->lzo_bufsize < uncompressed_size
             && grow_lzo_buf (ctx, uncompressed_size) < 0)
             goto done;
-        int r = LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
+        int r =
+            LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
         if (r < 0) {
             errno = EINVAL;
             goto done;
@@ -302,7 +323,10 @@ done:
     pthread_setcancelstate (PTHREAD_CANCEL_ENABLE, &old_state);
 }
 
-void store_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void store_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg)
 {
     sqlite_ctx_t *ctx = arg;
     const void *data;
@@ -323,7 +347,11 @@ void store_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *a
         errno = EFBIG;
         goto done;
     }
-    if (blobref_hash (ctx->hashfun, (uint8_t *)data, size, blobref, sizeof (blobref))
+    if (blobref_hash (ctx->hashfun,
+                      (uint8_t *)data,
+                      size,
+                      blobref,
+                      sizeof (blobref))
         < 0)
         goto done;
     if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
@@ -342,7 +370,11 @@ void store_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *a
         size = r;
         data = ctx->lzo_buf;
     }
-    if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, hash_len, SQLITE_STATIC)
+    if (sqlite3_bind_text (ctx->store_stmt,
+                           1,
+                           (char *)hash,
+                           hash_len,
+                           SQLITE_STATIC)
         != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -434,7 +466,10 @@ void broker_shutdown_cb (flux_t *h,
  * Tell content cache to disable backing store,
  * then write everything back to it before exiting.
  */
-void shutdown_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void shutdown_cb (flux_t *h,
+                  flux_msg_handler_t *mh,
+                  const flux_msg_t *msg,
+                  void *arg)
 {
     sqlite_ctx_t *ctx = arg;
     flux_future_t *f;
@@ -460,7 +495,8 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void
         const void *data = NULL;
         int uncompressed_size;
         int size = sqlite3_column_bytes (ctx->dump_stmt, 0);
-        if (sqlite3_column_type (ctx->dump_stmt, 0) != SQLITE_BLOB && size > 0) {
+        if (sqlite3_column_type (ctx->dump_stmt, 0) != SQLITE_BLOB
+            && size > 0) {
             flux_log (h, LOG_ERR, "shutdown: encountered non-blob value");
             continue;
         }
@@ -475,7 +511,10 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void
             if (ctx->lzo_bufsize < uncompressed_size
                 && grow_lzo_buf (ctx, uncompressed_size) < 0)
                 goto done;
-            int r = LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
+            int r = LZ4_decompress_safe (data,
+                                         ctx->lzo_buf,
+                                         size,
+                                         uncompressed_size);
             if (r < 0) {
                 errno = EINVAL;
                 goto done;
@@ -488,7 +527,12 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void
             data = ctx->lzo_buf;
             size = uncompressed_size;
         }
-        if (!(f = flux_rpc_raw (h, "content.store", data, size, FLUX_NODEID_ANY, 0))) {
+        if (!(f = flux_rpc_raw (h,
+                                "content.store",
+                                data,
+                                size,
+                                FLUX_NODEID_ANY,
+                                0))) {
             flux_log_error (h, "shutdown: store");
             continue;
         }

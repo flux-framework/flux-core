@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _UTIL_FDUTILS_H
-#define _UTIL_FDUTILS_H 1
+#    define _UTIL_FDUTILS_H 1
 
 /*
  *  fdutils: convenient functions for file descriptors

@@ -76,7 +76,8 @@ void aux_destroy_no_get_self (void)
     aux_destroy (&ac.aux);
 
     /* 2+1+0 == 3 */
-    ok (ac.count == 3, "aux_destroy doesn't allow access to items being destroyed");
+    ok (ac.count == 3,
+        "aux_destroy doesn't allow access to items being destroyed");
 }
 
 int myfree_count;
@@ -99,25 +100,29 @@ void simple_test (void)
     is (aux_get (aux, "frog"), "ribbit", "aux_get frog returns ribbit");
 
     /* set 2nd item with destructor */
-    ok (aux_set (&aux, "dog", "woof", myfree) == 0, "aux_set dog=woof free_fn=myfree");
+    ok (aux_set (&aux, "dog", "woof", myfree) == 0,
+        "aux_set dog=woof free_fn=myfree");
     is (aux_get (aux, "dog"), "woof", "aux_get dog returns woof");
     is (aux_get (aux, "frog"), "ribbit", "aux_get frog still returns ribbit");
 
     /* set 3rd item with destructor */
-    ok (aux_set (&aux, "cow", "moo", myfree) == 0, "aux_set cow=moo free_fn=myfree");
+    ok (aux_set (&aux, "cow", "moo", myfree) == 0,
+        "aux_set cow=moo free_fn=myfree");
     is (aux_get (aux, "cow"), "moo", "aux_get cow returns moo");
     is (aux_get (aux, "dog"), "woof", "aux_get dog still returns woof");
     is (aux_get (aux, "frog"), "ribbit", "aux_get frog still returns ribbit");
 
     /* aux_set duplicate */
     myfree_count = 0;
-    ok (aux_set (&aux, "cow", "oink", myfree) == 0, "aux_set cow=oink free_fn=myfree");
+    ok (aux_set (&aux, "cow", "oink", myfree) == 0,
+        "aux_set cow=oink free_fn=myfree");
     cmp_ok (myfree_count, "==", 1, "dup key=cow triggered destructor");
     is (aux_get (aux, "cow"), "oink", "aux_get cow now returns oink");
 
     /* aux_set val=NULL */
     myfree_count = 0;
-    ok (aux_set (&aux, "cow", NULL, NULL) == 0, "aux_set cow=NULL does not fail");
+    ok (aux_set (&aux, "cow", NULL, NULL) == 0,
+        "aux_set cow=NULL does not fail");
     cmp_ok (myfree_count, "==", 1, "and called destructor once");
     errno = 0;
     ok (aux_get (aux, "cow") == NULL && errno == ENOENT,

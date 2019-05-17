@@ -26,13 +26,15 @@ int main (int argc, char *argv[])
     (void)setenv ("FLUX_CONNECTOR_PATH",
                   flux_conf_get ("connector_path", CONF_FLAG_INTREE),
                   0);
-    ok ((h_srv = flux_open ("shmem://test&bind", 0)) != NULL, "created server handle");
+    ok ((h_srv = flux_open ("shmem://test&bind", 0)) != NULL,
+        "created server handle");
     ok ((h_cli = flux_open ("shmem://test&connect", 0)) != NULL,
         "created client handle");
     if (!h_cli || !h_srv)
         BAIL_OUT ("can't continue without client or server handle");
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL, "created test request");
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test request");
     ok (flux_send (h_cli, msg, 0) == 0, "sent request to server");
     flux_msg_destroy (msg);
 

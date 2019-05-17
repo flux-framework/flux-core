@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_UTIL_H
-#define _FLUX_KVS_UTIL_H
+#    define _FLUX_KVS_UTIL_H
 
 /* Normalize a KVS key
  * Returns new key string (caller must free), or NULL with errno set.

@@ -20,7 +20,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include <jansson.h>
@@ -102,18 +102,23 @@ void try_alloc (struct sched_ctx *sc)
 {
     if (sc->job) {
         if (test_debug_flag (sc->h, DEBUG_FAIL_ALLOC)) {
-            if (schedutil_alloc_respond_denied (sc->h, sc->job->msg, "DEBUG_FAIL_ALLOC")
+            if (schedutil_alloc_respond_denied (sc->h,
+                                                sc->job->msg,
+                                                "DEBUG_FAIL_ALLOC")
                 < 0)
                 flux_log_error (sc->h, "schedutil_alloc_respond_denied");
             goto done;
         }
         if (sc->cores_free > 0) {
-            if (schedutil_alloc_respond_R (sc->h, sc->job->msg, "1core", NULL) < 0)
+            if (schedutil_alloc_respond_R (sc->h, sc->job->msg, "1core", NULL)
+                < 0)
                 flux_log_error (sc->h, "schedutil_alloc_respond_R");
             sc->cores_free--;
             goto done;
         }
-        if (schedutil_alloc_respond_note (sc->h, sc->job->msg, "no cores available")
+        if (schedutil_alloc_respond_note (sc->h,
+                                          sc->job->msg,
+                                          "no cores available")
             < 0)
             flux_log_error (sc->h, "schedutil_alloc_respond_note");
     }
@@ -134,8 +139,10 @@ void exception_cb (flux_t *h,
 
     if (severity > 0 || sc->job == NULL || sc->job->id != id)
         return;
-    (void)
-        snprintf (note, sizeof (note), "alloc aborted due to exception type=%s", type);
+    (void)snprintf (note,
+                    sizeof (note),
+                    "alloc aborted due to exception type=%s",
+                    type);
     if (schedutil_alloc_respond_denied (h, sc->job->msg, note) < 0)
         flux_log_error (h, "%s: alloc_respond_denied", __FUNCTION__);
     job_destroy (sc->job);
@@ -235,7 +242,10 @@ void sched_destroy (struct sched_ctx *sc)
         if (sc->job) {
             /* Causes job-manager to pause scheduler interface.
              */
-            if (flux_respond_error (sc->h, sc->job->msg, ENOSYS, "scheduler unloading")
+            if (flux_respond_error (sc->h,
+                                    sc->job->msg,
+                                    ENOSYS,
+                                    "scheduler unloading")
                 < 0)
                 flux_log_error (sc->h, "flux_respond_error");
             job_destroy (sc->job);
@@ -252,8 +262,11 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
     if (!(sc = calloc (1, sizeof (*sc))))
         return NULL;
     sc->h = h;
-    if (!(sc->sched_ops =
-              schedutil_ops_register (h, alloc_cb, free_cb, exception_cb, sc))) {
+    if (!(sc->sched_ops = schedutil_ops_register (h,
+                                                  alloc_cb,
+                                                  free_cb,
+                                                  exception_cb,
+                                                  sc))) {
         flux_log_error (h, "schedutil_ops_register");
         goto error;
     }

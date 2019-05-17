@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _BROKER_OVERLAY_H
-#define _BROKER_OVERLAY_H
+#    define _BROKER_OVERLAY_H
 
-#include "attr.h"
-#include "src/common/libutil/zsecurity.h"
+#    include "attr.h"
+#    include "src/common/libutil/zsecurity.h"
 
 typedef struct overlay_struct overlay_t;
 typedef void (*overlay_cb_f) (overlay_t *ov, void *sock, void *arg);

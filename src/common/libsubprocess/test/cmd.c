@@ -110,9 +110,11 @@ void check_cmd_attributes (flux_cmd_t *cmd)
     ok (arg != NULL && !strcmp (arg, "command"),
         "flux_cmd_arg returns correct argv[0]");
     arg = flux_cmd_arg (cmd, 1);
-    ok (arg != NULL && !strcmp (arg, "foo"), "flux_cmd_arg returns correct argv[1]");
+    ok (arg != NULL && !strcmp (arg, "foo"),
+        "flux_cmd_arg returns correct argv[1]");
     arg = flux_cmd_arg (cmd, 2);
-    ok (arg != NULL && !strcmp (arg, "bar"), "flux_cmd_arg returns correct argv[2]");
+    ok (arg != NULL && !strcmp (arg, "bar"),
+        "flux_cmd_arg returns correct argv[2]");
 
     is (flux_cmd_getenv (cmd, "PATH"), "/bin:/usr/bin", "flux_cmd_getenv");
 
@@ -156,13 +158,15 @@ int main (int argc, char *argv[])
 
     // Test unsetenv with throwaway var
     diag ("Test setenv/getenv/unsetenv");
-    ok (flux_cmd_setenvf (cmd, 1, "FOO", "%d", 42) >= 0, "flux_cmd_setenvf (FOO=42)");
+    ok (flux_cmd_setenvf (cmd, 1, "FOO", "%d", 42) >= 0,
+        "flux_cmd_setenvf (FOO=42)");
     is (flux_cmd_getenv (cmd, "FOO"), "42", "flux_cmd_getenv (FOO) == 42");
     flux_cmd_unsetenv (cmd, "FOO");
     ok (flux_cmd_getenv (cmd, "FOO") == NULL, "flux_cmd_unsetenv works");
 
     // Test env overwrite
-    ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 42) >= 0, "flux_cmd_setenvf (FOO=42)");
+    ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 42) >= 0,
+        "flux_cmd_setenvf (FOO=42)");
     is (flux_cmd_getenv (cmd, "FOO"), "42", "flux_cmd_getenv (FOO) == 42");
     ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 24) < 0,
         "flux_cmd_setenvf (FOO=24) no overwrite fails");

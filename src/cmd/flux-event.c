@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <libgen.h>
@@ -67,7 +67,10 @@ static bool match_payload (const char *s1, const char *s2)
     return !strcmp (s1, s2);
 }
 
-static bool match_payload_raw (const void *p1, int p1sz, const char *p2, int p2sz)
+static bool match_payload_raw (const void *p1,
+                               int p1sz,
+                               const char *p2,
+                               int p2sz)
 {
     if (!p1 && !p2)
         return true;
@@ -117,7 +120,10 @@ done:
     return rc;
 }
 
-static int publish_json_sync (flux_t *h, const char *topic, int flags, char *payload)
+static int publish_json_sync (flux_t *h,
+                              const char *topic,
+                              int flags,
+                              char *payload)
 {
     flux_future_t *f;
     int seq;
@@ -151,35 +157,36 @@ done:
     return rc;
 }
 
-static struct optparse_option pub_opts[] = {{
-                                                .name = "raw",
-                                                .key = 'r',
-                                                .has_arg = 0,
-                                                .usage = "Interpret event payload as "
-                                                         "raw.",
-                                            },
-                                            {
-                                                .name = "synchronous",
-                                                .key = 's',
-                                                .has_arg = 0,
-                                                .usage = "Wait for event sequence "
-                                                         "assignment before exiting.",
-                                            },
-                                            {
-                                                .name = "loopback",
-                                                .key = 'l',
-                                                .has_arg = 0,
-                                                .usage = "Wait for published event to "
-                                                         "be received before exiting.",
-                                            },
-                                            {
-                                                .name = "private",
-                                                .key = 'p',
-                                                .has_arg = 0,
-                                                .usage = "Set privacy flag on "
-                                                         "published event.",
-                                            },
-                                            OPTPARSE_TABLE_END};
+static struct optparse_option pub_opts[] =
+    {{
+         .name = "raw",
+         .key = 'r',
+         .has_arg = 0,
+         .usage = "Interpret event payload as "
+                  "raw.",
+     },
+     {
+         .name = "synchronous",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Wait for event sequence "
+                  "assignment before exiting.",
+     },
+     {
+         .name = "loopback",
+         .key = 'l',
+         .has_arg = 0,
+         .usage = "Wait for published event to "
+                  "be received before exiting.",
+     },
+     {
+         .name = "private",
+         .key = 'p',
+         .has_arg = 0,
+         .usage = "Set privacy flag on "
+                  "published event.",
+     },
+     OPTPARSE_TABLE_END};
 
 static void event_pub_register (optparse_t *parent)
 {
@@ -325,8 +332,9 @@ static const struct optparse_option sub_opts[] = {{.name = "count",
                                                    .has_arg = 1,
                                                    .arginfo = "N",
                                                    .group = 1,
-                                                   .usage = "Process N events then "
-                                                            "exit"},
+                                                   .usage =
+                                                       "Process N events then "
+                                                       "exit"},
                                                   OPTPARSE_TABLE_END};
 
 void event_sub_register (optparse_t *parent)
@@ -356,7 +364,10 @@ static void event_cb (flux_t *h,
 
     if (flux_event_decode (msg, &topic, &payload) == 0)
         printf ("%s\t%s\n", topic, payload ? payload : "");
-    else if (flux_event_decode_raw (msg, &topic, (const void **)&payload, &payloadsz)
+    else if (flux_event_decode_raw (msg,
+                                    &topic,
+                                    (const void **)&payload,
+                                    &payloadsz)
              == 0) {
         int maxlen = payloadsz;  // no truncation
         char *s = make_printable (payload, payloadsz, maxlen);

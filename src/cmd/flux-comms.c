@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <getopt.h>
@@ -72,15 +72,15 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'r': /* --rank NODESET */
-                rank = strtoul (optarg, NULL, 10);
-                break;
-            default:
-                usage ();
-                break;
+        case 'h': /* --help */
+            usage ();
+            break;
+        case 'r': /* --rank NODESET */
+            rank = strtoul (optarg, NULL, 10);
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if (optind == argc)

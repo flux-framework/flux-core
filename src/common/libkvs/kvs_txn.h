@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_KVS_TXN_H
-#define _FLUX_CORE_KVS_TXN_H
+#    define _FLUX_CORE_KVS_TXN_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
-#include <stdarg.h>
+#    include <stdarg.h>
 
 typedef struct flux_kvs_txn flux_kvs_txn_t;
 
@@ -60,9 +60,9 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn,
                           const char *ns,
                           const char *target);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_KVS_TXN_H */
 

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <time.h>
 #include <sys/time.h>
@@ -160,11 +160,14 @@ static void cron_datetime_destroy (void *arg)
     datetime_entry_destroy (arg);
 }
 
-struct cron_entry_ops cron_datetime_operations = {.create = cron_datetime_create,
-                                                  .destroy = cron_datetime_destroy,
+struct cron_entry_ops cron_datetime_operations = {.create =
+                                                      cron_datetime_create,
+                                                  .destroy =
+                                                      cron_datetime_destroy,
                                                   .start = cron_datetime_start,
                                                   .stop = cron_datetime_stop,
-                                                  .tojson = cron_datetime_to_json};
+                                                  .tojson =
+                                                      cron_datetime_to_json};
 
 /* vi:tabstop=4 shiftwidth=4 expandtab
  */

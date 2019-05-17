@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _JOB_INGEST_WORKER_H
-#define _JOB_INGEST_WORKER_H
+#    define _JOB_INGEST_WORKER_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 struct worker;
 

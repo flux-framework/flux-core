@@ -35,8 +35,10 @@ int main (int argc, char *argv[])
     fd = pfds[0];
     fd2 = pfds[1];
 
-    ok (fd_get_flags (-1) < 0 && errno == EBADF, "fd_get_flags fails on invalid fd");
-    ok (fd_set_flags (-1, 0) < 0 && errno == EBADF, "fd_set_flags fails on invalid fd");
+    ok (fd_get_flags (-1) < 0 && errno == EBADF,
+        "fd_get_flags fails on invalid fd");
+    ok (fd_set_flags (-1, 0) < 0 && errno == EBADF,
+        "fd_set_flags fails on invalid fd");
     ok (fd_set_blocking (-1) < 0 && errno == EBADF,
         "fd_set_blocking fails on invalid fd");
     ok (fd_set_nonblocking (-1) < 0 && errno == EBADF,

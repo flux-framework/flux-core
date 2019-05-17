@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -169,7 +169,8 @@ static int pmi_wrap_publish_name (void *impl,
                                   const char *port)
 {
     struct pmi_wrap *pmi = impl;
-    int (*f) (const char *, const char *) = dlsym (pmi->dso, "PMI_Publish_name");
+    int (*f) (const char *, const char *) =
+        dlsym (pmi->dso, "PMI_Publish_name");
     return f ? f (service_name, port) : PMI_FAIL;
 }
 
@@ -180,7 +181,9 @@ static int pmi_wrap_unpublish_name (void *impl, const char *service_name)
     return f ? f (service_name) : PMI_FAIL;
 }
 
-static int pmi_wrap_lookup_name (void *impl, const char *service_name, char *port)
+static int pmi_wrap_lookup_name (void *impl,
+                                 const char *service_name,
+                                 char *port)
 {
     struct pmi_wrap *pmi = impl;
     int (*f) (const char *, const char *) = dlsym (pmi->dso, "PMI_Lookup_name");
@@ -410,7 +413,10 @@ void *pmi_wrap_create (const char *libname,
                 if (errstr)
                     fprintf (stderr, "%s: %s\n", __FUNCTION__, errstr);
                 else
-                    fprintf (stderr, "%s: dlopen %s failed\n", __FUNCTION__, name);
+                    fprintf (stderr,
+                             "%s: dlopen %s failed\n",
+                             __FUNCTION__,
+                             name);
             }
         } else if (!allow_self_wrap && dlsym (pmi->dso, "flux_pmi_library")) {
             if (debug)

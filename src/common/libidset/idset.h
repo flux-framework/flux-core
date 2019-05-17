@@ -12,11 +12,11 @@
  */
 
 #ifndef FLUX_IDSET_H
-#define FLUX_IDSET_H
+#    define FLUX_IDSET_H
 
-#include <sys/types.h>
-#include <sys/param.h>
-#include <stdbool.h>
+#    include <sys/types.h>
+#    include <sys/param.h>
+#    include <stdbool.h>
 
 enum idset_flags {
     IDSET_FLAG_AUTOGROW = 1,  // allow idset size to automatically grow
@@ -24,7 +24,7 @@ enum idset_flags {
     IDSET_FLAG_RANGE = 4,     // encode with ranges ("2,3,4,8" -> "2-4,8")
 };
 
-#define IDSET_INVALID_ID (UINT_MAX - 1)
+#    define IDSET_INVALID_ID (UINT_MAX - 1)
 
 /* Create/destroy an idset.
  * Set the initial size to 'size' (0 means implementation uses a default size).

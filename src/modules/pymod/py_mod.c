@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <Python.h>
@@ -55,7 +55,8 @@ void add_if_not_present (PyObject *list, const char *path)
 void print_usage ()
 {
     printf (
-        "pymod usage: flux module load pymod --module=<modname> [--path=<module path>] "
+        "pymod usage: flux module load pymod --module=<modname> "
+        "[--path=<module path>] "
         "[--verbose] [--help]]\n");
 }
 
@@ -92,7 +93,8 @@ static struct optparse_option opts[] = {
         .key = 'p',
         .has_arg = 1,
         .arginfo = "PATH",
-        .usage = "Director{y,ies} to add to PYTHONPATH before finding your module",
+        .usage =
+            "Director{y,ies} to add to PYTHONPATH before finding your module",
     },
     OPTPARSE_TABLE_END,
 };
@@ -142,7 +144,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         log_msg_exit ("optparse_set usage");
     int option_index = optparse_parse_args (p, argc, argv);
 
-    if (option_index <= 0 || optparse_hasopt (p, "help") || option_index >= argc) {
+    if (option_index <= 0 || optparse_hasopt (p, "help")
+        || option_index >= argc) {
         optparse_print_usage (p);
         return (option_index < 0);
     }

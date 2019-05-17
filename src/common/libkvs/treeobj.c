@@ -11,7 +11,7 @@
 /* See RFC 11 */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <string.h>
@@ -50,7 +50,9 @@ static int treeobj_unpack (json_t *obj, const char **typep, json_t **datap)
     return 0;
 }
 
-static int treeobj_peek (const json_t *obj, const char **typep, const json_t **datap)
+static int treeobj_peek (const json_t *obj,
+                         const char **typep,
+                         const json_t **datap)
 {
     json_t *data;
     int version;
@@ -95,8 +97,7 @@ int treeobj_validate (const json_t *obj)
         len = json_array_size (data);
         if (len == 0)
             goto inval;
-        json_array_foreach (data, i, o)
-        {
+        json_array_foreach (data, i, o) {
             if (blobref_validate (json_string_value (o)) < 0)
                 goto inval;
         }
@@ -107,8 +108,7 @@ int treeobj_validate (const json_t *obj)
         /* N.B. it should be safe to cast away const on 'data' as long as
          * 'o' is not modified.  We make 'o' const to ensure that.
          */
-        json_object_foreach ((json_t *)data, key, o)
-        {
+        json_object_foreach ((json_t *)data, key, o) {
             if (treeobj_validate (o) < 0)
                 goto inval;
         }
@@ -183,7 +183,9 @@ json_t *treeobj_get_data (json_t *obj)
     return data;
 }
 
-int treeobj_get_symlink (const json_t *obj, const char **ns, const char **target)
+int treeobj_get_symlink (const json_t *obj,
+                         const char **ns,
+                         const char **target)
 {
     const char *type;
     const json_t *data;
@@ -467,7 +469,8 @@ json_t *treeobj_create_symlink (const char *ns, const char *target)
             return NULL;
         }
     } else {
-        if (!(data = json_pack ("{s:s s:s}", "namespace", ns, "target", target))) {
+        if (!(data =
+                  json_pack ("{s:s s:s}", "namespace", ns, "target", target))) {
             errno = ENOMEM;
             return NULL;
         }
@@ -588,7 +591,8 @@ json_t *treeobj_create_valref_buf (const char *hashtype,
         blob_len = len;
         if (maxblob > 0 && len > maxblob)
             blob_len = maxblob;
-        if (blobref_hash (hashtype, data, blob_len, blobref, sizeof (blobref)) < 0)
+        if (blobref_hash (hashtype, data, blob_len, blobref, sizeof (blobref))
+            < 0)
             goto error;
         if (treeobj_append_blobref (valref, blobref) < 0)
             goto error;
@@ -615,7 +619,8 @@ json_t *treeobj_decode (const char *buf)
 json_t *treeobj_decodeb (const char *buf, size_t buflen)
 {
     json_t *obj = NULL;
-    if (!(obj = json_loadb (buf, buflen, 0, NULL)) || treeobj_validate (obj) < 0) {
+    if (!(obj = json_loadb (buf, buflen, 0, NULL))
+        || treeobj_validate (obj) < 0) {
         errno = EPROTO;
         goto error;
     }

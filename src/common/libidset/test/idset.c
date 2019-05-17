@@ -56,7 +56,9 @@ struct inout test_inputs[] = {
     {"1,7-9", IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS, "[1,7-9]"},
     {"1,7-9,16", IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS, "[1,7-9,16]"},
     {"1,7-9,14,16", IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS, "[1,7-9,14,16]"},
-    {"1-3,7-9,14,16", IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS, "[1-3,7-9,14,16]"},
+    {"1-3,7-9,14,16",
+     IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS,
+     "[1-3,7-9,14,16]"},
     {"3,2,4,5", IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS, "[2-5]"},
     {"", IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS, ""},
 
@@ -84,8 +86,8 @@ void test_codec (void)
         idset = idset_decode (ip->in);
         ok (idset != NULL, "idset_decode '%s' works", ip->in);
         s = idset_encode (idset, ip->flags);
-        bool match =
-            (s == NULL && ip->out == NULL) || (s && ip->out && !strcmp (s, ip->out));
+        bool match = (s == NULL && ip->out == NULL)
+                     || (s && ip->out && !strcmp (s, ip->out));
         ok (match == true,
             "idset_encode flags=0x%x '%s' works",
             ip->flags,
@@ -335,7 +337,8 @@ void test_clear (void)
     }
     ok (idset_count (idset) == 3, "idset_count returns 3");
 
-    ok (idset_clear (idset, 100) == 0, "idset_clear idset=[8-10], id=100 works");
+    ok (idset_clear (idset, 100) == 0,
+        "idset_clear idset=[8-10], id=100 works");
     ok (idset_count (idset) == 3, "idset_count still returns 3");
     errno = 0;
     ok (idset_clear (idset, UINT_MAX) < 0 && errno == EINVAL,
@@ -345,8 +348,10 @@ void test_clear (void)
         "idset_clear idset=[8-10], id=INVALID failed with EINVAL");
 
     ok (idset_first (idset) == 8, "idset_first idset=[8-10] returned 8");
-    ok (idset_next (idset, 8) == 9, "idset_next idset=[8-10], prev=8 returned 9");
-    ok (idset_next (idset, 9) == 10, "idset_next idset=[8-10], prev=9 returned 10");
+    ok (idset_next (idset, 8) == 9,
+        "idset_next idset=[8-10], prev=8 returned 9");
+    ok (idset_next (idset, 9) == 10,
+        "idset_next idset=[8-10], prev=9 returned 10");
     ok (idset_next (idset, 10) == IDSET_INVALID_ID,
         "idset_next idset=[8-10], prev=10 returned INVALID");
 
@@ -362,7 +367,8 @@ void test_range_clear (void)
 
     ok (idset_range_clear (idset, 2, 5) == 0, "idset_range_clear 2-5 works");
     ok (idset_count (idset) == 6, "idset_count == 6");
-    ok (idset_range_clear (idset, 2, 5) == 0, "idset_range_clear 2-5 again succeeds");
+    ok (idset_range_clear (idset, 2, 5) == 0,
+        "idset_range_clear 2-5 again succeeds");
     ok (idset_count (idset) == 6, "idset_count is still 6");
     ok (idset_range_clear (idset, 9, 6) == 0,  // reversed
         "idset_range_clear 9-6 works");
@@ -395,14 +401,16 @@ void test_equal (void)
     if (!(set2 = idset_create (1024, 0)))
         BAIL_OUT ("idset_create (1024, 0) failed");
     ok (idset_equal (set1, set2) == false, "idset_equal returns false");
-    ok (idset_range_set (set2, 0, 9) == 0, "idset_range_set (set2, 0, 9) succeeds");
+    ok (idset_range_set (set2, 0, 9) == 0,
+        "idset_range_set (set2, 0, 9) succeeds");
     ok (idset_equal (set1, set2) == false,
         "idset_equal of non-equal but equivalent size sets returns false");
     ok (idset_set (set2, 10) == 0 && idset_clear (set2, 0) == 0,
         "idset_set (set2, 10) && idset_clear (set2, 0)");
     ok (idset_equal (set1, set2), "idset_equal (set1, set2) == true");
 
-    ok (idset_range_clear (set1, 1, 10) == 0 && idset_range_clear (set2, 1, 10) == 0,
+    ok (idset_range_clear (set1, 1, 10) == 0
+            && idset_range_clear (set2, 1, 10) == 0,
         "idset_clear all entries from set1 and set2");
     ok (idset_count (set1) == 0 && idset_count (set2) == 0,
         "idset_count (set1) == idset_count (set2) == 0");
@@ -442,7 +450,8 @@ void test_autogrow (void)
     ok (idset->T.M == 1, "idset internal size is 1");
     ok (idset_set (idset, 0) == 0, "idset_set 0 works");
     errno = 0;
-    ok (idset_set (idset, 1) < 0 && errno == EINVAL, "idset_set 1 fails with EINVAL");
+    ok (idset_set (idset, 1) < 0 && errno == EINVAL,
+        "idset_set 1 fails with EINVAL");
     idset_destroy (idset);
 
     idset = idset_create (1, IDSET_FLAG_AUTOGROW);
@@ -463,7 +472,8 @@ void issue_1974 (void)
 
     idset = idset_create (1024, 0);
     ok (idset != NULL, "1974: idset_create size=1024 worked");
-    ok (idset_test (idset, 1024) == false, "1974: idset_test id=1024 returned false");
+    ok (idset_test (idset, 1024) == false,
+        "1974: idset_test id=1024 returned false");
     idset_destroy (idset);
 }
 

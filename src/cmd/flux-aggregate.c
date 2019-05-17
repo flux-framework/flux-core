@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdarg.h>
 
@@ -52,7 +52,10 @@ static struct optparse_option opts[] =
       .arginfo = "N",
       .has_arg = 1,
       .usage = "Forward aggregate upstream after N"},
-     {.name = "verbose", .key = 'v', .has_arg = 0, .usage = "Verbose operation"},
+     {.name = "verbose",
+      .key = 'v',
+      .has_arg = 0,
+      .usage = "Verbose operation"},
      OPTPARSE_TABLE_END};
 
 static void verbose (struct aggregate_args *args, const char *fmt, ...)
@@ -157,8 +160,7 @@ void print_entries (json_t *entries)
 {
     const char *key;
     json_t *value;
-    json_object_foreach (entries, key, value)
-    {
+    json_object_foreach (entries, key, value) {
         char *s = json_dumps (value, JSON_ENCODE_ANY | JSON_COMPACT);
         printf ("%s: %s\n", key, s);
         free (s);

@@ -9,14 +9,14 @@
 \************************************************************/
 
 #ifndef _SIGN_NONE_H
-#define _SIGN_NONE_H
+#    define _SIGN_NONE_H
 
 /* sign wrap/unwrap to be used for job submission/ingest
  * when flux-security is unavailable.  This simplified version
  * assumes mech=none and is for flux-core internal use only.
  */
 
-#include <stdint.h>
+#    include <stdint.h>
 
 char *sign_none_wrap (const void *payload, int payloadsz, uint32_t userid);
 

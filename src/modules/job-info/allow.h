@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_INFO_ALLOW_H
-#define _FLUX_JOB_INFO_ALLOW_H
+#    define _FLUX_JOB_INFO_ALLOW_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-#include "info.h"
+#    include "info.h"
 
 /* Determine if user who sent request 'msg' is allowed to
  * access job eventlog 's'.  Assume first event is the "submit"

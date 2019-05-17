@@ -21,7 +21,10 @@
 
 static const size_t zmqwriter_msgcount = 1024;
 
-static void zmqwriter (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void zmqwriter (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     void *sock = flux_zmq_watcher_get_zsock (w);
     static int count = 0;
@@ -40,7 +43,10 @@ static void zmqwriter (flux_reactor_t *r, flux_watcher_t *w, int revents, void *
             goto error;
         }
         if (zmsg_send (&zmsg, sock) < 0) {
-            fprintf (stderr, "%s: zmsg_send: %s\n", __FUNCTION__, strerror (errno));
+            fprintf (stderr,
+                     "%s: zmsg_send: %s\n",
+                     __FUNCTION__,
+                     strerror (errno));
             goto error;
         }
         count++;
@@ -52,7 +58,10 @@ error:
     flux_reactor_stop_error (r);
 }
 
-static void zmqreader (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void zmqreader (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     void *sock = flux_zmq_watcher_get_zsock (w);
     static int count = 0;
@@ -63,7 +72,10 @@ static void zmqreader (flux_reactor_t *r, flux_watcher_t *w, int revents, void *
     if (revents & FLUX_POLLIN) {
         zmsg_t *zmsg = zmsg_recv (sock);
         if (!zmsg) {
-            fprintf (stderr, "%s: zmsg_recv: %s\n", __FUNCTION__, strerror (errno));
+            fprintf (stderr,
+                     "%s: zmsg_recv: %s\n",
+                     __FUNCTION__,
+                     strerror (errno));
             goto error;
         }
         zmsg_destroy (&zmsg);
@@ -111,7 +123,10 @@ static void test_zmq (flux_reactor_t *reactor)
 
 static const size_t fdwriter_bufsize = 10 * 1024 * 1024;
 
-static void fdwriter (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void fdwriter (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
     static char *buf = NULL;
@@ -127,7 +142,10 @@ static void fdwriter (flux_reactor_t *r, flux_watcher_t *w, int revents, void *a
     if (revents & FLUX_POLLOUT) {
         if ((n = write (fd, buf + count, fdwriter_bufsize - count)) < 0
             && errno != EWOULDBLOCK && errno != EAGAIN) {
-            fprintf (stderr, "%s: write failed: %s\n", __FUNCTION__, strerror (errno));
+            fprintf (stderr,
+                     "%s: write failed: %s\n",
+                     __FUNCTION__,
+                     strerror (errno));
             goto error;
         }
         if (n > 0) {
@@ -142,7 +160,10 @@ static void fdwriter (flux_reactor_t *r, flux_watcher_t *w, int revents, void *a
 error:
     flux_reactor_stop_error (r);
 }
-static void fdreader (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void fdreader (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
     static char *buf = NULL;
@@ -158,7 +179,10 @@ static void fdreader (flux_reactor_t *r, flux_watcher_t *w, int revents, void *a
     if (revents & FLUX_POLLIN) {
         if ((n = read (fd, buf + count, fdwriter_bufsize - count)) < 0
             && errno != EWOULDBLOCK && errno != EAGAIN) {
-            fprintf (stderr, "%s: read failed: %s\n", __FUNCTION__, strerror (errno));
+            fprintf (stderr,
+                     "%s: read failed: %s\n",
+                     __FUNCTION__,
+                     strerror (errno));
             goto error;
         }
         if (n > 0) {
@@ -197,12 +221,16 @@ static void test_fd (flux_reactor_t *reactor)
     close (fd[1]);
 }
 
-static void buffer_read (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void buffer_read (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     int *count = arg;
 
     if (revents & FLUX_POLLERR) {
-        ok (false, "buffer: read callback incorrectly called with FLUX_POLLERR");
+        ok (false,
+            "buffer: read callback incorrectly called with FLUX_POLLERR");
     } else if (revents & FLUX_POLLIN) {
         flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
         const void *ptr;
@@ -215,7 +243,9 @@ static void buffer_read (flux_reactor_t *r, flux_watcher_t *w, int revents, void
 
         ok (!memcmp (ptr, "foobar", 6), "buffer: read returned correct data");
     } else {
-        ok (false, "buffer: read callback failed to return FLUX_POLLIN: %d", revents);
+        ok (false,
+            "buffer: read callback failed to return FLUX_POLLIN: %d",
+            revents);
     }
 
     (*count)++;
@@ -231,7 +261,8 @@ static void buffer_read_line (flux_reactor_t *r,
     int *count = arg;
 
     if (revents & FLUX_POLLERR) {
-        ok (false, "buffer: read line callback incorrectly called with FLUX_POLLERR");
+        ok (false,
+            "buffer: read line callback incorrectly called with FLUX_POLLERR");
     } else if (revents & FLUX_POLLIN) {
         flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
         const void *ptr;
@@ -243,9 +274,11 @@ static void buffer_read_line (flux_reactor_t *r,
         ok (len == 4, "buffer: read line returned correct length");
 
         if ((*count) == 0) {
-            ok (!memcmp (ptr, "foo\n", 4), "buffer: read line returned correct data");
+            ok (!memcmp (ptr, "foo\n", 4),
+                "buffer: read line returned correct data");
         } else {
-            ok (!memcmp (ptr, "bar\n", 4), "buffer: read line returned correct data");
+            ok (!memcmp (ptr, "bar\n", 4),
+                "buffer: read line returned correct data");
         }
     } else {
         ok (false,
@@ -259,7 +292,10 @@ static void buffer_read_line (flux_reactor_t *r,
     return;
 }
 
-static void buffer_write (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void buffer_write (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     int *count = arg;
 
@@ -283,7 +319,8 @@ static void buffer_read_fill (flux_reactor_t *r,
     int *count = arg;
 
     if (revents & FLUX_POLLERR) {
-        ok (false, "buffer: read callback incorrectly called with FLUX_POLLERR");
+        ok (false,
+            "buffer: read callback incorrectly called with FLUX_POLLERR");
     } else if (revents & FLUX_POLLIN) {
         flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
         const void *ptr;
@@ -296,7 +333,9 @@ static void buffer_read_fill (flux_reactor_t *r,
 
         ok (!memcmp (ptr, "foobar", 6), "buffer: read returned correct data");
     } else {
-        ok (false, "buffer: read callback failed to return FLUX_POLLIN: %d", revents);
+        ok (false,
+            "buffer: read callback failed to return FLUX_POLLIN: %d",
+            revents);
     }
 
     (*count)++;
@@ -314,7 +353,8 @@ static void buffer_read_overflow (flux_reactor_t *r,
 
     if (revents & FLUX_POLLERR) {
         ok (false,
-            "buffer overflow test: read callback incorrectly called with FLUX_POLLERR");
+            "buffer overflow test: read callback incorrectly called with "
+            "FLUX_POLLERR");
     } else if (revents & FLUX_POLLIN) {
         flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
         const void *ptr;
@@ -329,7 +369,8 @@ static void buffer_read_overflow (flux_reactor_t *r,
             "buffer overflow test: read returned correct data");
     } else {
         ok (false,
-            "buffer overflow test: read callback failed to return FLUX_POLLIN: %d",
+            "buffer overflow test: read callback failed to return FLUX_POLLIN: "
+            "%d",
             revents);
     }
 
@@ -355,7 +396,12 @@ static void test_buffer (flux_reactor_t *reactor)
     /* read buffer test */
 
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor, fd[0], 1024, buffer_read, 0, &count);
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         buffer_read,
+                                         0,
+                                         &count);
     ok (w != NULL, "buffer: read created");
 
     fb = flux_buffer_read_watcher_get_buffer (w);
@@ -366,7 +412,8 @@ static void test_buffer (flux_reactor_t *reactor)
 
     flux_watcher_start (w);
 
-    ok (flux_reactor_run (reactor, 0) == 0, "buffer: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
 
     ok (count == 1, "buffer: read callback successfully called");
 
@@ -388,11 +435,13 @@ static void test_buffer (flux_reactor_t *reactor)
 
     ok (fb != NULL, "buffer: buffer retrieved");
 
-    ok (write (fd[1], "foo\nbar\n", 8) == 8, "buffer: write to socketpair success");
+    ok (write (fd[1], "foo\nbar\n", 8) == 8,
+        "buffer: write to socketpair success");
 
     flux_watcher_start (w);
 
-    ok (flux_reactor_run (reactor, 0) == 0, "buffer: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
 
     ok (count == 2, "buffer: read line callback successfully called twice");
 
@@ -416,9 +465,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     flux_watcher_start (w);
 
-    ok (flux_buffer_write (fb, "bazbar", 6) == 6, "buffer: write to buffer success");
+    ok (flux_buffer_write (fb, "bazbar", 6) == 6,
+        "buffer: write to buffer success");
 
-    ok (flux_reactor_run (reactor, 0) == 0, "buffer: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
 
     ok (count == 0, "buffer: write callback never called");
 
@@ -445,11 +496,13 @@ static void test_buffer (flux_reactor_t *reactor)
 
     ok (fb != NULL, "buffer: buffer retrieved");
 
-    ok (flux_buffer_write (fb, "foobaz", 6) == 6, "buffer: write to buffer success");
+    ok (flux_buffer_write (fb, "foobaz", 6) == 6,
+        "buffer: write to buffer success");
 
     flux_watcher_start (w);
 
-    ok (flux_reactor_run (reactor, 0) == 0, "buffer: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
 
     ok (count == 0, "buffer: write callback never called");
 
@@ -483,7 +536,8 @@ static void test_buffer (flux_reactor_t *reactor)
 
     flux_watcher_start (w);
 
-    ok (flux_reactor_run (reactor, 0) == 0, "buffer: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
 
     ok (count == 3, "buffer: read callback successfully called 3 times");
 
@@ -514,7 +568,8 @@ static void test_buffer (flux_reactor_t *reactor)
         "buffer overflow test: reactor ran to completion");
 
     ok (count == 3,
-        "buffer overflow test: read line callback successfully called three times");
+        "buffer overflow test: read line callback successfully called three "
+        "times");
 
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
@@ -548,7 +603,8 @@ static void test_buffer (flux_reactor_t *reactor)
     fb = flux_buffer_write_watcher_get_buffer (w);
     ok (fb != NULL, "buffer: write watcher close: buffer retrieved");
 
-    ok (flux_buffer_write (fb, "foobaz", 6) == 6, "buffer: write to buffer success");
+    ok (flux_buffer_write (fb, "foobaz", 6) == 6,
+        "buffer: write to buffer success");
 
     ok (flux_buffer_write_watcher_is_closed (w, NULL) == 0,
         "buffer: flux_buffer_write_watcher_is_closed returns false");
@@ -564,7 +620,8 @@ static void test_buffer (flux_reactor_t *reactor)
 
     flux_watcher_start (w);
 
-    ok (flux_reactor_run (reactor, 0) == 0, "buffer: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
 
     ok (count == 1, "buffer: write callback called once");
     ok (flux_buffer_write_watcher_is_closed (w, &errnum) == 1 && errnum == 0,
@@ -574,7 +631,8 @@ static void test_buffer (flux_reactor_t *reactor)
 
     ok (read (pfds[0], buf, 1024) == 6, "buffer: read from pipe success");
 
-    ok (!memcmp (buf, "foobaz", 6), "buffer: read from pipe returned correct data");
+    ok (!memcmp (buf, "foobaz", 6),
+        "buffer: read from pipe returned correct data");
 
     ok (read (pfds[0], buf, 1024) == 0, "buffer: read from pipe got EOF");
 
@@ -600,7 +658,8 @@ static void buffer_read_fd_close (flux_reactor_t *r,
 
     if (revents & FLUX_POLLERR) {
         ok (false,
-            "buffer corner case: read callback incorrectly called with FLUX_POLLERR");
+            "buffer corner case: read callback incorrectly called with "
+            "FLUX_POLLERR");
     } else if (revents & FLUX_POLLIN) {
         flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
         const void *ptr;
@@ -620,11 +679,13 @@ static void buffer_read_fd_close (flux_reactor_t *r,
             ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
                 "buffer corner case: read from buffer success");
 
-            ok (len == 0, "buffer corner case: read returned 0, socketpair is closed");
+            ok (len == 0,
+                "buffer corner case: read returned 0, socketpair is closed");
         }
     } else {
         ok (false,
-            "buffer corner case: read callback failed to return FLUX_POLLIN: %d",
+            "buffer corner case: read callback failed to return FLUX_POLLIN: "
+            "%d",
             revents);
     }
 
@@ -654,7 +715,8 @@ static void buffer_read_line_fd_close (flux_reactor_t *r,
             ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
-            ok (len == 7, "buffer corner case: read line returned correct length");
+            ok (len == 7,
+                "buffer corner case: read line returned correct length");
 
             ok (!memcmp (ptr, "foobar\n", 7),
                 "buffer corner case: read line returned correct data");
@@ -665,11 +727,13 @@ static void buffer_read_line_fd_close (flux_reactor_t *r,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 0,
-                "buffer corner case: read line returned 0, socketpair is closed");
+                "buffer corner case: read line returned 0, socketpair is "
+                "closed");
         }
     } else {
         ok (false,
-            "buffer corner case: read line callback failed to return FLUX_POLLIN: %d",
+            "buffer corner case: read line callback failed to return "
+            "FLUX_POLLIN: %d",
             revents);
     }
 
@@ -699,7 +763,8 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
             ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
-            ok (len == 7, "buffer corner case: read line returned correct length");
+            ok (len == 7,
+                "buffer corner case: read line returned correct length");
 
             ok (!memcmp (ptr, "foobar\n", 7),
                 "buffer corner case: read line returned correct data");
@@ -709,12 +774,14 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
             ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
-            ok (len == 0, "buffer corner case: read line says no lines available");
+            ok (len == 0,
+                "buffer corner case: read line says no lines available");
 
             ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
                 "buffer corner case: read from buffer success");
 
-            ok (len == 3, "buffer corner case: read line returned correct length");
+            ok (len == 3,
+                "buffer corner case: read line returned correct length");
 
             ok (!memcmp (ptr, "foo", 3),
                 "buffer corner case: read line returned correct data");
@@ -723,11 +790,13 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 0,
-                "buffer corner case: read line returned 0, socketpair is closed");
+                "buffer corner case: read line returned 0, socketpair is "
+                "closed");
         }
     } else {
         ok (false,
-            "buffer corner case: read line callback failed to return FLUX_POLLIN: %d",
+            "buffer corner case: read line callback failed to return "
+            "FLUX_POLLIN: %d",
             revents);
     }
 
@@ -771,7 +840,8 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     ok (flux_reactor_run (reactor, 0) == 0,
         "buffer corner case: reactor ran to completion");
 
-    ok (bfc.count == 2, "buffer corner case: read callback successfully called twice");
+    ok (bfc.count == 2,
+        "buffer corner case: read callback successfully called twice");
 
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
@@ -820,12 +890,13 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     bfc.count = 0;
     bfc.fd = fd[1];
-    w = flux_buffer_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_line_fd_close_and_left_over_data,
-                                         FLUX_WATCHER_LINE_BUFFER,
-                                         &bfc);
+    w = flux_buffer_read_watcher_create (
+        reactor,
+        fd[0],
+        1024,
+        buffer_read_line_fd_close_and_left_over_data,
+        FLUX_WATCHER_LINE_BUFFER,
+        &bfc);
     ok (w != NULL, "buffer corner case: read line created");
 
     fb = flux_buffer_read_watcher_get_buffer (w);
@@ -841,7 +912,8 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
         "buffer corner case: reactor ran to completion");
 
     ok (bfc.count == 3,
-        "buffer corner case: read line callback successfully called three times");
+        "buffer corner case: read line callback successfully called three "
+        "times");
 
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
@@ -851,7 +923,10 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 }
 
 static int repeat_countdown = 10;
-static void repeat (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void repeat (flux_reactor_t *r,
+                    flux_watcher_t *w,
+                    int revents,
+                    void *arg)
 {
     repeat_countdown--;
     if (repeat_countdown == 0)
@@ -860,7 +935,10 @@ static void repeat (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg
 
 static int oneshot_runs = 0;
 static int oneshot_errno = 0;
-static void oneshot (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void oneshot (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     oneshot_runs++;
     if (oneshot_errno != 0) {
@@ -880,9 +958,11 @@ static void test_timer (flux_reactor_t *reactor)
     flux_reactor_now_update (reactor);
 
     errno = 0;
-    ok (!flux_timer_watcher_create (reactor, -1, 0, oneshot, NULL) && errno == EINVAL,
+    ok (!flux_timer_watcher_create (reactor, -1, 0, oneshot, NULL)
+            && errno == EINVAL,
         "timer: creating negative timeout fails with EINVAL");
-    ok (!flux_timer_watcher_create (reactor, 0, -1, oneshot, NULL) && errno == EINVAL,
+    ok (!flux_timer_watcher_create (reactor, 0, -1, oneshot, NULL)
+            && errno == EINVAL,
         "timer: creating negative repeat fails with EINVAL");
     ok ((w = flux_timer_watcher_create (reactor, 0, 0, oneshot, NULL)) != NULL,
         "timer: creating zero timeout oneshot works");
@@ -904,15 +984,19 @@ static void test_timer (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
-    ok ((w = flux_timer_watcher_create (reactor, 0.001, 0.001, repeat, NULL)) != NULL,
+    ok ((w = flux_timer_watcher_create (reactor, 0.001, 0.001, repeat, NULL))
+            != NULL,
         "timer: creating 1ms timeout with 1ms repeat works");
     flux_watcher_start (w);
     repeat_countdown = 10;
     t0 = flux_reactor_now (reactor);
     ok (flux_reactor_run (reactor, 0) == 0, "timer: reactor exited normally");
     elapsed = flux_reactor_now (reactor) - t0;
-    ok (repeat_countdown == 0, "timer: repeat timer ran 10x and stopped itself");
-    ok (elapsed >= 0.001 * 10, "timer: elapsed time is >= 10*1ms (%.3fs)", elapsed);
+    ok (repeat_countdown == 0,
+        "timer: repeat timer ran 10x and stopped itself");
+    ok (elapsed >= 0.001 * 10,
+        "timer: elapsed time is >= 10*1ms (%.3fs)",
+        elapsed);
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
@@ -987,22 +1071,30 @@ static void test_periodic (flux_reactor_t *reactor)
     ok (!flux_periodic_watcher_create (reactor, 0, -1, NULL, oneshot, NULL)
             && errno == EINVAL,
         "periodic: creating negative interval fails with EINVAL");
-    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, NULL, oneshot, NULL)) != NULL,
+    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, NULL, oneshot, NULL))
+            != NULL,
         "periodic: creating zero offset/interval works");
     flux_watcher_start (w);
     oneshot_runs = 0;
-    ok (flux_reactor_run (reactor, 0) == 0, "periodic: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor ran to completion");
     ok (oneshot_runs == 1, "periodic: oneshot was executed once");
     oneshot_runs = 0;
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
     repeat_countdown = 5;
-    ok ((w = flux_periodic_watcher_create (reactor, 0.01, 0.01, NULL, repeat, NULL))
+    ok ((w = flux_periodic_watcher_create (reactor,
+                                           0.01,
+                                           0.01,
+                                           NULL,
+                                           repeat,
+                                           NULL))
             != NULL,
         "periodic: creating 10ms interval works");
     flux_watcher_start (w);
-    ok (flux_reactor_run (reactor, 0) == 0, "periodic: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor ran to completion");
     ok (repeat_countdown == 0, "repeat ran for expected number of times");
     oneshot_runs = 0;
 
@@ -1026,7 +1118,8 @@ static void test_periodic (flux_reactor_t *reactor)
             != NULL,
         "periodic: creating with resched callback works");
     flux_watcher_start (w);
-    ok (flux_reactor_run (reactor, 0) >= 0, "periodic: reactor ran to completion");
+    ok (flux_reactor_run (reactor, 0) >= 0,
+        "periodic: reactor ran to completion");
     ok (resched_called, "resched_cb was called");
     ok (do_stop_callback_ran, "stop reactor callback was run");
     oneshot_runs = 0;
@@ -1043,14 +1136,18 @@ static void test_periodic (flux_reactor_t *reactor)
             != NULL,
         "periodic: create watcher with misconfigured resched callback");
     flux_watcher_start (w);
-    ok (flux_reactor_run (reactor, 0) == 0, "periodic: reactor stopped immediately");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor stopped immediately");
     ok (do_stop_callback_ran == false, "periodic: callback did not run");
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 }
 
 static int idle_count = 0;
-static void idle_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void idle_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     if (++idle_count == 42)
         flux_watcher_stop (w);
@@ -1070,13 +1167,19 @@ static void test_idle (flux_reactor_t *reactor)
 }
 
 static int prepare_count = 0;
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void prepare_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     prepare_count++;
 }
 
 static int check_count = 0;
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     check_count++;
 }
@@ -1097,7 +1200,11 @@ static void test_prepcheck (flux_reactor_t *reactor)
     flux_watcher_t *prep;
     flux_watcher_t *chk;
 
-    w = flux_timer_watcher_create (reactor, 0.01, 0.01, prepchecktimer_cb, NULL);
+    w = flux_timer_watcher_create (reactor,
+                                   0.01,
+                                   0.01,
+                                   prepchecktimer_cb,
+                                   NULL);
     ok (w != NULL, "created timer watcher that fires every 0.01s");
     flux_watcher_start (w);
 
@@ -1110,7 +1217,8 @@ static void test_prepcheck (flux_reactor_t *reactor)
     flux_watcher_start (chk);
 
     ok (flux_reactor_run (reactor, 0) >= 0, "reactor ran successfully");
-    ok (prepchecktimer_count == 8, "timer fired 8 times, then reactor was stopped");
+    ok (prepchecktimer_count == 8,
+        "timer fired 8 times, then reactor was stopped");
     diag ("prep %d check %d timer %d",
           prepare_count,
           check_count,
@@ -1124,13 +1232,19 @@ static void test_prepcheck (flux_reactor_t *reactor)
 }
 
 static int sigusr1_count = 0;
-static void sigusr1_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void sigusr1_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     if (++sigusr1_count == 8)
         flux_reactor_stop (r);
 }
 
-static void sigidle_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void sigidle_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     if (kill (getpid (), SIGUSR1) < 0)
         flux_reactor_stop_error (r);
@@ -1150,14 +1264,18 @@ static void test_signal (flux_reactor_t *reactor)
     flux_watcher_start (idle);
 
     ok (flux_reactor_run (reactor, 0) >= 0, "reactor ran successfully");
-    ok (sigusr1_count == 8, "signal watcher handled correct number of SIGUSR1's");
+    ok (sigusr1_count == 8,
+        "signal watcher handled correct number of SIGUSR1's");
 
     flux_watcher_destroy (w);
     flux_watcher_destroy (idle);
 }
 
 static pid_t child_pid = -1;
-static void child_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void child_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int pid = flux_child_watcher_get_rpid (w);
     int rstatus = flux_child_watcher_get_rstatus (w);
@@ -1196,12 +1314,18 @@ static void test_child (flux_reactor_t *reactor)
 
 static int stat_size = 0;
 static int stat_nlink = 0;
-static void stat_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void stat_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct stat new, old;
     flux_stat_watcher_get_rstat (w, &new, &old);
     if (new.st_nlink == 0) {
-        diag ("%s: nlink: old: %d new %d", __FUNCTION__, old.st_nlink, new.st_nlink);
+        diag ("%s: nlink: old: %d new %d",
+              __FUNCTION__,
+              old.st_nlink,
+              new.st_nlink);
         stat_nlink++;
         flux_watcher_stop (w);
     } else {
@@ -1221,7 +1345,10 @@ struct stattimer_ctx {
     enum { STATTIMER_APPEND, STATTIMER_UNLINK } state;
 };
 
-static void stattimer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void stattimer_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     struct stattimer_ctx *ctx = arg;
     if (ctx->state == STATTIMER_APPEND) {
@@ -1288,7 +1415,8 @@ int main (int argc, char *argv[])
     if (!reactor)
         BAIL_OUT ("can't continue without reactor");
 
-    ok (flux_reactor_run (reactor, 0) == 0, "reactor ran to completion (no watchers)");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "reactor ran to completion (no watchers)");
 
     test_timer (reactor);
     test_periodic (reactor);

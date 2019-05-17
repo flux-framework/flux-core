@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
@@ -17,8 +17,8 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
+#    include <caliper/cali.h>
+#    include <sys/syscall.h>
 #endif
 #include <jansson.h>
 #include <czmq.h>
@@ -82,9 +82,10 @@ static void rpc_destroy (struct flux_rpc *rpc)
     if (rpc) {
         if (rpc_finalize (rpc) < 0)
             log_matchtag_leak (rpc->h,
-                               (rpc->flags & FLUX_RPC_STREAMING) ? "unterminated "
-                                                                   "streaming RPC"
-                                                                 : "unfulfilled RPC",
+                               (rpc->flags & FLUX_RPC_STREAMING)
+                                   ? "unterminated "
+                                     "streaming RPC"
+                                   : "unfulfilled RPC",
                                rpc->matchtag);
         free (rpc);
     }
@@ -219,7 +220,8 @@ static void initialize_cb (flux_future_t *f, void *arg)
     m.matchtag = rpc->matchtag;
     if (!(mh = flux_msg_handler_create (h, m, response_cb, f)))
         goto error;
-    if (flux_future_aux_set (f, NULL, mh, (flux_free_f)flux_msg_handler_destroy) < 0) {
+    if (flux_future_aux_set (f, NULL, mh, (flux_free_f)flux_msg_handler_destroy)
+        < 0) {
         flux_msg_handler_destroy (mh);
         goto error;
     }
@@ -243,7 +245,8 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
         goto error;
     if (!(rpc = rpc_create (h, f, flags)))
         goto error;
-    if (flux_future_aux_set (f, "flux::rpc", rpc, (flux_free_f)rpc_destroy) < 0) {
+    if (flux_future_aux_set (f, "flux::rpc", rpc, (flux_free_f)rpc_destroy)
+        < 0) {
         rpc_destroy (rpc);
         goto error;
     }
@@ -330,7 +333,8 @@ flux_future_t *flux_rpc (flux_t *h,
     flux_msg_t *msg = NULL;
     flux_future_t *f = NULL;
 
-    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING)) {
+    if (!h
+        || validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING)) {
         errno = EINVAL;
         return NULL;
     }
@@ -353,7 +357,8 @@ flux_future_t *flux_rpc_raw (flux_t *h,
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
-    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING)) {
+    if (!h
+        || validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING)) {
         errno = EINVAL;
         return NULL;
     }
@@ -376,7 +381,8 @@ static flux_future_t *flux_rpc_vpack (flux_t *h,
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
-    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING)) {
+    if (!h
+        || validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING)) {
         errno = EINVAL;
         return NULL;
     }

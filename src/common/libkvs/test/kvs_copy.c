@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <string.h>
@@ -25,7 +25,8 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     errno = 0;
-    ok (flux_kvs_copy (NULL, NULL, "a", NULL, "b", 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_copy (NULL, NULL, "a", NULL, "b", 0) == NULL
+            && errno == EINVAL,
         "flux_kvs_copy h=NULL fails with EINVAL");
     errno = 0;
     ok (flux_kvs_copy (h, NULL, NULL, NULL, "b", 0) == NULL && errno == EINVAL,
@@ -35,7 +36,8 @@ int main (int argc, char *argv[])
         "flux_kvs_copy srckey=NULL fails with EINVAL");
 
     errno = 0;
-    ok (flux_kvs_move (NULL, NULL, "a", NULL, "b", 0) == NULL && errno == EINVAL,
+    ok (flux_kvs_move (NULL, NULL, "a", NULL, "b", 0) == NULL
+            && errno == EINVAL,
         "flux_kvs_move h=NULL fails with EINVAL");
     errno = 0;
     ok (flux_kvs_move (h, NULL, NULL, NULL, "b", 0) == NULL && errno == EINVAL,

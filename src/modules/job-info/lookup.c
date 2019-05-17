@@ -11,7 +11,7 @@
 /* lookup.c - lookup in job-info */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
@@ -80,7 +80,9 @@ error:
     return NULL;
 }
 
-static int lookup_key (struct lookup_ctx *l, flux_future_t *fall, const char *key)
+static int lookup_key (struct lookup_ctx *l,
+                       flux_future_t *fall,
+                       const char *key)
 {
     flux_future_t *f = NULL;
     char path[64];
@@ -129,8 +131,7 @@ static int lookup_keys (struct lookup_ctx *l)
             goto error;
     }
 
-    json_array_foreach (l->keys, index, key)
-    {
+    json_array_foreach (l->keys, index, key) {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
             errno = EINVAL;
@@ -173,7 +174,9 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
             if (errno != ENOENT)
-                flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+                flux_log_error (l->ctx->h,
+                                "%s: flux_kvs_lookup_get",
+                                __FUNCTION__);
             goto error;
         }
 
@@ -185,8 +188,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     if (!(o = json_object ()))
         goto enomem;
 
-    json_array_foreach (l->keys, index, key)
-    {
+    json_array_foreach (l->keys, index, key) {
         flux_future_t *f;
         const char *keystr;
         json_t *str = NULL;
@@ -203,7 +205,9 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
 
         if (flux_kvs_lookup_get (f, &s) < 0) {
             if (errno != ENOENT)
-                flux_log_error (l->ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+                flux_log_error (l->ctx->h,
+                                "%s: flux_kvs_lookup_get",
+                                __FUNCTION__);
             goto error;
         }
 
@@ -252,8 +256,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
     size_t index;
     json_t *key;
 
-    json_array_foreach (l->keys, index, key)
-    {
+    json_array_foreach (l->keys, index, key) {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
             errno = EINVAL;
@@ -267,7 +270,10 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
     return 0;
 }
 
-void lookup_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void lookup_cb (flux_t *h,
+                flux_msg_handler_t *mh,
+                const flux_msg_t *msg,
+                void *arg)
 {
     struct info_ctx *ctx = arg;
     struct lookup_ctx *l = NULL;

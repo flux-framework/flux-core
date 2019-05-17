@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_WAITQUEUE_H
-#define _FLUX_KVS_WAITQUEUE_H
+#    define _FLUX_KVS_WAITQUEUE_H
 
-#include <stdbool.h>
-#include <flux/core.h>
+#    include <stdbool.h>
+#    include <flux/core.h>
 
 /* A wait_t represents a waiter, which may be waiting on multiple things.
  * A waitqueue_t represents an object that can can change state and wake up
@@ -75,7 +75,10 @@ wait_t *wait_create_msg_handler (flux_t *h,
                                  flux_msg_handler_f cb);
 
 /* Set/get auxiliary data to the flux message stored in a wait_t */
-int wait_msg_aux_set (wait_t *w, const char *name, void *aux, flux_free_f destroy);
+int wait_msg_aux_set (wait_t *w,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy);
 void *wait_msg_aux_get (wait_t *w, const char *name);
 
 /* Get/set an aux errnum on a wait that can be retrieved later.

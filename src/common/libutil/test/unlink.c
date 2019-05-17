@@ -30,7 +30,10 @@ int main (int argc, char** argv)
 
     plan (NO_PLAN);
 
-    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (path,
+                    sizeof (path),
+                    "%s/unlink_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
 
@@ -39,7 +42,10 @@ int main (int argc, char** argv)
     ok (n == 1 && stat (path, &sb) < 0 && errno == ENOENT,
         "cleaned up directory containing nothing");
 
-    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (path,
+                    sizeof (path),
+                    "%s/unlink_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
     len = snprintf (path2, sizeof (path2), "%s/a", path);
@@ -50,7 +56,10 @@ int main (int argc, char** argv)
     ok (n == 2 && stat (path, &sb) < 0 && errno == ENOENT,
         "cleaned up directory containing 1 dir");
 
-    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (path,
+                    sizeof (path),
+                    "%s/unlink_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
     len = snprintf (path2, sizeof (path2), "%s/a", path);
@@ -65,7 +74,10 @@ int main (int argc, char** argv)
     ok (n == 3 && stat (path, &sb) < 0 && errno == ENOENT,
         "cleaned up directory containing 1 dir (empty) + 1 file ");
 
-    len = snprintf (path, sizeof (path), "%s/unlink_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (path,
+                    sizeof (path),
+                    "%s/unlink_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (path)) || !mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
     len = snprintf (path2, sizeof (path2), "%s/a", path);

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <stdlib.h>
@@ -149,7 +149,14 @@ static int rlist_append (struct rlist *rl, const char *ranks, json_t *e)
     json_error_t err;
 
     if (!ids
-        || json_unpack_ex (e, &err, 0, "{s:i,s?s}", "Core", &n, "cpuset", &corelist)
+        || json_unpack_ex (e,
+                           &err,
+                           0,
+                           "{s:i,s?s}",
+                           "Core",
+                           &n,
+                           "cpuset",
+                           &corelist)
                < 0)
         goto out;
     i = idset_first (ids);
@@ -182,8 +189,7 @@ struct rlist *rlist_from_hwloc_by_rank (const char *by_rank)
     if (!(rl = rlist_create ()))
         goto err;
 
-    json_object_foreach (o, key, entry)
-    {
+    json_object_foreach (o, key, entry) {
         if (rlist_append (rl, key, entry) < 0)
             goto err;
     }
@@ -235,7 +241,9 @@ int rlist_append_idset (struct rlist *rl, int rank, struct idset *idset)
     return 0;
 }
 
-static int rlist_append_rank_entry (struct rlist *rl, json_t *entry, json_error_t *ep)
+static int rlist_append_rank_entry (struct rlist *rl,
+                                    json_t *entry,
+                                    json_error_t *ep)
 {
     const char *ranks;
     const char *cores;
@@ -282,8 +290,7 @@ struct rlist *rlist_from_R (const char *s)
         goto err;
     if (!(rl = rlist_create ()))
         goto err;
-    json_array_foreach (R_lite, i, entry)
-    {
+    json_array_foreach (R_lite, i, entry) {
         if (rlist_append_rank_entry (rl, entry, &error) < 0)
             goto err;
     }

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <unistd.h>
@@ -39,12 +39,12 @@ void output (int rank, json_t *procs)
     if (!json_is_array (procs))
         log_msg_exit ("procs returned is not an array");
 
-    json_array_foreach (procs, index, value)
-    {
+    json_array_foreach (procs, index, value) {
         int pid;
         char *sender;
 
-        if (json_unpack (value, "{ s:i s:s }", "pid", &pid, "sender", &sender) < 0)
+        if (json_unpack (value, "{ s:i s:s }", "pid", &pid, "sender", &sender)
+            < 0)
             log_msg_exit ("json_unpack");
 
         printf ("%s\t%d\t%d\n", sender, rank, pid);
@@ -87,7 +87,12 @@ int main (int argc, char *argv[])
     if (!(f = flux_rpc (h, "cmb.rexec.processes", NULL, rank, 0)))
         log_err_exit ("flux_rpc");
 
-    if (flux_rpc_get_unpack (f, "{ s:i s:o }", "rank", &resp_rank, "procs", &resp_procs)
+    if (flux_rpc_get_unpack (f,
+                             "{ s:i s:o }",
+                             "rank",
+                             &resp_rank,
+                             "procs",
+                             &resp_procs)
         < 0)
         log_err_exit ("flux_rpc_get_unpack");
 

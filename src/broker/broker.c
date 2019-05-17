@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -32,15 +32,15 @@
 #include <czmq.h>
 #include <jansson.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
+#    include <caliper/cali.h>
+#    include <sys/syscall.h>
 #endif
 #if HAVE_VALGRIND
-#if HAVE_VALGRIND_H
-#include <valgrind.h>
-#elif HAVE_VALGRIND_VALGRIND_H
-#include <valgrind/valgrind.h>
-#endif
+#    if HAVE_VALGRIND_H
+#        include <valgrind.h>
+#    elif HAVE_VALGRIND_VALGRIND_H
+#        include <valgrind/valgrind.h>
+#    endif
 #endif
 
 #include "src/common/libutil/log.h"
@@ -138,7 +138,10 @@ static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+static void signal_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg);
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
@@ -197,12 +200,16 @@ static void usage (void)
     fprintf (stderr,
              "Usage: flux-broker OPTIONS [initial-command ...]\n"
              " -v,--verbose                 Be annoyingly verbose\n"
-             " -X,--module-path PATH        Set module search path (colon separated)\n"
-             " -s,--security=plain|curve|none    Select security mode (default: "
+             " -X,--module-path PATH        Set module search path (colon "
+             "separated)\n"
+             " -s,--security=plain|curve|none    Select security mode "
+             "(default: "
              "curve)\n"
              " -k,--k-ary K                 Wire up in a k-ary tree\n"
-             " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
-             " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
+             " -H,--heartrate SECS          Set heartrate in seconds (rank 0 "
+             "only)\n"
+             " -g,--shutdown-grace SECS     Set shutdown grace period in "
+             "seconds\n"
              " -S,--setattr ATTR=VAL        Set broker attribute\n");
     exit (1);
 }
@@ -218,56 +225,56 @@ void parse_command_line_arguments (int argc,
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-            case 's': /* --security=MODE */
-                if (!strcmp (optarg, "none")) {
-                    *sec_typemask = 0;
-                } else if (!strcmp (optarg, "plain")) {
-                    *sec_typemask |= ZSECURITY_TYPE_PLAIN;
-                    *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
-                } else if (!strcmp (optarg, "curve")) {
-                    *sec_typemask |= ZSECURITY_TYPE_CURVE;
-                    *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
-                } else {
-                    log_msg_exit ("--security arg must be none|plain|curve");
-                }
-                break;
-            case 'v': /* --verbose */
-                ctx->verbose = true;
-                break;
-            case 'X': /* --module-path PATH */
-                if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
-                    log_err_exit ("setting conf.module_path attribute");
-                break;
-            case 'k': /* --k-ary k */
-                errno = 0;
-                ctx->tbon_k = strtoul (optarg, &endptr, 10);
-                if (errno || *endptr != '\0')
-                    log_err_exit ("k-ary '%s'", optarg);
-                if (ctx->tbon_k < 1)
-                    usage ();
-                break;
-            case 'H': /* --heartrate SECS */
-                if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
-                    log_err_exit ("heartrate `%s'", optarg);
-                break;
-            case 'g': /* --shutdown-grace SECS */
-                if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
-                    log_err_exit ("shutdown-grace '%s'", optarg);
-                    usage ();
-                }
-                break;
-            case 'S': { /* --setattr ATTR=VAL */
-                char *val, *attr = xstrdup (optarg);
-                if ((val = strchr (attr, '=')))
-                    *val++ = '\0';
-                if (attr_add (ctx->attrs, attr, val, 0) < 0)
-                    if (attr_set (ctx->attrs, attr, val, true) < 0)
-                        log_err_exit ("setattr %s=%s", attr, val);
-                free (attr);
-                break;
+        case 's': /* --security=MODE */
+            if (!strcmp (optarg, "none")) {
+                *sec_typemask = 0;
+            } else if (!strcmp (optarg, "plain")) {
+                *sec_typemask |= ZSECURITY_TYPE_PLAIN;
+                *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
+            } else if (!strcmp (optarg, "curve")) {
+                *sec_typemask |= ZSECURITY_TYPE_CURVE;
+                *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
+            } else {
+                log_msg_exit ("--security arg must be none|plain|curve");
             }
-            default:
+            break;
+        case 'v': /* --verbose */
+            ctx->verbose = true;
+            break;
+        case 'X': /* --module-path PATH */
+            if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
+                log_err_exit ("setting conf.module_path attribute");
+            break;
+        case 'k': /* --k-ary k */
+            errno = 0;
+            ctx->tbon_k = strtoul (optarg, &endptr, 10);
+            if (errno || *endptr != '\0')
+                log_err_exit ("k-ary '%s'", optarg);
+            if (ctx->tbon_k < 1)
                 usage ();
+            break;
+        case 'H': /* --heartrate SECS */
+            if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
+                log_err_exit ("heartrate `%s'", optarg);
+            break;
+        case 'g': /* --shutdown-grace SECS */
+            if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
+                log_err_exit ("shutdown-grace '%s'", optarg);
+                usage ();
+            }
+            break;
+        case 'S': { /* --setattr ATTR=VAL */
+            char *val, *attr = xstrdup (optarg);
+            if ((val = strchr (attr, '=')))
+                *val++ = '\0';
+            if (attr_add (ctx->attrs, attr, val, 0) < 0)
+                if (attr_set (ctx->attrs, attr, val, true) < 0)
+                    log_err_exit ("setattr %s=%s", attr, val);
+            free (attr);
+            break;
+        }
+        default:
+            usage ();
         }
     }
     if (optind < argc) {
@@ -545,11 +552,21 @@ int main (int argc, char *argv[])
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
         runlevel_set_flux (ctx.runlevel, ctx.h);
 
-        if (runlevel_set_rc (ctx.runlevel, 1, rc1, rc1 ? strlen (rc1) + 1 : 0, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel,
+                             1,
+                             rc1,
+                             rc1 ? strlen (rc1) + 1 : 0,
+                             uri)
+            < 0)
             log_err_exit ("runlevel_set_rc 1");
         if (runlevel_set_rc (ctx.runlevel, 2, rc2, rc2_len, uri) < 0)
             log_err_exit ("runlevel_set_rc 2");
-        if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc3 ? strlen (rc3) + 1 : 0, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel,
+                             3,
+                             rc3,
+                             rc3 ? strlen (rc3) + 1 : 0,
+                             uri)
+            < 0)
             log_err_exit ("runlevel_set_rc 3");
     }
 
@@ -718,7 +735,8 @@ static void init_attrs_from_environment (attr_t *attrs)
     for (m = &attrmap[0]; m->env != NULL; m++) {
         val = getenv (m->env);
         if (!val && m->required)
-            log_msg_exit ("required environment variable %s is not set", m->env);
+            log_msg_exit ("required environment variable %s is not set",
+                          m->env);
         if (attr_add (attrs, m->attr, val, flags) < 0)
             log_err_exit ("attr_add %s", m->attr);
     }
@@ -744,7 +762,10 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     /* Initialize other miscellaneous attrs
      */
     init_attrs_broker_pid (attrs, pid);
-    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING, FLUX_ATTRFLAG_IMMUTABLE)
+    if (attr_add (attrs,
+                  "version",
+                  FLUX_CORE_VERSION_STRING,
+                  FLUX_ATTRFLAG_IMMUTABLE)
         < 0)
         log_err_exit ("attr_add version");
 }
@@ -796,7 +817,10 @@ static void set_proctitle (uint32_t rank)
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static void runlevel_io_cb (runlevel_t *r, const char *name, const char *msg, void *arg)
+static void runlevel_io_cb (runlevel_t *r,
+                            const char *name,
+                            const char *msg,
+                            void *arg)
 {
     broker_ctx_t *ctx = arg;
     int loglevel = !strcmp (name, "STDERR") ? LOG_ERR : LOG_INFO;
@@ -826,27 +850,27 @@ static void runlevel_cb (runlevel_t *r,
               elapsed);
 
     switch (level) {
-        case 1: /* init completed */
-            if (rc != 0) {
-                new_level = 3;
-                shutdown_arm (ctx->shutdown,
-                              ctx->shutdown_grace,
-                              rc,
-                              "run level 1 %s",
-                              exit_string);
-            } else
-                new_level = 2;
-            break;
-        case 2: /* initial program completed */
+    case 1: /* init completed */
+        if (rc != 0) {
             new_level = 3;
             shutdown_arm (ctx->shutdown,
                           ctx->shutdown_grace,
                           rc,
-                          "run level 2 %s",
+                          "run level 1 %s",
                           exit_string);
-            break;
-        case 3: /* finalization completed */
-            break;
+        } else
+            new_level = 2;
+        break;
+    case 2: /* initial program completed */
+        new_level = 3;
+        shutdown_arm (ctx->shutdown,
+                      ctx->shutdown_grace,
+                      rc,
+                      "run level 2 %s",
+                      exit_string);
+        break;
+    case 3: /* finalization completed */
+        break;
     }
     if (new_level != -1) {
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", new_level);
@@ -953,7 +977,11 @@ void create_broker_rundir (overlay_t *ov, void *arg)
         log_err_exit ("create_broker_rundir: asprintf");
     if (mkdir (broker_rundir, 0700) < 0)
         log_err_exit ("create_broker_rundir: mkdir (%s)", broker_rundir);
-    if (attr_add (attrs, "broker.rundir", broker_rundir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs,
+                  "broker.rundir",
+                  broker_rundir,
+                  FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
         log_err_exit ("create_broker_rundir: attr_add broker.rundir");
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
@@ -1016,7 +1044,10 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (attrs, "persist-filesystem", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs,
+                            "persist-filesystem",
+                            FLUX_ATTRFLAG_IMMUTABLE)
+            < 0)
             goto done;
         tmpl = xasprintf ("%s/fluxP-%s-XXXXXX", persist_fs, sid);
         if (!(dir = mkdtemp (tmpl)))
@@ -1026,11 +1057,16 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
     }
 done_success:
     if (attr_get (attrs, "persist-filesystem", NULL, NULL) < 0) {
-        if (attr_add (attrs, "persist-filesystem", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs,
+                      "persist-filesystem",
+                      NULL,
+                      FLUX_ATTRFLAG_IMMUTABLE)
+            < 0)
             goto done;
     }
     if (attr_get (attrs, "persist-directory", NULL, NULL) < 0) {
-        if (attr_add (attrs, "persist-directory", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, "persist-directory", NULL, FLUX_ATTRFLAG_IMMUTABLE)
+            < 0)
             goto done;
     }
     rc = 0;
@@ -1176,7 +1212,8 @@ static int unload_module_byname (broker_ctx_t *ctx,
 
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 {
-    int i, sigs[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE, SIGALRM};
+    int i,
+        sigs[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE, SIGALRM};
     flux_watcher_t *w;
 
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
@@ -1244,12 +1281,18 @@ static void cmb_insmod_cb (flux_t *h,
     size_t argz_len = 0;
     error_t e;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path, "args", &args) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:o}",
+                             "path",
+                             &path,
+                             "args",
+                             &args)
+        < 0)
         goto error;
     if (!json_is_array (args))
         goto proto;
-    json_array_foreach (args, index, value)
-    {
+    json_array_foreach (args, index, value) {
         if (!json_is_string (value))
             goto proto;
         if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
@@ -1323,7 +1366,13 @@ static void cmb_panic_cb (flux_t *h,
     const char *reason;
     int flags;  // reserved
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "reason", &reason, "flags", &flags)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i}",
+                             "reason",
+                             &reason,
+                             "flags",
+                             &flags)
         < 0) {
         flux_log_error (h, "malformed cmb.panic request");
         return;
@@ -1529,7 +1578,8 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, overlay_get_rank (ctx->overlay)))
             continue;
-        if (service_add (ctx->services, svc->name, NULL, route_to_handle, ctx) < 0)
+        if (service_add (ctx->services, svc->name, NULL, route_to_handle, ctx)
+            < 0)
             log_err_exit ("error registering service for %s", svc->name);
     }
 
@@ -1566,30 +1616,30 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
         goto done;
     overlay_checkin_child (ctx->overlay, uuid);
     switch (type) {
-        case FLUX_MSGTYPE_KEEPALIVE:
-            break;
-        case FLUX_MSGTYPE_REQUEST:
-            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            /* TRICKY:  Fix up ROUTER socket used in reverse direction.
-             * Request/response is designed for requests to travel
-             * ROUTER->DEALER (up) and responses DEALER-ROUTER (down).
-             * When used conventionally, the route stack is accumulated
-             * automatically as a request is routed up, and unwound
-             * automatically as a response is routed down.  When responses
-             * are routed up, ROUTER socket behavior must be subverted on
-             * the receiving end by popping two frames off of the stack and
-             * discarding.
-             */
-            (void)flux_msg_pop_route (msg, NULL);
-            (void)flux_msg_pop_route (msg, NULL);
-            if (broker_response_sendmsg (ctx, msg) < 0)
-                goto done;
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            (void)broker_event_sendmsg (ctx, msg);
-            break;
+    case FLUX_MSGTYPE_KEEPALIVE:
+        break;
+    case FLUX_MSGTYPE_REQUEST:
+        (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
+        break;
+    case FLUX_MSGTYPE_RESPONSE:
+        /* TRICKY:  Fix up ROUTER socket used in reverse direction.
+         * Request/response is designed for requests to travel
+         * ROUTER->DEALER (up) and responses DEALER-ROUTER (down).
+         * When used conventionally, the route stack is accumulated
+         * automatically as a request is routed up, and unwound
+         * automatically as a response is routed down.  When responses
+         * are routed up, ROUTER socket behavior must be subverted on
+         * the receiving end by popping two frames off of the stack and
+         * discarding.
+         */
+        (void)flux_msg_pop_route (msg, NULL);
+        (void)flux_msg_pop_route (msg, NULL);
+        if (broker_response_sendmsg (ctx, msg) < 0)
+            goto done;
+        break;
+    case FLUX_MSGTYPE_EVENT:
+        (void)broker_event_sendmsg (ctx, msg);
+        break;
     }
 done:
     if (uuid)
@@ -1605,7 +1655,8 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     uint32_t seq;
     const char *topic, *s;
 
-    if (flux_msg_get_seq (msg, &seq) < 0 || flux_msg_get_topic (msg, &topic) < 0) {
+    if (flux_msg_get_seq (msg, &seq) < 0
+        || flux_msg_get_topic (msg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
@@ -1657,28 +1708,28 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
-        case FLUX_MSGTYPE_RESPONSE:
-            if (broker_response_sendmsg (ctx, msg) < 0)
-                goto done;
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_clear_route (msg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "dropping malformed event");
-                goto done;
-            }
-            if (handle_event (ctx, msg) < 0)
-                goto done;
-            break;
-        case FLUX_MSGTYPE_REQUEST:
-            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
-            break;
-        default:
-            flux_log (ctx->h,
-                      LOG_ERR,
-                      "%s: unexpected %s",
-                      __FUNCTION__,
-                      flux_msg_typestr (type));
-            break;
+    case FLUX_MSGTYPE_RESPONSE:
+        if (broker_response_sendmsg (ctx, msg) < 0)
+            goto done;
+        break;
+    case FLUX_MSGTYPE_EVENT:
+        if (flux_msg_clear_route (msg) < 0) {
+            flux_log (ctx->h, LOG_ERR, "dropping malformed event");
+            goto done;
+        }
+        if (handle_event (ctx, msg) < 0)
+            goto done;
+        break;
+    case FLUX_MSGTYPE_REQUEST:
+        (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
+        break;
+    default:
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: unexpected %s",
+                  __FUNCTION__,
+                  flux_msg_typestr (type));
+        break;
     }
 done:
     flux_msg_destroy (msg);
@@ -1698,40 +1749,40 @@ static void module_cb (module_t *p, void *arg)
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
-        case FLUX_MSGTYPE_RESPONSE:
-            (void)broker_response_sendmsg (ctx, msg);
+    case FLUX_MSGTYPE_RESPONSE:
+        (void)broker_response_sendmsg (ctx, msg);
+        break;
+    case FLUX_MSGTYPE_REQUEST:
+        (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
+        break;
+    case FLUX_MSGTYPE_EVENT:
+        if (broker_event_sendmsg (ctx, msg) < 0) {
+            flux_log_error (ctx->h,
+                            "%s(%s): broker_event_sendmsg %s",
+                            __FUNCTION__,
+                            module_get_name (p),
+                            flux_msg_typestr (type));
+        }
+        break;
+    case FLUX_MSGTYPE_KEEPALIVE:
+        if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
+            flux_log_error (ctx->h,
+                            "%s: flux_keepalive_decode",
+                            module_get_name (p));
             break;
-        case FLUX_MSGTYPE_REQUEST:
-            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, msg) < 0) {
-                flux_log_error (ctx->h,
-                                "%s(%s): broker_event_sendmsg %s",
-                                __FUNCTION__,
-                                module_get_name (p),
-                                flux_msg_typestr (type));
-            }
-            break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
-                flux_log_error (ctx->h,
-                                "%s: flux_keepalive_decode",
-                                module_get_name (p));
-                break;
-            }
-            if (ka_status == FLUX_MODSTATE_EXITED)
-                module_set_errnum (p, ka_errnum);
-            module_set_status (p, ka_status);
-            break;
-        default:
-            flux_log (ctx->h,
-                      LOG_ERR,
-                      "%s(%s): unexpected %s",
-                      __FUNCTION__,
-                      module_get_name (p),
-                      flux_msg_typestr (type));
-            break;
+        }
+        if (ka_status == FLUX_MODSTATE_EXITED)
+            module_set_errnum (p, ka_errnum);
+        module_set_status (p, ka_status);
+        break;
+    default:
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s(%s): unexpected %s",
+                  __FUNCTION__,
+                  module_get_name (p),
+                  flux_msg_typestr (type));
+        break;
     }
 done:
     flux_msg_destroy (msg);
@@ -1780,7 +1831,10 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     }
 }
 
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void signal_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
@@ -1882,7 +1936,8 @@ static int broker_request_sendmsg (broker_ctx_t *ctx,
         rc = service_send (ctx->services, msg);
         if (rc < 0)
             goto error;
-    } else if ((gw = kary_child_route (ctx->tbon_k, size, rank, nodeid)) != KARY_NONE) {
+    } else if ((gw = kary_child_route (ctx->tbon_k, size, rank, nodeid))
+               != KARY_NONE) {
         rc = subvert_sendmsg_child (ctx, msg, gw);
         if (rc < 0)
             goto error;
@@ -2004,18 +2059,18 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
 
     switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, cpy, ERROR_MODE_RETURN);
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            rc = broker_response_sendmsg (ctx, cpy);
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, cpy);
-            break;
-        default:
-            errno = EINVAL;
-            break;
+    case FLUX_MSGTYPE_REQUEST:
+        rc = broker_request_sendmsg (ctx, cpy, ERROR_MODE_RETURN);
+        break;
+    case FLUX_MSGTYPE_RESPONSE:
+        rc = broker_response_sendmsg (ctx, cpy);
+        break;
+    case FLUX_MSGTYPE_EVENT:
+        rc = broker_event_sendmsg (ctx, cpy);
+        break;
+    default:
+        errno = EINVAL;
+        break;
     }
 done:
     flux_msg_destroy (cpy);

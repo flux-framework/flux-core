@@ -21,7 +21,8 @@ int main (int argc, char *argv[])
 
     /* restart_count_char */
 
-    ok (restart_count_char ("foo", '/') == 0, "restart_count_char s=foo c=/ returns 0");
+    ok (restart_count_char ("foo", '/') == 0,
+        "restart_count_char s=foo c=/ returns 0");
     ok (restart_count_char ("a.b.c", '/') == 0,
         "restart_count_char s=a.b.c c=. returns 2");
     ok (restart_count_char (".a.b.c", '/') == 0,

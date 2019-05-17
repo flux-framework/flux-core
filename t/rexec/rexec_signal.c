@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <unistd.h>
@@ -46,7 +46,8 @@ void signal_result (flux_future_t *f, void *arg)
 
 void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED
+        || state == FLUX_SUBPROCESS_FAILED) {
         fprintf (stderr,
                  "rank %d: %s: %s\n",
                  flux_subprocess_rank (p),

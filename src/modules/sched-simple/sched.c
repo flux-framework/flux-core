@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <flux/core.h>
@@ -50,7 +50,8 @@ static struct jobreq *jobreq_create (const flux_msg_t *msg, const char *jobspec)
 
     if (job == NULL)
         return NULL;
-    if (schedutil_alloc_request_decode (msg, &job->id, &pri, &uid, &t_submit) < 0)
+    if (schedutil_alloc_request_decode (msg, &job->id, &pri, &uid, &t_submit)
+        < 0)
         goto err;
     if (!(job->msg = flux_msg_copy (msg, true)))
         goto err;
@@ -102,7 +103,11 @@ static void try_alloc (flux_t *h, struct simple_sched *ss)
     if (!ss->job)
         return;
     jj = &ss->job->jj;
-    alloc = rlist_alloc (ss->rlist, ss->mode, jj->nnodes, jj->nslots, jj->slot_size);
+    alloc = rlist_alloc (ss->rlist,
+                         ss->mode,
+                         jj->nnodes,
+                         jj->nslots,
+                         jj->slot_size);
     if (!alloc) {
         const char *note = "unable to allocate provided jobspec";
         if (errno == ENOSPC)
@@ -183,7 +188,10 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
     try_alloc (h, ss);
 }
 
-static void alloc_cb (flux_t *h, const flux_msg_t *msg, const char *jobspec, void *arg)
+static void alloc_cb (flux_t *h,
+                      const flux_msg_t *msg,
+                      const char *jobspec,
+                      void *arg)
 {
     struct simple_sched *ss = arg;
 
@@ -318,7 +326,10 @@ static char *get_alloc_mode (flux_t *h, const char *mode)
     return NULL;
 }
 
-static int process_args (flux_t *h, struct simple_sched *ss, int argc, char *argv[])
+static int process_args (flux_t *h,
+                         struct simple_sched *ss,
+                         int argc,
+                         char *argv[])
 {
     int i;
     for (i = 0; i < argc; i++) {

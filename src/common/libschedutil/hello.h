@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _FLUX_SCHEDUTIL_HELLO_H
-#define _FLUX_SCHEDUTIL_HELLO_H
+#    define _FLUX_SCHEDUTIL_HELLO_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 /* Callback for ingesting allocated R's.
  * Return 0 on success, -1 on failure with errno set.

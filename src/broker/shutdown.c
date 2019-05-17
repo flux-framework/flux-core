@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <errno.h>
@@ -57,7 +57,10 @@ void shutdown_destroy (shutdown_t *s)
 
 /* When the timer expires, call the registered callback.
  */
-static void timer_handler (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timer_handler (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
 {
     shutdown_t *s = arg;
     if (s->shutdown)
@@ -99,7 +102,11 @@ void shutdown_handler (flux_t *h,
         }
         flux_watcher_start (s->timer);
         if (s->myrank == 0)
-            flux_log (s->h, LOG_INFO, "shutdown in %.3fs: %s", s->grace, s->reason);
+            flux_log (s->h,
+                      LOG_INFO,
+                      "shutdown in %.3fs: %s",
+                      s->grace,
+                      s->reason);
     }
 }
 
@@ -110,7 +117,8 @@ void shutdown_set_handle (shutdown_t *s, flux_t *h)
     s->h = h;
 
     match.topic_glob = "shutdown";
-    if (!(s->shutdown = flux_msg_handler_create (s->h, match, shutdown_handler, s)))
+    if (!(s->shutdown =
+              flux_msg_handler_create (s->h, match, shutdown_handler, s)))
         log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (s->shutdown);
     if (flux_event_subscribe (s->h, "shutdown") < 0)
@@ -162,7 +170,11 @@ flux_msg_t *shutdown_vencode (double grace,
                             exitcode);
 }
 
-flux_msg_t *shutdown_encode (double grace, int exitcode, int rank, const char *fmt, ...)
+flux_msg_t *shutdown_encode (double grace,
+                             int exitcode,
+                             int rank,
+                             const char *fmt,
+                             ...)
 {
     va_list ap;
     flux_msg_t *msg;
@@ -203,7 +215,11 @@ done:
     return rc;
 }
 
-int shutdown_arm (shutdown_t *s, double grace, int exitcode, const char *fmt, ...)
+int shutdown_arm (shutdown_t *s,
+                  double grace,
+                  int exitcode,
+                  const char *fmt,
+                  ...)
 {
     va_list ap;
     flux_msg_t *msg = NULL;

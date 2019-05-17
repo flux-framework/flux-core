@@ -11,7 +11,7 @@
 /* dtree.c - create HxW KVS directory tree */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <getopt.h>
 #include <flux/core.h>
@@ -34,7 +34,8 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height);
 void usage (void)
 {
     fprintf (stderr,
-             "Usage: dtree [--mkdir] [--prefix NAME] [--width N] [--height N]\n");
+             "Usage: dtree [--mkdir] [--prefix NAME] [--width N] [--height "
+             "N]\n");
     exit (1);
 }
 
@@ -46,7 +47,8 @@ void setup_dir (flux_t *h, const char *dir)
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_mkdir (txn, 0, dir) < 0)
         log_err_exit ("flux_kvs_txn_mkdir %s", dir);
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -65,21 +67,21 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'w': /* --width N */
-                width = strtoul (optarg, NULL, 10);
-                break;
-            case 'h': /* --height N */
-                height = strtoul (optarg, NULL, 10);
-                break;
-            case 'p': /* --prefix NAME */
-                prefix = optarg;
-                break;
-            case 'D': /* --mkdir */
-                Dopt++;
-                break;
-            default:
-                usage ();
-                break;
+        case 'w': /* --width N */
+            width = strtoul (optarg, NULL, 10);
+            break;
+        case 'h': /* --height N */
+            height = strtoul (optarg, NULL, 10);
+            break;
+        case 'p': /* --prefix NAME */
+            prefix = optarg;
+            break;
+        case 'D': /* --mkdir */
+            Dopt++;
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if (optind != argc)
@@ -108,7 +110,8 @@ int main (int argc, char *argv[])
         if (!(txn = flux_kvs_txn_create ()))
             log_err_exit ("flux_kvs_txn_create");
         dtree (txn, prefix, width, height);
-        if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
+        if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+            || flux_future_get (f, NULL) < 0)
             log_err_exit ("flux_kvs_commit");
         flux_future_destroy (f);
         flux_kvs_txn_destroy (txn);
@@ -180,7 +183,10 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height)
 
             rootref = flux_kvsdir_rootref (dir);
             if (rootref) {
-                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, keyat, rootref)))
+                if (!(f = flux_kvs_lookupat (h,
+                                             FLUX_KVS_READDIR,
+                                             keyat,
+                                             rootref)))
                     log_err_exit ("flux_kvs_lookupat");
             } else {
                 if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_READDIR, keyat)))

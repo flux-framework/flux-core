@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _BROKER_MODULE_H
-#define _BROKER_MODULE_H
+#    define _BROKER_MODULE_H
 
-#include <jansson.h>
+#    include <jansson.h>
 
-#include "heartbeat.h"
-#include "service.h"
+#    include "heartbeat.h"
+#    include "service.h"
 
 typedef struct module_struct module_t;
 typedef struct modhash_struct modhash_t;

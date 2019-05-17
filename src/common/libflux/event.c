@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <stdbool.h>
@@ -46,7 +46,9 @@ done:
     return rc;
 }
 
-int flux_event_decode (const flux_msg_t *msg, const char **topicp, const char **sp)
+int flux_event_decode (const flux_msg_t *msg,
+                       const char **topicp,
+                       const char **sp)
 {
     const char *topic, *s;
     int rc = -1;
@@ -113,7 +115,10 @@ done:
     return rc;
 }
 
-int flux_event_unpack (const flux_msg_t *msg, const char **topic, const char *fmt, ...)
+int flux_event_unpack (const flux_msg_t *msg,
+                       const char **topic,
+                       const char *fmt,
+                       ...)
 {
     va_list ap;
     int rc;
@@ -170,7 +175,9 @@ error:
     return NULL;
 }
 
-static flux_msg_t *flux_event_vpack (const char *topic, const char *fmt, va_list ap)
+static flux_msg_t *flux_event_vpack (const char *topic,
+                                     const char *fmt,
+                                     va_list ap)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
@@ -289,7 +296,11 @@ flux_future_t *flux_event_publish_pack (flux_t *h,
         return NULL;
     }
     json_decref (o);
-    if (!(f = wrap_event_rpc (h, topic, flags, json_str, strlen (json_str) + 1))) {
+    if (!(f = wrap_event_rpc (h,
+                              topic,
+                              flags,
+                              json_str,
+                              strlen (json_str) + 1))) {
         int saved_errno = errno;
         free (json_str);
         errno = saved_errno;

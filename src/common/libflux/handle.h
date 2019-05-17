@@ -9,18 +9,18 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_HANDLE_H
-#define _FLUX_CORE_HANDLE_H
+#    define _FLUX_CORE_HANDLE_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
+#    include <stdint.h>
+#    include <stdbool.h>
+#    include <string.h>
 
-#include "types.h"
-#include "message.h"
+#    include "types.h"
+#    include "message.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 typedef struct flux_handle_struct flux_t;
 
@@ -70,8 +70,8 @@ enum {
 /* Options for flux_setopt().
  * (Connectors may define custom option names)
  */
-#define FLUX_OPT_TESTING_USERID "flux::testing_userid"
-#define FLUX_OPT_TESTING_ROLEMASK "flux::testing_rolemask"
+#    define FLUX_OPT_TESTING_USERID "flux::testing_userid"
+#    define FLUX_OPT_TESTING_ROLEMASK "flux::testing_rolemask"
 
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a connector to dynamically load.
@@ -108,10 +108,10 @@ void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg);
  * The fatal error handler will only be called once.
  */
 void flux_fatal_error (flux_t *h, const char *fun, const char *msg);
-#define FLUX_FATAL(h)                                             \
-    do {                                                          \
-        flux_fatal_error ((h), __FUNCTION__, (strerror (errno))); \
-    } while (0)
+#    define FLUX_FATAL(h)                                             \
+        do {                                                          \
+            flux_fatal_error ((h), __FUNCTION__, (strerror (errno))); \
+        } while (0)
 
 /* Return true if the handle 'h' has encountered a fatal error.
  */
@@ -193,9 +193,9 @@ int flux_event_unsubscribe (flux_t *h, const char *topic);
 void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs);
 void flux_clr_msgcounters (flux_t *h);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

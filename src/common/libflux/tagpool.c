@@ -23,7 +23,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <string.h>
@@ -189,14 +189,14 @@ uint32_t tagpool_getattr (struct tagpool *t, int attr)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     switch (attr) {
-        case TAGPOOL_ATTR_REGULAR_SIZE:
-            return TAGPOOL_COUNT_REGULAR - 1;
-        case TAGPOOL_ATTR_REGULAR_AVAIL:
-            return t->reg_avail;
-        case TAGPOOL_ATTR_GROUP_SIZE:
-            return TAGPOOL_COUNT_GROUP - 1;
-        case TAGPOOL_ATTR_GROUP_AVAIL:
-            return t->group_avail;
+    case TAGPOOL_ATTR_REGULAR_SIZE:
+        return TAGPOOL_COUNT_REGULAR - 1;
+    case TAGPOOL_ATTR_REGULAR_AVAIL:
+        return t->reg_avail;
+    case TAGPOOL_ATTR_GROUP_SIZE:
+        return TAGPOOL_COUNT_GROUP - 1;
+    case TAGPOOL_ATTR_GROUP_AVAIL:
+        return t->group_avail;
     }
     return 0;
 }

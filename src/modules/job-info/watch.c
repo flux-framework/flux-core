@@ -12,7 +12,7 @@
  * job-info.eventlog-watch-cancel for job-info */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <flux/core.h>
@@ -98,7 +98,9 @@ static int watch_key (struct watch_ctx *w)
     return 0;
 }
 
-static bool eventlog_parse_next (const char **pp, const char **tok, size_t *toklen)
+static bool eventlog_parse_next (const char **pp,
+                                 const char **tok,
+                                 size_t *toklen)
 {
     char *term;
 
@@ -143,7 +145,8 @@ static void watch_continuation (flux_future_t *f, void *arg)
 
     input = s;
     while (eventlog_parse_next (&input, &tok, &toklen)) {
-        if (flux_respond_pack (ctx->h, w->msg, "{s:s#}", "event", tok, toklen) < 0) {
+        if (flux_respond_pack (ctx->h, w->msg, "{s:s#}", "event", tok, toklen)
+            < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -161,7 +164,10 @@ done:
     zlist_remove (ctx->watchers, w);
 }
 
-void watch_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void watch_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg)
 {
     struct info_ctx *ctx = arg;
     struct watch_ctx *w = NULL;
@@ -222,7 +228,9 @@ static void watch_cancel (struct info_ctx *ctx,
     free (s);
 }
 
-void watchers_cancel (struct info_ctx *ctx, const char *sender, uint32_t matchtag)
+void watchers_cancel (struct info_ctx *ctx,
+                      const char *sender,
+                      uint32_t matchtag)
 {
     struct watch_ctx *w;
 

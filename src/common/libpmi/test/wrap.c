@@ -66,7 +66,8 @@ int main (int argc, char *argv[])
         "pmi_wrap_get_appnum works, appnum positive number");
     size = -1;
     rc = ops->get_universe_size (pmi, &size);
-    ok (rc == PMI_SUCCESS && size == 1, "pmi_wrap_get_universe_size works, size == 1");
+    ok (rc == PMI_SUCCESS && size == 1,
+        "pmi_wrap_get_universe_size works, size == 1");
 
     kvsname_length = -1;
     rc = ops->kvs_get_name_length_max (pmi, &kvsname_length);
@@ -76,7 +77,8 @@ int main (int argc, char *argv[])
 
     kvsname = xzmalloc (kvsname_length);
     rc = ops->kvs_get_my_name (pmi, kvsname, kvsname_length);
-    ok (rc == PMI_SUCCESS && strlen (kvsname) > 0, "pmi_wrap_kvs_get_my_name works");
+    ok (rc == PMI_SUCCESS && strlen (kvsname) > 0,
+        "pmi_wrap_kvs_get_my_name works");
     diag ("kvsname: %s", kvsname);
 
     kvskey_length = -1;
@@ -103,7 +105,8 @@ int main (int argc, char *argv[])
     rc = ops->barrier (pmi);
     ok (rc == PMI_SUCCESS, "pmi_wrap_barrier works");
     rc = ops->kvs_get (pmi, kvsname, "foo", kvsval, kvsval_length);
-    ok (rc == PMI_SUCCESS && !strcmp (kvsval, "bar"), "pmi_wrap_kvs_get works ");
+    ok (rc == PMI_SUCCESS && !strcmp (kvsval, "bar"),
+        "pmi_wrap_kvs_get works ");
 
     rc = ops->kvs_put (pmi, kvsname, "foo", "bar");
     ok (rc == PMI_ERR_INVALID_KEY,
@@ -116,7 +119,16 @@ int main (int argc, char *argv[])
     rc = ops->lookup_name (pmi, "foo", port);
     ok (rc == PMI_FAIL, "pmi_wrap_lookup_name fails with PMI_FAIL");
 
-    rc = ops->spawn_multiple (pmi, 0, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL);
+    rc = ops->spawn_multiple (pmi,
+                              0,
+                              NULL,
+                              NULL,
+                              NULL,
+                              NULL,
+                              NULL,
+                              0,
+                              NULL,
+                              NULL);
     ok (rc == PMI_FAIL, "pmi_wrap_spawn_multiple fails with PMI_FAIL");
 
     dies_ok ({ ops->abort (pmi, 0, "a test message"); },

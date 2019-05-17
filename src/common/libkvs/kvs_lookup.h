@@ -9,13 +9,16 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_KVS_LOOKUP_H
-#define _FLUX_CORE_KVS_LOOKUP_H
+#    define _FLUX_CORE_KVS_LOOKUP_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
-flux_future_t *flux_kvs_lookup (flux_t *h, const char *ns, int flags, const char *key);
+flux_future_t *flux_kvs_lookup (flux_t *h,
+                                const char *ns,
+                                int flags,
+                                const char *key);
 flux_future_t *flux_kvs_lookupat (flux_t *h,
                                   int flags,
                                   const char *key,
@@ -39,9 +42,9 @@ const char *flux_kvs_lookup_get_key (flux_future_t *f);
  */
 int flux_kvs_lookup_cancel (flux_future_t *f);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_KVS_LOOKUP_H */
 

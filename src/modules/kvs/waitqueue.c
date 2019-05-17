@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <flux/core.h>
@@ -92,7 +92,10 @@ void wait_destroy (wait_t *w)
     }
 }
 
-int wait_msg_aux_set (wait_t *w, const char *name, void *aux, flux_free_f destroy)
+int wait_msg_aux_set (wait_t *w,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy)
 {
     if (w && w->hand.msg)
         return flux_msg_aux_set (w->hand.msg, name, aux, destroy);

@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_LOOKUP_H
-#define _FLUX_KVS_LOOKUP_H
+#    define _FLUX_KVS_LOOKUP_H
 
-#include <flux/core.h>
-#include "cache.h"
-#include "kvsroot.h"
+#    include <flux/core.h>
+#    include "cache.h"
+#    include "kvsroot.h"
 
 typedef struct lookup lookup_t;
 

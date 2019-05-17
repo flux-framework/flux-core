@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_SERVICE_H
-#define _FLUX_CORE_SERVICE_H
+#    define _FLUX_CORE_SERVICE_H
 
-#include "handle.h"
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /*
  *  Register service `name` with the broker for this handle. On success
@@ -45,9 +45,9 @@ flux_future_t *flux_service_register (flux_t *h, const char *name);
  */
 flux_future_t *flux_service_unregister (flux_t *h, const char *name);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_SERVICE_H */
 

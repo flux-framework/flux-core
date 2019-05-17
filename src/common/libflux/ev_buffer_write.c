@@ -77,7 +77,8 @@ int ev_buffer_write_init (struct ev_buffer_write *ebw,
     /* When any data becomes available, call buffer_data_available_cb,
      * which will start io reactor
      */
-    if (flux_buffer_set_low_read_cb (ebw->fb, buffer_data_available_cb, 0, ebw) < 0)
+    if (flux_buffer_set_low_read_cb (ebw->fb, buffer_data_available_cb, 0, ebw)
+        < 0)
         goto cleanup;
 
     ev_io_init (&ebw->io_w, buffer_write_cb, ebw->fd, EV_WRITE);

@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _BROKER_HELLO_H
-#define _BROKER_HELLO_H
+#    define _BROKER_HELLO_H
 
-#include <stdbool.h>
-#include "attr.h"
+#    include <stdbool.h>
+#    include "attr.h"
 
 /* hello protocol is used to detect that TBON overlay has wired up.
  */

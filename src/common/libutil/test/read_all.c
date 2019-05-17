@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/param.h>
 #include <stdlib.h>
@@ -56,7 +56,10 @@ void test_readback (size_t sz)
 
     /* Create tmpfile
      */
-    if (snprintf (tmpfile, sizeof (tmpfile), "%s/read_all.XXXXXX", t ? t : "/tmp")
+    if (snprintf (tmpfile,
+                  sizeof (tmpfile),
+                  "%s/read_all.XXXXXX",
+                  t ? t : "/tmp")
         >= sizeof (tmpfile))
         BAIL_OUT ("tmpfile overflow");
     if ((fd = mkstemp (tmpfile)) < 0)

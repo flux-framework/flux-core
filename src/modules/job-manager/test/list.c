@@ -65,7 +65,8 @@ int main (int argc, char *argv[])
     json_decref (o);
 
     o = list_job_array (q, 4, attrs);
-    ok (o != NULL && json_is_array (o), "list_job_array max_entries=4 returns array");
+    ok (o != NULL && json_is_array (o),
+        "list_job_array max_entries=4 returns array");
     ok (json_array_size (o) == 4, "array has expected size");
     el = json_array_get (o, 1);
     ok (el != NULL && json_is_object (el), "array[1] is an object");

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _UTIL_SETENVF_H
-#define _UTIL_SETENVF_H
+#    define _UTIL_SETENVF_H
 
 int setenvf (const char *name, int overwrite, const char *fmt, ...);
 

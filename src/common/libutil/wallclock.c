@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <time.h>
 #include <errno.h>
@@ -48,7 +48,8 @@ int wallclock_get_zulu (char *buf, size_t len)
         errno = EINVAL;
         return -1;
     }
-    if (snprintf (buf + 19, len - 19, ".%.6luZ", ts.tv_nsec / 1000) >= len - 20) {
+    if (snprintf (buf + 19, len - 19, ".%.6luZ", ts.tv_nsec / 1000)
+        >= len - 20) {
         errno = EINVAL;
         return -1;
     }

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -270,7 +270,8 @@ static lookup_process_t walk_symlink (lookup_t *lh,
      * flags say we can follow it
      */
     if (!last_pathcomp (wl->pathcomps, current_pathcomp)
-        || (!(lh->flags & FLUX_KVS_READLINK) && !(lh->flags & FLUX_KVS_TREEOBJ))) {
+        || (!(lh->flags & FLUX_KVS_READLINK)
+            && !(lh->flags & FLUX_KVS_TREEOBJ))) {
         if (wl->depth == SYMLINK_CYCLE_LIMIT) {
             lh->errnum = ELOOP;
             goto cleanup;
@@ -591,7 +592,8 @@ int lookup_get_errnum (lookup_t *lh)
         if (lh->state == LOOKUP_STATE_FINISHED)
             return lh->errnum;
         if (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
-            || lh->state == LOOKUP_STATE_CHECK_ROOT || lh->state == LOOKUP_STATE_WALK
+            || lh->state == LOOKUP_STATE_CHECK_ROOT
+            || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)
             return EAGAIN;
     }
@@ -624,7 +626,8 @@ json_t *lookup_get_value (lookup_t *lh)
 int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 {
     if (lh
-        && (lh->state == LOOKUP_STATE_CHECK_ROOT || lh->state == LOOKUP_STATE_WALK
+        && (lh->state == LOOKUP_STATE_CHECK_ROOT
+            || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)) {
         if (lh->valref_missing_refs) {
             int refcount, i;
@@ -808,7 +811,9 @@ static int get_multi_blobref_valref_length (lookup_t *lh,
     return 0;
 }
 
-static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount, int total_len)
+static char *get_multi_blobref_valref_data (lookup_t *lh,
+                                            int refcount,
+                                            int total_len)
 {
     struct cache_entry *entry;
     const char *reftmp;
@@ -849,7 +854,9 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount, int tota
 
 /* return 0 on success, -1 on failure.  On success, stall should be
  * check */
-static int get_multi_blobref_valref_value (lookup_t *lh, int refcount, bool *stall)
+static int get_multi_blobref_valref_value (lookup_t *lh,
+                                           int refcount,
+                                           bool *stall)
 {
     char *valbuf = NULL;
     int total_len = 0;
@@ -898,171 +905,78 @@ lookup_process_t lookup (lookup_t *lh)
         is_replay = true;
 
     switch (lh->state) {
-        case LOOKUP_STATE_INIT:
-            lh->state = LOOKUP_STATE_CHECK_NAMESPACE;
-            /* fallthrough */
-        case LOOKUP_STATE_CHECK_NAMESPACE:
-            /* If user did not specify root ref, must get from
-             * namespace
-             */
-            if (!lh->root_ref) {
-                struct kvsroot *root;
+    case LOOKUP_STATE_INIT:
+        lh->state = LOOKUP_STATE_CHECK_NAMESPACE;
+        /* fallthrough */
+    case LOOKUP_STATE_CHECK_NAMESPACE:
+        /* If user did not specify root ref, must get from
+         * namespace
+         */
+        if (!lh->root_ref) {
+            struct kvsroot *root;
 
-                root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->ns_name);
+            root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->ns_name);
 
-                if (!root) {
-                    free (lh->missing_namespace);
-                    if (!(lh->missing_namespace = strdup (lh->ns_name))) {
-                        lh->errnum = ENOMEM;
-                        goto error;
-                    }
-                    return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
-                }
-
-                if (kvsroot_check_user (lh->krm, root, lh->rolemask, lh->userid) < 0) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-
-                /* copy instead of storing pointer, always chance
-                 * namespace could timeout or be removed when
-                 * stalling */
-                if (!(lh->root_ref = strdup (root->ref))) {
+            if (!root) {
+                free (lh->missing_namespace);
+                if (!(lh->missing_namespace = strdup (lh->ns_name))) {
                     lh->errnum = ENOMEM;
                     goto error;
                 }
-                lh->root_seq = root->seq;
+                return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
             }
 
-            lh->state = LOOKUP_STATE_CHECK_ROOT;
-            /* fallthrough */
-        case LOOKUP_STATE_CHECK_ROOT:
-
-            if (is_replay) {
-                if (namespace_still_valid (lh) < 0)
-                    goto error;
-            }
-
-            /* special case root */
-            if (!strcmp (lh->path, ".")) {
-                if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                    if (!(lh->val = treeobj_create_dirref (lh->root_ref))) {
-                        lh->errnum = errno;
-                        goto error;
-                    }
-                } else {
-                    if (!(lh->flags & FLUX_KVS_READDIR)) {
-                        lh->errnum = EISDIR;
-                        goto error;
-                    }
-                    if (!(entry =
-                              cache_lookup (lh->cache, lh->root_ref, lh->current_epoch))
-                        || !cache_entry_get_valid (entry)) {
-                        lh->missing_ref = lh->root_ref;
-                        return LOOKUP_PROCESS_LOAD_MISSING_REFS;
-                    }
-                    if (!(valtmp = cache_entry_get_treeobj (entry))) {
-                        flux_log (lh->h, LOG_ERR, "root_ref points to non-treeobj");
-                        lh->errnum = EINVAL;
-                        goto error;
-                    }
-                    if (!treeobj_is_dir (valtmp)) {
-                        /* root_ref points to not dir */
-                        lh->errnum = ENOTRECOVERABLE;
-                        goto error;
-                    }
-                    if (!(lh->val = treeobj_deep_copy (valtmp))) {
-                        lh->errnum = errno;
-                        goto error;
-                    }
-                }
-                goto done;
-            }
-
-            lh->state = LOOKUP_STATE_WALK_INIT;
-            /* fallthrough */
-        case LOOKUP_STATE_WALK_INIT:
-            /* initialize walk - first depth is level 0 */
-
-            if (!walk_levels_push (lh, lh->root_ref, lh->path, 0)) {
+            if (kvsroot_check_user (lh->krm, root, lh->rolemask, lh->userid)
+                < 0) {
                 lh->errnum = errno;
                 goto error;
             }
 
-            lh->state = LOOKUP_STATE_WALK;
-            /* fallthrough */
-        case LOOKUP_STATE_WALK: {
-            lookup_process_t lret;
-
-            if (is_replay) {
-                if (namespace_still_valid (lh) < 0)
-                    goto error;
-            }
-
-            lret = walk (lh);
-
-            if (lret == LOOKUP_PROCESS_ERROR)
+            /* copy instead of storing pointer, always chance
+             * namespace could timeout or be removed when
+             * stalling */
+            if (!(lh->root_ref = strdup (root->ref))) {
+                lh->errnum = ENOMEM;
                 goto error;
-            else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE)
-                return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
-            else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS)
-                return LOOKUP_PROCESS_LOAD_MISSING_REFS;
-            else if (!lh->wdirent) {
-                // lh->errnum = ENOENT;
-                goto done; /* a NULL response is not necessarily an error */
             }
-
-            lh->state = LOOKUP_STATE_VALUE;
-            /* fallthrough */
+            lh->root_seq = root->seq;
         }
-        case LOOKUP_STATE_VALUE:
-            if (is_replay) {
-                if (namespace_still_valid (lh) < 0)
-                    goto error;
-            }
 
+        lh->state = LOOKUP_STATE_CHECK_ROOT;
+        /* fallthrough */
+    case LOOKUP_STATE_CHECK_ROOT:
+
+        if (is_replay) {
+            if (namespace_still_valid (lh) < 0)
+                goto error;
+        }
+
+        /* special case root */
+        if (!strcmp (lh->path, ".")) {
             if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                if (!(lh->val = treeobj_create_dirref (lh->root_ref))) {
                     lh->errnum = errno;
                     goto error;
                 }
-                goto done;
-            }
-
-            if (treeobj_is_dirref (lh->wdirent)) {
-                if ((lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EINVAL;
-                    goto error;
-                }
+            } else {
                 if (!(lh->flags & FLUX_KVS_READDIR)) {
                     lh->errnum = EISDIR;
                     goto error;
                 }
-                if ((refcount = treeobj_get_count (lh->wdirent)) < 0) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-                if (refcount != 1) {
-                    flux_log (lh->h, LOG_ERR, "invalid dirref count: %d", refcount);
-                    lh->errnum = ENOTRECOVERABLE;
-                    goto error;
-                }
-                if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-                if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+                if (!(entry = cache_lookup (lh->cache,
+                                            lh->root_ref,
+                                            lh->current_epoch))
                     || !cache_entry_get_valid (entry)) {
-                    lh->missing_ref = reftmp;
+                    lh->missing_ref = lh->root_ref;
                     return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                 }
                 if (!(valtmp = cache_entry_get_treeobj (entry))) {
-                    flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
-                    lh->errnum = ENOTRECOVERABLE;
+                    flux_log (lh->h, LOG_ERR, "root_ref points to non-treeobj");
+                    lh->errnum = EINVAL;
                     goto error;
                 }
                 if (!treeobj_is_dir (valtmp)) {
-                    /* dirref points to not dir */
+                    /* root_ref points to not dir */
                     lh->errnum = ENOTRECOVERABLE;
                     goto error;
                 }
@@ -1070,97 +984,196 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-            } else if (treeobj_is_valref (lh->wdirent)) {
-                bool stall;
+            }
+            goto done;
+        }
 
-                if ((lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EINVAL;
-                    goto error;
-                }
-                if ((lh->flags & FLUX_KVS_READDIR)) {
-                    lh->errnum = ENOTDIR;
-                    goto error;
-                }
-                if ((refcount = treeobj_get_count (lh->wdirent)) < 0) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-                if (!refcount) {
-                    flux_log (lh->h, LOG_ERR, "invalid valref count: %d", refcount);
-                    lh->errnum = ENOTRECOVERABLE;
-                    goto error;
-                }
-                if (refcount == 1) {
-                    if (get_single_blobref_valref_value (lh, &stall) < 0)
-                        goto error;
-                    if (stall)
-                        return LOOKUP_PROCESS_LOAD_MISSING_REFS;
-                } else {
-                    if (get_multi_blobref_valref_value (lh, refcount, &stall) < 0)
-                        goto error;
-                    if (stall)
-                        return LOOKUP_PROCESS_LOAD_MISSING_REFS;
-                }
-            } else if (treeobj_is_dir (lh->wdirent)) {
-                if ((lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EINVAL;
-                    goto error;
-                }
-                if (!(lh->flags & FLUX_KVS_READDIR)) {
-                    lh->errnum = EISDIR;
-                    goto error;
-                }
-                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-            } else if (treeobj_is_val (lh->wdirent)) {
-                if ((lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EINVAL;
-                    goto error;
-                }
-                if ((lh->flags & FLUX_KVS_READDIR)) {
-                    lh->errnum = ENOTDIR;
-                    goto error;
-                }
-                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-            } else if (treeobj_is_symlink (lh->wdirent)) {
-                /* this should be "impossible" */
-                if (!(lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EPROTO;
-                    goto error;
-                }
-                if (lh->flags & FLUX_KVS_READDIR) {
-                    lh->errnum = ENOTDIR;
-                    goto error;
-                }
-                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-            } else {
-                char *s = json_dumps (lh->wdirent, JSON_ENCODE_ANY);
-                flux_log (lh->h,
-                          LOG_ERR,
-                          "%s: corrupt dirent: %p, %s",
-                          __FUNCTION__,
-                          lh->wdirent,
-                          s);
-                free (s);
+        lh->state = LOOKUP_STATE_WALK_INIT;
+        /* fallthrough */
+    case LOOKUP_STATE_WALK_INIT:
+        /* initialize walk - first depth is level 0 */
+
+        if (!walk_levels_push (lh, lh->root_ref, lh->path, 0)) {
+            lh->errnum = errno;
+            goto error;
+        }
+
+        lh->state = LOOKUP_STATE_WALK;
+        /* fallthrough */
+    case LOOKUP_STATE_WALK: {
+        lookup_process_t lret;
+
+        if (is_replay) {
+            if (namespace_still_valid (lh) < 0)
+                goto error;
+        }
+
+        lret = walk (lh);
+
+        if (lret == LOOKUP_PROCESS_ERROR)
+            goto error;
+        else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE)
+            return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
+        else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS)
+            return LOOKUP_PROCESS_LOAD_MISSING_REFS;
+        else if (!lh->wdirent) {
+            // lh->errnum = ENOENT;
+            goto done; /* a NULL response is not necessarily an error */
+        }
+
+        lh->state = LOOKUP_STATE_VALUE;
+        /* fallthrough */
+    }
+    case LOOKUP_STATE_VALUE:
+        if (is_replay) {
+            if (namespace_still_valid (lh) < 0)
+                goto error;
+        }
+
+        if ((lh->flags & FLUX_KVS_TREEOBJ)) {
+            if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                lh->errnum = errno;
+                goto error;
+            }
+            goto done;
+        }
+
+        if (treeobj_is_dirref (lh->wdirent)) {
+            if ((lh->flags & FLUX_KVS_READLINK)) {
+                lh->errnum = EINVAL;
+                goto error;
+            }
+            if (!(lh->flags & FLUX_KVS_READDIR)) {
+                lh->errnum = EISDIR;
+                goto error;
+            }
+            if ((refcount = treeobj_get_count (lh->wdirent)) < 0) {
+                lh->errnum = errno;
+                goto error;
+            }
+            if (refcount != 1) {
+                flux_log (lh->h, LOG_ERR, "invalid dirref count: %d", refcount);
                 lh->errnum = ENOTRECOVERABLE;
                 goto error;
             }
-            /* val now contains the requested object (copied) */
-            break;
-        case LOOKUP_STATE_FINISHED:
-            break;
-        default:
-            flux_log (lh->h, LOG_ERR, "%s: invalid state %d", __FUNCTION__, lh->state);
+            if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
+                lh->errnum = errno;
+                goto error;
+            }
+            if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+                || !cache_entry_get_valid (entry)) {
+                lh->missing_ref = reftmp;
+                return LOOKUP_PROCESS_LOAD_MISSING_REFS;
+            }
+            if (!(valtmp = cache_entry_get_treeobj (entry))) {
+                flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
+                lh->errnum = ENOTRECOVERABLE;
+                goto error;
+            }
+            if (!treeobj_is_dir (valtmp)) {
+                /* dirref points to not dir */
+                lh->errnum = ENOTRECOVERABLE;
+                goto error;
+            }
+            if (!(lh->val = treeobj_deep_copy (valtmp))) {
+                lh->errnum = errno;
+                goto error;
+            }
+        } else if (treeobj_is_valref (lh->wdirent)) {
+            bool stall;
+
+            if ((lh->flags & FLUX_KVS_READLINK)) {
+                lh->errnum = EINVAL;
+                goto error;
+            }
+            if ((lh->flags & FLUX_KVS_READDIR)) {
+                lh->errnum = ENOTDIR;
+                goto error;
+            }
+            if ((refcount = treeobj_get_count (lh->wdirent)) < 0) {
+                lh->errnum = errno;
+                goto error;
+            }
+            if (!refcount) {
+                flux_log (lh->h, LOG_ERR, "invalid valref count: %d", refcount);
+                lh->errnum = ENOTRECOVERABLE;
+                goto error;
+            }
+            if (refcount == 1) {
+                if (get_single_blobref_valref_value (lh, &stall) < 0)
+                    goto error;
+                if (stall)
+                    return LOOKUP_PROCESS_LOAD_MISSING_REFS;
+            } else {
+                if (get_multi_blobref_valref_value (lh, refcount, &stall) < 0)
+                    goto error;
+                if (stall)
+                    return LOOKUP_PROCESS_LOAD_MISSING_REFS;
+            }
+        } else if (treeobj_is_dir (lh->wdirent)) {
+            if ((lh->flags & FLUX_KVS_READLINK)) {
+                lh->errnum = EINVAL;
+                goto error;
+            }
+            if (!(lh->flags & FLUX_KVS_READDIR)) {
+                lh->errnum = EISDIR;
+                goto error;
+            }
+            if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                lh->errnum = errno;
+                goto error;
+            }
+        } else if (treeobj_is_val (lh->wdirent)) {
+            if ((lh->flags & FLUX_KVS_READLINK)) {
+                lh->errnum = EINVAL;
+                goto error;
+            }
+            if ((lh->flags & FLUX_KVS_READDIR)) {
+                lh->errnum = ENOTDIR;
+                goto error;
+            }
+            if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                lh->errnum = errno;
+                goto error;
+            }
+        } else if (treeobj_is_symlink (lh->wdirent)) {
+            /* this should be "impossible" */
+            if (!(lh->flags & FLUX_KVS_READLINK)) {
+                lh->errnum = EPROTO;
+                goto error;
+            }
+            if (lh->flags & FLUX_KVS_READDIR) {
+                lh->errnum = ENOTDIR;
+                goto error;
+            }
+            if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                lh->errnum = errno;
+                goto error;
+            }
+        } else {
+            char *s = json_dumps (lh->wdirent, JSON_ENCODE_ANY);
+            flux_log (lh->h,
+                      LOG_ERR,
+                      "%s: corrupt dirent: %p, %s",
+                      __FUNCTION__,
+                      lh->wdirent,
+                      s);
+            free (s);
             lh->errnum = ENOTRECOVERABLE;
             goto error;
+        }
+        /* val now contains the requested object (copied) */
+        break;
+    case LOOKUP_STATE_FINISHED:
+        break;
+    default:
+        flux_log (lh->h,
+                  LOG_ERR,
+                  "%s: invalid state %d",
+                  __FUNCTION__,
+                  lh->state);
+        lh->errnum = ENOTRECOVERABLE;
+        goto error;
     }
 
 done:

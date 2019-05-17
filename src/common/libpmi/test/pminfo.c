@@ -43,12 +43,12 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'l': /* --library */
-                library = optarg;
-                break;
-            case 'c': /* --clique */
-                copt++;
-                break;
+        case 'l': /* --library */
+            library = optarg;
+            break;
+        case 'c': /* --clique */
+            copt++;
+            break;
         }
     }
     if (library) {
@@ -71,13 +71,19 @@ int main (int argc, char *argv[])
         log_msg_exit ("%d: PMI_Get_size: %s", rank, pmi_strerror (e));
     e = PMI_KVS_Get_name_length_max (&kvsname_len);
     if (e != PMI_SUCCESS)
-        log_msg_exit ("%d: PMI_KVS_Get_name_length_max: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: PMI_KVS_Get_name_length_max: %s",
+                      rank,
+                      pmi_strerror (e));
     e = PMI_KVS_Get_key_length_max (&key_len);
     if (e != PMI_SUCCESS)
-        log_msg_exit ("%d: PMI_KVS_Get_key_length_max: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: PMI_KVS_Get_key_length_max: %s",
+                      rank,
+                      pmi_strerror (e));
     e = PMI_KVS_Get_value_length_max (&val_len);
     if (e != PMI_SUCCESS)
-        log_msg_exit ("%d: PMI_KVS_Get_value_length_max: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: PMI_KVS_Get_value_length_max: %s",
+                      rank,
+                      pmi_strerror (e));
     kvsname = xzmalloc (kvsname_len);
     e = PMI_KVS_Get_my_name (kvsname, kvsname_len);
     if (e != PMI_SUCCESS)
@@ -96,15 +102,21 @@ int main (int argc, char *argv[])
             clique = xzmalloc (sizeof (clique[0]) * clen);
             e = PMI_Get_clique_ranks (clique, clen);
             if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_Get_clique_ranks: %s", rank, pmi_strerror (e));
+                log_msg_exit ("%d: PMI_Get_clique_ranks: %s",
+                              rank,
+                              pmi_strerror (e));
         } else {
             e = pmi_process_mapping_get_clique_size (&clen);
             if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_process_mapping: %s", rank, pmi_strerror (e));
+                log_msg_exit ("%d: PMI_process_mapping: %s",
+                              rank,
+                              pmi_strerror (e));
             clique = xzmalloc (sizeof (clique[0]) * clen);
             e = pmi_process_mapping_get_clique_ranks (clique, clen);
             if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_process_mapping: %s", rank, pmi_strerror (e));
+                log_msg_exit ("%d: PMI_process_mapping: %s",
+                              rank,
+                              pmi_strerror (e));
         }
         s = cliquetostr (clen, clique);
         printf ("%d: clique=%s\n", rank, s);

@@ -11,7 +11,7 @@
 /* kvs-watcher - track KVS changes */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
@@ -137,7 +137,9 @@ static void commit_destroy (struct commit *commit)
     }
 }
 
-static struct commit *commit_create (const char *rootref, int rootseq, json_t *keys)
+static struct commit *commit_create (const char *rootref,
+                                     int rootseq,
+                                     json_t *keys)
 {
     struct commit *commit = calloc (1, sizeof (*commit));
     if (!commit)
@@ -179,7 +181,8 @@ static void namespace_destroy (struct ns_monitor *nsm)
     }
 }
 
-static struct ns_monitor *namespace_create (struct watch_ctx *ctx, const char *ns)
+static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
+                                            const char *ns)
 {
     struct ns_monitor *nsm = calloc (1, sizeof (*nsm));
     if (!nsm)
@@ -235,8 +238,7 @@ static bool array_match (json_t *a, const char *key)
     size_t index;
     json_t *value;
 
-    json_array_foreach (a, index, value)
-    {
+    json_array_foreach (a, index, value) {
         const char *s = json_string_value (value);
         if (s && !strcmp (s, key))
             return true;
@@ -418,7 +420,12 @@ static void handle_lookup_response (flux_future_t *f, struct watcher *w)
             goto error;
         }
 
-        if (flux_rpc_get_unpack (f, "{ s:o s:i }", "val", &val, "rootseq", &root_seq)
+        if (flux_rpc_get_unpack (f,
+                                 "{ s:o s:i }",
+                                 "val",
+                                 &val,
+                                 "rootseq",
+                                 &root_seq)
             < 0) {
             /* It is worth mentioning ENOTSUP error conditions here.
              *
@@ -455,7 +462,12 @@ static void handle_lookup_response (flux_future_t *f, struct watcher *w)
             goto error;
         }
 
-        if (flux_rpc_get_unpack (f, "{ s:o s:i }", "val", &val, "rootseq", &root_seq)
+        if (flux_rpc_get_unpack (f,
+                                 "{ s:o s:i }",
+                                 "val",
+                                 &val,
+                                 "rootseq",
+                                 &root_seq)
             < 0)
             goto error;
 
@@ -465,7 +477,8 @@ static void handle_lookup_response (flux_future_t *f, struct watcher *w)
             return;
 
         if (!w->mute) {
-            if ((w->flags & FLUX_KVS_WATCH_FULL) || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
+            if ((w->flags & FLUX_KVS_WATCH_FULL)
+                || (w->flags & FLUX_KVS_WATCH_UNIQ)) {
                 if (handle_compare_response (h, w, val) < 0)
                     goto error;
             } else if (w->flags & FLUX_KVS_WATCH_APPEND) {
@@ -683,7 +696,9 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
 error_respond:
     if (!w->mute) {
         if (flux_respond_error (nsm->ctx->h, w->request, errno, NULL) < 0)
-            flux_log_error (nsm->ctx->h, "%s: flux_respond_error", __FUNCTION__);
+            flux_log_error (nsm->ctx->h,
+                            "%s: flux_respond_error",
+                            __FUNCTION__);
     }
     w->finished = true;
 finished:
@@ -970,7 +985,10 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx, const char *ns)
             zhash_delete (ctx->namespaces, ns);
             return NULL;
         }
-        if (flux_future_then (nsm->getrootf, -1., namespace_getroot_continuation, nsm)
+        if (flux_future_then (nsm->getrootf,
+                              -1.,
+                              namespace_getroot_continuation,
+                              nsm)
             < 0) {
             zhash_delete (ctx->namespaces, ns);
             return NULL;

@@ -43,8 +43,8 @@ void single_job_check (struct queue *queue)
         "submit_enqueue_one_job works");
     ok (queue_size (queue) == 1, "queue contains one job");
     ok ((job = zlist_head (newjobs)) != NULL, "newjobs contains one job");
-    ok (job->id == 1 && job->priority == 10 && job->userid == 42 && job->t_submit == 1.0
-            && job->flags == 0,
+    ok (job->id == 1 && job->priority == 10 && job->userid == 42
+            && job->t_submit == 1.0 && job->flags == 0,
         "struct job was properly decoded");
 
     /* malformed job */
@@ -104,7 +104,8 @@ void multi_job_check (struct queue *queue)
     ok (queue_size (queue) == 2, "queue contains 2 jobs");
     ok (zlist_size (newjobs) == 2, "newjobs contains 2 jobs");
     submit_enqueue_jobs_cleanup (queue, newjobs);
-    ok (queue_size (queue) == 0, "submit_enqueue_jobs_cleanup removed queue entries");
+    ok (queue_size (queue) == 0,
+        "submit_enqueue_jobs_cleanup removed queue entries");
 
     json_decref (jobs);
 }

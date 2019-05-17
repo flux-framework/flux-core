@@ -1,7 +1,7 @@
 /* setrootevents.c - pause / unpause setroot event reception */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <getopt.h>
 #include <flux/core.h>
@@ -40,21 +40,21 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'p': /* --pause */
-                pause = true;
-                break;
-            case 'u': /* --unpause */
-                unpause = true;
-                break;
-            case 'n': /* --namespace */
-                ns = optarg;
-                break;
-            default:
-                usage ();
-                break;
+        case 'h': /* --help */
+            usage ();
+            break;
+        case 'p': /* --pause */
+            pause = true;
+            break;
+        case 'u': /* --unpause */
+            unpause = true;
+            break;
+        case 'n': /* --namespace */
+            ns = optarg;
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if ((!pause && !unpause) || (pause && unpause))
@@ -68,7 +68,13 @@ int main (int argc, char *argv[])
     else
         topic = "kvs.setroot-unpause";
 
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0, "{ s:s }", "namespace", ns)))
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{ s:s }",
+                             "namespace",
+                             ns)))
         log_err_exit ("flux_rpc_pack");
 
     if (flux_future_get (f, NULL) < 0)

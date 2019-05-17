@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_DRAIN_H
-#define _FLUX_JOB_MANAGER_DRAIN_H
+#    define _FLUX_JOB_MANAGER_DRAIN_H
 
-#include <stdbool.h>
-#include <flux/core.h>
+#    include <stdbool.h>
+#    include <flux/core.h>
 
-#include "queue.h"
-#include "submit.h"
+#    include "queue.h"
+#    include "submit.h"
 
 struct drain_ctx;
 

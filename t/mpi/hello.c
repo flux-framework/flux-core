@@ -57,7 +57,8 @@ int main (int argc, char *argv[])
         clock_gettime (CLOCK_MONOTONIC, &t);
     MPI_Barrier (MPI_COMM_WORLD);
     if (id == 0) {
-        printf ("0: completed first barrier in %0.3fs\n", time_since (t) / 1000);
+        printf ("0: completed first barrier in %0.3fs\n",
+                time_since (t) / 1000);
         fflush (stdout);
     }
 

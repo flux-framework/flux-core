@@ -11,7 +11,7 @@
 /* torture.c - kvs torture test */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <getopt.h>
 #include <assert.h>
@@ -43,7 +43,8 @@ static void fill (char *s, int i, int len);
 void usage (void)
 {
     fprintf (stderr,
-             "Usage: torture [--quiet|--verbose] [--prefix NAME] [--size BYTES] "
+             "Usage: torture [--quiet|--verbose] [--prefix NAME] [--size "
+             "BYTES] "
              "[--count N]\n");
     exit (1);
 }
@@ -67,27 +68,27 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 's': /* --size BYTES */
-                size = strtoul (optarg, NULL, 10);
-                break;
-            case 'c': /* --count */
-                count = strtoul (optarg, NULL, 10);
-                break;
-            case 'p': /* --prefix NAME */
-                prefix = xstrdup (optarg);
-                break;
-            case 'v': /* --verbose */
-                verbose = true;
-                break;
-            case 'q': /* --quiet */
-                quiet = true;
-                break;
-            default:
-                usage ();
-                break;
+        case 'h': /* --help */
+            usage ();
+            break;
+        case 's': /* --size BYTES */
+            size = strtoul (optarg, NULL, 10);
+            break;
+        case 'c': /* --count */
+            count = strtoul (optarg, NULL, 10);
+            break;
+        case 'p': /* --prefix NAME */
+            prefix = xstrdup (optarg);
+            break;
+        case 'v': /* --verbose */
+            verbose = true;
+            break;
+        case 'q': /* --quiet */
+            quiet = true;
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if (optind != argc)
@@ -107,7 +108,8 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_unlink (txn, 0, prefix) < 0)
         log_err_exit ("flux_kvs_txn_unlink");
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -134,7 +136,8 @@ int main (int argc, char *argv[])
                  size);
 
     monotime (&t0);
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);

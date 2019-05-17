@@ -29,18 +29,22 @@ static char *valid[] = {
     "<42>1 2016-06-12T22:59:59.816857Z 1 - - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 4294967295 - - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z "
-    "this-is-a-really-long-hostname-field-well-we-have-255-chars-avaialable-so-maybe-"
+    "this-is-a-really-long-hostname-field-well-we-have-255-chars-avaialable-so-"
+    "maybe-"
     "not-that-long-huh - - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 logger - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 procid-000@@@-aaa - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 logger procid - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid - message",
-    "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid [exampleSDID@32473 iut=\"3\" "
+    "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid [exampleSDID@32473 "
+    "iut=\"3\" "
     "eventSource=\"Application\" eventID=\"1011\"] message",
-    "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid [exampleSDID@32473 iut=\"3\" "
+    "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid [exampleSDID@32473 "
+    "iut=\"3\" "
     "eventSource=\"Application\" eventID=\"1011\"][examplePriority@32473 "
     "class=\"high\"] message",
-    "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid [exampleSDID@32473 iut=\"3\" "
+    "<42>1 2016-06-12T22:59:59.816857Z 0 logger - msgid [exampleSDID@32473 "
+    "iut=\"3\" "
     "eventSource=\"Application\" eventID=\"1011\"][examplePriority@32473 "
     "class=\"high\"] message",
     NULL,
@@ -58,13 +62,17 @@ void test_split (void)
     stdlog_init (&hdr);
 
     /* orig=foo\nbar\nbaz */
-    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, "foo\nbar\nbaz");
+    len = stdlog_encode (buf,
+                         sizeof (buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         "foo\nbar\nbaz");
     ok (len >= 0, "stdlog_encode encoded foo\\nbar\\nbaz");
     xtra = stdlog_split_message (buf, &len, "\r\n");
     ok (xtra != NULL && !strcmp (xtra, "bar\nbaz"),
         "stdlog_split_message got bar\\nbaz");
-    ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0 && msg != NULL
-            && msglen == 3 && !strncmp (msg, "foo", msglen),
+    ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0
+            && msg != NULL && msglen == 3 && !strncmp (msg, "foo", msglen),
         "and truncated orig message to foo");
 
     /* xtra=bar\nbaz */
@@ -74,8 +82,8 @@ void test_split (void)
     xtra = stdlog_split_message (buf, &len, "\r\n");
     ok (xtra != NULL && !strcmp (xtra, "baz"), "stdlog_split_message got baz");
     diag ("xtra='%s'", xtra);
-    ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0 && msg != NULL
-            && msglen == 3 && !strncmp (msg, "bar", msglen),
+    ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0
+            && msg != NULL && msglen == 3 && !strncmp (msg, "bar", msglen),
         "and truncated orig message to bar");
 
     /* xtra=baz */
@@ -97,7 +105,11 @@ int main (int argc, char **argv)
     plan (NO_PLAN);
 
     stdlog_init (&hdr);
-    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, STDLOG_NILVALUE);
+    len = stdlog_encode (buf,
+                         sizeof (buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         STDLOG_NILVALUE);
     ok (len >= 0, "stdlog_init encoded defaults");
     diag ("%.*s", len, buf);
 
@@ -109,12 +121,16 @@ int main (int argc, char **argv)
     stdlog_init (&cln);
     ok (hdr.pri == cln.pri, "stdlog_decode decoded pri");
     ok (hdr.version == cln.version, "stdlog_decode decoded version");
-    ok (strcmp (hdr.timestamp, cln.timestamp) == 0, "stdlog_decode decoded timestamp");
-    ok (strcmp (hdr.hostname, cln.hostname) == 0, "stdlog_decode decoded hostname");
-    ok (strcmp (hdr.appname, cln.appname) == 0, "stdlog_decode decoded appname");
+    ok (strcmp (hdr.timestamp, cln.timestamp) == 0,
+        "stdlog_decode decoded timestamp");
+    ok (strcmp (hdr.hostname, cln.hostname) == 0,
+        "stdlog_decode decoded hostname");
+    ok (strcmp (hdr.appname, cln.appname) == 0,
+        "stdlog_decode decoded appname");
     ok (strcmp (hdr.procid, cln.procid) == 0, "stdlog_decode decoded procid");
     ok (strcmp (hdr.msgid, cln.msgid) == 0, "stdlog_decode decoded msgid");
-    ok (sdlen == strlen (STDLOG_NILVALUE) && strncmp (sd, STDLOG_NILVALUE, sdlen) == 0,
+    ok (sdlen == strlen (STDLOG_NILVALUE)
+            && strncmp (sd, STDLOG_NILVALUE, sdlen) == 0,
         "stdlog_decode decoded structured data");
     ok (msglen == strlen (STDLOG_NILVALUE)
             && strncmp (msg, STDLOG_NILVALUE, msglen) == 0,
@@ -123,7 +139,11 @@ int main (int argc, char **argv)
     /* Check that trailing \n or \r in message are dropped
      */
     stdlog_init (&hdr);
-    len = stdlog_encode (buf, sizeof (buf), &hdr, STDLOG_NILVALUE, "Hello whorl\n\r\n");
+    len = stdlog_encode (buf,
+                         sizeof (buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         "Hello whorl\n\r\n");
     ok (len >= 0, "stdlog_encode worked with message");
     diag ("%.*s", len, buf);
     n = stdlog_decode (buf, len, &hdr, &sd, &sdlen, &msg, &msglen);

@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef HAVE_CRON_TASK_H
-#define HAVE_CRON_TASK_H
+#    define HAVE_CRON_TASK_H
 
-#include <jansson.h>
-#include <flux/core.h>
+#    include <jansson.h>
+#    include <flux/core.h>
 
 /*  cron_task_t: async task handling for cron
  */

@@ -11,7 +11,7 @@
 /* See RFC 10 */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <inttypes.h>
 #include <czmq.h>
@@ -239,7 +239,8 @@ static int insert_entry (content_cache_t *cache, struct cache_entry *e)
  * Returns entry on success, NULL on failure.
  * N.B. errno is not set
  */
-static struct cache_entry *lookup_entry (content_cache_t *cache, const char *blobref)
+static struct cache_entry *lookup_entry (content_cache_t *cache,
+                                         const char *blobref)
 {
     return zhash_lookup (cache->entries, blobref);
 }
@@ -351,7 +352,11 @@ void content_load_request (flux_t *h,
     int len = 0;
     struct cache_entry *e;
 
-    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref, &blobref_size) < 0)
+    if (flux_request_decode_raw (msg,
+                                 NULL,
+                                 (const void **)&blobref,
+                                 &blobref_size)
+        < 0)
         goto error;
     if (!blobref || blobref[blobref_size - 1] != '\0') {
         errno = EPROTO;
@@ -362,7 +367,8 @@ void content_load_request (flux_t *h,
             errno = ENOENT;
             goto error;
         }
-        if (!(e = cache_entry_create (blobref)) || insert_entry (cache, e) < 0) {
+        if (!(e = cache_entry_create (blobref))
+            || insert_entry (cache, e) < 0) {
             flux_log_error (h, "content load");
             goto error; /* insert destroys 'e' on failure */
         }
@@ -521,7 +527,11 @@ static void content_store_request (flux_t *h,
         errno = EFBIG;
         goto error;
     }
-    if (blobref_hash (cache->hash_name, (uint8_t *)data, len, blobref, sizeof (blobref))
+    if (blobref_hash (cache->hash_name,
+                      (uint8_t *)data,
+                      len,
+                      blobref,
+                      sizeof (blobref))
         < 0)
         goto error;
 
@@ -539,7 +549,11 @@ static void content_store_request (flux_t *h,
             cache->acct_valid++;
             cache->acct_size += len;
         }
-        respond_requests_raw (&e->load_requests, cache->h, e->data, e->len, "load");
+        respond_requests_raw (&e->load_requests,
+                              cache->h,
+                              e->data,
+                              e->len,
+                              "load");
         if (!e->dirty) {
             e->dirty = 1;
             cache->acct_dirty++;
@@ -757,12 +771,20 @@ error:
 static void flush_respond (content_cache_t *cache)
 {
     if (!cache->acct_dirty) {
-        respond_requests_raw (&cache->flush_requests, cache->h, NULL, 0, "flush");
+        respond_requests_raw (&cache->flush_requests,
+                              cache->h,
+                              NULL,
+                              0,
+                              "flush");
     } else {
         errno = EIO;
         if (cache->rank == 0 && !cache->backing)
             errno = ENOSYS;
-        respond_requests_error (&cache->flush_requests, cache->h, errno, NULL, "flush");
+        respond_requests_error (&cache->flush_requests,
+                                cache->h,
+                                errno,
+                                NULL,
+                                "flush");
     }
 }
 
@@ -825,7 +847,8 @@ static int cache_purge (content_cache_t *cache)
         if (after_entries <= cache->purge_target_entries
             && e->len < cache->purge_large_entry)
             continue;
-        if ((!purge && !(purge = zlist_new ())) || zlist_append (purge, e) < 0) {
+        if ((!purge && !(purge = zlist_new ()))
+            || zlist_append (purge, e) < 0) {
             errno = ENOMEM;
             goto done;
         }
@@ -862,8 +885,14 @@ static void heartbeat_event (flux_t *h,
  */
 
 static const struct flux_msg_handler_spec htab[] = {
-    {FLUX_MSGTYPE_REQUEST, "content.load", content_load_request, FLUX_ROLE_USER},
-    {FLUX_MSGTYPE_REQUEST, "content.store", content_store_request, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST,
+     "content.load",
+     content_load_request,
+     FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST,
+     "content.store",
+     content_store_request,
+     FLUX_ROLE_USER},
     {FLUX_MSGTYPE_REQUEST, "content.backing", content_backing_request, 0},
     {FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0},
     {FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0},

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -18,10 +18,10 @@
 #include <czmq.h>
 #include <stdlib.h>
 #if HAVE_LIBJUDY
-#include <Judy.h>
+#    include <Judy.h>
 #endif
 #if HAVE_SOPHIA
-#include <sophia.h>
+#    include <sophia.h>
 #endif
 #include <sqlite3.h>
 
@@ -30,10 +30,10 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/log.h"
 #if HAVE_LSD_HASH
-#include "src/common/liblsd/hash.h"
+#    include "src/common/liblsd/hash.h"
 #endif
 #if HAVE_HATTRIE
-#include "src/common/libhat-trie/hat-trie.h"
+#    include "src/common/libhat-trie/hat-trie.h"
 #endif
 
 // const int num_keys = 1024*1024;

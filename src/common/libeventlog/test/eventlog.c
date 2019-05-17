@@ -76,55 +76,62 @@ void eventlog_entry_parsing (void)
 
     ok (eventlog_entry_parse (event, &timestamp, &name, &context) == 0
             && timestamp == 52.0 && !strcmp (name, "bar") && context
-            && json_is_object (context) && (jstr = json_object_get (context, "foo"))
+            && json_is_object (context)
+            && (jstr = json_object_get (context, "foo"))
             && (str = json_string_value (jstr)) && !strcmp (str, "bar"),
         "eventlog_entry_parse on event w/ context works");
     json_decref (event);
 }
 
-const char *goodevent[] = {"{\"timestamp\":42.0,\"name\":\"foo\"}\n",
-                           "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":"
-                           "16}}\n",
-                           NULL};
+const char *goodevent[] =
+    {"{\"timestamp\":42.0,\"name\":\"foo\"}\n",
+     "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":"
+     "16}}\n",
+     NULL};
 
-const char *badevent[] = {"\n",
-                          "\n\n",
-                          "foo",
-                          "foo\n",
-                          /* no newline end */
-                          "{\"timestamp\":42.0,\"name\":\"foo\"}",
-                          /* no newline end */
-                          "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":"
-                          "16}}",
-                          /* double newline end */
-                          "{\"timestamp\":42.0,\"name\":\"foo\"}\n\n",
-                          /* prefix newline */
-                          "\n{\"timestamp\":42.0,\"name\":\"foo\"}",
-                          /* timestamp bad */
-                          "{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
-                          /* name bad */
-                          "{\"timestamp\":42.0,\"name\":18}\n",
-                          /* no name field */
-                          "{\"timestamp\":42.0}\n",
-                          /* no timestamp field */
-                          "{\"name\":\"foo\"}\n",
-                          /* context not object */
-                          "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":\"bar\"}",
-                          NULL};
+const char *badevent[] =
+    {"\n",
+     "\n\n",
+     "foo",
+     "foo\n",
+     /* no newline end */
+     "{\"timestamp\":42.0,\"name\":\"foo\"}",
+     /* no newline end */
+     "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":{\"bar\":"
+     "16}}",
+     /* double newline end */
+     "{\"timestamp\":42.0,\"name\":\"foo\"}\n\n",
+     /* prefix newline */
+     "\n{\"timestamp\":42.0,\"name\":\"foo\"}",
+     /* timestamp bad */
+     "{\"timestamp\":\"foo\",\"name\":\"foo\"}\n",
+     /* name bad */
+     "{\"timestamp\":42.0,\"name\":18}\n",
+     /* no name field */
+     "{\"timestamp\":42.0}\n",
+     /* no timestamp field */
+     "{\"name\":\"foo\"}\n",
+     /* context not object */
+     "{\"timestamp\":42.0,\"name\":\"foo\",\"context\":\"bar\"}",
+     NULL};
 
 const char *goodlog[] = {
     "", /* empty log is acceptable */
-    "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":\"foo\"}\n",
-    "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":\"foo\","
+    "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":"
+    "\"foo\"}\n",
+    "{\"timestamp\":42.0,\"name\":\"foo\"}\n{\"timestamp\":42.0,\"name\":"
+    "\"foo\","
     "\"context\":{\"bar\":16}}\n",
     NULL,
 };
 
 const char *badlog[] = {
     /* no newline between events */
-    "{\"timestamp\":42.0,\"name\":\"foo\"}{\"timestamp\":42.0,\"name\":\"foo\"}\n",
+    "{\"timestamp\":42.0,\"name\":\"foo\"}{\"timestamp\":42.0,\"name\":\"foo\"}"
+    "\n",
     /* double newline between events */
-    "{\"timestamp\":42.0,\"name\":\"foo\"}\n\n{\"timestamp\":42.0,\"name\":\"foo\"}\n",
+    "{\"timestamp\":42.0,\"name\":\"foo\"}\n\n{\"timestamp\":42.0,\"name\":"
+    "\"foo\"}\n",
     NULL,
 };
 
@@ -136,16 +143,16 @@ char *printable (char *output, const char *input)
 
     for (ip = input, op = output; *ip != '\0'; ip++, op++) {
         switch (*ip) {
-            case '\n':
-                *op++ = '\\';
-                *op = 'n';
-                break;
-            case '\r':
-                *op++ = '\\';
-                *op = 'r';
-                break;
-            default:
-                *op = *ip;
+        case '\n':
+            *op++ = '\\';
+            *op = 'n';
+            break;
+        case '\r':
+            *op++ = '\\';
+            *op = 'r';
+            break;
+        default:
+            *op = *ip;
         }
     }
     *op = '\0';
@@ -322,12 +329,14 @@ void eventlog_entry_encoding (void)
     json_decref (e);
 
     e = eventlog_entry_create (1., "foo", "{\"data\":\"foo\"}");
-    ok (e != NULL, "eventlog_entry_create context=\"{\"data\":\"foo\"}\" works");
+    ok (e != NULL,
+        "eventlog_entry_create context=\"{\"data\":\"foo\"}\" works");
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = eventlog_entry_create (1., "foo", "{\"data\":\"foo\"}\n");
-    ok (e != NULL, "eventlog_entry_create context=\"{\"data\":\"foo\"}\\n\" works");
+    ok (e != NULL,
+        "eventlog_entry_create context=\"{\"data\":\"foo\"}\\n\" works");
     /* newline should be stripped in check */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
@@ -343,13 +352,15 @@ void eventlog_entry_encoding (void)
     json_decref (e);
 
     e = eventlog_entry_pack (1., "foo", "{ s:s }\n", "data", "foo");
-    ok (e != NULL, "eventlog_entry_pack context=\"{\"data\":\"foo\"}\\n\" works");
+    ok (e != NULL,
+        "eventlog_entry_pack context=\"{\"data\":\"foo\"}\\n\" works");
     /* newline should be stripped in check */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = eventlog_entry_pack (1., "foo", "{ s:s }", "data", "foo\n");
-    ok (e != NULL, "eventlog_entry_pack context=\"{\"data\":\"foo\\n\"}\" works");
+    ok (e != NULL,
+        "eventlog_entry_pack context=\"{\"data\":\"foo\\n\"}\" works");
     /* newline is serialized */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\\n\"}");
     json_decref (e);
@@ -365,13 +376,15 @@ void eventlog_entry_encoding (void)
     json_decref (e);
 
     e = test_eventlog_entry_vpack (1., "foo", "{ s:s }\n", "data", "foo");
-    ok (e != NULL, "eventlog_entry_vpack context=\"{\"data\":\"foo\"}\\n\" works");
+    ok (e != NULL,
+        "eventlog_entry_vpack context=\"{\"data\":\"foo\"}\\n\" works");
     /* newline should be stripped in check */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\"}");
     json_decref (e);
 
     e = test_eventlog_entry_vpack (1., "foo", "{ s:s }", "data", "foo\n");
-    ok (e != NULL, "eventlog_entry_vpack context=\"{\"data\":\"foo\\n\"}\" works");
+    ok (e != NULL,
+        "eventlog_entry_vpack context=\"{\"data\":\"foo\\n\"}\" works");
     /* newline is serialized */
     eventlog_entry_check (e, 1., "foo", "{\"data\":\"foo\\n\"}");
     json_decref (e);
@@ -400,7 +413,8 @@ void eventlog_entry_encoding_errors (void)
         "eventlog_entry_create context=\"foo\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_create (1., "foo", "[\"foo\"]") == NULL && errno == EINVAL,
+    ok (eventlog_entry_create (1., "foo", "[\"foo\"]") == NULL
+            && errno == EINVAL,
         "eventlog_entry_create context=\"[\"foo\"]\" fails with EINVAL");
 
     errno = 0;
@@ -416,7 +430,8 @@ void eventlog_entry_encoding_errors (void)
         "eventlog_entry_pack context=\"foo\" fails with EINVAL");
 
     errno = 0;
-    ok (eventlog_entry_pack (1., "foo", "[s]", "foo") == NULL && errno == EINVAL,
+    ok (eventlog_entry_pack (1., "foo", "[s]", "foo") == NULL
+            && errno == EINVAL,
         "eventlog_entry_pack context=\"[\"foo\"]\" fails with EINVAL");
 
     errno = 0;
@@ -432,7 +447,8 @@ void eventlog_entry_encoding_errors (void)
         "eventlog_entry_vpack context=\"foo\" fails with EINVAL");
 
     errno = 0;
-    ok (test_eventlog_entry_vpack (1., "foo", "[s]", "foo") == NULL && errno == EINVAL,
+    ok (test_eventlog_entry_vpack (1., "foo", "[s]", "foo") == NULL
+            && errno == EINVAL,
         "eventlog_entry_vpack context=\"[\"foo\"]\" fails with EINVAL");
 }
 

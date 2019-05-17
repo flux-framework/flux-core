@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <getopt.h>
 #include <assert.h>
@@ -33,7 +33,8 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-             "Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] [name]\n");
+             "Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] "
+             "[name]\n");
     exit (1);
 }
 
@@ -53,21 +54,21 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'q': /* --quiet */
-                quiet = 1;
-                break;
-            case 'n': /* --nprocs N */
-                nprocs = strtoul (optarg, NULL, 10);
-                break;
-            case 't': /* --test-iterations N */
-                iter = strtoul (optarg, NULL, 10);
-                break;
-            default:
-                usage ();
-                break;
+        case 'h': /* --help */
+            usage ();
+            break;
+        case 'q': /* --quiet */
+            quiet = 1;
+            break;
+        case 'n': /* --nprocs N */
+            nprocs = strtoul (optarg, NULL, 10);
+            break;
+        case 't': /* --test-iterations N */
+            iter = strtoul (optarg, NULL, 10);
+            break;
+        default:
+            usage ();
+            break;
         }
     }
     if (optind < argc - 1)
@@ -85,7 +86,8 @@ int main (int argc, char *argv[])
             tname = xasprintf ("%s.%d", name, i);
         if (!(f = flux_barrier (h, tname, nprocs))) {
             if (errno == EINVAL && tname == NULL)
-                log_msg_exit ("%s", "provide barrier name if not running as LWJ");
+                log_msg_exit ("%s",
+                              "provide barrier name if not running as LWJ");
             else
                 log_err_exit ("flux_barrier");
         }

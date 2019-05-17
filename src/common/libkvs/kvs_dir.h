@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_KVS_DIR_H
-#define _FLUX_CORE_KVS_DIR_H
+#    define _FLUX_CORE_KVS_DIR_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* The flux_kvsdir_t represents an unordered list of directory entries.
  * It is also overloaded as a container for a flux_t handle, a snapshot
@@ -82,9 +82,9 @@ const char *flux_kvsdir_rootref (const flux_kvsdir_t *dir);
  */
 char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *key);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_KVS_DIR_H */
 

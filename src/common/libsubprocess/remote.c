@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -88,7 +88,8 @@ static void process_new_state (flux_subprocess_t *p,
                                int errnum,
                                int status)
 {
-    if (p->state == FLUX_SUBPROCESS_EXEC_FAILED || p->state == FLUX_SUBPROCESS_FAILED)
+    if (p->state == FLUX_SUBPROCESS_EXEC_FAILED
+        || p->state == FLUX_SUBPROCESS_FAILED)
         return;
 
     p->state = state;
@@ -120,7 +121,8 @@ static void remote_in_prep_cb (flux_reactor_t *r,
 {
     struct subprocess_channel *c = arg;
 
-    if (flux_buffer_bytes (c->write_buffer) > 0 || (c->closed && !c->write_eof_sent)
+    if (flux_buffer_bytes (c->write_buffer) > 0
+        || (c->closed && !c->write_eof_sent)
         || (c->p->state == FLUX_SUBPROCESS_EXITED
             || c->p->state == FLUX_SUBPROCESS_FAILED))
         flux_watcher_start (c->in_idle_w);
@@ -146,7 +148,11 @@ static int remote_write (struct subprocess_channel *c)
         goto error;
     }
 
-    sodium_bin2base64 (s_data, s_len, ptr, lenp, sodium_base64_VARIANT_ORIGINAL);
+    sodium_bin2base64 (s_data,
+                       s_len,
+                       ptr,
+                       lenp,
+                       sodium_base64_VARIANT_ORIGINAL);
 
     if (!(f = flux_rpc_pack (c->p->h,
                              "cmb.rexec.write",
@@ -217,7 +223,8 @@ static void remote_in_check_cb (flux_reactor_t *r,
         }
     }
 
-    if (!flux_buffer_bytes (c->write_buffer) && c->closed && !c->write_eof_sent) {
+    if (!flux_buffer_bytes (c->write_buffer) && c->closed
+        && !c->write_eof_sent) {
         if (remote_close (c) < 0) {
             flux_log_error (c->p->h, "remote_close");
             goto error;
@@ -315,8 +322,9 @@ static int remote_channel_setup (flux_subprocess_t *p,
             goto error;
         }
 
-        if (!(c->in_prep_w =
-                  flux_prepare_watcher_create (p->reactor, remote_in_prep_cb, c))) {
+        if (!(c->in_prep_w = flux_prepare_watcher_create (p->reactor,
+                                                          remote_in_prep_cb,
+                                                          c))) {
             flux_log_error (p->h, "flux_prepare_watcher_create");
             goto error;
         }
@@ -326,8 +334,9 @@ static int remote_channel_setup (flux_subprocess_t *p,
             goto error;
         }
 
-        if (!(c->in_check_w =
-                  flux_check_watcher_create (p->reactor, remote_in_check_cb, c))) {
+        if (!(c->in_check_w = flux_check_watcher_create (p->reactor,
+                                                         remote_in_check_cb,
+                                                         c))) {
             flux_log_error (p->h, "flux_check_watcher_create");
             goto error;
         }
@@ -344,8 +353,9 @@ static int remote_channel_setup (flux_subprocess_t *p,
         }
         p->channels_eof_expected++;
 
-        if (!(c->out_prep_w =
-                  flux_prepare_watcher_create (p->reactor, remote_out_prep_cb, c))) {
+        if (!(c->out_prep_w = flux_prepare_watcher_create (p->reactor,
+                                                           remote_out_prep_cb,
+                                                           c))) {
             flux_log_error (p->h, "flux_prepare_watcher_create");
             goto error;
         }
@@ -355,8 +365,9 @@ static int remote_channel_setup (flux_subprocess_t *p,
             goto error;
         }
 
-        if (!(c->out_check_w =
-                  flux_check_watcher_create (p->reactor, remote_out_check_cb, c))) {
+        if (!(c->out_check_w = flux_check_watcher_create (p->reactor,
+                                                          remote_out_check_cb,
+                                                          c))) {
             flux_log_error (p->h, "flux_check_watcher_create");
             goto error;
         }
@@ -498,7 +509,8 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f, int rank)
         }
     }
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED
+        || state == FLUX_SUBPROCESS_FAILED) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "errno", &errnum) < 0) {
             flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
             return -1;
@@ -517,7 +529,10 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f, int rank)
     return 0;
 }
 
-static int remote_output (flux_subprocess_t *p, flux_future_t *f, int rank, pid_t pid)
+static int remote_output (flux_subprocess_t *p,
+                          flux_future_t *f,
+                          int rank,
+                          pid_t pid)
 {
     struct subprocess_channel *c;
     const char *s_data;
@@ -534,7 +549,8 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f, int rank, pid_
 
     if (!(c = zhash_lookup (p->channels, stream))) {
         flux_log_error (p->h,
-                        "invalid channel received: rank = %d, pid = %d, stream = %s",
+                        "invalid channel received: rank = %d, pid = %d, stream "
+                        "= %s",
                         rank,
                         pid,
                         stream);
@@ -573,7 +589,8 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f, int rank, pid_
 
         if (tmp != len) {
             flux_log_error (p->h,
-                            "channel buffer error: rank = %d pid = %d, stream = %s, "
+                            "channel buffer error: rank = %d pid = %d, stream "
+                            "= %s, "
                             "len = %zu",
                             rank,
                             pid,
@@ -608,7 +625,8 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
     int rank;
     pid_t pid;
 
-    if (flux_rpc_get_unpack (f, "{ s:s s:i }", "type", &type, "rank", &rank) < 0) {
+    if (flux_rpc_get_unpack (f, "{ s:s s:i }", "type", &type, "rank", &rank)
+        < 0) {
         flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
     }
@@ -662,7 +680,8 @@ static void remote_continuation_cb (flux_future_t *f, void *arg)
     int rank;
     int save_errno;
 
-    if (flux_rpc_get_unpack (f, "{ s:s s:i }", "type", &type, "rank", &rank) < 0) {
+    if (flux_rpc_get_unpack (f, "{ s:s s:i }", "type", &type, "rank", &rank)
+        < 0) {
         flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
     }

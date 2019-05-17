@@ -11,7 +11,7 @@
 /* submit.c - handle job-manager.submit request from job-ingest */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
@@ -106,8 +106,7 @@ zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs)
         errno = ENOMEM;
         return NULL;
     }
-    json_array_foreach (jobs, index, el)
-    {
+    json_array_foreach (jobs, index, el) {
         if (submit_enqueue_one_job (queue, newjobs, el) < 0)
             goto error;
     }

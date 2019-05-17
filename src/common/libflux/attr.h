@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_ATTR_H
-#define _FLUX_CORE_ATTR_H
+#    define _FLUX_CORE_ATTR_H
 
 /* broker attributes
  *
@@ -25,11 +25,11 @@
  * attributes programmatically.
  */
 
-#include "handle.h"
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Get the value for attribute 'name' from the local broker.
  * Returns value on success, NULL on failure with errno set.
@@ -59,9 +59,9 @@ int flux_get_rank (flux_t *h, uint32_t *rank);
  */
 int flux_get_size (flux_t *h, uint32_t *size);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_ATTR_H */
 

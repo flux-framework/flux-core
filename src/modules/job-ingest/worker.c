@@ -46,7 +46,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <unistd.h>
 #include <czmq.h>
@@ -95,30 +95,31 @@ static void worker_completion_cb (flux_subprocess_t *p)
 
 /* Subprocess state change.
  */
-static void worker_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+static void worker_state_cb (flux_subprocess_t *p,
+                             flux_subprocess_state_t state)
 {
     struct worker *w = flux_subprocess_aux_get (p, worker_auxkey);
 
     switch (state) {
-        case FLUX_SUBPROCESS_RUNNING:
-            flux_log (w->h,
-                      LOG_DEBUG,
-                      "%s: running (pid=%d)",
-                      w->name,
-                      (int)flux_subprocess_pid (p));
-            break;
-        case FLUX_SUBPROCESS_EXEC_FAILED:
-        case FLUX_SUBPROCESS_FAILED:
-            flux_log (w->h,
-                      LOG_ERR,
-                      "%s: %s",
-                      w->name,
-                      flux_subprocess_state_string (state));
-            break;
-        case FLUX_SUBPROCESS_STARTED:
-        case FLUX_SUBPROCESS_EXITED:
-        case FLUX_SUBPROCESS_INIT:
-            break;  // ignore
+    case FLUX_SUBPROCESS_RUNNING:
+        flux_log (w->h,
+                  LOG_DEBUG,
+                  "%s: running (pid=%d)",
+                  w->name,
+                  (int)flux_subprocess_pid (p));
+        break;
+    case FLUX_SUBPROCESS_EXEC_FAILED:
+    case FLUX_SUBPROCESS_FAILED:
+        flux_log (w->h,
+                  LOG_ERR,
+                  "%s: %s",
+                  w->name,
+                  flux_subprocess_state_string (state));
+        break;
+    case FLUX_SUBPROCESS_STARTED:
+    case FLUX_SUBPROCESS_EXITED:
+    case FLUX_SUBPROCESS_INIT:
+        break;  // ignore
     }
 }
 
@@ -152,7 +153,9 @@ static void worker_active (struct worker *w)
 /* Fulfill future 'f' with result 's'.
  * Ensure that any errors in parsing 's' are passed on to 'f' as well.
  */
-static void worker_fulfill_future (struct worker *w, flux_future_t *f, const char *s)
+static void worker_fulfill_future (struct worker *w,
+                                   flux_future_t *f,
+                                   const char *s)
 {
     json_t *o;
     int errnum;
@@ -215,7 +218,11 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         flux_future_t *f;
 
         if (!(f = zlist_pop (w->queue))) {
-            flux_log (w->h, LOG_ERR, "%s: dropping orphan response: '%s'", w->name, s);
+            flux_log (w->h,
+                      LOG_ERR,
+                      "%s: dropping orphan response: '%s'",
+                      w->name,
+                      s);
             return;
         }
         worker_fulfill_future (w, f, s);
@@ -290,7 +297,8 @@ static void worker_stop (struct worker *w)
 static int worker_start (struct worker *w)
 {
     if (!w->p) {
-        if (!(w->p = flux_rexec (w->h, FLUX_NODEID_ANY, 0, w->cmd, &worker_ops))) {
+        if (!(w->p =
+                  flux_rexec (w->h, FLUX_NODEID_ANY, 0, w->cmd, &worker_ops))) {
             return -1;
         }
         if (flux_subprocess_aux_set (w->p, worker_auxkey, w, NULL) < 0) {
@@ -346,8 +354,11 @@ struct worker *worker_create (flux_t *h,
         return NULL;
     w->h = h;
     w->inactivity_timeout = inactivity_timeout;
-    if (!(w->timer =
-              flux_timer_watcher_create (r, inactivity_timeout, 0., worker_timeout, w)))
+    if (!(w->timer = flux_timer_watcher_create (r,
+                                                inactivity_timeout,
+                                                0.,
+                                                worker_timeout,
+                                                w)))
         goto error;
     if (!(w->trash = zlist_new ()))
         goto error;

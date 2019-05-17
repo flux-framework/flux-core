@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _BROKER_PUBLISHER_H
-#define _BROKER_PUBLISHER_H
+#    define _BROKER_PUBLISHER_H
 
 typedef int (*publisher_send_f) (void *arg, const flux_msg_t *msg);
 

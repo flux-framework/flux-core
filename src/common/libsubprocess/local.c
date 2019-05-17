@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -63,14 +63,18 @@ static void local_channel_flush (struct subprocess_channel *c)
     }
 }
 
-static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void local_in_cb (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
 
     if (flux_buffer_write_watcher_is_closed (w, &err) == 1) {
         if (err)
-            log_msg ("flux_buffer_write_watcher close error: %s", strerror (err));
+            log_msg ("flux_buffer_write_watcher close error: %s",
+                     strerror (err));
         else
             c->parent_fd = -1; /* closed by reactor */
         flux_watcher_stop (w); /* c->buffer_write_w */
@@ -144,7 +148,10 @@ static void local_output (struct subprocess_channel *c,
         subprocess_check_completed (c->p);
 }
 
-static void local_out_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void local_out_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_channel_out);
@@ -499,7 +506,9 @@ static int local_child (flux_subprocess_t *p)
 
     // Change working directory
     if ((cwd = flux_cmd_getcwd (p->cmd)) && chdir (cwd) < 0) {
-        flux_log_error (p->h, "Couldn't change dir to %s: going to /tmp instead", cwd);
+        flux_log_error (p->h,
+                        "Couldn't change dir to %s: going to /tmp instead",
+                        cwd);
         if (chdir ("/tmp") < 0)
             _exit (1);
     }

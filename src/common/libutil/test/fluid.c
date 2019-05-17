@@ -45,7 +45,8 @@ int main (int argc, char *argv[])
     gen.id = 16383;
     gen.epoch -= 1000ULL * 60 * 60 * 24 * 365 * 34;  // 34 years
     gen.seq = 1023;
-    ok (fluid_generate (&gen, &id) == 0, "fluid_generate works 34 years in the future");
+    ok (fluid_generate (&gen, &id) == 0,
+        "fluid_generate works 34 years in the future");
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,

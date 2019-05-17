@@ -11,7 +11,7 @@
 /* zsecurity.c - flux zeromq security functions */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -98,7 +98,8 @@ zsecurity_t *zsecurity_create (int typemask, const char *confdir)
 {
     zsecurity_t *c = calloc (1, sizeof (*c));
 
-    if ((typemask & ZSECURITY_TYPE_CURVE) && (typemask & ZSECURITY_TYPE_PLAIN)) {
+    if ((typemask & ZSECURITY_TYPE_CURVE)
+        && (typemask & ZSECURITY_TYPE_PLAIN)) {
         errno = EINVAL;
         goto error;
     }
@@ -254,7 +255,8 @@ stat_again:
                 goto stat_again;
             } else {
                 seterrstr (c,
-                           "The directory '%s' does not exist.  Have you run \"flux "
+                           "The directory '%s' does not exist.  Have you run "
+                           "\"flux "
                            "keygen\"?",
                            path);
             }
@@ -336,7 +338,9 @@ static zcert_t *zcert_curve_new (zsecurity_t *c)
 
     if (zmq_curve_keypair (pub, sec) < 0) {
         if (errno == ENOTSUP)
-            seterrstr (c, "No CURVE support in libzmq (not compiled with libsodium?)");
+            seterrstr (c,
+                       "No CURVE support in libzmq (not compiled with "
+                       "libsodium?)");
         else
             seterrstr (c, "Unknown error generating CURVE keypair");
         return NULL;
@@ -475,7 +479,10 @@ static int genpasswd (zsecurity_t *c, const char *user)
     rc = zhash_save (passwds, c->passwd_file);
     umask (old_mask);
     if (rc < 0) {
-        seterrstr (c, "zhash_save %s: %s", c->passwd_file, zmq_strerror (errno));
+        seterrstr (c,
+                   "zhash_save %s: %s",
+                   c->passwd_file,
+                   zmq_strerror (errno));
         goto done;
     }
     /* FIXME: check created file mode */

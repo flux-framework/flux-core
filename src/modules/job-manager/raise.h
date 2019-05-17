@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_RAISE_H
-#define _FLUX_JOB_MANAGER_RAISE_H
+#    define _FLUX_JOB_MANAGER_RAISE_H
 
-#include <stdint.h>
-#include "queue.h"
-#include "alloc.h"
+#    include <stdint.h>
+#    include "queue.h"
+#    include "alloc.h"
 
 /* Hande a request to raise an exception on job.
  */

@@ -69,8 +69,7 @@ static struct idset *rset_ranks (struct resource_set *r)
     }
     if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
         return NULL;
-    json_array_foreach (r->R_lite, i, entry)
-    {
+    json_array_foreach (r->R_lite, i, entry) {
         if ((json_unpack_ex (entry, NULL, 0, "{s:s}", "rank", &ranks) < 0)
             || (idset_set_string (idset, ranks) < 0))
             goto err;
@@ -124,7 +123,10 @@ struct resource_set *resource_set_create (const char *R, json_error_t *errp)
         goto err;
     if (version != 1) {
         if (errp)
-            snprintf (errp->text, sizeof (errp->text), "invalid version: %d", version);
+            snprintf (errp->text,
+                      sizeof (errp->text),
+                      "invalid version: %d",
+                      version);
         goto err;
     }
     if (!(r->ranks = rset_ranks (r))) {

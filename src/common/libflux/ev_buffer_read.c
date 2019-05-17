@@ -58,7 +58,8 @@ static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 {
     struct ev_buffer_read *ebr =
         (struct ev_buffer_read *)((char *)w
-                                  - offsetof (struct ev_buffer_read, prepare_w));
+                                  - offsetof (struct ev_buffer_read,
+                                              prepare_w));
 
     if (data_to_read (ebr, NULL) == true)
         ev_idle_start (loop, &ebr->idle_w);

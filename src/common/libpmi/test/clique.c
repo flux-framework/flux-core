@@ -74,7 +74,10 @@ static char *cliquetostr (int rank, int len, int *clique)
     return s;
 }
 
-static char *cliqueN (struct pmi_map_block *blocks, int nblocks, int size, int rank)
+static char *cliqueN (struct pmi_map_block *blocks,
+                      int nblocks,
+                      int size,
+                      int rank)
 {
     int rc;
     int nranks;
@@ -85,7 +88,12 @@ static char *cliqueN (struct pmi_map_block *blocks, int nblocks, int size, int r
     if (rc != PMI_SUCCESS)
         return NULL;
     ranks = xzmalloc (sizeof (int) * nranks);
-    rc = pmi_process_mapping_find_ranks (blocks, nblocks, rank, size, ranks, nranks);
+    rc = pmi_process_mapping_find_ranks (blocks,
+                                         nblocks,
+                                         rank,
+                                         size,
+                                         ranks,
+                                         nranks);
     if (rc != PMI_SUCCESS) {
         free (ranks);
         return NULL;
@@ -117,8 +125,9 @@ int main (int argc, char *argv[])
 
     rc = pmi_process_mapping_parse (valid[1].vec, &blocks, &nblocks);
     ok (rc == PMI_SUCCESS && nblocks == 2 && blocks[0].nodeid == 0
-            && blocks[0].nodes == 8 && blocks[0].procs == 16 && blocks[1].nodeid == 0
-            && blocks[1].nodes == 4 && blocks[1].procs == 32,
+            && blocks[0].nodes == 8 && blocks[0].procs == 16
+            && blocks[1].nodeid == 0 && blocks[1].nodes == 4
+            && blocks[1].procs == 32,
         "correctly parsed 2-block vector");
     if (rc == PMI_SUCCESS)
         free (blocks);
@@ -138,16 +147,25 @@ int main (int argc, char *argv[])
     if (rc != PMI_SUCCESS)
         BAIL_OUT ("cannot continue");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 0, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 0, "find_nodeid says node 0 runs proc 0");
+    ok (rc == PMI_SUCCESS && nodeid == 0,
+        "find_nodeid says node 0 runs proc 0");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 1, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 1, "find_nodeid says node 1 runs proc 1");
+    ok (rc == PMI_SUCCESS && nodeid == 1,
+        "find_nodeid says node 1 runs proc 1");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 2, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 0, "find_nodeid says node 0 runs proc 2");
+    ok (rc == PMI_SUCCESS && nodeid == 0,
+        "find_nodeid says node 0 runs proc 2");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 3, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 1, "find_nodeid says node 1 runs proc 3");
+    ok (rc == PMI_SUCCESS && nodeid == 1,
+        "find_nodeid says node 1 runs proc 3");
 
-    rc = pmi_process_mapping_find_nranks (blocks, nblocks, 0, valid[4].size, &nranks);
-    ok (rc == PMI_SUCCESS && nranks == 2, "find_nranks says node 0 runs two procs");
+    rc = pmi_process_mapping_find_nranks (blocks,
+                                          nblocks,
+                                          0,
+                                          valid[4].size,
+                                          &nranks);
+    ok (rc == PMI_SUCCESS && nranks == 2,
+        "find_nranks says node 0 runs two procs");
     ranks = xzmalloc (sizeof (int) * nranks);
     rc = pmi_process_mapping_find_ranks (blocks,
                                          nblocks,
@@ -159,8 +177,13 @@ int main (int argc, char *argv[])
         "find_ranks says node 0 runs 0,2");
     free (ranks);
 
-    rc = pmi_process_mapping_find_nranks (blocks, nblocks, 1, valid[4].size, &nranks);
-    ok (rc == PMI_SUCCESS && nranks == 2, "find_nranks says node 1 runs two procs");
+    rc = pmi_process_mapping_find_nranks (blocks,
+                                          nblocks,
+                                          1,
+                                          valid[4].size,
+                                          &nranks);
+    ok (rc == PMI_SUCCESS && nranks == 2,
+        "find_nranks says node 1 runs two procs");
     ranks = xzmalloc (sizeof (int) * nranks);
     rc = pmi_process_mapping_find_ranks (blocks,
                                          nblocks,
@@ -182,16 +205,25 @@ int main (int argc, char *argv[])
     if (rc != PMI_SUCCESS)
         BAIL_OUT ("cannot continue");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 0, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 0, "find_nodeid says node 0 runs proc 0");
+    ok (rc == PMI_SUCCESS && nodeid == 0,
+        "find_nodeid says node 0 runs proc 0");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 1, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 0, "find_nodeid says node 0 runs proc 1");
+    ok (rc == PMI_SUCCESS && nodeid == 0,
+        "find_nodeid says node 0 runs proc 1");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 2, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 1, "find_nodeid says node 1 runs proc 2");
+    ok (rc == PMI_SUCCESS && nodeid == 1,
+        "find_nodeid says node 1 runs proc 2");
     rc = pmi_process_mapping_find_nodeid (blocks, nblocks, 3, &nodeid);
-    ok (rc == PMI_SUCCESS && nodeid == 1, "find_nodeid says node 1 runs proc 3");
+    ok (rc == PMI_SUCCESS && nodeid == 1,
+        "find_nodeid says node 1 runs proc 3");
 
-    rc = pmi_process_mapping_find_nranks (blocks, nblocks, 0, valid[5].size, &nranks);
-    ok (rc == PMI_SUCCESS && nranks == 2, "find_nranks says node 0 runs two procs");
+    rc = pmi_process_mapping_find_nranks (blocks,
+                                          nblocks,
+                                          0,
+                                          valid[5].size,
+                                          &nranks);
+    ok (rc == PMI_SUCCESS && nranks == 2,
+        "find_nranks says node 0 runs two procs");
     ranks = xzmalloc (sizeof (int) * nranks);
     rc = pmi_process_mapping_find_ranks (blocks,
                                          nblocks,
@@ -203,8 +235,13 @@ int main (int argc, char *argv[])
         "find_ranks says node 0 runs 0,1");
     free (ranks);
 
-    rc = pmi_process_mapping_find_nranks (blocks, nblocks, 1, valid[5].size, &nranks);
-    ok (rc == PMI_SUCCESS && nranks == 2, "find_nranks says node 1 runs two procs");
+    rc = pmi_process_mapping_find_nranks (blocks,
+                                          nblocks,
+                                          1,
+                                          valid[5].size,
+                                          &nranks);
+    ok (rc == PMI_SUCCESS && nranks == 2,
+        "find_nranks says node 1 runs two procs");
     ranks = xzmalloc (sizeof (int) * nranks);
     rc = pmi_process_mapping_find_ranks (blocks,
                                          nblocks,
@@ -222,7 +259,10 @@ int main (int argc, char *argv[])
 
     for (i = 0; valid[i].vec != NULL; i++) {
         rc = pmi_process_mapping_parse (valid[i].vec, &blocks, &nblocks);
-        ok (rc == PMI_SUCCESS, "parsed %s size=%d", valid[i].vec, valid[i].size);
+        ok (rc == PMI_SUCCESS,
+            "parsed %s size=%d",
+            valid[i].vec,
+            valid[i].size);
         for (rank = 0; rank < valid[i].size; rank++) {
             s = cliqueN (blocks, nblocks, valid[i].size, rank);
             if (!s)

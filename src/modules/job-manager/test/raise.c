@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 
@@ -43,7 +43,8 @@ int main (int argc, char **argv)
 
     ok (raise_allow (FLUX_ROLE_OWNER, 42, 43) == 0,
         "raise_allow permits instance owner");
-    ok (raise_allow (FLUX_ROLE_USER, 42, 42) == 0, "raise_allow permits job owner");
+    ok (raise_allow (FLUX_ROLE_USER, 42, 42) == 0,
+        "raise_allow permits job owner");
     ok (raise_allow (FLUX_ROLE_USER, 42, 43) < 0,
         "raise_allow denies guest non-job owner");
     ok (raise_allow (FLUX_ROLE_NONE, FLUX_USERID_UNKNOWN, 43) < 0,

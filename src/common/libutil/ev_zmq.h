@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _EV_ZMQ_H
-#define _EV_ZMQ_H
+#    define _EV_ZMQ_H
 
 typedef struct ev_zmq_struct ev_zmq;
 typedef void (*ev_zmq_cb) (struct ev_loop *loop, ev_zmq *w, int revents);
@@ -40,14 +40,14 @@ static __inline__ int ztoe (int z)
         e |= EV_READ;
     if ((z & ZMQ_POLLOUT))
         e |= EV_WRITE;
-#if 0
+#    if 0
     /* Note: libev will assert if EV_ERROR is included in 'events'.
      * If there is an error, libev will call your callback with EV_ERROR set
      * whether you request it or not.  Silently ignore ZMQ_POLLERR here.
      */
     if ((z & ZMQ_POLLERR))
         e |= EV_ERROR;
-#endif
+#    endif
     return e;
 }
 

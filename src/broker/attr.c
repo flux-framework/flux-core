@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
@@ -66,7 +66,8 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
             errno = EPERM;
             goto done;
         }
-        if (((e->flags & FLUX_ATTRFLAG_READONLY) || (e->flags & FLUX_ATTRFLAG_ACTIVE))
+        if (((e->flags & FLUX_ATTRFLAG_READONLY)
+             || (e->flags & FLUX_ATTRFLAG_ACTIVE))
             && !force) {
             errno = EPERM;
             goto done;
@@ -285,7 +286,10 @@ int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val, int flags)
     return attr_add (attrs, name, val_string, flags);
 }
 
-int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val, int flags)
+int attr_add_active_uint32 (attr_t *attrs,
+                            const char *name,
+                            uint32_t *val,
+                            int flags)
 {
     return attr_add_active (attrs, name, flags, get_uint32, set_uint32, val);
 }
@@ -324,7 +328,8 @@ void getattr_request_cb (flux_t *h,
         errno = ENOENT;
         goto error;
     }
-    if (flux_respond_pack (h, msg, "{s:s s:i}", "value", val, "flags", flags) < 0)
+    if (flux_respond_pack (h, msg, "{s:s s:i}", "value", val, "flags", flags)
+        < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -341,7 +346,14 @@ void setattr_request_cb (flux_t *h,
     const char *name;
     const char *val;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name, "value", &val) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "name",
+                             &name,
+                             "value",
+                             &val)
+        < 0)
         goto error;
     if (attr_set (attrs, name, val, false) < 0) {
         if (errno != ENOENT)

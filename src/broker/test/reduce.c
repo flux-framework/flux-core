@@ -227,7 +227,10 @@ void test_nopolicy (flux_t *h)
             errors++;
     }
     ok (errors == 0, "nopolicy: flux_reduce_append added 100 items in batch 0");
-    cmp_ok (forward_calls, "==", 0, "nopolicy: op.forward not called as we are rank 0");
+    cmp_ok (forward_calls,
+            "==",
+            0,
+            "nopolicy: op.forward not called as we are rank 0");
     cmp_ok (reduce_calls,
             "==",
             0,
@@ -246,12 +249,19 @@ void test_timed (flux_t *h)
 
     clear_counts ();
 
-    ok ((r = flux_reduce_create (h, reduce_ops, 0.1, NULL, FLUX_REDUCE_TIMEDFLUSH))
+    ok ((r = flux_reduce_create (h,
+                                 reduce_ops,
+                                 0.1,
+                                 NULL,
+                                 FLUX_REDUCE_TIMEDFLUSH))
             != NULL,
         "timed: flux_reduce_create works");
     if (!r)
         BAIL_OUT ();
-    ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_TIMEOUT, &timeout, sizeof (timeout))
+    ok (flux_reduce_opt_get (r,
+                             FLUX_REDUCE_OPT_TIMEOUT,
+                             &timeout,
+                             sizeof (timeout))
                 == 0
             && timeout == 0.1,
         "timed: flux_reduce_opt_get TIMEOUT returned timeout");

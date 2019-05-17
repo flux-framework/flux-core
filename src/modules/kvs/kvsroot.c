@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -120,8 +120,11 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
-    if (!(root->ktm =
-              kvstxn_mgr_create (cache, root->ns_name, hash_name, krm->h, krm->arg))) {
+    if (!(root->ktm = kvstxn_mgr_create (cache,
+                                         root->ns_name,
+                                         hash_name,
+                                         krm->h,
+                                         krm->arg))) {
         flux_log_error (krm->h, "kvstxn_mgr_create");
         goto error;
     }
@@ -189,7 +192,8 @@ struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm, const char *ns)
     return zhash_lookup (krm->roothash, ns);
 }
 
-struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm, const char *ns)
+struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
+                                              const char *ns)
 {
     struct kvsroot *root;
 

@@ -136,14 +136,16 @@ static hwloc_topology_t global_hwloc_create (char **xml, int n)
     hwloc_topology_t global;
     int i;
 
-    if (hwloc_topology_init (&global) < 0 || hwloc_topology_set_custom (global) < 0)
+    if (hwloc_topology_init (&global) < 0
+        || hwloc_topology_set_custom (global) < 0)
         log_err_exit ("gather: unable to init topology");
 
     for (i = 0; i < n; i++) {
         hwloc_topology_t topo;
         if (hwloc_topology_init (&topo) < 0)
             log_err_exit ("hwloc_topology_init");
-        if (hwloc_topology_set_xmlbuffer (topo, xml[i], strlen (xml[i]) + 1) < 0)
+        if (hwloc_topology_set_xmlbuffer (topo, xml[i], strlen (xml[i]) + 1)
+            < 0)
             log_err_exit ("hwloc_topology_set_xmlbuffer");
         if (hwloc_topology_load (topo) < 0)
             log_err_exit ("hwloc_topology_load");
@@ -338,17 +340,17 @@ FILE *argz_popen (char *argz, size_t argz_len, pid_t *pidptr)
     if (pipe (pfds) < 0)
         log_err_exit ("pipe");
     switch ((pid = fork ())) {
-        case -1:
-            log_err_exit ("fork");
-        case 0:
-            close (pfds[1]);
-            dup2 (pfds[0], STDIN_FILENO);
-            argz_execp (argz, argz_len);
-            if (errno != ENOENT)
-                log_err ("exec");
-            exit (errno); /* So we can detect ENOENT.. Sorry */
-        default:
-            break;
+    case -1:
+        log_err_exit ("fork");
+    case 0:
+        close (pfds[1]);
+        dup2 (pfds[0], STDIN_FILENO);
+        argz_execp (argz, argz_len);
+        if (errno != ENOENT)
+            log_err ("exec");
+        exit (errno); /* So we can detect ENOENT.. Sorry */
+    default:
+        break;
     }
     close (pfds[0]);
     *pidptr = pid;
@@ -531,7 +533,9 @@ static flux_future_t *kvs_txn_put_xml_file (flux_kvs_txn_t *txn,
  *   rank: <basedir>/<rank>.xml. All KVS puts are performed under a
  *   single transaction.
  */
-flux_future_t *kvs_load_xml_idset (flux_t *h, const char *basedir, struct idset *idset)
+flux_future_t *kvs_load_xml_idset (flux_t *h,
+                                   const char *basedir,
+                                   struct idset *idset)
 {
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
@@ -590,7 +594,8 @@ static int run_hwloc_aggregate (flux_t *h,
     if ((argz_appendf (&argz,
                        &argz_len,
                        "flux hwloc aggregate-load "
-                       "--timeout=%.3f --unpack=%s.by_rank --key=%s.reload:%u-%u",
+                       "--timeout=%.3f --unpack=%s.by_rank "
+                       "--key=%s.reload:%u-%u",
                        timeout,
                        base,
                        base,
@@ -746,7 +751,8 @@ static json_t *topo_tojson (hwloc_topology_t topology)
             goto error;
     }
     if ((ids = hwloc_cpuset_idset_string (topology))) {
-        if (!(v = json_string (ids)) || json_object_set_new (o, "cpuset", v) < 0)
+        if (!(v = json_string (ids))
+            || json_object_set_new (o, "cpuset", v) < 0)
             goto error;
         free (ids);
     }
@@ -826,7 +832,8 @@ static int kvs_put_xml_fence (flux_t *h,
     flux_future_t *f;
     flux_kvs_txn_t *txn = NULL;
 
-    if (!(txn = flux_kvs_txn_create ()) || (kvs_txn_put_xml (txn, rank, xml) < 0))
+    if (!(txn = flux_kvs_txn_create ())
+        || (kvs_txn_put_xml (txn, rank, xml) < 0))
         log_err_exit ("kvs put xml (rank=%d)", rank);
     if (!(f = flux_kvs_fence (h, NULL, 0, name, nprocs, txn))
         || flux_future_get (f, NULL) < 0)

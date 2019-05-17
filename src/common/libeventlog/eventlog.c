@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include <jansson.h>
@@ -18,7 +18,8 @@
 
 #include "eventlog.h"
 
-static json_t *eventlog_entry_decode_common (const char *event, bool trailing_newline);
+static json_t *eventlog_entry_decode_common (const char *event,
+                                             bool trailing_newline);
 
 int eventlog_entry_parse (json_t *entry,
                           double *timestamp,
@@ -128,7 +129,8 @@ bool eventlog_entry_validate (json_t *entry)
     json_t *context;
 
     if (!json_is_object (entry) || !(name = json_object_get (entry, "name"))
-        || !json_is_string (name) || !(timestamp = json_object_get (entry, "timestamp"))
+        || !json_is_string (name)
+        || !(timestamp = json_object_get (entry, "timestamp"))
         || !json_is_number (timestamp))
         return false;
 
@@ -140,7 +142,8 @@ bool eventlog_entry_validate (json_t *entry)
     return true;
 }
 
-static json_t *eventlog_entry_decode_common (const char *entry, bool trailing_newline)
+static json_t *eventlog_entry_decode_common (const char *entry,
+                                             bool trailing_newline)
 {
     int len;
     char *ptr;
@@ -223,7 +226,9 @@ static json_t *entry_build (double timestamp, const char *name, json_t *context)
     return o;
 }
 
-json_t *eventlog_entry_create (double timestamp, const char *name, const char *context)
+json_t *eventlog_entry_create (double timestamp,
+                               const char *name,
+                               const char *context)
 {
     json_t *rv = NULL;
     json_t *c = NULL;

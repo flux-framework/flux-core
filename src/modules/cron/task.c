@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <signal.h>
@@ -116,7 +116,10 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
     va_end (ap);
 }
 
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     cron_task_t *t = arg;
     t->timedout = 1;
@@ -186,7 +189,8 @@ static void completion_cb (flux_subprocess_t *p)
     cron_task_handle_finished (p, t);
 }
 
-static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+static void state_change_cb (flux_subprocess_t *p,
+                             flux_subprocess_state_t state)
 {
     cron_task_t *t = flux_subprocess_aux_get (p, "task");
 
@@ -238,7 +242,9 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
         is_stderr = true;
 
     if (!(ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp))) {
-        flux_log_error (t->h, "%s: flux_subprocess_read_trimmed_line", __FUNCTION__);
+        flux_log_error (t->h,
+                        "%s: flux_subprocess_read_trimmed_line",
+                        __FUNCTION__);
         return;
     }
 
@@ -299,8 +305,7 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         const char *key;
         json_t *value;
 
-        json_object_foreach (env, key, value)
-        {
+        json_object_foreach (env, key, value) {
             const char *value_str = json_string_value (value);
             if (!value_str) {
                 flux_log_error (t->h, "exec_cmd_create: json_string_value");

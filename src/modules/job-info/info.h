@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_INFO_INFO_H
-#define _FLUX_JOB_INFO_INFO_H
+#    define _FLUX_JOB_INFO_INFO_H
 
-#include <flux/core.h>
-#include <czmq.h>
+#    include <flux/core.h>
+#    include <czmq.h>
 
 struct info_ctx {
     flux_t *h;

@@ -9,16 +9,16 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_H
-#define _FLUX_CORE_H
+#    define _FLUX_CORE_H
 
 /* NOTE: these programming interfaces should be considered EXPERIMENTAL
  * and are subject to change in flux-core releases prefixed with "0."
  */
 
-#include "core/flux.h"
-#include "core/kvs.h"
-#include "core/job.h"
-#include "core/subprocess.h"
+#    include "core/flux.h"
+#    include "core/kvs.h"
+#    include "core/job.h"
+#    include "core/subprocess.h"
 
 #endif /* !_FLUX_CORE_H */
 

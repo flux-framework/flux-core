@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 #include <czmq.h>
@@ -154,12 +154,19 @@ error:
     return NULL;
 }
 
-static int decode_response (flux_future_t *f, const char **rootrefp, int *rootseqp)
+static int decode_response (flux_future_t *f,
+                            const char **rootrefp,
+                            int *rootseqp)
 {
     const char *rootref;
     int rootseq;
 
-    if (flux_rpc_get_unpack (f, "{s:s s:i}", "rootref", &rootref, "rootseq", &rootseq)
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:i}",
+                             "rootref",
+                             &rootref,
+                             "rootseq",
+                             &rootseq)
         < 0)
         return -1;
     if (rootrefp)

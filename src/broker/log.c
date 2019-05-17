@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 
@@ -435,11 +435,18 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
         if (attr_add (attrs, "log-filename", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         (void)attr_delete (attrs, "log-stderr-level", true);
-        if (attr_add (attrs, "log-stderr-level", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, "log-stderr-level", NULL, FLUX_ATTRFLAG_IMMUTABLE)
+            < 0)
             goto done;
     }
 
-    if (attr_add_active (attrs, "log-level", 0, attr_get_log, attr_set_log, logbuf) < 0)
+    if (attr_add_active (attrs,
+                         "log-level",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf)
+        < 0)
         goto done;
     if (attr_add_active (attrs,
                          "log-forward-level",
@@ -457,10 +464,16 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
                          logbuf)
         < 0)
         goto done;
-    if (attr_add_active (attrs, "log-ring-size", 0, attr_get_log, attr_set_log, logbuf)
+    if (attr_add_active (attrs,
+                         "log-ring-size",
+                         0,
+                         attr_get_log,
+                         attr_set_log,
+                         logbuf)
         < 0)
         goto done;
-    if (attr_add_active (attrs, "log-ring-used", 0, attr_get_log, NULL, logbuf) < 0)
+    if (attr_add_active (attrs, "log-ring-used", 0, attr_get_log, NULL, logbuf)
+        < 0)
         goto done;
     if (attr_add_active (attrs, "log-count", 0, attr_get_log, NULL, logbuf) < 0)
         goto done;
@@ -592,7 +605,13 @@ static void dmesg_request_cb (flux_t *h,
     int len;
     int seq, follow;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:b }", "seq", &seq, "follow", &follow)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:b }",
+                             "seq",
+                             &seq,
+                             "follow",
+                             &follow)
         < 0)
         goto error;
     if (logbuf_get (logbuf, seq, &seq, &buf, &len) < 0) {

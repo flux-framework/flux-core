@@ -62,28 +62,28 @@ int main (int argc, char *argv[])
             break;
 
         switch (c) {
-            case 'O':
-                out++;
-                break;
-            case 'E':
-                err++;
-                break;
-            case 'n':
-                no_newline++;
-                break;
-            case 'c':
-                channel++;
-                channel_name = optarg;
-                break;
-            case 'C':
-                channel_out++;
-                break;
-            case 'P':
-                prefix++;
-                break;
-            case 'b':
-                bytes = atoi (optarg);
-                break;
+        case 'O':
+            out++;
+            break;
+        case 'E':
+            err++;
+            break;
+        case 'n':
+            no_newline++;
+            break;
+        case 'c':
+            channel++;
+            channel_name = optarg;
+            break;
+        case 'C':
+            channel_out++;
+            break;
+        case 'P':
+            prefix++;
+            break;
+        case 'b':
+            bytes = atoi (optarg);
+            break;
         }
     }
 

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
@@ -53,7 +53,10 @@ void flux_kvsdir_destroy (flux_kvsdir_t *dir)
 
 flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
 {
-    return kvsdir_create_fromobj (dir->handle, dir->rootref, dir->key, dir->dirobj);
+    return kvsdir_create_fromobj (dir->handle,
+                                  dir->rootref,
+                                  dir->key,
+                                  dir->dirobj);
 }
 
 /* If rootref is non-NULL, the kvsdir records the root reference
@@ -135,8 +138,7 @@ flux_kvsitr_t *flux_kvsitr_create (const flux_kvsdir_t *dir)
     if (!(itr->keys = zlist_new ()))
         goto error;
     dirdata = treeobj_get_data (dir->dirobj);
-    json_object_foreach (dirdata, key, value)
-    {
+    json_object_foreach (dirdata, key, value) {
         if (zlist_push (itr->keys, (char *)key) < 0)
             goto error;
     }

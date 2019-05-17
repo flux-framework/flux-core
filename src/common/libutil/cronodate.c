@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <time.h>
 #include <sys/time.h>
@@ -30,8 +30,13 @@ struct cronodate {
     struct cronodate_item item[TM_MAX_ITEM];
 };
 
-static char *weekdays[] =
-    {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+static char *weekdays[] = {"Sunday",
+                           "Monday",
+                           "Tuesday",
+                           "Wednesday",
+                           "Thursday",
+                           "Friday",
+                           "Saturday"};
 #define WEEKDAY_COUNT 7
 
 static char *months[] = {"January",
@@ -51,17 +56,17 @@ static char *months[] = {"January",
 int tm_unit_min (tm_unit_t item)
 {
     switch (item) {
-        case TM_SEC:
-        case TM_MIN:
-        case TM_HOUR:
-        case TM_WDAY:
-        case TM_MON:
-        case TM_YEAR:  // 1900
-            return 0;
-        case TM_MDAY:
-            return 1;
-        default:
-            break;
+    case TM_SEC:
+    case TM_MIN:
+    case TM_HOUR:
+    case TM_WDAY:
+    case TM_MON:
+    case TM_YEAR:  // 1900
+        return 0;
+    case TM_MDAY:
+        return 1;
+    default:
+        break;
     }
     return (-1);
 }
@@ -69,22 +74,22 @@ int tm_unit_min (tm_unit_t item)
 int tm_unit_max (tm_unit_t item)
 {
     switch (item) {
-        case TM_SEC:
-            return 60;
-        case TM_MIN:
-            return 59;
-        case TM_HOUR:
-            return 23;
-        case TM_MDAY:
-            return 31;
-        case TM_MON:
-            return 11;
-        case TM_WDAY:
-            return 6;
-        case TM_YEAR:  // 3000
-            return 3000 - 1900;
-        default:
-            break;
+    case TM_SEC:
+        return 60;
+    case TM_MIN:
+        return 59;
+    case TM_HOUR:
+        return 23;
+    case TM_MDAY:
+        return 31;
+    case TM_MON:
+        return 11;
+    case TM_WDAY:
+        return 6;
+    case TM_YEAR:  // 3000
+        return 3000 - 1900;
+    default:
+        break;
     }
     return (-1);
 }
@@ -92,22 +97,22 @@ int tm_unit_max (tm_unit_t item)
 const char *tm_unit_string (tm_unit_t item)
 {
     switch (item) {
-        case TM_SEC:
-            return "second";
-        case TM_MIN:
-            return "minute";
-        case TM_HOUR:
-            return "hour";
-        case TM_MDAY:
-            return "mday";
-        case TM_MON:
-            return "month";
-        case TM_WDAY:
-            return "weekday";
-        case TM_YEAR:
-            return "year";
-        default:
-            break;
+    case TM_SEC:
+        return "second";
+    case TM_MIN:
+        return "minute";
+    case TM_HOUR:
+        return "hour";
+    case TM_MDAY:
+        return "mday";
+    case TM_MON:
+        return "month";
+    case TM_WDAY:
+        return "weekday";
+    case TM_YEAR:
+        return "year";
+    default:
+        break;
     }
     return "unknown";
 }
@@ -167,7 +172,8 @@ cronodate_t *cronodate_create ()
 
     memset (d, 0, sizeof (*d));
     for (i = 0; i < TM_MAX_ITEM; i++) {
-        struct idset *n = idset_create (tm_unit_max (i) + 1, IDSET_FLAG_AUTOGROW);
+        struct idset *n =
+            idset_create (tm_unit_max (i) + 1, IDSET_FLAG_AUTOGROW);
         if (n == NULL) {
             cronodate_destroy (d);
             return (NULL);
@@ -212,7 +218,8 @@ static int get_range (const char *r, tm_unit_t u, int *lo, int *hi)
     } else if ((p = strchr (r, '-'))) {
         *(p++) = '\0';
         // r = lo, p = hi
-        if (((*lo = tm_string2int (r, u)) < 0) || ((*hi = tm_string2int (p, u)) < 0))
+        if (((*lo = tm_string2int (r, u)) < 0)
+            || ((*hi = tm_string2int (p, u)) < 0))
             return (-1);
     } else {
         *lo = *hi = tm_string2int (r, u);
@@ -305,14 +312,18 @@ void cronodate_fillset (cronodate_t *d)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++)
-        (void)idset_range_set (d->item[i].set, tm_unit_min (i), tm_unit_max (i));
+        (void)idset_range_set (d->item[i].set,
+                               tm_unit_min (i),
+                               tm_unit_max (i));
 }
 
 void cronodate_emptyset (cronodate_t *d)
 {
     int i;
     for (i = 0; i < TM_MAX_ITEM; i++)
-        (void)idset_range_clear (d->item[i].set, tm_unit_min (i), tm_unit_max (i));
+        (void)idset_range_clear (d->item[i].set,
+                                 tm_unit_min (i),
+                                 tm_unit_max (i));
 }
 
 /* Return pointer to item in struct tm that corresponds to tm_unit_t type.
@@ -320,22 +331,22 @@ void cronodate_emptyset (cronodate_t *d)
 static int *tm_item (struct tm *t, tm_unit_t item)
 {
     switch (item) {
-        case TM_SEC:
-            return &t->tm_sec;
-        case TM_MIN:
-            return &t->tm_min;
-        case TM_HOUR:
-            return &t->tm_hour;
-        case TM_MDAY:
-            return &t->tm_mday;
-        case TM_MON:
-            return &t->tm_mon;
-        case TM_WDAY:
-            return &t->tm_wday;
-        case TM_YEAR:
-            return &t->tm_year;
-        default:
-            break;
+    case TM_SEC:
+        return &t->tm_sec;
+    case TM_MIN:
+        return &t->tm_min;
+    case TM_HOUR:
+        return &t->tm_hour;
+    case TM_MDAY:
+        return &t->tm_mday;
+    case TM_MON:
+        return &t->tm_mon;
+    case TM_WDAY:
+        return &t->tm_wday;
+    case TM_YEAR:
+        return &t->tm_year;
+    default:
+        break;
     }
     return (NULL);
 }
@@ -374,38 +385,38 @@ static int tm_advance (struct tm *tm, tm_unit_t item, int val)
     int *ti;
 
     switch (item) {
-        case TM_SEC:
-        case TM_MIN:
-        case TM_HOUR:
-        case TM_MDAY:
-        case TM_MON:
-            ti = tm_item (tm, item);
-            /* If current value is greater than new value, then roll over
-             *  to the next higher time unit (e.g. for seconds add one to minutes)
-             *  and set this unit to the new "val" value.
-             */
-            if (*ti > val)
-                tm_incr (tm, item + 1);
-            *ti = val;
-            tm_reset (tm, item);
-            break;
-        /* Year is special. It doesn't overflow
+    case TM_SEC:
+    case TM_MIN:
+    case TM_HOUR:
+    case TM_MDAY:
+    case TM_MON:
+        ti = tm_item (tm, item);
+        /* If current value is greater than new value, then roll over
+         *  to the next higher time unit (e.g. for seconds add one to minutes)
+         *  and set this unit to the new "val" value.
          */
-        case TM_YEAR:
-            tm->tm_year = val;
-            tm_reset (tm, TM_YEAR);
-            break;
+        if (*ti > val)
+            tm_incr (tm, item + 1);
+        *ti = val;
+        tm_reset (tm, item);
+        break;
+    /* Year is special. It doesn't overflow
+     */
+    case TM_YEAR:
+        tm->tm_year = val;
+        tm_reset (tm, TM_YEAR);
+        break;
 
-        /* day of week is special */
-        case TM_WDAY:
-            if (tm->tm_wday > val)  // into next week
-                tm->tm_mday += (7 - tm->tm_wday) + val;
-            else
-                tm->tm_mday = val - tm->tm_wday;
-            tm_reset (tm, TM_MDAY);
-            break;
-        default:
-            return (-1);
+    /* day of week is special */
+    case TM_WDAY:
+        if (tm->tm_wday > val)  // into next week
+            tm->tm_mday += (7 - tm->tm_wday) + val;
+        else
+            tm->tm_mday = val - tm->tm_wday;
+        tm_reset (tm, TM_MDAY);
+        break;
+    default:
+        return (-1);
     }
     return (0);
 }

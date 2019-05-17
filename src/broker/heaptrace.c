@@ -9,16 +9,16 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #if WITH_TCMALLOC
-#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
-#include <gperftools/heap-profiler.h>
-#elif HAVE_GOOGLE_HEAP_PROFILER_H
-#include <google/heap-profiler.h>
-#else
-#error gperftools headers not configured
-#endif
+#    if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+#        include <gperftools/heap-profiler.h>
+#    elif HAVE_GOOGLE_HEAP_PROFILER_H
+#        include <google/heap-profiler.h>
+#    else
+#        error gperftools headers not configured
+#    endif
 #endif /* WITH_TCMALLOC */
 
 #include <flux/core.h>

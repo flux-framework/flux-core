@@ -21,7 +21,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <libgen.h>
@@ -130,11 +130,11 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'n':
-                nopt = true;
-                break;
-            default:
-                usage ();
+        case 'n':
+            nopt = true;
+            break;
+        default:
+            usage ();
         }
     }
 
@@ -160,7 +160,8 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_put (txn, 0, key, "init-val") < 0)
         log_err_exit ("flux_kvs_txn_put");
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -190,7 +191,10 @@ int main (int argc, char *argv[])
         thd[i].n = i;
         if ((rc = pthread_attr_init (&thd[i].attr)))
             log_errn (rc, "pthread_attr_init");
-        if ((rc = pthread_create (&thd[i].t, &thd[i].attr, committhread, &thd[i])))
+        if ((rc = pthread_create (&thd[i].t,
+                                  &thd[i].attr,
+                                  committhread,
+                                  &thd[i])))
             log_errn (rc, "pthread_create");
     }
 

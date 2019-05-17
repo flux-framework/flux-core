@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -30,8 +30,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
+#    include <caliper/cali.h>
+#    include <sys/syscall.h>
 #endif
 
 #include "src/common/libutil/log.h"
@@ -203,17 +203,17 @@ flux_msg_t *module_recvmsg (module_t *p)
     if (flux_msg_get_type (msg, &type) < 0)
         goto error;
     switch (type) {
-        case FLUX_MSGTYPE_RESPONSE:
-            if (flux_msg_pop_route (msg, NULL) < 0)
-                goto error;
-            break;
-        case FLUX_MSGTYPE_REQUEST:
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_push_route (msg, zuuid_str (p->uuid)) < 0)
-                goto error;
-            break;
-        default:
-            break;
+    case FLUX_MSGTYPE_RESPONSE:
+        if (flux_msg_pop_route (msg, NULL) < 0)
+            goto error;
+        break;
+    case FLUX_MSGTYPE_REQUEST:
+    case FLUX_MSGTYPE_EVENT:
+        if (flux_msg_push_route (msg, zuuid_str (p->uuid)) < 0)
+            goto error;
+        break;
+    default:
+        break;
     }
     /* All shmem:// connections to the broker have FLUX_ROLE_OWNER
      * and are "authenticated" as the instance owner.
@@ -251,30 +251,30 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
-        case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
-            char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%" PRIu32, p->rank);
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            if (flux_msg_push_route (cpy, uuid) < 0)
-                goto done;
-            if (flux_msg_sendzsock (p->sock, cpy) < 0)
-                goto done;
-            break;
-        }
-        case FLUX_MSGTYPE_RESPONSE: { /* simulate ROUTER socket */
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            if (flux_msg_pop_route (cpy, NULL) < 0)
-                goto done;
-            if (flux_msg_sendzsock (p->sock, cpy) < 0)
-                goto done;
-            break;
-        }
-        default:
-            if (flux_msg_sendzsock (p->sock, msg) < 0)
-                goto done;
-            break;
+    case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
+        char uuid[16];
+        snprintf (uuid, sizeof (uuid), "%" PRIu32, p->rank);
+        if (!(cpy = flux_msg_copy (msg, true)))
+            goto done;
+        if (flux_msg_push_route (cpy, uuid) < 0)
+            goto done;
+        if (flux_msg_sendzsock (p->sock, cpy) < 0)
+            goto done;
+        break;
+    }
+    case FLUX_MSGTYPE_RESPONSE: { /* simulate ROUTER socket */
+        if (!(cpy = flux_msg_copy (msg, true)))
+            goto done;
+        if (flux_msg_pop_route (cpy, NULL) < 0)
+            goto done;
+        if (flux_msg_sendzsock (p->sock, cpy) < 0)
+            goto done;
+        break;
+    }
+    default:
+        if (flux_msg_sendzsock (p->sock, msg) < 0)
+            goto done;
+        break;
     }
     rc = 0;
 done:
@@ -370,7 +370,10 @@ done:
     return rc;
 }
 
-static void module_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void module_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
@@ -565,7 +568,9 @@ module_t *module_add (modhash_t *mh, const char *path)
      */
     rc = zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
     assert (rc == 0); /* uuids are by definition unique */
-    zhash_freefn (mh->zh_byuuid, module_get_uuid (p), (zhash_free_fn *)module_destroy);
+    zhash_freefn (mh->zh_byuuid,
+                  module_get_uuid (p),
+                  (zhash_free_fn *)module_destroy);
     return p;
 }
 

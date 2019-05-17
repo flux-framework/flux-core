@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
@@ -66,19 +66,19 @@ static int op_pollevents (void *impl)
     };
     int revents = 0;
     switch (poll (&pfd, 1, 0)) {
-        case 1:
-            if (pfd.revents & POLLIN)
-                revents |= FLUX_POLLIN;
-            if (pfd.revents & POLLOUT)
-                revents |= FLUX_POLLOUT;
-            if ((pfd.revents & POLLERR) || (pfd.revents & POLLHUP))
-                revents |= FLUX_POLLERR;
-            break;
-        case 0:
-            break;
-        default: /* -1 */
+    case 1:
+        if (pfd.revents & POLLIN)
+            revents |= FLUX_POLLIN;
+        if (pfd.revents & POLLOUT)
+            revents |= FLUX_POLLOUT;
+        if ((pfd.revents & POLLERR) || (pfd.revents & POLLHUP))
             revents |= FLUX_POLLERR;
-            break;
+        break;
+    case 0:
+        break;
+    default: /* -1 */
+        revents |= FLUX_POLLERR;
+        break;
     }
     return revents;
 }
@@ -210,7 +210,8 @@ static int parse_ssh_user_at_host (ssh_ctx_t *c, const char *path)
         errno = ENOMEM;
         goto done;
     }
-    if ((p = strchr (cpy, ':')) || (p = strchr (cpy, '/')) || (p = strchr (cpy, '?')))
+    if ((p = strchr (cpy, ':')) || (p = strchr (cpy, '/'))
+        || (p = strchr (cpy, '?')))
         *p = '\0';
     if (argz_add (&c->ssh_argz, &c->ssh_argz_len, cpy) != 0) {
         errno = ENOMEM;
@@ -388,7 +389,10 @@ flux_t *connector_init (const char *path, int flags)
          * will just fail with errno = ENOENT, which is not all that helpful.
          * Emit a hint on stderr even though this is perhaps not ideal.
          */
-        fprintf (stderr, "ssh-connector: %s: %s\n", c->ssh_cmd, strerror (errno));
+        fprintf (stderr,
+                 "ssh-connector: %s: %s\n",
+                 c->ssh_cmd,
+                 strerror (errno));
         fprintf (stderr, "Hint: set FLUX_SSH in environment to override\n");
         goto error;
     }

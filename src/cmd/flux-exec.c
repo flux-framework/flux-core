@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <unistd.h>
@@ -44,7 +44,10 @@ static struct optparse_option cmdopts[] =
       .key = 'n',
       .has_arg = 0,
       .usage = "Redirect stdin from /dev/null"},
-     {.name = "verbose", .key = 'v', .has_arg = 0, .usage = "Run with more verbosity."},
+     {.name = "verbose",
+      .key = 'v',
+      .has_arg = 0,
+      .usage = "Run with more verbosity."},
      OPTPARSE_TABLE_END};
 
 extern char **environ;
@@ -158,11 +161,14 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             flux_watcher_stop (stdin_w);
     }
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED
+        || state == FLUX_SUBPROCESS_FAILED) {
         int errnum = flux_subprocess_fail_errno (p);
         int ec = 1;
 
-        log_err ("Error: rank %d: %s", flux_subprocess_rank (p), strerror (errnum));
+        log_err ("Error: rank %d: %s",
+                 flux_subprocess_rank (p),
+                 strerror (errnum));
 
         /* bash standard, 126 for permission/access denied, 127 for
          * command not found.  68 (EX_NOHOST) for No route to host.
@@ -202,7 +208,10 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void stdin_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
     flux_subprocess_t *p;
@@ -248,7 +257,9 @@ static void signal_cb (int signum)
                 if (!(idset_str = idset_encode (hanging, flags)))
                     log_err_exit ("idset_encode");
 
-                fprintf (stderr, "%s: command still running at exit\n", idset_str);
+                fprintf (stderr,
+                         "%s: command still running at exit\n",
+                         idset_str);
                 free (idset_str);
                 exit (1);
             }
@@ -356,7 +367,8 @@ int main (int argc, char *argv[])
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
 
-    if (optparse_getopt (opts, "rank", &optargp) > 0 && strcmp (optargp, "all")) {
+    if (optparse_getopt (opts, "rank", &optargp) > 0
+        && strcmp (optargp, "all")) {
         if (!(ns = idset_decode (optargp)))
             log_err_exit ("idset_decode");
         if (flux_get_size (h, &rank_count) < 0)
@@ -376,7 +388,8 @@ int main (int argc, char *argv[])
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
-        char *nodeset = idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
+        char *nodeset =
+            idset_encode (ns, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
         if (!nodeset)
             log_err_exit ("idset_encode");
         fprintf (stderr,

@@ -9,18 +9,18 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_REACTOR_H
-#define _FLUX_CORE_REACTOR_H
+#    define _FLUX_CORE_REACTOR_H
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <stdbool.h>
+#    include <sys/types.h>
+#    include <sys/stat.h>
+#    include <stdbool.h>
 
-#include "handle.h"
-#include "buffer.h"
+#    include "handle.h"
+#    include "buffer.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Reactor
  */
@@ -44,7 +44,8 @@ enum {
 
 /* Flags for buffer watchers */
 enum {
-    FLUX_WATCHER_LINE_BUFFER = 1, /* line buffer data before invoking callback */
+    FLUX_WATCHER_LINE_BUFFER =
+        1, /* line buffer data before invoking callback */
 };
 
 flux_reactor_t *flux_reactor_create (int flags);
@@ -251,9 +252,9 @@ void *flux_watcher_get_data (flux_watcher_t *w);
  */
 struct flux_watcher_ops *flux_watcher_get_ops (flux_watcher_t *w);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 

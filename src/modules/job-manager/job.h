@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_JOB_H
-#define _FLUX_JOB_MANAGER_JOB_H
+#    define _FLUX_JOB_MANAGER_JOB_H
 
-#include <stdint.h>
-#include "src/common/libjob/job.h"
+#    include <stdint.h>
+#    include "src/common/libjob/job.h"
 
 struct job {
     flux_jobid_t id;

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <jansson.h>
@@ -115,10 +115,13 @@ void test_empty (void)
 
     itr = flux_kvsitr_create (dir);
     ok (itr != NULL, "flux_kvsitr_create works");
-    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on first call");
-    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on second call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on first call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on second call");
     flux_kvsitr_rewind (itr);
-    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL after rewind");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL after rewind");
     flux_kvsitr_destroy (itr);
 
     flux_kvsdir_destroy (dir);
@@ -204,8 +207,10 @@ void test_full (void)
         "flux_kvsitr_next returns non-NULL on second call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on third call");
-    ok (flux_kvsitr_next (itr) != NULL, "flux_kvsitr_next returns NULL on fourth call");
-    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on fifth call");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns NULL on fourth call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on fifth call");
 
     flux_kvsitr_rewind (itr);
     ok (flux_kvsitr_next (itr) != NULL,
@@ -214,13 +219,16 @@ void test_full (void)
         "flux_kvsitr_next returns non-NULL on second call");
     ok (flux_kvsitr_next (itr) != NULL,
         "flux_kvsitr_next returns non-NULL on third call");
-    ok (flux_kvsitr_next (itr) != NULL, "flux_kvsitr_next returns NULL on fourth call");
-    ok (flux_kvsitr_next (itr) == NULL, "flux_kvsitr_next returns NULL on fifth call");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns NULL on fourth call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on fifth call");
     flux_kvsitr_destroy (itr);
 
     flux_kvsdir_t *cpy = flux_kvsdir_copy (dir);
     ok (cpy != NULL, "flux_kvsdir_copy was successful");
-    ok (flux_kvsdir_get_size (cpy) == 4, "flux_kvsdir_get_size on copy returns 4");
+    ok (flux_kvsdir_get_size (cpy) == 4,
+        "flux_kvsdir_get_size on copy returns 4");
 
     flux_kvsdir_destroy (dir);
 

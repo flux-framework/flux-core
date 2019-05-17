@@ -9,21 +9,21 @@
 \************************************************************/
 
 #ifndef _FLUX_SCHEDUTIL_H
-#define _FLUX_SCHEDUTIL_H
+#    define _FLUX_SCHEDUTIL_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
-#include "hello.h"
-#include "ready.h"
-#include "alloc.h"
-#include "free.h"
-#include "ops.h"
+#    include "hello.h"
+#    include "ready.h"
+#    include "alloc.h"
+#    include "free.h"
+#    include "ops.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_SCHEDUTIL_H */
 

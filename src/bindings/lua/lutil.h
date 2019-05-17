@@ -13,11 +13,11 @@
 
 #include <lua.h>
 #if !defined LUA_VERSION_NUM || LUA_VERSION_NUM == 501
-#define NEED_LUAL_SETFUNCS 1
+#    define NEED_LUAL_SETFUNCS 1
 /*  Lua 5.0/5.1 compatibility with Lua 5.2
  *    http://lua-users.org/wiki/CompatibilityWithLuaFive
  */
-#include <lauxlib.h>
+#    include <lauxlib.h>
 void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 #endif /* LUA_VERSION_NUM <= 501 */
 

@@ -14,8 +14,8 @@
 ./issue1760 a
 2018-10-25T13:09:25.940817Z kvs.alert[0]: dropped 12 of 12 cache entries
 2018-10-25T13:09:25.941349Z kvs.err[0]: load: content_load_request_send: Invalid
-argument 2018-10-25T13:09:25.941367Z kvs.err[0]: kvstxn_load_cb: load: Invalid argument
-issue1760: flux_future_get: Invalid argument
+argument 2018-10-25T13:09:25.941367Z kvs.err[0]: kvstxn_load_cb: load: Invalid
+argument issue1760: flux_future_get: Invalid argument
  */
 
 /* Failure mode 2:
@@ -27,7 +27,7 @@ argument issue1760: flux_future_get: Success Aborted (core dumped)
 */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 

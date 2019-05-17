@@ -34,7 +34,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
@@ -113,7 +113,8 @@ void event_batch_commit (struct event_ctx *ctx)
         if (batch->txn) {
             if (!(batch->f = flux_kvs_commit (ctx->h, NULL, 0, batch->txn)))
                 goto error;
-            if (flux_future_then (batch->f, -1., commit_continuation, batch) < 0)
+            if (flux_future_then (batch->f, -1., commit_continuation, batch)
+                < 0)
                 goto error;
             if (zlist_append (ctx->pending, batch) < 0)
                 goto nomem;
@@ -227,7 +228,8 @@ static int event_batch_commit_event (struct event_ctx *ctx,
         return -1;
     if (!(entrystr = eventlog_entry_encode (entry)))
         return -1;
-    if (flux_kvs_txn_put (ctx->batch->txn, FLUX_KVS_APPEND, key, entrystr) < 0) {
+    if (flux_kvs_txn_put (ctx->batch->txn, FLUX_KVS_APPEND, key, entrystr)
+        < 0) {
         free (entrystr);
         return -1;
     }
@@ -241,7 +243,9 @@ int event_batch_pub_state (struct event_ctx *ctx, struct job *job)
 
     if (event_batch_start (ctx) < 0)
         goto error;
-    if (!(o = json_pack ("[I,s]", job->id, flux_job_statetostr (job->state, false))))
+    if (!(o = json_pack ("[I,s]",
+                         job->id,
+                         flux_job_statetostr (job->state, false))))
         goto nomem;
     if (json_array_append_new (ctx->batch->state_trans, o)) {
         json_decref (o);
@@ -257,44 +261,44 @@ error:
 int event_job_action (struct event_ctx *ctx, struct job *job)
 {
     switch (job->state) {
-        case FLUX_JOB_NEW:
-            break;
-        case FLUX_JOB_DEPEND:
-            if (event_job_post_pack (ctx, job, "depend", NULL) < 0)
-                return -1;
-            break;
-        case FLUX_JOB_SCHED:
-            if (alloc_enqueue_alloc_request (ctx->alloc_ctx, job) < 0)
-                return -1;
-            break;
-        case FLUX_JOB_RUN:
-            if (start_send_request (ctx->start_ctx, job) < 0)
-                return -1;
-            break;
-        case FLUX_JOB_CLEANUP:
-            if (job->alloc_queued)
-                alloc_dequeue_alloc_request (ctx->alloc_ctx, job);
+    case FLUX_JOB_NEW:
+        break;
+    case FLUX_JOB_DEPEND:
+        if (event_job_post_pack (ctx, job, "depend", NULL) < 0)
+            return -1;
+        break;
+    case FLUX_JOB_SCHED:
+        if (alloc_enqueue_alloc_request (ctx->alloc_ctx, job) < 0)
+            return -1;
+        break;
+    case FLUX_JOB_RUN:
+        if (start_send_request (ctx->start_ctx, job) < 0)
+            return -1;
+        break;
+    case FLUX_JOB_CLEANUP:
+        if (job->alloc_queued)
+            alloc_dequeue_alloc_request (ctx->alloc_ctx, job);
 
-            /* N.B. start_pending indicates that the start request is still
-             * expecting responses.  The final response is the 'release'
-             * response with final=true.  Thus once the flag is clear,
-             * it is safe to release all resources to the scheduler.
-             */
-            if (job->has_resources && !job->start_pending) {
-                if (alloc_send_free_request (ctx->alloc_ctx, job) < 0)
-                    return -1;
-            }
-            /* Post cleanup event when cleanup is complete.
-             */
-            if (!job->alloc_queued && !job->alloc_pending && !job->free_pending
-                && !job->start_pending && !job->has_resources) {
-                if (event_job_post_pack (ctx, job, "clean", NULL) < 0)
-                    return -1;
-            }
-            break;
-        case FLUX_JOB_INACTIVE:
-            queue_delete (ctx->queue, job, job->queue_handle);
-            break;
+        /* N.B. start_pending indicates that the start request is still
+         * expecting responses.  The final response is the 'release'
+         * response with final=true.  Thus once the flag is clear,
+         * it is safe to release all resources to the scheduler.
+         */
+        if (job->has_resources && !job->start_pending) {
+            if (alloc_send_free_request (ctx->alloc_ctx, job) < 0)
+                return -1;
+        }
+        /* Post cleanup event when cleanup is complete.
+         */
+        if (!job->alloc_queued && !job->alloc_pending && !job->free_pending
+            && !job->start_pending && !job->has_resources) {
+            if (event_job_post_pack (ctx, job, "clean", NULL) < 0)
+                return -1;
+        }
+        break;
+    case FLUX_JOB_INACTIVE:
+        queue_delete (ctx->queue, job, job->queue_handle);
+        break;
     }
     return 0;
 }
@@ -458,12 +462,14 @@ error:
     return -1;
 }
 
-void event_ctx_set_alloc_ctx (struct event_ctx *ctx, struct alloc_ctx *alloc_ctx)
+void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
+                              struct alloc_ctx *alloc_ctx)
 {
     ctx->alloc_ctx = alloc_ctx;
 }
 
-void event_ctx_set_start_ctx (struct event_ctx *ctx, struct start_ctx *start_ctx)
+void event_ctx_set_start_ctx (struct event_ctx *ctx,
+                              struct start_ctx *start_ctx)
 {
     ctx->start_ctx = start_ctx;
 }
@@ -504,8 +510,11 @@ struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue)
         return NULL;
     ctx->h = h;
     ctx->queue = queue;
-    if (!(ctx->timer =
-              flux_timer_watcher_create (flux_get_reactor (h), 0., 0., timer_cb, ctx)))
+    if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
+                                                  0.,
+                                                  0.,
+                                                  timer_cb,
+                                                  ctx)))
         goto error;
     if (!(ctx->pending = zlist_new ()))
         goto nomem;

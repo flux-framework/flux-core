@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _KVS_DIR_PRIVATE_H
-#define _KVS_DIR_PRIVATE_H
+#    define _KVS_DIR_PRIVATE_H
 
 flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle,
                                       const char *rootref,

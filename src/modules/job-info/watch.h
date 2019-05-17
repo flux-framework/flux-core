@@ -9,11 +9,14 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_INFO_WATCH_H
-#define _FLUX_JOB_INFO_WATCH_H
+#    define _FLUX_JOB_INFO_WATCH_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-void watch_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg);
+void watch_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg);
 
 void watch_cancel_cb (flux_t *h,
                       flux_msg_handler_t *mh,
@@ -21,7 +24,9 @@ void watch_cancel_cb (flux_t *h,
                       void *arg);
 
 /* Cancel all lookups that match (sender, matchtag). */
-void watchers_cancel (struct info_ctx *ctx, const char *sender, uint32_t matchtag);
+void watchers_cancel (struct info_ctx *ctx,
+                      const char *sender,
+                      uint32_t matchtag);
 
 void watch_cleanup (struct info_ctx *ctx);
 

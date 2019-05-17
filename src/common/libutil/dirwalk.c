@@ -59,7 +59,9 @@ static void direntry_destroy (struct direntry *e)
  *  Create a direntry under parent dirfd `fd` and path `dir`, from
  *   directory entry `dent`.
  */
-static struct direntry *direntry_create (int fd, const char *dir, struct dirent *dent)
+static struct direntry *direntry_create (int fd,
+                                         const char *dir,
+                                         struct dirent *dent)
 {
     struct direntry *e = calloc (1, sizeof (*e));
     if (!e)
@@ -281,7 +283,8 @@ int dirwalk (const char *path, int flags, dirwalk_filter_f fn, void *arg)
      *   then force "current" dir to the path at which we want to
      *   start traversal.
      */
-    if ((dirwalk_set_flags (d, flags) < 0) || !(d->current = direntry_create_dir (path))
+    if ((dirwalk_set_flags (d, flags) < 0)
+        || !(d->current = direntry_create_dir (path))
         || (dirwalk_traverse (d, fn, arg) < 0))
         goto out;
     count = d->count;
@@ -326,7 +329,10 @@ zlist_t *dirwalk_find (const char *searchpath,
     int saved_errno;
     char *copy = NULL;
     char *s, *dirpath, *sptr = NULL;
-    struct find_arg arg = {.count = count, .pattern = pattern, .fn = fn, .arg = uarg};
+    struct find_arg arg = {.count = count,
+                           .pattern = pattern,
+                           .fn = fn,
+                           .arg = uarg};
 
     if (!(arg.results = zlist_new ()))
         return NULL;

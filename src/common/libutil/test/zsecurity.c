@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <limits.h>
@@ -54,7 +54,8 @@ void test_ctor_dtor (void)
 
     errno = 0;
     sec = zsecurity_create (ZSECURITY_TYPE_CURVE | ZSECURITY_TYPE_PLAIN, NULL);
-    ok (sec == NULL && errno == EINVAL, "zsecurity_create PLAIN|CURVE returns EINVAL");
+    ok (sec == NULL && errno == EINVAL,
+        "zsecurity_create PLAIN|CURVE returns EINVAL");
 
     ok ((sec = zsecurity_create (ZSECURITY_TYPE_PLAIN, NULL)) != NULL,
         "zsecurity_create PLAIN works");
@@ -102,7 +103,8 @@ void test_keygen (void)
         BAIL_OUT ("zsecurity_create failed");
     errno = 0;
     ok (zsecurity_keygen (sec) < 0 && errno != 0,
-        "zsecurity_keygen (force) fails with errno != 0 if confdir does not exist");
+        "zsecurity_keygen (force) fails with errno != 0 if confdir does not "
+        "exist");
     zsecurity_destroy (sec);
 
     /* No security modes selected.
@@ -113,7 +115,8 @@ void test_keygen (void)
     sec = zsecurity_create (0, path);
     if (!sec)
         BAIL_OUT ("zsecurity_create failed");
-    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen with no security modes works");
+    ok (zsecurity_keygen (sec) == 0,
+        "zsecurity_keygen with no security modes works");
     ok ((stat (path, &sb) == 0 && S_ISDIR (sb.st_mode)
          && (sb.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) == 0700),
         "confdir is a directory with mode 0700");
@@ -181,13 +184,15 @@ void test_keygen (void)
     snprintf (path, sizeof (path), "%s/sectest.XXXXXX", tmp ? tmp : "/tmp");
     if (!mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
-    sec = zsecurity_create (ZSECURITY_TYPE_CURVE | ZSECURITY_KEYGEN_FORCE, path);
+    sec =
+        zsecurity_create (ZSECURITY_TYPE_CURVE | ZSECURITY_KEYGEN_FORCE, path);
     if (!sec)
         BAIL_OUT ("zsecurity_create failed");
     if (zsecurity_keygen (sec) < 0)
         BAIL_OUT ("zsecurity_keygen CURVE failed");
     errno = 0;
-    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen (force) CURVE-overwrite works");
+    ok (zsecurity_keygen (sec) == 0,
+        "zsecurity_keygen (force) CURVE-overwrite works");
     ok (unlink_recursive (path) == 6, "unlinked 6 file/dir");
     zsecurity_destroy (sec);
 
@@ -212,13 +217,15 @@ void test_keygen (void)
     snprintf (path, sizeof (path), "%s/sectest.XXXXXX", tmp ? tmp : "/tmp");
     if (!mkdtemp (path))
         BAIL_OUT ("could not create tmp directory");
-    sec = zsecurity_create (ZSECURITY_TYPE_PLAIN | ZSECURITY_KEYGEN_FORCE, path);
+    sec =
+        zsecurity_create (ZSECURITY_TYPE_PLAIN | ZSECURITY_KEYGEN_FORCE, path);
     if (!sec)
         BAIL_OUT ("zsecurity_create failed");
     if (zsecurity_keygen (sec) < 0)
         BAIL_OUT ("zsecurity_keygen PLAIN failed");
     errno = 0;
-    ok (zsecurity_keygen (sec) == 0, "zsecurity_keygen (force) PLAIN-overwrite works");
+    ok (zsecurity_keygen (sec) == 0,
+        "zsecurity_keygen (force) PLAIN-overwrite works");
     ok (unlink_recursive (path) == 2, "unlinked 2 file/dir");
     zsecurity_destroy (sec);
 }

@@ -14,7 +14,10 @@
 
 static void aggregate_wait_set_errnum (flux_future_t *f, int errnum)
 {
-    if (flux_future_aux_set (f, "aggregate::errnum", (void *)(intptr_t)errnum, NULL)
+    if (flux_future_aux_set (f,
+                             "aggregate::errnum",
+                             (void *)(intptr_t)errnum,
+                             NULL)
         < 0) {
         /* Not much we can do here but immediately fulfill future and
          *  hope for the best.
@@ -60,7 +63,12 @@ static void aggregate_check (flux_future_t *f, void *arg)
         flux_kvs_lookup_cancel (f);
         aggregate_wait_set_errnum (f_orig, errno);
     } else if (!(o = json_loads (result, 0, NULL))
-               || (json_unpack (o, "{s:i,s:i}", "count", &count, "total", &total)
+               || (json_unpack (o,
+                                "{s:i,s:i}",
+                                "count",
+                                &count,
+                                "total",
+                                &total)
                    < 0)) {
         flux_kvs_lookup_cancel (f);
         aggregate_wait_set_errnum (f_orig, errno);
@@ -69,7 +77,10 @@ static void aggregate_check (flux_future_t *f, void *arg)
                              "aggregate::json_t",
                              json_incref (o),
                              (flux_free_f)json_decref);
-        flux_future_aux_set (f_orig, "aggregate::json_str", strdup (result), free);
+        flux_future_aux_set (f_orig,
+                             "aggregate::json_str",
+                             strdup (result),
+                             free);
         flux_kvs_lookup_cancel (f);
         /*  f_orig will be fulfilled by aggregate_fulfill_finalize() once
          *   flux_kvs_lookup_get() returns ENODATA. This ensures there

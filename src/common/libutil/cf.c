@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include <config.h>
+#    include <config.h>
 #endif /* HAVE_CONFIG_H */
 #include <errno.h>
 #include <string.h>
@@ -55,11 +55,12 @@ cf_t *cf_copy (const cf_t *cf)
     return cpy;
 }
 
-static void __attribute__ ((format (printf, 4, 5))) errprintf (struct cf_error *error,
-                                                               const char *filename,
-                                                               int lineno,
-                                                               const char *fmt,
-                                                               ...)
+static void __attribute__ ((format (printf, 4, 5)))
+errprintf (struct cf_error *error,
+           const char *filename,
+           int lineno,
+           const char *fmt,
+           ...)
 {
     va_list ap;
     int saved_errno = errno;
@@ -106,24 +107,24 @@ enum cf_type cf_typeof (const cf_t *cf)
     if (!cf)
         return CF_UNKNOWN;
     switch (json_typeof ((json_t *)cf)) {
-        case JSON_OBJECT:
-            if (tomltk_json_to_epoch (cf, NULL) == 0)
-                return CF_TIMESTAMP;
-            else
-                return CF_TABLE;
-        case JSON_ARRAY:
-            return CF_ARRAY;
-        case JSON_INTEGER:
-            return CF_INT64;
-        case JSON_REAL:
-            return CF_DOUBLE;
-        case JSON_TRUE:
-        case JSON_FALSE:
-            return CF_BOOL;
-        case JSON_STRING:
-            return CF_STRING;
-        default:
-            return CF_UNKNOWN;
+    case JSON_OBJECT:
+        if (tomltk_json_to_epoch (cf, NULL) == 0)
+            return CF_TIMESTAMP;
+        else
+            return CF_TABLE;
+    case JSON_ARRAY:
+        return CF_ARRAY;
+    case JSON_INTEGER:
+        return CF_INT64;
+    case JSON_REAL:
+        return CF_DOUBLE;
+    case JSON_TRUE:
+    case JSON_FALSE:
+        return CF_BOOL;
+    case JSON_STRING:
+        return CF_STRING;
+    default:
+        return CF_UNKNOWN;
     }
 }
 
@@ -270,29 +271,29 @@ int cf_update_glob (cf_t *cf, const char *pattern, struct cf_error *error)
     tmp = cf_create ();
 
     switch (rc) {
-        case 0:
-            count = 0;
-            for (i = 0; i < gl.gl_pathc; i++) {
-                if (cf_update_file (tmp, gl.gl_pathv[i], error) < 0) {
-                    errnum = errno;
-                    count = -1;
-                    break;
-                }
-                count++;
+    case 0:
+        count = 0;
+        for (i = 0; i < gl.gl_pathc; i++) {
+            if (cf_update_file (tmp, gl.gl_pathv[i], error) < 0) {
+                errnum = errno;
+                count = -1;
+                break;
             }
-            break;
-        case GLOB_NOMATCH:
-            count = 0;
-            errprintf (error, pattern, -1, "No match");
-            break;
-        case GLOB_NOSPACE:
-            errprintf (error, pattern, -1, "Out of memory");
-            errnum = ENOMEM;
-            break;
-        case GLOB_ABORTED:
-            errprintf (error, pattern, -1, "Read error");
-            errnum = EINVAL;
-            break;
+            count++;
+        }
+        break;
+    case GLOB_NOMATCH:
+        count = 0;
+        errprintf (error, pattern, -1, "No match");
+        break;
+    case GLOB_NOSPACE:
+        errprintf (error, pattern, -1, "Out of memory");
+        errnum = ENOMEM;
+        break;
+    case GLOB_ABORTED:
+        errprintf (error, pattern, -1, "Read error");
+        errnum = EINVAL;
+        break;
     }
     globfree (&gl);
 
@@ -313,7 +314,8 @@ int cf_update_glob (cf_t *cf, const char *pattern, struct cf_error *error)
 static bool is_end_marker (struct cf_option opt)
 {
     const struct cf_option end = CF_OPTIONS_TABLE_END;
-    return (opt.key == end.key && opt.type == end.type && opt.required == end.required);
+    return (opt.key == end.key && opt.type == end.type
+            && opt.required == end.required);
 }
 
 static const struct cf_option *find_option (const struct cf_option opts[],

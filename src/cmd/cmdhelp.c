@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <glob.h>
 #include <string.h>
@@ -177,18 +177,18 @@ zhash_t *get_command_list_hash (const char *pattern)
 
     rc = glob (pattern, GLOB_ERR, NULL, &gl);
     switch (rc) {
-        case 0:
-            break; /* have results, fall-through. */
-        case GLOB_ABORTED:
-            /* No help.d directory? */
-            goto out;
-            break;
-        case GLOB_NOMATCH:
-            goto out;
-            break;
-        default:
-            fprintf (stderr, "glob: unknown error %d\n", rc);
-            break;
+    case 0:
+        break; /* have results, fall-through. */
+    case GLOB_ABORTED:
+        /* No help.d directory? */
+        goto out;
+        break;
+    case GLOB_NOMATCH:
+        goto out;
+        break;
+    default:
+        fprintf (stderr, "glob: unknown error %d\n", rc);
+        break;
     }
 
     zh = zhash_new ();

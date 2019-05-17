@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include <config.h>
+#    include <config.h>
 #endif /* HAVE_CONFIG_H */
 
 #include <time.h>
@@ -52,7 +52,9 @@ static void errprintf (struct tomltk_error *error,
  * is parsed to:
  *   error->lineno=42, error->errbuf="bad key"
  */
-static void errfromtoml (struct tomltk_error *error, const char *filename, char *errstr)
+static void errfromtoml (struct tomltk_error *error,
+                         const char *filename,
+                         char *errstr)
 {
     if (error) {
         char *msg = errstr;
@@ -70,8 +72,8 @@ static void errfromtoml (struct tomltk_error *error, const char *filename, char 
  */
 static int tstotm (toml_timestamp_t *ts, struct tm *tm)
 {
-    if (!ts || !tm || !ts->year || !ts->month || !ts->day || !ts->hour || !ts->minute
-        || !ts->second)
+    if (!ts || !tm || !ts->year || !ts->month || !ts->day || !ts->hour
+        || !ts->minute || !ts->second)
         return -1;
     memset (tm, 0, sizeof (*tm));
     tm->tm_year = *ts->year - 1900;
@@ -158,7 +160,8 @@ static int value_to_json (const char *raw, json_t **op)
             goto nomem;
     } else if (toml_rtots (raw, &ts) == 0) {
         time_t t;
-        if (tomltk_ts_to_epoch (&ts, &t) < 0 || !(obj = tomltk_epoch_to_json (t)))
+        if (tomltk_ts_to_epoch (&ts, &t) < 0
+            || !(obj = tomltk_epoch_to_json (t)))
             goto error;
     } else {
         errno = EINVAL;
@@ -273,7 +276,9 @@ json_t *tomltk_table_to_json (toml_table_t *tab)
     return obj;
 }
 
-toml_table_t *tomltk_parse (const char *conf, int len, struct tomltk_error *error)
+toml_table_t *tomltk_parse (const char *conf,
+                            int len,
+                            struct tomltk_error *error)
 {
     char errbuf[200];
     char *cpy;
@@ -300,7 +305,8 @@ toml_table_t *tomltk_parse (const char *conf, int len, struct tomltk_error *erro
     return tab;
 }
 
-toml_table_t *tomltk_parse_file (const char *filename, struct tomltk_error *error)
+toml_table_t *tomltk_parse_file (const char *filename,
+                                 struct tomltk_error *error)
 {
     char errbuf[200];
     FILE *fp;

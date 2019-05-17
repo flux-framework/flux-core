@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -202,7 +202,9 @@ int cache_entry_set_errnum_on_valid (struct cache_entry *entry, int errnum)
 
     entry->errnum = errnum;
     if (entry->waitlist_valid) {
-        if (wait_queue_iter (entry->waitlist_valid, set_wait_errnum, &entry->errnum)
+        if (wait_queue_iter (entry->waitlist_valid,
+                             set_wait_errnum,
+                             &entry->errnum)
             < 0)
             return -1;
         if (wait_runqueue (entry->waitlist_valid) < 0)
@@ -221,7 +223,9 @@ int cache_entry_set_errnum_on_notdirty (struct cache_entry *entry, int errnum)
 
     entry->errnum = errnum;
     if (entry->waitlist_notdirty) {
-        if (wait_queue_iter (entry->waitlist_notdirty, set_wait_errnum, &entry->errnum)
+        if (wait_queue_iter (entry->waitlist_notdirty,
+                             set_wait_errnum,
+                             &entry->errnum)
             < 0)
             return -1;
         if (wait_runqueue (entry->waitlist_notdirty) < 0)
@@ -309,8 +313,10 @@ int cache_remove_entry (struct cache *cache, const char *ref)
     struct cache_entry *entry = zhashx_lookup (cache->zhx, ref);
 
     if (entry && !entry->dirty
-        && (!entry->waitlist_notdirty || !wait_queue_length (entry->waitlist_notdirty))
-        && (!entry->waitlist_valid || !wait_queue_length (entry->waitlist_valid))) {
+        && (!entry->waitlist_notdirty
+            || !wait_queue_length (entry->waitlist_notdirty))
+        && (!entry->waitlist_valid
+            || !wait_queue_length (entry->waitlist_valid))) {
         zhashx_delete (cache->zhx, ref);
         return 1;
     }
@@ -346,9 +352,10 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     }
     ref = zlistx_first (keys);
     while (ref) {
-        if ((entry = zhashx_lookup (cache->zhx, ref)) && !cache_entry_get_dirty (entry)
-            && cache_entry_get_valid (entry)
-            && (thresh == 0 || cache_entry_age (entry, current_epoch) > thresh)) {
+        if ((entry = zhashx_lookup (cache->zhx, ref))
+            && !cache_entry_get_dirty (entry) && cache_entry_get_valid (entry)
+            && (thresh == 0
+                || cache_entry_age (entry, current_epoch) > thresh)) {
             zhashx_delete (cache->zhx, ref);
             count++;
         }

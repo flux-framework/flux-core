@@ -23,13 +23,15 @@ int main (int argc, char** argv)
     ok (wallclock_get_zulu (buf, sizeof (buf)) >= 0,
         "wallclock_get_zulu() works: %s",
         buf);
-    ok (strlen (buf) < WALLCLOCK_MAXLEN, "result did not overflow WALLCLOCK_MAXLEN");
+    ok (strlen (buf) < WALLCLOCK_MAXLEN,
+        "result did not overflow WALLCLOCK_MAXLEN");
     ok (strlen (buf) < STDLOG_MAX_TIMESTAMP,
         "result did not overflow STDLOG_MAX_TIMESTAMP");
 
     /* example: 2016-06-10T18:01:18.479194Z */
 
-    ok (buf[10] == 'T', "RFC 5424: mandatory T character present in correct position");
+    ok (buf[10] == 'T',
+        "RFC 5424: mandatory T character present in correct position");
     ok (strchr (buf, 'Z') != NULL || strchr (buf, 'z') == NULL,
         "RFC 5424: optional Z character is upper case");
 

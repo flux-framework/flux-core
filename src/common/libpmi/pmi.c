@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -189,7 +189,11 @@ int PMI_KVS_Get_my_name (char kvsname[], int length)
     if (ctx.impl && ctx.ops->kvs_get_my_name)
         result = ctx.ops->kvs_get_my_name (ctx.impl, kvsname, length);
     if (result == PMI_SUCCESS) {
-        DPRINTF ("%d: %s (\"%s\") rc=%d\n", ctx.rank, __FUNCTION__, kvsname, result);
+        DPRINTF ("%d: %s (\"%s\") rc=%d\n",
+                 ctx.rank,
+                 __FUNCTION__,
+                 kvsname,
+                 result);
     } else {
         DPRINTF ("%d: %s rc=%d %s\n",
                  ctx.rank,
@@ -239,7 +243,10 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
     return result;
 }
 
-int PMI_KVS_Get (const char kvsname[], const char key[], char value[], int length)
+int PMI_KVS_Get (const char kvsname[],
+                 const char key[],
+                 char value[],
+                 int length)
 {
     int result = PMI_ERR_INIT;
     if (ctx.impl && ctx.ops->kvs_get)

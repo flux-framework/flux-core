@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdbool.h>
 #include <unistd.h>
@@ -31,7 +31,8 @@ void basic_api_tests (void)
 
     cache = cache_create ();
 
-    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL, "kvsroot_mgr_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
 
     ok (kvsroot_mgr_root_count (krm) == 0,
         "kvsroot_mgr_root_count returns correct count of roots");
@@ -48,19 +49,22 @@ void basic_api_tests (void)
     ok (kvsroot_mgr_root_count (krm) == 1,
         "kvsroot_mgr_root_count returns correct count of roots");
 
-    ok ((tmproot = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE)) != NULL,
+    ok ((tmproot = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE))
+            != NULL,
         "kvsroot_mgr_lookup_root works");
 
     ok (tmproot == root, "kvsroot_mgr_lookup_root returns correct root");
 
-    ok ((tmproot = kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE)) != NULL,
+    ok ((tmproot = kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE))
+            != NULL,
         "kvsroot_mgr_lookup_root_safe works");
 
     ok (tmproot == root, "kvsroot_mgr_lookup_root_safe returns correct root");
 
     root->remove = true;
 
-    ok ((tmproot = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE)) != NULL,
+    ok ((tmproot = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE))
+            != NULL,
         "kvsroot_mgr_lookup_root works");
 
     ok (tmproot == root, "kvsroot_mgr_lookup_root returns correct root");
@@ -76,7 +80,8 @@ void basic_api_tests (void)
 
     ok (root->seq == 18, "kvsroot_setroot set seq correctly");
 
-    ok (kvsroot_check_user (krm, NULL, FLUX_ROLE_OWNER, 0) < 0 && errno == EINVAL,
+    ok (kvsroot_check_user (krm, NULL, FLUX_ROLE_OWNER, 0) < 0
+            && errno == EINVAL,
         "kvsroot_check_user failed with EINVAL on bad input");
 
     ok (!kvsroot_check_user (krm, root, FLUX_ROLE_OWNER, 0),
@@ -145,13 +150,16 @@ void basic_iter_tests (void)
 
     cache = cache_create ();
 
-    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL, "kvsroot_mgr_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
 
-    ok ((root = kvsroot_mgr_create_root (krm, cache, "sha1", "foo", geteuid (), 0))
+    ok ((root =
+             kvsroot_mgr_create_root (krm, cache, "sha1", "foo", geteuid (), 0))
             != NULL,
         "kvsroot_mgr_create_root works");
 
-    ok ((root = kvsroot_mgr_create_root (krm, cache, "sha1", "bar", geteuid (), 0))
+    ok ((root =
+             kvsroot_mgr_create_root (krm, cache, "sha1", "bar", geteuid (), 0))
             != NULL,
         "kvsroot_mgr_create_root works");
 
@@ -162,13 +170,15 @@ void basic_iter_tests (void)
     ok (kvsroot_mgr_iter_roots (krm, count_roots_cb, &count) == 0,
         "kvsroot_mgr_iter_roots works");
 
-    ok (count == 2, "kvsroot_mgr_iter_roots called callback correct number of times");
+    ok (count == 2,
+        "kvsroot_mgr_iter_roots called callback correct number of times");
 
     count = 0;
     ok (kvsroot_mgr_iter_roots (krm, count_roots_early_exit_cb, &count) == 0,
         "kvsroot_mgr_iter_roots works if exitting midway");
 
-    ok (count == 1, "kvsroot_mgr_iter_roots called callback correct number of times");
+    ok (count == 1,
+        "kvsroot_mgr_iter_roots called callback correct number of times");
 
     ok (kvsroot_mgr_iter_roots (krm, roots_error_cb, NULL) < 0,
         "kvsroot_mgr_iter_roots errors on error in callback");
@@ -177,7 +187,8 @@ void basic_iter_tests (void)
         "kvsroot_mgr_iter_roots works on remove callback");
 
     ok (kvsroot_mgr_root_count (krm) == 1,
-        "kvsroot_mgr_root_count returns correct count of roots after a removal");
+        "kvsroot_mgr_root_count returns correct count of roots after a "
+        "removal");
 
     kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
@@ -194,7 +205,8 @@ void basic_kvstxn_mgr_tests (void)
 
     cache = cache_create ();
 
-    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL, "kvsroot_mgr_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
 
     ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
@@ -215,7 +227,8 @@ void basic_kvstxn_mgr_tests (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (root->ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok ((tmpaux = kvstxn_get_aux (kt)) != NULL, "kvstxn_get_aux returns non-NULL aux");
+    ok ((tmpaux = kvstxn_get_aux (kt)) != NULL,
+        "kvstxn_get_aux returns non-NULL aux");
 
     ok (tmpaux == &global, "kvstxn_get_aux returns correct aux value");
 

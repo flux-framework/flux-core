@@ -17,8 +17,9 @@
 #define FOREACH_ZLISTX(LIST, VAR) \
     for ((VAR) = zlistx_first (LIST); VAR; (VAR) = zlistx_next (LIST))
 
-#define FOREACH_ZHASH(HASH, KEY, VALUE)                                               \
-    for ((VALUE) = zhash_first (HASH), (KEY) = zhash_cursor (HASH); (VALUE) && (KEY); \
+#define FOREACH_ZHASH(HASH, KEY, VALUE)                             \
+    for ((VALUE) = zhash_first (HASH), (KEY) = zhash_cursor (HASH); \
+         (VALUE) && (KEY);                                          \
          (VALUE) = zhash_next (HASH), (KEY) = zhash_cursor (HASH))
 
 #define FOREACH_ZHASHX(HASH, KEY, VALUE)                              \

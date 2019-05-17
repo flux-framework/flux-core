@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <time.h>
 #include <sys/resource.h>
@@ -35,12 +35,15 @@ static void rusage_request_cb (flux_t *h,
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i "
+                           "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i "
+                           "s:i s:i "
                            "s:i s:i}",
                            "utime",
-                           (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec,
+                           (double)ru.ru_utime.tv_sec
+                               + 1E-6 * ru.ru_utime.tv_usec,
                            "stime",
-                           (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec,
+                           (double)ru.ru_stime.tv_sec
+                               + 1E-6 * ru.ru_stime.tv_usec,
                            "maxrss",
                            ru.ru_maxrss,
                            "ixrss",

@@ -9,28 +9,29 @@
 \************************************************************/
 
 #ifndef _UTIL_STDLOG_H
-#define _UTIL_STDLOG_H
+#    define _UTIL_STDLOG_H
 
-#include <stdarg.h>
+#    include <stdarg.h>
 
 /* RFC 5424 syslog wire format */
 
-#define STDLOG_MAX_PRI 5
-#define STDLOG_MAX_VER 3
-#define STDLOG_MAX_TIMESTAMP 32
-#define STDLOG_MAX_HOSTNAME 255
-#define STDLOG_MAX_APPNAME 48
-#define STDLOG_MAX_PROCID 128
-#define STDLOG_MAX_MSGID 32
-#define STDLOG_MAX_HEADER                                                             \
-    (5 + STDLOG_MAX_PRI + STDLOG_MAX_VER + STDLOG_MAX_TIMESTAMP + STDLOG_MAX_HOSTNAME \
-     + STDLOG_MAX_APPNAME + STDLOG_MAX_PROCID + STDLOG_MAX_MSGID)
+#    define STDLOG_MAX_PRI 5
+#    define STDLOG_MAX_VER 3
+#    define STDLOG_MAX_TIMESTAMP 32
+#    define STDLOG_MAX_HOSTNAME 255
+#    define STDLOG_MAX_APPNAME 48
+#    define STDLOG_MAX_PROCID 128
+#    define STDLOG_MAX_MSGID 32
+#    define STDLOG_MAX_HEADER                                           \
+        (5 + STDLOG_MAX_PRI + STDLOG_MAX_VER + STDLOG_MAX_TIMESTAMP     \
+         + STDLOG_MAX_HOSTNAME + STDLOG_MAX_APPNAME + STDLOG_MAX_PROCID \
+         + STDLOG_MAX_MSGID)
 
-#define STDLOG_NILVALUE "-"
+#    define STDLOG_NILVALUE "-"
 
-#define STDLOG_SEVERITY(pri) ((pri) >> 3)
-#define STDLOG_FACILITY(pri) ((pri)&7)
-#define STDLOG_PRI(sev, fac) (((sev) << 3) | ((fac)&7))
+#    define STDLOG_SEVERITY(pri) ((pri) >> 3)
+#    define STDLOG_FACILITY(pri) ((pri)&7)
+#    define STDLOG_PRI(sev, fac) (((sev) << 3) | ((fac)&7))
 
 struct stdlog_header {
     char buf[STDLOG_MAX_HEADER + 1];

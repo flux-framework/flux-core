@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <stdlib.h>
@@ -35,19 +35,19 @@ int fsd_parse_duration (const char *s, double *dp)
     if (*p != '\0') {
         unsigned int multiplier = 0;
         switch (*p) {
-            case 0:
-            case 's':
-                multiplier = 1;
-                break;
-            case 'm':
-                multiplier = 60;
-                break;
-            case 'h':
-                multiplier = 60 * 60;
-                break;
-            case 'd':
-                multiplier = 60 * 60 * 24;
-                break;
+        case 0:
+        case 's':
+            multiplier = 1;
+            break;
+        case 'm':
+            multiplier = 60;
+            break;
+        case 'h':
+            multiplier = 60 * 60;
+            break;
+        case 'd':
+            multiplier = 60 * 60 * 24;
+            break;
         }
         if (multiplier == 0) {
             errno = EINVAL;

@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _UTIL_MONOTIME_H
-#define _UTIL_MONOTIME_H
+#    define _UTIL_MONOTIME_H
 
-#include <time.h>
-#include <stdbool.h>
+#    include <time.h>
+#    include <stdbool.h>
 
 double monotime_since (struct timespec t0); /* milliseconds */
 void monotime (struct timespec *tp);

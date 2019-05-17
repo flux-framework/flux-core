@@ -75,13 +75,15 @@ static void test_composite_basic_any (flux_reactor_t *r, bool with_error)
     s = flux_future_first_child (any);
     ok ((s != NULL) && !strcmp (s, "f1"), "flux_future_first_child() == 'f1'");
 
-    ok (flux_future_push (any, "f2", f2) == 0, "flux_future_push (any, 'f2', f2)");
+    ok (flux_future_push (any, "f2", f2) == 0,
+        "flux_future_push (any, 'f2', f2)");
 
     s = flux_future_first_child (any);
     ok (s != NULL && (!strcmp (s, "f1") || !strcmp (s, "f2")),
         "flux_future_first_child (any) returns one of two children");
     p = flux_future_next_child (any);
-    ok ((p != NULL) && (!strcmp (p, "f1") || !strcmp (p, "f2")) && (strcmp (p, s) != 0),
+    ok ((p != NULL) && (!strcmp (p, "f1") || !strcmp (p, "f2"))
+            && (strcmp (p, s) != 0),
         "flux_future_next_child (any) returns different child (%s)",
         s);
     ok (flux_future_next_child (any) == NULL,
@@ -89,7 +91,8 @@ static void test_composite_basic_any (flux_reactor_t *r, bool with_error)
 
     ok (!flux_future_is_ready (any), "flux_future_is_ready (any) == false");
 
-    ok (flux_future_wait_for (any, 0.1) == 0, "flux_future_wait_for() returns success");
+    ok (flux_future_wait_for (any, 0.1) == 0,
+        "flux_future_wait_for() returns success");
     ok (init_and_fulfill_called && init_no_fulfill_called,
         "initializers for both futures called synchronously");
 
@@ -129,7 +132,8 @@ static void test_composite_basic_all (flux_reactor_t *r, bool with_error)
     s = flux_future_first_child (all);
     ok ((s != NULL) && !strcmp (s, "f1"), "flux_future_first_child() == 'f1'");
 
-    ok (flux_future_push (all, "f2", f2) == 0, "flux_future_push (all, 'f2', f2)");
+    ok (flux_future_push (all, "f2", f2) == 0,
+        "flux_future_push (all, 'f2', f2)");
 
     ok (!flux_future_is_ready (all), "flux_future_is_ready (all) == false");
 
@@ -293,7 +297,9 @@ static void test_basic_chained (flux_reactor_t *r)
     ok (flux_future_get (f3, NULL) < 0 && errno == 123,
         "chained (failure): flux_future_get: %s",
         strerror (errno));
-    is (str, "step1-step2_err", "chained (failure): step2 error short-circuits step3");
+    is (str,
+        "step1-step2_err",
+        "chained (failure): step2 error short-circuits step3");
     flux_future_destroy (f3);
 
     /*==== Recovery with flux_future_or_then() ===*/
@@ -307,7 +313,8 @@ static void test_basic_chained (flux_reactor_t *r)
     if (!f || !f1 || !f2 || !f3)
         BAIL_OUT ("Error creating test futures");
 
-    ok (f2 == f1, "chained (or-then): and_then/or_then return the same 'next' future");
+    ok (f2 == f1,
+        "chained (or-then): and_then/or_then return the same 'next' future");
 
     flux_future_set_reactor (f, r);
     ok (!flux_future_is_ready (f3) && !flux_future_is_ready (f2),
@@ -342,7 +349,8 @@ void timeout_init (flux_future_t *f, void *arg)
         goto error;
     /* no longer need memory for stashed argument */
     free (dptr);
-    if (flux_future_aux_set (f, "watcher", w, (flux_free_f)flux_watcher_destroy) < 0) {
+    if (flux_future_aux_set (f, "watcher", w, (flux_free_f)flux_watcher_destroy)
+        < 0) {
         flux_watcher_destroy (w);
         goto error;
     }
@@ -382,7 +390,8 @@ void async_check (flux_future_t *fc, void *arg)
     }
     ok ((f = flux_future_get_child (fc, "f1")) != NULL,
         "async: retrieved handle child future");
-    ok (flux_future_get (f, NULL) == 0, "async: flux_future_get on child successful");
+    ok (flux_future_get (f, NULL) == 0,
+        "async: flux_future_get on child successful");
     ok ((f = flux_future_get_child (fc, "timeout")) != NULL,
         "async: retrieved handle to timeout future");
     ok (flux_future_get (f, NULL) == 0, "async: timeout future fulfilled");
@@ -408,7 +417,8 @@ void test_composite_all_async (bool with_error)
     if (!(f = flux_future_timeout (0.1)))
         BAIL_OUT ("flux_future_timeout failed");
 
-    ok (flux_future_push (fc, "timeout", f) == 0, "flux_future_push timeout success");
+    ok (flux_future_push (fc, "timeout", f) == 0,
+        "flux_future_push timeout success");
 
     flux_future_set_reactor (fc, r);
     ok (flux_future_then (fc, 1., async_check, &with_error) == 0,
@@ -438,7 +448,8 @@ void async_any_check (flux_future_t *fc, void *arg)
     }
     ok ((f = flux_future_get_child (fc, "timeout")) != NULL,
         "async: retrieved handle to timeout future");
-    ok (flux_future_is_ready (f) == false, "async: timeout future not yet fulfilled");
+    ok (flux_future_is_ready (f) == false,
+        "async: timeout future not yet fulfilled");
     flux_future_timeout_clear (f);
     async_any_check_rc = 0;
     /* Required so we pop out of reactor since we will still have
@@ -464,7 +475,8 @@ void test_composite_any_async (bool with_error)
     if (!(f = flux_future_timeout (1.0)))
         BAIL_OUT ("flux_future_timeout failed");
 
-    ok (flux_future_push (fc, "timeout", f) == 0, "flux_future_push timeout success");
+    ok (flux_future_push (fc, "timeout", f) == 0,
+        "flux_future_push timeout success");
 
     flux_future_set_reactor (fc, r);
     ok (flux_future_then (fc, -1., async_any_check, &with_error) == 0,
@@ -498,7 +510,8 @@ void f_strcat (flux_future_t *prev, void *arg)
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("f_strcat: flux_future_create: %s", strerror (errno));
     flux_future_fulfill (f, next, free);
-    ok (flux_future_continue (prev, f) == 0, "f_strcat: flux_future_continue worked");
+    ok (flux_future_continue (prev, f) == 0,
+        "f_strcat: flux_future_continue worked");
     flux_future_destroy (prev);
 }
 
@@ -562,7 +575,8 @@ void test_chained_no_continue ()
 
     ok (flux_future_wait_for (f3, 5.) == 0, "flux_future_wait_for()");
 
-    ok (first && second, "All futures auto-fulfilled without flux_future_continue");
+    ok (first && second,
+        "All futures auto-fulfilled without flux_future_continue");
     flux_future_destroy (f3);
 }
 

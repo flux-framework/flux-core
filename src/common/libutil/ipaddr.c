@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/param.h>
 #include <unistd.h>
@@ -96,7 +96,10 @@ int ipaddr_getall (char **addrs, size_t *addrssz, char *errstr, int errstrsz)
                          NI_NUMERICHOST);
         if (e != 0) {
             if (errstr)
-                snprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (e));
+                snprintf (errstr,
+                          errstrsz,
+                          "getnameinfo: %s",
+                          gai_strerror (e));
             goto done;
         }
         if ((e = argz_add (addrs, addrssz, host)) != 0) {

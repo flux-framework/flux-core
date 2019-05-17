@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <signal.h>
 #include <unistd.h>
@@ -157,7 +157,12 @@ int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
             || attr_delete (attrs, "init.mode", true) < 0)
             return -1;
     }
-    if (attr_add_active (attrs, "init.mode", 0, runlevel_attr_get, runlevel_attr_set, r)
+    if (attr_add_active (attrs,
+                         "init.mode",
+                         0,
+                         runlevel_attr_get,
+                         runlevel_attr_set,
+                         r)
         < 0)
         return -1;
 
@@ -183,7 +188,10 @@ void runlevel_set_size (runlevel_t *r, uint32_t size)
     int n;
 
     if (size > 1)
-        n = snprintf (r->nodeset, sizeof (r->nodeset), "[0-%" PRIu32 "]", size - 1);
+        n = snprintf (r->nodeset,
+                      sizeof (r->nodeset),
+                      "[0-%" PRIu32 "]",
+                      size - 1);
     else
         n = snprintf (r->nodeset, sizeof (r->nodeset), "[0]");
     assert (n < sizeof (r->nodeset));

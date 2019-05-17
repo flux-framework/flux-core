@@ -30,7 +30,8 @@ int main (int argc, char *argv[])
     ok ((ml = msglist_create (free)) != NULL, "msglist_create works");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == POLLOUT,
         "msglist_pollevents on empty msglist returns POLLOUT");
-    ok (msglist_append (ml, xstrdup ("foo")) == 0, "msglist_append 'foo' works");
+    ok (msglist_append (ml, xstrdup ("foo")) == 0,
+        "msglist_append 'foo' works");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == (POLLOUT | POLLIN),
         "msglist_pollevents on non-empty msglist returns POLLOUT | POLLIN");
     ok (msglist_push (ml, xstrdup ("bar")) == 0, "msglist_push 'bar' works");

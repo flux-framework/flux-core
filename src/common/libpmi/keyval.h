@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _FLUX_PMI_KEYVAL_H
-#define _FLUX_PMI_KEYVAL_H
+#    define _FLUX_PMI_KEYVAL_H
 
 enum {
     EKV_SUCCESS = 0,

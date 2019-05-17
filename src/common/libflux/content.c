@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <stdlib.h>
@@ -43,7 +43,10 @@ int flux_content_load_get (flux_future_t *f, const void **buf, int *len)
     return flux_rpc_get_raw (f, buf, len);
 }
 
-flux_future_t *flux_content_store (flux_t *h, const void *buf, int len, int flags)
+flux_future_t *flux_content_store (flux_t *h,
+                                   const void *buf,
+                                   int len,
+                                   int flags)
 {
     const char *topic = "content.store";
     uint32_t rank = FLUX_NODEID_ANY;

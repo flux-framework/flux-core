@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <errno.h>
@@ -113,7 +113,10 @@ static void event_cb (flux_t *h,
     }
 }
 
-static void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timer_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     heartbeat_t *hb = arg;
     flux_msg_t *msg = NULL;
@@ -144,8 +147,11 @@ int heartbeat_start (heartbeat_t *hb)
     if (rank == 0) {
         flux_reactor_t *r = flux_get_reactor (hb->h);
         flux_reactor_now_update (r);
-        if (!(hb->timer =
-                  flux_timer_watcher_create (r, hb->rate, hb->rate, timer_cb, hb)))
+        if (!(hb->timer = flux_timer_watcher_create (r,
+                                                     hb->rate,
+                                                     hb->rate,
+                                                     timer_cb,
+                                                     hb)))
             return -1;
         flux_watcher_start (hb->timer);
     }

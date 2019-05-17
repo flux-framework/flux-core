@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include "builtin.h"
 #include <unistd.h>
@@ -132,10 +132,16 @@ static client_t *client_create (proxy_ctx_t *ctx, int rfd, int wfd)
         oom ();
     if (!(c->outqueue = zlist_new ()))
         oom ();
-    c->inw =
-        flux_fd_watcher_create (ctx->reactor, c->rfd, FLUX_POLLIN, client_read_cb, c);
-    c->outw =
-        flux_fd_watcher_create (ctx->reactor, c->wfd, FLUX_POLLOUT, client_write_cb, c);
+    c->inw = flux_fd_watcher_create (ctx->reactor,
+                                     c->rfd,
+                                     FLUX_POLLIN,
+                                     client_read_cb,
+                                     c);
+    c->outw = flux_fd_watcher_create (ctx->reactor,
+                                      c->wfd,
+                                      FLUX_POLLOUT,
+                                      client_write_cb,
+                                      c);
     if (!c->inw || !c->outw) {
         flux_log_error (h, "flux_fd_watcher_create");
         goto error;
@@ -224,7 +230,10 @@ static int global_subscribe (proxy_ctx_t *ctx, const char *topic)
 
     if (!(sub = zhash_lookup (ctx->subscriptions, topic))) {
         if (flux_event_subscribe (ctx->h, topic) < 0) {
-            flux_log_error (ctx->h, "%s: flux_event_subscribe %s", __FUNCTION__, topic);
+            flux_log_error (ctx->h,
+                            "%s: flux_event_subscribe %s",
+                            __FUNCTION__,
+                            topic);
             goto done;
         }
         sub = subscription_create (topic);
@@ -532,26 +541,26 @@ static void client_read_cb (flux_reactor_t *r,
         goto disconnect;
     }
     switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            if (!internal_request (c, msg)) {
-                /* insert disconnect notifier before forwarding request */
-                if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
-                    flux_log_error (h, "disconnect_update");
-                    goto disconnect;
-                }
-                if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
-                    oom (); /* FIXME */
-                if (flux_send (h, msg, 0) < 0)
-                    log_err ("%s: flux_send", __FUNCTION__);
+    case FLUX_MSGTYPE_REQUEST:
+        if (!internal_request (c, msg)) {
+            /* insert disconnect notifier before forwarding request */
+            if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
+                flux_log_error (h, "disconnect_update");
+                goto disconnect;
             }
-            break;
-        case FLUX_MSGTYPE_EVENT:
+            if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
+                oom (); /* FIXME */
             if (flux_send (h, msg, 0) < 0)
                 log_err ("%s: flux_send", __FUNCTION__);
-            break;
-        default:
-            flux_log (h, LOG_ERR, "drop unexpected %s", flux_msg_typestr (type));
-            break;
+        }
+        break;
+    case FLUX_MSGTYPE_EVENT:
+        if (flux_send (h, msg, 0) < 0)
+            log_err ("%s: flux_send", __FUNCTION__);
+        break;
+    default:
+        flux_log (h, LOG_ERR, "drop unexpected %s", flux_msg_typestr (type));
+        break;
     }
     flux_msg_destroy (msg);
     return;
@@ -654,7 +663,8 @@ static void event_cb (flux_t *h,
         }
         c = zlist_next (ctx->clients);
     }
-    // flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic, count);
+    // flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic,
+    // count);
 }
 
 static int check_cred (proxy_ctx_t *ctx, int fd)
@@ -689,7 +699,10 @@ static int send_auth_response (int fd, unsigned char e)
 
 /* Accept a connection from new client.
  */
-static void listener_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void listener_cb (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
     proxy_ctx_t *ctx = arg;
@@ -831,7 +844,10 @@ static void completion_cb (flux_subprocess_t *p)
     flux_subprocess_destroy (p);
 }
 
-static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpath)
+static int child_create (proxy_ctx_t *ctx,
+                         int ac,
+                         char **av,
+                         const char *workpath)
 {
     const char *shell = getenv ("SHELL");
     char *argz = NULL;
@@ -906,21 +922,22 @@ static const struct flux_msg_handler_spec htab[] =
      {FLUX_MSGTYPE_RESPONSE, NULL, response_cb, 0},
      FLUX_MSGHANDLER_TABLE_END};
 
-static struct optparse_option proxy_opts[] = {{
-                                                  .name = "stdio",
-                                                  .key = 's',
-                                                  .has_arg = 0,
-                                                  .usage = "Present proxy interface on "
-                                                           "stdio",
-                                              },
-                                              {
-                                                  .name = "setenv",
-                                                  .key = 'e',
-                                                  .has_arg = 1,
-                                                  .usage = "Set NAME=VALUE in "
-                                                           "flux-proxy environment",
-                                              },
-                                              OPTPARSE_TABLE_END};
+static struct optparse_option proxy_opts[] =
+    {{
+         .name = "stdio",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Present proxy interface on "
+                  "stdio",
+     },
+     {
+         .name = "setenv",
+         .key = 'e',
+         .has_arg = 1,
+         .usage = "Set NAME=VALUE in "
+                  "flux-proxy environment",
+     },
+     OPTPARSE_TABLE_END};
 
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
@@ -998,11 +1015,12 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         assert (n < sizeof (sockpath));
         if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
             goto done;
-        if (!(ctx->listen_w = flux_fd_watcher_create (ctx->reactor,
-                                                      ctx->listen_fd,
-                                                      FLUX_POLLIN | FLUX_POLLERR,
-                                                      listener_cb,
-                                                      ctx))) {
+        if (!(ctx->listen_w =
+                  flux_fd_watcher_create (ctx->reactor,
+                                          ctx->listen_fd,
+                                          FLUX_POLLIN | FLUX_POLLERR,
+                                          listener_cb,
+                                          ctx))) {
             goto done;
         }
         flux_watcher_start (ctx->listen_w);

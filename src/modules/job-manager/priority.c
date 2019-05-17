@@ -27,7 +27,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 
@@ -50,7 +50,13 @@ void priority_handle_request (flux_t *h,
     int priority;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i}", "id", &id, "priority", &priority)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i}",
+                             "id",
+                             &id,
+                             "priority",
+                             &priority)
             < 0
         || flux_msg_get_userid (msg, &userid) < 0
         || flux_msg_get_rolemask (msg, &rolemask) < 0)

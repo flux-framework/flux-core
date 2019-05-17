@@ -110,25 +110,32 @@ int main (int argc, char **argv)
     val = attr_first (attrs);
     ok (val && !strcmp (val, "foo"), "attr_first returned foo");
     ok (attr_next (attrs) == NULL, "attr_next returned NULL");
-    ok (attr_add (attrs, "foo1", "42", 0) == 0 && attr_add (attrs, "foo2", "43", 0) == 0
+    ok (attr_add (attrs, "foo1", "42", 0) == 0
+            && attr_add (attrs, "foo2", "43", 0) == 0
             && attr_add (attrs, "foo3", "44", 0) == 0
             && attr_add (attrs, "foo4", "44", 0) == 0,
         "attr_add foo1, foo2, foo3, foo4 works");
     val = attr_first (attrs);
-    ok (val && !strncmp (val, "foo", 3), "attr_first returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3),
+        "attr_first returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3),
+        "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3),
+        "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3),
+        "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3), "attr_next returned foo-prefixed attr");
+    ok (val && !strncmp (val, "foo", 3),
+        "attr_next returned foo-prefixed attr");
     ok (attr_next (attrs) == NULL, "attr_next returned NULL");
 
     /* attr_add_active (int helper)
      */
-    ok (attr_add_active_int (attrs, "a", &a, 0) == 0, "attr_add_active_int works");
+    ok (attr_add_active_int (attrs, "a", &a, 0) == 0,
+        "attr_add_active_int works");
     a = 0;
     ok (attr_get (attrs, "a", &val, NULL) == 0 && val && !strcmp (val, "0"),
         "attr_get on active int tracks val=0");
@@ -139,10 +146,12 @@ int main (int argc, char **argv)
     ok (attr_get (attrs, "a", &val, NULL) == 0 && !strcmp (val, "-1"),
         "attr_get on active int tracks val=-1");
     a = INT_MAX - 1;
-    ok (attr_get (attrs, "a", &val, NULL) == 0 && strtol (val, NULL, 10) == INT_MAX - 1,
+    ok (attr_get (attrs, "a", &val, NULL) == 0
+            && strtol (val, NULL, 10) == INT_MAX - 1,
         "attr_get on active int tracks val=INT_MAX-1");
     a = INT_MIN + 1;
-    ok (attr_get (attrs, "a", &val, NULL) == 0 && strtol (val, NULL, 10) == INT_MIN + 1,
+    ok (attr_get (attrs, "a", &val, NULL) == 0
+            && strtol (val, NULL, 10) == INT_MIN + 1,
         "attr_get on active int tracks val=INT_MIN+1");
 
     ok (attr_set (attrs, "a", "0", false) == 0 && a == 0,

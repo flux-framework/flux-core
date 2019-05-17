@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/types.h>
 #include <unistd.h>
@@ -93,7 +93,9 @@ static int pmi_single_unpublish_name (void *impl, const char *service_name)
     return PMI_FAIL;
 }
 
-static int pmi_single_lookup_name (void *impl, const char *service_name, char *port)
+static int pmi_single_lookup_name (void *impl,
+                                   const char *service_name,
+                                   char *port)
 {
     return PMI_FAIL;
 }

@@ -59,7 +59,13 @@ void fatal_err (const char *message, void *arg)
 
 flux_future_t *incr (flux_t *h, int n)
 {
-    return flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0, "{s:i}", "counter", n);
+    return flux_rpc_pack (h,
+                          "rpctest.incr",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:i}",
+                          "counter",
+                          n);
 }
 
 int incr_get (flux_future_t *f, int *n)
@@ -239,7 +245,10 @@ void test_chained_now_harder (flux_t *h)
         return;
     }
     pass ("chained-now-harder: created future-and-then 3 levels deep");
-    cmp_ok (incr_get (f3, &count), "==", 0, "chained-now-harder: response received");
+    cmp_ok (incr_get (f3, &count),
+            "==",
+            0,
+            "chained-now-harder: response received");
     cmp_ok (count, "==", 3, "chained-now-harder: result is correct");
     flux_future_destroy (f3);
     return;
@@ -288,7 +297,8 @@ void test_or_then (flux_t *h)
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
     errmsg = flux_future_error_string (f2);
-    ok (!strcmp (errmsg, "Protocol error"), "or-then: error string reported correctly");
+    ok (!strcmp (errmsg, "Protocol error"),
+        "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }
 
@@ -323,7 +333,8 @@ void test_or_then_error_string (flux_t *h)
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
     errmsg = flux_future_error_string (f2);
-    ok (!strcmp (errmsg, "my errstr"), "or-then: error string reported correctly");
+    ok (!strcmp (errmsg, "my errstr"),
+        "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }
 

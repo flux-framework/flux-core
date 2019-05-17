@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <flux/core.h>
@@ -183,12 +183,18 @@ int hello_start (hello_t *hello)
         flags |= FLUX_REDUCE_TIMEDFLUSH;
     if (hwm > 0)
         flags |= FLUX_REDUCE_HWMFLUSH;
-    if (!(hello->reduce =
-              flux_reduce_create (hello->h, reduce_ops, timeout, hello, flags))) {
+    if (!(hello->reduce = flux_reduce_create (hello->h,
+                                              reduce_ops,
+                                              timeout,
+                                              hello,
+                                              flags))) {
         log_err ("hello: creating reduction handle");
         goto done;
     }
-    if (flux_reduce_opt_set (hello->reduce, FLUX_REDUCE_OPT_HWM, &hwm, sizeof (hwm))
+    if (flux_reduce_opt_set (hello->reduce,
+                             FLUX_REDUCE_OPT_HWM,
+                             &hwm,
+                             sizeof (hwm))
         < 0) {
         log_err ("hello: setting FLUX_REDUCE_OPT_HWM");
         goto done;
@@ -214,7 +220,13 @@ static void join_request (flux_t *h,
     hello_t *hello = arg;
     int count, batch;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:i }", "count", &count, "batch", &batch)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:i }",
+                             "count",
+                             &count,
+                             "batch",
+                             &batch)
         < 0)
         log_err_exit ("hello: flux_request_unpack");
     if (batch != 0 || count <= 0)

@@ -45,7 +45,8 @@ void test_simple_msg_handler (flux_t *h)
 
     ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, &mh)) != NULL,
         "handle created dispatcher on demand");
-    ok ((msg = flux_event_encode ("test", NULL)) != NULL, "encoded event message");
+    ok ((msg = flux_event_encode ("test", NULL)) != NULL,
+        "encoded event message");
     ok (flux_send (h, msg, 0) == 0, "sent event message on loop connector");
     cb_called = 0;
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
@@ -80,8 +81,10 @@ void test_fastpath (flux_t *h)
         "allocated matchtag");
     ok ((mh = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
-    ok ((msg = flux_response_encode ("foo", NULL)) != NULL, "encoded response message");
-    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0, "set matchtag in response");
+    ok ((msg = flux_response_encode ("foo", NULL)) != NULL,
+        "encoded response message");
+    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
+        "set matchtag in response");
     ok (flux_send (h, msg, 0) == 0, "sent response message on loop connector");
     cb_called = 0;
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
@@ -93,13 +96,15 @@ void test_fastpath (flux_t *h)
     ok (rc >= 0, "flux_reactor_run ran");
     ok (cb_called == 1, "message handler was called after being started");
 
-    ok (flux_msg_enable_route (msg) == 0 && flux_msg_push_route (msg, "myuuid") == 0,
+    ok (flux_msg_enable_route (msg) == 0
+            && flux_msg_push_route (msg, "myuuid") == 0,
         "added route to message");
     ok (flux_send (h, msg, 0) == 0, "sent response message on loop connector");
     cb_called = 0;
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
     ok (rc >= 0, "flux_reactor_run ran");
-    ok (cb_called == 0, "dispatch did not match response in wrong matchtag domain");
+    ok (cb_called == 0,
+        "dispatch did not match response in wrong matchtag domain");
     ok (flux_recv (h, FLUX_MATCH_ANY, 0) == NULL,
         "unmatched message was discarded by dispatcher");
 
@@ -133,20 +138,26 @@ void test_cloned_dispatch (flux_t *orig)
     ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
         "handle created dispatcher on demand");
     flux_msg_handler_start (mh);
-    ok ((msg = flux_event_encode ("test", NULL)) != NULL, "encoded event message");
+    ok ((msg = flux_event_encode ("test", NULL)) != NULL,
+        "encoded event message");
     ok (flux_send (h, msg, 0) == 0, "sent event message on cloned connector");
     flux_msg_destroy (msg);
     diag ("started event handler");
 
     /* response (matched) */
     m.matchtag = flux_matchtag_alloc (h, 0);
-    ok (m.matchtag != FLUX_MATCHTAG_NONE, "allocated matchtag (%d)", m.matchtag);  // 1
+    ok (m.matchtag != FLUX_MATCHTAG_NONE,
+        "allocated matchtag (%d)",
+        m.matchtag);  // 1
     ok ((mh2 = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
     flux_msg_handler_start (mh2);
-    ok ((msg = flux_response_encode ("foo", NULL)) != NULL, "encoded response message");
-    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0, "set matchtag in response");
-    ok (flux_send (h, msg, 0) == 0, "sent response message on cloned connector");
+    ok ((msg = flux_response_encode ("foo", NULL)) != NULL,
+        "encoded response message");
+    ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
+        "set matchtag in response");
+    ok (flux_send (h, msg, 0) == 0,
+        "sent response message on cloned connector");
     flux_msg_destroy (msg);
     diag ("started response handler");
 
@@ -155,9 +166,12 @@ void test_cloned_dispatch (flux_t *orig)
     ok (m2.matchtag != FLUX_MATCHTAG_NONE,
         "allocated matchtag (%d)",
         m2.matchtag);  // 2
-    ok ((msg = flux_response_encode ("bar", NULL)) != NULL, "encoded response message");
-    ok (flux_msg_set_matchtag (msg, m2.matchtag) == 0, "set matchtag in response");
-    ok (flux_send (h, msg, 0) == 0, "sent response message on cloned connector");
+    ok ((msg = flux_response_encode ("bar", NULL)) != NULL,
+        "encoded response message");
+    ok (flux_msg_set_matchtag (msg, m2.matchtag) == 0,
+        "set matchtag in response");
+    ok (flux_send (h, msg, 0) == 0,
+        "sent response message on cloned connector");
     flux_msg_destroy (msg);
 
     /* N.B. libev NOWAIT semantics don't guarantee that all pending
@@ -180,7 +194,8 @@ void test_cloned_dispatch (flux_t *orig)
     ok (cb_called == 2, "no messages handled on third reactor loop");
 
     /* requeue event and unmatched responses */
-    ok (flux_dispatch_requeue (h) == 0, "requeued unconsumed messages in clone");
+    ok (flux_dispatch_requeue (h) == 0,
+        "requeued unconsumed messages in clone");
 
     msg = flux_recv (orig, FLUX_MATCH_ANY, 0);
     ok (msg != NULL, "received first message on orig handle");
@@ -200,7 +215,8 @@ void test_cloned_dispatch (flux_t *orig)
     flux_msg_destroy (msg);
     end_skip;
 
-    ok (flux_recv (orig, FLUX_MATCH_ANY, 0) == NULL, "there are no more messages");
+    ok (flux_recv (orig, FLUX_MATCH_ANY, 0) == NULL,
+        "there are no more messages");
 
     /* close the clone */
     flux_msg_handler_destroy (mh);

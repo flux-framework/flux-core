@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _KVS_TXN_PRIVATE_H
-#define _KVS_TXN_PRIVATE_H
+#    define _KVS_TXN_PRIVATE_H
 
 int txn_get_op_count (flux_kvs_txn_t *txn);
 

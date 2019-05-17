@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_BARRIER_H
-#define _FLUX_CORE_BARRIER_H
+#    define _FLUX_CORE_BARRIER_H
 
-#include "handle.h"
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Execute a barrier across 'nprocs' processes.
  * The 'name' must be unique across the comms session, or
@@ -23,9 +23,9 @@ extern "C" {
  */
 flux_future_t *flux_barrier (flux_t *h, const char *name, int nprocs);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_BARRIER_H */
 

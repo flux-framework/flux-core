@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _UTIL_FLUID_H
-#define _UTIL_FLUID_H
+#    define _UTIL_FLUID_H
 
-#include <stdint.h>
+#    include <stdint.h>
 
 /* FLUID - Flux Locally unique ID (64 bits):
  * - timestamp (ms since epoch):  40 bits (35 year long runtime)
@@ -48,7 +48,10 @@ int fluid_generate (struct fluid_generator *gen, fluid_t *fluid);
 /* Convert 'fluid' to NULL-terminated string 'buf' of specified type.
  * Return 0 on success, -1 on failure.
  */
-int fluid_encode (char *buf, int bufsz, fluid_t fluid, fluid_string_type_t type);
+int fluid_encode (char *buf,
+                  int bufsz,
+                  fluid_t fluid,
+                  fluid_string_type_t type);
 
 /* Convert NULL-terminated string 's' of specified 'type' to 'fluid'.
  * Return 0 on success, -1 on failure.

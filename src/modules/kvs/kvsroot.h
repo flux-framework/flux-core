@@ -9,16 +9,16 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_KVSROOT_H
-#define _FLUX_KVS_KVSROOT_H
+#    define _FLUX_KVS_KVSROOT_H
 
-#include <stdbool.h>
-#include <flux/core.h>
+#    include <stdbool.h>
+#    include <flux/core.h>
 
-#include "cache.h"
-#include "kvstxn.h"
-#include "treq.h"
-#include "waitqueue.h"
-#include "src/common/libutil/blobref.h"
+#    include "cache.h"
+#    include "kvstxn.h"
+#    include "treq.h"
+#    include "waitqueue.h"
+#    include "src/common/libutil/blobref.h"
 
 typedef struct kvsroot_mgr kvsroot_mgr_t;
 
@@ -62,7 +62,8 @@ struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm, const char *ns);
 
 /* safe lookup, will return NULL if root in process of being removed,
  * i.e. remove flag set to true */
-struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm, const char *ns);
+struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
+                                              const char *ns);
 
 int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
 

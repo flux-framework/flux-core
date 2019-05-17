@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdarg.h>
 #include <czmq.h>
@@ -182,7 +182,8 @@ char *overlay_lspeer_encode (overlay_t *ov)
         goto nomem;
     FOREACH_ZHASH (ov->children, uuid, child)
     {
-        if (!(child_o = json_pack ("{s:i}", "idle", ov->epoch - child->lastseen)))
+        if (!(child_o =
+                  json_pack ("{s:i}", "idle", ov->epoch - child->lastseen)))
             goto nomem;
         if (json_object_set_new (o, uuid, child_o) < 0) {
             json_decref (child_o);
@@ -362,7 +363,10 @@ done:
     return rc;
 }
 
-static void child_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void child_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
@@ -397,7 +401,10 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
     return 0;
 }
 
-static void parent_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void parent_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
@@ -518,14 +525,22 @@ int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
                          overlay)
         < 0)
         return -1;
-    if (attr_add_uint32 (attrs, "rank", overlay->rank, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_uint32 (attrs, "size", overlay->size, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_int (attrs, "tbon.arity", overlay->tbon_k, FLUX_ATTRFLAG_IMMUTABLE)
+    if (attr_add_uint32 (attrs, "rank", overlay->rank, FLUX_ATTRFLAG_IMMUTABLE)
         < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.level", overlay->tbon_level, FLUX_ATTRFLAG_IMMUTABLE)
+    if (attr_add_uint32 (attrs, "size", overlay->size, FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
+        return -1;
+    if (attr_add_int (attrs,
+                      "tbon.arity",
+                      overlay->tbon_k,
+                      FLUX_ATTRFLAG_IMMUTABLE)
+        < 0)
+        return -1;
+    if (attr_add_int (attrs,
+                      "tbon.level",
+                      overlay->tbon_level,
+                      FLUX_ATTRFLAG_IMMUTABLE)
         < 0)
         return -1;
     if (attr_add_int (attrs,

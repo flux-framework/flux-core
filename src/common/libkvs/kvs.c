@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <unistd.h>
 
@@ -49,7 +49,13 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
         return NULL;
     }
 
-    return flux_rpc_pack (h, "kvs.namespace-remove", 0, 0, "{ s:s }", "namespace", ns);
+    return flux_rpc_pack (h,
+                          "kvs.namespace-remove",
+                          0,
+                          0,
+                          "{ s:s }",
+                          "namespace",
+                          ns);
 }
 
 int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp)

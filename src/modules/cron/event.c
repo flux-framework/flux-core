@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include "entry.h"
 
@@ -26,7 +26,10 @@ struct cron_event {
     char *event;
 };
 
-static void ev_timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void ev_timer_cb (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     cron_entry_t *e = arg;
     struct cron_event *ev = cron_entry_type_data (e);

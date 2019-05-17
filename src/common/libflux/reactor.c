@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <string.h>
@@ -104,7 +104,10 @@ flux_reactor_t *flux_get_reactor (flux_t *h)
     flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
     if (!r) {
         if ((r = flux_reactor_create (0))) {
-            if (flux_aux_set (h, "flux::reactor", r, (flux_free_f)flux_reactor_destroy)
+            if (flux_aux_set (h,
+                              "flux::reactor",
+                              r,
+                              (flux_free_f)flux_reactor_destroy)
                 < 0) {
                 flux_reactor_destroy (r);
                 r = NULL;
@@ -423,7 +426,11 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r,
         return NULL;
     }
 
-    if (!(w = flux_watcher_create (r, sizeof (*ebr), &buffer_read_watcher, cb, arg)))
+    if (!(w = flux_watcher_create (r,
+                                   sizeof (*ebr),
+                                   &buffer_read_watcher,
+                                   cb,
+                                   arg)))
         goto cleanup;
 
     ebr = flux_watcher_get_data (w);
@@ -506,7 +513,11 @@ flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r,
         return NULL;
     }
 
-    if (!(w = flux_watcher_create (r, sizeof (*ebw), &buffer_write_watcher, cb, arg)))
+    if (!(w = flux_watcher_create (r,
+                                   sizeof (*ebw),
+                                   &buffer_write_watcher,
+                                   cb,
+                                   arg)))
         goto cleanup;
 
     ebw = flux_watcher_get_data (w);

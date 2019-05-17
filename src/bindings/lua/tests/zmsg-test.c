@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <lua.h>
 #include <lauxlib.h>
@@ -52,7 +52,8 @@ static int l_zi_resp_cb (lua_State *L,
         free (msg);
         return lua_pusherror (L, "flux_msg_set_json: %s", strerror (errno));
     }
-    return lua_push_zmsg_info (L, zmsg_info_create (msg, FLUX_MSGTYPE_RESPONSE));
+    return lua_push_zmsg_info (L,
+                               zmsg_info_create (msg, FLUX_MSGTYPE_RESPONSE));
 }
 
 static int l_cmb_zmsg_create_type (lua_State *L, int type)

@@ -13,9 +13,10 @@
  * 34AA973C D4C4DAA4 F61EEB2B DBAD2731 6534016F
  */
 
-static char *test_data[] = {"abc",
-                            "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
-                            "A million repetitions of 'a'"};
+static char *test_data[] =
+    {"abc",
+     "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+     "A million repetitions of 'a'"};
 static char *test_results[] = {"A9993E36 4706816A BA3E2571 7850C26C 9CD0D89D",
                                "84983E44 1C3BD26E BAAE4AA1 F95129E5 E54670F1",
                                "34AA973C D4C4DAA4 F61EEB2B DBAD2731 6534016F"};
@@ -51,7 +52,9 @@ int main (int argc, char **argv)
         SHA1_Final (&context, digest);
         digest_to_hex (digest, output);
 
-        ok (strcmp (output, test_results[k]) == 0, "FIPS test vector %s", test_data[k]);
+        ok (strcmp (output, test_results[k]) == 0,
+            "FIPS test vector %s",
+            test_data[k]);
     }
 
     /* million 'a' vector we feed separately */
@@ -60,7 +63,9 @@ int main (int argc, char **argv)
         SHA1_Update (&context, (uint8_t *)"a", 1);
     SHA1_Final (&context, digest);
     digest_to_hex (digest, output);
-    ok (strcmp (output, test_results[2]) == 0, "FIPS test vector %s", test_data[2]);
+    ok (strcmp (output, test_results[2]) == 0,
+        "FIPS test vector %s",
+        test_data[2]);
 
     /* verify that (>200 byte) data buffer isn't scribbled upon
      * N.B. if sha1.c is built without SHA1HANDSOFF, this fails.

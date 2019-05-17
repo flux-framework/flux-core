@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <stdarg.h>
@@ -47,7 +47,9 @@ done:
     return rc;
 }
 
-int flux_response_decode (const flux_msg_t *msg, const char **topicp, const char **sp)
+int flux_response_decode (const flux_msg_t *msg,
+                          const char **topicp,
+                          const char **sp)
 {
     const char *topic, *s;
     int rc = -1;
@@ -164,7 +166,9 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_response_encode_raw (const char *topic, const void *data, int len)
+flux_msg_t *flux_response_encode_raw (const char *topic,
+                                      const void *data,
+                                      int len)
 {
     flux_msg_t *msg;
 
@@ -265,7 +269,10 @@ error:
     return -1;
 }
 
-int flux_respond_pack (flux_t *h, const flux_msg_t *request, const char *fmt, ...)
+int flux_respond_pack (flux_t *h,
+                       const flux_msg_t *request,
+                       const char *fmt,
+                       ...)
 {
     int rc;
     va_list ap;
@@ -280,7 +287,10 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request, const char *fmt, ..
     return rc;
 }
 
-int flux_respond_raw (flux_t *h, const flux_msg_t *request, const void *data, int len)
+int flux_respond_raw (flux_t *h,
+                      const flux_msg_t *request,
+                      const void *data,
+                      int len)
 {
     flux_msg_t *msg = NULL;
 

@@ -11,7 +11,7 @@
 /* restart - reload active jobs from the KVS */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdlib.h>
 #include <argz.h>
@@ -156,7 +156,9 @@ static int restart_map_cb (struct job *job, void *arg)
 
 /* Load any active jobs present in the KVS at startup.
  */
-int restart_from_kvs (flux_t *h, struct queue *queue, struct event_ctx *event_ctx)
+int restart_from_kvs (flux_t *h,
+                      struct queue *queue,
+                      struct event_ctx *event_ctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);

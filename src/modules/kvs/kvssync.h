@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_KVSSYNC_H
-#define _FLUX_KVS_KVSSYNC_H
+#    define _FLUX_KVS_KVSSYNC_H
 
-#include <stdbool.h>
-#include <flux/core.h>
+#    include <stdbool.h>
+#    include <flux/core.h>
 
-#include "kvsroot.h"
+#    include "kvsroot.h"
 
 typedef bool (*kvssync_test_msg_f) (const flux_msg_t *msg, void *arg);
 
@@ -34,7 +34,9 @@ int kvssync_add (struct kvsroot *root,
 void kvssync_process (struct kvsroot *root, bool all);
 
 /* remove message on synclist that meet 'cmp' conditions */
-int kvssync_remove_msg (struct kvsroot *root, kvssync_test_msg_f cmp, void *arg);
+int kvssync_remove_msg (struct kvsroot *root,
+                        kvssync_test_msg_f cmp,
+                        void *arg);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 

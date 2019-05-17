@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <flux/core.h>
@@ -30,7 +30,8 @@ struct jobkey_input jobkeytab[] = {
 
     /* expected failure: overflow */
     {4,
-     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     "xxxxxxxx"
      "xxxxxxxxxx",
      NULL},
 
@@ -53,7 +54,8 @@ void check_one_jobkey (struct jobkey_input *try)
     len = flux_job_kvs_key (path, sizeof (path), try->id, try->key);
 
     if (try->expected) {
-        if (len >= 0 && len == strlen (try->expected) && !strcmp (path, try->expected))
+        if (len >= 0 && len == strlen (try->expected)
+            && !strcmp (path, try->expected))
             valid = true;
     } else {  // expected failure
         if (len < 0)

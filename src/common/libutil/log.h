@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _UTIL_LOG_H
-#define _UTIL_LOG_H
+#    define _UTIL_LOG_H
 
-#include <errno.h>
-#include <stdarg.h>
-#include <stdlib.h>
+#    include <errno.h>
+#    include <stdarg.h>
+#    include <stdlib.h>
 
-#include "macros.h"
+#    include "macros.h"
 
 void log_init (char *cmd_name);
 void log_fini (void);

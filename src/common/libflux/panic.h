@@ -9,14 +9,14 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_PANIC_H
-#define _FLUX_CORE_PANIC_H
+#    define _FLUX_CORE_PANIC_H
 
-#include <stdint.h>
-#include "handle.h"
+#    include <stdint.h>
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Tell broker on 'nodeid' to call _exit() after displaying 'reason'
  * on stderr.  'nodeid' may be FLUX_NODEID_ANY to select the local
@@ -24,9 +24,9 @@ extern "C" {
  */
 int flux_panic (flux_t *h, uint32_t nodeid, int flags, const char *reason);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_PANIC_H */
 

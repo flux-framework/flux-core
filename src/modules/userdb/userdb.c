@@ -18,7 +18,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -151,7 +151,9 @@ error:
     return NULL;
 }
 
-static struct user *user_add (userdb_ctx_t *ctx, uint32_t userid, uint32_t rolemask)
+static struct user *user_add (userdb_ctx_t *ctx,
+                              uint32_t userid,
+                              uint32_t rolemask)
 {
     struct user *up = NULL;
     char key[16];
@@ -196,7 +198,10 @@ static void user_delete (userdb_ctx_t *ctx, uint32_t userid)
     zhash_delete (ctx->db, key);
 }
 
-static void lookup (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+static void lookup (flux_t *h,
+                    flux_msg_handler_t *mh,
+                    const flux_msg_t *msg,
+                    void *arg)
 {
     userdb_ctx_t *ctx = arg;
     uint32_t userid;

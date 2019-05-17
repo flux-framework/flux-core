@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include <czmq.h>
@@ -32,9 +32,14 @@ struct test_server {
     zuuid_t *uuid;
 };
 
-static flux_t *test_connector_create (const char *shmem_name, bool server, int flags);
+static flux_t *test_connector_create (const char *shmem_name,
+                                      bool server,
+                                      int flags);
 
-void shutdown_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void shutdown_cb (flux_t *h,
+                  flux_msg_handler_t *mh,
+                  const flux_msg_t *msg,
+                  void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
@@ -145,7 +150,8 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      * N.B. this has to go in before shutdown else shutdown will be masked.
      */
     if (!a->cb) {
-        if (!(a->diag_mh = flux_msg_handler_create (a->s, FLUX_MATCH_ANY, diag_cb, a)))
+        if (!(a->diag_mh =
+                  flux_msg_handler_create (a->s, FLUX_MATCH_ANY, diag_cb, a)))
             BAIL_OUT ("flux_msg_handler_create");
         flux_msg_handler_start (a->diag_mh);
         a->cb = diag_server;
@@ -155,7 +161,8 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      */
     struct flux_match match = FLUX_MATCH_REQUEST;
     match.topic_glob = "shutdown";
-    if (!(a->shutdown_mh = flux_msg_handler_create (a->s, match, shutdown_cb, a)))
+    if (!(a->shutdown_mh =
+              flux_msg_handler_create (a->s, match, shutdown_cb, a)))
         BAIL_OUT ("flux_msg_handler_create");
     flux_msg_handler_start (a->shutdown_mh);
 
@@ -163,7 +170,8 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      */
     if ((e = pthread_create (&a->thread, NULL, thread_wrapper, a)) != 0)
         BAIL_OUT ("pthread_create");
-    if (flux_aux_set (a->c, "test_server", a, (flux_free_f)test_server_destroy) < 0)
+    if (flux_aux_set (a->c, "test_server", a, (flux_free_f)test_server_destroy)
+        < 0)
         BAIL_OUT ("flux_aux_set");
     return a->c;
 }
@@ -272,7 +280,9 @@ static const struct flux_handle_ops handle_ops = {
     .impl_destroy = test_connector_fini,
 };
 
-static flux_t *test_connector_create (const char *shmem_name, bool server, int flags)
+static flux_t *test_connector_create (const char *shmem_name,
+                                      bool server,
+                                      int flags)
 {
     struct test_connector *tcon;
 
@@ -332,7 +342,9 @@ static int loopback_connector_pollfd (void *impl)
     return msglist_pollfd (lcon->queue);
 }
 
-static int loopback_connector_send (void *impl, const flux_msg_t *msg, int flags)
+static int loopback_connector_send (void *impl,
+                                    const flux_msg_t *msg,
+                                    int flags)
 {
     struct loopback_connector *lcon = impl;
     uint32_t userid;

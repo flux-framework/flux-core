@@ -9,20 +9,20 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_FLOG_H
-#define _FLUX_CORE_FLOG_H
+#    define _FLUX_CORE_FLOG_H
 
-#include <stdarg.h>
-#include <syslog.h>
-#include <stdlib.h>
-#include <errno.h>
+#    include <stdarg.h>
+#    include <syslog.h>
+#    include <stdlib.h>
+#    include <errno.h>
 
-#include "handle.h"
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
-#define FLUX_MAX_LOGBUF 2048
+#    define FLUX_MAX_LOGBUF 2048
 
 typedef void (*flux_log_f) (const char *buf, int len, void *arg);
 
@@ -54,8 +54,12 @@ void flux_log_verror (flux_t *h, const char *fmt, va_list ap);
 void flux_log_error (flux_t *h, const char *fmt, ...)
     __attribute__ ((format (printf, 2, 3)));
 
-#define FLUX_LOG_ERROR(h) \
-    (void)flux_log_error ((h), "%s::%d[%s]", __FILE__, __LINE__, __FUNCTION__)
+#    define FLUX_LOG_ERROR(h)               \
+        (void)flux_log_error ((h),          \
+                              "%s::%d[%s]", \
+                              __FILE__,     \
+                              __LINE__,     \
+                              __FUNCTION__)
 
 /* Redirect log messages to flux_log_f in this handle instance.
  */
@@ -80,9 +84,9 @@ void flux_log_fprint (const char *buf, int len, void *arg);
  */
 const char *flux_strerror (int errnum);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_FLOG_H */
 

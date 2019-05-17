@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _FLUX_SCHEDUTIL_FREE_H
-#define _FLUX_SCHEDUTIL_FREE_H
+#    define _FLUX_SCHEDUTIL_FREE_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 /* Decode a free request.
  * Returns 0 on success, -1 on failure with errno set.

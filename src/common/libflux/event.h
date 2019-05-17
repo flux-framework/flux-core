@@ -9,14 +9,14 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_EVENT_H
-#define _FLUX_CORE_EVENT_H
+#    define _FLUX_CORE_EVENT_H
 
-#include "message.h"
-#include "future.h"
+#    include "message.h"
+#    include "future.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 enum event_flags {
     FLUX_EVENT_PRIVATE = 1,
@@ -27,13 +27,18 @@ enum event_flags {
  * If s is non-NULL, assign string payload or set to NULL if none
  * exists.  Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **s);
+int flux_event_decode (const flux_msg_t *msg,
+                       const char **topic,
+                       const char **s);
 
 /* Decode an event message with required JSON payload.  These functions use
  * jansson unpack style variable arguments for decoding the JSON object
  * payload directly.  Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_event_unpack (const flux_msg_t *msg, const char **topic, const char *fmt, ...);
+int flux_event_unpack (const flux_msg_t *msg,
+                       const char **topic,
+                       const char *fmt,
+                       ...);
 
 /* Encode an event message with optinal string payload.
  * If s is non-NULL, it is copied to the message payload.
@@ -49,7 +54,9 @@ flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...);
 
 /* Encode an event message with raw payload.
  */
-flux_msg_t *flux_event_encode_raw (const char *topic, const void *data, int len);
+flux_msg_t *flux_event_encode_raw (const char *topic,
+                                   const void *data,
+                                   int len);
 
 /* Decode an event message, with optional raw payload.
  * If topic is non-NULL, assign the event topic string.
@@ -92,9 +99,9 @@ flux_future_t *flux_event_publish_raw (flux_t *h,
  */
 int flux_event_publish_get_seq (flux_future_t *f, int *seq);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !FLUX_CORE_EVENT_H */
 

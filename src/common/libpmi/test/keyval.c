@@ -126,14 +126,16 @@ int main (int argc, char **argv)
 
     ok (keyval_parse_word (pmi[0], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "init")
-            && keyval_parse_uint (pmi[0], "pmi_version", &ui) == EKV_SUCCESS && ui == 1
+            && keyval_parse_uint (pmi[0], "pmi_version", &ui) == EKV_SUCCESS
+            && ui == 1
             && keyval_parse_uint (pmi[0], "pmi_subversion", &ui) == EKV_SUCCESS
             && ui == 1,
         "parsed pmi-1 init request");
     ok (keyval_parse_word (pmi[1], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "response_to_init")
             && keyval_parse_int (pmi[1], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_uint (pmi[1], "pmi_version", &ui) == EKV_SUCCESS && ui == 1
+            && keyval_parse_uint (pmi[1], "pmi_version", &ui) == EKV_SUCCESS
+            && ui == 1
             && keyval_parse_uint (pmi[1], "pmi_subversion", &ui) == EKV_SUCCESS
             && ui == 1,
         "parsed pmi-1 init response");
@@ -144,8 +146,10 @@ int main (int argc, char **argv)
             && !strcmp (val, "maxes")
             && keyval_parse_int (pmi[3], "rc", &i) == EKV_SUCCESS && i == 0
             && keyval_parse_uint (pmi[3], "kvsname_max", &ui) == EKV_SUCCESS
-            && ui == 256 && keyval_parse_uint (pmi[3], "keylen_max", &ui) == EKV_SUCCESS
-            && ui == 256 && keyval_parse_uint (pmi[3], "vallen_max", &ui) == EKV_SUCCESS
+            && ui == 256
+            && keyval_parse_uint (pmi[3], "keylen_max", &ui) == EKV_SUCCESS
+            && ui == 256
+            && keyval_parse_uint (pmi[3], "vallen_max", &ui) == EKV_SUCCESS
             && ui == 256,
         "parsed pmi-1 maxes response");
     ok (keyval_parse_word (pmi[4], "cmd", val, sizeof (val)) == EKV_SUCCESS
@@ -154,7 +158,8 @@ int main (int argc, char **argv)
     ok (keyval_parse_word (pmi[5], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "universe_size")
             && keyval_parse_int (pmi[5], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_uint (pmi[5], "size", &ui) == EKV_SUCCESS && ui == 2,
+            && keyval_parse_uint (pmi[5], "size", &ui) == EKV_SUCCESS
+            && ui == 2,
         "parsed pmi-1 universe_size response");
     ok (keyval_parse_word (pmi[6], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "get_appnum"),
@@ -184,74 +189,91 @@ int main (int argc, char **argv)
     ok (keyval_parse_word (pmi[13], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "my_kvsname")
             && keyval_parse_int (pmi[13], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_word (pmi[13], "kvsname", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[13], "kvsname", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "lwj.1.pmi"),
         "parsed pmi-1 kvsname response");
     ok (keyval_parse_word (pmi[14], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "put")
-            && keyval_parse_word (pmi[14], "kvsname", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[14], "kvsname", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "lwj.1.pmi")
-            && keyval_parse_word (pmi[14], "key", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[14], "key", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "PM")
-            && keyval_parse_string (pmi[14], "value", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_string (pmi[14], "value", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "/dev/shm/mpich_shar_tmpYbGKbb"),
         "parsed pmi-1 put request");
     ok (keyval_parse_word (pmi[15], "cmd", val, sizeof (val)) == EKV_SUCCESS
-            && !strcmp (val, "put_result") && keyval_parse_int (pmi[15], "rc", &i) == 0
-            && i == EKV_SUCCESS
-            && keyval_parse_string (pmi[15], "msg", val, sizeof (val)) == EKV_SUCCESS
+            && !strcmp (val, "put_result")
+            && keyval_parse_int (pmi[15], "rc", &i) == 0 && i == EKV_SUCCESS
+            && keyval_parse_string (pmi[15], "msg", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "success"),
         "parsed pmi-1 put response");
     ok (keyval_parse_word (pmi[16], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "get")
-            && keyval_parse_word (pmi[16], "kvsname", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[16], "kvsname", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "lwj.1.pmi")
-            && keyval_parse_word (pmi[16], "key", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[16], "key", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "sh"),
         "parsed pmi-1 get request");
     ok (keyval_parse_word (pmi[17], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "get_result")
             && keyval_parse_int (pmi[17], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_word (pmi[17], "msg", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[17], "msg", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "success")
-            && keyval_parse_string (pmi[17], "value", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_string (pmi[17], "value", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "/dev/shm/mpich_shar_tmpYbGKbb"),
         "parsed pmi-1 get response");
     ok (keyval_parse_word (pmi[18], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "publish_name")
-            && keyval_parse_word (pmi[18], "service", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[18], "service", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "zz")
-            && keyval_parse_word (pmi[18], "port", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[18], "port", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "merp42"),
         "parsed pmi-1 publish request");
     ok (keyval_parse_word (pmi[19], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "publish_result")
             && keyval_parse_int (pmi[19], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_word (pmi[19], "info", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[19], "info", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "ok"),
         "parsed pmi-1 publish response");
     ok (keyval_parse_word (pmi[20], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "lookup_name")
-            && keyval_parse_word (pmi[20], "service", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[20], "service", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "zz"),
         "parsed pmi-1 lookup request");
     ok (keyval_parse_word (pmi[21], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "lookup_result")
             && keyval_parse_int (pmi[21], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_word (pmi[21], "info", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[21], "info", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "ok")
-            && keyval_parse_word (pmi[21], "port", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[21], "port", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "merp42"),
         "parsed pmi-1 lookup response");
     ok (keyval_parse_word (pmi[22], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "unpublish_name")
-            && keyval_parse_word (pmi[22], "service", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[22], "service", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "zz"),
         "parsed pmi-1 unpublish request");
     ok (keyval_parse_word (pmi[23], "cmd", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "unpublish_result")
             && keyval_parse_int (pmi[23], "rc", &i) == EKV_SUCCESS && i == 0
-            && keyval_parse_word (pmi[23], "info", val, sizeof (val)) == EKV_SUCCESS
+            && keyval_parse_word (pmi[23], "info", val, sizeof (val))
+                   == EKV_SUCCESS
             && !strcmp (val, "ok"),
         "parsed pmi-1 unpublish response");
 
@@ -260,12 +282,15 @@ int main (int argc, char **argv)
         "parsed pmi-1 spawn mcmd request");
     ok (keyval_parse_uint (spawn[1], "nprocs", &ui) == EKV_SUCCESS && ui == 2,
         "parsed pmi-1 spawn nprocs request");
-    ok (keyval_parse_word (spawn[2], "execname", val, sizeof (val)) == EKV_SUCCESS
+    ok (keyval_parse_word (spawn[2], "execname", val, sizeof (val))
+                == EKV_SUCCESS
             && !strcmp (val, "workprog"),
         "parsed pmi-1 spawn execname request");
-    ok (keyval_parse_uint (spawn[3], "totspawns", &ui) == EKV_SUCCESS && ui == 2,
+    ok (keyval_parse_uint (spawn[3], "totspawns", &ui) == EKV_SUCCESS
+            && ui == 2,
         "parsed pmi-1 spawn totspawns request");
-    ok (keyval_parse_uint (spawn[4], "spawnssofar", &ui) == EKV_SUCCESS && ui == 0,
+    ok (keyval_parse_uint (spawn[4], "spawnssofar", &ui) == EKV_SUCCESS
+            && ui == 0,
         "parsed pmi-1 spawn spawnssofar request");
     ok (keyval_parse_word (spawn[5], "arg0", val, sizeof (val)) == EKV_SUCCESS
             && !strcmp (val, "workprog"),
@@ -281,20 +306,26 @@ int main (int argc, char **argv)
         "parsed pmi-1 spawn arg3 request");
     ok (keyval_parse_uint (spawn[9], "argcnt", &ui) == EKV_SUCCESS && ui == 4,
         "parsed pmi-1 spawn argcnt request");
-    ok (keyval_parse_uint (spawn[10], "preput_num", &ui) == EKV_SUCCESS && ui == 1,
+    ok (keyval_parse_uint (spawn[10], "preput_num", &ui) == EKV_SUCCESS
+            && ui == 1,
         "parsed pmi-1 spawn preput_num request");
-    ok (keyval_parse_word (spawn[11], "preput_key_0", val, sizeof (val)) == EKV_SUCCESS
+    ok (keyval_parse_word (spawn[11], "preput_key_0", val, sizeof (val))
+                == EKV_SUCCESS
             && !strcmp (val, "foo"),
         "parsed pmi-1 spawn preput_key_0 request");
-    ok (keyval_parse_word (spawn[12], "preput_val_0", val, sizeof (val)) == EKV_SUCCESS
+    ok (keyval_parse_word (spawn[12], "preput_val_0", val, sizeof (val))
+                == EKV_SUCCESS
             && !strcmp (val, "bar"),
         "parsed pmi-1 spawn preput_val_0 request");
-    ok (keyval_parse_uint (spawn[13], "info_num", &ui) == EKV_SUCCESS && ui == 1,
+    ok (keyval_parse_uint (spawn[13], "info_num", &ui) == EKV_SUCCESS
+            && ui == 1,
         "parsed pmi-1 spawn info_num request");
-    ok (keyval_parse_word (spawn[14], "info_key_0", val, sizeof (val)) == EKV_SUCCESS
+    ok (keyval_parse_word (spawn[14], "info_key_0", val, sizeof (val))
+                == EKV_SUCCESS
             && !strcmp (val, "baz"),
         "parsed pmi-1 spawn info_key_0 request");
-    ok (keyval_parse_word (spawn[15], "info_val_0", val, sizeof (val)) == EKV_SUCCESS
+    ok (keyval_parse_word (spawn[15], "info_val_0", val, sizeof (val))
+                == EKV_SUCCESS
             && !strcmp (val, "zurn"),
         "parsed pmi-1 spawn info_val_0 request");
     /* skip endcmd - we'll just strcmp that one */

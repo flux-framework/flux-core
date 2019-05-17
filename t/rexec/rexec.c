@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <unistd.h>
@@ -32,14 +32,16 @@ static struct optparse_option cmdopts[] = {{.name = "rank",
                                             .key = 's',
                                             .has_arg = 0,
                                             .arginfo = "NONE",
-                                            .usage = "Output state changes as they "
-                                                     "occur"},
+                                            .usage =
+                                                "Output state changes as they "
+                                                "occur"},
                                            {.name = "stdin2stream",
                                             .key = 'i',
                                             .has_arg = 1,
                                             .arginfo = "CHANNEL",
-                                            .usage = "Read in stdin and forward to "
-                                                     "subprocess channel"},
+                                            .usage =
+                                                "Read in stdin and forward to "
+                                                "subprocess channel"},
                                            OPTPARSE_TABLE_END};
 
 optparse_t *opts;
@@ -59,7 +61,8 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
     if (optparse_getopt (opts, "outputstates", NULL) > 0)
         printf ("%s\n", flux_subprocess_state_string (state));
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_EXEC_FAILED
+        || state == FLUX_SUBPROCESS_FAILED) {
         fprintf (stderr,
                  "rank %d: %s: %s\n",
                  flux_subprocess_rank (p),

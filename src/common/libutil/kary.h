@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _UTIL_KARY_H
-#define _UTIL_KARY_H
+#    define _UTIL_KARY_H
 
-#include <stdint.h>
+#    include <stdint.h>
 
 /* k-ary tree utils
  *
@@ -19,7 +19,7 @@
  * c.f. http://cs.lmu.edu/~ray/notes/orderedtrees/
  */
 
-#define KARY_NONE (~(uint32_t)0)
+#    define KARY_NONE (~(uint32_t)0)
 
 /* Return the parent of i or KARY_NONE if i has no parent.
  */

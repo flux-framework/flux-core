@@ -30,7 +30,10 @@ int main (int argc, char *argv[])
 
         log_msg ("loop=%d", i);
 
-        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE, key)))
+        if (!(f = flux_kvs_lookup (h,
+                                   NULL,
+                                   FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE,
+                                   key)))
             log_err_exit ("flux_kvs_lookup");
         if (flux_kvs_lookup_cancel (f) < 0)
             log_err_exit ("flux_kvs_lookup_cancel");

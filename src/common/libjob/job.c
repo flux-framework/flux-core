@@ -9,13 +9,13 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <unistd.h>
 #include <sys/types.h>
 #include <flux/core.h>
 #if HAVE_FLUX_SECURITY
-#include <flux/security/sign.h>
+#    include <flux/security/sign.h>
 #endif
 #include <jansson.h>
 
@@ -56,7 +56,8 @@ static flux_security_t *get_security_ctx (flux_t *h, flux_future_t **f_error)
             goto error;
         if (flux_security_configure (sec, NULL) < 0)
             goto error;
-        if (flux_aux_set (h, auxkey, sec, (flux_free_f)flux_security_destroy) < 0)
+        if (flux_aux_set (h, auxkey, sec, (flux_free_f)flux_security_destroy)
+            < 0)
             goto error;
     }
     return sec;
@@ -67,7 +68,10 @@ error:
 }
 #endif
 
-flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority, int flags)
+flux_future_t *flux_job_submit (flux_t *h,
+                                const char *jobspec,
+                                int priority,
+                                int flags)
 {
     flux_future_t *f = NULL;
     const char *J;
@@ -134,7 +138,8 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
     json_t *o = NULL;
     int saved_errno;
 
-    if (!h || max_entries < 0 || !json_str || !(o = json_loads (json_str, 0, NULL))) {
+    if (!h || max_entries < 0 || !json_str
+        || !(o = json_loads (json_str, 0, NULL))) {
         errno = EINVAL;
         return NULL;
     }
@@ -184,7 +189,12 @@ flux_future_t *flux_job_raise (flux_t *h,
             goto nomem;
         }
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.raise", FLUX_NODEID_ANY, 0, "o", o)))
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.raise",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "o",
+                             o)))
         goto error;
     return f;
 nomem:
@@ -234,7 +244,12 @@ int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key)
 
     if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    len = snprintf (buf, bufsz, "job.%s%s%s", idstr, key ? "." : "", key ? key : "");
+    len = snprintf (buf,
+                    bufsz,
+                    "job.%s%s%s",
+                    idstr,
+                    key ? "." : "",
+                    key ? key : "");
     if (len >= bufsz) {
         errno = EOVERFLOW;
         return -1;
@@ -252,7 +267,13 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags, "{s:I}", "id", id)))
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             rpc_flags,
+                             "{s:I}",
+                             "id",
+                             id)))
         return NULL;
     return f;
 }
@@ -291,18 +312,18 @@ int flux_job_event_watch_cancel (flux_future_t *f)
 const char *flux_job_statetostr (flux_job_state_t state, bool single_char)
 {
     switch (state) {
-        case FLUX_JOB_NEW:
-            return single_char ? "N" : "NEW";
-        case FLUX_JOB_DEPEND:
-            return single_char ? "D" : "DEPEND";
-        case FLUX_JOB_SCHED:
-            return single_char ? "S" : "SCHED";
-        case FLUX_JOB_RUN:
-            return single_char ? "R" : "RUN";
-        case FLUX_JOB_CLEANUP:
-            return single_char ? "C" : "CLEANUP";
-        case FLUX_JOB_INACTIVE:
-            return single_char ? "I" : "INACTIVE";
+    case FLUX_JOB_NEW:
+        return single_char ? "N" : "NEW";
+    case FLUX_JOB_DEPEND:
+        return single_char ? "D" : "DEPEND";
+    case FLUX_JOB_SCHED:
+        return single_char ? "S" : "SCHED";
+    case FLUX_JOB_RUN:
+        return single_char ? "R" : "RUN";
+    case FLUX_JOB_CLEANUP:
+        return single_char ? "C" : "CLEANUP";
+    case FLUX_JOB_INACTIVE:
+        return single_char ? "I" : "INACTIVE";
     }
     return single_char ? "?" : "(unknown)";
 }

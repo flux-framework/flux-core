@@ -28,7 +28,10 @@ static void die (const char *fmt, ...)
     exit (1);
 }
 
-static void write_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void write_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     int errnum;
     if (revents & FLUX_POLLERR)
@@ -41,7 +44,10 @@ static void write_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *a
     }
 }
 
-static void read_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void read_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     const void *data;
     int len, n = 0;
@@ -96,9 +102,18 @@ int main (int argc, char *argv[])
     if (!(r = flux_reactor_create (0)))
         die ("flux_reactor_create failed\n");
 
-    ww = flux_buffer_write_watcher_create (r, STDOUT_FILENO, 4096, write_cb, 0, NULL);
-    rw =
-        flux_buffer_read_watcher_create (r, STDIN_FILENO, 4096, read_cb, 0, (void *)ww);
+    ww = flux_buffer_write_watcher_create (r,
+                                           STDOUT_FILENO,
+                                           4096,
+                                           write_cb,
+                                           0,
+                                           NULL);
+    rw = flux_buffer_read_watcher_create (r,
+                                          STDIN_FILENO,
+                                          4096,
+                                          read_cb,
+                                          0,
+                                          (void *)ww);
     if (!rw || !ww)
         die ("flux buffer watcher create failed\n");
 

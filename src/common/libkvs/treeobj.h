@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_TREEOBJ_H
-#define _FLUX_KVS_TREEOBJ_H
+#    define _FLUX_KVS_TREEOBJ_H
 
-#include <jansson.h>
-#include <stdbool.h>
+#    include <jansson.h>
+#    include <stdbool.h>
 
 /* See RFC 11 */
 
@@ -58,7 +58,9 @@ json_t *treeobj_get_data (json_t *obj);
 
 /* get convenience functions, operate on type specific objects
  */
-int treeobj_get_symlink (const json_t *obj, const char **ns, const char **target);
+int treeobj_get_symlink (const json_t *obj,
+                         const char **ns,
+                         const char **target);
 
 /* get decoded val data.
  * If len == 0, data will be NULL.

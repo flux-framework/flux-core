@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -210,9 +210,10 @@ static void subprocess_server_destroy (void *arg)
     }
 }
 
-static flux_subprocess_server_t *subprocess_server_create (flux_t *h,
-                                                           const char *local_uri,
-                                                           int rank)
+static flux_subprocess_server_t *subprocess_server_create (
+    flux_t *h,
+    const char *local_uri,
+    int rank)
 {
     flux_subprocess_server_t *s = calloc (1, sizeof (*s));
     int save_errno;
@@ -376,23 +377,23 @@ static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
     assert (p->state != FLUX_SUBPROCESS_FAILED);
 
     switch (p->state_reported) {
-        case FLUX_SUBPROCESS_INIT:
-            /* next state to report must be STARTED */
-            return FLUX_SUBPROCESS_STARTED;
-        case FLUX_SUBPROCESS_STARTED:
-            /* next state must be RUNNING or EXEC_FAILED */
-            if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
-                return FLUX_SUBPROCESS_EXEC_FAILED;
-            else /* p->state == FLUX_SUBPROCESS_RUNNING
-                    || p->state == FLUX_SUBPROCESS_EXITED */
-                return FLUX_SUBPROCESS_RUNNING;
-        case FLUX_SUBPROCESS_RUNNING:
-            /* next state is EXITED */
-            return FLUX_SUBPROCESS_EXITED;
-        case FLUX_SUBPROCESS_EXEC_FAILED:
-        case FLUX_SUBPROCESS_EXITED:
-        case FLUX_SUBPROCESS_FAILED:
-            break;
+    case FLUX_SUBPROCESS_INIT:
+        /* next state to report must be STARTED */
+        return FLUX_SUBPROCESS_STARTED;
+    case FLUX_SUBPROCESS_STARTED:
+        /* next state must be RUNNING or EXEC_FAILED */
+        if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
+            return FLUX_SUBPROCESS_EXEC_FAILED;
+        else /* p->state == FLUX_SUBPROCESS_RUNNING
+                || p->state == FLUX_SUBPROCESS_EXITED */
+            return FLUX_SUBPROCESS_RUNNING;
+    case FLUX_SUBPROCESS_RUNNING:
+        /* next state is EXITED */
+        return FLUX_SUBPROCESS_EXITED;
+    case FLUX_SUBPROCESS_EXEC_FAILED:
+    case FLUX_SUBPROCESS_EXITED:
+    case FLUX_SUBPROCESS_FAILED:
+        break;
     }
 
     /* shouldn't be possible to reach here */
@@ -503,7 +504,8 @@ static void completed_check_cb (flux_reactor_t *r,
      * If no state change callback was specified, we must have reached
      * state FLUX_SUBPROCESS_EXITED to have reached this point.
      */
-    if (!p->ops.on_state_change || p->state_reported == FLUX_SUBPROCESS_EXITED) {
+    if (!p->ops.on_state_change
+        || p->state_reported == FLUX_SUBPROCESS_EXITED) {
         if (p->ops.on_completion)
             (*p->ops.on_completion) (p);
 
@@ -549,8 +551,8 @@ static flux_subprocess_t *flux_exec_wrap (flux_t *h,
                                           const flux_subprocess_ops_t *ops)
 {
     flux_subprocess_t *p = NULL;
-    int valid_flags =
-        (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH | FLUX_SUBPROCESS_FLAGS_SETPGRP);
+    int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
+                       | FLUX_SUBPROCESS_FLAGS_SETPGRP);
     int save_errno;
 
     if (!r || !cmd) {
@@ -622,7 +624,8 @@ flux_subprocess_t *flux_rexec (flux_t *h,
     flux_reactor_t *r;
     int save_errno;
 
-    if (!h || (rank < 0 && rank != FLUX_NODEID_ANY && rank != FLUX_NODEID_UPSTREAM)
+    if (!h
+        || (rank < 0 && rank != FLUX_NODEID_ANY && rank != FLUX_NODEID_UPSTREAM)
         || !cmd) {
         errno = EINVAL;
         return NULL;
@@ -722,7 +725,8 @@ int flux_subprocess_write (flux_subprocess_t *p,
             return -1;
         }
     } else {
-        if (p->state != FLUX_SUBPROCESS_INIT && p->state != FLUX_SUBPROCESS_STARTED
+        if (p->state != FLUX_SUBPROCESS_INIT
+            && p->state != FLUX_SUBPROCESS_STARTED
             && p->state != FLUX_SUBPROCESS_RUNNING) {
             errno = EPIPE;
             return -1;
@@ -917,18 +921,18 @@ flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)
 const char *flux_subprocess_state_string (flux_subprocess_state_t state)
 {
     switch (state) {
-        case FLUX_SUBPROCESS_INIT:
-            return "Init";
-        case FLUX_SUBPROCESS_STARTED:
-            return "Started";
-        case FLUX_SUBPROCESS_EXEC_FAILED:
-            return "Exec Failed";
-        case FLUX_SUBPROCESS_RUNNING:
-            return "Running";
-        case FLUX_SUBPROCESS_EXITED:
-            return "Exited";
-        case FLUX_SUBPROCESS_FAILED:
-            return "Failed";
+    case FLUX_SUBPROCESS_INIT:
+        return "Init";
+    case FLUX_SUBPROCESS_STARTED:
+        return "Started";
+    case FLUX_SUBPROCESS_EXEC_FAILED:
+        return "Exec Failed";
+    case FLUX_SUBPROCESS_RUNNING:
+        return "Running";
+    case FLUX_SUBPROCESS_EXITED:
+        return "Exited";
+    case FLUX_SUBPROCESS_FAILED:
+        return "Failed";
     }
     return NULL;
 }
@@ -952,7 +956,8 @@ int flux_subprocess_fail_errno (flux_subprocess_t *p)
         errno = EINVAL;
         return -1;
     }
-    if (p->state != FLUX_SUBPROCESS_EXEC_FAILED && p->state != FLUX_SUBPROCESS_FAILED) {
+    if (p->state != FLUX_SUBPROCESS_EXEC_FAILED
+        && p->state != FLUX_SUBPROCESS_FAILED) {
         errno = EINVAL;
         return -1;
     }

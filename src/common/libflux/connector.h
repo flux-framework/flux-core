@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_CONNECTOR_H
-#define _FLUX_CORE_CONNECTOR_H
+#    define _FLUX_CORE_CONNECTOR_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /**
  ** Only handle implementation stuff below.
@@ -35,12 +35,14 @@ struct flux_handle_ops {
     void (*impl_destroy) (void *impl);
 };
 
-flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
+flux_t *flux_handle_create (void *impl,
+                            const struct flux_handle_ops *ops,
+                            int flags);
 void flux_handle_destroy (flux_t *hp);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_CONNECTOR_H */
 

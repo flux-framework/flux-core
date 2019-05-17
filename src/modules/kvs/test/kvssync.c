@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdbool.h>
 #include <unistd.h>
@@ -27,7 +27,8 @@ int count = 0;
 
 void basic_corner_case_tests (void)
 {
-    ok (kvssync_add (NULL, NULL, NULL, NULL, NULL, NULL, 0) < 0 && errno == EINVAL,
+    ok (kvssync_add (NULL, NULL, NULL, NULL, NULL, NULL, 0) < 0
+            && errno == EINVAL,
         "kvssync_add fails with EINVAL on bad input");
 
     ok (kvssync_remove_msg (NULL, NULL, NULL) < 0 && errno == EINVAL,
@@ -51,7 +52,8 @@ void basic_api_tests (void)
 
     cache = cache_create ();
 
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL, "kvsroot_mgr_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     ok (kvsroot_mgr_root_count (krm) == 0,
         "kvsroot_mgr_root_count returns correct count of roots");
@@ -119,7 +121,8 @@ void basic_api_tests (void)
 
     kvssync_process (root, true);
 
-    ok (count == 3, "kvssync_process called callback thrice on all flag = true");
+    ok (count == 3,
+        "kvssync_process called callback thrice on all flag = true");
 
     ok (zlist_size (root->synclist) == 0, "synclist is length 0");
 
@@ -139,7 +142,8 @@ void basic_api_tests (void)
 
     kvssync_process (root, true);
 
-    ok (count == 3, "kvssync_process called callback thrice on all flag = true");
+    ok (count == 3,
+        "kvssync_process called callback thrice on all flag = true");
 
     flux_msg_destroy (msg);
 
@@ -175,7 +179,8 @@ void basic_remove_tests (void)
 
     cache = cache_create ();
 
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL, "kvsroot_mgr_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     ok (kvsroot_mgr_root_count (krm) == 0,
         "kvsroot_mgr_root_count returns correct count of roots");
@@ -216,7 +221,8 @@ void basic_remove_tests (void)
 
     ok (zlist_size (root->synclist) == 5, "synclist is still length 5");
 
-    ok (!kvssync_remove_msg (root, msgcmp_true, NULL), "kvssync_remove_msg works");
+    ok (!kvssync_remove_msg (root, msgcmp_true, NULL),
+        "kvssync_remove_msg works");
 
     ok (zlist_size (root->synclist) == 0, "synclist is length 0");
 

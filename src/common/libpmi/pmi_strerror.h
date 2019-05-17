@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_PMI_STRERROR_H
-#define _FLUX_CORE_PMI_STRERROR_H
+#    define _FLUX_CORE_PMI_STRERROR_H
 
 const char *pmi_strerror (int rc);
 

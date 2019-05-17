@@ -9,15 +9,15 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_SUBMIT_H
-#define _FLUX_JOB_MANAGER_SUBMIT_H
+#    define _FLUX_JOB_MANAGER_SUBMIT_H
 
-#include <stdbool.h>
-#include <czmq.h>
-#include <jansson.h>
-#include <flux/core.h>
+#    include <stdbool.h>
+#    include <czmq.h>
+#    include <jansson.h>
+#    include <flux/core.h>
 
-#include "queue.h"
-#include "alloc.h"
+#    include "queue.h"
+#    include "alloc.h"
 
 struct submit_ctx;
 

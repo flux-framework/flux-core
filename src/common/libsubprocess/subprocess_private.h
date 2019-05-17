@@ -79,7 +79,7 @@ struct flux_subprocess {
     int channels_eof_expected; /* number of eofs to expect */
     int channels_eof_sent;     /* counter to avoid loop checks */
 
-    int status;            /* Raw status from waitpid(2), valid if exited       */
+    int status; /* Raw status from waitpid(2), valid if exited       */
     int exec_failed_errno; /* Holds errno from exec(2) if exec() failed  */
 
     flux_subprocess_state_t state;

@@ -28,7 +28,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <unistd.h>
 #include <czmq.h>
@@ -90,7 +90,8 @@ struct validate *validate_create (flux_t *h)
     assert (argv[0] != NULL);
     assert (argv[2] != NULL);
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
-        if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout, 3, argv)))
+        if (!(v->worker[i] =
+                  worker_create (h, worker_inactivity_timeout, 3, argv)))
             goto error;
     }
     return v;
@@ -111,7 +112,8 @@ struct worker *select_best_worker (struct validate *v)
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
         if (worker_is_running (v->worker[i])) {
             if (!best
-                || (worker_queue_depth (v->worker[i]) < worker_queue_depth (best)))
+                || (worker_queue_depth (v->worker[i])
+                    < worker_queue_depth (best)))
                 best = v->worker[i];
         } else if (!idle)
             idle = v->worker[i];
@@ -140,8 +142,10 @@ flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len)
         if (!(f = flux_future_create (NULL, NULL)))
             return NULL;
         flux_future_set_flux (f, v->h);
-        (void)
-            snprintf (errbuf, sizeof (errbuf), "jobspec: invalid JSON: %s", error.text);
+        (void)snprintf (errbuf,
+                        sizeof (errbuf),
+                        "jobspec: invalid JSON: %s",
+                        error.text);
         flux_future_fulfill_error (f, EINVAL, errbuf);
         return f;
     }

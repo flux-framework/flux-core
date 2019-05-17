@@ -11,7 +11,7 @@
 /* commit - performance test for KVS commits */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <libgen.h>
@@ -101,7 +101,12 @@ void *thread (void *arg)
         else
             flags = 0;
         if (fopt) {
-            if (!(f = flux_kvs_fence (t->h, NULL, flags, fence_name, fence_nprocs, txn))
+            if (!(f = flux_kvs_fence (t->h,
+                                      NULL,
+                                      flags,
+                                      fence_name,
+                                      fence_nprocs,
+                                      txn))
                 || flux_future_get (f, NULL) < 0)
                 log_err_exit ("flux_kvs_fence");
             flux_future_destroy (f);
@@ -135,23 +140,23 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'f':
-                fopt = true;
-                fence_nprocs = strtoul (optarg, NULL, 10);
-                if (!fence_nprocs)
-                    log_msg_exit ("fence value must be > 0");
-                break;
-            case 's':
-                sopt = true;
-                break;
-            case 'n':
-                nopt = true;
-                nopt_divisor = strtoul (optarg, NULL, 10);
-                if (!nopt_divisor)
-                    log_msg_exit ("nopt value must be > 0");
-                break;
-            default:
-                usage ();
+        case 'f':
+            fopt = true;
+            fence_nprocs = strtoul (optarg, NULL, 10);
+            if (!fence_nprocs)
+                log_msg_exit ("fence value must be > 0");
+            break;
+        case 's':
+            sopt = true;
+            break;
+        case 'n':
+            nopt = true;
+            nopt_divisor = strtoul (optarg, NULL, 10);
+            if (!nopt_divisor)
+                log_msg_exit ("nopt value must be > 0");
+            break;
+        default:
+            usage ();
         }
     }
     if (argc - optind != 3)

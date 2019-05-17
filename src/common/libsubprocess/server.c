@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -156,7 +156,8 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
     }
 }
 
-static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+static void rexec_state_change_cb (flux_subprocess_t *p,
+                                   flux_subprocess_state_t state)
 {
     flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
     flux_msg_t *msg = (flux_msg_t *)flux_subprocess_aux_get (p, "msg");
@@ -417,7 +418,13 @@ static void server_exec_cb (flux_t *h,
     if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", s->local_uri) < 0)
         goto error;
 
-    if (flux_respond_pack (s->h, msg, "{s:s s:i}", "type", "start", "rank", s->rank)
+    if (flux_respond_pack (s->h,
+                           msg,
+                           "{s:s s:i}",
+                           "type",
+                           "start",
+                           "rank",
+                           s->rank)
         < 0) {
         flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
@@ -505,7 +512,8 @@ static int write_subprocess (flux_subprocess_server_t *s,
 
     if (tmp != len) {
         flux_log_error (s->h,
-                        "channel buffer error: rank = %d pid = %d, stream = %s, len = "
+                        "channel buffer error: rank = %d pid = %d, stream = "
+                        "%s, len = "
                         "%zu",
                         s->rank,
                         flux_subprocess_pid (p),
@@ -614,7 +622,13 @@ static void server_signal_cb (flux_t *h,
 
     errno = 0;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:i }", "pid", &pid, "signum", &signum)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:i }",
+                             "pid",
+                             &pid,
+                             "signum",
+                             &signum)
         < 0) {
         flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
         errno = EPROTO;
@@ -707,7 +721,8 @@ static void server_processes_cb (flux_t *h,
         p = zhash_next (s->subprocesses);
     }
 
-    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank, "procs", procs) < 0)
+    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank, "procs", procs)
+        < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdbool.h>
 #include <czmq.h>
@@ -87,7 +87,11 @@ flux_reduce_t *flux_reduce_create (flux_t *h,
         return NULL;
     }
     if ((flags & FLUX_REDUCE_TIMEDFLUSH)) {
-        if (!(r->timer = flux_timer_watcher_create (r->reactor, 0., 0., timer_cb, r))) {
+        if (!(r->timer = flux_timer_watcher_create (r->reactor,
+                                                    0.,
+                                                    0.,
+                                                    timer_cb,
+                                                    r))) {
             flux_reduce_destroy (r);
             return NULL;
         }
@@ -239,37 +243,37 @@ int flux_reduce_push (flux_reduce_t *r, void *item)
 int flux_reduce_opt_get (flux_reduce_t *r, int option, void *val, size_t size)
 {
     switch (option) {
-        case FLUX_REDUCE_OPT_TIMEOUT:
-            if (size != sizeof (r->timeout))
-                goto invalid;
-            memcpy (val, &r->timeout, size);
-            break;
-        case FLUX_REDUCE_OPT_HWM:
-            if (size != sizeof (r->count))
-                goto invalid;
-            memcpy (val, &r->hwm, size);
-            break;
-        case FLUX_REDUCE_OPT_COUNT: {
-            unsigned int count = zlist_size (r->items);
-            if (size != sizeof (count))
-                goto invalid;
-            memcpy (val, &count, size);
-            break;
-        }
-        case FLUX_REDUCE_OPT_WCOUNT: {
-            unsigned int count = 0;
-            void *item = zlist_first (r->items);
-            while (item) {
-                count += r->ops.itemweight ? r->ops.itemweight (item) : 1;
-                item = zlist_next (r->items);
-            }
-            if (size != sizeof (count))
-                goto invalid;
-            memcpy (val, &count, size);
-            break;
-        }
-        default:
+    case FLUX_REDUCE_OPT_TIMEOUT:
+        if (size != sizeof (r->timeout))
             goto invalid;
+        memcpy (val, &r->timeout, size);
+        break;
+    case FLUX_REDUCE_OPT_HWM:
+        if (size != sizeof (r->count))
+            goto invalid;
+        memcpy (val, &r->hwm, size);
+        break;
+    case FLUX_REDUCE_OPT_COUNT: {
+        unsigned int count = zlist_size (r->items);
+        if (size != sizeof (count))
+            goto invalid;
+        memcpy (val, &count, size);
+        break;
+    }
+    case FLUX_REDUCE_OPT_WCOUNT: {
+        unsigned int count = 0;
+        void *item = zlist_first (r->items);
+        while (item) {
+            count += r->ops.itemweight ? r->ops.itemweight (item) : 1;
+            item = zlist_next (r->items);
+        }
+        if (size != sizeof (count))
+            goto invalid;
+        memcpy (val, &count, size);
+        break;
+    }
+    default:
+        goto invalid;
     }
     return 0;
 invalid:
@@ -280,19 +284,19 @@ invalid:
 int flux_reduce_opt_set (flux_reduce_t *r, int option, void *val, size_t size)
 {
     switch (option) {
-        case FLUX_REDUCE_OPT_TIMEOUT:
-            if (size != sizeof (r->timeout))
-                goto invalid;
-            memcpy (&r->timeout, val, size);
-            break;
-        case FLUX_REDUCE_OPT_HWM:
-            if (size != sizeof (r->hwm))
-                goto invalid;
-            memcpy (&r->hwm, val, size);
-            r->hwm_readonly = true;
-            break;
-        default:
+    case FLUX_REDUCE_OPT_TIMEOUT:
+        if (size != sizeof (r->timeout))
             goto invalid;
+        memcpy (&r->timeout, val, size);
+        break;
+    case FLUX_REDUCE_OPT_HWM:
+        if (size != sizeof (r->hwm))
+            goto invalid;
+        memcpy (&r->hwm, val, size);
+        r->hwm_readonly = true;
+        break;
+    default:
+        goto invalid;
     }
     return 0;
 invalid:

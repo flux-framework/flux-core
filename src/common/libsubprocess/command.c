@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <stdlib.h>
@@ -68,7 +68,10 @@ static int init_argz (char **argzp, size_t *argz_lenp, char *const av[])
  *  Same as init_argz, but pass argument count (ac) and verify that
  *   the argument vector av has NULL as its final element.
  */
-static int init_argz_count (char **argzp, size_t *argz_lenp, int ac, char *const av[])
+static int init_argz_count (char **argzp,
+                            size_t *argz_lenp,
+                            int ac,
+                            char *const av[])
 {
     if (av && (av[ac] != NULL)) {
         errno = EINVAL;
@@ -80,7 +83,10 @@ static int init_argz_count (char **argzp, size_t *argz_lenp, int ac, char *const
 /*
  *  Append string defined by [fmt, ap] to argz vector in argzp
  */
-static int argz_appendv (char **argzp, size_t *argz_lenp, const char *fmt, va_list ap)
+static int argz_appendv (char **argzp,
+                         size_t *argz_lenp,
+                         const char *fmt,
+                         va_list ap)
 {
     int e;
     char *s;
@@ -183,8 +189,7 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
     if (!json_is_array (o))
         goto fail;
 
-    json_array_foreach (o, index, value)
-    {
+    json_array_foreach (o, index, value) {
         if (!json_is_string (value))
             goto fail;
         if (argz_add (argzp, argz_lenp, json_string_value (value)))
@@ -240,8 +245,7 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
     if (!json_is_object (o))
         goto fail;
 
-    json_object_foreach (o, var, val)
-    {
+    json_object_foreach (o, var, val) {
         if (!json_is_string (val))
             goto fail;
         if (envz_add (envzp, envz_lenp, var, json_string_value (val)))
@@ -299,8 +303,7 @@ static zhash_t *zhash_fromjson (json_t *o)
     h = zhash_new ();
     zhash_autofree (h);
 
-    json_object_foreach (o, key, val)
-    {
+    json_object_foreach (o, key, val) {
         if (!json_is_string (val))
             goto fail;
         if (zhash_insert (h, key, (char *)json_string_value (val)) < 0) {
@@ -330,8 +333,7 @@ static zlist_t *zlist_fromjson (json_t *o)
     l = zlist_new ();
     zlist_autofree (l);
 
-    json_array_foreach (o, index, value)
-    {
+    json_array_foreach (o, index, value) {
         if (!json_is_string (value))
             goto fail;
         if (zlist_append (l, (char *)json_string_value (value)) < 0) {

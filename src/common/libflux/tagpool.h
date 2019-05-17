@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_TAGPOOL_H
-#define _FLUX_CORE_TAGPOOL_H
+#    define _FLUX_CORE_TAGPOOL_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#    include <stdint.h>
+#    include <stdbool.h>
 
 enum {
     TAGPOOL_FLAG_GROUP = 1,

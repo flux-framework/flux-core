@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <ctype.h>
 #include <string.h>
@@ -30,20 +30,26 @@
 #define SHA256_STRING_SIZE (SHA256_BLOCK_SIZE * 2 + SHA256_PREFIX_LENGTH + 1)
 
 #if BLOBREF_MAX_STRING_SIZE < SHA1_STRING_SIZE
-#error BLOBREF_MAX_STRING_SIZE is too small
+#    error BLOBREF_MAX_STRING_SIZE is too small
 #endif
 #if BLOBREF_MAX_DIGEST_SIZE < SHA1_DIGEST_SIZE
-#error BLOBREF_MAX_DIGEST_SIZE is too small
+#    error BLOBREF_MAX_DIGEST_SIZE is too small
 #endif
 #if BLOBREF_MAX_STRING_SIZE < SHA256_STRING_SIZE
-#error BLOBREF_MAX_STRING_SIZE is too small
+#    error BLOBREF_MAX_STRING_SIZE is too small
 #endif
 #if BLOBREF_MAX_DIGEST_SIZE < SHA256_BLOCK_SIZE
-#error BLOBREF_MAX_DIGEST_SIZE is too small
+#    error BLOBREF_MAX_DIGEST_SIZE is too small
 #endif
 
-static void sha1_hash (const void *data, int data_len, void *hash, int hash_len);
-static void sha256_hash (const void *data, int data_len, void *hash, int hash_len);
+static void sha1_hash (const void *data,
+                       int data_len,
+                       void *hash,
+                       int hash_len);
+static void sha256_hash (const void *data,
+                         int data_len,
+                         void *hash,
+                         int hash_len);
 
 struct blobhash {
     char *name;
@@ -75,7 +81,10 @@ static void sha1_hash (const void *data, int data_len, void *hash, int hash_len)
     SHA1_Final (&ctx, hash);
 }
 
-static void sha256_hash (const void *data, int data_len, void *hash, int hash_len)
+static void sha256_hash (const void *data,
+                         int data_len,
+                         void *hash,
+                         int hash_len)
 {
     SHA256_CTX ctx;
 

@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_PMI_WRAP_H
-#define _FLUX_CORE_PMI_WRAP_H
+#    define _FLUX_CORE_PMI_WRAP_H
 
-#include <stdbool.h>
-#include "src/common/libpmi/pmi_operations.h"
+#    include <stdbool.h>
+#    include "src/common/libpmi/pmi_operations.h"
 
 void *pmi_wrap_create (const char *libname,
                        struct pmi_operations **ops,

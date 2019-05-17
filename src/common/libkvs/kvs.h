@@ -9,22 +9,22 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_KVS_H
-#define _FLUX_CORE_KVS_H
+#    define _FLUX_CORE_KVS_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-#include "kvs_dir.h"
-#include "kvs_lookup.h"
-#include "kvs_getroot.h"
-#include "kvs_txn.h"
-#include "kvs_commit.h"
-#include "kvs_copy.h"
+#    include "kvs_dir.h"
+#    include "kvs_lookup.h"
+#    include "kvs_getroot.h"
+#    include "kvs_txn.h"
+#    include "kvs_commit.h"
+#    include "kvs_copy.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
-#define KVS_PRIMARY_NAMESPACE "primary"
+#    define KVS_PRIMARY_NAMESPACE "primary"
 
 enum kvs_op {
     FLUX_KVS_READDIR = 1,
@@ -67,9 +67,9 @@ int flux_kvs_wait_version (flux_t *h, const char *ns, int version);
  */
 int flux_kvs_dropcache (flux_t *h);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_KVS_H */
 

@@ -9,15 +9,15 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_JOB_H
-#define _FLUX_CORE_JOB_H
+#    define _FLUX_CORE_JOB_H
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <flux/core.h>
+#    include <stdbool.h>
+#    include <stdint.h>
+#    include <flux/core.h>
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,  // 'jobspec' is already signed
@@ -108,9 +108,9 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id);
 int flux_job_event_watch_get (flux_future_t *f, const char **event);
 int flux_job_event_watch_cancel (flux_future_t *f);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_JOB_H */
 

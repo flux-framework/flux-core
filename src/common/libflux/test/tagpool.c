@@ -77,7 +77,8 @@ int main (int argc, char *argv[])
     count = 0;
     while (tagpool_alloc (t, 0) != FLUX_MATCHTAG_NONE)
         count++;
-    ok (count == norm_size, "regular: entire pool allocated by tagpool_alloc loop");
+    ok (count == norm_size,
+        "regular: entire pool allocated by tagpool_alloc loop");
     avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
     ok (avail == 0, "regular: pool is exhausted");
 
@@ -118,7 +119,8 @@ int main (int argc, char *argv[])
     count = 0;
     while (tagpool_alloc (t, TAGPOOL_FLAG_GROUP) != FLUX_MATCHTAG_NONE)
         count++;
-    ok (count == grp_size, "group: entire poool allocated by tagpool_alloc loop");
+    ok (count == grp_size,
+        "group: entire poool allocated by tagpool_alloc loop");
     avail = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL);
     ok (avail == 0, "group: pool is exhausted");
     tagpool_destroy (t);

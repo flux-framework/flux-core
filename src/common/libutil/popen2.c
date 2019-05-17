@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <unistd.h>
 #include <sys/types.h>
@@ -114,14 +114,14 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
     }
     signal (SIGPIPE, SIG_IGN);
     switch ((p->pid = fork ())) {
-        case -1: /* fork error */
-            saved_errno = errno;
-            goto error;
-        case 0: /* child */
-            child (p, path, argv);
-            /*NOTREACHED*/
-        default: /* parent */
-            break;
+    case -1: /* fork error */
+        saved_errno = errno;
+        goto error;
+    case 0: /* child */
+        child (p, path, argv);
+        /*NOTREACHED*/
+    default: /* parent */
+        break;
     }
     (void)close (p->fd[SP_CHILD]);
     (void)close (p->ctl[SP_CHILD]);

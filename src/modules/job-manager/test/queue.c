@@ -44,9 +44,12 @@ int main (int argc, char *argv[])
     job[0] = job_create_test (1, FLUX_JOB_PRIORITY_DEFAULT);
     job[1] = job_create_test (2, FLUX_JOB_PRIORITY_DEFAULT);
     job[2] = job_create_test (3, FLUX_JOB_PRIORITY_DEFAULT);
-    ok (queue_insert (q, job[0], &job[0]->queue_handle) == 0, "queue_insert 1 pri=def");
-    ok (queue_insert (q, job[1], &job[1]->queue_handle) == 0, "queue_insert 2 pri=def");
-    ok (queue_insert (q, job[2], &job[2]->queue_handle) == 0, "queue_insert 3 pri=def");
+    ok (queue_insert (q, job[0], &job[0]->queue_handle) == 0,
+        "queue_insert 1 pri=def");
+    ok (queue_insert (q, job[1], &job[1]->queue_handle) == 0,
+        "queue_insert 2 pri=def");
+    ok (queue_insert (q, job[2], &job[2]->queue_handle) == 0,
+        "queue_insert 3 pri=def");
 
     errno = 0;
     ok (queue_insert (q, job[2], &job[2]->queue_handle) < 0 && errno == EEXIST,
@@ -66,7 +69,8 @@ int main (int argc, char *argv[])
 
     /* lookup_by_id */
 
-    ok (queue_lookup_by_id (q, 1) == job[0] && queue_lookup_by_id (q, 2) == job[1]
+    ok (queue_lookup_by_id (q, 1) == job[0]
+            && queue_lookup_by_id (q, 2) == job[1]
             && queue_lookup_by_id (q, 3) == job[2],
         "queue_lookup_by_id works for all three jobs");
     errno = 0;
@@ -99,7 +103,8 @@ int main (int argc, char *argv[])
      */
     job[2]->priority = FLUX_JOB_PRIORITY_MAX;  // job 3
     queue_reorder (q, job[2], job[2]->queue_handle);
-    ok (queue_first (q) == job[2], "reorder job 3 pri=max moves that job first");
+    ok (queue_first (q) == job[2],
+        "reorder job 3 pri=max moves that job first");
 
     /* queue_delete */
 

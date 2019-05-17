@@ -77,7 +77,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 #include <flux/core.h>
@@ -129,7 +129,8 @@ static void interface_teardown (struct alloc_ctx *ctx, char *s, int errnum)
              */
             if (job->alloc_pending) {
                 assert (job->aux_queue_handle == NULL);
-                if (queue_insert (ctx->inqueue, job, &job->aux_queue_handle) < 0)
+                if (queue_insert (ctx->inqueue, job, &job->aux_queue_handle)
+                    < 0)
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
@@ -218,7 +219,14 @@ static void alloc_response_cb (flux_t *h,
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown;  // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?:s}", "id", &id, "type", &type, "note", &note)
+    if (flux_msg_unpack (msg,
+                         "{s:I s:i s?:s}",
+                         "id",
+                         &id,
+                         "type",
+                         &type,
+                         "note",
+                         &note)
         < 0)
         goto teardown;
     if (type != 0 && type != 1 && type != 2) {
@@ -417,7 +425,10 @@ error:
  * Runs right before reactor calls poll(2).
  * If a job can be scheduled, start idle watcher.
  */
-static void prep_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void prep_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct alloc_ctx *ctx = arg;
     if (!ctx->ready)
@@ -432,7 +443,10 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *ar
  * Runs right after reactor calls poll(2).
  * Stop idle watcher, and send next alloc request, if available.
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct alloc_ctx *ctx = arg;
     struct job *job;
@@ -454,8 +468,10 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *a
         job->alloc_queued = 0;
         ctx->active_alloc_count++;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)
-                event_job_post_pack (ctx->event_ctx, job, "debug.alloc-request", NULL);
+            (void)event_job_post_pack (ctx->event_ctx,
+                                       job,
+                                       "debug.alloc-request",
+                                       NULL);
     }
 }
 
@@ -467,7 +483,10 @@ int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job)
             return -1;
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event_ctx, job, "debug.free-request", NULL);
+            (void)event_job_post_pack (ctx->event_ctx,
+                                       job,
+                                       "debug.free-request",
+                                       NULL);
     }
     return 0;
 }

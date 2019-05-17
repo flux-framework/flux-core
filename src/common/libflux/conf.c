@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <string.h>
@@ -40,7 +40,9 @@ static struct config default_config[] = {
     {"jobspec_validate_path",
      INSTALLED_JOBSPEC_VALIDATE_PATH,
      INTREE_JOBSPEC_VALIDATE_PATH},
-    {"jobspec_schema_path", INSTALLED_JOBSPEC_SCHEMA_PATH, INTREE_JOBSPEC_SCHEMA_PATH},
+    {"jobspec_schema_path",
+     INSTALLED_JOBSPEC_SCHEMA_PATH,
+     INTREE_JOBSPEC_SCHEMA_PATH},
     {NULL, NULL, NULL},
 };
 

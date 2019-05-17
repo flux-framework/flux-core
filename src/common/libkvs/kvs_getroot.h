@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_KVS_GETROOT_H
-#define _FLUX_CORE_KVS_GETROOT_H
+#    define _FLUX_CORE_KVS_GETROOT_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Request the current KVS root hash for namespace 'ns'. */
 flux_future_t *flux_kvs_getroot (flux_t *h, const char *ns, int flags);
@@ -30,9 +30,9 @@ int flux_kvs_getroot_get_blobref (flux_future_t *f, const char **blobref);
 int flux_kvs_getroot_get_sequence (flux_future_t *f, int *seq);
 int flux_kvs_getroot_get_owner (flux_future_t *f, uint32_t *owner);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_KVS_GETROOT_H */
 

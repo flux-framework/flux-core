@@ -24,7 +24,10 @@ static int send_request (flux_t *h, const char *topic)
     int rc = -1;
     flux_msg_t *msg = flux_request_encode (topic, NULL);
     if (!msg || flux_send (h, msg, 0) < 0) {
-        fprintf (stderr, "%s: flux_send failed: %s", __FUNCTION__, strerror (errno));
+        fprintf (stderr,
+                 "%s: flux_send failed: %s",
+                 __FUNCTION__,
+                 strerror (errno));
         goto done;
     }
     rc = 0;
@@ -116,7 +119,10 @@ static void test_msg (flux_t *h)
     flux_msg_handler_destroy (mh);
 }
 
-static void dummy (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+static void dummy (flux_t *h,
+                   flux_msg_handler_t *mh,
+                   const flux_msg_t *msg,
+                   void *arg)
 {
 }
 
@@ -157,7 +163,8 @@ int main (int argc, char *argv[])
 
     /* Misc
      */
-    lives_ok ({ leak_msg_handler (); }, "leaking a msg_handler_t doesn't segfault");
+    lives_ok ({ leak_msg_handler (); },
+              "leaking a msg_handler_t doesn't segfault");
 
     flux_close (h);
     done_testing ();

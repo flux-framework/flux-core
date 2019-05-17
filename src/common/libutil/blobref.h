@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _UTIL_BLOBREF_H
-#define _UTIL_BLOBREF_H
+#    define _UTIL_BLOBREF_H
 
-#define BLOBREF_MAX_STRING_SIZE 72
-#define BLOBREF_MAX_DIGEST_SIZE 32
+#    define BLOBREF_MAX_STRING_SIZE 72
+#    define BLOBREF_MAX_DIGEST_SIZE 32
 
-#include <stdint.h>
+#    include <stdint.h>
 
 /* Convert a blobref string to hash digest.
  * The hash algorithm is selected by the blobref prefix.

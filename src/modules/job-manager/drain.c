@@ -20,7 +20,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdbool.h>
 #include <czmq.h>
@@ -90,7 +90,8 @@ static void undrain_cb (flux_t *h,
     }
     submit_enable (ctx->submit_ctx);
     while ((req = zlist_pop (ctx->requests))) {
-        if (flux_respond_error (ctx->h, req, EINVAL, "queue was re-enabled") < 0)
+        if (flux_respond_error (ctx->h, req, EINVAL, "queue was re-enabled")
+            < 0)
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         flux_msg_destroy (req);
     }
@@ -106,9 +107,14 @@ void drain_ctx_destroy (struct drain_ctx *ctx)
         if (ctx->requests) {
             flux_msg_t *msg;
             while ((msg = zlist_pop (ctx->requests))) {
-                if (flux_respond_error (ctx->h, msg, ENOSYS, "job-manager is unloading")
+                if (flux_respond_error (ctx->h,
+                                        msg,
+                                        ENOSYS,
+                                        "job-manager is unloading")
                     < 0)
-                    flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+                    flux_log_error (ctx->h,
+                                    "%s: flux_respond_error",
+                                    __FUNCTION__);
                 flux_msg_destroy (msg);
             }
             zlist_destroy (&ctx->requests);

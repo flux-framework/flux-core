@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -34,9 +34,10 @@
 #include "src/common/libutil/fdutils.h"
 
 enum {
-    DEBUG_AUTHFAIL_ONESHOT = 1,  /* force auth to fail one time */
-    DEBUG_USERDB_ONESHOT = 2,    /* force userdb lookup of instance owner */
-    DEBUG_OWNERDROP_ONESHOT = 4, /* drop OWNER role to USER on next connection */
+    DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
+    DEBUG_USERDB_ONESHOT = 2,   /* force userdb lookup of instance owner */
+    DEBUG_OWNERDROP_ONESHOT =
+        4, /* drop OWNER role to USER on next connection */
 };
 
 #define LISTEN_BACKLOG 5
@@ -264,11 +265,17 @@ static client_t *client_create (mod_local_ctx_t *ctx, int fd)
     c->disconnect_notify = zhash_new ();
     c->subscriptions = zhash_new ();
     c->outqueue = zlist_new ();
-    if (!c->uuid || !c->disconnect_notify || !c->subscriptions || !c->outqueue) {
+    if (!c->uuid || !c->disconnect_notify || !c->subscriptions
+        || !c->outqueue) {
         errno = ENOMEM;
         goto error;
     }
-    if (client_authenticate (fd, h, ctx->instance_owner, &c->userid, &c->rolemask) < 0)
+    if (client_authenticate (fd,
+                             h,
+                             ctx->instance_owner,
+                             &c->userid,
+                             &c->rolemask)
+        < 0)
         goto error;
     if (!(c->inw = flux_fd_watcher_create (ctx->reactor,
                                            fd,
@@ -426,11 +433,17 @@ static int global_subscribe (mod_local_ctx_t *ctx, const char *topic)
 
     if (!(sub = zhash_lookup (ctx->subscriptions, topic))) {
         if (!(sub = subscription_create (topic))) {
-            flux_log_error (ctx->h, "%s: subscription_create %s", __FUNCTION__, topic);
+            flux_log_error (ctx->h,
+                            "%s: subscription_create %s",
+                            __FUNCTION__,
+                            topic);
             goto done;
         }
         if (flux_event_subscribe (ctx->h, topic) < 0) {
-            flux_log_error (ctx->h, "%s: flux_event_subscribe %s", __FUNCTION__, topic);
+            flux_log_error (ctx->h,
+                            "%s: flux_event_subscribe %s",
+                            __FUNCTION__,
+                            topic);
             subscription_destroy (sub);
             goto done;
         }
@@ -571,7 +584,8 @@ static void request_cb (flux_t *h,
  *  Registers a message handler for 'service.*' which will simply
  *  forward all reqeuests to the assigned client.
  */
-static struct local_service *local_service_create (client_t *c, const char *service)
+static struct local_service *local_service_create (client_t *c,
+                                                   const char *service)
 {
     mod_local_ctx_t *ctx = c->ctx;
     int n;
@@ -591,7 +605,9 @@ static struct local_service *local_service_create (client_t *c, const char *serv
     }
     match.topic_glob = glob;
     if (!(ls->mh = flux_msg_handler_create (ctx->h, match, request_cb, c))) {
-        flux_log_error (ctx->h, "local_service_create: %s: msghandler create", service);
+        flux_log_error (ctx->h,
+                        "local_service_create: %s: msghandler create",
+                        service);
         goto error;
     }
     ls->client = c;
@@ -1085,37 +1101,37 @@ static void client_read_cb (flux_reactor_t *r,
         goto error_disconnect;
     }
     switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            if (!internal_request (c, msg)) {
-                /* insert disconnect notifier before forwarding request */
-                if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
-                    flux_log_error (h, "disconnect_update");
-                    goto error;
-                }
-                if (flux_msg_enable_route (msg) < 0) {
-                    flux_log_error (h, "flux_msg_enable_route");
-                    goto error;
-                }
-                if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0) {
-                    flux_log_error (h, "flux_msg_push_route");
-                    goto error;
-                }
-                if (flux_send (h, msg, 0) < 0) {
-                    flux_log_error (h, "%s: flux_send", __FUNCTION__);
-                    goto error;
-                }
+    case FLUX_MSGTYPE_REQUEST:
+        if (!internal_request (c, msg)) {
+            /* insert disconnect notifier before forwarding request */
+            if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
+                flux_log_error (h, "disconnect_update");
+                goto error;
             }
-            break;
-        case FLUX_MSGTYPE_EVENT:
-        case FLUX_MSGTYPE_RESPONSE:
+            if (flux_msg_enable_route (msg) < 0) {
+                flux_log_error (h, "flux_msg_enable_route");
+                goto error;
+            }
+            if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0) {
+                flux_log_error (h, "flux_msg_push_route");
+                goto error;
+            }
             if (flux_send (h, msg, 0) < 0) {
                 flux_log_error (h, "%s: flux_send", __FUNCTION__);
                 goto error;
             }
-            break;
-        default:
-            flux_log (h, LOG_ERR, "drop unexpected %s", flux_msg_typestr (type));
+        }
+        break;
+    case FLUX_MSGTYPE_EVENT:
+    case FLUX_MSGTYPE_RESPONSE:
+        if (flux_send (h, msg, 0) < 0) {
+            flux_log_error (h, "%s: flux_send", __FUNCTION__);
             goto error;
+        }
+        break;
+    default:
+        flux_log (h, LOG_ERR, "drop unexpected %s", flux_msg_typestr (type));
+        goto error;
     }
 done:
     flux_msg_destroy (msg);
@@ -1236,12 +1252,16 @@ static void event_cb (flux_t *h,
         }
         c = zlist_next (ctx->clients);
     }
-    // flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic, count);
+    // flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic,
+    // count);
 }
 
 /* Accept a connection from new client.
  */
-static void listener_cb (flux_reactor_t *r, flux_watcher_t *mh, int revents, void *arg)
+static void listener_cb (flux_reactor_t *r,
+                         flux_watcher_t *mh,
+                         int revents,
+                         void *arg)
 {
     int fd = flux_fd_watcher_get_fd (mh);
     mod_local_ctx_t *ctx = arg;

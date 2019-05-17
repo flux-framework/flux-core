@@ -49,7 +49,8 @@ void test_msg_handler_create (flux_t *h)
     /* invalid arguments
      */
     errno = 0;
-    ok (flux_msg_handler_create (NULL, FLUX_MATCH_ANY, dummy_msg_handler, NULL) == NULL
+    ok (flux_msg_handler_create (NULL, FLUX_MATCH_ANY, dummy_msg_handler, NULL)
+                == NULL
             && errno == EINVAL,
         "flux_msg_handler_create h=NULL fails with EINVAL");
     errno = 0;
@@ -76,10 +77,12 @@ void test_msg_handler_addvec (flux_t *h)
     /* invalid arguments
      */
     errno = 0;
-    ok (flux_msg_handler_addvec (NULL, tab, NULL, &handlers) < 0 && errno == EINVAL,
+    ok (flux_msg_handler_addvec (NULL, tab, NULL, &handlers) < 0
+            && errno == EINVAL,
         "flux_msg_handler_addvec h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_msg_handler_addvec (h, NULL, NULL, &handlers) < 0 && errno == EINVAL,
+    ok (flux_msg_handler_addvec (h, NULL, NULL, &handlers) < 0
+            && errno == EINVAL,
         "flux_msg_handler_addvec tab=NULL fails with EINVAL");
     errno = 0;
     ok (flux_msg_handler_addvec (h, tab, NULL, NULL) < 0 && errno == EINVAL,

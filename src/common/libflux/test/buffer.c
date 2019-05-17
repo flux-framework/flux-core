@@ -77,7 +77,8 @@ void basic (void)
     ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 1),
         "flux_buffer_space returns length of space left");
 
-    ok (flux_buffer_drop (fb, -1) == 1, "flux_buffer_drop drops remaining bytes");
+    ok (flux_buffer_drop (fb, -1) == 1,
+        "flux_buffer_drop drops remaining bytes");
 
     ok (flux_buffer_bytes (fb) == 0,
         "flux_buffer_bytes returns 0 with all bytes dropped");
@@ -100,14 +101,16 @@ void basic (void)
 
     ok (!memcmp (ptr, "fo", 2), "flux_buffer_read returns expected data");
 
-    ok (flux_buffer_bytes (fb) == 1, "flux_buffer_bytes returns new length after read");
+    ok (flux_buffer_bytes (fb) == 1,
+        "flux_buffer_bytes returns new length after read");
 
     ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL && len == 1,
         "flux_buffer_peek with length -1 works");
 
     ok (!memcmp (ptr, "o", 1), "flux_buffer_peek returns expected data");
 
-    ok (flux_buffer_bytes (fb) == 0, "flux_buffer_bytes returns 0 with all bytes read");
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 with all bytes read");
 
     ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
         "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
@@ -116,7 +119,8 @@ void basic (void)
 
     ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 on no line");
 
-    ok (flux_buffer_write_line (fb, "foo") == 4, "flux_buffer_write_line works");
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line works");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns length of bytes written");
@@ -124,30 +128,35 @@ void basic (void)
     ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 4),
         "flux_buffer_space returns length of space left");
 
-    ok (flux_buffer_lines (fb) == 1, "flux_buffer_lines returns 1 on line written");
+    ok (flux_buffer_lines (fb) == 1,
+        "flux_buffer_lines returns 1 on line written");
 
     ok ((ptr = flux_buffer_peek_line (fb, &len)) != NULL && len == 4,
         "flux_buffer_peek_line works");
 
-    ok (!memcmp (ptr, "foo\n", 4), "flux_buffer_peek_line returns expected data");
+    ok (!memcmp (ptr, "foo\n", 4),
+        "flux_buffer_peek_line returns expected data");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns unchanged length after peek_line");
 
     ok (flux_buffer_drop_line (fb) == 4, "flux_buffer_drop_line works");
 
-    ok (flux_buffer_bytes (fb) == 0, "flux_buffer_bytes returns 0 after drop_line");
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 after drop_line");
 
     ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
         "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
 
-    ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 after drop_line");
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after drop_line");
 
     /* write_line & peek_trimmed_line tests */
 
     ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 on no line");
 
-    ok (flux_buffer_write_line (fb, "foo") == 4, "flux_buffer_write_line works");
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line works");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns length of bytes written");
@@ -155,30 +164,35 @@ void basic (void)
     ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 4),
         "flux_buffer_space returns length of space left");
 
-    ok (flux_buffer_lines (fb) == 1, "flux_buffer_lines returns 1 on line written");
+    ok (flux_buffer_lines (fb) == 1,
+        "flux_buffer_lines returns 1 on line written");
 
     ok ((ptr = flux_buffer_peek_trimmed_line (fb, &len)) != NULL && len == 3,
         "flux_buffer_peek_trimmed_line works");
 
-    ok (!memcmp (ptr, "foo", 3), "flux_buffer_peek_trimmed_line returns expected data");
+    ok (!memcmp (ptr, "foo", 3),
+        "flux_buffer_peek_trimmed_line returns expected data");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns unchanged length after peek_trimmed_line");
 
     ok (flux_buffer_drop_line (fb) == 4, "flux_buffer_drop_line works");
 
-    ok (flux_buffer_bytes (fb) == 0, "flux_buffer_bytes returns 0 after drop_line");
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 after drop_line");
 
     ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
         "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
 
-    ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 after drop_line");
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after drop_line");
 
     /* write_line & read_line tests */
 
     ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 on no line");
 
-    ok (flux_buffer_write_line (fb, "foo") == 4, "flux_buffer_write_line works");
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line works");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns length of bytes written");
@@ -186,25 +200,30 @@ void basic (void)
     ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 4),
         "flux_buffer_space returns length of space left");
 
-    ok (flux_buffer_lines (fb) == 1, "flux_buffer_lines returns 1 on line written");
+    ok (flux_buffer_lines (fb) == 1,
+        "flux_buffer_lines returns 1 on line written");
 
     ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL && len == 4,
         "flux_buffer_read_line works");
 
-    ok (!memcmp (ptr, "foo\n", 4), "flux_buffer_read_line returns expected data");
+    ok (!memcmp (ptr, "foo\n", 4),
+        "flux_buffer_read_line returns expected data");
 
-    ok (flux_buffer_bytes (fb) == 0, "flux_buffer_bytes returns 0 after read_line");
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 after read_line");
 
     ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
         "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
 
-    ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 after read_line");
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after read_line");
 
     /* write_line & read_trimmed_line tests */
 
     ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 on no line");
 
-    ok (flux_buffer_write_line (fb, "foo") == 4, "flux_buffer_write_line works");
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line works");
 
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns length of bytes written");
@@ -212,12 +231,14 @@ void basic (void)
     ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 4),
         "flux_buffer_space returns length of space left");
 
-    ok (flux_buffer_lines (fb) == 1, "flux_buffer_lines returns 1 on line written");
+    ok (flux_buffer_lines (fb) == 1,
+        "flux_buffer_lines returns 1 on line written");
 
     ok ((ptr = flux_buffer_read_trimmed_line (fb, &len)) != NULL && len == 3,
         "flux_buffer_read_trimmed_line works");
 
-    ok (!memcmp (ptr, "foo", 3), "flux_buffer_read_trimmed_line returns expected data");
+    ok (!memcmp (ptr, "foo", 3),
+        "flux_buffer_read_trimmed_line returns expected data");
 
     ok (flux_buffer_bytes (fb) == 0,
         "flux_buffer_bytes returns 0 after read_trimmed_line");
@@ -254,7 +275,8 @@ void basic (void)
     ok (flux_buffer_bytes (fb) == 3,
         "flux_buffer_bytes returns correct length after peek");
 
-    ok (flux_buffer_drop (fb, -1) == 3, "flux_buffer_drop drops remaining bytes");
+    ok (flux_buffer_drop (fb, -1) == 3,
+        "flux_buffer_drop drops remaining bytes");
 
     /* read_to_fd tests */
 
@@ -294,14 +316,16 @@ void basic (void)
 
     ok (!memcmp (ptr, "fo", 2), "flux_buffer_read returns expected data");
 
-    ok (flux_buffer_bytes (fb) == 1, "flux_buffer_bytes returns new length after read");
+    ok (flux_buffer_bytes (fb) == 1,
+        "flux_buffer_bytes returns new length after read");
 
     ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL && len == 1,
         "flux_buffer_peek with length -1 works");
 
     ok (!memcmp (ptr, "o", 1), "flux_buffer_peek returns expected data");
 
-    ok (flux_buffer_bytes (fb) == 0, "flux_buffer_bytes returns 0 with all bytes read");
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes returns 0 with all bytes read");
 
     flux_buffer_destroy (fb);
     close (pipefds[0]);
@@ -333,7 +357,8 @@ void read_line_cb (flux_buffer_t *fb, void *arg)
     ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL && len == 7,
         "flux_buffer_read_line in callback works");
 
-    ok (!memcmp (ptr, "foobar\n", 7), "read_line in callback returns expected data");
+    ok (!memcmp (ptr, "foobar\n", 7),
+        "read_line in callback returns expected data");
 }
 
 void write_cb (flux_buffer_t *fb, void *arg)
@@ -342,7 +367,8 @@ void write_cb (flux_buffer_t *fb, void *arg)
 
     (*count)++;
 
-    ok (flux_buffer_write (fb, "a", 1) == 1, "flux_buffer_write in callback works");
+    ok (flux_buffer_write (fb, "a", 1) == 1,
+        "flux_buffer_write in callback works");
 }
 
 void basic_callback (void)
@@ -414,7 +440,8 @@ void basic_callback (void)
     ok (flux_buffer_set_read_line_cb (fb, NULL, &count) == 0,
         "flux_buffer_set_read_line_cb clear callback success");
 
-    ok (flux_buffer_write_line (fb, "foo") == 4, "flux_buffer_write_line success");
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line success");
 
     ok (count == 0, "read_line_cb cleared successfully");
 
@@ -423,7 +450,8 @@ void basic_callback (void)
 
     ok (flux_buffer_drop (fb, -1) == 4, "flux_buffer_drop cleared all data");
 
-    ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 after drop line");
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after drop line");
 
     /* low read callback w/ write_from_fd */
 
@@ -594,7 +622,8 @@ void read_line_multiple_cb (flux_buffer_t *fb, void *arg)
     ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL && len == 4,
         "flux_buffer_read_line in callback works");
 
-    ok (!memcmp (ptr, "foo\n", 4), "read line in callback returns expected data");
+    ok (!memcmp (ptr, "foo\n", 4),
+        "read line in callback returns expected data");
 }
 
 void multiple_callback (void)
@@ -611,7 +640,8 @@ void multiple_callback (void)
     ok (flux_buffer_set_low_read_cb (fb, read_multiple_cb, 3, &count) == 0,
         "flux_buffer_set_low_read_cb success");
 
-    ok (flux_buffer_write (fb, "foofoofoo", 9) == 9, "flux_buffer_write success");
+    ok (flux_buffer_write (fb, "foofoofoo", 9) == 9,
+        "flux_buffer_write success");
 
     ok (count == 2, "read_cb called two times");
 
@@ -622,7 +652,8 @@ void multiple_callback (void)
     ok (flux_buffer_set_low_read_cb (fb, NULL, 3, &count) == 0,
         "flux_buffer_set_low_read_cb clear callback success");
 
-    ok (flux_buffer_write (fb, "foo", 3) == 3, "flux_buffer_write_line success");
+    ok (flux_buffer_write (fb, "foo", 3) == 3,
+        "flux_buffer_write_line success");
 
     ok (count == 0, "read_cb cleared successfully");
 
@@ -635,7 +666,8 @@ void multiple_callback (void)
 
     ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 on no line");
 
-    ok (flux_buffer_write (fb, "foo\nfoo\n", 8) == 8, "flux_buffer_write success");
+    ok (flux_buffer_write (fb, "foo\nfoo\n", 8) == 8,
+        "flux_buffer_write success");
 
     ok (flux_buffer_lines (fb) == 2,
         "flux_buffer_lines returns 2 on two lines written");
@@ -658,7 +690,8 @@ void multiple_callback (void)
     ok (flux_buffer_set_read_line_cb (fb, NULL, &count) == 0,
         "flux_buffer_set_read_line_cb clear callback success");
 
-    ok (flux_buffer_write_line (fb, "foo") == 4, "flux_buffer_write_line success");
+    ok (flux_buffer_write_line (fb, "foo") == 4,
+        "flux_buffer_write_line success");
 
     ok (count == 0, "read_line_cb cleared successfully");
 
@@ -667,7 +700,8 @@ void multiple_callback (void)
 
     ok (flux_buffer_drop (fb, -1) == 4, "flux_buffer_drop cleared all data");
 
-    ok (flux_buffer_lines (fb) == 0, "flux_buffer_lines returns 0 after drop line");
+    ok (flux_buffer_lines (fb) == 0,
+        "flux_buffer_lines returns 0 after drop line");
 
     flux_buffer_destroy (fb);
 }
@@ -731,7 +765,8 @@ void disable_callback (void)
     ok (flux_buffer_write (fb, "foobar", 6) == 6, "flux_buffer_write success");
 
     ok (count == 1,
-        "disable_read_cb called only once, disabling callback in callback worked");
+        "disable_read_cb called only once, disabling callback in callback "
+        "worked");
 
     ok (flux_buffer_write (fb, "foo", 3) == 3, "flux_buffer_write success");
 
@@ -747,14 +782,17 @@ void disable_callback (void)
     ok (flux_buffer_set_read_line_cb (fb, disable_read_line_cb, &count) == 0,
         "flux_buffer_set_read_line_cb success");
 
-    ok (flux_buffer_write (fb, "foo\nfoo\n", 8) == 8, "flux_buffer_write success");
+    ok (flux_buffer_write (fb, "foo\nfoo\n", 8) == 8,
+        "flux_buffer_write success");
 
     ok (count == 1,
-        "disable_read_line_cb called only once, disabling callback in callback worked");
+        "disable_read_line_cb called only once, disabling callback in callback "
+        "worked");
 
     ok (flux_buffer_write (fb, "foo\n", 4) == 4, "flux_buffer_write success");
 
-    ok (count == 1, "disable_read_line_cb not called again, callback is disabled");
+    ok (count == 1,
+        "disable_read_line_cb not called again, callback is disabled");
 
     ok (flux_buffer_drop (fb, -1) == 8, "flux_buffer_drop cleared all data");
 
@@ -802,11 +840,14 @@ void corner_case (void)
         "flux_buffer_readonly fails on NULL pointer");
     ok (flux_buffer_is_readonly (NULL) < 0 && errno == EINVAL,
         "flux_buffer_is_readonly fails on NULL pointer");
-    ok (flux_buffer_set_low_read_cb (NULL, empty_cb, 0, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_low_read_cb (NULL, empty_cb, 0, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_low_read_cb fails on NULL pointer");
-    ok (flux_buffer_set_read_line_cb (NULL, empty_cb, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_read_line_cb (NULL, empty_cb, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_read_line_cb fails on NULL pointer");
-    ok (flux_buffer_set_high_write_cb (NULL, empty_cb, 0, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_high_write_cb (NULL, empty_cb, 0, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_high_write_cb fails on NULL pointer");
     ok (flux_buffer_drop (NULL, -1) < 0 && errno == EINVAL,
         "flux_buffer_drop fails on NULL pointer");
@@ -849,52 +890,66 @@ void corner_case (void)
 
     ok ((ptr = flux_buffer_peek_line (fb, &len)) != NULL,
         "flux_buffer_peek_line works when no data available");
-    ok (len == 0, "flux_buffer_peek_line returns length 0 when no data available");
+    ok (len == 0,
+        "flux_buffer_peek_line returns length 0 when no data available");
     ok ((ptr = flux_buffer_peek_trimmed_line (fb, &len)) != NULL,
         "flux_buffer_peek_trimmed_line works when no data available");
     ok (len == 0,
-        "flux_buffer_peek_trimmed_line returns length 0 when no data available");
+        "flux_buffer_peek_trimmed_line returns length 0 when no data "
+        "available");
     ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
         "flux_buffer_read_line works when no data available");
-    ok (len == 0, "flux_buffer_read_line returns length 0 when no data available");
+    ok (len == 0,
+        "flux_buffer_read_line returns length 0 when no data available");
     ok ((ptr = flux_buffer_read_trimmed_line (fb, &len)) != NULL,
         "flux_buffer_read_trimmed_line works when no data available");
     ok (len == 0,
-        "flux_buffer_read_trimmed_line returns length 0 when no data available");
+        "flux_buffer_read_trimmed_line returns length 0 when no data "
+        "available");
 
     /* callback corner case tests */
 
-    ok (flux_buffer_set_low_read_cb (fb, empty_cb, -1, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_low_read_cb (fb, empty_cb, -1, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_low_read_cb fails on bad input");
     ok (flux_buffer_set_low_read_cb (fb, empty_cb, 0, NULL) == 0,
         "flux_buffer_set_low_read_cb success");
-    ok (flux_buffer_set_low_read_cb (fb, empty_cb, -1, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_low_read_cb (fb, empty_cb, -1, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_low_read_cb fails on bad input overwrite callback");
-    ok (flux_buffer_set_read_line_cb (fb, empty_cb, NULL) < 0 && errno == EEXIST,
+    ok (flux_buffer_set_read_line_cb (fb, empty_cb, NULL) < 0
+            && errno == EEXIST,
         "flux_buffer_set_read_line_cb fails if callback already set");
-    ok (flux_buffer_set_high_write_cb (fb, empty_cb, 0, NULL) < 0 && errno == EEXIST,
+    ok (flux_buffer_set_high_write_cb (fb, empty_cb, 0, NULL) < 0
+            && errno == EEXIST,
         "flux_buffer_set_high_write_cb fails if callback already set");
     ok (flux_buffer_set_low_read_cb (fb, NULL, 0, NULL) == 0,
         "flux_buffer_set_low_read_cb success clear callback");
 
     ok (flux_buffer_set_read_line_cb (fb, empty_cb, NULL) == 0,
         "flux_buffer_set_read_line_cb success");
-    ok (flux_buffer_set_low_read_cb (fb, empty_cb, 0, NULL) < 0 && errno == EEXIST,
+    ok (flux_buffer_set_low_read_cb (fb, empty_cb, 0, NULL) < 0
+            && errno == EEXIST,
         "flux_buffer_set_low_read_cb fails if callback already set");
-    ok (flux_buffer_set_high_write_cb (fb, empty_cb, 0, NULL) < 0 && errno == EEXIST,
+    ok (flux_buffer_set_high_write_cb (fb, empty_cb, 0, NULL) < 0
+            && errno == EEXIST,
         "flux_buffer_set_high_write_cb fails if callback already set");
     ok (flux_buffer_set_read_line_cb (fb, NULL, NULL) == 0,
         "flux_buffer_set_read_line_cb success clear callback");
 
-    ok (flux_buffer_set_high_write_cb (fb, empty_cb, -1, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_high_write_cb (fb, empty_cb, -1, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_high_write_cb fails on bad input");
     ok (flux_buffer_set_high_write_cb (fb, empty_cb, 0, NULL) == 0,
         "flux_buffer_set_high_write_cb success");
-    ok (flux_buffer_set_high_write_cb (fb, empty_cb, -1, NULL) < 0 && errno == EINVAL,
+    ok (flux_buffer_set_high_write_cb (fb, empty_cb, -1, NULL) < 0
+            && errno == EINVAL,
         "flux_buffer_set_high_write_cb fails on bad input overwrite callback");
-    ok (flux_buffer_set_low_read_cb (fb, empty_cb, 0, NULL) < 0 && errno == EEXIST,
+    ok (flux_buffer_set_low_read_cb (fb, empty_cb, 0, NULL) < 0
+            && errno == EEXIST,
         "flux_buffer_set_low_read_cb fails if callback already set");
-    ok (flux_buffer_set_read_line_cb (fb, empty_cb, NULL) < 0 && errno == EEXIST,
+    ok (flux_buffer_set_read_line_cb (fb, empty_cb, NULL) < 0
+            && errno == EEXIST,
         "flux_buffer_set_read_line_cb fails if callback already set");
     ok (flux_buffer_set_high_write_cb (fb, NULL, 0, NULL) == 0,
         "flux_buffer_set_high_write_cb success clear callback");
@@ -927,7 +982,8 @@ void full_buffer (void)
     ok (flux_buffer_bytes (fb) == 4,
         "flux_buffer_bytes returns length of bytes written");
 
-    ok (flux_buffer_space (fb) == 0, "flux_buffer_space returns length of space left");
+    ok (flux_buffer_space (fb) == 0,
+        "flux_buffer_space returns length of space left");
 
     ok (flux_buffer_write (fb, "5", 1) < 0 && errno == ENOSPC,
         "flux_buffer_write fails with ENOSPC if exceeding buffer size");
@@ -950,11 +1006,13 @@ void readonly_buffer (void)
     ok ((fb = flux_buffer_create (FLUX_BUFFER_TEST_MAXSIZE)) != NULL,
         "flux_buffer_create works");
 
-    ok (flux_buffer_is_readonly (fb) == 0, "flux buffer is not readonly on creation");
+    ok (flux_buffer_is_readonly (fb) == 0,
+        "flux buffer is not readonly on creation");
 
     ok (flux_buffer_readonly (fb) == 0, "flux buffer readonly set");
 
-    ok (flux_buffer_is_readonly (fb) > 0, "flux buffer is readonly after setting");
+    ok (flux_buffer_is_readonly (fb) > 0,
+        "flux buffer is readonly after setting");
 
     flux_buffer_destroy (fb);
 

@@ -9,14 +9,14 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
 #include <czmq.h>
 #include <argz.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
+#    include <caliper/cali.h>
 #endif
 #include <flux/core.h>
 
@@ -152,8 +152,9 @@ static void op_fini (void *impl)
 flux_t *connector_init (const char *path, int flags)
 {
 #if HAVE_CALIPER
-    cali_id_t uuid =
-        cali_create_attribute ("flux.uuid", CALI_TYPE_STRING, CALI_ATTR_SKIP_EVENTS);
+    cali_id_t uuid = cali_create_attribute ("flux.uuid",
+                                            CALI_TYPE_STRING,
+                                            CALI_ATTR_SKIP_EVENTS);
     size_t length = strlen (path);
     cali_push_snapshot (CALI_SCOPE_PROCESS | CALI_SCOPE_THREAD,
                         1,

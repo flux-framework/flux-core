@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_KVSTXN_H
-#define _FLUX_KVS_KVSTXN_H
+#    define _FLUX_KVS_KVSTXN_H
 
-#include <flux/core.h>
-#include <czmq.h>
+#    include <flux/core.h>
+#    include <czmq.h>
 
-#include "cache.h"
+#    include "cache.h"
 
 typedef struct kvstxn_mgr kvstxn_mgr_t;
 typedef struct kvstxn kvstxn_t;
@@ -111,7 +111,9 @@ int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data);
  *
  * return -1 in callback to break iteration
  */
-int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt, kvstxn_cache_entry_f cb, void *data);
+int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
+                                     kvstxn_cache_entry_f cb,
+                                     void *data);
 
 /* convenience function for cleaning up a dirty cache entry that was
  * returned to the user via kvstxn_process().  Generally speaking, this
@@ -170,7 +172,9 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm);
  * an error (i.e. you don't use kvstxn_get_newroot_ref to get a new
  * root).
  */
-void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt, bool fallback);
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm,
+                                    kvstxn_t *kt,
+                                    bool fallback);
 
 int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm);
 void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm);

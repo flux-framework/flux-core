@@ -11,7 +11,7 @@
 /* cron interval type definition */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <jansson.h>
@@ -41,7 +41,8 @@ static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_t *arg)
     /*  Unpack 'interval' and 'after' arguments. If after was not specified,
      *   (and thus is still < 0.0), then it is set to interval by default.
      */
-    if (json_unpack (arg, "{ s:F, s?F }", "interval", &i, "after", &after) < 0) {
+    if (json_unpack (arg, "{ s:F, s?F }", "interval", &i, "after", &after)
+        < 0) {
         return NULL;
     }
     if (after < 0.0)

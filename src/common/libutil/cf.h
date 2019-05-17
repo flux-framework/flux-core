@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _UTIL_CF_H
-#define _UTIL_CF_H
+#    define _UTIL_CF_H
 
-#include <time.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <limits.h>
+#    include <time.h>
+#    include <stdbool.h>
+#    include <stdint.h>
+#    include <limits.h>
 
 // flags for cf_check
 enum {
@@ -44,10 +44,10 @@ struct cf_option {
     enum cf_type type;
     bool required;
 };
-#define CF_OPTIONS_TABLE_END \
-    {                        \
-        NULL, 0, false       \
-    }
+#    define CF_OPTIONS_TABLE_END \
+        {                        \
+            NULL, 0, false       \
+        }
 
 /* Error information is filled in by cf_update, cf_file, and cf_check.
  * If filename is unavailable, it is set to empty string.

@@ -43,7 +43,8 @@ int subcommand_env_register (optparse_t *p)
                                  "env",
                                  cmd_env,
                                  "[OPTIONS...] [COMMAND...]",
-                                 "Print the flux environment or execute COMMAND inside "
+                                 "Print the flux environment or execute "
+                                 "COMMAND inside "
                                  "it",
                                  0,
                                  NULL);

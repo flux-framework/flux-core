@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _UTIL_TIMESTAMP_H
-#define _UTIL_TIMESTAMP_H
+#    define _UTIL_TIMESTAMP_H
 
-#include <time.h>
+#    include <time.h>
 
 /* Convert time_t (GMT) to ISO 8601 timestamp string,
  * e.g. "2003-08-24T05:14:50Z"

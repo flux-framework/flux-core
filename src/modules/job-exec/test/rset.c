@@ -107,8 +107,13 @@ int main (int ac, char *av[])
         json_error_t err;
         struct resource_set *r = resource_set_create (e->input, &err);
         if (e->expected_ranks == NULL) {  // Expected failure
-            ok (r == NULL, "%s: resource_set_create expected failure", e->descr);
-            is (err.text, e->error_string, "%s: got expected error text", e->descr);
+            ok (r == NULL,
+                "%s: resource_set_create expected failure",
+                e->descr);
+            is (err.text,
+                e->error_string,
+                "%s: got expected error text",
+                e->descr);
         } else {
             if (r) {
                 const struct idset *ids = resource_set_ranks (r);

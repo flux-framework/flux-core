@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_REDUCE_H
-#define _FLUX_CORE_REDUCE_H
+#    define _FLUX_CORE_REDUCE_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 typedef struct flux_reduce_struct flux_reduce_t;
 
@@ -57,9 +57,9 @@ int flux_reduce_opt_get (flux_reduce_t *r, int option, void *val, size_t size);
 
 int flux_reduce_opt_set (flux_reduce_t *r, int option, void *val, size_t size);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* _FLUX_CORE_REDUCE_H */
 

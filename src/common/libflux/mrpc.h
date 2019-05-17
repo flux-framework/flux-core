@@ -9,16 +9,16 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_MRPC_H
-#define _FLUX_CORE_MRPC_H
+#    define _FLUX_CORE_MRPC_H
 
-#include <stdbool.h>
+#    include <stdbool.h>
 
-#include "handle.h"
-#include "rpc.h"
+#    include "handle.h"
+#    include "rpc.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 typedef struct flux_mrpc_struct flux_mrpc_t;
 typedef void (*flux_mrpc_continuation_f) (flux_mrpc_t *mrpc, void *arg);
@@ -104,9 +104,9 @@ int flux_mrpc_aux_set (flux_mrpc_t *mrpc,
                        void *aux,
                        flux_free_f destroy);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_MRPC_H */
 

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdbool.h>
 #include <string.h>
@@ -60,7 +60,8 @@ void kvs_util_normalize_key_path_tests (void)
 
     s = kvs_util_normalize_key ("....", &dirflag);
     ok (s != NULL && !strcmp (s, "."),
-        "kvs_util_normalize_key transforms several standalone separators to one");
+        "kvs_util_normalize_key transforms several standalone separators to "
+        "one");
     free (s);
 }
 

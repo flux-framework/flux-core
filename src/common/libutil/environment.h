@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _UTIL_ENVIRONMENT_H
-#define _UTIL_ENVIRONMENT_H
+#    define _UTIL_ENVIRONMENT_H
 
-#include <stdbool.h>
-#include <stdarg.h>
+#    include <stdbool.h>
+#    include <stdarg.h>
 
 /* Create/destroy environment
  */
@@ -69,7 +69,9 @@ void environment_apply (struct environment *e);
  * @param value The value to use, this will be split based on the separator
  * defined for the key if one is set, otherwise it is prepended whole
  */
-void environment_push (struct environment *e, const char *key, const char *value);
+void environment_push (struct environment *e,
+                       const char *key,
+                       const char *value);
 
 /**
  * @brief Split, deduplicate, and push a new value onto the back of the
@@ -80,7 +82,9 @@ void environment_push (struct environment *e, const char *key, const char *value
  * @param value The value to use, this will be split based on the separator
  * defined for the key if one is set, otherwise it is appended whole
  */
-void environment_push_back (struct environment *e, const char *key, const char *value);
+void environment_push_back (struct environment *e,
+                            const char *key,
+                            const char *value);
 
 /**
  * @brief Add the specified value to the front of the target key without
@@ -158,7 +162,9 @@ void environment_from_env (struct environment *e,
  * @param separator the separator to use to join components of this object and
  * split and dedup inputs
  */
-void environment_set_separator (struct environment *e, const char *key, char separator);
+void environment_set_separator (struct environment *e,
+                                const char *key,
+                                char separator);
 
 /**
  * @brief Get the value of a given environment variable by name.

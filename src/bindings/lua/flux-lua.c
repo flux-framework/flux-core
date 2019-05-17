@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <unistd.h>
 #include <stdio.h>
@@ -869,7 +869,10 @@ void push_stat_table (lua_State *L, struct stat *s)
     lua_setfield (L, t, "st_blocks");
 }
 
-void stat_watcher_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+void stat_watcher_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct stat st, prev;
     int rc, t;
@@ -979,7 +982,10 @@ static int l_watcher_index (lua_State *L)
     return (1);
 }
 
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     int rc;
     int t;
@@ -1112,33 +1118,34 @@ static int l_flux_reactor_stop_error (lua_State *L)
     return 0;
 }
 
-static const struct luaL_Reg flux_functions[] = {{"new", l_flux_new}, {NULL, NULL}};
+static const struct luaL_Reg flux_functions[] = {{"new", l_flux_new},
+                                                 {NULL, NULL}};
 
-static const struct luaL_Reg flux_methods[] = {{"__gc", l_flux_destroy},
-                                               {"__index", l_flux_index},
-                                               {"send", l_flux_send},
-                                               {"recv", l_flux_recv},
-                                               {"recvmsg", l_flux_recvmsg},
-                                               {"rpc", l_flux_rpc},
-                                               {"sendevent", l_flux_send_event},
-                                               {"recv_event", l_flux_recv_event},
-                                               {"subscribe", l_flux_subscribe},
-                                               {"unsubscribe", l_flux_unsubscribe},
-                                               {"getattr", l_flux_getattr},
-                                               {"msghandler", l_msghandler_add},
-                                               {"statwatcher", l_stat_watcher_add},
-                                               {"timer", l_timeout_handler_add},
-                                               {"reactor", l_flux_reactor_start},
-                                               {"reactor_stop", l_flux_reactor_stop},
-                                               {"reactor_stop_error",
-                                                l_flux_reactor_stop_error},
-                                               {NULL, NULL}};
+static const struct luaL_Reg flux_methods[] =
+    {{"__gc", l_flux_destroy},
+     {"__index", l_flux_index},
+     {"send", l_flux_send},
+     {"recv", l_flux_recv},
+     {"recvmsg", l_flux_recvmsg},
+     {"rpc", l_flux_rpc},
+     {"sendevent", l_flux_send_event},
+     {"recv_event", l_flux_recv_event},
+     {"subscribe", l_flux_subscribe},
+     {"unsubscribe", l_flux_unsubscribe},
+     {"getattr", l_flux_getattr},
+     {"msghandler", l_msghandler_add},
+     {"statwatcher", l_stat_watcher_add},
+     {"timer", l_timeout_handler_add},
+     {"reactor", l_flux_reactor_start},
+     {"reactor_stop", l_flux_reactor_stop},
+     {"reactor_stop_error", l_flux_reactor_stop_error},
+     {NULL, NULL}};
 
-static const struct luaL_Reg msghandler_methods[] = {{"__index", l_msghandler_index},
-                                                     {"__newindex",
-                                                      l_msghandler_newindex},
-                                                     {"remove", l_msghandler_remove},
-                                                     {NULL, NULL}};
+static const struct luaL_Reg msghandler_methods[] =
+    {{"__index", l_msghandler_index},
+     {"__newindex", l_msghandler_newindex},
+     {"remove", l_msghandler_remove},
+     {NULL, NULL}};
 
 static const struct luaL_Reg watcher_methods[] = {{"__gc", l_watcher_destroy},
                                                   {"__index", l_watcher_index},

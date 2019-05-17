@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _UTIL_TSTAT_H
-#define _UTIL_TSTAT_H
+#    define _UTIL_TSTAT_H
 
 typedef struct {
     double min, max;

@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _UTIL_GETIP_H
-#define _UTIL_GETIP_H
+#    define _UTIL_GETIP_H
 
-#include <sys/types.h>
+#    include <sys/types.h>
 
 /* Get ip address associated with primary hostname.
  * Return it as a string in buf (up to len bytes, always null terminated)

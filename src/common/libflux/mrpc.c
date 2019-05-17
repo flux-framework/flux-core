@@ -9,15 +9,15 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
+#    include <caliper/cali.h>
+#    include <sys/syscall.h>
 #endif
 #include <jansson.h>
 #include <czmq.h>
@@ -79,7 +79,9 @@ static void flux_mrpc_usecount_decr (flux_mrpc_t *mrpc)
          */
         if (mrpc->m.matchtag != FLUX_MATCHTAG_NONE) {
             if (mrpc->rx_count < mrpc->rx_expected)
-                log_matchtag_leak (mrpc->h, "incomplete MRPC", mrpc->m.matchtag);
+                log_matchtag_leak (mrpc->h,
+                                   "incomplete MRPC",
+                                   mrpc->m.matchtag);
             else
                 flux_matchtag_free (mrpc->h, mrpc->m.matchtag);
         }
@@ -126,7 +128,9 @@ static flux_mrpc_t *mrpc_create (flux_t *h, int rx_expected)
     return mrpc;
 }
 
-static int mrpc_request_prepare (flux_mrpc_t *mrpc, flux_msg_t *msg, uint32_t nodeid)
+static int mrpc_request_prepare (flux_mrpc_t *mrpc,
+                                 flux_msg_t *msg,
+                                 uint32_t nodeid)
 {
     int rc = -1;
     uint32_t matchtag = mrpc->m.matchtag & ~FLUX_MATCHTAG_GROUP_MASK;
@@ -255,7 +259,9 @@ done:
     return rc;
 }
 
-static int flux_mrpc_vget_unpack (flux_mrpc_t *mrpc, const char *fmt, va_list ap)
+static int flux_mrpc_vget_unpack (flux_mrpc_t *mrpc,
+                                  const char *fmt,
+                                  va_list ap)
 {
     int rc = -1;
 
@@ -338,7 +344,10 @@ int flux_mrpc_then (flux_mrpc_t *mrpc, flux_mrpc_continuation_f cb, void *arg)
     }
     if (cb && !mrpc->then_cb) {
         if (!mrpc->mh) {
-            if (!(mrpc->mh = flux_msg_handler_create (mrpc->h, mrpc->m, mrpc_cb, mrpc)))
+            if (!(mrpc->mh = flux_msg_handler_create (mrpc->h,
+                                                      mrpc->m,
+                                                      mrpc_cb,
+                                                      mrpc)))
                 goto done;
         }
         flux_msg_handler_start (mrpc->mh);
@@ -403,7 +412,10 @@ error:
     return NULL;
 }
 
-static flux_mrpc_t *mrpc (flux_t *h, const char *nodeset, int flags, flux_msg_t *msg)
+static flux_mrpc_t *mrpc (flux_t *h,
+                          const char *nodeset,
+                          int flags,
+                          flux_msg_t *msg)
 {
     struct idset *ns = NULL;
     flux_mrpc_t *mrpc = NULL;

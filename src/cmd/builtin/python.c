@@ -28,7 +28,8 @@ int subcommand_python_register (optparse_t *p)
                                  "python",
                                  cmd_python,
                                  "[PYTHON ARGUMENTS...]",
-                                 "Run the python interpreter flux was configured with",
+                                 "Run the python interpreter flux was "
+                                 "configured with",
                                  OPTPARSE_SUBCMD_SKIP_OPTS,
                                  NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);

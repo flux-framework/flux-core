@@ -46,7 +46,8 @@ void test_modname (void)
 
     errmsg_count = 0;
     name = flux_modname (FAKE2, NULL, NULL);
-    ok (name == NULL && errmsg_count == 0, "flux_modname moderr callback can be NULL");
+    ok (name == NULL && errmsg_count == 0,
+        "flux_modname moderr callback can be NULL");
 
     errno = 0;
     errmsg_count = 0;
@@ -133,7 +134,8 @@ void test_modfind (void)
 
     errno = 0;
     path = flux_modfind (searchpath, NULL, NULL, NULL);
-    ok (path == NULL && errno == EINVAL, "flux_modfind modname=NULL fails with EINVAL");
+    ok (path == NULL && errno == EINVAL,
+        "flux_modfind modname=NULL fails with EINVAL");
 
     errno = 0;
     path = flux_modfind (NULL, "fake1", NULL, NULL);

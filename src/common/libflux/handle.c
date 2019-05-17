@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <string.h>
@@ -20,8 +20,8 @@
 #include <poll.h>
 #include <czmq.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
+#    include <caliper/cali.h>
+#    include <sys/syscall.h>
 #endif
 
 #include "handle.h"
@@ -90,15 +90,17 @@ void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags);
 #if HAVE_CALIPER
 void profiling_context_init (struct profiling_context *prof)
 {
-    prof->msg_type = cali_create_attribute ("flux.message.type",
-                                            CALI_TYPE_STRING,
-                                            CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
+    prof->msg_type =
+        cali_create_attribute ("flux.message.type",
+                               CALI_TYPE_STRING,
+                               CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
     prof->msg_seq = cali_create_attribute ("flux.message.seq",
                                            CALI_TYPE_INT,
                                            CALI_ATTR_SKIP_EVENTS);
-    prof->msg_topic = cali_create_attribute ("flux.message.topic",
-                                             CALI_TYPE_STRING,
-                                             CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
+    prof->msg_topic =
+        cali_create_attribute ("flux.message.topic",
+                               CALI_TYPE_STRING,
+                               CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
     prof->msg_sender = cali_create_attribute ("flux.message.sender",
                                               CALI_TYPE_STRING,
                                               CALI_ATTR_SKIP_EVENTS);
@@ -114,9 +116,10 @@ void profiling_context_init (struct profiling_context *prof)
         cali_create_attribute ("flux.message.response_expected",
                                CALI_TYPE_INT,
                                CALI_ATTR_SKIP_EVENTS);
-    prof->msg_action = cali_create_attribute ("flux.message.action",
-                                              CALI_TYPE_STRING,
-                                              CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
+    prof->msg_action =
+        cali_create_attribute ("flux.message.action",
+                               CALI_TYPE_STRING,
+                               CALI_ATTR_DEFAULT | CALI_ATTR_ASVALUE);
     prof->msg_match_type = cali_create_attribute ("flux.message.match.type",
                                                   CALI_TYPE_INT,
                                                   CALI_ATTR_SKIP_EVENTS);
@@ -257,7 +260,8 @@ flux_t *flux_open (const char *uri, int flags)
     if (!uri)
         uri = getenv ("FLUX_URI");
     if (!uri) {
-        if (asprintf (&default_uri, "local://%s", flux_conf_get ("rundir", 0)) < 0)
+        if (asprintf (&default_uri, "local://%s", flux_conf_get ("rundir", 0))
+            < 0)
             goto done;
         uri = default_uri;
     }
@@ -286,7 +290,8 @@ flux_t *flux_open (const char *uri, int flags)
 #endif
     if ((s = getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid, sizeof (userid)) < 0) {
+        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid, sizeof (userid))
+            < 0) {
             flux_handle_destroy (h);
             h = NULL;
             goto done;
@@ -294,7 +299,10 @@ flux_t *flux_open (const char *uri, int flags)
     }
     if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
         uint32_t rolemask = strtoul (s, NULL, 0);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask, sizeof (rolemask))
+        if (flux_opt_set (h,
+                          FLUX_OPT_TESTING_ROLEMASK,
+                          &rolemask,
+                          sizeof (rolemask))
             < 0) {
             flux_handle_destroy (h);
             h = NULL;
@@ -314,7 +322,9 @@ void flux_close (flux_t *h)
     errno = saved_errno;
 }
 
-flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
+flux_t *flux_handle_create (void *impl,
+                            const struct flux_handle_ops *ops,
+                            int flags)
 {
     flux_t *h = malloc (sizeof (*h));
     if (!h)
@@ -559,18 +569,18 @@ static void update_tx_stats (flux_t *h, const flux_msg_t *msg)
     int type;
     if (flux_msg_get_type (msg, &type) == 0) {
         switch (type) {
-            case FLUX_MSGTYPE_REQUEST:
-                h->msgcounters.request_tx++;
-                break;
-            case FLUX_MSGTYPE_RESPONSE:
-                h->msgcounters.response_tx++;
-                break;
-            case FLUX_MSGTYPE_EVENT:
-                h->msgcounters.event_tx++;
-                break;
-            case FLUX_MSGTYPE_KEEPALIVE:
-                h->msgcounters.keepalive_tx++;
-                break;
+        case FLUX_MSGTYPE_REQUEST:
+            h->msgcounters.request_tx++;
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            h->msgcounters.response_tx++;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            h->msgcounters.event_tx++;
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            h->msgcounters.keepalive_tx++;
+            break;
         }
     } else
         errno = 0;
@@ -581,18 +591,18 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
     int type;
     if (flux_msg_get_type (msg, &type) == 0) {
         switch (type) {
-            case FLUX_MSGTYPE_REQUEST:
-                h->msgcounters.request_rx++;
-                break;
-            case FLUX_MSGTYPE_RESPONSE:
-                h->msgcounters.response_rx++;
-                break;
-            case FLUX_MSGTYPE_EVENT:
-                h->msgcounters.event_rx++;
-                break;
-            case FLUX_MSGTYPE_KEEPALIVE:
-                h->msgcounters.keepalive_rx++;
-                break;
+        case FLUX_MSGTYPE_REQUEST:
+            h->msgcounters.request_rx++;
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            h->msgcounters.response_rx++;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            h->msgcounters.event_rx++;
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            h->msgcounters.keepalive_rx++;
+            break;
         }
     } else
         errno = 0;

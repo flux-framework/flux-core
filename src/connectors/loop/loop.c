@@ -11,7 +11,7 @@
 /* loop connector - mainly for testing */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>

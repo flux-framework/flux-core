@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_PRIORITY_H
-#define _FLUX_JOB_MANAGER_PRIORITY_H
+#    define _FLUX_JOB_MANAGER_PRIORITY_H
 
-#include "queue.h"
-#include "event.h"
+#    include "queue.h"
+#    include "event.h"
 
 /* Handle a 'priority' request - job priority adjustment
  */

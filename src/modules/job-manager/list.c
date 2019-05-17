@@ -34,7 +34,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 #include <flux/core.h>
@@ -60,8 +60,7 @@ json_t *list_one_job (struct job *job, json_t *attrs)
 
     if (!(o = json_object ()))
         goto error_nomem;
-    json_array_foreach (attrs, index, value)
-    {
+    json_array_foreach (attrs, index, value) {
         const char *attr = json_string_value (value);
         json_t *val = NULL;
         if (!attr) {
@@ -113,7 +112,8 @@ json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs)
     struct job *job;
     int saved_errno;
 
-    if (max_entries < 0 || !json_is_array (attrs) || json_array_size (attrs) == 0) {
+    if (max_entries < 0 || !json_is_array (attrs)
+        || json_array_size (attrs) == 0) {
         errno = EPROTO;
         goto error;
     }

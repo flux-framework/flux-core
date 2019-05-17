@@ -11,7 +11,7 @@
 /* aggregator.c - reduction based numerical aggreagator */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <flux/core.h>
@@ -133,18 +133,18 @@ static int summarize_int (struct aggregate *ag, json_t *value)
 static int aggregate_update_summary (struct aggregate *ag, json_t *value)
 {
     switch (json_typeof (value)) {
-        case JSON_INTEGER:
-            return summarize_int (ag, value);
-        case JSON_REAL:
-            return summarize_real (ag, value);
-        case JSON_STRING:
-        case JSON_OBJECT:
-        case JSON_ARRAY:
-        case JSON_TRUE:
-        case JSON_FALSE:
-        case JSON_NULL:
-            /* Currently no summary stats for these types */
-            return (0);
+    case JSON_INTEGER:
+        return summarize_int (ag, value);
+    case JSON_REAL:
+        return summarize_real (ag, value);
+    case JSON_STRING:
+    case JSON_OBJECT:
+    case JSON_ARRAY:
+    case JSON_TRUE:
+    case JSON_FALSE:
+    case JSON_NULL:
+        /* Currently no summary stats for these types */
+        return (0);
     }
     return (0);
 }
@@ -152,7 +152,8 @@ static int aggregate_update_summary (struct aggregate *ag, json_t *value)
 /*  Add a new aggregate entry to this aggregate.
  *   Update summary stats if update == true.
  */
-static struct aggregate_entry *aggregate_entry_add (struct aggregate *ag, json_t *value)
+static struct aggregate_entry *aggregate_entry_add (struct aggregate *ag,
+                                                    json_t *value)
 {
     struct aggregate_entry *ae = aggregate_entry_create ();
     if (ae) {
@@ -216,8 +217,7 @@ static int aggregate_push_json (struct aggregate *ag, json_t *entries)
     const char *ids;
     json_t *val;
 
-    json_object_foreach (entries, ids, val)
-    {
+    json_object_foreach (entries, ids, val) {
         if (aggregate_push (ag, val, ids) < 0) {
             flux_log_error (ag->ctx->h, "aggregate_push failed");
             return (-1);
@@ -226,7 +226,9 @@ static int aggregate_push_json (struct aggregate *ag, json_t *entries)
     return (0);
 }
 
-static int set_json_object_new_idset_key (json_t *o, struct idset *key, json_t *value)
+static int set_json_object_new_idset_key (json_t *o,
+                                          struct idset *key,
+                                          json_t *value)
 {
     char *s;
     int rc;
@@ -414,7 +416,8 @@ static char *aggregate_to_string (struct aggregate *ag)
      *   for backwards compatibility
      */
     if (ag->summary) {
-        json_object_foreach (ag->summary, name, val) json_object_set (o, name, val);
+        json_object_foreach (ag->summary, name, val)
+            json_object_set (o, name, val);
     }
     s = json_dumps (o, JSON_COMPACT);
     json_decref (o);
@@ -495,7 +498,10 @@ static void aggregate_destroy (struct aggregate *ag)
     free (ag);
 }
 
-static void timer_cb (flux_reactor_t *r, flux_watcher_t *tw, int revents, void *arg)
+static void timer_cb (flux_reactor_t *r,
+                      flux_watcher_t *tw,
+                      int revents,
+                      void *arg)
 {
     struct aggregate *ag = arg;
     flux_t *h = ag->ctx->h;
@@ -510,7 +516,8 @@ static void aggregate_timer_start (struct aggregate *ag, double timeout)
     if (ctx->rank != 0) {
         flux_t *h = ctx->h;
         flux_reactor_t *r = flux_get_reactor (h);
-        ag->tw = flux_timer_watcher_create (r, timeout, 0., timer_cb, (void *)ag);
+        ag->tw =
+            flux_timer_watcher_create (r, timeout, 0., timer_cb, (void *)ag);
         if (ag->tw == NULL) {
             flux_log_error (h, "flux_timer_watcher_create");
             return;
@@ -519,7 +526,8 @@ static void aggregate_timer_start (struct aggregate *ag, double timeout)
     }
 }
 
-static struct aggregate *aggregate_create (struct aggregator *ctx, const char *key)
+static struct aggregate *aggregate_create (struct aggregator *ctx,
+                                           const char *key)
 {
     flux_t *h = ctx->h;
 
@@ -671,7 +679,8 @@ static void push_cb (flux_t *h,
               ag->fwd_count,
               ag->total);
     if (ctx->rank > 0) {
-        if ((ag->count == ag->total || ag->count == ag->fwd_count || timeout == 0.))
+        if ((ag->count == ag->total || ag->count == ag->fwd_count
+             || timeout == 0.))
             if (aggregate_flush (ag) < 0)
                 goto error;
     } else if (ag->count == ag->total)

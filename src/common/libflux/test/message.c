@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <errno.h>
@@ -77,7 +77,9 @@ void check_routes (void)
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_first works");
-    like (s, "sender", "flux_msg_get_route_first returns id1 on msg w/delim+id1+id2");
+    like (s,
+          "sender",
+          "flux_msg_get_route_first returns id1 on msg w/delim+id1+id2");
     free (s);
 
     ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
@@ -90,7 +92,9 @@ void check_routes (void)
     s = NULL;
     ok (flux_msg_pop_route (msg, &s) == 0 && s != NULL,
         "flux_msg_pop_route works on msg w/routes");
-    like (s, "router", "flux_msg_pop_routet returns id2 on message with delim+id1+id2");
+    like (s,
+          "router",
+          "flux_msg_pop_routet returns id2 on message with delim+id1+id2");
     free (s);
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
@@ -111,7 +115,8 @@ void check_topic (void)
     ok (flux_msg_get_topic (msg, &s) < 0 && errno == EPROTO,
         "flux_msg_get_topic fails with EPROTO on msg w/o topic");
     ok (flux_msg_set_topic (msg, "blorg") == 0, "flux_msg_set_topic works");
-    ok (flux_msg_get_topic (msg, &s) == 0, "flux_msg_get_topic works on msg w/topic");
+    ok (flux_msg_get_topic (msg, &s) == 0,
+        "flux_msg_get_topic works on msg w/topic");
     like (s, "blorg", "and we got back the topic string we set");
 
     ok (flux_msg_enable_route (msg) == 0, "flux_msg_enable_route works");
@@ -260,13 +265,15 @@ void check_payload (void)
 
     errno = 0;
     memset (pay, 42, plen);
-    ok (flux_msg_set_payload (msg, pay, plen) == 0 && flux_msg_frames (msg) == 2,
+    ok (flux_msg_set_payload (msg, pay, plen) == 0
+            && flux_msg_frames (msg) == 2,
         "flux_msg_set_payload works");
 
     len = 0;
     buf = NULL;
     errno = 0;
-    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen && errno == 0,
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen
+            && errno == 0,
         "flux_msg_get_payload works");
     cmp_mem (buf, pay, len, "and we got back the payload we set");
 
@@ -275,7 +282,8 @@ void check_payload (void)
     len = 0;
     buf = NULL;
     errno = 0;
-    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen && errno == 0,
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen
+            && errno == 0,
         "flux_msg_get_payload works with topic");
     cmp_mem (buf, pay, len, "and we got back the payload we set");
     ok (flux_msg_set_topic (msg, NULL) == 0 && flux_msg_frames (msg) == 2,
@@ -289,7 +297,8 @@ void check_payload (void)
     len = 0;
     buf = NULL;
     errno = 0;
-    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen && errno == 0,
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen
+            && errno == 0,
         "flux_msg_get_payload still works, with routes");
     cmp_mem (buf, pay, len, "and we got back the payload we set");
 
@@ -298,13 +307,15 @@ void check_payload (void)
     len = 0;
     buf = NULL;
     errno = 0;
-    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen && errno == 0,
+    ok (flux_msg_get_payload (msg, &buf, &len) == 0 && buf && len == plen
+            && errno == 0,
         "flux_msg_get_payload works, with topic and routes");
     cmp_mem (buf, pay, len, "and we got back the payload we set");
 
     errno = 0;
     ok (flux_msg_set_payload (msg, buf, len - 1) < 0 && errno == EINVAL,
-        "flux_msg_set_payload detects reuse of payload fragment and fails with EINVAL");
+        "flux_msg_set_payload detects reuse of payload fragment and fails with "
+        "EINVAL");
 
     ok (flux_msg_set_payload (msg, buf, len) == 0,
         "flux_msg_set_payload detects payload echo and works");
@@ -338,14 +349,16 @@ void check_proto (void)
     ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE,
         "flux_msg_get_type works and returns what we set");
 
-    ok (flux_msg_set_type (msg, FLUX_MSGTYPE_REQUEST) == 0, "flux_msg_set_type works");
+    ok (flux_msg_set_type (msg, FLUX_MSGTYPE_REQUEST) == 0,
+        "flux_msg_set_type works");
     ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "flux_msg_get_type works and returns what we set");
     ok (flux_msg_get_nodeid (msg, &nodeid) == 0 && nodeid == FLUX_NODEID_ANY,
         "flux_msg_get_nodeid works on request and default is sane");
 
     nodeid = 42;
-    ok (flux_msg_set_nodeid (msg, nodeid) == 0, "flux_msg_set_nodeid works on request");
+    ok (flux_msg_set_nodeid (msg, nodeid) == 0,
+        "flux_msg_set_nodeid works on request");
     nodeid = 0;
     ok (flux_msg_get_nodeid (msg, &nodeid) == 0 && nodeid == 42,
         "flux_msg_get_nodeid works and returns what we set");
@@ -353,10 +366,12 @@ void check_proto (void)
     errno = 0;
     ok (flux_msg_set_errnum (msg, 42) < 0 && errno == EINVAL,
         "flux_msg_set_errnum on non-response fails with errno == EINVAL");
-    ok (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) == 0, "flux_msg_set_type works");
+    ok (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) == 0,
+        "flux_msg_set_type works");
     ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE,
         "flux_msg_get_type works and returns what we set");
-    ok (flux_msg_set_errnum (msg, 43) == 0, "flux_msg_set_errnum works on response");
+    ok (flux_msg_set_errnum (msg, 43) == 0,
+        "flux_msg_set_errnum works on response");
     errno = 0;
     ok (flux_msg_set_nodeid (msg, 0) < 0 && errno == EINVAL,
         "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
@@ -364,7 +379,8 @@ void check_proto (void)
     ok (flux_msg_get_errnum (msg, &errnum) == 0 && errnum == 43,
         "flux_msg_get_errnum works and returns what we set");
 
-    ok (flux_msg_set_type (msg, FLUX_MSGTYPE_REQUEST) == 0, "flux_msg_set_type works");
+    ok (flux_msg_set_type (msg, FLUX_MSGTYPE_REQUEST) == 0,
+        "flux_msg_set_type works");
 
     errno = 0;
     ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM) < 0 && errno == EINVAL,
@@ -403,15 +419,18 @@ void check_security (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "flux_msg_create works");
-    ok (flux_msg_get_userid (msg, &userid) == 0 && userid == FLUX_USERID_UNKNOWN,
+    ok (flux_msg_get_userid (msg, &userid) == 0
+            && userid == FLUX_USERID_UNKNOWN,
         "message created with userid=FLUX_USERID_UNKNOWN");
-    ok (flux_msg_get_rolemask (msg, &rolemask) == 0 && rolemask == FLUX_ROLE_NONE,
+    ok (flux_msg_get_rolemask (msg, &rolemask) == 0
+            && rolemask == FLUX_ROLE_NONE,
         "message created with rolemask=FLUX_ROLE_NONE");
-    ok (flux_msg_set_userid (msg, 4242) == 0 && flux_msg_get_userid (msg, &userid) == 0
-            && userid == 4242,
+    ok (flux_msg_set_userid (msg, 4242) == 0
+            && flux_msg_get_userid (msg, &userid) == 0 && userid == 4242,
         "flux_msg_set_userid 4242 works");
     ok (flux_msg_set_rolemask (msg, FLUX_ROLE_ALL) == 0
-            && flux_msg_get_rolemask (msg, &rolemask) == 0 && rolemask == FLUX_ROLE_ALL,
+            && flux_msg_get_rolemask (msg, &rolemask) == 0
+            && rolemask == FLUX_ROLE_ALL,
         "flux_msg_set_rolemask FLUX_ROLE_ALL works");
     flux_msg_destroy (msg);
 }
@@ -426,10 +445,12 @@ void check_cmp (void)
     ok (flux_msg_cmp (msg, match), "flux_msg_cmp all-match works");
 
     match.typemask = FLUX_MSGTYPE_RESPONSE;
-    ok (!flux_msg_cmp (msg, match), "flux_msg_cmp with request type not in mask works");
+    ok (!flux_msg_cmp (msg, match),
+        "flux_msg_cmp with request type not in mask works");
 
     match.typemask |= FLUX_MSGTYPE_REQUEST;
-    ok (flux_msg_cmp (msg, match), "flux_msg_cmp with request type in mask works");
+    ok (flux_msg_cmp (msg, match),
+        "flux_msg_cmp with request type in mask works");
 
     ok (flux_msg_set_topic (msg, "hello.foo") == 0, "flux_msg_set_topic works");
     match.topic_glob = "hello.foobar";
@@ -465,7 +486,8 @@ void check_encode (void)
         "decoded expected message type");
     ok (flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar"),
         "decoded expected topic string");
-    ok (flux_msg_has_payload (msg2) == false, "decoded expected (lack of) payload");
+    ok (flux_msg_has_payload (msg2) == false,
+        "decoded expected (lack of) payload");
 
     flux_msg_destroy (msg);
     flux_msg_destroy (msg2);
@@ -486,12 +508,14 @@ void check_sendfd (void)
         "flux_msg_create works");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0, "flux_msg_set_topic works");
     ok (flux_msg_sendfd (pfd[1], msg, NULL) == 0, "flux_msg_sendfd works");
-    ok ((msg2 = flux_msg_recvfd (pfd[0], NULL)) != NULL, "flux_msg_recvfd works");
+    ok ((msg2 = flux_msg_recvfd (pfd[0], NULL)) != NULL,
+        "flux_msg_recvfd works");
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "decoded expected message type");
     ok (flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar"),
         "decoded expected topic string");
-    ok (flux_msg_has_payload (msg2) == false, "decoded expected (lack of) payload");
+    ok (flux_msg_has_payload (msg2) == false,
+        "decoded expected (lack of) payload");
 
     flux_msg_destroy (msg);
     flux_msg_destroy (msg2);
@@ -517,20 +541,24 @@ void check_sendzsock (void)
         "created test message");
 
     ok (flux_msg_sendzsock (zsock[1], msg) == 0, "flux_msg_sendzsock works");
-    ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL, "flux_msg_recvzsock works");
+    ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL,
+        "flux_msg_recvzsock works");
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
-            && flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar")
+            && flux_msg_get_topic (msg2, &topic) == 0
+            && !strcmp (topic, "foo.bar")
             && flux_msg_has_payload (msg2) == false,
         "decoded message looks like what was sent");
     flux_msg_destroy (msg2);
 
     /* Send it again.
      */
-    ok (flux_msg_sendzsock (zsock[1], msg) == 0, "try2: flux_msg_sendzsock works");
+    ok (flux_msg_sendzsock (zsock[1], msg) == 0,
+        "try2: flux_msg_sendzsock works");
     ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL,
         "try2: flux_msg_recvzsock works");
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
-            && flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar")
+            && flux_msg_get_topic (msg2, &topic) == 0
+            && !strcmp (topic, "foo.bar")
             && flux_msg_has_payload (msg2) == false,
         "try2: decoded message looks like what was sent");
     flux_msg_destroy (msg2);
@@ -551,7 +579,8 @@ void check_aux (void)
     flux_msg_t *msg;
     char *test_data = "Hello";
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL, "created test message");
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
     errno = 0;
     ok (flux_msg_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
         "flux_msg_aux_set msg=NULL fails with EINVAL");
@@ -565,7 +594,8 @@ void check_aux (void)
     ok (flux_msg_aux_get (msg, "test") == test_data,
         "flux_msg_aux_get aux data memeber key returns orig pointer");
     flux_msg_destroy (msg);
-    ok (myfree_arg == test_data, "destroyed message and aux destructor was called");
+    ok (myfree_arg == test_data,
+        "destroyed message and aux destructor was called");
 }
 
 void check_copy (void)
@@ -588,7 +618,8 @@ void check_copy (void)
         "copy is keepalive: no routes, topic, or payload");
     flux_msg_destroy (cpy);
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL, "created request");
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created request");
     ok (flux_msg_enable_route (msg) == 0, "added route delim");
     ok (flux_msg_set_topic (msg, "foo") == 0, "set topic string");
     ok (flux_msg_set_payload (msg, buf, sizeof (buf)) == 0, "added payload");
@@ -607,7 +638,8 @@ void check_copy (void)
         "flux_msg_copy works (payload=false)");
     type = -1;
     ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
-            && !flux_msg_has_payload (cpy) && flux_msg_get_route_count (cpy) == 0
+            && !flux_msg_has_payload (cpy)
+            && flux_msg_get_route_count (cpy) == 0
             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic, "foo"),
         "copy is request: w/route delim, topic, and no payload");
     flux_msg_destroy (cpy);
@@ -628,13 +660,15 @@ void check_print (void)
               "flux_msg_fprint doesn't segfault on keepalive");
     flux_msg_destroy (msg);
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL, "created test message");
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL,
+        "created test message");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0, "set topic string");
     lives_ok ({ flux_msg_fprint (f, msg); },
               "flux_msg_fprint doesn't segfault on event with topic");
     flux_msg_destroy (msg);
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL, "created test message");
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0, "set topic string");
     ok (flux_msg_enable_route (msg) == 0, "enabled routing");
     ok (flux_msg_push_route (msg, "id1") == 0, "added one route");
@@ -647,7 +681,8 @@ void check_print (void)
         "created test message");
     ok (flux_msg_enable_route (msg) == 0, "enabled routing");
     lives_ok ({ flux_msg_fprint (f, msg); },
-              "flux_msg_fprint doesn't segfault on response with empty route stack");
+              "flux_msg_fprint doesn't segfault on response with empty route "
+              "stack");
     flux_msg_destroy (msg);
 
     fclose (f);
@@ -686,15 +721,18 @@ void check_flags (void)
     ok (flux_msg_set_streaming (msg) == 0, "flux_msg_set_streaming_works");
     ok (flux_msg_is_streaming (msg) == true, "flux_msg_is_streaming = true");
 
-    ok (flux_msg_set_topic (msg, "foo") == 0 && flux_msg_get_flags (msg, &flags) == 0
+    ok (flux_msg_set_topic (msg, "foo") == 0
+            && flux_msg_get_flags (msg, &flags) == 0
             && (flags & FLUX_MSGFLAG_TOPIC),
         "flux_msg_set_topic sets FLUX_MSGFLAG_TOPIC");
 
     ok (flux_msg_set_payload (msg, "foo", 3) == 0
-            && flux_msg_get_flags (msg, &flags) == 0 && (flags & FLUX_MSGFLAG_PAYLOAD),
+            && flux_msg_get_flags (msg, &flags) == 0
+            && (flags & FLUX_MSGFLAG_PAYLOAD),
         "flux_msg_set_payload sets FLUX_MSGFLAG_PAYLOAD");
 
-    ok (flux_msg_enable_route (msg) == 0 && flux_msg_get_flags (msg, &flags) == 0
+    ok (flux_msg_enable_route (msg) == 0
+            && flux_msg_get_flags (msg, &flags) == 0
             && (flags & FLUX_MSGFLAG_ROUTE),
         "flux_msg_enable_route sets FLUX_MSGFLAG_ROUTE");
 

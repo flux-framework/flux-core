@@ -14,7 +14,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -251,7 +251,10 @@ static int cron_entry_stop (cron_entry_t *e)
 /*
  * Callback used to stop a cron entry safely.
  */
-static void entry_stop_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void entry_stop_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
 {
     cron_entry_stop (arg);
     flux_watcher_stop (w);

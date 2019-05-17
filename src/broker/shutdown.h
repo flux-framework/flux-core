@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _BROKER_SHUTDOWN_H
-#define _BROKER_SHUTDOWN_H
+#    define _BROKER_SHUTDOWN_H
 
 /* Manage the shutdown process for the comms session.
  *
@@ -67,7 +67,11 @@ flux_msg_t *shutdown_vencode (double grace,
                               int rank,
                               const char *fmt,
                               va_list ap);
-flux_msg_t *shutdown_encode (double grace, int rc, int rank, const char *fmt, ...);
+flux_msg_t *shutdown_encode (double grace,
+                             int rc,
+                             int rank,
+                             const char *fmt,
+                             ...);
 int shutdown_decode (const flux_msg_t *msg,
                      double *grace,
                      int *rc,

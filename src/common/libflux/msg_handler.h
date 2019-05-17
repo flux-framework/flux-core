@@ -9,14 +9,14 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_MSG_HANDLER_H
-#define _FLUX_CORE_MSG_HANDLER_H
+#    define _FLUX_CORE_MSG_HANDLER_H
 
-#include "message.h"
-#include "handle.h"
+#    include "message.h"
+#    include "handle.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 typedef struct flux_msg_handler flux_msg_handler_t;
 
@@ -39,7 +39,8 @@ void flux_msg_handler_stop (flux_msg_handler_t *mh);
  * Use _allow_rolemask() add roles, _deny_rolemask() to remove them.
  * (N.B. FLUX_ROLE_OWNER cannot be denied)
  */
-void flux_msg_handler_allow_rolemask (flux_msg_handler_t *mh, uint32_t rolemask);
+void flux_msg_handler_allow_rolemask (flux_msg_handler_t *mh,
+                                      uint32_t rolemask);
 void flux_msg_handler_deny_rolemask (flux_msg_handler_t *mh, uint32_t rolemask);
 
 struct flux_msg_handler_spec {
@@ -48,10 +49,10 @@ struct flux_msg_handler_spec {
     flux_msg_handler_f cb;
     uint32_t rolemask;
 };
-#define FLUX_MSGHANDLER_TABLE_END \
-    {                             \
-        0, NULL, NULL, 0          \
-    }
+#    define FLUX_MSGHANDLER_TABLE_END \
+        {                             \
+            0, NULL, NULL, 0          \
+        }
 
 int flux_msg_handler_addvec (flux_t *h,
                              const struct flux_msg_handler_spec tab[],
@@ -63,9 +64,9 @@ void flux_msg_handler_delvec (flux_msg_handler_t *msg_handlers[]);
  */
 int flux_dispatch_requeue (flux_t *h);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_MSG_HANDLER_H */
 

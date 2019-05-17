@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/types.h>
 #include <pwd.h>
@@ -174,12 +174,16 @@ static void environment_push_inner (struct environment *e,
     }
 }
 
-void environment_push (struct environment *e, const char *key, const char *value)
+void environment_push (struct environment *e,
+                       const char *key,
+                       const char *value)
 {
     environment_push_inner (e, key, value, true, true);
 }
 
-void environment_push_back (struct environment *e, const char *key, const char *value)
+void environment_push_back (struct environment *e,
+                            const char *key,
+                            const char *value)
 {
     environment_push_inner (e, key, value, false, true);
 }
@@ -209,7 +213,9 @@ void environment_from_env (struct environment *e,
     environment_set (e, key, env, separator);
 }
 
-void environment_set_separator (struct environment *e, const char *key, char separator)
+void environment_set_separator (struct environment *e,
+                                const char *key,
+                                char separator)
 {
     struct env_item *item = zhash_lookup (e->environment, key);
     if (item)

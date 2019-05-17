@@ -30,10 +30,14 @@ void iter_cb (wait_t *w, void *arg)
     (*count)++;
 
     /* what "foobar" is set to not important, just set to count */
-    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0, "wait_msg_aux_set works");
+    ok (wait_msg_aux_set (w, "foobar", count, NULL) == 0,
+        "wait_msg_aux_set works");
 }
 
-void msghand (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void msghand (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
 {
     int *count = arg;
     (*count)++;
@@ -84,8 +88,10 @@ int main (int argc, char *argv[])
 
     ok (wait_msg_aux_set (NULL, NULL, NULL, NULL) < 0,
         "wait_msg_aux_set returns -1 on bad input");
-    ok (!wait_msg_aux_get (NULL, NULL), "wait_msg_aux_set returns NULL on bad input");
-    ok (wait_aux_get_errnum (NULL) < 0, "wait_aux_get_errnum returns -1 on bad input");
+    ok (!wait_msg_aux_get (NULL, NULL),
+        "wait_msg_aux_set returns NULL on bad input");
+    ok (wait_aux_get_errnum (NULL) < 0,
+        "wait_aux_get_errnum returns -1 on bad input");
 
     /* Create/destroy wait_t with msg handler, and set/get aux data
      */
@@ -94,7 +100,8 @@ int main (int argc, char *argv[])
     ok (msg != NULL, "flux_msg_create works");
     w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand);
     ok (w != NULL, "wait_create_msg_handler with non-NULL msg works");
-    ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0, "wait_msg_aux_set works");
+    ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0,
+        "wait_msg_aux_set works");
     str = wait_msg_aux_get (w, "aux");
     ok (str && !strcmp (str, "val"),
         "wait_msg_aux_get works and returns correct value");
@@ -106,8 +113,10 @@ int main (int argc, char *argv[])
      */
     errnum = 0;
     ok ((w = wait_create (wait_cb, NULL)) != NULL, "wait_create works");
-    ok (wait_aux_get_errnum (w) == 0, "wait_aux_get_errnum returns 0 initially");
-    ok (wait_set_error_cb (w, error_cb, &errnum) == 0, "wait_set_error_cb works");
+    ok (wait_aux_get_errnum (w) == 0,
+        "wait_aux_get_errnum returns 0 initially");
+    ok (wait_set_error_cb (w, error_cb, &errnum) == 0,
+        "wait_set_error_cb works");
     ok (wait_aux_set_errnum (w, ENOTSUP) == 0, "wait_aux_set_errnum works");
     ok (errnum == ENOTSUP, "error cb called correctly");
     ok (wait_aux_get_errnum (w) == ENOTSUP,
@@ -172,9 +181,11 @@ int main (int argc, char *argv[])
 
     ok (wait_get_usecount (w) == 0, "wait_usecount 0 initially");
     ok (wait_addqueue (q, w) == 0, "wait_addqueue works");
-    ok (wait_get_usecount (w) == 1, "wait_usecount 1 after adding to one queue");
+    ok (wait_get_usecount (w) == 1,
+        "wait_usecount 1 after adding to one queue");
     ok (wait_addqueue (q2, w) == 0, "wait_addqueue works");
-    ok (wait_get_usecount (w) == 2, "wait_usecount 2 after adding to second queue");
+    ok (wait_get_usecount (w) == 2,
+        "wait_usecount 2 after adding to second queue");
     ok (wait_queue_length (q) == 1 && wait_queue_length (q2) == 1,
         "wait_queue_length of each queue is 1");
 
@@ -206,7 +217,8 @@ int main (int argc, char *argv[])
         if (wait_addqueue (q, w) < 0)
             break;
     }
-    ok (wait_queue_length (q) == 20, "wait_queue_length 20 after 20 wait_addqueues");
+    ok (wait_queue_length (q) == 20,
+        "wait_queue_length 20 after 20 wait_addqueues");
     ok (count == 0, "wait_t callback has not run");
 
     ok ((i = wait_destroy_msg (q, msgcmp, NULL)) == 3,

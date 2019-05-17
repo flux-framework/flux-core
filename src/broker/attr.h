@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef BROKER_ATTR_H
-#define BROKER_ATTR_H
+#    define BROKER_ATTR_H
 
-#include <stdint.h>
-#include <flux/core.h>
+#    include <stdint.h>
+#    include <flux/core.h>
 
 enum {
     FLUX_ATTRFLAG_IMMUTABLE = 1, /* attribute is cacheable */
@@ -75,7 +75,10 @@ int attr_add_active (attr_t *attrs,
 /* Add an attribute that tracks an integer value
  */
 int attr_add_active_int (attr_t *attrs, const char *name, int *val, int flags);
-int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val, int flags);
+int attr_add_active_uint32 (attr_t *attrs,
+                            const char *name,
+                            uint32_t *val,
+                            int flags);
 
 /* Iterate over attribute names with internal cursor.
  */

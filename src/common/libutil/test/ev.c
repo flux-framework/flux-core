@@ -38,21 +38,24 @@ void test_libev_timer (void)
 
     ev_timer_init (&w, timer_cb, 1E-1, 0.);
     ev_timer_start (loop, &w);
-    ok (ev_run (loop, 0) == 0, "ev_run returns 0 after no-repeat timer fires once");
+    ok (ev_run (loop, 0) == 0,
+        "ev_run returns 0 after no-repeat timer fires once");
     ev_timer_stop (loop, &w);
 
     i = 0;
     ev_timer_init (&w, timer_arg_cb, 1E-1, 0.);
     w.data = &i;
     ev_timer_start (loop, &w);
-    ok (ev_run (loop, 0) == 0 && i == 1, "passing arbitrary data using w->data works");
+    ok (ev_run (loop, 0) == 0 && i == 1,
+        "passing arbitrary data using w->data works");
     ev_timer_stop (loop, &w);
 
     i = 0;
     ev_timer_init (&w, timer_arg_cb, 1E-3, 1E-3);
     w.data = &i;
     ev_timer_start (loop, &w);
-    ok (ev_run (loop, 0) != 0 && i == 100, "ev_break causes ev_run to return nonzero");
+    ok (ev_run (loop, 0) != 0 && i == 100,
+        "ev_break causes ev_run to return nonzero");
     ev_timer_stop (loop, &w);
 
     ev_loop_destroy (loop);
@@ -152,7 +155,8 @@ void test_zmq_events (void)
     ok (zmq_getsockopt (zin, ZMQ_EVENTS, &zevents, &zevents_size) == 0
             && !(zevents & ZMQ_POLLIN),
         "zmq_getsockopt ZMQ_EVENTS says PAIR socket not ready to recv");
-    ok (zmq_poll (&zp, 1, 10) == 0, "zmq_poll says PAIR socket not ready to recv");
+    ok (zmq_poll (&zp, 1, 10) == 0,
+        "zmq_poll says PAIR socket not ready to recv");
     if (s)
         free (s);
     zmq_close (zin);
@@ -223,7 +227,8 @@ void test_ev_zmq (void)
     ev_zmq_start (loop, &win);
     ev_zmq_start (loop, &wout);
 
-    ok (ev_run (loop, 0) == 0, "both watchers removed themselves and ev_run exited");
+    ok (ev_run (loop, 0) == 0,
+        "both watchers removed themselves and ev_run exited");
     ev_zmq_stop (loop, &win);
     ev_zmq_stop (loop, &wout);
     cmp_ok (i, "==", 100, "ev_zmq handler ran 100 times");

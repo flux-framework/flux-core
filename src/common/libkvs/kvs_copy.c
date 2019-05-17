@@ -16,7 +16,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 
@@ -53,7 +53,8 @@ static struct copy_context *copy_context_create (const char *srcns,
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if ((srcns && !(ctx->srcns = strdup (srcns))) || !(ctx->srckey = strdup (srckey))
+    if ((srcns && !(ctx->srcns = strdup (srcns)))
+        || !(ctx->srckey = strdup (srckey))
         || (dstns && !(ctx->dstns = strdup (dstns)))
         || !(ctx->dstkey = strdup (dstkey))) {
         copy_context_destroy (ctx);
@@ -164,7 +165,8 @@ flux_future_t *flux_kvs_copy (flux_t *h,
         if (!(f1 = flux_kvs_lookup (h, NULL, FLUX_KVS_TREEOBJ, srckey)))
             return NULL;
     }
-    if (!(ctx = copy_context_create (srcns, srckey, dstns, dstkey, commit_flags)))
+    if (!(ctx =
+              copy_context_create (srcns, srckey, dstns, dstkey, commit_flags)))
         goto error;
     if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);
@@ -195,7 +197,8 @@ flux_future_t *flux_kvs_move (flux_t *h,
     }
     if (!(f1 = flux_kvs_copy (h, srcns, srckey, dstns, dstkey, commit_flags)))
         return NULL;
-    if (!(ctx = copy_context_create (srcns, srckey, dstns, dstkey, commit_flags)))
+    if (!(ctx =
+              copy_context_create (srcns, srckey, dstns, dstkey, commit_flags)))
         goto error;
     if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);

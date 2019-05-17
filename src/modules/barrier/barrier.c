@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -46,7 +46,10 @@ typedef struct _barrier_struct {
 } barrier_t;
 
 static int exit_event_send (flux_t *h, const char *name, int errnum);
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg);
 
 static void freectx (void *arg)
 {
@@ -73,11 +76,12 @@ static barrier_ctx_t *getctx (flux_t *h)
             flux_log_error (h, "flux_get_rank");
             goto error;
         }
-        if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
-                                                      barrier_reduction_timeout_sec,
-                                                      0.,
-                                                      timeout_cb,
-                                                      ctx))) {
+        if (!(ctx->timer =
+                  flux_timer_watcher_create (flux_get_reactor (h),
+                                             barrier_reduction_timeout_sec,
+                                             0.,
+                                             timeout_cb,
+                                             ctx))) {
             flux_log_error (h, "flux_timer_watacher_create");
             goto error;
         }
@@ -115,7 +119,9 @@ static void barrier_destroy (void *arg)
     return;
 }
 
-static barrier_t *barrier_create (barrier_ctx_t *ctx, const char *name, int nprocs)
+static barrier_t *barrier_create (barrier_ctx_t *ctx,
+                                  const char *name,
+                                  int nprocs)
 {
     barrier_t *b;
 
@@ -147,7 +153,9 @@ done:
     return b;
 }
 
-static int barrier_add_client (barrier_t *b, char *sender, const flux_msg_t *msg)
+static int barrier_add_client (barrier_t *b,
+                               char *sender,
+                               const flux_msg_t *msg)
 {
     flux_msg_t *cpy = flux_msg_copy (msg, true);
     if (!cpy || zhash_insert (b->clients, sender, cpy) < 0)
@@ -220,7 +228,8 @@ static void enter_request_cb (flux_t *h,
         b = barrier_create (ctx, name, nprocs);
 
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
-     * A client, distinguished by internal == false, can only enter barrier once.
+     * A client, distinguished by internal == false, can only enter barrier
+     * once.
      */
     if (internal == false) {
         if (barrier_add_client (b, sender, msg) < 0) {
@@ -244,7 +253,9 @@ static void enter_request_cb (flux_t *h,
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log_error (ctx->h, "exit_event_send");
     } else if (ctx->rank > 0 && !ctx->timer_armed) {
-        flux_timer_watcher_reset (ctx->timer, barrier_reduction_timeout_sec, 0.);
+        flux_timer_watcher_reset (ctx->timer,
+                                  barrier_reduction_timeout_sec,
+                                  0.);
         flux_watcher_start (ctx->timer);
         ctx->timer_armed = true;
     }
@@ -311,7 +322,13 @@ static void exit_event_cb (flux_t *h,
     const char *key;
     flux_msg_t *req;
 
-    if (flux_event_unpack (msg, NULL, "{s:s s:i !}", "name", &name, "errnum", &errnum)
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{s:s s:i !}",
+                           "name",
+                           &name,
+                           "errnum",
+                           &errnum)
         < 0) {
         flux_log_error (h, "%s: decoding event", __FUNCTION__);
         return;
@@ -332,7 +349,10 @@ static void exit_event_cb (flux_t *h,
     }
 }
 
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     barrier_ctx_t *ctx = arg;
     const char *key;

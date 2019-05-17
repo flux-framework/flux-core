@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef BROKER_EXEC_H
-#define BROKER_EXEC_H
+#    define BROKER_EXEC_H
 
-#include <stdint.h>
-#include <flux/core.h>
-#include "attr.h"
+#    include <stdint.h>
+#    include <flux/core.h>
+#    include "attr.h"
 
 /* Kill any processes started by disconnecting client.
  */

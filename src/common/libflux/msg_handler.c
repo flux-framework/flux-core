@@ -9,12 +9,12 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #if HAVE_CALIPER
-#include <caliper/cali.h>
-#include <sys/syscall.h>
+#    include <caliper/cali.h>
+#    include <sys/syscall.h>
 #endif
 
 #include "message.h"
@@ -53,7 +53,10 @@ struct flux_msg_handler {
     uint8_t running : 1;
 };
 
-static void handle_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg);
 static void free_msg_handler (flux_msg_handler_t *mh);
 
 static size_t matchtag_hasher (const void *key);
@@ -212,7 +215,9 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
     mh->fn (mh->d->h, mh, msg, mh->arg);
 }
 
-static bool dispatch_message (struct dispatch *d, const flux_msg_t *msg, int type)
+static bool dispatch_message (struct dispatch *d,
+                              const flux_msg_t *msg,
+                              int type)
 {
     flux_msg_handler_t *mh;
     bool match = false;
@@ -286,7 +291,10 @@ done:
     return rc;
 }
 
-static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw, int revents, void *arg)
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *hw,
+                       int revents,
+                       void *arg)
 {
     struct dispatch *d = arg;
     flux_msg_t *msg = NULL;
@@ -350,25 +358,25 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw, int revents, void 
             msg = NULL;  // prevent destruction below
         } else {
             switch (type) {
-                case FLUX_MSGTYPE_REQUEST:
-                    if (flux_respond_error (d->h, msg, ENOSYS, NULL))
-                        goto done;
-                    break;
-                case FLUX_MSGTYPE_EVENT:
-                    break;
-                case FLUX_MSGTYPE_RESPONSE:
-                    handle_late_response (d, msg);
-                    break;
-                default:
-                    if (flux_flags_get (d->h) & FLUX_O_TRACE) {
-                        const char *topic = NULL;
-                        (void)flux_msg_get_topic (msg, &topic);
-                        fprintf (stderr,
-                                 "nomatch: %s '%s'\n",
-                                 flux_msg_typestr (type),
-                                 topic ? topic : "");
-                    }
-                    break;
+            case FLUX_MSGTYPE_REQUEST:
+                if (flux_respond_error (d->h, msg, ENOSYS, NULL))
+                    goto done;
+                break;
+            case FLUX_MSGTYPE_EVENT:
+                break;
+            case FLUX_MSGTYPE_RESPONSE:
+                handle_late_response (d, msg);
+                break;
+            default:
+                if (flux_flags_get (d->h) & FLUX_O_TRACE) {
+                    const char *topic = NULL;
+                    (void)flux_msg_get_topic (msg, &topic);
+                    fprintf (stderr,
+                             "nomatch: %s '%s'\n",
+                             flux_msg_typestr (type),
+                             topic ? topic : "");
+                }
+                break;
             }
         }
     }

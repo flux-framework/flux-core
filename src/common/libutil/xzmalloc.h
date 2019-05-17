@@ -9,10 +9,10 @@
 \************************************************************/
 
 #ifndef _UTIL_XZMALLOC_H
-#define _UTIL_XZMALLOC_H
+#    define _UTIL_XZMALLOC_H
 
-#include <sys/types.h>
-#include <stdarg.h>
+#    include <sys/types.h>
+#    include <stdarg.h>
 
 /* Memory allocation functions that call oom() on allocation error.
  */

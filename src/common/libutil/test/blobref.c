@@ -19,7 +19,7 @@ const char *badref[] = {
     "nerf-4d4ed591f7d26abd8145650f334d283bdb661765",    // unknown hash
     "sha14d4ed591f7d26abd8145650f334d283bdb661765",     // missing prefix sep
     "sha256-4d4ed591f7d26abd8145650f334d283bdb661765",  // runt
-    "sha1-4d4ed591f7d26abd8145650f334d283bdb66176x",    // suffix chars not hex */
+    "sha1-4d4ed591f7d26abd8145650f334d283bdb66176x",  // suffix chars not hex */
     NULL,
 };
 
@@ -46,23 +46,29 @@ int main (int argc, char **argv)
             && errno == EINVAL,
         "blobref_hash fails EINVAL with unknown hash name");
     errno = 0;
-    ok (blobref_hash ("sha1", data, sizeof (data), NULL, 0) < 0 && errno == EINVAL,
+    ok (blobref_hash ("sha1", data, sizeof (data), NULL, 0) < 0
+            && errno == EINVAL,
         "blobref_hash fails EINVAL with NULL ref pointer");
     errno = 0;
-    ok (blobref_hash ("sha1", data, sizeof (data), ref, 1) < 0 && errno == EINVAL,
+    ok (blobref_hash ("sha1", data, sizeof (data), ref, 1) < 0
+            && errno == EINVAL,
         "blobref_hash fails EINVAL with invalid ref length");
 
     errno = 0;
-    ok (blobref_strtohash (badref[0], digest, sizeof (digest)) < 0 && errno == EINVAL,
+    ok (blobref_strtohash (badref[0], digest, sizeof (digest)) < 0
+            && errno == EINVAL,
         "blobref_strtohash fails EINVAL with unknown hash prefix");
     errno = 0;
-    ok (blobref_strtohash (badref[1], digest, sizeof (digest)) < 0 && errno == EINVAL,
+    ok (blobref_strtohash (badref[1], digest, sizeof (digest)) < 0
+            && errno == EINVAL,
         "blobref_strtohash fails EINVAL with missing hash prefix separator");
     errno = 0;
-    ok (blobref_strtohash (badref[2], digest, sizeof (digest)) < 0 && errno == EINVAL,
+    ok (blobref_strtohash (badref[2], digest, sizeof (digest)) < 0
+            && errno == EINVAL,
         "blobref_strtohash fails EINVAL with wrong blobref length for prefix");
     errno = 0;
-    ok (blobref_strtohash (badref[3], digest, sizeof (digest)) < 0 && errno == EINVAL,
+    ok (blobref_strtohash (badref[3], digest, sizeof (digest)) < 0
+            && errno == EINVAL,
         "blobref_strtohash fails EINVAL with out of range blobref chars");
     errno = 0;
     ok (blobref_strtohash (goodref[0], digest, 2) < 0 && errno == EINVAL,
@@ -70,15 +76,18 @@ int main (int argc, char **argv)
 
     memset (digest, 6, sizeof (digest));
     errno = 0;
-    ok (blobref_hashtostr ("nerf", digest, SHA1_DIGEST_SIZE, ref, sizeof (ref)) < 0
+    ok (blobref_hashtostr ("nerf", digest, SHA1_DIGEST_SIZE, ref, sizeof (ref))
+                < 0
             && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with unknown hash");
     errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA256_BLOCK_SIZE, ref, sizeof (ref)) < 0
+    ok (blobref_hashtostr ("sha1", digest, SHA256_BLOCK_SIZE, ref, sizeof (ref))
+                < 0
             && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with wrong digest size for hash");
     errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, NULL, sizeof (ref)) < 0
+    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, NULL, sizeof (ref))
+                < 0
             && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with NULL ref pointer");
     errno = 0;
@@ -96,7 +105,12 @@ int main (int argc, char **argv)
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA1_DIGEST_SIZE,
         "blobref_strtohash returns expected size hash");
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref2, sizeof (ref2)) == 0,
+    ok (blobref_hashtostr ("sha1",
+                           digest,
+                           SHA1_DIGEST_SIZE,
+                           ref2,
+                           sizeof (ref2))
+            == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
     ok (strcmp (ref, ref2) == 0, "and blobrefs match");
@@ -111,7 +125,11 @@ int main (int argc, char **argv)
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA256_BLOCK_SIZE,
         "blobref_strtohash returns expected size hash");
-    ok (blobref_hashtostr ("sha256", digest, SHA256_BLOCK_SIZE, ref2, sizeof (ref2))
+    ok (blobref_hashtostr ("sha256",
+                           digest,
+                           SHA256_BLOCK_SIZE,
+                           ref2,
+                           sizeof (ref2))
             == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);

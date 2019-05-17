@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <getopt.h>
@@ -66,58 +66,59 @@ static struct optparse_option remove_opts[] = {RANK_OPTION,
 static struct optparse_option load_opts[] = {RANK_OPTION,
                                              EXCLUDE_OPTION,
                                              OPTPARSE_TABLE_END};
-static struct optparse_option stats_opts[] = {{
-                                                  .name = "parse",
-                                                  .key = 'p',
-                                                  .has_arg = 1,
-                                                  .arginfo = "OBJNAME",
-                                                  .usage = "Parse object "
-                                                           "period-delimited object "
-                                                           "name",
-                                              },
-                                              {
-                                                  .name = "scale",
-                                                  .key = 's',
-                                                  .has_arg = 1,
-                                                  .arginfo = "N",
-                                                  .usage = "Scale numeric JSON value "
-                                                           "by N",
-                                              },
-                                              {
-                                                  .name = "type",
-                                                  .key = 't',
-                                                  .has_arg = 1,
-                                                  .arginfo = "int|double",
-                                                  .usage = "Convert JSON value to "
-                                                           "specified type",
-                                              },
-                                              {
-                                                  .name = "rank",
-                                                  .key = 'r',
-                                                  .has_arg = 1,
-                                                  .arginfo = "RANK",
-                                                  .usage = "Target specified rank",
-                                              },
-                                              {
-                                                  .name = "rusage",
-                                                  .key = 'R',
-                                                  .has_arg = 0,
-                                                  .usage = "Request rusage data "
-                                                           "instead of stats",
-                                              },
-                                              {
-                                                  .name = "clear",
-                                                  .key = 'c',
-                                                  .has_arg = 0,
-                                                  .usage = "Clear stats on target rank",
-                                              },
-                                              {
-                                                  .name = "clear-all",
-                                                  .key = 'C',
-                                                  .has_arg = 0,
-                                                  .usage = "Clear stats on all ranks",
-                                              },
-                                              OPTPARSE_TABLE_END};
+static struct optparse_option stats_opts[] =
+    {{
+         .name = "parse",
+         .key = 'p',
+         .has_arg = 1,
+         .arginfo = "OBJNAME",
+         .usage = "Parse object "
+                  "period-delimited object "
+                  "name",
+     },
+     {
+         .name = "scale",
+         .key = 's',
+         .has_arg = 1,
+         .arginfo = "N",
+         .usage = "Scale numeric JSON value "
+                  "by N",
+     },
+     {
+         .name = "type",
+         .key = 't',
+         .has_arg = 1,
+         .arginfo = "int|double",
+         .usage = "Convert JSON value to "
+                  "specified type",
+     },
+     {
+         .name = "rank",
+         .key = 'r',
+         .has_arg = 1,
+         .arginfo = "RANK",
+         .usage = "Target specified rank",
+     },
+     {
+         .name = "rusage",
+         .key = 'R',
+         .has_arg = 0,
+         .usage = "Request rusage data "
+                  "instead of stats",
+     },
+     {
+         .name = "clear",
+         .key = 'c',
+         .has_arg = 0,
+         .usage = "Clear stats on target rank",
+     },
+     {
+         .name = "clear-all",
+         .key = 'C',
+         .has_arg = 0,
+         .usage = "Clear stats on all ranks",
+     },
+     OPTPARSE_TABLE_END};
 static struct optparse_option debug_opts[] = {
     {
         .name = "clear",
@@ -276,7 +277,8 @@ void parse_modarg (const char *arg, char **name, char **path)
         if (!searchpath)
             log_msg_exit ("FLUX_MODULE_PATH is not set");
         modname = xstrdup (arg);
-        if (!(modpath = flux_modfind (searchpath, modname, module_dlerror, NULL)))
+        if (!(modpath =
+                  flux_modfind (searchpath, modname, module_dlerror, NULL)))
             log_msg_exit ("%s: not found in module search path", modname);
     }
     *name = modname;
@@ -520,24 +522,24 @@ int lsmod_print_cb (const char *name,
     else
         strncpy (idle_str, "idle", sizeof (idle_str));
     switch (status) {
-        case FLUX_MODSTATE_INIT:
-            S = 'I';
-            break;
-        case FLUX_MODSTATE_SLEEPING:
-            S = 'S';
-            break;
-        case FLUX_MODSTATE_RUNNING:
-            S = 'R';
-            break;
-        case FLUX_MODSTATE_FINALIZING:
-            S = 'F';
-            break;
-        case FLUX_MODSTATE_EXITED:
-            S = 'X';
-            break;
-        default:
-            S = '?';
-            break;
+    case FLUX_MODSTATE_INIT:
+        S = 'I';
+        break;
+    case FLUX_MODSTATE_SLEEPING:
+        S = 'S';
+        break;
+    case FLUX_MODSTATE_RUNNING:
+        S = 'R';
+        break;
+    case FLUX_MODSTATE_FINALIZING:
+        S = 'F';
+        break;
+    case FLUX_MODSTATE_EXITED:
+        S = 'X';
+        break;
+    default:
+        S = '?';
+        break;
     }
     printf ("%-20.20s %8d %7s %4s  %c  %8s %s\n",
             name,
@@ -649,8 +651,7 @@ char *lsmod_services_string (json_t *services, const char *skip)
     char *argz = NULL;
     size_t argz_len = 0;
 
-    json_array_foreach (services, index, value)
-    {
+    json_array_foreach (services, index, value) {
         const char *name = json_string_value (value);
         if (name && (!skip || strcmp (name, skip) != 0))
             insert_service_list (&l, name);
@@ -687,10 +688,17 @@ void lsmod_map_hash (zhashx_t *mods, flux_lsmod_f cb, void *arg)
             status = FLUX_MODSTATE_RUNNING;
         else
             status = FLUX_MODSTATE_SLEEPING;
-        if (!(nodeset =
-                  idset_encode (m->nodeset, IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        if (!(nodeset = idset_encode (m->nodeset,
+                                      IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
             log_err_exit ("idset_encode");
-        cb (m->name, m->size, m->digest, m->idle, status, nodeset, m->services, arg);
+        cb (m->name,
+            m->size,
+            m->digest,
+            m->idle,
+            status,
+            nodeset,
+            m->services,
+            arg);
         free (nodeset);
     }
 }
@@ -707,8 +715,7 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
 
     if (!json_is_array (o))
         goto proto;
-    json_array_foreach (o, index, value)
-    {
+    json_array_foreach (o, index, value) {
         if (json_unpack (value,
                          "{s:s s:i s:s s:i s:i s:o}",
                          "name",
@@ -737,7 +744,13 @@ int lsmod_merge_result (uint32_t nodeid, json_t *o, zhashx_t *mods)
             if (idset_set (m->nodeset, nodeid) < 0)
                 log_err_exit ("idset_set");
         } else {
-            m = module_record_create (name, size, digest, idle, status, nodeid, svcstr);
+            m = module_record_create (name,
+                                      size,
+                                      digest,
+                                      idle,
+                                      status,
+                                      nodeid,
+                                      svcstr);
             zhashx_update (mods, hash_key, m);
         }
         free (hash_key);
@@ -845,7 +858,8 @@ static void parse_json (optparse_t *p, const char *json_str)
      */
     scale = optparse_get_double (p, "scale", 1.0);
     typestr = optparse_get_str (p, "type", NULL);
-    if (json_typeof (o) == JSON_INTEGER || (typestr && !strcmp (typestr, "int"))) {
+    if (json_typeof (o) == JSON_INTEGER
+        || (typestr && !strcmp (typestr, "int"))) {
         double d = json_number_value (o);
         printf ("%d\n", (int)(d * scale));
     } else if (json_typeof (o) == JSON_REAL

@@ -16,8 +16,9 @@ static struct optparse_option setattr_opts[] = {{
                                                     .name = "expunge",
                                                     .key = 'e',
                                                     .has_arg = 0,
-                                                    .usage = "Unset the specified "
-                                                             "attribute",
+                                                    .usage =
+                                                        "Unset the specified "
+                                                        "attribute",
                                                 },
                                                 OPTPARSE_TABLE_END};
 
@@ -99,8 +100,7 @@ zlistx_t *get_sorted_attrlist (flux_t *h)
     if (!(f = flux_rpc (h, "attr.list", NULL, FLUX_NODEID_ANY, 0))
         || flux_rpc_get_unpack (f, "{s:o}", "names", &names) < 0)
         log_err_exit ("attr.list");
-    json_array_foreach (names, index, value)
-    {
+    json_array_foreach (names, index, value) {
         const char *name = json_string_value (value);
         if (!name)
             log_msg_exit ("non-string attr name returned");

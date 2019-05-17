@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef BROKER_HEAPTRACE_H
-#define BROKER_HEAPTRACE_H
+#    define BROKER_HEAPTRACE_H
 
 int heaptrace_initialize (flux_t *h);
 

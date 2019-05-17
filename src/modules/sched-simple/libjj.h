@@ -12,7 +12,7 @@
 #define HAVE_SCHED_LIBJJ_H 1
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #define JJ_ERROR_TEXT_LENGTH 256

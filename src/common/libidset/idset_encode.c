@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/param.h>
 #include <errno.h>
@@ -81,7 +81,10 @@ static int catrange (char **s,
 /* Return value: count of id's in set, or -1 on failure.
  * N.B. if count is more than INT_MAX, return value is INT_MAX.
  */
-static int encode_ranged (const struct idset *idset, char **s, size_t *sz, size_t *len)
+static int encode_ranged (const struct idset *idset,
+                          char **s,
+                          size_t *sz,
+                          size_t *len)
 {
     int count = 0;
     unsigned int id;
@@ -118,7 +121,10 @@ static int encode_ranged (const struct idset *idset, char **s, size_t *sz, size_
 /* Return value: count of id's in set, or -1 on failure.
  * N.B. if count is more than INT_MAX, return value is INT_MAX.
  */
-static int encode_simple (const struct idset *idset, char **s, size_t *sz, size_t *len)
+static int encode_simple (const struct idset *idset,
+                          char **s,
+                          size_t *sz,
+                          size_t *len)
 {
     int count = 0;
     unsigned int id;
@@ -143,7 +149,8 @@ char *idset_encode (const struct idset *idset, int flags)
     size_t strlength = 0;
     int count;
 
-    if (validate_idset_flags (flags, IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE) < 0)
+    if (validate_idset_flags (flags, IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE)
+        < 0)
         return NULL;
     if (!idset) {
         errno = EINVAL;

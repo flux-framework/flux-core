@@ -9,12 +9,12 @@
 \************************************************************/
 
 #ifndef _FLUX_KVS_CACHE_H
-#define _FLUX_KVS_CACHE_H
+#    define _FLUX_KVS_CACHE_H
 
-#include <jansson.h>
+#    include <jansson.h>
 
-#include "src/common/libutil/tstat.h"
-#include "waitqueue.h"
+#    include "src/common/libutil/tstat.h"
+#    include "waitqueue.h"
 
 struct cache_entry;
 struct cache;
@@ -78,7 +78,9 @@ int cache_entry_force_clear_dirty (struct cache_entry *entry);
  * cache_entry_set_raw() & cache_entry_clear_data()
  * return -1 on error, 0 on success
  */
-int cache_entry_get_raw (struct cache_entry *entry, const void **data, int *len);
+int cache_entry_get_raw (struct cache_entry *entry,
+                         const void **data,
+                         int *len);
 int cache_entry_set_raw (struct cache_entry *entry, const void *data, int len);
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *entry);

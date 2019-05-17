@@ -49,7 +49,13 @@ void rpctest_nodeid_cb (flux_t *h,
         goto error;
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "s:i s:i", "nodeid", (int)nodeid, "flags", flags)
+    if (flux_respond_pack (h,
+                           msg,
+                           "s:i s:i",
+                           "nodeid",
+                           (int)nodeid,
+                           "flags",
+                           flags)
         < 0)
         BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     return;
@@ -178,7 +184,13 @@ void rpctest_multi_cb (flux_t *h,
     uint8_t flags;
     int noterm;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:i}", "count", &count, "noterm", &noterm)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:i}",
+                             "count",
+                             &count,
+                             "noterm",
+                             &noterm)
         < 0)
         goto error;
     if (!flux_msg_is_streaming (msg)) {
@@ -188,7 +200,8 @@ void rpctest_multi_cb (flux_t *h,
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     for (i = 0; i < count; i++) {
-        if (flux_respond_pack (h, msg, "{s:i s:i}", "seq", i, "flags", flags) < 0)
+        if (flux_respond_pack (h, msg, "{s:i s:i}", "seq", i, "flags", flags)
+            < 0)
             BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     }
     if (noterm)
@@ -242,7 +255,8 @@ void test_corner_case (flux_t *h)
         "flux_rpc fails with EINVAL on NULL handle");
 
     errno = 0;
-    ok (flux_rpc_raw (NULL, "topic", "data", 4, 0, 0) == NULL && errno == EINVAL,
+    ok (flux_rpc_raw (NULL, "topic", "data", 4, 0, 0) == NULL
+            && errno == EINVAL,
         "flux_rpc_raw fails with EINVAL on NULL handle");
 
     errno = 0;
@@ -276,7 +290,8 @@ void test_corner_case (flux_t *h)
         "flux_rpc fails with EINVAL on invalid flags");
 
     errno = 0;
-    ok (flux_rpc_raw (h, "topic", "data", 4, 0, 0xFF) == NULL && errno == EINVAL,
+    ok (flux_rpc_raw (h, "topic", "data", 4, 0, 0xFF) == NULL
+            && errno == EINVAL,
         "flux_rpc_raw fails with EINVAL on invalid flags");
 
     errno = 0;
@@ -296,12 +311,14 @@ void test_service (flux_t *h)
 
     errno = 0;
     r = flux_rpc (h, NULL, NULL, FLUX_NODEID_ANY, 0);
-    ok (r == NULL && errno == EINVAL, "flux_rpc with NULL topic fails with EINVAL");
+    ok (r == NULL && errno == EINVAL,
+        "flux_rpc with NULL topic fails with EINVAL");
 
     count = flux_matchtag_avail (h, 0);
     r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0);
     ok (r != NULL, "flux_rpc sent request to rpctest.hello service");
-    ok (flux_matchtag_avail (h, 0) == count - 1, "flux_rpc allocated one matchtag");
+    ok (flux_matchtag_avail (h, 0) == count - 1,
+        "flux_rpc allocated one matchtag");
     msg = flux_recv (h, FLUX_MATCH_RESPONSE, 0);
     ok (msg != NULL, "flux_recv matched response");
     rc = flux_msg_get_topic (msg, &topic);
@@ -324,7 +341,8 @@ void test_service (flux_t *h)
     ok (flux_matchtag_avail (h, 0) == count - 1,
         "flux_future_destroy did not free matchtag");
     // requeue "lost" response so matchtag can be reclaimed
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0, "flux_requeue response worked");
+    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
+        "flux_requeue response worked");
     flux_msg_destroy (msg);
 
     ok (reclaim_matchtag (h, 1, 1.) == 0,
@@ -344,7 +362,8 @@ void test_basic (flux_t *h)
     ok (flux_future_wait_for (r, 0.) < 0 && errno == ETIMEDOUT,
         "flux_future_wait_for (0.) timed out (not ready)");
     ok (flux_rpc_get (r, NULL) == 0, "flux_rpc_get works");
-    ok (flux_future_wait_for (r, 0.) == 0, "flux_future_wait_for (0.) works (ready)");
+    ok (flux_future_wait_for (r, 0.) == 0,
+        "flux_future_wait_for (0.) works (ready)");
     ok (flux_rpc_get (r, NULL) == 0, "flux_rpc_get works a second time");
     flux_future_destroy (r);
 
@@ -388,7 +407,8 @@ void test_error (flux_t *h)
                        "{s:i}",
                        "errnum",
                        ENOTDIR);
-    ok (f != NULL, "flux_rpc_pack sent request to rpctest.echoerr service (no errstr)");
+    ok (f != NULL,
+        "flux_rpc_pack sent request to rpctest.echoerr service (no errstr)");
     errno = 0;
     ok (flux_future_get (f, NULL) < 0 && errno == ENOTDIR,
         "flux_future_get failed with expected errno");
@@ -452,7 +472,8 @@ void test_encoding (flux_t *h)
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     json_str = NULL;
-    ok (flux_rpc_get (r, &json_str) == 0 && json_str && !strcmp (json_str, "{}"),
+    ok (flux_rpc_get (r, &json_str) == 0 && json_str
+            && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload");
     flux_future_destroy (r);
 
@@ -472,16 +493,24 @@ void test_encoding (flux_t *h)
 
     /* use newish pack/unpack payload interfaces */
     int i = 0;
-    ok ((r = flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0, "{s:i}", "n", 107))
+    ok ((r = flux_rpc_pack (h,
+                            "rpctest.incr",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{s:i}",
+                            "n",
+                            107))
             != NULL,
         "flux_rpc_pack works");
     ok (flux_rpc_get_unpack (r, NULL) < 0 && errno == EINVAL,
         "flux_rpc_get_unpack fails with EINVAL");
-    ok (flux_rpc_get_unpack (r, "{s:i}", "n", &i) == 0, "flux_rpc_get_unpack works");
+    ok (flux_rpc_get_unpack (r, "{s:i}", "n", &i) == 0,
+        "flux_rpc_get_unpack works");
     ok (i == 108, "and service returned incremented value");
     flux_future_destroy (r);
 
-    /* cause remote EPROTO (unexpected payload) - will be picked up in _getf() */
+    /* cause remote EPROTO (unexpected payload) - will be picked up in _getf()
+     */
     ok ((r = flux_rpc_pack (h,
                             "rpcftest.hello",
                             FLUX_NODEID_ANY,
@@ -497,7 +526,8 @@ void test_encoding (flux_t *h)
     flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects payload) */
-    ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
+    ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}"))
+            != NULL,
         "flux_rpc_pack with empty payload works");
     errno = 0;
     ok (flux_rpc_get_unpack (r, "{ s:i }", "foo", &i) < 0 && errno == EPROTO,
@@ -531,7 +561,8 @@ static void then_cb (flux_future_t *r, void *arg)
     ok (flux_future_wait_for (r, 0.) == 0,
         "flux_future_wait_for works (ready) in continuation");
     json_str = NULL;
-    ok (flux_rpc_get (r, &json_str) == 0 && json_str && !strcmp (json_str, "{}"),
+    ok (flux_rpc_get (r, &json_str) == 0 && json_str
+            && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload in continuation");
     flux_reactor_stop (flux_get_reactor (h));
 }
@@ -544,7 +575,8 @@ void test_then (flux_t *h)
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     ok (flux_future_then (r, -1., then_cb, h) == 0, "flux_future_then works");
-    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0, "reactor completed normally");
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
+        "reactor completed normally");
     flux_future_destroy (r);
 
     /* ensure contination is called if "get" called before "then"
@@ -552,10 +584,12 @@ void test_then (flux_t *h)
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     json_str = NULL;
-    ok (flux_rpc_get (r, &json_str) == 0 && json_str && !strcmp (json_str, "{}"),
+    ok (flux_rpc_get (r, &json_str) == 0 && json_str
+            && !strcmp (json_str, "{}"),
         "flux_rpc_get works synchronously and returned expected payload");
     ok (flux_future_then (r, -1., then_cb, h) == 0, "flux_future_then works");
-    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0, "reactor completed normally");
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
+        "reactor completed normally");
     flux_future_destroy (r);
 
     diag ("completed test of continuations");
@@ -583,7 +617,8 @@ void test_multi_response (flux_t *h)
     if (!f)
         BAIL_OUT ("flux_rpc_pack failed");
     errno = 0;
-    while (flux_rpc_get_unpack (f, "{s:i s:i}", "seq", &seq, "flags", &inflags) == 0) {
+    while (flux_rpc_get_unpack (f, "{s:i s:i}", "seq", &seq, "flags", &inflags)
+           == 0) {
         if (flux_future_get (f, (const void **)&response) == 0)
             (void)flux_msg_get_flags (response, &outflags);
         count++;
@@ -600,7 +635,10 @@ void test_multi_response (flux_t *h)
     t1 = flux_matchtag_avail (h, 0);
     flux_future_destroy (f);
     t2 = flux_matchtag_avail (h, 0);
-    cmp_ok (t1, "<", t2, "multi-now: stream terminated w/ ENODATA, matchtag retired");
+    cmp_ok (t1,
+            "<",
+            t2,
+            "multi-now: stream terminated w/ ENODATA, matchtag retired");
 }
 
 void test_multi_response_noterm (flux_t *h)
@@ -628,7 +666,10 @@ void test_multi_response_noterm (flux_t *h)
     t1 = flux_matchtag_avail (h, 0);
     flux_future_destroy (f);
     t2 = flux_matchtag_avail (h, 0);
-    cmp_ok (t1, "==", t2, "multi-now-noterm: unterminated stream leaked matchtag");
+    cmp_ok (t1,
+            "==",
+            t2,
+            "multi-now-noterm: unterminated stream leaked matchtag");
     ok (reclaim_matchtag (h, 1, 1.) == 0,
         "multi-now-noterm: matchtag from prematurely destroyed RPC reclaimed");
 }
@@ -709,7 +750,8 @@ static void multi_then_next_cb (flux_future_t *f, void *arg)
         count++;
         return;
     }
-    ok (errno == ENODATA, "multi-then-chain: got ENODATA as EOF in continuation");
+    ok (errno == ENODATA,
+        "multi-then-chain: got ENODATA as EOF in continuation");
     ok (count == 2, "multi-then-chain: received 2 valid responses after first");
     flux_reactor_stop (flux_future_get_reactor (f));
     flux_future_destroy (f);
@@ -763,15 +805,18 @@ void test_rpc_message_inval (flux_t *h)
         BAIL_OUT ("flux_response_create failed");
 
     errno = 0;
-    ok (flux_rpc_message (NULL, msg, FLUX_NODEID_ANY, 0) == NULL && errno == EINVAL,
+    ok (flux_rpc_message (NULL, msg, FLUX_NODEID_ANY, 0) == NULL
+            && errno == EINVAL,
         "flux_rpc_message h=NULL fails with EINVAL");
 
     errno = 0;
-    ok (flux_rpc_message (h, NULL, FLUX_NODEID_ANY, 0) == NULL && errno == EINVAL,
+    ok (flux_rpc_message (h, NULL, FLUX_NODEID_ANY, 0) == NULL
+            && errno == EINVAL,
         "flux_rpc_message msg=NULL fails with EINVAL");
 
     errno = 0;
-    ok (flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0xffff) == NULL && errno == EINVAL,
+    ok (flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0xffff) == NULL
+            && errno == EINVAL,
         "flux_rpc_message flags=wrong fails with EINVAL");
 
     flux_msg_destroy (msg);
@@ -780,7 +825,8 @@ void test_rpc_message_inval (flux_t *h)
         BAIL_OUT ("flux_response_create failed");
 
     errno = 0;
-    ok (flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0) == NULL && errno == EINVAL,
+    ok (flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0) == NULL
+            && errno == EINVAL,
         "flux_rpc_message msg=event fails with EINVAL");
 
     flux_msg_destroy (msg);

@@ -9,15 +9,15 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_EVENT_H
-#define _FLUX_JOB_MANAGER_EVENT_H
+#    define _FLUX_JOB_MANAGER_EVENT_H
 
-#include <stdarg.h>
-#include <flux/core.h>
-#include <jansson.h>
+#    include <stdarg.h>
+#    include <flux/core.h>
+#    include <jansson.h>
 
-#include "job.h"
-#include "alloc.h"
-#include "start.h"
+#    include "job.h"
+#    include "alloc.h"
+#    include "start.h"
 
 struct event_ctx;
 struct alloc_ctx;
@@ -50,8 +50,10 @@ int event_job_post_pack (struct event_ctx *ctx,
                          const char *context_fmt,
                          ...);
 
-void event_ctx_set_alloc_ctx (struct event_ctx *ctx, struct alloc_ctx *alloc_ctx);
-void event_ctx_set_start_ctx (struct event_ctx *ctx, struct start_ctx *start_ctx);
+void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
+                              struct alloc_ctx *alloc_ctx);
+void event_ctx_set_start_ctx (struct event_ctx *ctx,
+                              struct start_ctx *start_ctx);
 
 void event_ctx_destroy (struct event_ctx *ctx);
 struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue);

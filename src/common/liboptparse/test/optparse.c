@@ -92,7 +92,8 @@ Usage: prog-foo [OPTIONS]\n\
                                     .has_arg = 1,
                                     .flags = OPTPARSE_OPT_HIDDEN,
                                     .arginfo = "ARGINFO",
-                                    .usage = "This option should not be displayed"});
+                                    .usage =
+                                        "This option should not be displayed"});
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
     usage_ok (p,
@@ -141,13 +142,15 @@ This is some doc in header\n\
               "Usage output as with doc");
 
     // Add a longer option in group 1:
-    opt = ((struct optparse_option){.name = "long-option",
-                                    .key = 'A',
-                                    .has_arg = 1,
-                                    .group = 1,
-                                    .arginfo = "ARGINFO",
-                                    .usage = "Enable a long option with argument info "
-                                             "ARGINFO."});
+    opt =
+        ((struct optparse_option){.name = "long-option",
+                                  .key = 'A',
+                                  .has_arg = 1,
+                                  .group = 1,
+                                  .arginfo = "ARGINFO",
+                                  .usage =
+                                      "Enable a long option with argument info "
+                                      "ARGINFO."});
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
 
@@ -189,12 +192,14 @@ This is some doc for group 1\n\
               "Usage output with increased option width");
 
     // Add an option with very long description in group 1:
-    opt = ((struct optparse_option){.name = "option-B",
-                                    .key = 'B',
-                                    .group = 1,
-                                    .usage = "This option has a very long description. "
-                                             "It should be split across lines "
-                                             "nicely."});
+    opt = ((
+        struct optparse_option){.name = "option-B",
+                                .key = 'B',
+                                .group = 1,
+                                .usage =
+                                    "This option has a very long description. "
+                                    "It should be split across lines "
+                                    "nicely."});
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
 
@@ -211,11 +216,13 @@ This is some doc for group 1\n\
               "Usage output with message autosplit across lines");
 
     // Add an option whose description will break up a word
-    opt = ((struct optparse_option){.name = "option-C",
-                                    .key = 'C',
-                                    .group = 1,
-                                    .usage = "ThisOptionHasAVeryLongWordInTheDescriptio"
-                                             "nThatShouldBeBrokenAcrossLines."});
+    opt = ((
+        struct optparse_option){.name = "option-C",
+                                .key = 'C',
+                                .group = 1,
+                                .usage =
+                                    "ThisOptionHasAVeryLongWordInTheDescriptio"
+                                    "nThatShouldBeBrokenAcrossLines."});
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
 
@@ -274,7 +281,9 @@ This is some doc for group 1\n\
     optparse_destroy (p);
 }
 
-int alt_print_usage (optparse_t *p, struct optparse_option *o, const char *optarg)
+int alt_print_usage (optparse_t *p,
+                     struct optparse_option *o,
+                     const char *optarg)
 {
     output_f ("alt_print_usage called");
     return (0);
@@ -385,7 +394,8 @@ void test_convenience_accessors (void)
 
     /* hasopt
      */
-    dies_ok ({ optparse_hasopt (p, "no-exist"); }, "hasopt exits on unknown arg");
+    dies_ok ({ optparse_hasopt (p, "no-exist"); },
+             "hasopt exits on unknown arg");
     lives_ok ({ optparse_hasopt (p, "foo"); }, "hasopt lives on known arg");
     ok (optparse_hasopt (p, "foo"), "hasopt finds present option");
     ok (!optparse_hasopt (p, "bar"), "hasopt doesn't find missing option");
@@ -393,17 +403,20 @@ void test_convenience_accessors (void)
 
     /* get_int
      */
-    dies_ok ({ optparse_get_int (p, "no-exist", 0); }, "get_int exits on unknown arg");
+    dies_ok ({ optparse_get_int (p, "no-exist", 0); },
+             "get_int exits on unknown arg");
     dies_ok ({ optparse_get_int (p, "foo", 0); },
              "get_int exits on option with no argument");
     dies_ok ({ optparse_get_int (p, "baz", 0); },
              "get_int exits on option with wrong type argument (string)");
     dies_ok ({ optparse_get_int (p, "dub", 0); },
              "get_int exits on option with wrong type argument (float)");
-    lives_ok ({ optparse_get_int (p, "bar", 0); }, "get_int lives on known arg");
+    lives_ok ({ optparse_get_int (p, "bar", 0); },
+              "get_int lives on known arg");
     ok (optparse_get_int (p, "bar", 42) == 42,
         "get_int returns default argument when arg not present");
-    ok (optparse_get_int (p, "mnf", 42) == 7, "get_int returns arg when present");
+    ok (optparse_get_int (p, "mnf", 42) == 7,
+        "get_int returns arg when present");
     ok (optparse_get_int (p, "neg", 42) == -4,
         "get_int returns negative arg when present");
 
@@ -415,7 +428,8 @@ void test_convenience_accessors (void)
              "get_double exits on option with no argument");
     dies_ok ({ optparse_get_double (p, "baz", 0); },
              "get_int exits on option with wrong type argument (string)");
-    lives_ok ({ optparse_get_double (p, "bar", 0); }, "get_double lives on known arg");
+    lives_ok ({ optparse_get_double (p, "bar", 0); },
+              "get_double lives on known arg");
     ok (optparse_get_double (p, "bar", 42.0) == 42.0,
         "get_double returns default argument when arg not present");
     ok (optparse_get_double (p, "mnf", 42) == 7.0,
@@ -452,7 +466,8 @@ void test_convenience_accessors (void)
              "get_str exits on unknown arg");
     ok (optparse_get_str (p, "foo", "xyz") == NULL,
         "get_str returns NULL on option with no argument configured");
-    lives_ok ({ optparse_get_str (p, "bar", NULL); }, "get_str lives on known arg");
+    lives_ok ({ optparse_get_str (p, "bar", NULL); },
+              "get_str lives on known arg");
     ok (optparse_get_str (p, "bar", NULL) == NULL,
         "get_str returns default argument when arg not present");
     like (optparse_get_str (p, "baz", NULL),
@@ -461,7 +476,8 @@ void test_convenience_accessors (void)
 
     /* fatalerr
      */
-    dies_ok ({ optparse_hasopt (p, "no-exist"); }, "hasopt exits on unknown arg");
+    dies_ok ({ optparse_hasopt (p, "no-exist"); },
+             "hasopt exits on unknown arg");
 
     rc = optparse_set (p, OPTPARSE_FATALERR_FN, myfatal);
     ok (rc == OPTPARSE_SUCCESS, "optparse_set FATALERR_FN");
@@ -487,24 +503,30 @@ void test_errors (void)
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_EEXIST, "optparse_add_option: Errror with EEXIST");
     e = optparse_add_option (NULL, &opt);
-    ok (e == OPTPARSE_BAD_ARG, "optparse_add_option: BAD_ARG with invalid optparse_t");
+    ok (e == OPTPARSE_BAD_ARG,
+        "optparse_add_option: BAD_ARG with invalid optparse_t");
 
     e = optparse_remove_option (p, "foo");
-    ok (e == OPTPARSE_FAILURE, "optparse_remove_option: FAILURE if option not found");
+    ok (e == OPTPARSE_FAILURE,
+        "optparse_remove_option: FAILURE if option not found");
 
     // optparse_set error cases:
     e = optparse_set (p, 1000, 1);
     ok (e == OPTPARSE_BAD_ARG, "optparse_set (invalid item) returns BAD_ARG");
 
     e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 2000);
-    ok (e == OPTPARSE_BAD_ARG, "optparse_set (LEFT_MARGIN, 2000) returns BAD_ARG");
+    ok (e == OPTPARSE_BAD_ARG,
+        "optparse_set (LEFT_MARGIN, 2000) returns BAD_ARG");
     e = optparse_set (p, OPTPARSE_LEFT_MARGIN, -1);
-    ok (e == OPTPARSE_BAD_ARG, "optparse_set (LEFT_MARGIN, -1) returns BAD_ARG");
+    ok (e == OPTPARSE_BAD_ARG,
+        "optparse_set (LEFT_MARGIN, -1) returns BAD_ARG");
 
     e = optparse_set (p, OPTPARSE_OPTION_WIDTH, 2000);
-    ok (e == OPTPARSE_BAD_ARG, "optparse_set (OPTION_WIDTH, 2000) returns BAD_ARG");
+    ok (e == OPTPARSE_BAD_ARG,
+        "optparse_set (OPTION_WIDTH, 2000) returns BAD_ARG");
     e = optparse_set (p, OPTPARSE_OPTION_WIDTH, -1);
-    ok (e == OPTPARSE_BAD_ARG, "optparse_set (OPTION_WIDTH, -1) returns BAD_ARG");
+    ok (e == OPTPARSE_BAD_ARG,
+        "optparse_set (OPTION_WIDTH, -1) returns BAD_ARG");
 
     optparse_destroy (p);
 }
@@ -516,8 +538,16 @@ void test_multiret (void)
     optparse_err_t e;
     optparse_t *p = optparse_create ("multret-test");
     struct optparse_option opts[] = {
-        {.name = "required-arg", .key = 'r', .has_arg = 1, .arginfo = "", .usage = ""},
-        {.name = "optional-arg", .key = 'o', .has_arg = 2, .arginfo = "", .usage = ""},
+        {.name = "required-arg",
+         .key = 'r',
+         .has_arg = 1,
+         .arginfo = "",
+         .usage = ""},
+        {.name = "optional-arg",
+         .key = 'o',
+         .has_arg = 2,
+         .arginfo = "",
+         .usage = ""},
         {.name = "multi-ret",
          .key = 'm',
          .has_arg = 1,
@@ -684,7 +714,8 @@ void test_optional_argument (void)
     optindex = optparse_parse_args (p, ac, av);
     ok (optindex == (ac - 1), "parse options, verify optindex");
 
-    ok (optparse_hasopt (p, "optional-arg"), "found optional-arg option with no args");
+    ok (optparse_hasopt (p, "optional-arg"),
+        "found optional-arg option with no args");
     optarg = NULL;
     rc = optparse_getopt (p, "optional-arg", &optarg);
     ok (rc == 1, "saw --optional-arg once", rc);
@@ -695,7 +726,8 @@ void test_optional_argument (void)
 
     optindex = optparse_parse_args (p, ac, av2);
     ok (optindex == (ac - 1), "parse options, verify optindex");
-    ok (optparse_hasopt (p, "optional-arg"), "found optional-arg option with args");
+    ok (optparse_hasopt (p, "optional-arg"),
+        "found optional-arg option with args");
 
     rc = optparse_getopt (p, "optional-arg", &optarg);
     ok (rc == 2, "saw --optional-arg again", rc);
@@ -874,7 +906,8 @@ Usage: test two [OPTIONS]...\n\
     //
     e = optparse_run_subcommand (a, ac, av3);
     ok (e == OPTPARSE_SUCCESS, "optparse_run_subcommand before parse succeeds");
-    ok (called = 3, "optparse_run_subcmomand: called subcmd_two with correct args");
+    ok (called = 3,
+        "optparse_run_subcmomand: called subcmd_two with correct args");
 
     // Test unknown option prints expected error:
     char *av4[] = {"test", "two", "--unknown", NULL};
@@ -911,7 +944,8 @@ Try `test two --help' for more information.\n",
 
     diag ("parsing test two -Zt foo");
     n = optparse_run_subcommand (a, ac, av42);
-    ok (n == -1, "optparse_run_subcommand with bad short opt mixed with good fails");
+    ok (n == -1,
+        "optparse_run_subcommand with bad short opt mixed with good fails");
 
     usage_output_is (
         "\
@@ -957,7 +991,9 @@ Usage: test one [OPTIONS]\n\
               "Hidden subcommand doesn't appear in usage output");
 
     // Unhide subcommand
-    e = optparse_set (optparse_get_subcommand (a, "hidden"), OPTPARSE_SUBCMD_HIDE, 0);
+    e = optparse_set (optparse_get_subcommand (a, "hidden"),
+                      OPTPARSE_SUBCMD_HIDE,
+                      0);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 0)");
     usage_ok (a,
               "\
@@ -968,7 +1004,9 @@ Usage: test hidden [OPTIONS]\n\
               "Unhidden subcommand now displayed in usage output");
 
     // Hide again with optparse_set
-    e = optparse_set (optparse_get_subcommand (a, "hidden"), OPTPARSE_SUBCMD_HIDE, 1);
+    e = optparse_set (optparse_get_subcommand (a, "hidden"),
+                      OPTPARSE_SUBCMD_HIDE,
+                      1);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 1)");
     usage_ok (a,
               "\
@@ -991,8 +1029,11 @@ Usage: test one [OPTIONS]\n\
 
     n = optparse_run_subcommand (a, ac, av6);
     ok (n == 0, "optparse_run_subcommand with OPTPARSE_SUBCMD_NOOPTS");
-    ok (value == 2, "optparse_run_subcommand() run with argc = %d (expected 2)", value);
-    ok (optparse_option_index (d) == -1, "optparse_run_subcommand: skipped parse_args");
+    ok (value == 2,
+        "optparse_run_subcommand() run with argc = %d (expected 2)",
+        value);
+    ok (optparse_option_index (d) == -1,
+        "optparse_run_subcommand: skipped parse_args");
 
     optparse_destroy (a);
 }
@@ -1161,7 +1202,9 @@ void test_non_option_arguments (void)
     optindex = optparse_option_index (p);
     ok (optindex == 2, "!posixly_correct: argv elements are permuted");
     is (av4[1], "--test=foo", "!posixly_correct: argv[1] is now --test=foo");
-    is (av4[2], "1234", "!posixly_correct: argv[2] is now non-option arg (1234)");
+    is (av4[2],
+        "1234",
+        "!posixly_correct: argv[2] is now non-option arg (1234)");
 
     optparse_destroy (p);
 }

@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -151,7 +151,8 @@ void test_tojson_t2 (void)
     obj = tomltk_table_to_json (tab);
     ok (obj != NULL, "t2: tomltk_table_to_json works");
     jdiag ("t2", obj);
-    rc = json_unpack (obj, "{s:{s:[I,I,I]}}", "t", "ia", &ia[0], &ia[1], &ia[2]);
+    rc =
+        json_unpack (obj, "{s:{s:[I,I,I]}}", "t", "ia", &ia[0], &ia[1], &ia[2]);
     ok (rc == 0, "t2: unpack successful");
     ok (ia[0] == 1 && ia[1] == 2 && ia[2] == 3, "t2: has expected values");
     json_decref (obj);

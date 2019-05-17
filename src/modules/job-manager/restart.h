@@ -9,18 +9,20 @@
 \************************************************************/
 
 #ifndef _FLUX_JOB_MANAGER_RESTART_H
-#define _FLUX_JOB_MANAGER_RESTART_H
+#    define _FLUX_JOB_MANAGER_RESTART_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
-#include "event.h"
-#include "job.h"
-#include "queue.h"
+#    include "event.h"
+#    include "job.h"
+#    include "queue.h"
 
 /* exposed for unit testing only */
 int restart_count_char (const char *s, char c);
 
-int restart_from_kvs (flux_t *h, struct queue *queue, struct event_ctx *event_ctx);
+int restart_from_kvs (flux_t *h,
+                      struct queue *queue,
+                      struct event_ctx *event_ctx);
 
 #endif /* _FLUX_JOB_MANAGER_RESTART_H */
 

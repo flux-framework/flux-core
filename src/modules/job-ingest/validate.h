@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef _JOB_INGEST_VALIDATE_H
-#define _JOB_INGEST_VALIDATE_H
+#    define _JOB_INGEST_VALIDATE_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 struct validate *v;
 

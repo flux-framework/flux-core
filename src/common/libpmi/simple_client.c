@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -192,7 +192,8 @@ static int pmi_simple_client_publish_name (void *impl,
     return PMI_FAIL;
 }
 
-static int pmi_simple_client_unpublish_name (void *impl, const char *service_name)
+static int pmi_simple_client_unpublish_name (void *impl,
+                                             const char *service_name)
 {
     return PMI_FAIL;
 }
@@ -227,7 +228,9 @@ done:
     return result;
 }
 
-static int pmi_simple_client_abort (void *impl, int exit_code, const char *error_msg)
+static int pmi_simple_client_abort (void *impl,
+                                    int exit_code,
+                                    const char *error_msg)
 {
     fprintf (stderr, "PMI_Abort: %s\n", error_msg);
     exit (exit_code);
@@ -235,7 +238,9 @@ static int pmi_simple_client_abort (void *impl, int exit_code, const char *error
     return PMI_SUCCESS;
 }
 
-static int pmi_simple_client_kvs_get_my_name (void *impl, char *kvsname, int length)
+static int pmi_simple_client_kvs_get_my_name (void *impl,
+                                              char *kvsname,
+                                              int length)
 {
     struct pmi_simple_client *pmi = impl;
     int result = PMI_FAIL;
@@ -298,7 +303,11 @@ static int pmi_simple_client_kvs_put (void *impl,
 
     if (!pmi->initialized)
         goto done;
-    if (dprintf (pmi->fd, "cmd=put kvsname=%s key=%s value=%s\n", kvsname, key, value)
+    if (dprintf (pmi->fd,
+                 "cmd=put kvsname=%s key=%s value=%s\n",
+                 kvsname,
+                 key,
+                 value)
         < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
@@ -348,16 +357,17 @@ done:
     return result;
 }
 
-static int pmi_simple_client_spawn_multiple (void *impl,
-                                             int count,
-                                             const char *cmds[],
-                                             const char **argvs[],
-                                             const int maxprocs[],
-                                             const int info_keyval_sizesp[],
-                                             const PMI_keyval_t *info_keyval_vectors[],
-                                             int preput_keyval_size,
-                                             const PMI_keyval_t preput_keyval_vector[],
-                                             int errors[])
+static int pmi_simple_client_spawn_multiple (
+    void *impl,
+    int count,
+    const char *cmds[],
+    const char **argvs[],
+    const int maxprocs[],
+    const int info_keyval_sizesp[],
+    const PMI_keyval_t *info_keyval_vectors[],
+    int preput_keyval_size,
+    const PMI_keyval_t preput_keyval_vector[],
+    int errors[])
 {
     return PMI_FAIL;
 }

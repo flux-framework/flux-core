@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include "src/common/libtap/tap.h"
@@ -49,7 +49,11 @@ int reclaim_matchtag (flux_t *h, int count, double timeout)
         BAIL_OUT ("flux_msg_handler_create failed");
     flux_msg_handler_start (mh);
 
-    if (!(timer = flux_timer_watcher_create (r, timeout, 0, reclaim_timeout, &expired)))
+    if (!(timer = flux_timer_watcher_create (r,
+                                             timeout,
+                                             0,
+                                             reclaim_timeout,
+                                             &expired)))
         BAIL_OUT ("flux_timer_watcher_create failed");
     flux_watcher_start (timer);
 

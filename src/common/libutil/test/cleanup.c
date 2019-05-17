@@ -33,14 +33,20 @@ int main (int argc, char** argv)
 
     /* Independent file and dir
      */
-    len = snprintf (file, sizeof (file), "%s/cleanup_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (file,
+                    sizeof (file),
+                    "%s/cleanup_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (file)))
         BAIL_OUT ("snprintf failed creating tmp file path");
     if (!(fd = mkstemp (file)))
         BAIL_OUT ("could not create tmp file");
     close (fd);
 
-    len = snprintf (dir, sizeof (dir), "%s/cleanup_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (dir,
+                    sizeof (dir),
+                    "%s/cleanup_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (dir)))
         BAIL_OUT ("snprintf failed creating tmp directory");
     if (!mkdtemp (dir))
@@ -49,12 +55,17 @@ int main (int argc, char** argv)
     cleanup_push_string (cleanup_file, file);
     cleanup_push_string (cleanup_directory, dir);
     cleanup_run ();
-    ok (stat (file, &sb) < 0 && errno == ENOENT, "cleanup removed independent file");
-    ok (stat (dir, &sb) < 0 && errno == ENOENT, "cleanup removed independent dir");
+    ok (stat (file, &sb) < 0 && errno == ENOENT,
+        "cleanup removed independent file");
+    ok (stat (dir, &sb) < 0 && errno == ENOENT,
+        "cleanup removed independent dir");
 
     /* This time put file inside directory
      */
-    len = snprintf (dir, sizeof (dir), "%s/cleanup_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (dir,
+                    sizeof (dir),
+                    "%s/cleanup_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (dir)))
         BAIL_OUT ("snprintf failed creating tmp directory");
     if (!mkdtemp (dir))
@@ -70,12 +81,17 @@ int main (int argc, char** argv)
     cleanup_push_string (cleanup_directory, dir);
     cleanup_push_string (cleanup_file, file);
     cleanup_run ();
-    ok (stat (file, &sb) < 0 && errno == ENOENT, "cleanup removed file pushed second");
-    ok (stat (dir, &sb) < 0 && errno == ENOENT, "cleanup removed dir pushed first");
+    ok (stat (file, &sb) < 0 && errno == ENOENT,
+        "cleanup removed file pushed second");
+    ok (stat (dir, &sb) < 0 && errno == ENOENT,
+        "cleanup removed dir pushed first");
 
     /* Same but reverse push order
      */
-    len = snprintf (dir, sizeof (dir), "%s/cleanup_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (dir,
+                    sizeof (dir),
+                    "%s/cleanup_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (dir)))
         BAIL_OUT ("snprintf failed creating tmp directory");
     if (!mkdtemp (dir))
@@ -100,7 +116,10 @@ int main (int argc, char** argv)
 
     /* Same but recursive removal
      */
-    len = snprintf (dir, sizeof (dir), "%s/cleanup_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (dir,
+                    sizeof (dir),
+                    "%s/cleanup_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (dir)))
         BAIL_OUT ("snprintf failed creating tmp directory");
     if (!mkdtemp (dir))
@@ -123,7 +142,10 @@ int main (int argc, char** argv)
 
     /* Try couple levels deep
      */
-    len = snprintf (dir, sizeof (dir), "%s/cleanup_test.XXXXXX", tmp ? tmp : "/tmp");
+    len = snprintf (dir,
+                    sizeof (dir),
+                    "%s/cleanup_test.XXXXXX",
+                    tmp ? tmp : "/tmp");
     if ((len < 0) || (len >= sizeof (dir)))
         BAIL_OUT ("snprintf failed creating tmp dir path");
     if (!mkdtemp (dir))

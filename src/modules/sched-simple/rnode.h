@@ -12,7 +12,7 @@
 #define HAVE_SCHED_RNODE_H 1
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <inttypes.h>

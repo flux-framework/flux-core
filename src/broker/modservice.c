@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -139,7 +139,8 @@ static void debug_cb (flux_t *h,
     int *debug_flags;
     const char *op;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op, "flags", &flags) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op, "flags", &flags)
+        < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
         if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
@@ -170,7 +171,10 @@ error:
 
 /* Reactor loop is about to block.
  */
-static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void prepare_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
 {
     modservice_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_SLEEPING);
@@ -181,7 +185,10 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void 
 
 /* Reactor loop just unblocked.
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     modservice_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING);
@@ -204,7 +211,9 @@ static void register_event (modservice_ctx_t *ctx,
     if (zlist_append (ctx->handlers, mh) < 0)
         oom ();
     if (flux_event_subscribe (ctx->h, match.topic_glob) < 0)
-        log_err_exit ("%s: flux_event_subscribe %s", __FUNCTION__, match.topic_glob);
+        log_err_exit ("%s: flux_event_subscribe %s",
+                      __FUNCTION__,
+                      match.topic_glob);
     free (match.topic_glob);
 }
 
@@ -233,7 +242,10 @@ void modservice_register (flux_t *h, module_t *p)
 
     register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER);
     register_request (ctx, "stats.get", stats_get_cb, FLUX_ROLE_ALL);
-    register_request (ctx, "stats.clear", stats_clear_request_cb, FLUX_ROLE_OWNER);
+    register_request (ctx,
+                      "stats.clear",
+                      stats_clear_request_cb,
+                      FLUX_ROLE_OWNER);
     register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER);
 
     if (ping_initialize (h, module_get_name (ctx->p)) < 0)

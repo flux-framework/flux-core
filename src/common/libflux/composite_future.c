@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 
@@ -303,7 +303,8 @@ static void fulfill_next (flux_future_t *f, flux_future_t *next)
     if (flux_future_fulfill_with (next, f) < 0)
         flux_future_fatal_error (next,
                                  errno,
-                                 "fulfill_next: flux_future_fulfill_with failed");
+                                 "fulfill_next: flux_future_fulfill_with "
+                                 "failed");
     flux_future_destroy (f);
 }
 
@@ -492,12 +493,17 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f)
     /*  Set the "next" future in the chain (prev->next) to be fulfilled
      *   by the provided future `f` once it is fulfilled.
      */
-    return flux_future_then (f, -1., (flux_continuation_f)fulfill_next, cf->next);
+    return flux_future_then (f,
+                             -1.,
+                             (flux_continuation_f)fulfill_next,
+                             cf->next);
 }
 
 /* "Continue" the chained "next" future embedded in `prev` with an error
  */
-void flux_future_continue_error (flux_future_t *prev, int errnum, const char *errstr)
+void flux_future_continue_error (flux_future_t *prev,
+                                 int errnum,
+                                 const char *errstr)
 {
     struct chained_future *cf = chained_future_get (prev);
     if (cf && cf->next) {

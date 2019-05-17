@@ -53,7 +53,8 @@ int main (int argc, char **argv)
     ok (service_send (sw, msg) < 0 && errno == ENOSYS,
         "service_send to 'foo' fails with ENOSYS");
 
-    ok (service_add (sw, "foo", NULL, foo_cb, NULL) == 0, "service_add foo works");
+    ok (service_add (sw, "foo", NULL, foo_cb, NULL) == 0,
+        "service_add foo works");
 
     foo_cb_msg = NULL;
     foo_cb_arg = (void *)(uintptr_t)1;
@@ -78,7 +79,8 @@ int main (int argc, char **argv)
     msg = flux_request_encode ("bar.baz", NULL);
     if (!msg)
         BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
-    ok (service_add (sw, "bar", NULL, foo_cb, NULL) == 0, "service_add bar works");
+    ok (service_add (sw, "bar", NULL, foo_cb, NULL) == 0,
+        "service_add bar works");
     foo_cb_rc = 0;
     ok (service_send (sw, msg) == 0, "service_send to 'bar.baz' works");
     flux_msg_destroy (msg);

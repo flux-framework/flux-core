@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdbool.h>
 #include <jansson.h>
@@ -49,7 +49,8 @@ void treq_basic_tests (void)
 
     ok ((tr = treq_create ("foo", 1, 3)) != NULL, "treq_create works");
 
-    ok (treq_count_reached (tr) == false, "initial treq_count_reached() is false");
+    ok (treq_count_reached (tr) == false,
+        "initial treq_count_reached() is false");
 
     ok ((name = treq_get_name (tr)) != NULL, "treq_get_name works");
 
@@ -63,7 +64,8 @@ void treq_basic_tests (void)
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
 
-    ok (treq_add_request_ops (tr, ops) == 0, "initial treq_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "initial treq_add_request_ops add works");
 
     ok ((o = treq_get_ops (tr)) != NULL, "initial treq_get_ops call works");
 
@@ -92,7 +94,8 @@ void treq_basic_tests (void)
 
     ok (treq_count_reached (tr) == true, "later treq_count_reached() is true");
 
-    ok (treq_get_processed (tr) == false, "treq_get_processed returns false initially");
+    ok (treq_get_processed (tr) == false,
+        "treq_get_processed returns false initially");
 
     treq_set_processed (tr, true);
 
@@ -102,15 +105,19 @@ void treq_basic_tests (void)
 
     treq_destroy (tr);
 
-    ok (treq_create_rank (1, 2, -1, 0) == NULL, "treq_create_rank fails on bad input");
+    ok (treq_create_rank (1, 2, -1, 0) == NULL,
+        "treq_create_rank fails on bad input");
 
-    ok ((tr = treq_create_rank (214, 3577, 2, 4)) != NULL, "treq_create_rank works");
+    ok ((tr = treq_create_rank (214, 3577, 2, 4)) != NULL,
+        "treq_create_rank works");
 
     ok ((name = treq_get_name (tr)) != NULL, "treq_get_name works");
 
-    ok (strstr (name, "214") != NULL, "treq_get_name returns name with rank in it");
+    ok (strstr (name, "214") != NULL,
+        "treq_get_name returns name with rank in it");
 
-    ok (strstr (name, "3577") != NULL, "treq_get_name returns name with seq in it");
+    ok (strstr (name, "3577") != NULL,
+        "treq_get_name returns name with seq in it");
 
     treq_destroy (tr);
 }
@@ -123,12 +130,14 @@ void treq_ops_tests (void)
 
     ok ((tr = treq_create ("foo", 3, 3)) != NULL, "treq_create works");
 
-    ok (treq_count_reached (tr) == false, "initial treq_count_reached() is false");
+    ok (treq_count_reached (tr) == false,
+        "initial treq_count_reached() is false");
 
     ok (treq_add_request_ops (tr, NULL) == 0,
         "treq_add_request_ops works with NULL ops");
 
-    ok (treq_count_reached (tr) == false, "treq_count_reached() is still false");
+    ok (treq_count_reached (tr) == false,
+        "treq_count_reached() is still false");
 
     /* for test ops can be anything */
     ops = json_array ();
@@ -138,7 +147,8 @@ void treq_ops_tests (void)
 
     json_decref (ops);
 
-    ok (treq_count_reached (tr) == false, "treq_count_reached() is still false");
+    ok (treq_count_reached (tr) == false,
+        "treq_count_reached() is still false");
 
     /* for test ops can be anything */
     ops = json_array ();
@@ -179,14 +189,16 @@ void treq_request_tests (void)
     ok ((request = flux_request_encode ("mytopic", "{ A : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok (treq_add_request_copy (tr, request) == 0, "treq_add_request_copy works");
+    ok (treq_add_request_copy (tr, request) == 0,
+        "treq_add_request_copy works");
 
     flux_msg_destroy (request);
 
     ok ((request = flux_request_encode ("mytopic", "{ B : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok (treq_add_request_copy (tr, request) == 0, "treq_add_request_copy works");
+    ok (treq_add_request_copy (tr, request) == 0,
+        "treq_add_request_copy works");
 
     flux_msg_destroy (request);
 
@@ -213,7 +225,8 @@ void treq_mgr_basic_tests (void)
 
     ok ((tr = treq_create ("treq1", 1, 0)) != NULL, "treq_create works");
 
-    ok (treq_mgr_add_transaction (trm, tr) == 0, "treq_mgr_add_transaction works");
+    ok (treq_mgr_add_transaction (trm, tr) == 0,
+        "treq_mgr_add_transaction works");
 
     ok (treq_mgr_add_transaction (trm, tr) < 0,
         "treq_mgr_add_transaction fails on duplicate treq");
@@ -283,12 +296,14 @@ void treq_mgr_iter_tests (void)
     ok ((trm = treq_mgr_create ()) != NULL, "treq_mgr_create works");
 
     count = 0;
-    ok (treq_mgr_iter_transactions (trm, treq_count_cb, &count) == 0 && count == 0,
+    ok (treq_mgr_iter_transactions (trm, treq_count_cb, &count) == 0
+            && count == 0,
         "treq_mgr_iter_transactions success when no transactions submitted");
 
     ok ((tr = treq_create ("treq1", 1, 0)) != NULL, "treq_create works");
 
-    ok (treq_mgr_add_transaction (trm, tr) == 0, "treq_mgr_add_transaction works");
+    ok (treq_mgr_add_transaction (trm, tr) == 0,
+        "treq_mgr_add_transaction works");
 
     ok (treq_mgr_transactions_count (trm) == 1,
         "treq_mgr_transactions_count returns correct count of transactions");
@@ -296,8 +311,10 @@ void treq_mgr_iter_tests (void)
     ok (treq_mgr_iter_transactions (trm, treq_error_cb, NULL) < 0,
         "treq_mgr_iter_transactions error on callback error");
 
-    ok (treq_mgr_iter_transactions (trm, treq_add_error_cb, trm) < 0 && errno == EAGAIN,
-        "treq_mgr_iter_transactions error on callback error trying to add treq");
+    ok (treq_mgr_iter_transactions (trm, treq_add_error_cb, trm) < 0
+            && errno == EAGAIN,
+        "treq_mgr_iter_transactions error on callback error trying to add "
+        "treq");
 
     ok (treq_mgr_iter_transactions (trm, treq_remove_cb, trm) == 0,
         "treq_mgr_iter_transactions success on remove");

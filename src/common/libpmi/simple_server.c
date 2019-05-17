@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,7 +44,10 @@ static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
                                             void *client,
                                             int result);
 
-static void trace (struct pmi_simple_server *pmi, void *client, const char *fmt, ...)
+static void trace (struct pmi_simple_server *pmi,
+                   void *client,
+                   const char *fmt,
+                   ...)
 {
     va_list ap;
 
@@ -121,7 +124,9 @@ static void client_destroy (void *arg)
     }
 }
 
-static int mcmd_execute (struct pmi_simple_server *pmi, void *client, struct client *c)
+static int mcmd_execute (struct pmi_simple_server *pmi,
+                         void *client,
+                         struct client *c)
 {
     char resp[SIMPLE_MAX_PROTO_LINE + 1];
     char *buf = zlist_first (c->mcmd);
@@ -145,7 +150,9 @@ static int mcmd_execute (struct pmi_simple_server *pmi, void *client, struct cli
     return rc;
 }
 
-static int mcmd_begin (struct pmi_simple_server *pmi, void *client, const char *buf)
+static int mcmd_begin (struct pmi_simple_server *pmi,
+                       void *client,
+                       const char *buf)
 {
     struct client *c;
     char ptrkey[2 * sizeof (void *) + 1];
@@ -188,7 +195,9 @@ static int mcmd_inprogress (struct pmi_simple_server *pmi, void *client)
     return 1;
 }
 
-static int mcmd_append (struct pmi_simple_server *pmi, void *client, const char *buf)
+static int mcmd_append (struct pmi_simple_server *pmi,
+                        void *client,
+                        const char *buf)
 {
     struct client *c;
     char ptrkey[2 * sizeof (void *) + 1];
@@ -309,7 +318,10 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     }
     /* appnum */
     else if (keyval_parse_isword (buf, "cmd", "get_appnum") == 0) {
-        snprintf (resp, sizeof (resp), "cmd=appnum rc=0 appnum=%d\n", pmi->appnum);
+        snprintf (resp,
+                  sizeof (resp),
+                  "cmd=appnum rc=0 appnum=%d\n",
+                  pmi->appnum);
     }
     /* kvsname */
     else if (keyval_parse_isword (buf, "cmd", "get_my_kvsname") == 0) {
@@ -454,7 +466,8 @@ int pmi_simple_server_kvs_get_complete (struct pmi_simple_server *pmi,
 {
     char resp[SIMPLE_MAX_PROTO_LINE + 1];
     if (val == NULL)
-        return (pmi_simple_server_kvs_get_error (pmi, client, PMI_ERR_INVALID_KEY));
+        return (
+            pmi_simple_server_kvs_get_error (pmi, client, PMI_ERR_INVALID_KEY));
     snprintf (resp, sizeof (resp), "cmd=get_result rc=0 value=%s\n", val);
     return (client_respond (pmi, client, resp));
 }

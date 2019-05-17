@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -88,7 +88,11 @@ static time_t strtotime (const char *s)
 void cfdiag (int rc, const char *prefix, struct cf_error *error)
 {
     if (rc < 0)
-        diag ("%s: %s::%d: %s", prefix, error->filename, error->lineno, error->errbuf);
+        diag ("%s: %s::%d: %s",
+              prefix,
+              error->filename,
+              error->lineno,
+              error->errbuf);
 }
 
 void test_basic (void)
@@ -149,7 +153,8 @@ void test_basic (void)
      */
     cf2 = cf_get_in (cf, "tab");
     ok (cf2 && cf_typeof (cf2) == CF_TABLE, "accessed table");
-    ok (cf_int64 (cf_get_in (cf2, "subvalue")) == 42, "accessed value in table");
+    ok (cf_int64 (cf_get_in (cf2, "subvalue")) == 42,
+        "accessed value in table");
 
     cf_destroy (cf);
 }
@@ -245,7 +250,8 @@ void test_corner (void)
     ok (cf_update (NULL, NULL, 0, &error) < 0 && errno == EINVAL,
         "cf_update cf=NULL fails with EINVAL");
     errno = 0;
-    ok (cf_update (cf, NULL, 0, &error) == 0, "cf_update buf=NULL works (no-op)");
+    ok (cf_update (cf, NULL, 0, &error) == 0,
+        "cf_update buf=NULL works (no-op)");
     errno = 0;
     const char *junk = ",]foo";
     ok (cf_update (cf, junk, strlen (junk), &error) < 0 && errno == EINVAL,
@@ -285,7 +291,8 @@ void test_corner (void)
     /* cf_copy
      */
     errno = 0;
-    ok (cf_copy (NULL) == NULL && errno == EINVAL, "cf_copy cf=NULL fails with EINVAL");
+    ok (cf_copy (NULL) == NULL && errno == EINVAL,
+        "cf_copy cf=NULL fails with EINVAL");
 
     /* cf_typeof
      */
@@ -467,7 +474,9 @@ void test_update_glob (void)
     ok (cf_update_glob (cf, p, &error) < 0 && errno == EINVAL,
         "cf_update_glob fails when one file fails to parse");
     diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
-    like (error.filename, "99.*\\.toml", "Failed file contained in error.filename");
+    like (error.filename,
+          "99.*\\.toml",
+          "Failed file contained in error.filename");
 
     ok (cf_get_in (cf, "i") == NULL,
         "keys from ok files not added to cf table when one file fails");
@@ -500,7 +509,8 @@ void test_check (void)
 
     errno = 0;
     rc = cf_check (cf, opts_extra, CF_STRICT, &error);
-    ok (rc < 0 && errno == EINVAL, "cf_check flags=CF_STRICT fails with extra key");
+    ok (rc < 0 && errno == EINVAL,
+        "cf_check flags=CF_STRICT fails with extra key");
     cfdiag (rc, "cf_check", &error);
 
     /* Missing key.

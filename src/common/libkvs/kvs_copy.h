@@ -9,11 +9,11 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_KVS_COPY_H
-#define _FLUX_CORE_KVS_COPY_H
+#    define _FLUX_CORE_KVS_COPY_H
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 /* Create a copy of 'srckey' at 'dstkey'.  Read from / write to the
  * specified namespaces.  If a namespace is not specified (i.e. NULL),
@@ -51,9 +51,9 @@ flux_future_t *flux_kvs_move (flux_t *h,
                               const char *dstkey,
                               int commit_flags);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_KVS_COPY_H */
 

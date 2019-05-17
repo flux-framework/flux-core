@@ -23,7 +23,11 @@ struct creds {
 
 static int cred_get (flux_t *h, struct creds *cr)
 {
-    if (flux_opt_get (h, FLUX_OPT_TESTING_USERID, &cr->userid, sizeof (cr->userid)) < 0)
+    if (flux_opt_get (h,
+                      FLUX_OPT_TESTING_USERID,
+                      &cr->userid,
+                      sizeof (cr->userid))
+        < 0)
         return -1;
     if (flux_opt_get (h,
                       FLUX_OPT_TESTING_ROLEMASK,
@@ -36,7 +40,11 @@ static int cred_get (flux_t *h, struct creds *cr)
 
 static int cred_set (flux_t *h, struct creds *cr)
 {
-    if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &cr->userid, sizeof (cr->userid)) < 0)
+    if (flux_opt_set (h,
+                      FLUX_OPT_TESTING_USERID,
+                      &cr->userid,
+                      sizeof (cr->userid))
+        < 0)
         return -1;
     if (flux_opt_set (h,
                       FLUX_OPT_TESTING_ROLEMASK,
@@ -95,7 +103,8 @@ static void check_rpc_oneway_faked (flux_t *h)
     ok (msg != NULL, "received looped back request");
     ok (flux_msg_get_userid (msg, &cr.userid) == 0 && cr.userid == new.userid,
         "request contains test userid");
-    ok (flux_msg_get_rolemask (msg, &cr.rolemask) == 0 && cr.rolemask == new.rolemask,
+    ok (flux_msg_get_rolemask (msg, &cr.rolemask) == 0
+            && cr.rolemask == new.rolemask,
         "request contains test rolemask");
     flux_msg_destroy (msg);
 
@@ -174,8 +183,10 @@ static void check_rpc_default_policy (flux_t *h)
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0, "random-creds: reactor successfully handled one event");
     errno = 0;
-    ok (testrpc1_called == false && flux_future_get (f, NULL) == -1 && errno == EPERM,
-        "random-creds: handler was NOT called and dispatcher returned EPERM response");
+    ok (testrpc1_called == false && flux_future_get (f, NULL) == -1
+            && errno == EPERM,
+        "random-creds: handler was NOT called and dispatcher returned EPERM "
+        "response");
     flux_future_destroy (f);
     ok (cred_set (h, &saved) == 0, "restored connector creds");
 
@@ -298,7 +309,8 @@ static void check_rpc_targetted_policy (flux_t *h)
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0, "nontarget-creds: reactor successfully handled one event");
     errno = 0;
-    ok (testrpc1_called == false && flux_future_get (f, NULL) == -1 && errno == EPERM,
+    ok (testrpc1_called == false && flux_future_get (f, NULL) == -1
+            && errno == EPERM,
         "nontarget-creds: handler was NOT called and dispatcher returned EPERM "
         "response");
     flux_future_destroy (f);

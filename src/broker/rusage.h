@@ -9,9 +9,9 @@
 \************************************************************/
 
 #ifndef BROKER_RUSAGE_H
-#define BROKER_RUSAGE_H
+#    define BROKER_RUSAGE_H
 
-#include <flux/core.h>
+#    include <flux/core.h>
 
 int rusage_initialize (flux_t *h, const char *service);
 

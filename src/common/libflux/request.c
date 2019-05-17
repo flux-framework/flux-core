@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <stdarg.h>
@@ -41,7 +41,9 @@ done:
     return rc;
 }
 
-int flux_request_decode (const flux_msg_t *msg, const char **topicp, const char **sp)
+int flux_request_decode (const flux_msg_t *msg,
+                         const char **topicp,
+                         const char **sp)
 {
     const char *topic, *s;
     int rc = -1;
@@ -160,7 +162,9 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_request_encode_raw (const char *topic, const void *data, int len)
+flux_msg_t *flux_request_encode_raw (const char *topic,
+                                     const void *data,
+                                     int len)
 {
     flux_msg_t *msg = request_encode (topic);
 

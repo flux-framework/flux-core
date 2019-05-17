@@ -15,7 +15,9 @@
 
 struct ev_flux;
 
-typedef void (*ev_flux_f) (struct ev_loop *loop, struct ev_flux *w, int revents);
+typedef void (*ev_flux_f) (struct ev_loop *loop,
+                           struct ev_flux *w,
+                           int revents);
 
 struct ev_flux {
     ev_io io_w;

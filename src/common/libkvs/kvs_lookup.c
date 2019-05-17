@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <assert.h>
 #include <errno.h>
@@ -93,25 +93,29 @@ static int validate_lookup_flags (int flags, bool watch_ok)
     flags &= ~FLUX_KVS_WAITCREATE;
 
     switch (flags) {
-        case 0:
-        case FLUX_KVS_TREEOBJ:
-        case FLUX_KVS_READDIR:
-        case FLUX_KVS_READDIR | FLUX_KVS_TREEOBJ:
-        case FLUX_KVS_READLINK:
-            return 0;
-        default:
-            return -1;
+    case 0:
+    case FLUX_KVS_TREEOBJ:
+    case FLUX_KVS_READDIR:
+    case FLUX_KVS_READDIR | FLUX_KVS_TREEOBJ:
+    case FLUX_KVS_READLINK:
+        return 0;
+    default:
+        return -1;
     }
 }
 
-flux_future_t *flux_kvs_lookup (flux_t *h, const char *ns, int flags, const char *key)
+flux_future_t *flux_kvs_lookup (flux_t *h,
+                                const char *ns,
+                                int flags,
+                                const char *key)
 {
     struct lookup_ctx *ctx;
     flux_future_t *f;
     const char *topic = "kvs.lookup";
     int rpc_flags = 0;
 
-    if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags, true) < 0) {
+    if (!h || !key || strlen (key) == 0
+        || validate_lookup_flags (flags, true) < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -265,7 +269,8 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len)
+            < 0)
             return -1;
         ctx->val_valid = true;
         // N.B. val_data includes xtra 0 byte term not reflected in val_len
@@ -303,13 +308,16 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len)
+            < 0)
             return -1;
         ctx->val_valid = true;
     }
     if (!ctx->val_obj) {
-        if (!(ctx->val_obj =
-                  json_loadb (ctx->val_data, ctx->val_len, JSON_DECODE_ANY, NULL))) {
+        if (!(ctx->val_obj = json_loadb (ctx->val_data,
+                                         ctx->val_len,
+                                         JSON_DECODE_ANY,
+                                         NULL))) {
             errno = EINVAL;
             return -1;
         }
@@ -331,7 +339,8 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data, &ctx->val_len)
+            < 0)
             return -1;
         ctx->val_valid = true;
     }
@@ -351,8 +360,10 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->dir) {
-        if (!(ctx->dir =
-                  kvsdir_create_fromobj (ctx->h, ctx->atref, ctx->key, ctx->treeobj)))
+        if (!(ctx->dir = kvsdir_create_fromobj (ctx->h,
+                                                ctx->atref,
+                                                ctx->key,
+                                                ctx->treeobj)))
             return -1;
     }
     if (dirp)
@@ -360,7 +371,9 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     return 0;
 }
 
-int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **ns, const char **target)
+int flux_kvs_lookup_get_symlink (flux_future_t *f,
+                                 const char **ns,
+                                 const char **target)
 {
     struct lookup_ctx *ctx;
     const char *n = NULL, *t = NULL;
@@ -400,7 +413,8 @@ int flux_kvs_lookup_cancel (flux_future_t *f)
     flux_future_t *f2;
 
     if (!f || !(ctx = flux_future_aux_get (f, auxkey))
-        || (!(ctx->flags & FLUX_KVS_WATCH) && !(ctx->flags & FLUX_KVS_WAITCREATE))) {
+        || (!(ctx->flags & FLUX_KVS_WATCH)
+            && !(ctx->flags & FLUX_KVS_WAITCREATE))) {
         errno = EINVAL;
         return -1;
     }

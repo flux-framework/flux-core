@@ -9,14 +9,14 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 #if HAVE_FLUX_SECURITY
-#include <flux/security/context.h>
-#include <flux/security/sign.h>
+#    include <flux/security/context.h>
+#    include <flux/security/sign.h>
 #endif
 
 #include "src/common/libutil/fluid.h"
@@ -125,7 +125,8 @@ static void job_destroy (struct job *job)
     }
 }
 
-static struct job *job_create (const flux_msg_t *msg, struct job_ingest_ctx *ctx)
+static struct job *job_create (const flux_msg_t *msg,
+                               struct job_ingest_ctx *ctx)
 {
     struct job *job;
 
@@ -199,7 +200,9 @@ error:
 
 /* Respond to all requestors (for each job) with errnum and errstr (required).
  */
-static void batch_respond_error (struct batch *batch, int errnum, const char *errstr)
+static void batch_respond_error (struct batch *batch,
+                                 int errnum,
+                                 const char *errstr)
 {
     flux_t *h = batch->ctx->h;
     struct job *job = zlist_first (batch->jobs);
@@ -331,7 +334,10 @@ static void batch_flush_continuation (flux_future_t *f, void *arg)
  * continuations that commit its data to the KVS, respond to requestors,
  * and announce the new jobids.
  */
-static void batch_flush (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void batch_flush (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
     struct batch *batch;
@@ -389,7 +395,8 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
-    if (flux_kvs_txn_put_raw (batch->txn, 0, key, job->jobspec, job->jobspecsz) < 0)
+    if (flux_kvs_txn_put_raw (batch->txn, 0, key, job->jobspec, job->jobspecsz)
+        < 0)
         goto error;
     entry = eventlog_entry_pack (0.,
                                  "submit",
@@ -628,7 +635,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
-    if (!(ctx.timer = flux_timer_watcher_create (r, 0., 0., batch_flush, &ctx))) {
+    if (!(ctx.timer =
+              flux_timer_watcher_create (r, 0., 0., batch_flush, &ctx))) {
         flux_log_error (h, "flux_timer_watcher_create");
         goto done;
     }

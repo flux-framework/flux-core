@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 
 #include <string.h>
@@ -27,11 +27,13 @@ void errors (void)
     /* check simple error cases */
 
     errno = 0;
-    ok (flux_kvs_fence (NULL, NULL, 0, NULL, 0, NULL) == NULL && errno == EINVAL,
+    ok (flux_kvs_fence (NULL, NULL, 0, NULL, 0, NULL) == NULL
+            && errno == EINVAL,
         "flux_kvs_fence fails on bad params");
 
     errno = 0;
-    ok (flux_kvs_fence (NULL, NULL, 0, "foo", 1, NULL) == NULL && errno == EINVAL,
+    ok (flux_kvs_fence (NULL, NULL, 0, "foo", 1, NULL) == NULL
+            && errno == EINVAL,
         "flux_kvs_fence fails on bad handle");
 
     errno = 0;

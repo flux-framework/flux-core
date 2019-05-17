@@ -9,14 +9,14 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_RPC_H
-#define _FLUX_CORE_RPC_H
+#    define _FLUX_CORE_RPC_H
 
-#include "handle.h"
-#include "future.h"
+#    include "handle.h"
+#    include "future.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 enum {
     FLUX_RPC_NORESPONSE = 1,
@@ -58,9 +58,9 @@ int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len);
  */
 uint32_t flux_rpc_get_matchtag (flux_future_t *f);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_RPC_H */
 

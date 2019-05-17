@@ -11,23 +11,23 @@
 /* See Flux RFC 13 */
 
 #ifndef FLUX_PMI_H_INCLUDED
-#define FLUX_PMI_H_INCLUDED
+#    define FLUX_PMI_H_INCLUDED
 
-#define PMI_SUCCESS 0
-#define PMI_FAIL -1
-#define PMI_ERR_INIT 1
-#define PMI_ERR_NOMEM 2
-#define PMI_ERR_INVALID_ARG 3
-#define PMI_ERR_INVALID_KEY 4
-#define PMI_ERR_INVALID_KEY_LENGTH 5
-#define PMI_ERR_INVALID_VAL 6
-#define PMI_ERR_INVALID_VAL_LENGTH 7
-#define PMI_ERR_INVALID_LENGTH 8
-#define PMI_ERR_INVALID_NUM_ARGS 9
-#define PMI_ERR_INVALID_ARGS 10
-#define PMI_ERR_INVALID_NUM_PARSED 11
-#define PMI_ERR_INVALID_KEYVALP 12
-#define PMI_ERR_INVALID_SIZE 13
+#    define PMI_SUCCESS 0
+#    define PMI_FAIL -1
+#    define PMI_ERR_INIT 1
+#    define PMI_ERR_NOMEM 2
+#    define PMI_ERR_INVALID_ARG 3
+#    define PMI_ERR_INVALID_KEY 4
+#    define PMI_ERR_INVALID_KEY_LENGTH 5
+#    define PMI_ERR_INVALID_VAL 6
+#    define PMI_ERR_INVALID_VAL_LENGTH 7
+#    define PMI_ERR_INVALID_LENGTH 8
+#    define PMI_ERR_INVALID_NUM_ARGS 9
+#    define PMI_ERR_INVALID_ARGS 10
+#    define PMI_ERR_INVALID_NUM_PARSED 11
+#    define PMI_ERR_INVALID_KEYVALP 12
+#    define PMI_ERR_INVALID_SIZE 13
 
 int PMI_Init (int *spawned);
 int PMI_Initialized (int *initialized);
@@ -49,7 +49,10 @@ int PMI_KVS_Get_key_length_max (int *length);
 int PMI_KVS_Get_value_length_max (int *length);
 
 int PMI_KVS_Put (const char kvsname[], const char key[], const char value[]);
-int PMI_KVS_Get (const char kvsname[], const char key[], char value[], int length);
+int PMI_KVS_Get (const char kvsname[],
+                 const char key[],
+                 char value[],
+                 int length);
 int PMI_KVS_Commit (const char kvsname[]);
 int PMI_Barrier (void);
 

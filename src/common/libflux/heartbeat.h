@@ -9,20 +9,20 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_HEARTBEAT
-#define _FLUX_CORE_HEARTBEAT
+#    define _FLUX_CORE_HEARTBEAT
 
-#include "message.h"
+#    include "message.h"
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 flux_msg_t *flux_heartbeat_encode (int epoch);
 int flux_heartbeat_decode (const flux_msg_t *msg, int *epoch);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_FLUX_CORE_HEARTBEAT */
 

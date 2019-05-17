@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 #include <flux/core.h>
@@ -41,8 +41,10 @@ void test_create (void)
     job_decref (job);
     ok (errno == 42, "job_decref doesn't clobber errno");
 
-    lives_ok ({ job_incref (NULL); }, "job_incref on NULL pointer doesn't crash");
-    lives_ok ({ job_decref (NULL); }, "job_decref on NULL pointer doesn't crash");
+    lives_ok ({ job_incref (NULL); },
+              "job_incref on NULL pointer doesn't crash");
+    lives_ok ({ job_decref (NULL); },
+              "job_decref on NULL pointer doesn't crash");
 }
 
 const char *test_input[] = {
@@ -95,8 +97,10 @@ void test_create_from_eventlog (void)
     job = job_create_from_eventlog (2, test_input[0]);
     if (job == NULL)
         BAIL_OUT ("job_create_from_eventlog log=(submit) failed");
-    ok (job->refcount == 1, "job_create_from_eventlog log=(submit) set refcount to 1");
-    ok (job->id == 2, "job_create_from_eventlog log=(submit) set id from param");
+    ok (job->refcount == 1,
+        "job_create_from_eventlog log=(submit) set refcount to 1");
+    ok (job->id == 2,
+        "job_create_from_eventlog log=(submit) set id from param");
     ok (!job->alloc_pending && !job->free_pending && !job->has_resources,
         "job_create_from_eventlog log=(submit)  set no internal flags");
     ok (job->userid == 66,
@@ -115,7 +119,8 @@ void test_create_from_eventlog (void)
     job = job_create_from_eventlog (3, test_input[1]);
     if (job == NULL)
         BAIL_OUT ("job_create_from_eventlog log=(submit+pri) failed");
-    ok (job->id == 3, "job_create_from_eventlog log=(submit+pri) set id from param");
+    ok (job->id == 3,
+        "job_create_from_eventlog log=(submit+pri) set id from param");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+pri) set userid from submit");
     ok (job->priority == 1,
@@ -159,7 +164,8 @@ void test_create_from_eventlog (void)
     if (job == NULL)
         BAIL_OUT ("job_create_from_eventlog log=(submit+depend+alloc) failed");
     ok (!job->alloc_pending && !job->free_pending && job->has_resources,
-        "job_create_from_eventlog log=(submit+depend+alloc) set has_resources flag");
+        "job_create_from_eventlog log=(submit+depend+alloc) set has_resources "
+        "flag");
     ok (job->state == FLUX_JOB_RUN,
         "job_create_from_eventlog log=(submit+depend+alloc) set state=RUN");
     job_decref (job);
@@ -173,9 +179,12 @@ void test_create_from_eventlog (void)
     /* 6 - submit + depend + alloc + ex0 + free */
     job = job_create_from_eventlog (3, test_input[6]);
     if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+alloc+ex0+free) failed");
+        BAIL_OUT (
+            "job_create_from_eventlog log=(submit+depend+alloc+ex0+free) "
+            "failed");
     ok (!job->alloc_pending && !job->free_pending && !job->has_resources,
-        "job_create_from_eventlog log=(submit+depend+alloc+ex0+free) set no internal "
+        "job_create_from_eventlog log=(submit+depend+alloc+ex0+free) set no "
+        "internal "
         "flags");
     ok (job->state == FLUX_JOB_CLEANUP,
         "job_create_from_eventlog log=(submit+depend+alloc+ex0+free) set "

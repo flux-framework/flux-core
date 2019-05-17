@@ -86,33 +86,34 @@ int cmd_heaptrace (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
-static struct optparse_subcommand heaptrace_subcmds[] = {{
-                                                             "start",
-                                                             "FILENAME",
-                                                             "start heap profiling, "
-                                                             "sending output to "
-                                                             "FILENAME",
-                                                             internal_heaptrace_start,
-                                                             0,
-                                                             NULL,
-                                                         },
-                                                         {
-                                                             "stop",
-                                                             NULL,
-                                                             "stop heap profiling",
-                                                             internal_heaptrace_stop,
-                                                             0,
-                                                             NULL,
-                                                         },
-                                                         {
-                                                             "dump",
-                                                             "REASON",
-                                                             "dump heap profile",
-                                                             internal_heaptrace_dump,
-                                                             0,
-                                                             NULL,
-                                                         },
-                                                         OPTPARSE_SUBCMD_END};
+static struct optparse_subcommand heaptrace_subcmds[] =
+    {{
+         "start",
+         "FILENAME",
+         "start heap profiling, "
+         "sending output to "
+         "FILENAME",
+         internal_heaptrace_start,
+         0,
+         NULL,
+     },
+     {
+         "stop",
+         NULL,
+         "stop heap profiling",
+         internal_heaptrace_stop,
+         0,
+         NULL,
+     },
+     {
+         "dump",
+         "REASON",
+         "dump heap profile",
+         internal_heaptrace_dump,
+         0,
+         NULL,
+     },
+     OPTPARSE_SUBCMD_END};
 
 int subcommand_heaptrace_register (optparse_t *p)
 {

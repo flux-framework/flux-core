@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,7 +67,8 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
         goto error_inval;
     if (!val_userid || *val_userid != 'i')
         goto error_inval;
-    if (val_userid[1] < '0' || val_userid[1] > '9')  // no sign or wspace allowed
+    if (val_userid[1] < '0'
+        || val_userid[1] > '9')  // no sign or wspace allowed
         goto error_inval;
     errno = 0;
     userid = strtoul (val_userid + 1, &endptr, 10);
@@ -125,7 +126,10 @@ static char *payload_encode (const void *src, int srclen)
                               sodium_base64_VARIANT_ORIGINAL);
 }
 
-static int payload_decode (const void *src, int srclen, void **payload, int *payloadsz)
+static int payload_decode (const void *src,
+                           int srclen,
+                           void **payload,
+                           int *payloadsz)
 {
     size_t dstlen = BASE64_DECODE_SIZE (srclen);
     void *dst;

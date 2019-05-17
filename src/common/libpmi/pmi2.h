@@ -9,29 +9,29 @@
 \************************************************************/
 
 #ifndef FLUX_PMI2_H_INCLUDED
-#define FLUX_PMI2_H_INCLUDED
+#    define FLUX_PMI2_H_INCLUDED
 
-#define PMI2_SUCCESS 0
-#define PMI2_FAIL -1
-#define PMI2_ERR_INIT 1
-#define PMI2_ERR_NOMEM 2
-#define PMI2_ERR_INVALID_ARG 3
-#define PMI2_ERR_INVALID_KEY 4
-#define PMI2_ERR_INVALID_KEY_LENGTH 5
-#define PMI2_ERR_INVALID_VAL 6
-#define PMI2_ERR_INVALID_VAL_LENGTH 7
-#define PMI2_ERR_INVALID_LENGTH 8
-#define PMI2_ERR_INVALID_NUM_ARGS 9
-#define PMI2_ERR_INVALID_ARGS 10
-#define PMI2_ERR_INVALID_NUM_PARSED 11
-#define PMI2_ERR_INVALID_KEYVALP 12
-#define PMI2_ERR_INVALID_SIZE 13
-#define PMI2_ERR_OTHER 14
+#    define PMI2_SUCCESS 0
+#    define PMI2_FAIL -1
+#    define PMI2_ERR_INIT 1
+#    define PMI2_ERR_NOMEM 2
+#    define PMI2_ERR_INVALID_ARG 3
+#    define PMI2_ERR_INVALID_KEY 4
+#    define PMI2_ERR_INVALID_KEY_LENGTH 5
+#    define PMI2_ERR_INVALID_VAL 6
+#    define PMI2_ERR_INVALID_VAL_LENGTH 7
+#    define PMI2_ERR_INVALID_LENGTH 8
+#    define PMI2_ERR_INVALID_NUM_ARGS 9
+#    define PMI2_ERR_INVALID_ARGS 10
+#    define PMI2_ERR_INVALID_NUM_PARSED 11
+#    define PMI2_ERR_INVALID_KEYVALP 12
+#    define PMI2_ERR_INVALID_SIZE 13
+#    define PMI2_ERR_OTHER 14
 
-#define PMI2_MAX_KEYLEN 64
-#define PMI2_MAX_VALLEN 1024
-#define PMI2_MAX_ATTRVALUE 1024
-#define PMI2_ID_NULL -1
+#    define PMI2_MAX_KEYLEN 64
+#    define PMI2_MAX_VALLEN 1024
+#    define PMI2_MAX_ATTRVALUE 1024
+#    define PMI2_ID_NULL -1
 
 int PMI2_Init (int *spawned, int *size, int *rank, int *appnum);
 int PMI2_Finalize (void);
@@ -92,7 +92,10 @@ int PMI2_Info_GetNodeAttrIntArray (const char name[],
                                    int *outlen,
                                    int *found);
 int PMI2_Info_PutNodeAttr (const char name[], const char value[]);
-int PMI2_Info_GetJobAttr (const char name[], char value[], int valuelen, int *found);
+int PMI2_Info_GetJobAttr (const char name[],
+                          char value[],
+                          int valuelen,
+                          int *found);
 int PMI2_Info_GetJobAttrIntArray (const char name[],
                                   int array[],
                                   int arraylen,

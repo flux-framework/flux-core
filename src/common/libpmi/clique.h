@@ -9,7 +9,7 @@
 \************************************************************/
 
 #ifndef _FLUX_CORE_PMI_CLIQUE_H
-#define _FLUX_CORE_PMI_CLIQUE_H
+#    define _FLUX_CORE_PMI_CLIQUE_H
 
 /* Parse the PMI_process_mapping attribute.
  *

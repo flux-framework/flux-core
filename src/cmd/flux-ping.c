@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <stdio.h>
 #include <unistd.h>
@@ -45,54 +45,55 @@ struct ping_data {
     unsigned int rpc_count;
 };
 
-static struct optparse_option cmdopts[] = {{
-                                               .name = "rank",
-                                               .key = 'r',
-                                               .has_arg = 1,
-                                               .arginfo = "NODESET",
-                                               .usage = "Find target on a specific "
-                                                        "broker rank(s)",
-                                           },
-                                           {
-                                               .name = "pad",
-                                               .key = 'p',
-                                               .has_arg = 1,
-                                               .arginfo = "N",
-                                               .usage = "Include in the payload a "
-                                                        "string of length N bytes",
-                                           },
-                                           {
-                                               .name = "interval",
-                                               .key = 'i',
-                                               .has_arg = 1,
-                                               .arginfo = "N",
-                                               .usage = "Specify the delay, in "
-                                                        "seconds, between successive "
-                                                        "requests",
-                                           },
-                                           {
-                                               .name = "count",
-                                               .key = 'c',
-                                               .has_arg = 1,
-                                               .arginfo = "N",
-                                               .usage = "Specify the number of "
-                                                        "requests to send",
-                                           },
-                                           {
-                                               .name = "batch",
-                                               .key = 'b',
-                                               .has_arg = 0,
-                                               .usage = "Begin processing responses "
-                                                        "after all requests are sent",
-                                           },
-                                           {
-                                               .name = "userid",
-                                               .key = 'u',
-                                               .has_arg = 0,
-                                               .usage = "Include userid and rolemask "
-                                                        "in ping output",
-                                           },
-                                           OPTPARSE_TABLE_END};
+static struct optparse_option cmdopts[] =
+    {{
+         .name = "rank",
+         .key = 'r',
+         .has_arg = 1,
+         .arginfo = "NODESET",
+         .usage = "Find target on a specific "
+                  "broker rank(s)",
+     },
+     {
+         .name = "pad",
+         .key = 'p',
+         .has_arg = 1,
+         .arginfo = "N",
+         .usage = "Include in the payload a "
+                  "string of length N bytes",
+     },
+     {
+         .name = "interval",
+         .key = 'i',
+         .has_arg = 1,
+         .arginfo = "N",
+         .usage = "Specify the delay, in "
+                  "seconds, between successive "
+                  "requests",
+     },
+     {
+         .name = "count",
+         .key = 'c',
+         .has_arg = 1,
+         .arginfo = "N",
+         .usage = "Specify the number of "
+                  "requests to send",
+     },
+     {
+         .name = "batch",
+         .key = 'b',
+         .has_arg = 0,
+         .usage = "Begin processing responses "
+                  "after all requests are sent",
+     },
+     {
+         .name = "userid",
+         .key = 'u',
+         .has_arg = 0,
+         .usage = "Include userid and rolemask "
+                  "in ping output",
+     },
+     OPTPARSE_TABLE_END};
 
 void ping_data_free (void *ctx)
 {
@@ -351,7 +352,11 @@ int main (int argc, char *argv[])
             usleep ((useconds_t) (ctx.interval * 1E6));
         }
     } else {
-        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.interval, timer_cb, &ctx);
+        tw = flux_timer_watcher_create (ctx.reactor,
+                                        0,
+                                        ctx.interval,
+                                        timer_cb,
+                                        &ctx);
         if (!tw)
             log_err_exit ("error creating watchers");
         flux_watcher_start (tw);

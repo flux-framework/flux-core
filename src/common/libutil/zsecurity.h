@@ -9,13 +9,13 @@
 \************************************************************/
 
 #ifndef _UTIL_ZSECURITY_H
-#define _UTIL_ZSECURITY_H
+#    define _UTIL_ZSECURITY_H
 
-#include <stdbool.h>
+#    include <stdbool.h>
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C" {
-#endif
+#    endif
 
 typedef struct zsecurity_struct zsecurity_t;
 
@@ -109,9 +109,9 @@ const char *zsecurity_errstr (zsecurity_t *c);
  */
 const char *zsecurity_confstr (zsecurity_t *c);
 
-#ifdef __cplusplus
+#    ifdef __cplusplus
 }
-#endif
+#    endif
 
 #endif /* !_UTIL_ZSECURITY_H */
 

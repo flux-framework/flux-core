@@ -79,7 +79,7 @@
  */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <jansson.h>
 #include <flux/core.h>
@@ -198,7 +198,14 @@ static void start_response_cb (flux_t *h,
         flux_log_error (h, "start: topic=%s not registered", topic);
         goto error;
     }
-    if (flux_msg_unpack (msg, "{s:I s:s s:o}", "id", &id, "type", &type, "data", &data)
+    if (flux_msg_unpack (msg,
+                         "{s:I s:s s:o}",
+                         "id",
+                         &id,
+                         "type",
+                         &type,
+                         "data",
+                         &data)
         < 0) {
         flux_log_error (h, "start response payload");
         goto error;
@@ -215,7 +222,8 @@ static void start_response_cb (flux_t *h,
     } else if (!strcmp (type, "release")) {
         const char *idset;
         int final;
-        if (json_unpack (data, "{s:s s:b}", "ranks", &idset, "final", &final) < 0) {
+        if (json_unpack (data, "{s:s s:b}", "ranks", &idset, "final", &final)
+            < 0) {
             errno = EPROTO;
             flux_log_error (h, "start: release response: malformed data");
             goto error;
@@ -302,15 +310,23 @@ int start_send_request (struct start_ctx *ctx, struct job *job)
     if (!job->start_pending && ctx->start_topic != NULL) {
         if (!(msg = flux_request_encode (ctx->start_topic, NULL)))
             return -1;
-        if (flux_msg_pack (msg, "{s:I s:i}", "id", job->id, "userid", job->userid) < 0)
+        if (flux_msg_pack (msg,
+                           "{s:I s:i}",
+                           "id",
+                           job->id,
+                           "userid",
+                           job->userid)
+            < 0)
             goto error;
         if (flux_send (ctx->h, msg, 0) < 0)
             goto error;
         flux_msg_destroy (msg);
         job->start_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)
-                event_job_post_pack (ctx->event_ctx, job, "debug.start-request", NULL);
+            (void)event_job_post_pack (ctx->event_ctx,
+                                       job,
+                                       "debug.start-request",
+                                       NULL);
     }
     return 0;
 error:

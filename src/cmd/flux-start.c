@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <termios.h>
 #include <unistd.h>
@@ -56,8 +56,12 @@ struct client {
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
-int start_session (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path);
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path);
+int start_session (const char *cmd_argz,
+                   size_t cmd_argz_len,
+                   const char *broker_path);
+int exec_broker (const char *cmd_argz,
+                 size_t cmd_argz_len,
+                 const char *broker_path);
 char *create_scratch_dir (const char *session_id);
 struct client *client_create (const char *broker_path,
                               const char *scratch_dir,
@@ -199,8 +203,9 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_set usage");
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
-    ctx.killer_timeout =
-        optparse_get_duration (ctx.opts, "killer-timeout", DEFAULT_KILLER_TIMEOUT);
+    ctx.killer_timeout = optparse_get_duration (ctx.opts,
+                                                "killer-timeout",
+                                                DEFAULT_KILLER_TIMEOUT);
     if (ctx.killer_timeout < 0.)
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optindex < argc) {
@@ -218,10 +223,13 @@ int main (int argc, char *argv[])
         if (bootstrap != BOOTSTRAP_SELFPMI) {
             if (!optparse_hasopt (ctx.opts, "bootstrap")) {
                 bootstrap = BOOTSTRAP_SELFPMI;
-                log_msg ("warning: setting --bootstrap=selfpmi due to --size option");
+                log_msg (
+                    "warning: setting --bootstrap=selfpmi due to --size "
+                    "option");
             } else {
                 log_errn_exit (EINVAL,
-                               "--size can only be used with --bootstrap=selfpmi");
+                               "--size can only be used with "
+                               "--bootstrap=selfpmi");
             }
         }
         ctx.size = optparse_get_int (ctx.opts, "size", -1);
@@ -232,18 +240,18 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     switch (bootstrap) {
-        case BOOTSTRAP_PMI:
-            if (optparse_hasopt (ctx.opts, "scratchdir"))
-                log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
-            status = exec_broker (command, len, broker_path);
-            break;
-        case BOOTSTRAP_SELFPMI:
-            if (!optparse_hasopt (ctx.opts, "size"))
-                log_msg_exit ("--size must be specified for --bootstrap=selfpmi");
-            status = start_session (command, len, broker_path);
-            break;
-        default:
-            assert (0); /* should never happen */
+    case BOOTSTRAP_PMI:
+        if (optparse_hasopt (ctx.opts, "scratchdir"))
+            log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
+        status = exec_broker (command, len, broker_path);
+        break;
+    case BOOTSTRAP_SELFPMI:
+        if (!optparse_hasopt (ctx.opts, "size"))
+            log_msg_exit ("--size must be specified for --bootstrap=selfpmi");
+        status = start_session (command, len, broker_path);
+        break;
+    default:
+        assert (0); /* should never happen */
     }
 
     optparse_destroy (ctx.opts);
@@ -277,7 +285,8 @@ static void setup_profiling_env (void)
         if (rc < 0)
             log_err_exit ("Unable to set LD_PRELOAD in environment");
 
-        if ((profile != NULL) && (setenv ("CALI_CONFIG_PROFILE", profile, 1) < 0))
+        if ((profile != NULL)
+            && (setenv ("CALI_CONFIG_PROFILE", profile, 1) < 0))
             log_err_exit ("setenv (CALI_CONFIG_PROFILE)");
         setenv ("CALI_LOG_VERBOSITY", "0", 0);
     }
@@ -393,7 +402,10 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *name)
+void add_args_list (char **argz,
+                    size_t *argz_len,
+                    optparse_t *opt,
+                    const char *name)
 {
     const char *arg;
     optparse_getopt_iterator_reset (opt, name);
@@ -426,7 +438,10 @@ static void pmi_debug_trace (void *client, const char *buf)
     fprintf (stderr, "%d: %s", cli->rank, buf);
 }
 
-int pmi_kvs_put (void *arg, const char *kvsname, const char *key, const char *val)
+int pmi_kvs_put (void *arg,
+                 const char *kvsname,
+                 const char *key,
+                 const char *val)
 {
     zhash_update (ctx.pmi.kvs, key, xstrdup (val));
     zhash_freefn (ctx.pmi.kvs, key, (zhash_free_fn *)free);
@@ -459,7 +474,9 @@ int execvp_argz (char *argz, size_t argz_len)
  * broker will figure out how to bootstrap without any further aid from
  * flux-start.
  */
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path)
+int exec_broker (const char *cmd_argz,
+                 size_t cmd_argz_len,
+                 const char *broker_path)
 {
     char *argz = NULL;
     size_t argz_len = 0;
@@ -515,7 +532,10 @@ struct client *client_create (const char *broker_path,
     free (dir_arg);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)
-        argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
+        argz_append (&argz,
+                     &argz_len,
+                     cmd_argz,
+                     cmd_argz_len); /* must be last arg */
 
     if (!(cli->cmd = flux_cmd_create (0, NULL, environ)))
         goto fail;
@@ -578,8 +598,13 @@ void pmi_server_initialize (int flags, const char *session_id)
     int appnum = strtol (session_id, NULL, 10);
     if (!(ctx.pmi.kvs = zhash_new ()))
         oom ();
-    ctx.pmi.srv =
-        pmi_simple_server_create (ops, appnum, ctx.size, ctx.size, "-", flags, NULL);
+    ctx.pmi.srv = pmi_simple_server_create (ops,
+                                            appnum,
+                                            ctx.size,
+                                            ctx.size,
+                                            "-",
+                                            flags,
+                                            NULL);
     if (!ctx.pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }
@@ -625,7 +650,9 @@ void restore_termios (void)
  * descriptors it implies that the brokers in this instance must all
  * be contained on one node.  This is mostly useful for testing purposes.
  */
-int start_session (const char *cmd_argz, size_t cmd_argz_len, const char *broker_path)
+int start_session (const char *cmd_argz,
+                   size_t cmd_argz_len,
+                   const char *broker_path)
 {
     struct client *cli;
     int rank;

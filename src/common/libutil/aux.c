@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <string.h>
 #include <errno.h>
@@ -42,7 +42,9 @@ static void aux_item_destroy (struct aux_item *aux)
 /* Create an aux item.
  * Return item on success, NULL on failure with errno set (ENOMEM).
  */
-static struct aux_item *aux_item_create (const char *key, void *val, aux_free_f free_fn)
+static struct aux_item *aux_item_create (const char *key,
+                                         void *val,
+                                         aux_free_f free_fn)
 {
     struct aux_item *aux;
 
@@ -127,7 +129,10 @@ void *aux_get (struct aux_item *head, const char *key)
  * 'head' is an in/out parameter.
  * Returns 0 on success, -1 on failure with errno set (EINVAL, ENOMEM).
  */
-int aux_set (struct aux_item **head, const char *key, void *val, aux_free_f free_fn)
+int aux_set (struct aux_item **head,
+             const char *key,
+             void *val,
+             aux_free_f free_fn)
 {
     struct aux_item *item;
 

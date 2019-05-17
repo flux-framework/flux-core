@@ -11,7 +11,7 @@
 /* publisher.c - event publishing service on rank 0 */
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <errno.h>
 #include <flux/core.h>
@@ -133,12 +133,18 @@ static void send_event (struct publisher *pub, const flux_msg_t *msg)
     sender = zlist_first (pub->senders);
     while (sender != NULL) {
         if (sender->send (sender->arg, msg) < 0)
-            flux_log_error (pub->h, "%s: sender=%s", __FUNCTION__, sender->name);
+            flux_log_error (pub->h,
+                            "%s: sender=%s",
+                            __FUNCTION__,
+                            sender->name);
         sender = zlist_next (pub->senders);
     }
 }
 
-void pub_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void pub_cb (flux_t *h,
+             flux_msg_handler_t *mh,
+             const flux_msg_t *msg,
+             void *arg)
 {
     struct publisher *pub = arg;
     const char *topic;
@@ -166,7 +172,12 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg
         goto error;
     if (flux_msg_get_userid (msg, &userid) < 0)
         goto error;
-    if (!(event = encode_event (topic, flags, rolemask, userid, ++pub->seq, payload)))
+    if (!(event = encode_event (topic,
+                                flags,
+                                rolemask,
+                                userid,
+                                ++pub->seq,
+                                payload)))
         goto error_restore_seq;
     send_event (pub, event);
     if (flux_respond_pack (h, msg, "{s:i}", "seq", pub->seq) < 0)

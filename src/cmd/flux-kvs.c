@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+#    include "config.h"
 #endif
 #include <flux/core.h>
 #include <flux/optparse.h>
@@ -51,514 +51,527 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir,
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-static struct optparse_option readlink_opts[] = {{
-                                                     .name = "namespace",
-                                                     .key = 'N',
-                                                     .has_arg = 1,
-                                                     .usage = "Specify KVS namespace "
-                                                              "to use.",
-                                                 },
-                                                 {
-                                                     .name = "at",
-                                                     .key = 'a',
-                                                     .has_arg = 1,
-                                                     .usage = "Lookup relative to RFC "
-                                                              "11 snapshot reference",
-                                                 },
-                                                 {
-                                                     .name = "namespace-only",
-                                                     .key = 'o',
-                                                     .has_arg = 0,
-                                                     .usage = "Output only namespace "
-                                                              "if link points to a "
-                                                              "namespace",
-                                                 },
-                                                 {
-                                                     .name = "key-only",
-                                                     .key = 'k',
-                                                     .has_arg = 0,
-                                                     .usage = "Output only key if link "
-                                                              "points to a namespace",
-                                                 },
-                                                 OPTPARSE_TABLE_END};
+static struct optparse_option readlink_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace "
+                  "to use.",
+     },
+     {
+         .name = "at",
+         .key = 'a',
+         .has_arg = 1,
+         .usage = "Lookup relative to RFC "
+                  "11 snapshot reference",
+     },
+     {
+         .name = "namespace-only",
+         .key = 'o',
+         .has_arg = 0,
+         .usage = "Output only namespace "
+                  "if link points to a "
+                  "namespace",
+     },
+     {
+         .name = "key-only",
+         .key = 'k',
+         .has_arg = 0,
+         .usage = "Output only key if link "
+                  "points to a namespace",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option get_opts[] = {{
-                                                .name = "namespace",
-                                                .key = 'N',
-                                                .has_arg = 1,
-                                                .usage = "Specify KVS namespace to "
-                                                         "use.",
-                                            },
-                                            {
-                                                .name = "json",
-                                                .key = 'j',
-                                                .has_arg = 0,
-                                                .usage = "Interpret value(s) as "
-                                                         "encoded JSON",
-                                            },
-                                            {
-                                                .name = "raw",
-                                                .key = 'r',
-                                                .has_arg = 0,
-                                                .usage = "Interpret value(s) as raw "
-                                                         "data",
-                                            },
-                                            {
-                                                .name = "treeobj",
-                                                .key = 't',
-                                                .has_arg = 0,
-                                                .usage = "Show RFC 11 object",
-                                            },
-                                            {
-                                                .name = "at",
-                                                .key = 'a',
-                                                .has_arg = 1,
-                                                .usage = "Lookup relative to RFC 11 "
-                                                         "snapshot reference",
-                                            },
-                                            {
-                                                .name = "label",
-                                                .key = 'l',
-                                                .has_arg = 0,
-                                                .usage = "Print key= before value",
-                                            },
-                                            {
-                                                .name = "waitcreate",
-                                                .key = 'W',
-                                                .has_arg = 0,
-                                                .usage = "Wait for creation to occur "
-                                                         "on watch",
-                                            },
-                                            {
-                                                .name = "watch",
-                                                .key = 'w',
-                                                .has_arg = 0,
-                                                .usage = "Monitor key writes",
-                                            },
-                                            {
-                                                .name = "uniq",
-                                                .key = 'u',
-                                                .has_arg = 0,
-                                                .usage = "Only monitor key writes if "
-                                                         "values have changed",
-                                            },
-                                            {
-                                                .name = "append",
-                                                .key = 'A',
-                                                .has_arg = 0,
-                                                .usage = "Only monitor key appends",
-                                            },
-                                            {
-                                                .name = "full",
-                                                .key = 'f',
-                                                .has_arg = 0,
-                                                .usage = "Monitor key changes with "
-                                                         "more complete accuracy",
-                                            },
-                                            {
-                                                .name = "count",
-                                                .key = 'c',
-                                                .has_arg = 1,
-                                                .arginfo = "COUNT",
-                                                .usage = "Display at most COUNT "
-                                                         "changes",
-                                            },
-                                            OPTPARSE_TABLE_END};
+static struct optparse_option get_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to "
+                  "use.",
+     },
+     {
+         .name = "json",
+         .key = 'j',
+         .has_arg = 0,
+         .usage = "Interpret value(s) as "
+                  "encoded JSON",
+     },
+     {
+         .name = "raw",
+         .key = 'r',
+         .has_arg = 0,
+         .usage = "Interpret value(s) as raw "
+                  "data",
+     },
+     {
+         .name = "treeobj",
+         .key = 't',
+         .has_arg = 0,
+         .usage = "Show RFC 11 object",
+     },
+     {
+         .name = "at",
+         .key = 'a',
+         .has_arg = 1,
+         .usage = "Lookup relative to RFC 11 "
+                  "snapshot reference",
+     },
+     {
+         .name = "label",
+         .key = 'l',
+         .has_arg = 0,
+         .usage = "Print key= before value",
+     },
+     {
+         .name = "waitcreate",
+         .key = 'W',
+         .has_arg = 0,
+         .usage = "Wait for creation to occur "
+                  "on watch",
+     },
+     {
+         .name = "watch",
+         .key = 'w',
+         .has_arg = 0,
+         .usage = "Monitor key writes",
+     },
+     {
+         .name = "uniq",
+         .key = 'u',
+         .has_arg = 0,
+         .usage = "Only monitor key writes if "
+                  "values have changed",
+     },
+     {
+         .name = "append",
+         .key = 'A',
+         .has_arg = 0,
+         .usage = "Only monitor key appends",
+     },
+     {
+         .name = "full",
+         .key = 'f',
+         .has_arg = 0,
+         .usage = "Monitor key changes with "
+                  "more complete accuracy",
+     },
+     {
+         .name = "count",
+         .key = 'c',
+         .has_arg = 1,
+         .arginfo = "COUNT",
+         .usage = "Display at most COUNT "
+                  "changes",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option put_opts[] = {{
-                                                .name = "namespace",
-                                                .key = 'N',
-                                                .has_arg = 1,
-                                                .usage = "Specify KVS namespace to "
-                                                         "use.",
-                                            },
-                                            {
-                                                .name = "treeobj-root",
-                                                .key = 'O',
-                                                .has_arg = 0,
-                                                .usage = "Output resulting RFC11 root "
-                                                         "containing puts",
-                                            },
-                                            {
-                                                .name = "sequence",
-                                                .key = 's',
-                                                .has_arg = 0,
-                                                .usage = "Output root sequence of root "
-                                                         "containing puts",
-                                            },
-                                            {
-                                                .name = "json",
-                                                .key = 'j',
-                                                .has_arg = 0,
-                                                .usage = "Store value(s) as encoded "
-                                                         "JSON",
-                                            },
-                                            {
-                                                .name = "raw",
-                                                .key = 'r',
-                                                .has_arg = 0,
-                                                .usage = "Store value(s) as-is without "
-                                                         "adding NULL termination",
-                                            },
-                                            {
-                                                .name = "treeobj",
-                                                .key = 't',
-                                                .has_arg = 0,
-                                                .usage = "Store RFC 11 object",
-                                            },
-                                            {
-                                                .name = "no-merge",
-                                                .key = 'n',
-                                                .has_arg = 0,
-                                                .usage = "Set the NO_MERGE flag to "
-                                                         "ensure commit is standalone",
-                                            },
-                                            {
-                                                .name = "append",
-                                                .key = 'A',
-                                                .has_arg = 0,
-                                                .usage = "Append value(s) to key "
-                                                         "instead of overwriting",
-                                            },
-                                            OPTPARSE_TABLE_END};
+static struct optparse_option put_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to "
+                  "use.",
+     },
+     {
+         .name = "treeobj-root",
+         .key = 'O',
+         .has_arg = 0,
+         .usage = "Output resulting RFC11 root "
+                  "containing puts",
+     },
+     {
+         .name = "sequence",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Output root sequence of root "
+                  "containing puts",
+     },
+     {
+         .name = "json",
+         .key = 'j',
+         .has_arg = 0,
+         .usage = "Store value(s) as encoded "
+                  "JSON",
+     },
+     {
+         .name = "raw",
+         .key = 'r',
+         .has_arg = 0,
+         .usage = "Store value(s) as-is without "
+                  "adding NULL termination",
+     },
+     {
+         .name = "treeobj",
+         .key = 't',
+         .has_arg = 0,
+         .usage = "Store RFC 11 object",
+     },
+     {
+         .name = "no-merge",
+         .key = 'n',
+         .has_arg = 0,
+         .usage = "Set the NO_MERGE flag to "
+                  "ensure commit is standalone",
+     },
+     {
+         .name = "append",
+         .key = 'A',
+         .has_arg = 0,
+         .usage = "Append value(s) to key "
+                  "instead of overwriting",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option dir_opts[] = {{
-                                                .name = "namespace",
-                                                .key = 'N',
-                                                .has_arg = 1,
-                                                .usage = "Specify KVS namespace to "
-                                                         "use.",
-                                            },
-                                            {
-                                                .name = "recursive",
-                                                .key = 'R',
-                                                .has_arg = 0,
-                                                .usage = "Recursively display keys "
-                                                         "under subdirectories",
-                                            },
-                                            {
-                                                .name = "directory",
-                                                .key = 'd',
-                                                .has_arg = 0,
-                                                .usage = "List directory entries and "
-                                                         "not values",
-                                            },
-                                            {
-                                                .name = "width",
-                                                .key = 'w',
-                                                .has_arg = 1,
-                                                .usage = "Set output width to COLS.  0 "
-                                                         "means no limit",
-                                            },
-                                            {
-                                                .name = "at",
-                                                .key = 'a',
-                                                .has_arg = 1,
-                                                .usage = "Lookup relative to RFC 11 "
-                                                         "snapshot reference",
-                                            },
-                                            OPTPARSE_TABLE_END};
+static struct optparse_option dir_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to "
+                  "use.",
+     },
+     {
+         .name = "recursive",
+         .key = 'R',
+         .has_arg = 0,
+         .usage = "Recursively display keys "
+                  "under subdirectories",
+     },
+     {
+         .name = "directory",
+         .key = 'd',
+         .has_arg = 0,
+         .usage = "List directory entries and "
+                  "not values",
+     },
+     {
+         .name = "width",
+         .key = 'w',
+         .has_arg = 1,
+         .usage = "Set output width to COLS.  0 "
+                  "means no limit",
+     },
+     {
+         .name = "at",
+         .key = 'a',
+         .has_arg = 1,
+         .usage = "Lookup relative to RFC 11 "
+                  "snapshot reference",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option ls_opts[] = {{
-                                               .name = "namespace",
-                                               .key = 'N',
-                                               .has_arg = 1,
-                                               .usage = "Specify KVS namespace to use.",
-                                           },
-                                           {
-                                               .name = "recursive",
-                                               .key = 'R',
-                                               .has_arg = 0,
-                                               .usage = "List directory recursively",
-                                           },
-                                           {
-                                               .name = "directory",
-                                               .key = 'd',
-                                               .has_arg = 0,
-                                               .usage = "List directory instead of "
-                                                        "contents",
-                                           },
-                                           {
-                                               .name = "width",
-                                               .key = 'w',
-                                               .has_arg = 1,
-                                               .usage = "Set output width to COLS.  0 "
-                                                        "means no limit",
-                                           },
-                                           {
-                                               .name = "1",
-                                               .key = '1',
-                                               .has_arg = 0,
-                                               .usage = "Force one entry per line",
-                                           },
-                                           {
-                                               .name = "classify",
-                                               .key = 'F',
-                                               .has_arg = 0,
-                                               .usage = "Append indicator (one of .@) "
-                                                        "to entries",
-                                           },
-                                           OPTPARSE_TABLE_END};
+static struct optparse_option ls_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to use.",
+     },
+     {
+         .name = "recursive",
+         .key = 'R',
+         .has_arg = 0,
+         .usage = "List directory recursively",
+     },
+     {
+         .name = "directory",
+         .key = 'd',
+         .has_arg = 0,
+         .usage = "List directory instead of "
+                  "contents",
+     },
+     {
+         .name = "width",
+         .key = 'w',
+         .has_arg = 1,
+         .usage = "Set output width to COLS.  0 "
+                  "means no limit",
+     },
+     {
+         .name = "1",
+         .key = '1',
+         .has_arg = 0,
+         .usage = "Force one entry per line",
+     },
+     {
+         .name = "classify",
+         .key = 'F',
+         .has_arg = 0,
+         .usage = "Append indicator (one of .@) "
+                  "to entries",
+     },
+     OPTPARSE_TABLE_END};
 
 static struct optparse_option dropcache_opts[] = {{
                                                       .name = "all",
                                                       .key = 'a',
                                                       .has_arg = 0,
-                                                      .usage = "Drop KVS across all "
-                                                               "ranks",
+                                                      .usage =
+                                                          "Drop KVS across all "
+                                                          "ranks",
                                                   },
                                                   OPTPARSE_TABLE_END};
 
-static struct optparse_option unlink_opts[] = {{
-                                                   .name = "namespace",
-                                                   .key = 'N',
-                                                   .has_arg = 1,
-                                                   .usage = "Specify KVS namespace to "
-                                                            "use.",
-                                               },
-                                               {
-                                                   .name = "treeobj-root",
-                                                   .key = 'O',
-                                                   .has_arg = 0,
-                                                   .usage = "Output resulting RFC11 "
-                                                            "root containing unlinks",
-                                               },
-                                               {
-                                                   .name = "sequence",
-                                                   .key = 's',
-                                                   .has_arg = 0,
-                                                   .usage = "Output root sequence of "
-                                                            "root containing unlinks",
-                                               },
-                                               {
-                                                   .name = "recursive",
-                                                   .key = 'R',
-                                                   .has_arg = 0,
-                                                   .usage = "Remove directory contents "
-                                                            "recursively",
-                                               },
-                                               {
-                                                   .name = "force",
-                                                   .key = 'f',
-                                                   .has_arg = 0,
-                                                   .usage = "ignore nonexistent files",
-                                               },
-                                               OPTPARSE_TABLE_END};
+static struct optparse_option unlink_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to "
+                  "use.",
+     },
+     {
+         .name = "treeobj-root",
+         .key = 'O',
+         .has_arg = 0,
+         .usage = "Output resulting RFC11 "
+                  "root containing unlinks",
+     },
+     {
+         .name = "sequence",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Output root sequence of "
+                  "root containing unlinks",
+     },
+     {
+         .name = "recursive",
+         .key = 'R',
+         .has_arg = 0,
+         .usage = "Remove directory contents "
+                  "recursively",
+     },
+     {
+         .name = "force",
+         .key = 'f',
+         .has_arg = 0,
+         .usage = "ignore nonexistent files",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option getroot_opts[] = {{
-                                                    .name = "namespace",
-                                                    .key = 'N',
-                                                    .has_arg = 1,
-                                                    .usage = "Specify KVS namespace to "
-                                                             "use.",
-                                                },
-                                                {
-                                                    .name = "sequence",
-                                                    .key = 's',
-                                                    .has_arg = 0,
-                                                    .usage = "Show sequence number",
-                                                },
-                                                {
-                                                    .name = "owner",
-                                                    .key = 'o',
-                                                    .has_arg = 0,
-                                                    .usage = "Show owner",
-                                                },
-                                                OPTPARSE_TABLE_END};
+static struct optparse_option getroot_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to "
+                  "use.",
+     },
+     {
+         .name = "sequence",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Show sequence number",
+     },
+     {
+         .name = "owner",
+         .key = 'o',
+         .has_arg = 0,
+         .usage = "Show owner",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option copy_opts[] = {{
-                                                 .name = "src-namespace",
-                                                 .key = 'S',
-                                                 .has_arg = 1,
-                                                 .usage = "Specify source key's "
-                                                          "namespace",
-                                             },
-                                             {
-                                                 .name = "dst-namespace",
-                                                 .key = 'D',
-                                                 .has_arg = 1,
-                                                 .usage = "Specify destination key's "
-                                                          "namespace",
-                                             },
-                                             OPTPARSE_TABLE_END};
+static struct optparse_option copy_opts[] =
+    {{
+         .name = "src-namespace",
+         .key = 'S',
+         .has_arg = 1,
+         .usage = "Specify source key's "
+                  "namespace",
+     },
+     {
+         .name = "dst-namespace",
+         .key = 'D',
+         .has_arg = 1,
+         .usage = "Specify destination key's "
+                  "namespace",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option link_opts[] = {{
-                                                 .name = "namespace",
-                                                 .key = 'N',
-                                                 .has_arg = 1,
-                                                 .usage = "Specify link's namespace.",
-                                             },
-                                             {
-                                                 .name = "target-namespace",
-                                                 .key = 'T',
-                                                 .has_arg = 1,
-                                                 .usage = "Specify target's namespace",
-                                             },
-                                             {
-                                                 .name = "treeobj-root",
-                                                 .key = 'O',
-                                                 .has_arg = 0,
-                                                 .usage = "Output resulting RFC11 root "
-                                                          "containing link",
-                                             },
-                                             {
-                                                 .name = "sequence",
-                                                 .key = 's',
-                                                 .has_arg = 0,
-                                                 .usage = "Output root sequence of "
-                                                          "root containing link",
-                                             },
-                                             OPTPARSE_TABLE_END};
+static struct optparse_option link_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify link's namespace.",
+     },
+     {
+         .name = "target-namespace",
+         .key = 'T',
+         .has_arg = 1,
+         .usage = "Specify target's namespace",
+     },
+     {
+         .name = "treeobj-root",
+         .key = 'O',
+         .has_arg = 0,
+         .usage = "Output resulting RFC11 root "
+                  "containing link",
+     },
+     {
+         .name = "sequence",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Output root sequence of "
+                  "root containing link",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option mkdir_opts[] = {{
-                                                  .name = "namespace",
-                                                  .key = 'N',
-                                                  .has_arg = 1,
-                                                  .usage = "Specify KVS namespace to "
-                                                           "use.",
-                                              },
-                                              {
-                                                  .name = "treeobj-root",
-                                                  .key = 'O',
-                                                  .has_arg = 0,
-                                                  .usage = "Output resulting RFC11 "
-                                                           "root containing new "
-                                                           "directory",
-                                              },
-                                              {
-                                                  .name = "sequence",
-                                                  .key = 's',
-                                                  .has_arg = 0,
-                                                  .usage = "Output root sequence of "
-                                                           "root containing new "
-                                                           "directory",
-                                              },
-                                              OPTPARSE_TABLE_END};
+static struct optparse_option mkdir_opts[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace to "
+                  "use.",
+     },
+     {
+         .name = "treeobj-root",
+         .key = 'O',
+         .has_arg = 0,
+         .usage = "Output resulting RFC11 "
+                  "root containing new "
+                  "directory",
+     },
+     {
+         .name = "sequence",
+         .key = 's',
+         .has_arg = 0,
+         .usage = "Output root sequence of "
+                  "root containing new "
+                  "directory",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_option namespace_opt[] = {{
-                                                     .name = "namespace",
-                                                     .key = 'N',
-                                                     .has_arg = 1,
-                                                     .usage = "Specify KVS namespace "
-                                                              "to use.",
-                                                 },
-                                                 OPTPARSE_TABLE_END};
+static struct optparse_option namespace_opt[] =
+    {{
+         .name = "namespace",
+         .key = 'N',
+         .has_arg = 1,
+         .usage = "Specify KVS namespace "
+                  "to use.",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_subcommand subcommands[] = {{
-                                                       "namespace",
-                                                       NULL,
-                                                       "Perform KVS namespace "
-                                                       "operations",
-                                                       cmd_namespace,
-                                                       0,
-                                                       NULL,
-                                                   },
-                                                   {"get",
-                                                    "[-N ns] [-j|-r|-t] [-a treeobj] "
-                                                    "[-l] [-W] [-w] [-u] [-A] [-f] "
-                                                    "[-c COUNT] key [key...]",
-                                                    "Get value stored under key",
-                                                    cmd_get,
-                                                    0,
-                                                    get_opts},
-                                                   {"put",
-                                                    "[-N ns] [-O|-s] [-j|-r|-t] [-n] "
-                                                    "[-A] key=value [key=value...]",
-                                                    "Store value under key",
-                                                    cmd_put,
-                                                    0,
-                                                    put_opts},
-                                                   {"dir",
-                                                    "[-N ns] [-R] [-d] [-w COLS] [-a "
-                                                    "treeobj] [key]",
-                                                    "Display all keys under directory",
-                                                    cmd_dir,
-                                                    0,
-                                                    dir_opts},
-                                                   {"ls",
-                                                    "[-N ns] [-R] [-d] [-F] [-w COLS] "
-                                                    "[-1] [key...]",
-                                                    "List directory",
-                                                    cmd_ls,
-                                                    0,
-                                                    ls_opts},
-                                                   {"unlink",
-                                                    "[-N ns] [-O|-s] [-R] [-f] key "
-                                                    "[key...]",
-                                                    "Remove key",
-                                                    cmd_unlink,
-                                                    0,
-                                                    unlink_opts},
-                                                   {"link",
-                                                    "[-N ns] [-T ns] [-O|-s] target "
-                                                    "linkname",
-                                                    "Create a new name for target",
-                                                    cmd_link,
-                                                    0,
-                                                    link_opts},
-                                                   {"readlink",
-                                                    "[-N ns] [-a treeobj] [ -o | -k ] "
-                                                    "key [key...]",
-                                                    "Retrieve the key a link refers to",
-                                                    cmd_readlink,
-                                                    0,
-                                                    readlink_opts},
-                                                   {"mkdir",
-                                                    "[-N ns] [-O|-s] key [key...]",
-                                                    "Create a directory",
-                                                    cmd_mkdir,
-                                                    0,
-                                                    mkdir_opts},
-                                                   {"copy",
-                                                    "[-S src-ns] [-D dst-ns] source "
-                                                    "destination",
-                                                    "Copy source key to destination "
-                                                    "key",
-                                                    cmd_copy,
-                                                    0,
-                                                    copy_opts},
-                                                   {"move",
-                                                    "[-S src-ns] [-D dst-ns] source "
-                                                    "destination",
-                                                    "Move source key to destination "
-                                                    "key",
-                                                    cmd_move,
-                                                    0,
-                                                    copy_opts},
-                                                   {"dropcache",
-                                                    "[--all]",
-                                                    "Tell KVS to drop its cache",
-                                                    cmd_dropcache,
-                                                    0,
-                                                    dropcache_opts},
-                                                   {"version",
-                                                    "[-N ns]",
-                                                    "Display curent KVS version",
-                                                    cmd_version,
-                                                    0,
-                                                    namespace_opt},
-                                                   {"wait",
-                                                    "[-N ns] version",
-                                                    "Block until the KVS reaches "
-                                                    "version",
-                                                    cmd_wait,
-                                                    0,
-                                                    namespace_opt},
-                                                   {"getroot",
-                                                    "[-N ns] [-s|-o]",
-                                                    "Get KVS root treeobj",
-                                                    cmd_getroot,
-                                                    0,
-                                                    getroot_opts},
-                                                   {
-                                                       "eventlog",
-                                                       NULL,
-                                                       "Manipulate a KVS eventlog",
-                                                       cmd_eventlog,
-                                                       0,
-                                                       NULL,
-                                                   },
-                                                   OPTPARSE_SUBCMD_END};
+static struct optparse_subcommand subcommands[] =
+    {{
+         "namespace",
+         NULL,
+         "Perform KVS namespace "
+         "operations",
+         cmd_namespace,
+         0,
+         NULL,
+     },
+     {"get",
+      "[-N ns] [-j|-r|-t] [-a treeobj] "
+      "[-l] [-W] [-w] [-u] [-A] [-f] "
+      "[-c COUNT] key [key...]",
+      "Get value stored under key",
+      cmd_get,
+      0,
+      get_opts},
+     {"put",
+      "[-N ns] [-O|-s] [-j|-r|-t] [-n] "
+      "[-A] key=value [key=value...]",
+      "Store value under key",
+      cmd_put,
+      0,
+      put_opts},
+     {"dir",
+      "[-N ns] [-R] [-d] [-w COLS] [-a "
+      "treeobj] [key]",
+      "Display all keys under directory",
+      cmd_dir,
+      0,
+      dir_opts},
+     {"ls",
+      "[-N ns] [-R] [-d] [-F] [-w COLS] "
+      "[-1] [key...]",
+      "List directory",
+      cmd_ls,
+      0,
+      ls_opts},
+     {"unlink",
+      "[-N ns] [-O|-s] [-R] [-f] key "
+      "[key...]",
+      "Remove key",
+      cmd_unlink,
+      0,
+      unlink_opts},
+     {"link",
+      "[-N ns] [-T ns] [-O|-s] target "
+      "linkname",
+      "Create a new name for target",
+      cmd_link,
+      0,
+      link_opts},
+     {"readlink",
+      "[-N ns] [-a treeobj] [ -o | -k ] "
+      "key [key...]",
+      "Retrieve the key a link refers to",
+      cmd_readlink,
+      0,
+      readlink_opts},
+     {"mkdir",
+      "[-N ns] [-O|-s] key [key...]",
+      "Create a directory",
+      cmd_mkdir,
+      0,
+      mkdir_opts},
+     {"copy",
+      "[-S src-ns] [-D dst-ns] source "
+      "destination",
+      "Copy source key to destination "
+      "key",
+      cmd_copy,
+      0,
+      copy_opts},
+     {"move",
+      "[-S src-ns] [-D dst-ns] source "
+      "destination",
+      "Move source key to destination "
+      "key",
+      cmd_move,
+      0,
+      copy_opts},
+     {"dropcache",
+      "[--all]",
+      "Tell KVS to drop its cache",
+      cmd_dropcache,
+      0,
+      dropcache_opts},
+     {"version",
+      "[-N ns]",
+      "Display curent KVS version",
+      cmd_version,
+      0,
+      namespace_opt},
+     {"wait",
+      "[-N ns] version",
+      "Block until the KVS reaches "
+      "version",
+      cmd_wait,
+      0,
+      namespace_opt},
+     {"getroot",
+      "[-N ns] [-s|-o]",
+      "Get KVS root treeobj",
+      cmd_getroot,
+      0,
+      getroot_opts},
+     {
+         "eventlog",
+         NULL,
+         "Manipulate a KVS eventlog",
+         cmd_eventlog,
+         0,
+         NULL,
+     },
+     OPTPARSE_SUBCMD_END};
 
 int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
 {
@@ -605,7 +618,8 @@ int main (int argc, char *argv[])
     if ((optindex = optparse_parse_args (p, argc, argv)) < 0)
         exit (1);
 
-    if ((argc - optindex == 0) || !optparse_get_subcommand (p, argv[optindex])) {
+    if ((argc - optindex == 0)
+        || !optparse_get_subcommand (p, argv[optindex])) {
         usage (p, NULL, NULL);
         exit (1);
     }
@@ -669,7 +683,8 @@ int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
     }
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
-        if (!(f = flux_kvs_namespace_remove (h, name)) || flux_future_get (f, NULL) < 0)
+        if (!(f = flux_kvs_namespace_remove (h, name))
+            || flux_future_get (f, NULL) < 0)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
     }
@@ -726,16 +741,17 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static struct optparse_option namespace_create_opts[] = {{
-                                                             .name = "owner",
-                                                             .key = 'o',
-                                                             .has_arg = 1,
-                                                             .usage = "Specify "
-                                                                      "alternate "
-                                                                      "namespace owner "
-                                                                      "via userid",
-                                                         },
-                                                         OPTPARSE_TABLE_END};
+static struct optparse_option namespace_create_opts[] =
+    {{
+         .name = "owner",
+         .key = 'o',
+         .has_arg = 1,
+         .usage = "Specify "
+                  "alternate "
+                  "namespace owner "
+                  "via userid",
+     },
+     OPTPARSE_TABLE_END};
 
 static struct optparse_subcommand namespace_subcommands[] =
     {{"create",
@@ -825,36 +841,38 @@ static void output_key_json_object (const char *key, json_t *o, int maxcol)
     char *s;
 
     switch (json_typeof (o)) {
-        case JSON_NULL:
-            kv_printf (key, maxcol, "nil");
-            break;
-        case JSON_TRUE:
-            kv_printf (key, maxcol, "true");
-            break;
-        case JSON_FALSE:
-            kv_printf (key, maxcol, "false");
-            break;
-        case JSON_REAL:
-            kv_printf (key, maxcol, "%f", json_real_value (o));
-            break;
-        case JSON_INTEGER:
-            kv_printf (key, maxcol, "%lld", (long long)json_integer_value (o));
-            break;
-        case JSON_STRING:
-            kv_printf (key, maxcol, "%s", json_string_value (o));
-            break;
-        case JSON_ARRAY:
-        case JSON_OBJECT:
-        default:
-            if (!(s = json_dumps (o, JSON_SORT_KEYS)))
-                log_msg_exit ("json_dumps failed");
-            kv_printf (key, maxcol, "%s", s);
-            free (s);
-            break;
+    case JSON_NULL:
+        kv_printf (key, maxcol, "nil");
+        break;
+    case JSON_TRUE:
+        kv_printf (key, maxcol, "true");
+        break;
+    case JSON_FALSE:
+        kv_printf (key, maxcol, "false");
+        break;
+    case JSON_REAL:
+        kv_printf (key, maxcol, "%f", json_real_value (o));
+        break;
+    case JSON_INTEGER:
+        kv_printf (key, maxcol, "%lld", (long long)json_integer_value (o));
+        break;
+    case JSON_STRING:
+        kv_printf (key, maxcol, "%s", json_string_value (o));
+        break;
+    case JSON_ARRAY:
+    case JSON_OBJECT:
+    default:
+        if (!(s = json_dumps (o, JSON_SORT_KEYS)))
+            log_msg_exit ("json_dumps failed");
+        kv_printf (key, maxcol, "%s", s);
+        free (s);
+        break;
     }
 }
 
-static void output_key_json_str (const char *key, const char *json_str, const char *arg)
+static void output_key_json_str (const char *key,
+                                 const char *json_str,
+                                 const char *arg)
 {
     json_t *o;
     json_error_t error;
@@ -1420,7 +1438,10 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir,
             const char *ns = NULL;
             const char *target = NULL;
             if (rootref) {
-                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref)))
+                if (!(f = flux_kvs_lookupat (h,
+                                             FLUX_KVS_READLINK,
+                                             key,
+                                             rootref)))
                     log_err_exit ("%s", key);
             } else {
                 if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READLINK, key)))
@@ -1437,7 +1458,10 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir,
             if (Ropt) {
                 const flux_kvsdir_t *ndir;
                 if (rootref) {
-                    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
+                    if (!(f = flux_kvs_lookupat (h,
+                                                 FLUX_KVS_READDIR,
+                                                 key,
+                                                 rootref)))
                         log_err_exit ("%s", key);
                 } else {
                     if (!(f = flux_kvs_lookup (h, ns, FLUX_KVS_READDIR, key)))
@@ -1585,7 +1609,9 @@ static bool need_newline (int col, int col_width, int win_width)
 /* List the content of 'dir', arranging output in columns that fit 'win_width',
  * and using a custom column width selected based on the longest entry name.
  */
-static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width, optparse_t *p)
+static void list_kvs_dir_single (const flux_kvsdir_t *dir,
+                                 int win_width,
+                                 optparse_t *p)
 {
     flux_kvsitr_t *itr;
     const char *name;
@@ -1792,7 +1818,8 @@ static int categorize_key (optparse_t *p,
         if (optparse_hasopt (p, "classify"))
             strcat (nkey, "@");
         /* do not follow symlink under several circumstances */
-        if (optparse_hasopt (p, "classify") || optparse_hasopt (p, "directory")) {
+        if (optparse_hasopt (p, "classify")
+            || optparse_hasopt (p, "directory")) {
             if (zlist_append (singles, nkey) < 0)
                 log_err_exit ("zlist_append");
         } else {
@@ -2113,8 +2140,7 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
     if (!(a = eventlog_decode (s)))
         log_err_exit ("eventlog_decode");
 
-    json_array_foreach (a, index, value)
-    {
+    json_array_foreach (a, index, value) {
         if (optparse_hasopt (ctx->p, "unformatted"))
             eventlog_unformatted_print (value);
         else
@@ -2178,56 +2204,60 @@ static struct optparse_option eventlog_append_opts[] = {{
                                                             .name = "timestamp",
                                                             .key = 't',
                                                             .has_arg = 1,
-                                                            .arginfo = "SECONDS",
-                                                            .usage = "Specify "
-                                                                     "timestamp in "
-                                                                     "seconds since "
-                                                                     "epoch",
+                                                            .arginfo =
+                                                                "SECONDS",
+                                                            .usage =
+                                                                "Specify "
+                                                                "timestamp in "
+                                                                "seconds since "
+                                                                "epoch",
                                                         },
                                                         OPTPARSE_TABLE_END};
 
-static struct optparse_option eventlog_get_opts[] = {{
-                                                         .name = "watch",
-                                                         .key = 'w',
-                                                         .has_arg = 0,
-                                                         .usage = "Monitor eventlog",
-                                                     },
-                                                     {
-                                                         .name = "count",
-                                                         .key = 'c',
-                                                         .has_arg = 1,
-                                                         .arginfo = "COUNT",
-                                                         .usage = "Display at most "
-                                                                  "COUNT events",
-                                                     },
-                                                     {
-                                                         .name = "unformatted",
-                                                         .key = 'u',
-                                                         .has_arg = 0,
-                                                         .usage = "Show event in RFC "
-                                                                  "18 form",
-                                                     },
-                                                     OPTPARSE_TABLE_END};
+static struct optparse_option eventlog_get_opts[] =
+    {{
+         .name = "watch",
+         .key = 'w',
+         .has_arg = 0,
+         .usage = "Monitor eventlog",
+     },
+     {
+         .name = "count",
+         .key = 'c',
+         .has_arg = 1,
+         .arginfo = "COUNT",
+         .usage = "Display at most "
+                  "COUNT events",
+     },
+     {
+         .name = "unformatted",
+         .key = 'u',
+         .has_arg = 0,
+         .usage = "Show event in RFC "
+                  "18 form",
+     },
+     OPTPARSE_TABLE_END};
 
-static struct optparse_subcommand eventlog_subcommands[] = {{
-                                                                "append",
-                                                                "[-t SECONDS] key name "
-                                                                "[context ...]",
-                                                                "Append to eventlog",
-                                                                cmd_eventlog_append,
-                                                                0,
-                                                                eventlog_append_opts,
-                                                            },
-                                                            {
-                                                                "get",
-                                                                "[-u] [-w] [-c COUNT] "
-                                                                "key",
-                                                                "Get eventlog",
-                                                                cmd_eventlog_get,
-                                                                0,
-                                                                eventlog_get_opts,
-                                                            },
-                                                            OPTPARSE_SUBCMD_END};
+static struct optparse_subcommand eventlog_subcommands[] =
+    {{
+         "append",
+         "[-t SECONDS] key name "
+         "[context ...]",
+         "Append to eventlog",
+         cmd_eventlog_append,
+         0,
+         eventlog_append_opts,
+     },
+     {
+         "get",
+         "[-u] [-w] [-c COUNT] "
+         "key",
+         "Get eventlog",
+         cmd_eventlog_get,
+         0,
+         eventlog_get_opts,
+     },
+     OPTPARSE_SUBCMD_END};
 
 int cmd_eventlog (optparse_t *p, int argc, char **argv)
 {
