@@ -10,12 +10,15 @@ AllowShortLoopsOnASingleLine : false
 BinPackParameters : false
 AllowAllParametersOfDeclarationOnNextLine : false
 AlignTrailingComments : true
-ColumnLimit : 88
+ColumnLimit : 80
+SpaceAfterCStyleCast : false
+IndentCaseLabels : false
+IndentPPDirectives: AfterHash
 
 # do not put all arguments on one line unless it's the same line as the call
 PenaltyBreakBeforeFirstCallParameter : 10000000
 PenaltyReturnTypeOnItsOwnLine : 65000
-PenaltyBreakString : 10
+PenaltyBreakString : 1000
 
 # do not make build-breaking changes
 SortIncludes : false
@@ -27,3 +30,4 @@ BinPackArguments : false
 AlignOperands : true
 BreakBeforeTernaryOperators : true
 AllowAllParametersOfDeclarationOnNextLine : false
+ForEachMacros: ['json_object_foreach', 'json_array_foreach']
