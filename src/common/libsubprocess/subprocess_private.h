@@ -97,7 +97,9 @@ struct flux_subprocess {
 
     /* fds[0] is parent/user, fds[1] is child */
     int sync_fds[2];                /* socketpair for fork/exec sync      */
+    bool in_hook;                   /* if presently in a hook */
     flux_watcher_t *child_w;
+    flux_subprocess_hooks_t hooks;
 
     /* remote */
 

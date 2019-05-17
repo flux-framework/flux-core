@@ -361,7 +361,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(p = flux_exec (s->h, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops))) {
+    if (!(p = flux_exec (s->h,
+                         FLUX_SUBPROCESS_FLAGS_SETPGRP,
+                         cmd,
+                         &ops,
+                         NULL))) {
         /* error here, generate FLUX_SUBPROCESS_EXEC_FAILED state */
         if (flux_respond_pack (h, msg, "{s:s s:i s:i s:i}",
                                "type", "state",
