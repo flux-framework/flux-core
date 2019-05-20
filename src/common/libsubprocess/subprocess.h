@@ -40,15 +40,13 @@ typedef struct flux_subprocess_server flux_subprocess_server_t;
  *
  * Possible state changes:
  *
- * init -> started
- * started -> exec failed
- * started -> running
+ * init -> running
+ * init -> exec failed
  * running -> exited
  * any state -> failed
  */
 typedef enum {
     FLUX_SUBPROCESS_INIT,         /* initial state */
-    FLUX_SUBPROCESS_STARTED,      /* fork() has been issued/requested */
     FLUX_SUBPROCESS_EXEC_FAILED,  /* exec(2) has failed, only for rexec() */
     FLUX_SUBPROCESS_RUNNING,      /* exec(2) has been called */
     FLUX_SUBPROCESS_EXITED,       /* process has exited */

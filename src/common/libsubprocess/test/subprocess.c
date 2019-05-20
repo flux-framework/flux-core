@@ -1157,9 +1157,6 @@ void test_kill_eofs (flux_reactor_t *r)
 void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
     if (state_change_cb_count == 0)
-        ok (state == FLUX_SUBPROCESS_STARTED,
-            "subprocess state == STARTED in state change handler");
-    else if (state_change_cb_count == 1)
         ok (state == FLUX_SUBPROCESS_RUNNING,
             "subprocess state == RUNNING in state change handler");
     else
@@ -1191,7 +1188,7 @@ void test_state_change (flux_reactor_t *r)
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
-    ok (state_change_cb_count == 3, "state change callback called 3 times");
+    ok (state_change_cb_count == 2, "state change callback called 3 times");
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
@@ -1199,8 +1196,6 @@ void test_state_change (flux_reactor_t *r)
 void test_state_strings (void)
 {
     ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_INIT), "Init"),
-        "flux_subprocess_state_string returns correct string");
-    ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_STARTED), "Started"),
         "flux_subprocess_state_string returns correct string");
     ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_RUNNING), "Running"),
         "flux_subprocess_state_string returns correct string");

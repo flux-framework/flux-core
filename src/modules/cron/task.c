@@ -196,13 +196,7 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
 
     cron_task_state_update (t, flux_subprocess_state_string (state));
 
-    if (state == FLUX_SUBPROCESS_STARTED) {
-        t->started = 1;
-        clock_gettime (CLOCK_REALTIME, &t->starttime);
-        if (t->timeout >= 0.0)
-            cron_task_timeout_start (t);
-    }
-    else if (state == FLUX_SUBPROCESS_RUNNING) {
+    if (state == FLUX_SUBPROCESS_RUNNING) {
         clock_gettime (CLOCK_REALTIME, &t->runningtime);
         t->running = 1;
         t->pid = flux_subprocess_pid (p);
@@ -358,6 +352,12 @@ int cron_task_run (cron_task_t *t,
         flux_log_error (h, "flux_subprocess_aux_set");
         goto done;
     }
+
+    t->started = 1;
+    clock_gettime (CLOCK_REALTIME, &t->starttime);
+    cron_task_state_update (t, "Started");
+    if (t->timeout >= 0.0)
+        cron_task_timeout_start (t);
 
     t->p = p;
     rc = 0;

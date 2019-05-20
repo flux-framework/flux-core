@@ -158,21 +158,13 @@ static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t
 
     assert (s && msg);
 
-    if (state == FLUX_SUBPROCESS_STARTED) {
+    if (state == FLUX_SUBPROCESS_RUNNING) {
         if (store_pid (s, p) < 0)
             goto error;
         if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
                                "type", "state",
                                "rank", s->rank,
                                "pid", flux_subprocess_pid (p),
-                               "state", state) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
-            goto error;
-        }
-    } else if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
                                "state", state) < 0) {
             flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;

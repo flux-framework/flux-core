@@ -91,11 +91,9 @@ static void process_new_state (flux_subprocess_t *p,
 
     p->state = state;
 
-    if (p->state == FLUX_SUBPROCESS_STARTED) {
+    if (p->state == FLUX_SUBPROCESS_RUNNING) {
         p->pid = pid;
         p->pid_set = true;
-    }
-    else if (p->state == FLUX_SUBPROCESS_RUNNING) {
         start_channel_watchers (p);
     }
     else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
@@ -499,7 +497,7 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f,
         return -1;
     }
 
-    if (state == FLUX_SUBPROCESS_STARTED) {
+    if (state == FLUX_SUBPROCESS_RUNNING) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
             flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
             return -1;
