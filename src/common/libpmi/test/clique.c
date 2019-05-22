@@ -59,21 +59,6 @@ static struct spec invalid[] = {
     { NULL, 0},
 };
 
-static char *cliquetostr (int rank, int len, int *clique)
-{
-    int i, slen = (len + 1)*16;
-    char *s;
-
-    if (len == 0)
-        return NULL;
-
-    s = xzmalloc (slen);
-    sprintf (s, "%d: ", rank);
-    for (i = 0; i < len; i++)
-        sprintf (s + strlen (s), "%s%d", i > 0 ? "," : "", clique[i]);
-    return s;
-}
-
 static char *cliqueN (struct pmi_map_block *blocks, int nblocks, int size,
                       int rank)
 {
@@ -81,6 +66,7 @@ static char *cliqueN (struct pmi_map_block *blocks, int nblocks, int size,
     int nranks;
     int *ranks = NULL;
     char *s;
+    char buf[512];
 
     rc = pmi_process_mapping_find_nranks (blocks, nblocks, rank, size, &nranks);
     if (rc != PMI_SUCCESS)
@@ -92,7 +78,8 @@ static char *cliqueN (struct pmi_map_block *blocks, int nblocks, int size,
         free (ranks);
         return NULL;
     }
-    s = cliquetostr (rank, nranks, ranks);
+    s = xasprintf ("%d: %s", rank,
+                   pmi_cliquetostr (buf, sizeof (buf), ranks, nranks));
     free (ranks);
     return s;
 }

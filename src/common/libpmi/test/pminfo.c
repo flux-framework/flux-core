@@ -30,8 +30,6 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
-static char *cliquetostr (int len, int *clique);
-
 int main(int argc, char *argv[])
 {
     int rank, size, appnum;
@@ -94,6 +92,7 @@ int main(int argc, char *argv[])
         int clen;
         int *clique;
         char *s;
+        char buf[256];
 
         e = PMI_Get_clique_size (&clen);
         if (e == PMI_SUCCESS) {
@@ -114,10 +113,9 @@ int main(int argc, char *argv[])
                 log_msg_exit ("%d: PMI_process_mapping: %s",
                               rank, pmi_strerror (e));
         }
-        s = cliquetostr (clen, clique);
+        s = pmi_cliquetostr (buf, sizeof (buf), clique, clen);
         printf ("%d: clique=%s\n", rank, s);
         free (clique);
-        free (s);
     }
     /* Generic info
      */
@@ -138,18 +136,6 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-static char *cliquetostr (int len, int *clique)
-{
-    int i, slen = len*16;
-    char *s = xzmalloc (slen);
-
-    for (i = 0; i < len; i++)
-        sprintf (s + strlen (s), "%s%d", i > 0 ? "," : "", clique[i]);
-    return s;
-}
-
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

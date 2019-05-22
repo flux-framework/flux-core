@@ -274,6 +274,24 @@ done:
     return rc;
 }
 
+char *pmi_cliquetostr (char *buf, int bufsz, int *ranks, int length)
+{
+    int n, i, count;
+
+    buf[0] = '\0';
+    for (i = 0, count  = 0; i < length; i++) {
+        n = snprintf (buf + count,
+                      bufsz - count,
+                      "%s%d",
+                      i > 0 ? "," : "",
+                      ranks[i]);
+        if (n >= bufsz - count)
+            return "overflow";
+        count += n;
+    }
+    return buf;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

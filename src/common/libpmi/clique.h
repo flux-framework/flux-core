@@ -68,6 +68,11 @@ int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks, int nblocks,
 int pmi_process_mapping_get_clique_size (int *size);
 int pmi_process_mapping_get_clique_ranks (int ranks[], int length);
 
+/* Convert rank array to csv string.  If clique is empty, return empty string.
+ * If string overflows, return "overflow".
+ */
+char *pmi_cliquetostr (char *buf, int bufsz, int *ranks, int length);
+
 #endif /* _FLUX_CORE_PMI_CLIQUE_H */
 
 /*
