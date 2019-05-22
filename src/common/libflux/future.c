@@ -721,6 +721,24 @@ void flux_future_fatal_error (flux_future_t *f, int errnum, const char *errstr)
     }
 }
 
+bool flux_future_has_error (flux_future_t *f)
+{
+    if (f) {
+        /* fatal errnum take precedence over any future
+         * fulfillments */
+        if (f->fatal_errnum_valid)
+            return true;
+        else if (f->result_valid) {
+            /* future contains a valid fulfillment, must check if it
+             * is a error fulfillment.
+             */
+            if (f->result.is_error)
+                return true;
+        }
+    }
+    return false;
+}
+
 const char *flux_future_error_string (flux_future_t *f)
 {
     if (f) {
@@ -731,18 +749,16 @@ const char *flux_future_error_string (flux_future_t *f)
                 return f->fatal_errnum_string;
             return flux_strerror (f->fatal_errnum);
         }
-        else if (f->result_valid) {
-            /* future contains a valid fulfillment.  The fulfillment
-             * may be a valid error (with or without optional string) or
-             * non-error (errnum == 0 passed to flux_strerror())
+        else if (f->result_valid && f->result.is_error) {
+            /* future contains a valid error fulfillment.  Return the
+             * optional error string or flux_strerror() of the errnum.
              */
             if (f->result.errnum_string)
                 return f->result.errnum_string;
             return flux_strerror (f->result.errnum);
         }
-        return "future not fulfilled";
     }
-    return "future NULL";
+    return NULL;
 }
 
 /* timer - for flux_future_then() timeout

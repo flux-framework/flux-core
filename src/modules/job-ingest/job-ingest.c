@@ -271,7 +271,7 @@ static void batch_announce_continuation (flux_future_t *f, void *arg)
     flux_t *h = batch->ctx->h;
 
     if (flux_future_get (f, NULL) < 0) {
-        batch_respond_error (batch, errno, flux_future_error_string (f));
+        batch_respond_error (batch, errno, future_strerror (f, errno));
         if (batch_cleanup (batch) < 0)
             flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
     }
@@ -443,7 +443,7 @@ void validate_continuation (flux_future_t *f, void *arg)
     /* If jobspec validation failed, respond immediately to the user.
      */
     if (flux_future_get (f, NULL) < 0) {
-        errmsg = flux_future_error_string (f);
+        errmsg = future_strerror (f, errno);
         goto error;
     }
     if (fluid_generate (&ctx->gen, &job->id) < 0)

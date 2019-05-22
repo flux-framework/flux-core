@@ -819,29 +819,69 @@ void test_fatal_error_async (void)
     flux_reactor_destroy (r);
 }
 
+void test_has_error (void)
+{
+    flux_future_t *f;
+
+    ok (flux_future_has_error (NULL) == false,
+        "flux_future_has_error returns false on NULL input");
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    ok (flux_future_has_error (f) == false,
+        "flux_future_has_error returns false on unfulfilled future");
+
+    flux_future_fulfill (f, "Hello", NULL);
+
+    ok (flux_future_has_error (f) == false,
+        "flux_future_has_error returns false on future fulfilled "
+        "with non-error result");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fulfill_error (f, ENOENT, NULL);
+
+    ok (flux_future_has_error (f) == true,
+        "flux_future_has_error returns true on future fulfilled "
+        "with error result");
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+
+    flux_future_fatal_error (f, ENOENT, NULL);
+
+    ok (flux_future_has_error (f) == true,
+        "flux_future_has_error returns true on future fulfilled "
+        "with fatal error");
+
+    flux_future_destroy (f);
+}
+
 void test_error_string (void)
 {
     flux_future_t *f;
     const char *str;
 
-    ok ((str = flux_future_error_string (NULL)) != NULL
-        && !strcmp (str, "future NULL"),
-        "flux_future_error_string returns \"future NULL\" on NULL input");
+    ok (flux_future_error_string (NULL) == NULL,
+        "flux_future_error_string returns NULL on NULL input");
 
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
 
-    ok ((str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "future not fulfilled"),
-        "flux_future_error_string returns \"future not fulfilled\" on "
-        "unfulfilled future");
+    ok (flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL on unfulfilled future");
 
     flux_future_fulfill (f, "Hello", NULL);
 
     ok (flux_future_get (f, NULL) == 0
-        && (str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "Success"),
-        "flux_future_error_string returns \"Success\" when future fulfilled "
+        && flux_future_error_string (f) == NULL,
+        "flux_future_error_string returns NULL when future fulfilled "
         "with non-error result");
 
     flux_future_destroy (f);
@@ -1195,6 +1235,7 @@ int main (int argc, char *argv[])
     test_fatal_error ();
     test_fatal_error_async ();
 
+    test_has_error ();
     test_error_string ();
 
     test_multiple_fulfill ();
