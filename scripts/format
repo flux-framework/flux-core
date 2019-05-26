@@ -5,12 +5,24 @@ declare -i EXITCODE=0
 GITROOT=$(git rev-parse --show-toplevel)
 cd $GITROOT
 
+function format {
+    spatch --sp-file scripts/pre-clang-format.cocci $1 \
+        | patch -o - $1 \
+        | clang-format -style=file \
+        | sed '/\/\/ REMOVE ME - INSERTED BY COCCI/,+1d' \
+        | sponge $1
+}
+
+export -f format
 if command -v clang-format 2>&1 > /dev/null ; then
-    find src t -name "*.c" -o -name "*.h" | grep -v -Ef .vendored-files | xargs clang-format -style=file -i
+    find src t -name "*.c" -o -name "*.h" | grep -v -Ef .vendored-files \
+               | xargs -n1 bash -c 'format'
 else
     echo "clang-format not found, C left unformatted"
     EXITCODE=1
 fi
+
+exit
 
 if command -v black 2>&1 > /dev/null ; then
     # awk cmd copied from:
