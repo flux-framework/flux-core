@@ -24,16 +24,19 @@ static int parse_block (const char *s, struct pmi_map_block *block)
 {
     char *endptr;
 
+    errno = 0;
     block->nodeid = strtoul (s, &endptr, 10);
-    if (*endptr != ',')
+    if (errno != 0 || *endptr != ',')
         return PMI_FAIL;
     s = endptr + 1;
+    errno = 0;
     block->nodes = strtoul (s, &endptr, 10);
-    if (*endptr != ',')
+    if (errno != 0 || *endptr != ',')
         return PMI_FAIL;
     s = endptr + 1;
+    errno = 0;
     block->procs = strtoul (s, &endptr, 10);
-    if (*endptr != ')')
+    if (errno != 0 || *endptr != ')')
         return PMI_FAIL;
     return PMI_SUCCESS;
 }

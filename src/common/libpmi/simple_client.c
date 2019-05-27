@@ -285,19 +285,28 @@ struct pmi_simple_client *pmi_simple_client_create_fd (const char *pmi_fd,
     }
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
+    errno = 0;
     pmi->fd = strtol (pmi_fd, NULL, 10);
     pmi->rank = strtol (pmi_rank, NULL, 10);
     pmi->size = strtol (pmi_size, NULL, 10);
-    if (pmi->fd < 0 || pmi->rank < 0 || pmi->size < 1) {
-        pmi_simple_client_destroy (pmi);
-        errno = EINVAL;
-        return NULL;
-    }
-    if (pmi_spawned)
+    if (errno != 0 || pmi->fd < 0 || pmi->rank < 0 || pmi->size < 1)
+        goto error;
+    if (pmi_spawned) {
+        errno = 0;
         pmi->spawned = strtol (pmi_spawned, NULL, 10);
-    if (pmi_debug)
+        if (errno != 0)
+            goto error;
+    }
+    if (pmi_debug) {
+        errno = 0;
         pmi->debug = strtol (pmi_debug, NULL, 10);
+        if (errno != 0)
+            goto error;
+    }
     return pmi;
+error:
+    pmi_simple_client_destroy (pmi);
+    return NULL;
 }
 
 /*
