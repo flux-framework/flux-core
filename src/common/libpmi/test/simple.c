@@ -19,6 +19,7 @@
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/simple_client.h"
 #include "src/common/libpmi/dgetline.h"
+#include "src/common/libpmi/pmi.h"
 #include "src/common/libflux/reactor.h"
 
 #include "src/common/libtap/tap.h"
@@ -135,16 +136,14 @@ int main (int argc, char *argv[])
         .barrier_enter = s_barrier_enter,
         .response_send = s_send_response,
     };
-    void *cli;
-    struct pmi_operations *ops;
-    int spawned = -1, initialized = -1;
-    int rank = -1, size = -1;
+    struct pmi_simple_client *cli;
     int universe_size = -1;
-    int name_len = -1, key_len = -1, val_len = -1;
     char *name = NULL, *val = NULL, *val2 = NULL, *val3 = NULL;
     char *key = NULL;
     int rc;
-    char port[1024];
+    char pmi_fd[16];
+    char pmi_rank[16];
+    char pmi_size[16];
 
     plan (NO_PLAN);
 
@@ -160,134 +159,114 @@ int main (int argc, char *argv[])
     ok (pthread_create (&ctx.t, NULL, server_thread, &ctx) == 0,
         "pthread_create successfully started server");
 
-    setenvf ("PMI_FD", 1, "%d", ctx.fds[0]);
-    setenvf ("PMI_RANK", 1, "%d", 0);
-    setenvf ("PMI_SIZE", 1, "%d", ctx.size);
+    /* create/init
+     */
+    snprintf (pmi_fd, sizeof (pmi_fd), "%d", ctx.fds[0]);
+    snprintf (pmi_rank, sizeof (pmi_rank), "%d", 0);
+    snprintf (pmi_size, sizeof (pmi_size), "%d", 1);
 
-    ok ((cli = pmi_simple_client_create (&ops)) != NULL,
+    ok ((cli = pmi_simple_client_create_fd (pmi_fd, pmi_rank, pmi_size,
+                                            NULL, NULL)) != NULL,
         "pmi_simple_client_create OK");
-    ok (ops->initialized (cli, &initialized) == PMI_SUCCESS
-        && initialized == 0,
-        "pmi_simple_client_initialized OK, initialized=0");
-    ok (ops->init (cli, &spawned) == PMI_SUCCESS && spawned == 0,
-        "pmi_simple_client_init OK, spawned=0");
-    ok (ops->initialized (cli, &initialized) == PMI_SUCCESS
-        && initialized == 1,
-        "pmi_simple_client_initialized OK, initialized=1");
+    ok (cli->initialized == false,
+        "cli->initialized == false");
+    ok (pmi_simple_client_init (cli) == PMI_SUCCESS,
+        "pmi_simple_client_init OK");
+    ok (cli->spawned == false,
+        "cli->spawned == failse");
 
     /* retrieve basic params
      */
-    ok (ops->get_size (cli, &size) == PMI_SUCCESS && size == 1,
-        "pmi_simple_client_get_size OK, size=%d", size);
-    ok (ops->get_rank (cli, &rank) == PMI_SUCCESS && rank == 0,
-        "pmi_simple_client_get_rank OK, rank=%d", rank);
-    ok (ops->get_universe_size (cli, &universe_size) == PMI_SUCCESS
-        && universe_size == size,
+    ok (cli->size == 1,
+        "cli->size == 1");
+    ok (cli->rank == 0,
+        "cli->rank == 0");
+    ok (pmi_simple_client_get_universe_size (cli, &universe_size) == PMI_SUCCESS
+        && universe_size == cli->size,
         "pmi_simple_client_get_universe_size OK, universe_size=%d", universe_size);
-    ok (ops->kvs_get_name_length_max (cli, &name_len) == PMI_SUCCESS
-        && name_len > 0,
-        "pmi_simple_client_kvs_get_name_length_max OK, name_len=%d", name_len);
-    ok (ops->kvs_get_key_length_max (cli, &key_len) == PMI_SUCCESS
-        && key_len > 0,
-        "pmi_simple_client_kvs_get_key_length_max OK, key_len=%d", key_len);
-    ok (ops->kvs_get_value_length_max (cli, &val_len) == PMI_SUCCESS
-        && val_len > 0,
-        "pmi_simple_client_kvs_get_value_length_max OK, val_len=%d", val_len);
-    name = xzmalloc (name_len);
-    ok (ops->kvs_get_my_name (cli, name, name_len) == PMI_SUCCESS
+    ok (cli->kvsname_max > 0,
+        "cli->kvsname_max > 0");
+    ok (cli->keylen_max > 0,
+        "cli->keylen_max > 0");
+    ok (cli->vallen_max > 0,
+        "cli->vallen_max > 0");
+    name = xzmalloc (cli->kvsname_max);
+    ok (pmi_simple_client_kvs_get_my_name (cli, name,
+                                           cli->kvsname_max) == PMI_SUCCESS
         && strlen (name) > 0,
-        "pmi_simple_client_kvs_get_my_name OK, name=%s", name);
+        "pmi_simple_client_kvs_get_my_name OK");
+    diag ("kvsname=%s", name);
 
     /* put foo=bar / commit / barier / get foo
      */
-    ok (ops->kvs_put (cli, name, "foo", "bar") == PMI_SUCCESS,
+    ok (pmi_simple_client_kvs_put (cli, name, "foo", "bar") == PMI_SUCCESS,
         "pmi_simple_client_kvs_put foo=bar OK");
-    ok (ops->kvs_commit (cli, name) == PMI_SUCCESS,
-        "pmi_simple_client_kvs_commit OK");
-    ok (ops->barrier (cli) == PMI_SUCCESS,
+    ok (pmi_simple_client_barrier (cli) == PMI_SUCCESS,
         "pmi_simple_client_barrier OK");
-    val = xzmalloc (val_len);
-    ok (ops->kvs_get (cli, name, "foo", val, val_len) == PMI_SUCCESS
+    val = xzmalloc (cli->vallen_max);
+    ok (pmi_simple_client_kvs_get (cli, name, "foo",
+                                   val, cli->vallen_max) == PMI_SUCCESS
         && !strcmp (val, "bar"),
         "pmi_simple_client_kvs_get foo OK, val=%s", val);
 
     /* put long=... / get long
      */
-    val2 = xzmalloc (val_len);
-    memset (val2, 'x', val_len - 1);
-    ok (ops->kvs_put (cli, name, "long", val2) == PMI_SUCCESS,
+    val2 = xzmalloc (cli->vallen_max);
+    memset (val2, 'x', cli->vallen_max - 1);
+    ok (pmi_simple_client_kvs_put (cli, name, "long", val2) == PMI_SUCCESS,
         "pmi_simple_client_kvs_put long=xxx... OK");
-    memset (val, 'y', val_len); /* not null terminated */
-    ok (ops->kvs_get (cli, name, "long", val, val_len) == PMI_SUCCESS
-        && strnlen (val2, val_len) < val_len
+    memset (val, 'y', cli->vallen_max); /* not null terminated */
+    ok (pmi_simple_client_kvs_get (cli, name, "long",
+                                   val, cli->vallen_max) == PMI_SUCCESS
+        && strnlen (val2, cli->vallen_max) < cli->vallen_max
         && strcmp (val, val2) == 0,
         "pmi_simple_client_kvs_get long OK, val=xxx...");
 
     /* put: value too long
      */
-    val3 = xzmalloc (val_len + 1);
-    memset (val3, 'y', val_len);
-    rc = ops->kvs_put (cli, name, "toolong", val3);
+    val3 = xzmalloc (cli->vallen_max + 1);
+    memset (val3, 'y', cli->vallen_max);
+    rc = pmi_simple_client_kvs_put (cli, name, "toolong", val3);
     ok (rc == PMI_ERR_INVALID_VAL_LENGTH,
         "pmi_simple_client_kvs_put val too long fails");
 
     /* put: key too long
      */
-    key = xzmalloc (key_len + 1);
-    memset (key, 'z', key_len);
-    rc = ops->kvs_put (cli, name, key, "abc");
+    key = xzmalloc (cli->keylen_max + 1);
+    memset (key, 'z', cli->keylen_max);
+    rc = pmi_simple_client_kvs_put (cli, name, key, "abc");
     ok (rc == PMI_ERR_INVALID_KEY_LENGTH,
         "pmi_simple_client_kvs_put key too long fails");
 
     /* get: key too long
      */
-    rc = ops->kvs_get (cli, name, key, val, val_len);
+    rc = pmi_simple_client_kvs_get (cli, name, key, val, cli->vallen_max);
     ok (rc == PMI_ERR_INVALID_KEY_LENGTH,
         "pmi_simple_client_kvs_get key too long fails");
 
     /* get: no exist
      */
-    rc = ops->kvs_get (cli, name, "noexist", val, val_len);
+    rc = pmi_simple_client_kvs_get (cli, name, "noexist", val, cli->vallen_max);
     ok (rc == PMI_ERR_INVALID_KEY,
         "pmi_simple_client_kvs_get unknown key fails");
 
     /* barrier: entry failure
      */
     rig_barrier_entry_failure = 1;
-    ok (ops->barrier (cli) == PMI_FAIL,
+    ok (pmi_simple_client_barrier (cli) == PMI_FAIL,
         "pmi_simple_client_barrier with entry function failure fails");
     rig_barrier_entry_failure = 0;
     rig_barrier_exit_failure = 1;
-    ok (ops->barrier (cli) == PMI_FAIL,
+    ok (pmi_simple_client_barrier (cli) == PMI_FAIL,
         "pmi_simple_client_barrier with exit function failure fails");
     rig_barrier_exit_failure = 0;
-    ok (ops->barrier (cli) == PMI_SUCCESS,
+    ok (pmi_simple_client_barrier (cli) == PMI_SUCCESS,
         "pmi_simple_client_barrier OK (rigged errors cleared)");
-
-    /* unimplemented stuff
-     */
-    rc = ops->publish_name (cli, "foo", "42");
-    ok (rc == PMI_FAIL,
-        "pmi_simple_publish_name fails with PMI_FAIL");
-    rc = ops->unpublish_name (cli, "foo");
-    ok (rc == PMI_FAIL,
-        "pmi_simple_unpublish_name fails with PMI_FAIL");
-    rc = ops->lookup_name (cli, "foo", port);
-    ok (rc == PMI_FAIL,
-        "pmi_simple_lookup_name fails with PMI_FAIL");
-
-    rc = ops->spawn_multiple (cli, 0, NULL, NULL, NULL, NULL, NULL,
-                              0, NULL, NULL);
-    ok (rc == PMI_FAIL,
-        "pmi_simple_spawn_multiple fails with PMI_FAIL");
-
-    dies_ok ({ops->abort (cli, 0, "a test message");},
-        "pmi_simple_abort exits program");
 
     /* finalize
      */
 
-    ok (ops->finalize (cli) == PMI_SUCCESS,
+    ok (pmi_simple_client_finalize (cli) == PMI_SUCCESS,
         "pmi_simple_client_finalize OK");
 
     ok (pthread_join (ctx.t, NULL) == 0,
@@ -298,7 +277,7 @@ int main (int argc, char *argv[])
     free (val2);
     free (val3);
     free (key);
-    ops->destroy (cli);
+    pmi_simple_client_destroy (cli);
     if (ctx.pmi)
         pmi_simple_server_destroy (ctx.pmi);
     close (ctx.fds[0]);

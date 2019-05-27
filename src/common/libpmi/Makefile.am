@@ -19,10 +19,6 @@ libpmi_la_SOURCES = \
 	simple_client.c \
 	simple_client.h \
 	pmi.c \
-	wrap.c \
-	wrap.h \
-	single.c \
-	single.h \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
@@ -30,16 +26,13 @@ libpmi_la_SOURCES = \
 	dgetline.c \
 	dgetline.h \
 	clique.c \
-	clique.h \
-	pmi_operations.h
+	clique.h
 
 fluxinclude_HEADERS = \
 	pmi.h
 
 TESTS = test_keyval.t \
 	test_simple.t \
-	test_single.t \
-	test_wrap.t \
 	test_clique.t
 
 test_ldadd = \
@@ -72,15 +65,6 @@ test_keyval_t_LDADD = $(test_ldadd)
 test_simple_t_SOURCES = test/simple.c
 test_simple_t_CPPFLAGS = $(test_cppflags)
 test_simple_t_LDADD = $(test_ldadd)
-
-test_single_t_SOURCES = test/single.c
-test_single_t_CPPFLAGS = $(test_cppflags)
-test_single_t_LDADD = $(test_ldadd)
-
-test_wrap_t_SOURCES = test/wrap.c
-test_wrap_t_CPPFLAGS = $(test_cppflags) \
-    -DINTREE_PMI_LIBRARY_PATH=\"$(abs_top_builddir)/src/common/.libs/libpmi.so\"
-test_wrap_t_LDADD = $(test_ldadd)
 
 test_clique_t_SOURCES = test/clique.c
 test_clique_t_CPPFLAGS = $(test_cppflags)
