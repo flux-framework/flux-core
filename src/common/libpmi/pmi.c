@@ -93,9 +93,13 @@ int PMI_Init (int *spawned)
 
 int PMI_Initialized (int *initialized)
 {
+    int result = PMI_SUCCESS;
+
     if (initialized)
         *initialized = pmi_global_ctx ? pmi_global_ctx->initialized : 0;
-    DRETURN (PMI_SUCCESS);
+    else
+        result = PMI_ERR_INVALID_ARG;
+    DRETURN (result);
 }
 
 int PMI_Finalize (void)
@@ -125,8 +129,12 @@ int PMI_Get_size (int *size)
     int result = PMI_ERR_INIT;
 
     if (pmi_global_ctx) {
-        *size = pmi_global_ctx->size;
-        result = PMI_SUCCESS;
+        if (!size)
+            result = PMI_ERR_INVALID_ARG;
+        else {
+            *size = pmi_global_ctx->size;
+            result = PMI_SUCCESS;
+        }
     }
     DRETURN (result);
 }
@@ -136,8 +144,12 @@ int PMI_Get_rank (int *rank)
     int result = PMI_ERR_INIT;
 
     if (pmi_global_ctx) {
-        *rank = pmi_global_ctx->rank;
-        result = PMI_SUCCESS;
+        if (!rank)
+            result = PMI_ERR_INVALID_ARG;
+        else {
+            *rank = pmi_global_ctx->rank;
+            result = PMI_SUCCESS;
+        }
     }
     DRETURN (result);
 }
@@ -161,17 +173,19 @@ int PMI_Get_appnum (int *appnum)
 int PMI_KVS_Get_my_name (char kvsname[], int length)
 {
     int result;
-    int rank = pmi_global_ctx ? pmi_global_ctx->rank : -1;
 
     result = pmi_simple_client_kvs_get_my_name (pmi_global_ctx,
                                                 kvsname,
                                                 length);
-    if (result == PMI_SUCCESS) {
-        DPRINTF ("%d: %s (\"%s\") rc=%d\n", rank, __func__, kvsname, result);
-    } else {
-        DPRINTF ("%d: %s rc=%d %s\n", rank, __func__, result,
-                 pmi_strerror (result));
-    }
+
+    DPRINTF ("%d: %s (\"%s\", %d) rc=%d %s\n",
+             pmi_global_ctx ? pmi_global_ctx->rank : -1,
+             __func__,
+             result == PMI_SUCCESS ? kvsname : "",
+             length,
+             result,
+             result == PMI_SUCCESS ? "" : pmi_strerror (result));
+
     return result;
 }
 
@@ -180,8 +194,12 @@ int PMI_KVS_Get_name_length_max (int *length)
     int result = PMI_ERR_INIT;
 
     if (pmi_global_ctx && pmi_global_ctx->initialized) {
-        *length = pmi_global_ctx->kvsname_max;
-        result = PMI_SUCCESS;
+        if (!length)
+            result = PMI_ERR_INVALID_ARG;
+        else {
+            *length = pmi_global_ctx->kvsname_max;
+            result = PMI_SUCCESS;
+        }
     }
     DRETURN (result);
 }
@@ -191,8 +209,12 @@ int PMI_KVS_Get_key_length_max (int *length)
     int result = PMI_ERR_INIT;
 
     if (pmi_global_ctx && pmi_global_ctx->initialized) {
-        *length = pmi_global_ctx->keylen_max;
-        result = PMI_SUCCESS;
+        if (!length)
+            result = PMI_ERR_INVALID_ARG;
+        else {
+            *length = pmi_global_ctx->keylen_max;
+            result = PMI_SUCCESS;
+        }
     }
     DRETURN (result);
 }
@@ -202,8 +224,12 @@ int PMI_KVS_Get_value_length_max (int *length)
     int result = PMI_ERR_INIT;
 
     if (pmi_global_ctx && pmi_global_ctx->initialized) {
-        *length = pmi_global_ctx->vallen_max;
-        result = PMI_SUCCESS;
+        if (!length)
+            result = PMI_ERR_INVALID_ARG;
+        else {
+            *length = pmi_global_ctx->vallen_max;
+            result = PMI_SUCCESS;
+        }
     }
     DRETURN (result);
 }
@@ -211,12 +237,18 @@ int PMI_KVS_Get_value_length_max (int *length)
 int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
 {
     int result;
-    int rank = pmi_global_ctx ? pmi_global_ctx->rank : -1;
 
     result = pmi_simple_client_kvs_put (pmi_global_ctx, kvsname, key, value);
-    DPRINTF ("%d: PMI_KVS_Put (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
-             rank, kvsname, key, value, result,
+
+    DPRINTF ("%d: %s (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
+             pmi_global_ctx ? pmi_global_ctx->rank : -1,
+             __func__,
+             kvsname ? kvsname : "NULL",
+             key ? key : "NULL",
+             value ? value : "NULL",
+             result,
              result == PMI_SUCCESS ? "" : pmi_strerror (result));
+
     return result;
 }
 
@@ -224,17 +256,19 @@ int PMI_KVS_Get (const char kvsname[], const char key[],
                  char value[], int length)
 {
     int result;
-    int rank = pmi_global_ctx ? pmi_global_ctx->rank : -1;
 
     result = pmi_simple_client_kvs_get (pmi_global_ctx, kvsname, key,
                                         value, length);
-    if (result == PMI_SUCCESS) {
-        DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\", \"%s\") rc=%d\n",
-                 rank, kvsname, key, value, result);
-    } else {
-        DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\") rc=%d %s\n",
-                 rank, kvsname, key, result, pmi_strerror (result));
-    }
+
+    DPRINTF ("%d: %s (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
+             pmi_global_ctx ? pmi_global_ctx->rank : -1,
+             __func__,
+             kvsname ? kvsname : "NULL",
+             key ? key : "NULL",
+             result == PMI_SUCCESS ? value : "",
+             result,
+             result == PMI_SUCCESS ? "" : pmi_strerror (result));
+
     return result;
 }
 
@@ -242,8 +276,12 @@ int PMI_KVS_Commit (const char kvsname[])
 {
     int result = PMI_ERR_INIT;
 
-    if (pmi_global_ctx && pmi_global_ctx->initialized)
-        result = PMI_SUCCESS; // no-op
+    if (pmi_global_ctx && pmi_global_ctx->initialized) {
+        if (!kvsname)
+            result = PMI_ERR_INVALID_ARG;
+        else
+            result = PMI_SUCCESS; // no-op in this implementation
+    }
     DRETURN (result);
 }
 

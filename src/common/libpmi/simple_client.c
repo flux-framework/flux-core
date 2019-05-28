@@ -105,6 +105,8 @@ int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum)
 
     if (!pmi || !pmi->initialized)
         return PMI_ERR_INIT;
+    if (!appnum)
+        return PMI_ERR_INVALID_ARG;
     if (dprintf (pmi->fd, "cmd=get_appnum\n") < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
@@ -130,6 +132,8 @@ int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
 
     if (!pmi || !pmi->initialized)
         return PMI_ERR_INIT;
+    if (!universe_size)
+        return PMI_ERR_INVALID_ARG;
     if (dprintf (pmi->fd, "cmd=get_universe_size\n") < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
@@ -178,6 +182,8 @@ int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
 
     if (!pmi || !pmi->initialized)
         return PMI_ERR_INIT;
+    if (!kvsname || length <= 0)
+        return PMI_ERR_INVALID_ARG;
     if (dprintf (pmi->fd, "cmd=get_my_kvsname\n") < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
@@ -205,6 +211,8 @@ int pmi_simple_client_kvs_put (struct pmi_simple_client *pmi,
 
     if (!pmi || !pmi->initialized)
         return PMI_ERR_INIT;
+    if (!kvsname || !key || !value)
+        return PMI_ERR_INVALID_ARG;
     if (dprintf (pmi->fd, "cmd=put kvsname=%s key=%s value=%s\n",
                  kvsname, key, value) < 0)
         goto done;
@@ -232,6 +240,8 @@ int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
 
     if (!pmi || !pmi->initialized)
         return PMI_ERR_INIT;
+    if (!kvsname || !key || !value || len <= 0)
+        return PMI_ERR_INVALID_ARG;
     if (dprintf (pmi->fd, "cmd=get kvsname=%s key=%s\n", kvsname, key) < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
