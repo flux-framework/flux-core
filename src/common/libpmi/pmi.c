@@ -328,7 +328,7 @@ int PMI_Get_clique_ranks (int ranks[], int length)
 {
     int result;
 
-    result = pmi_process_mapping_get_clique_ranks (ranks, length);
+    result = pmi_simple_client_get_clique_ranks (pmi_global_ctx, ranks, length);
     DRETURN (result);
 }
 
@@ -336,7 +336,7 @@ int PMI_Get_clique_size (int *size)
 {
     int result;
 
-    result = pmi_process_mapping_get_clique_size (size);
+    result = pmi_simple_client_get_clique_size (pmi_global_ctx, size);
     DRETURN (result);
 }
 

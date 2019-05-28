@@ -95,24 +95,14 @@ int main(int argc, char *argv[])
         char buf[256];
 
         e = PMI_Get_clique_size (&clen);
-        if (e == PMI_SUCCESS) {
-            clique = xzmalloc (sizeof (clique[0]) * clen);
-            e = PMI_Get_clique_ranks (clique, clen);
-            if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_Get_clique_ranks: %s",
-                              rank, pmi_strerror(e));
-        }
-        else {
-            e = pmi_process_mapping_get_clique_size (&clen);
-            if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_process_mapping: %s",
-                              rank, pmi_strerror (e));
-            clique = xzmalloc (sizeof (clique[0]) * clen);
-            e = pmi_process_mapping_get_clique_ranks (clique, clen);
-            if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_process_mapping: %s",
-                              rank, pmi_strerror (e));
-        }
+        if (e != PMI_SUCCESS)
+            log_msg_exit ("%d PMI_Get_clique_size: %s",
+                          rank, pmi_strerror (e));
+        clique = xzmalloc (sizeof (clique[0]) * clen);
+        e = PMI_Get_clique_ranks (clique, clen);
+        if (e != PMI_SUCCESS)
+            log_msg_exit ("%d: PMI_Get_clique_ranks: %s",
+                          rank, pmi_strerror(e));
         s = pmi_cliquetostr (buf, sizeof (buf), clique, clen);
         printf ("%d: clique=%s\n", rank, s);
         free (clique);

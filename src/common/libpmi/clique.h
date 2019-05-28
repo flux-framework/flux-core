@@ -61,13 +61,6 @@ int pmi_process_mapping_find_ranks (struct pmi_map_block *blocks, int nblocks,
                                     int *ranks, int nranks);
 
 
-/* These functions can be used in place of PMI_Get_clique_size()
- * and PMI_Get_clique_ranks().  They make canonical PMI API calls
- * to obtain the rank, size, maxes, and PMI_process_mapping value.
- */
-int pmi_process_mapping_get_clique_size (int *size);
-int pmi_process_mapping_get_clique_ranks (int ranks[], int length);
-
 /* Convert rank array to csv string.  If clique is empty, return empty string.
  * If string overflows, return "overflow".
  */

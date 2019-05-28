@@ -18,9 +18,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/param.h>
+#include <assert.h>
 
 #include "simple_client.h"
 #include "simple_server.h"
+#include "clique.h"
 #include "dgetline.h"
 #include "keyval.h"
 #include "pmi.h"
@@ -258,6 +260,100 @@ int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
 done:
     return result;
 }
+
+/* Helper for get_clique_size(), get_clique_ranks().
+ * Fetch 'PMI_process_mapping' from the KVS and parse.
+ * On success, results are placed in blocks, nblocks, nodeid.
+ * The caller must free 'blocks'.
+ */
+static int fetch_process_mapping (struct pmi_simple_client *pmi,
+                                  struct pmi_map_block **blocks,
+                                  int *nblocks,
+                                  int *nodeid)
+{
+    const char *key = "PMI_process_mapping";
+    int result;
+    char *nom;
+    char *val;
+
+    assert (pmi != NULL);
+    assert (pmi->initialized);
+
+    nom = calloc (1, pmi->kvsname_max);
+    val = calloc (1, pmi->vallen_max);
+    if (!nom || !val) {
+        result = PMI_ERR_NOMEM;
+        goto done;
+    }
+    result = pmi_simple_client_kvs_get_my_name (pmi, nom, pmi->kvsname_max);
+    if (result != PMI_SUCCESS)
+        goto done;
+    result = pmi_simple_client_kvs_get (pmi, nom, key, val, pmi->vallen_max);
+    if (result != PMI_SUCCESS)
+        goto done;
+    result = pmi_process_mapping_parse (val, blocks, nblocks);
+    if (result != PMI_SUCCESS)
+        goto done;
+    if (pmi_process_mapping_find_nodeid (*blocks, *nblocks,
+                                         pmi->rank, nodeid) != PMI_SUCCESS)
+        *nodeid = -1;
+done:
+    free (nom);
+    free (val);
+    return result;
+}
+
+int pmi_simple_client_get_clique_size (struct pmi_simple_client *pmi,
+                                       int *size)
+{
+    int result;
+    struct pmi_map_block *blocks = NULL;
+    int nblocks;
+    int nodeid;
+
+    if (!pmi || !pmi->initialized)
+        return PMI_ERR_INIT;
+    if (!size)
+        return PMI_ERR_INVALID_ARG;
+    result = fetch_process_mapping (pmi, &blocks, &nblocks, &nodeid);
+    if (result != PMI_SUCCESS || nodeid == -1) {
+        *size = 1;
+        result = PMI_SUCCESS;
+    }
+    else
+        result = pmi_process_mapping_find_nranks (blocks, nblocks, nodeid,
+                                                  pmi->size, size);
+    free (blocks);
+    return result;
+}
+
+int pmi_simple_client_get_clique_ranks (struct pmi_simple_client *pmi,
+                                        int ranks[],
+                                        int length)
+{
+    int result;
+    struct pmi_map_block *blocks = NULL;
+    int nblocks;
+    int nodeid;
+
+    if (!pmi || !pmi->initialized)
+        return PMI_ERR_INIT;
+    if (!ranks)
+        return PMI_ERR_INVALID_ARG;
+    result = fetch_process_mapping (pmi, &blocks, &nblocks, &nodeid);
+    if (result != PMI_SUCCESS || nodeid == -1) {
+        if (length != 1)
+            return PMI_ERR_INVALID_SIZE;
+        *ranks = pmi->rank;
+        result = PMI_SUCCESS;
+    }
+    else
+        result = pmi_process_mapping_find_ranks (blocks, nblocks, nodeid,
+                                                 pmi->size, ranks, length);
+    free (blocks);
+    return result;
+}
+
 
 void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
 {

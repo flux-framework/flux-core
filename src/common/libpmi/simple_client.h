@@ -69,6 +69,15 @@ int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
                                char *value,
                                int len);
 
+/* Clique functions emulated with PMI_process_mapping key.
+ */
+int pmi_simple_client_get_clique_size (struct pmi_simple_client *pmi,
+                                       int *size);
+int pmi_simple_client_get_clique_ranks (struct pmi_simple_client *pmi,
+                                        int ranks[],
+                                        int length);
+
+
 /* Not implemented (yet):
  * abort, publish, unpublish, lookup, spawn
  */
