@@ -64,8 +64,6 @@ void shutdown_disarm (shutdown_t *s);
  */
 flux_msg_t *shutdown_vencode (double grace, int rc, int rank,
                               const char *fmt, va_list ap);
-flux_msg_t *shutdown_encode (double grace, int rc, int rank,
-                             const char *fmt, ...);
 int shutdown_decode (const flux_msg_t *msg, double *grace, int *rc, int *rank,
                      char *reason, int reason_len);
 

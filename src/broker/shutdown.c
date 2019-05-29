@@ -149,19 +149,6 @@ flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
                             "exitcode", exitcode);
 }
 
-flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
-                             const char *fmt, ...)
-{
-    va_list ap;
-    flux_msg_t *msg;
-
-    va_start (ap, fmt);
-    msg = shutdown_vencode (grace, exitcode, rank, fmt, ap);
-    va_end (ap);
-
-    return msg;
-}
-
 int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
                      int *rank, char *reason, int reason_len)
 {
