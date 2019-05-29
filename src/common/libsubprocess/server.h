@@ -24,4 +24,11 @@ int server_terminate_subprocesses (flux_subprocess_server_t *s);
 int server_terminate_by_uuid (flux_subprocess_server_t *s,
                               const char *id);
 
+int server_terminate_setup (flux_subprocess_server_t *s,
+                            double wait_time);
+
+void server_terminate_cleanup (flux_subprocess_server_t *s);
+
+int server_terminate_wait (flux_subprocess_server_t *s);
+
 #endif /* !_SUBPROCESS_SERVER_H */

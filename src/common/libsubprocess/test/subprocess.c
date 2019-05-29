@@ -148,6 +148,9 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_subprocess_server_terminate_by_uuid (NULL, NULL) < 0
         && errno == EINVAL,
         "flux_subprocess_server_terminate_by_uuid fails with NULL pointer inputs");
+    ok (flux_subprocess_server_subprocesses_kill (NULL, 0, 0.) < 0
+        && errno == EINVAL,
+        "flux_subprocess_server_subprocesses_kill fails with NULL pointer inputs");
 
     ok (flux_exec (NULL, 0, NULL, NULL, NULL) == NULL
         && errno == EINVAL,
