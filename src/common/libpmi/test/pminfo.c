@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
 {
     int rank, size, appnum;
     int e, spawned, initialized, kvsname_len, key_len, val_len;
+    int universe_size;
     char *kvsname;
     int ch;
     char *library = NULL;
@@ -67,6 +68,9 @@ int main(int argc, char *argv[])
     e = PMI_Get_size (&size);
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_Get_size: %s", rank, pmi_strerror (e));
+    e = PMI_Get_universe_size (&universe_size);
+    if (e != PMI_SUCCESS)
+        log_msg_exit ("%d: PMI_Get_universe_size: %s", rank, pmi_strerror (e));
     e = PMI_KVS_Get_name_length_max (&kvsname_len);
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_KVS_Get_name_length_max: %s",
