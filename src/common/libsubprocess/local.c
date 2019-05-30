@@ -622,8 +622,6 @@ static int local_fork (flux_subprocess_t *p)
     if (subprocess_parent_wait_on_child (p) < 0)
         return -1;
 
-    p->state = FLUX_SUBPROCESS_STARTED;
-
     if (p->hooks.post_fork) {
         /* always a chance caller may destroy subprocess in callback */
         flux_subprocess_ref (p);

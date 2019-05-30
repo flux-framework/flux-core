@@ -382,9 +382,6 @@ static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
 
     switch (p->state_reported) {
     case FLUX_SUBPROCESS_INIT:
-        /* next state to report must be STARTED */
-        return FLUX_SUBPROCESS_STARTED;
-    case FLUX_SUBPROCESS_STARTED:
         /* next state must be RUNNING or EXEC_FAILED */
         if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
             return FLUX_SUBPROCESS_EXEC_FAILED;
@@ -720,8 +717,7 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
     }
 
     if (p->local) {
-        if (p->state != FLUX_SUBPROCESS_STARTED
-            && p->state != FLUX_SUBPROCESS_RUNNING) {
+        if (p->state != FLUX_SUBPROCESS_RUNNING) {
             errno = EPIPE;
             return -1;
         }
@@ -737,7 +733,6 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
     }
     else {
         if (p->state != FLUX_SUBPROCESS_INIT
-            && p->state != FLUX_SUBPROCESS_STARTED
             && p->state != FLUX_SUBPROCESS_RUNNING) {
             errno = EPIPE;
             return -1;
@@ -773,8 +768,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
         return 0;
 
     if (p->local) {
-        if (p->state == FLUX_SUBPROCESS_STARTED
-            || p->state == FLUX_SUBPROCESS_RUNNING) {
+        if (p->state == FLUX_SUBPROCESS_RUNNING) {
             if (flux_buffer_write_watcher_close (c->buffer_write_w) < 0) {
                 log_err ("flux_buffer_write_watcher_close");
                 return -1;
@@ -939,8 +933,6 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state)
     {
     case FLUX_SUBPROCESS_INIT:
         return "Init";
-    case FLUX_SUBPROCESS_STARTED:
-        return "Started";
     case FLUX_SUBPROCESS_EXEC_FAILED:
         return "Exec Failed";
     case FLUX_SUBPROCESS_RUNNING:

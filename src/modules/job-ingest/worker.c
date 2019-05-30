@@ -111,7 +111,6 @@ static void worker_state_cb (flux_subprocess_t *p,
             flux_log (w->h, LOG_ERR, "%s: %s", w->name,
                       flux_subprocess_state_string (state));
             break;
-        case FLUX_SUBPROCESS_STARTED:
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:
             break; // ignore

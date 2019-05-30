@@ -214,7 +214,6 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
         p = zlist_first (subprocesses);
         while (p) {
             if (flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT
-                || flux_subprocess_state (p) == FLUX_SUBPROCESS_STARTED
                 || flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
                 if (flux_subprocess_write (p, "STDIN", ptr, lenp) < 0)
                     log_err_exit ("flux_subprocess_write");

@@ -81,16 +81,14 @@ test_expect_success 'basic rexec propogates exit code()' '
 
 test_expect_success 'basic rexec functionality (check state changes)' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec -s /bin/true > output &&
-        echo "Started" > expected &&
-        echo "Running" >> expected &&
+        echo "Running" > expected &&
         echo "Exited" >> expected &&
         test_cmp expected output
 '
 
 test_expect_success 'basic rexec fail exec() (check state changes)' '
 	! ${FLUX_BUILD_DIR}/t/rexec/rexec -s / > output &&
-        echo "Started" > expected &&
-        echo "Exec Failed" >> expected &&
+        echo "Exec Failed" > expected &&
         test_cmp expected output
 '
 
