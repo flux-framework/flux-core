@@ -62,7 +62,10 @@ test_keyval_t_SOURCES = test/keyval.c
 test_keyval_t_CPPFLAGS = $(test_cppflags)
 test_keyval_t_LDADD = $(test_ldadd)
 
-test_simple_t_SOURCES = test/simple.c
+test_simple_t_SOURCES = \
+	test/simple.c \
+	test/server_thread.c \
+	test/server_thread.h
 test_simple_t_CPPFLAGS = $(test_cppflags)
 test_simple_t_LDADD = $(test_ldadd)
 
