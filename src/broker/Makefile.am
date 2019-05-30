@@ -74,7 +74,8 @@ TESTS = test_shutdown.t \
 	test_hello.t \
 	test_attr.t \
 	test_service.t \
-	test_reduce.t
+	test_reduce.t \
+	test_liblist.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
@@ -116,3 +117,7 @@ test_service_t_LDADD = $(test_ldadd)
 test_reduce_t_SOURCES = test/reduce.c
 test_reduce_t_CPPFLAGS = $(test_cppflags)
 test_reduce_t_LDADD = $(test_ldadd)
+
+test_liblist_t_SOURCES = test/liblist.c
+test_liblist_t_CPPFLAGS = $(test_cppflags)
+test_liblist_t_LDADD = $(test_ldadd)
