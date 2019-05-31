@@ -297,7 +297,7 @@ void flux_subprocess_server_stop (flux_subprocess_server_t *s)
 int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
                                               const char *id)
 {
-    if (!s || s->magic != SUBPROCESS_SERVER_MAGIC) {
+    if (!s || s->magic != SUBPROCESS_SERVER_MAGIC || !id) {
         errno = EINVAL;
         return -1;
     }
