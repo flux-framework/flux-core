@@ -24,10 +24,34 @@
 #include "attr.h"
 #include "exec.h"
 
+#define EXEC_TERMINATE_TIMEOUT 5.0
+
 static void exec_finalize (void *arg)
 {
     flux_subprocess_server_t *s = arg;
     flux_subprocess_server_stop (s);
+}
+
+void exec_terminate_subprocesses (flux_t *h)
+{
+    flux_subprocess_server_t *s = flux_aux_get (h, "flux::exec");
+
+    if (flux_subprocess_server_subprocesses_kill (s,
+                                                  SIGTERM,
+                                                  EXEC_TERMINATE_TIMEOUT) < 0)
+        flux_log_error (h, "flux_subprocess_server_subprocesses_kill");
+
+    /* SIGKILL is also sent in final teardown via
+     * flux_subprocess_server_stop(), but we wish to avoid any
+     * subprocesses continuing to run and potential send broker
+     * messages while we begin teardown, so we will SIGKILL the
+     * subprocesses as well.
+     */
+
+    if (flux_subprocess_server_subprocesses_kill (s,
+                                                  SIGKILL,
+                                                  EXEC_TERMINATE_TIMEOUT) < 0)
+        flux_log_error (h, "flux_subprocess_server_subprocesses_kill");
 }
 
 int exec_terminate_subprocesses_by_uuid (flux_t *h, const char *id)

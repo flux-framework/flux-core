@@ -618,6 +618,12 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         log_msg ("exited event loop");
 
+    /* inform all lingering subprocesses we are tearing down.  Do this
+     * before any cleanup/teardown below, as this call will re-enter
+     * the reactor.
+     */
+    exec_terminate_subprocesses (ctx.h);
+
     /* Restore default sigmask and actions for SIGINT, SIGTERM
      */
     if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0)
