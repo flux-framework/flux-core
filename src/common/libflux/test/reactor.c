@@ -1305,42 +1305,42 @@ static void test_child  (flux_reactor_t *reactor)
     flux_reactor_destroy (r);
 }
 
-static int stat_size = 0;
-static int stat_nlink = 0;
+struct stat_ctx {
+    int fd;
+    char *path;
+    int stat_size;
+    int stat_nlink;
+    enum { STAT_APPEND, STAT_UNLINK } state;
+};
 static void stat_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
+    struct stat_ctx *ctx = arg;
     struct stat new, old;
     flux_stat_watcher_get_rstat (w, &new, &old);
     if (new.st_nlink == 0) {
         diag ("%s: nlink: old: %d new %d", __FUNCTION__,
                 old.st_nlink, new.st_nlink);
-        stat_nlink++;
+        ctx->stat_nlink++;
         flux_watcher_stop (w);
     } else {
         if (old.st_size != new.st_size) {
             diag ("%s: size: old=%ld new=%ld", __FUNCTION__,
                   (long)old.st_size, (long)new.st_size);
-            stat_size++;
+            ctx->stat_size++;
         }
     }
 }
 
-struct stattimer_ctx {
-    int fd;
-    char *path;
-    enum { STATTIMER_APPEND, STATTIMER_UNLINK } state;
-};
-
 static void stattimer_cb (flux_reactor_t *r, flux_watcher_t *w,
                           int revents, void *arg)
 {
-    struct stattimer_ctx *ctx = arg;
-    if (ctx->state == STATTIMER_APPEND) {
+    struct stat_ctx *ctx = arg;
+    if (ctx->state == STAT_APPEND) {
         if (write (ctx->fd, "hello\n", 6) < 0 || close (ctx->fd) < 0)
             flux_reactor_stop_error (r);
-        ctx->state = STATTIMER_UNLINK;
-    } else if (ctx->state == STATTIMER_UNLINK) {
+        ctx->state = STAT_UNLINK;
+    } else if (ctx->state == STAT_UNLINK) {
         if (unlink (ctx->path) < 0)
             flux_reactor_stop_error (r);
         flux_watcher_stop (w);
@@ -1350,16 +1350,16 @@ static void stattimer_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void test_stat (flux_reactor_t *reactor)
 {
     flux_watcher_t *w, *tw;
-    struct stattimer_ctx ctx;
+    struct stat_ctx ctx = {0};
     const char *tmpdir = getenv ("TMPDIR");
 
     ctx.path = xasprintf ("%s/reactor-test.XXXXXX", tmpdir ? tmpdir : "/tmp");
     ctx.fd = mkstemp (ctx.path);
-    ctx.state = STATTIMER_APPEND;
+    ctx.state = STAT_APPEND;
 
     ok (ctx.fd >= 0,
         "created temporary file");
-    w = flux_stat_watcher_create (reactor, ctx.path, 0., stat_cb, NULL);
+    w = flux_stat_watcher_create (reactor, ctx.path, 0., stat_cb, &ctx);
     ok (w != NULL,
         "created stat watcher");
     flux_watcher_start (w);
@@ -1373,9 +1373,9 @@ static void test_stat (flux_reactor_t *reactor)
     ok (flux_reactor_run (reactor, 0) == 0,
         "reactor ran successfully");
 
-    ok (stat_size == 1,
+    ok (ctx.stat_size == 1,
         "stat watcher invoked once for size change");
-    ok (stat_nlink == 1,
+    ok (ctx.stat_nlink == 1,
         "stat watcher invoked once for nlink set to zero");
 
     flux_watcher_destroy (w);
