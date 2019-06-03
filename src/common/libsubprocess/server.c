@@ -78,6 +78,11 @@ static void remove_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
 
     zhash_delete (s->subprocesses, str);
 
+    if (!zhash_size (s->subprocesses) && s->terminate_prep_w) {
+        flux_watcher_start (s->terminate_prep_w);
+        flux_watcher_start (s->terminate_check_w);
+    }
+
 cleanup:
     free (str);
 }
@@ -667,10 +672,10 @@ void server_stop (flux_subprocess_server_t *s)
     flux_msg_handler_delvec (s->handlers);
 }
 
-static void terminate (flux_subprocess_t *p)
+static void server_signal_subprocess (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f;
-    if (!(f = flux_subprocess_kill (p, SIGKILL))) {
+    if (!(f = flux_subprocess_kill (p, signum))) {
         flux_subprocess_server_t *s;
         s = flux_subprocess_aux_get (p, "server_ctx");
         flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
@@ -679,16 +684,22 @@ static void terminate (flux_subprocess_t *p)
     flux_future_destroy (f);
 }
 
-int server_terminate_subprocesses (flux_subprocess_server_t *s)
+int server_signal_subprocesses (flux_subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
     p = zhash_first (s->subprocesses);
     while (p) {
-        terminate (p);
+        server_signal_subprocess (p, signum);
         p = zhash_next (s->subprocesses);
     }
 
+    return 0;
+}
+
+int server_terminate_subprocesses (flux_subprocess_server_t *s)
+{
+    server_signal_subprocesses (s, SIGKILL);
     return 0;
 }
 
@@ -700,7 +711,7 @@ static void terminate_uuid (flux_subprocess_t *p, const char *id)
         return;
 
     if (!strcmp (id, sender))
-        terminate (p);
+        server_signal_subprocess (p, SIGKILL);
 
     free (sender);
 }
@@ -714,6 +725,98 @@ int server_terminate_by_uuid (flux_subprocess_server_t *s,
     while (p) {
         terminate_uuid (p, id);
         p = zhash_next (s->subprocesses);
+    }
+
+    return 0;
+}
+
+static void terminate_prep_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    flux_subprocess_server_t *s = arg;
+    flux_watcher_start (s->terminate_idle_w);
+}
+
+static void terminate_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    flux_subprocess_server_t *s = arg;
+    flux_watcher_stop (s->terminate_timer_w);
+    flux_watcher_stop (s->terminate_prep_w);
+    flux_watcher_stop (s->terminate_idle_w);
+    flux_watcher_stop (s->terminate_check_w);
+    flux_reactor_stop (s->r);
+}
+
+void server_terminate_cleanup (flux_subprocess_server_t *s)
+{
+    flux_watcher_destroy (s->terminate_timer_w);
+    flux_watcher_destroy (s->terminate_prep_w);
+    flux_watcher_destroy (s->terminate_idle_w);
+    flux_watcher_destroy (s->terminate_check_w);
+    s->terminate_timer_w = NULL;
+    s->terminate_prep_w = NULL;
+    s->terminate_idle_w = NULL;
+    s->terminate_check_w = NULL;
+}
+
+int server_terminate_setup (flux_subprocess_server_t *s,
+                            double wait_time)
+{
+    s->terminate_timer_w = flux_timer_watcher_create (s->r,
+                                                      wait_time, 0.,
+                                                      terminate_cb,
+                                                      s);
+    if (!s->terminate_timer_w) {
+        flux_log_error (s->h, "flux_timer_watcher_create");
+        goto error;
+    }
+
+    if (s->terminate_prep_w)
+        return 0;
+
+    s->terminate_prep_w = flux_prepare_watcher_create (s->r,
+                                                       terminate_prep_cb,
+                                                       s);
+    if (!s->terminate_prep_w) {
+        flux_log_error (s->h, "flux_prepare_watcher_create");
+        goto error;
+    }
+
+    s->terminate_idle_w = flux_idle_watcher_create (s->r,
+                                                    NULL,
+                                                    s);
+    if (!s->terminate_idle_w) {
+        flux_log_error (s->h, "flux_idle_watcher_create");
+        goto error;
+    }
+
+    s->terminate_check_w = flux_check_watcher_create (s->r,
+                                                      terminate_cb,
+                                                      s);
+    if (!s->terminate_check_w) {
+        flux_log_error (s->h, "flux_check_watcher_create");
+        goto error;
+    }
+
+    return 0;
+
+error:
+    server_terminate_cleanup (s);
+    return -1;
+}
+
+int server_terminate_wait (flux_subprocess_server_t *s)
+{
+    flux_watcher_start (s->terminate_timer_w);
+
+    if (flux_reactor_run (s->r, 0) < 0) {
+        flux_log_error (s->h, "flux_reactor_run");
+        return -1;
     }
 
     return 0;

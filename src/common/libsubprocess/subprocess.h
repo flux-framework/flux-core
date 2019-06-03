@@ -120,8 +120,24 @@ flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
                                                         const char *local_uri,
                                                         uint32_t rank);
 
-/*  Stop a subprocess server / cleanup flux_subprocess_server_t */
+/*  Stop a subprocess server / cleanup flux_subprocess_server_t.  Will
+ *  send a SIGKILL to all remaining subprocesses.
+ */
 void flux_subprocess_server_stop (flux_subprocess_server_t *s);
+
+/* Send all subprocesses signal and wait up to wait_time seconds for
+ * all subprocesses to complete.  This is typically called to send
+ * SIGTERM before calling flux_subprocess_server_stop(), allowing
+ * users to send a signal to inform subprocesses to complete / cleanup
+ * before they are sent SIGKILL.
+ *
+ * This function will enter the reactor to wait for subprocesses to
+ * complete, should only be called on cleanup path when primary
+ * reactor has exited.
+ */
+int flux_subprocess_server_subprocesses_kill (flux_subprocess_server_t *s,
+                                              int signum,
+                                              double wait_time);
 
 /* Terminate all subprocesses started by a sender id */
 int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,

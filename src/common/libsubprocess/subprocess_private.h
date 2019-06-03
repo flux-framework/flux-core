@@ -116,6 +116,12 @@ struct flux_subprocess_server {
     uint32_t rank;
     zhash_t *subprocesses;
     flux_msg_handler_t **handlers;
+
+    /* for teardown / termination */
+    flux_watcher_t *terminate_timer_w;
+    flux_watcher_t *terminate_prep_w;
+    flux_watcher_t *terminate_idle_w;
+    flux_watcher_t *terminate_check_w;
 };
 
 void subprocess_check_completed (flux_subprocess_t *p);

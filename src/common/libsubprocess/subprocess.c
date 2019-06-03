@@ -209,6 +209,12 @@ static void subprocess_server_destroy (void *arg)
          */
         zhash_destroy (&s->subprocesses);
         free (s->local_uri);
+
+        flux_watcher_destroy (s->terminate_timer_w);
+        flux_watcher_destroy (s->terminate_prep_w);
+        flux_watcher_destroy (s->terminate_idle_w);
+        flux_watcher_destroy (s->terminate_check_w);
+
         s->magic = ~SUBPROCESS_SERVER_MAGIC;
         free (s);
     }
@@ -294,10 +300,39 @@ void flux_subprocess_server_stop (flux_subprocess_server_t *s)
     }
 }
 
+int flux_subprocess_server_subprocesses_kill (flux_subprocess_server_t *s,
+                                              int signum,
+                                              double wait_time)
+{
+    int rv = -1;
+
+    if (!s || s->magic != SUBPROCESS_SERVER_MAGIC) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!zhash_size (s->subprocesses))
+        return 0;
+
+    if (server_terminate_setup (s, wait_time) < 0)
+        goto error;
+
+    if (server_signal_subprocesses (s, signum) < 0)
+        goto error;
+
+    if (server_terminate_wait (s) < 0)
+        goto error;
+
+    rv = 0;
+error:
+    server_terminate_cleanup (s);
+    return rv;
+}
+
 int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
                                               const char *id)
 {
-    if (!s || s->magic != SUBPROCESS_SERVER_MAGIC) {
+    if (!s || s->magic != SUBPROCESS_SERVER_MAGIC || !id) {
         errno = EINVAL;
         return -1;
     }
