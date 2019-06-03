@@ -1374,7 +1374,7 @@ static void test_stat (flux_reactor_t *reactor)
         "reactor ran successfully");
 
     tap_skip (stat_size == 1,
-        "stat watcher invoked once for size chnage");
+        "stat watcher invoked once for size change");
     ok (stat_nlink == 1,
         "stat watcher invoked once for nlink set to zero");
 
