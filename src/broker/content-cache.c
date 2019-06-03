@@ -163,8 +163,12 @@ static void cache_entry_destroy (void *arg)
             free (e->data);
         if (e->blobref)
             free (e->blobref);
-        assert (!e->load_requests || zlist_size (e->load_requests) == 0);
-        assert (!e->store_requests || zlist_size (e->store_requests) == 0);
+        if (e->load_requests && zlist_size (e->load_requests) > 0)
+            flux_log (e->h, LOG_ERR, "%s: load_requests not empty",
+                      __FUNCTION__);
+        if (e->store_requests && zlist_size (e->store_requests) > 0)
+            flux_log (e->h, LOG_ERR, "%s: store_requests not empty",
+                      __FUNCTION__);
         message_list_destroy (&e->load_requests);
         message_list_destroy (&e->store_requests);
         free (e);
@@ -249,6 +253,8 @@ static struct cache_entry *lookup_entry (content_cache_t *cache,
  */
 static void remove_entry (content_cache_t *cache, struct cache_entry *e)
 {
+    assert (!e->load_requests || zlist_size (e->load_requests) == 0);
+    assert (!e->store_requests || zlist_size (e->store_requests) == 0);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
