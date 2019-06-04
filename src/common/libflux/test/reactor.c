@@ -1310,7 +1310,7 @@ struct stat_ctx {
     char *path;
     int stat_size;
     int stat_nlink;
-    enum { STAT_APPEND, STAT_UNLINK } state;
+    enum { STAT_APPEND, STAT_WAIT, STAT_UNLINK } state;
 };
 static void stat_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
@@ -1328,6 +1328,7 @@ static void stat_cb (flux_reactor_t *r, flux_watcher_t *w,
             diag ("%s: size: old=%ld new=%ld", __FUNCTION__,
                   (long)old.st_size, (long)new.st_size);
             ctx->stat_size++;
+            ctx->state = STAT_UNLINK;
         }
     }
 }
@@ -1339,7 +1340,7 @@ static void stattimer_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (ctx->state == STAT_APPEND) {
         if (write (ctx->fd, "hello\n", 6) < 0 || close (ctx->fd) < 0)
             flux_reactor_stop_error (r);
-        ctx->state = STAT_UNLINK;
+        ctx->state = STAT_WAIT;
     } else if (ctx->state == STAT_UNLINK) {
         if (unlink (ctx->path) < 0)
             flux_reactor_stop_error (r);
