@@ -372,21 +372,31 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         ov->child_cb (ov, zsock, ov->child_arg);
 }
 
+/* Cleanup not done in this function, responsibiility of caller to
+ * call endpoint_destroy() eventually */
 static int bind_child (overlay_t *ov, struct endpoint *ep)
 {
-    if (!(ep->zs = zsock_new_router (NULL)))
-        log_err_exit ("zsock_new_router");
-    if (zsecurity_ssockinit (ov->sec, ep->zs) < 0)
-        log_msg_exit ("zsecurity_ssockinit: %s", zsecurity_errstr (ov->sec));
-    if (zsock_bind (ep->zs, "%s", ep->uri) < 0)
-        log_err_exit ("%s", ep->uri);
+    if (!(ep->zs = zsock_new_router (NULL))) {
+        log_err ("zsock_new_router");
+        return -1;
+    }
+    if (zsecurity_ssockinit (ov->sec, ep->zs) < 0) {
+        log_msg ("zsecurity_ssockinit: %s", zsecurity_errstr (ov->sec));
+        return -1;
+    }
+    if (zsock_bind (ep->zs, "%s", ep->uri) < 0) {
+        log_err ("%s", ep->uri);
+        return -1;
+    }
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
         free (ep->uri);
         ep->uri = zsock_last_endpoint (ep->zs);
     }
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
-                                           ep->zs, FLUX_POLLIN, child_cb, ov)))
-        log_err_exit ("flux_zmq_watcher_create");
+                                           ep->zs, FLUX_POLLIN, child_cb, ov))) {
+        log_err ("flux_zmq_watcher_create");
+        return -1;
+    }
     flux_watcher_start (ep->w);
     /* Ensure that ipc files are removed when the broker exits.
      */
@@ -478,8 +488,10 @@ int overlay_bind (overlay_t *ov)
     if (overlay_sec_init (ov) < 0)
         goto done;
 
-    if (ov->child && !ov->child->zs)
-        bind_child (ov, ov->child);
+    if (ov->child && !ov->child->zs) {
+        if (bind_child (ov, ov->child) < 0)
+            goto done;
+    }
 
     rc = 0;
 done:
