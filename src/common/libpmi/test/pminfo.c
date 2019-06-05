@@ -30,12 +30,11 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
-static char *cliquetostr (int len, int *clique);
-
 int main(int argc, char *argv[])
 {
     int rank, size, appnum;
     int e, spawned, initialized, kvsname_len, key_len, val_len;
+    int universe_size;
     char *kvsname;
     int ch;
     char *library = NULL;
@@ -69,6 +68,9 @@ int main(int argc, char *argv[])
     e = PMI_Get_size (&size);
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_Get_size: %s", rank, pmi_strerror (e));
+    e = PMI_Get_universe_size (&universe_size);
+    if (e != PMI_SUCCESS)
+        log_msg_exit ("%d: PMI_Get_universe_size: %s", rank, pmi_strerror (e));
     e = PMI_KVS_Get_name_length_max (&kvsname_len);
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_KVS_Get_name_length_max: %s",
@@ -94,30 +96,20 @@ int main(int argc, char *argv[])
         int clen;
         int *clique;
         char *s;
+        char buf[256];
 
         e = PMI_Get_clique_size (&clen);
-        if (e == PMI_SUCCESS) {
-            clique = xzmalloc (sizeof (clique[0]) * clen);
-            e = PMI_Get_clique_ranks (clique, clen);
-            if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_Get_clique_ranks: %s",
-                              rank, pmi_strerror(e));
-        }
-        else {
-            e = pmi_process_mapping_get_clique_size (&clen);
-            if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_process_mapping: %s",
-                              rank, pmi_strerror (e));
-            clique = xzmalloc (sizeof (clique[0]) * clen);
-            e = pmi_process_mapping_get_clique_ranks (clique, clen);
-            if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_process_mapping: %s",
-                              rank, pmi_strerror (e));
-        }
-        s = cliquetostr (clen, clique);
+        if (e != PMI_SUCCESS)
+            log_msg_exit ("%d PMI_Get_clique_size: %s",
+                          rank, pmi_strerror (e));
+        clique = xzmalloc (sizeof (clique[0]) * clen);
+        e = PMI_Get_clique_ranks (clique, clen);
+        if (e != PMI_SUCCESS)
+            log_msg_exit ("%d: PMI_Get_clique_ranks: %s",
+                          rank, pmi_strerror(e));
+        s = pmi_cliquetostr (buf, sizeof (buf), clique, clen);
         printf ("%d: clique=%s\n", rank, s);
         free (clique);
-        free (s);
     }
     /* Generic info
      */
@@ -138,18 +130,6 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-static char *cliquetostr (int len, int *clique)
-{
-    int i, slen = len*16;
-    char *s = xzmalloc (slen);
-
-    for (i = 0; i < len; i++)
-        sprintf (s + strlen (s), "%s%d", i > 0 ? "," : "", clique[i]);
-    return s;
-}
-
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

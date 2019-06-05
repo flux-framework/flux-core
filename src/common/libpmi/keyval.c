@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include "keyval.h"
 
 static const char *parse_val (const char *s, const char *key)
@@ -38,8 +39,9 @@ int keyval_parse_uint (const char *s, const char *key, unsigned int *val)
     unsigned int i;
     if (!cp)
         return EKV_NOKEY;
+    errno = 0;
     i = strtoul (cp, &endptr, 10);
-    if (*endptr && !isspace (*endptr))
+    if (errno != 0 || (*endptr && !isspace (*endptr)))
         return EKV_VAL_PARSE;
     *val = i;
     return EKV_SUCCESS;
@@ -52,8 +54,9 @@ int keyval_parse_int (const char *s, const char *key, int *val)
     int i;
     if (!cp)
         return EKV_NOKEY;
+    errno = 0;
     i = strtol (cp, &endptr, 10);
-    if (*endptr && !isspace (*endptr))
+    if (errno != 0 || (*endptr && !isspace (*endptr)))
         return EKV_VAL_PARSE;
     *val = i;
     return EKV_SUCCESS;

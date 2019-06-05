@@ -13,6 +13,7 @@
 #endif
 #include <sys/param.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
@@ -26,6 +27,8 @@
 #include "attr.h"
 #include "overlay.h"
 #include "boot_pmi.h"
+#include "pmiutil.h"
+
 
 /* Generally accepted max, although some go higher (IE is 2083) */
 #define ENDPOINT_MAX 2048
@@ -142,148 +145,126 @@ done:
 
 int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
 {
-    int spawned;
-    int size;
-    int rank;
-    int appnum;
     int parent_rank;
     const char *child_uri;
-    int kvsname_len;
-    int key_len;
-    int val_len;
-    char *kvsname = NULL;
-    char *key = NULL;
-    char *val = NULL;
-    int e;
-    int rc = -1;
+    char key[64];
+    char val[1024];
     const char *tbonendpoint = NULL;
+    struct pmi_handle *pmi;
+    struct pmi_params pmi_params;
+    int result;
 
-    if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
-        log_msg ("PMI_Init: %s", pmi_strerror (e));
-        goto done;
+    memset (&pmi_params, 0, sizeof (pmi_params));
+    if (!(pmi = broker_pmi_create ())) {
+        log_err ("broker_pmi_create");
+        goto error;
+    }
+    result = broker_pmi_init (pmi);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_init: %s", pmi_strerror (result));
+        goto error;
+    }
+    result = broker_pmi_get_params (pmi, &pmi_params);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_get_params: %s", pmi_strerror (result));
+        goto error;
     }
 
-    /* Get rank, size, appnum
-     */
-    if ((e = PMI_Get_size (&size)) != PMI_SUCCESS) {
-        log_msg ("PMI_Get_size: %s", pmi_strerror (e));
-        goto done;
-    }
-    if ((e = PMI_Get_rank (&rank)) != PMI_SUCCESS) {
-        log_msg ("PMI_Get_rank: %s", pmi_strerror (e));
-        goto done;
-    }
-    if ((e = PMI_Get_appnum (&appnum)) != PMI_SUCCESS) {
-        log_msg ("PMI_Get_appnum: %s", pmi_strerror (e));
-        goto done;
-    }
-
-    overlay_init (overlay, (uint32_t)size, (uint32_t)rank, tbon_k);
+    overlay_init (overlay,
+                  (uint32_t)pmi_params.size,
+                  (uint32_t)pmi_params.rank,
+                  tbon_k);
 
     /* Set session-id attribute from PMI appnum if not already set.
      */
     if (attr_get (attrs, "session-id", NULL, NULL) < 0) {
-        if (attr_add_int (attrs, "session-id", appnum,
+        if (attr_add_int (attrs, "session-id", pmi_params.appnum,
                           FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
+            goto error;
     }
 
     if (update_endpoint_attr (attrs, "tbon.endpoint", &tbonendpoint,
                                                         "tcp://%h:*") < 0)
-        goto done;
+        goto error;
 
     overlay_set_child (overlay, tbonendpoint);
-
-    /* Prepare for PMI KVS operations by grabbing the kvsname,
-     * and buffers for keys and values.
-     */
-    if ((e = PMI_KVS_Get_name_length_max (&kvsname_len)) != PMI_SUCCESS) {
-        log_msg ("PMI_KVS_Get_name_length_max: %s", pmi_strerror (e));
-        goto done;
-    }
-    kvsname = xzmalloc (kvsname_len);
-    if ((e = PMI_KVS_Get_my_name (kvsname, kvsname_len)) != PMI_SUCCESS) {
-        log_msg ("PMI_KVS_Get_my_name: %s", pmi_strerror (e));
-        goto done;
-    }
-    if ((e = PMI_KVS_Get_key_length_max (&key_len)) != PMI_SUCCESS) {
-        log_msg ("PMI_KVS_Get_key_length_max: %s", pmi_strerror (e));
-        goto done;
-    }
-    key = xzmalloc (key_len);
-    if ((e = PMI_KVS_Get_value_length_max (&val_len)) != PMI_SUCCESS) {
-        log_msg ("PMI_KVS_Get_value_length_max: %s", pmi_strerror (e));
-        goto done;
-    }
-    val = xzmalloc (val_len);
 
     /* Bind to addresses to expand URI wildcards, so we can exchange
      * the real addresses.
      */
     if (overlay_bind (overlay) < 0) {
         log_err ("overlay_bind failed");   /* function is idempotent */
-        goto done;
+        goto error;
     }
 
     /* Write the URI of downstream facing socket under the rank (if any).
      */
     if ((child_uri = overlay_get_child (overlay))) {
-        if (snprintf (key, key_len, "cmbd.%d.uri", rank) >= key_len) {
+
+        if (snprintf (key, sizeof (key),
+                      "cmbd.%d.uri", pmi_params.rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
-            goto done;
+            goto error;
         }
-        if (snprintf (val, val_len, "%s", child_uri) >= val_len) {
+        if (snprintf (val, sizeof (val), "%s", child_uri) >= sizeof (val)) {
             log_msg ("pmi val string overflow");
-            goto done;
+            goto error;
         }
-        if ((e = PMI_KVS_Put (kvsname, key, val)) != PMI_SUCCESS) {
-            log_msg ("PMI_KVS_Put: %s", pmi_strerror (e));
-            goto done;
+        result = broker_pmi_kvs_put (pmi, pmi_params.kvsname, key, val);
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_put: %s", pmi_strerror (result));
+            goto error;
         }
     }
 
     /* Puts are complete, now we synchronize and begin our gets.
      */
-    if ((e = PMI_KVS_Commit (kvsname)) != PMI_SUCCESS) {
-        log_msg ("PMI_KVS_Commit: %s", pmi_strerror (e));
-        goto done;
+    result = broker_pmi_kvs_commit (pmi, pmi_params.kvsname);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_kvs_commit: %s", pmi_strerror (result));
+        goto error;
     }
-    if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
-        log_msg ("PMI_Barrier: %s", pmi_strerror (e));
-        goto done;
+    result = broker_pmi_barrier (pmi);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
+        goto error;
     }
 
     /* Read the uri of our parent, after computing its rank
      */
-    if (rank > 0) {
-        parent_rank = kary_parentof (tbon_k, (uint32_t)rank);
-        if (snprintf (key, key_len, "cmbd.%d.uri", parent_rank) >= key_len) {
+    if (pmi_params.rank > 0) {
+        parent_rank = kary_parentof (tbon_k, (uint32_t)pmi_params.rank);
+        if (snprintf (key, sizeof (key),
+                      "cmbd.%d.uri", parent_rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
-            goto done;
+            goto error;
         }
-        if ((e = PMI_KVS_Get (kvsname, key, val, val_len)) != PMI_SUCCESS) {
-            log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
-            goto done;
+        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
+                                     key, val, sizeof (val));
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_get: %s", pmi_strerror (result));
+            goto error;
         }
         overlay_set_parent (overlay, "%s", val);
     }
 
-    if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
-        log_msg ("PMI_Barrier: %s", pmi_strerror (e));
-        goto done;
+    result = broker_pmi_barrier (pmi);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
+        goto error;
     }
-    PMI_Finalize ();
-    rc = 0;
-done:
-    if (kvsname)
-        free (kvsname);
-    if (key)
-        free (key);
-    if (val)
-        free (val);
-    if (rc != 0)
-        errno = EPROTO;
-    return rc;
+
+    result = broker_pmi_finalize (pmi);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));
+        goto error;
+    }
+
+    broker_pmi_destroy (pmi);
+    return 0;
+error:
+    broker_pmi_destroy (pmi);
+    return -1;
 }
 
 /*

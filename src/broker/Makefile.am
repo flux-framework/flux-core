@@ -54,6 +54,10 @@ libbroker_la_SOURCES = \
 	boot_config.c \
 	boot_pmi.h \
 	boot_pmi.c \
+	pmiutil.h \
+	pmiutil.c \
+	liblist.h \
+	liblist.c \
 	publisher.h \
 	publisher.c
 
@@ -70,12 +74,15 @@ TESTS = test_shutdown.t \
 	test_hello.t \
 	test_attr.t \
 	test_service.t \
-	test_reduce.t
+	test_reduce.t \
+	test_liblist.t \
+	test_pmiutil.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(top_builddir)/src/common/libtap/libtap.la
 
 test_cppflags = \
@@ -112,3 +119,11 @@ test_service_t_LDADD = $(test_ldadd)
 test_reduce_t_SOURCES = test/reduce.c
 test_reduce_t_CPPFLAGS = $(test_cppflags)
 test_reduce_t_LDADD = $(test_ldadd)
+
+test_liblist_t_SOURCES = test/liblist.c
+test_liblist_t_CPPFLAGS = $(test_cppflags)
+test_liblist_t_LDADD = $(test_ldadd)
+
+test_pmiutil_t_SOURCES = test/pmiutil.c
+test_pmiutil_t_CPPFLAGS = $(test_cppflags)
+test_pmiutil_t_LDADD = $(test_ldadd)

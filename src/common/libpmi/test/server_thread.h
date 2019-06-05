@@ -8,14 +8,11 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_CORE_PMI_SINGLE_H
-#define _FLUX_CORE_PMI_SINGLE_H
+struct pmi_server_context *pmi_server_create (int *cfd, int size);
+void pmi_server_destroy (struct pmi_server_context *ctx);
 
-#include "src/common/libpmi/pmi_operations.h"
-
-void *pmi_single_create (struct pmi_operations **ops);
-
-#endif /* _FLUX_CORE_PMI_SINGLE_H */
+void pmi_set_barrier_entry_failure (struct pmi_server_context *ctx, int val);
+void pmi_set_barrier_exit_failure (struct pmi_server_context *ctx, int val);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
