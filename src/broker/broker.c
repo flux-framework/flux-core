@@ -627,11 +627,11 @@ int main (int argc, char *argv[])
     /* Restore default sigmask and actions for SIGINT, SIGTERM
      */
     if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0)
-        log_err_exit ("sigprocmask");
+        log_err ("sigprocmask");
     if (sigaction (SIGINT, &old_sigact_int, NULL) < 0)
-        log_err_exit ("sigaction");
+        log_err ("sigaction");
     if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
-        log_err_exit ("sigaction");
+        log_err ("sigaction");
 
     /* remove heartbeat timer, if any
      */
