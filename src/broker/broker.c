@@ -322,17 +322,15 @@ int main (int argc, char *argv[])
         oom ();
 
     ctx.tbon_k = 2; /* binary TBON is default */
+    /* Record the instance owner: the effective uid of the broker. */
+    ctx.userid = geteuid ();
+    /* Set default rolemask for messages sent with flux_send()
+     * on the broker's internal handle. */
+    ctx.rolemask = FLUX_ROLE_OWNER;
 
     init_attrs (ctx.attrs, getpid ());
 
     parse_command_line_arguments (argc, argv, &ctx, &sec_typemask);
-
-    /* Record the instance owner: the effective uid of the broker.
-     * Set default rolemask for messages sent with flux_send()
-     * on the broker's internal handle.
-     */
-    ctx.userid = geteuid ();
-    ctx.rolemask = FLUX_ROLE_OWNER;
 
     if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
         log_err_exit ("content cache attributes");
