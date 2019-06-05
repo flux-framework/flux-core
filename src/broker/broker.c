@@ -197,8 +197,8 @@ static void usage (void)
     exit (1);
 }
 
-void parse_command_line_arguments(int argc, char *argv[],
-                                  broker_ctx_t *ctx, int *sec_typemask)
+void parse_command_line_arguments (int argc, char *argv[],
+                                   broker_ctx_t *ctx, int *sec_typemask)
 {
     int c;
     int e;
@@ -316,9 +316,9 @@ int main (int argc, char *argv[])
     if (!(ctx.publisher = publisher_create ()))
         oom ();
 
-    init_attrs (ctx.attrs, getpid());
+    init_attrs (ctx.attrs, getpid ());
 
-    parse_command_line_arguments(argc, argv, &ctx, &sec_typemask);
+    parse_command_line_arguments (argc, argv, &ctx, &sec_typemask);
 
     /* Record the instance owner: the effective uid of the broker.
      * Set default rolemask for messages sent with flux_send()
@@ -472,7 +472,7 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (overlay_register_attrs(ctx.overlay, ctx.attrs) < 0)
+    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0)
         log_err_exit ("registering overlay attributes");
     if (hello_register_attrs (ctx.hello, ctx.attrs) < 0)
         log_err_exit ("configuring attributes");
