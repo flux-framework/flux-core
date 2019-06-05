@@ -427,11 +427,6 @@ int attr_register_handlers (attr_t *attrs, flux_t *h)
     return 0;
 }
 
-void attr_unregister_handlers (attr_t *attrs)
-{
-    flux_msg_handler_delvec (attrs->handlers);
-}
-
 attr_t *attr_create (void)
 {
     attr_t *attrs = calloc (1, sizeof (*attrs));
@@ -450,6 +445,8 @@ attr_t *attr_create (void)
 void attr_destroy (attr_t *attrs)
 {
     if (attrs) {
+        if (attrs->handlers)
+            flux_msg_handler_delvec (attrs->handlers);
         zhash_destroy (&attrs->hash);
         free (attrs);
     }

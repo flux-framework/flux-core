@@ -654,7 +654,7 @@ int main (int argc, char *argv[])
 
     /* Unregister builtin services
      */
-    attr_unregister_handlers (ctx.attrs);
+    attr_destroy (ctx.attrs);
     content_cache_destroy (ctx.cache);
 
     broker_unhandle_signals (sigwatchers);
@@ -668,7 +668,6 @@ int main (int argc, char *argv[])
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
     hello_destroy (ctx.hello);
-    attr_destroy (ctx.attrs);
     shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);

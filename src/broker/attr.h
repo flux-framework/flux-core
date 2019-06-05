@@ -34,10 +34,9 @@ typedef struct attr_struct attr_t;
 attr_t *attr_create (void);
 void attr_destroy (attr_t *attrs);
 
-/* Register/unregister message handlers
+/* Register message handlers
  */
 int attr_register_handlers (attr_t *attrs, flux_t *h);
-void attr_unregister_handlers (attr_t *attrs);
 
 /* Delete an attribute
  */
