@@ -565,7 +565,7 @@ int main (int argc, char *argv[])
     if (heaptrace_initialize (ctx.h) < 0)
         log_msg_exit ("heaptrace_initialize");
     if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
-        log_err_exit ("exec2_initialize");
+        log_err_exit ("exec_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
     if (rusage_initialize (ctx.h, "cmb") < 0)
