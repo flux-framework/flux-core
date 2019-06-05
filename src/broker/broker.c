@@ -560,7 +560,7 @@ int main (int argc, char *argv[])
     if (overlay_connect (ctx.overlay) < 0)
         log_err_exit ("overlay_connect");
 
-    shutdown_set_handle (ctx.shutdown, ctx.h);
+    shutdown_set_flux (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services

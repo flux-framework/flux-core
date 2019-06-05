@@ -102,7 +102,7 @@ void shutdown_handler (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-void shutdown_set_handle (shutdown_t *s, flux_t *h)
+void shutdown_set_flux (shutdown_t *s, flux_t *h)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
 
