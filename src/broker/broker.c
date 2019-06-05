@@ -298,15 +298,20 @@ int main (int argc, char *argv[])
     if (!(sigwatchers = zlist_new ()))
         oom ();
 
-    ctx.modhash = modhash_create ();
+    if (!(ctx.modhash = modhash_create ()))
+        oom ();
     if (!(ctx.services = service_switch_create ()))
-        log_err_exit ("service_switch_create");
-    ctx.overlay = overlay_create ();
-    ctx.hello = hello_create ();
-    ctx.tbon_k = 2; /* binary TBON is default */
-    ctx.heartbeat = heartbeat_create ();
-    ctx.shutdown = shutdown_create ();
-    ctx.attrs = attr_create ();
+        oom ();
+    if (!(ctx.overlay = overlay_create ()))
+        oom ();
+    if (!(ctx.hello = hello_create ()))
+        oom ();
+    if (!(ctx.heartbeat = heartbeat_create ()))
+        oom ();
+    if (!(ctx.shutdown = shutdown_create ()))
+        oom ();
+    if (!(ctx.attrs = attr_create ()))
+        oom ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
@@ -315,6 +320,8 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.publisher = publisher_create ()))
         oom ();
+
+    ctx.tbon_k = 2; /* binary TBON is default */
 
     init_attrs (ctx.attrs, getpid ());
 

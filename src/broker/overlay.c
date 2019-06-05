@@ -105,12 +105,21 @@ void overlay_destroy (overlay_t *ov)
 
 overlay_t *overlay_create (void)
 {
-    overlay_t *ov = xzmalloc (sizeof (*ov));
+    overlay_t *ov = calloc (1, sizeof (*ov) );
+
+    if (!ov) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
 
-    if (!(ov->children = zhash_new ()))
-        oom ();
+    if (!(ov->children = zhash_new ())) {
+        overlay_destroy (ov);
+        errno = ENOMEM;
+        return NULL;
+    }
 
     return ov;
 }

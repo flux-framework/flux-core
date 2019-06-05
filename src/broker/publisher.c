@@ -53,12 +53,15 @@ void publisher_destroy (struct publisher *pub)
 
 struct publisher *publisher_create (void)
 {
-    struct publisher *pub;
+    struct publisher *pub = calloc (1, sizeof (*pub));
 
-    if (!(pub = calloc (1, sizeof (*pub))))
+    if (!pub) {
+        errno = ENOMEM;
         return NULL;
+    }
     if (!(pub->senders = zlist_new ())) {
         publisher_destroy (pub);
+        errno = ENOMEM;
         return NULL;
     }
     return pub;

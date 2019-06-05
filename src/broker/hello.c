@@ -61,7 +61,13 @@ struct flux_reduce_ops reduce_ops = {
 
 hello_t *hello_create (void)
 {
-    hello_t *hello = xzmalloc (sizeof (*hello));
+    hello_t *hello = calloc (1, sizeof (*hello));
+
+    if (!hello) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
     hello->size = 1;
     return hello;
 }

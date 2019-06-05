@@ -46,7 +46,13 @@ void heartbeat_destroy (heartbeat_t *hb)
 
 heartbeat_t *heartbeat_create (void)
 {
-    heartbeat_t *hb = xzmalloc (sizeof (*hb));
+    heartbeat_t *hb = calloc (1, sizeof (*hb));
+
+    if (!hb) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
     hb->rate = dfl_heartrate;
     return hb;
 }

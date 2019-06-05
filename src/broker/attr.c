@@ -434,9 +434,16 @@ void attr_unregister_handlers (attr_t *attrs)
 
 attr_t *attr_create (void)
 {
-    attr_t *attrs = xzmalloc (sizeof (*attrs));
-    if (!(attrs->hash = zhash_new ()))
-        oom ();
+    attr_t *attrs = calloc (1, sizeof (*attrs));
+    if (!attrs) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(attrs->hash = zhash_new ())) {
+        attr_destroy (attrs);
+        errno = ENOMEM;
+        return NULL;
+    }
     return attrs;
 }
 

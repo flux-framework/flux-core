@@ -48,12 +48,11 @@ struct runlevel {
 
 runlevel_t *runlevel_create (void)
 {
-    runlevel_t *r = malloc (sizeof (*r));
+    runlevel_t *r = calloc (1, sizeof (*r));
     if (!r) {
         errno = ENOMEM;
         return NULL;
     }
-    memset (r, 0, sizeof (*r));
     r->mode = "normal";
     return r;
 }

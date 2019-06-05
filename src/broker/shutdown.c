@@ -40,7 +40,12 @@ struct shutdown_struct {
 
 shutdown_t *shutdown_create (void)
 {
-    shutdown_t *s = xzmalloc (sizeof (*s));
+    shutdown_t *s = calloc (1, sizeof (*s));
+
+    if (!s) {
+        errno = ENOMEM;
+        return NULL;
+    }
     return s;
 }
 
