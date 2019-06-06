@@ -88,7 +88,7 @@ int main (int argc, char **argv)
 
     ok ((sh = shutdown_create ()) != NULL,
         "shutdown_create works");
-    shutdown_set_handle (sh, h);
+    shutdown_set_flux (sh, h);
     shutdown_set_callback (sh, shutdown_cb, NULL);
 
     matchlog.topic_glob = "log.append";

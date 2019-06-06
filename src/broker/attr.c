@@ -427,22 +427,26 @@ int attr_register_handlers (attr_t *attrs, flux_t *h)
     return 0;
 }
 
-void attr_unregister_handlers (attr_t *attrs)
-{
-    flux_msg_handler_delvec (attrs->handlers);
-}
-
 attr_t *attr_create (void)
 {
-    attr_t *attrs = xzmalloc (sizeof (*attrs));
-    if (!(attrs->hash = zhash_new ()))
-        oom ();
+    attr_t *attrs = calloc (1, sizeof (*attrs));
+    if (!attrs) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(attrs->hash = zhash_new ())) {
+        attr_destroy (attrs);
+        errno = ENOMEM;
+        return NULL;
+    }
     return attrs;
 }
 
 void attr_destroy (attr_t *attrs)
 {
     if (attrs) {
+        if (attrs->handlers)
+            flux_msg_handler_delvec (attrs->handlers);
         zhash_destroy (&attrs->hash);
         free (attrs);
     }

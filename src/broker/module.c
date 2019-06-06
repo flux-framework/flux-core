@@ -575,9 +575,16 @@ void module_remove (modhash_t *mh, module_t *p)
 
 modhash_t *modhash_create (void)
 {
-    modhash_t *mh = xzmalloc (sizeof (*mh));
-    if (!(mh->zh_byuuid = zhash_new ()))
-        oom ();
+    modhash_t *mh = calloc (1, sizeof (*mh));
+    if (!mh) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(mh->zh_byuuid = zhash_new ())) {
+        modhash_destroy (mh);
+        errno = ENOMEM;
+        return NULL;
+    }
     return mh;
 }
 
@@ -588,13 +595,15 @@ void modhash_destroy (modhash_t *mh)
     int e;
 
     if (mh) {
-        FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
-            if (p->t) {
-                if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH)
-                    log_errn (e, "pthread_cancel");
+        if (mh->zh_byuuid) {
+            FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
+                if (p->t) {
+                    if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH)
+                        log_errn (e, "pthread_cancel");
+                }
             }
+            zhash_destroy (&mh->zh_byuuid);
         }
-        zhash_destroy (&mh->zh_byuuid);
         free (mh);
     }
 }

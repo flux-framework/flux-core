@@ -197,8 +197,8 @@ static void usage (void)
     exit (1);
 }
 
-void parse_command_line_arguments(int argc, char *argv[],
-                                  broker_ctx_t *ctx, int *sec_typemask)
+void parse_command_line_arguments (int argc, char *argv[],
+                                   broker_ctx_t *ctx, int *sec_typemask)
 {
     int c;
     int e;
@@ -298,15 +298,20 @@ int main (int argc, char *argv[])
     if (!(sigwatchers = zlist_new ()))
         oom ();
 
-    ctx.modhash = modhash_create ();
+    if (!(ctx.modhash = modhash_create ()))
+        oom ();
     if (!(ctx.services = service_switch_create ()))
-        log_err_exit ("service_switch_create");
-    ctx.overlay = overlay_create ();
-    ctx.hello = hello_create ();
-    ctx.tbon_k = 2; /* binary TBON is default */
-    ctx.heartbeat = heartbeat_create ();
-    ctx.shutdown = shutdown_create ();
-    ctx.attrs = attr_create ();
+        oom ();
+    if (!(ctx.overlay = overlay_create ()))
+        oom ();
+    if (!(ctx.hello = hello_create ()))
+        oom ();
+    if (!(ctx.heartbeat = heartbeat_create ()))
+        oom ();
+    if (!(ctx.shutdown = shutdown_create ()))
+        oom ();
+    if (!(ctx.attrs = attr_create ()))
+        oom ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
@@ -316,16 +321,16 @@ int main (int argc, char *argv[])
     if (!(ctx.publisher = publisher_create ()))
         oom ();
 
-    init_attrs (ctx.attrs, getpid());
-
-    parse_command_line_arguments(argc, argv, &ctx, &sec_typemask);
-
-    /* Record the instance owner: the effective uid of the broker.
-     * Set default rolemask for messages sent with flux_send()
-     * on the broker's internal handle.
-     */
+    ctx.tbon_k = 2; /* binary TBON is default */
+    /* Record the instance owner: the effective uid of the broker. */
     ctx.userid = geteuid ();
+    /* Set default rolemask for messages sent with flux_send()
+     * on the broker's internal handle. */
     ctx.rolemask = FLUX_ROLE_OWNER;
+
+    init_attrs (ctx.attrs, getpid ());
+
+    parse_command_line_arguments (argc, argv, &ctx, &sec_typemask);
 
     if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
         log_err_exit ("content cache attributes");
@@ -472,7 +477,7 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (overlay_register_attrs(ctx.overlay, ctx.attrs) < 0)
+    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0)
         log_err_exit ("registering overlay attributes");
     if (hello_register_attrs (ctx.hello, ctx.attrs) < 0)
         log_err_exit ("configuring attributes");
@@ -555,7 +560,7 @@ int main (int argc, char *argv[])
     if (overlay_connect (ctx.overlay) < 0)
         log_err_exit ("overlay_connect");
 
-    shutdown_set_handle (ctx.shutdown, ctx.h);
+    shutdown_set_flux (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services
@@ -565,7 +570,7 @@ int main (int argc, char *argv[])
     if (heaptrace_initialize (ctx.h) < 0)
         log_msg_exit ("heaptrace_initialize");
     if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
-        log_err_exit ("exec2_initialize");
+        log_err_exit ("exec_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
     if (rusage_initialize (ctx.h, "cmb") < 0)
@@ -627,11 +632,11 @@ int main (int argc, char *argv[])
     /* Restore default sigmask and actions for SIGINT, SIGTERM
      */
     if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0)
-        log_err_exit ("sigprocmask");
+        log_err ("sigprocmask");
     if (sigaction (SIGINT, &old_sigact_int, NULL) < 0)
-        log_err_exit ("sigaction");
+        log_err ("sigaction");
     if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
-        log_err_exit ("sigaction");
+        log_err ("sigaction");
 
     /* remove heartbeat timer, if any
      */
@@ -649,7 +654,7 @@ int main (int argc, char *argv[])
 
     /* Unregister builtin services
      */
-    attr_unregister_handlers (ctx.attrs);
+    attr_destroy (ctx.attrs);
     content_cache_destroy (ctx.cache);
 
     broker_unhandle_signals (sigwatchers);
@@ -663,7 +668,6 @@ int main (int argc, char *argv[])
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
     hello_destroy (ctx.hello);
-    attr_destroy (ctx.attrs);
     shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
