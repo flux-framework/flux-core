@@ -55,7 +55,8 @@ nodist_flux_SOURCES = \
 
 dist_fluxcmd_SCRIPTS = \
 	flux-cron \
-	flux-jobspec.py
+	flux-jobspec.py \
+	flux-srun
 
 fluxcmd_PROGRAMS = \
 	flux-aggregate \
