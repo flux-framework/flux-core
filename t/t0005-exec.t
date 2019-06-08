@@ -44,7 +44,7 @@ test_expect_success 'test_on_rank works' '
 '
 
 test_expect_success 'test_on_rank sends to correct rank' '
-	flux comms info | grep rank=0 && 
+	flux comms info | grep rank=0 &&
 	test_on_rank 1 sh -c "flux comms info | grep -q rank=1"
 '
 

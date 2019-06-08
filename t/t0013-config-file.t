@@ -68,7 +68,7 @@ test_expect_success 'flux broker with incompat attrs fails' '
 # size=1 boot from config file
 # N.B. "private" config sets rank and optionally size, while "shared"
 # config requires broker to infer rank from position of a local interface's
-# IP address in the tbon-endpoints array (which only works for size=1 in 
+# IP address in the tbon-endpoints array (which only works for size=1 in
 # a single-node test).
 #
 

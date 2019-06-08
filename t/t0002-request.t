@@ -61,7 +61,7 @@ test_expect_success 'request: rpc returns expected error' '
 '
 
 test_expect_success 'request: rpc returns expected json' '
-	${FLUX_BUILD_DIR}/t/request/treq src 
+	${FLUX_BUILD_DIR}/t/request/treq src
 '
 
 test_expect_success 'request: rpc accepts expected json' '
@@ -73,7 +73,7 @@ test_expect_success 'request: 10K responses received in order' '
 '
 
 test_expect_success 'request: 10K responses received in order, with deferrals' '
-	${FLUX_BUILD_DIR}/t/request/treq putmsg 
+	${FLUX_BUILD_DIR}/t/request/treq putmsg
 '
 
 test_expect_success 'request: proxy ping 0 from 1 is 4 hops' '

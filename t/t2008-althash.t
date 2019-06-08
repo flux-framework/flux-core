@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Test alternate hash config 
+test_description='Test alternate hash config
 
 Start a session with a non-default hash type for content/kvs.'
 

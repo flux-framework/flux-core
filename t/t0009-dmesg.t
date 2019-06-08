@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test broker log ring buffer' 
+test_description='Test broker log ring buffer'
 
 . `dirname $0`/sharness.sh
 

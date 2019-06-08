@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Test basic module management 
+test_description='Test basic module management
 
 Verify module load/unload/list
 '

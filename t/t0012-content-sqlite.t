@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test content-sqlite service' 
+test_description='Test content-sqlite service'
 
 . `dirname $0`/sharness.sh
 
