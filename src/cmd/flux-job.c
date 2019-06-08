@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #include <time.h>
 #include <stdio.h>
@@ -34,10 +35,12 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
+#include "src/common/libutil/monotime.h"
 #include "src/common/libeventlog/eventlog.h"
 
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
+int cmd_attach (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
@@ -170,6 +173,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_raise,
       0,
       raise_opts,
+    },
+    { "attach",
+      "[OPTIONS] id",
+      "Interactively attach to job",
+      cmd_attach,
+      0,
+      NULL,
     },
     { "submit",
       "[OPTIONS] [jobspec]",
@@ -568,6 +578,154 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     flux_close (h);
     free (jobspec);
     return 0;
+}
+
+struct attach_ctx {
+    flux_t *h;
+    int exit_code;
+    flux_jobid_t id;
+    flux_future_t *f;
+    flux_watcher_t *sigint_w;
+    flux_watcher_t *sigtstp_w;
+    struct timespec t_sigint;
+};
+
+void attach_cancel_continuation (flux_future_t *f, void *arg)
+{
+    if (flux_future_get (f, NULL) < 0)
+        log_msg ("cancel: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+}
+
+void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    flux_future_t *f;
+    int signum = flux_signal_watcher_get_signum (w);
+
+    if (signum == SIGINT) {
+        if (monotime_since (ctx->t_sigint) > 2000) {
+            monotime (&ctx->t_sigint);
+            flux_watcher_start (ctx->sigtstp_w);
+            log_msg ("one more ctrl-C within 2s to cancel or ctrl-Z to detach");
+        }
+        else {
+            if (!(f = flux_job_cancel (ctx->h, ctx->id,
+                                       "interrupted by ctrl-C")))
+                log_err_exit ("flux_job_cancel");
+            if (flux_future_then (f, -1, attach_cancel_continuation, NULL) < 0)
+                log_err_exit ("flux_future_then");
+        }
+    }
+    else if (signum == SIGTSTP) {
+        if (monotime_since (ctx->t_sigint) <= 2000) {
+            if (flux_job_event_watch_cancel (ctx->f) < 0)
+                log_err_exit ("flux_job_event_watch_cancel");
+            log_msg ("detaching...");
+        }
+        else {
+            flux_watcher_stop (ctx->sigtstp_w);
+            log_msg ("one more ctrl-Z to suspend");
+        }
+    }
+}
+
+void attach_event_continuation (flux_future_t *f, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    const char *entry;
+    json_t *o;
+    const char *name;
+    json_t *context;
+
+    if (flux_job_event_watch_get (f, &entry) < 0) {
+        if (errno == ENODATA)
+            goto done;
+        log_msg_exit ("flux_job_event_watch_get: %s",
+                      future_strerror (f, errno));
+    }
+    if (!(o = eventlog_entry_decode (entry)))
+        log_err_exit ("eventlog_entry_decode");
+    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+        log_err_exit ("evenlog_entry_parse");
+    if (!strcmp (name, "exception")) {
+        const char *type;
+        int severity;
+        const char *note = NULL;
+
+        if (json_unpack (context, "{s:s s:i s?:s}",
+                         "type", &type,
+                         "severity", &severity,
+                         "note", &note) < 0)
+            log_err_exit ("error decoding exception context");
+        fprintf (stderr, "%s: %s exception%s%s\n",
+                 severity == 0 ? "Fatal" : "Warning",
+                 type,
+                 note && strlen (note) > 0 ? ": " : "",
+                 note ? note : "");
+    }
+    else if (!strcmp (name, "finish")) {
+        if (json_unpack (context, "{s:i}", "status", &ctx->exit_code) < 0)
+            log_err_exit ("error decoding finish context");
+    }
+    else if (!strcmp (name, "clean")) {
+        if (flux_job_event_watch_cancel (f) < 0)
+            log_err_exit ("flux_job_event_watch_cancel");
+    }
+    json_decref (o);
+    flux_future_reset (f);
+    return;
+done:
+    flux_future_destroy (f);
+    flux_watcher_stop (ctx->sigint_w);
+    flux_watcher_stop (ctx->sigtstp_w);
+}
+
+int cmd_attach (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_reactor_t *r;
+    struct attach_ctx ctx;
+
+    memset (&ctx, 0, sizeof (ctx));
+    ctx.exit_code = 1;
+
+    if (argc - optindex != 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+
+    if (!(ctx.h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (!(r = flux_get_reactor (ctx.h)))
+        log_err_exit ("flux_get_reactor");
+
+    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id)))
+        log_err_exit ("flux_job_event_watch");
+    if (flux_future_then (ctx.f, -1, attach_event_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+
+    ctx.sigint_w = flux_signal_watcher_create (r,
+                                               SIGINT,
+                                               attach_signal_cb,
+                                               &ctx);
+    ctx.sigtstp_w = flux_signal_watcher_create (r,
+                                                SIGTSTP,
+                                                attach_signal_cb,
+                                                &ctx);
+    if (!ctx.sigint_w || !ctx.sigtstp_w)
+        log_err_exit ("flux_signal_watcher_create");
+    flux_watcher_start (ctx.sigint_w);
+
+    if (flux_reactor_run (r, 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_watcher_destroy (ctx.sigint_w);
+    flux_watcher_destroy (ctx.sigtstp_w);
+    flux_close (ctx.h);
+    return ctx.exit_code;
 }
 
 void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
