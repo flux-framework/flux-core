@@ -100,7 +100,7 @@ test_expect_success HAVE_JQ 'job-exec: simulate epilog/cleanup tasks' '
 #
 # XXX: Trying to generate an exception during cleanup is racy, however,
 #  there is not currently another way to do this until we have a *real*
-#  epilog script which could be triggered by events. If this test becoms
+#  epilog script which could be triggered by events. If this test becomes
 #  a problem, we can disable it until that time.
 #
 test_expect_success HAVE_JQ 'job-exec: exception during cleanup' '
