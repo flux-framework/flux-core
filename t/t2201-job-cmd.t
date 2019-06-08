@@ -44,6 +44,10 @@ test_expect_success 'flux-job: missing sub-command fails with usage message' '
 	grep -q Usage: usage2.out
 '
 
+test_expect_success 'flux-job: submit with empty jobpsec fails' '
+	test_must_fail flux job submit </dev/null
+'
+
 test_expect_success 'flux-job: submit with nonexistent jobpsec fails' '
 	test_must_fail flux job submit /noexist
 '
@@ -214,6 +218,18 @@ test_expect_success 'flux-job: id works with spaces in input' '
 	(echo "42"; echo "42") >despace.exp &&
 	(echo "42 "; echo " 42") | flux job id >despace.out &&
 	test_cmp despace.exp despace.out
+'
+
+test_expect_success 'flux-job: attach fails without jobid argument' '
+	test_must_fail flux job attach
+'
+
+test_expect_success 'flux-job: attach fails without jobid argument' '
+	test_must_fail flux job attach
+'
+
+test_expect_success 'flux-job: attach fails on invalid jobid' '
+	test_must_fail flux job attach $((${validjob}+1))
 '
 
 test_done
