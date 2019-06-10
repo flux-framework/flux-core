@@ -535,11 +535,25 @@ int main (int argc, char *argv[])
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
         runlevel_set_flux (ctx.runlevel, ctx.h);
 
-        if (runlevel_set_rc (ctx.runlevel, 1, rc1, rc1 ? strlen (rc1) + 1 : 0, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel,
+                             1,
+                             rc1,
+                             rc1 ? strlen (rc1) + 1 : 0,
+                             uri) < 0)
             log_err_exit ("runlevel_set_rc 1");
-        if (runlevel_set_rc (ctx.runlevel, 2, rc2, rc2_len, uri) < 0)
+
+        if (runlevel_set_rc (ctx.runlevel,
+                             2,
+                             rc2,
+                             rc2_len,
+                             uri) < 0)
             log_err_exit ("runlevel_set_rc 2");
-        if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc3 ? strlen (rc3) + 1 : 0, uri) < 0)
+
+        if (runlevel_set_rc (ctx.runlevel,
+                             3,
+                             rc3,
+                             rc3 ? strlen (rc3) + 1 : 0,
+                             uri) < 0)
             log_err_exit ("runlevel_set_rc 3");
     }
 
