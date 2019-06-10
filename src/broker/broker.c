@@ -582,7 +582,7 @@ int main (int argc, char *argv[])
     if (attr_register_handlers (ctx.attrs, ctx.h) < 0)
         log_err_exit ("attr_register_handlers");
     if (heaptrace_initialize (ctx.h) < 0)
-        log_msg_exit ("heaptrace_initialize");
+        log_err_exit ("heaptrace_initialize");
     if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
         log_err_exit ("exec_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
