@@ -94,6 +94,13 @@ static struct optparse_option submit_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option attach_opts[] =  {
+    { .name = "show-events", .key = 'E', .has_arg = 0,
+      .usage = "Show job events on stderr",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option id_opts[] =  {
     { .name = "from", .key = 'f', .has_arg = 1,
       .arginfo = "dec|kvs|words",
@@ -179,7 +186,7 @@ static struct optparse_subcommand subcommands[] = {
       "Interactively attach to job",
       cmd_attach,
       0,
-      NULL,
+      attach_opts,
     },
     { "submit",
       "[OPTIONS] [jobspec]",
@@ -590,6 +597,7 @@ struct attach_ctx {
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
     struct timespec t_sigint;
+    bool show_events;
 };
 
 void attach_cancel_continuation (flux_future_t *f, void *arg)
@@ -650,7 +658,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
     if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
-        log_err_exit ("evenlog_entry_parse");
+        log_err_exit ("eventlog_entry_parse");
     if (!strcmp (name, "exception")) {
         const char *type;
         int severity;
@@ -661,20 +669,23 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          "severity", &severity,
                          "note", &note) < 0)
             log_err_exit ("error decoding exception context");
-        fprintf (stderr, "%s: %s exception%s%s\n",
-                 severity == 0 ? "Fatal" : "Warning",
+        fprintf (stderr, "job-event: exception type=%s severity=%d %s\n",
                  type,
-                 note && strlen (note) > 0 ? ": " : "",
+                 severity,
                  note ? note : "");
     }
-    else if (!strcmp (name, "finish")) {
-        if (json_unpack (context, "{s:i}", "status", &ctx->exit_code) < 0)
-            log_err_exit ("error decoding finish context");
+    else {
+        if (!strcmp (name, "finish")) {
+            if (json_unpack (context, "{s:i}", "status", &ctx->exit_code) < 0)
+                log_err_exit ("error decoding finish context");
+        }
+        else if (!strcmp (name, "clean")) {
+            if (flux_job_event_watch_cancel (f) < 0)
+                log_err_exit ("flux_job_event_watch_cancel");
+        }
     }
-    else if (!strcmp (name, "clean")) {
-        if (flux_job_event_watch_cancel (f) < 0)
-            log_err_exit ("flux_job_event_watch_cancel");
-    }
+    if (ctx->show_events && strcmp (name, "exception") != 0)
+        fprintf (stderr, "job-event: %s\n", name);
     json_decref (o);
     flux_future_reset (f);
     return;
@@ -698,6 +709,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.show_events = optparse_hasopt (p, "show-events");
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
