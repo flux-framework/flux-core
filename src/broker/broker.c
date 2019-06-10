@@ -436,8 +436,8 @@ int main (int argc, char *argv[])
     }
     else
         log_err_exit ("unknown boot method: %s", boot_method);
-    uint32_t rank = overlay_get_rank(ctx.overlay);
-    uint32_t size = overlay_get_size(ctx.overlay);
+    uint32_t rank = overlay_get_rank (ctx.overlay);
+    uint32_t size = overlay_get_size (ctx.overlay);
 
     assert (size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
@@ -773,7 +773,7 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     broker_ctx_t *ctx = arg;
     if (expired) {
-        if (overlay_get_rank(ctx->overlay) == 0)
+        if (overlay_get_rank (ctx->overlay) == 0)
             exit_rc = shutdown_get_rc (s);
         flux_reactor_stop (flux_get_reactor (ctx->h));
     }
@@ -1481,7 +1481,7 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
     flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
-        if (!nodeset_member (svc->nodeset, overlay_get_rank(ctx->overlay)))
+        if (!nodeset_member (svc->nodeset, overlay_get_rank (ctx->overlay)))
             continue;
         if (service_add (ctx->services, svc->name, NULL,
                           route_to_handle, ctx) < 0)
@@ -1756,7 +1756,7 @@ static int subvert_sendmsg_child (broker_ctx_t *ctx, const flux_msg_t *msg,
     char uuid[16];
     int rc = -1;
 
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, overlay_get_rank(ctx->overlay));
+    snprintf (uuid, sizeof (uuid), "%"PRIu32, overlay_get_rank (ctx->overlay));
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
     snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
@@ -1787,8 +1787,8 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
     uint32_t nodeid, gw;
     uint8_t flags;
     int rc = -1;
-    uint32_t rank = overlay_get_rank(ctx->overlay);
-    uint32_t size = overlay_get_size(ctx->overlay);
+    uint32_t rank = overlay_get_rank (ctx->overlay);
+    uint32_t size = overlay_get_size (ctx->overlay);
     const char *topic;
     char errbuf[64];
     const char *errstr = NULL;
@@ -1866,7 +1866,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    parent = kary_parentof (ctx->tbon_k, overlay_get_rank(ctx->overlay));
+    parent = kary_parentof (ctx->tbon_k, overlay_get_rank (ctx->overlay));
     snprintf (puuid, sizeof (puuid), "%"PRIu32, parent);
 
     /* See if it should go to the parent (backwards!)
@@ -1895,7 +1895,7 @@ done:
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
 
-    if (overlay_get_rank(ctx->overlay) > 0) {
+    if (overlay_get_rank (ctx->overlay) > 0) {
         flux_msg_t *cpy;
         if (!(cpy = flux_msg_copy (msg, true)))
             return -1;

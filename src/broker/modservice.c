@@ -221,7 +221,7 @@ void modservice_register (flux_t *h, module_t *p)
     if (rusage_initialize (h, module_get_name (ctx->p)) < 0)
         log_err_exit ("rusage_initialize");
 
-    register_event   (ctx, "stats.clear", stats_clear_event_cb);
+    register_event (ctx, "stats.clear", stats_clear_event_cb);
 
     if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx)))
         log_err_exit ("flux_prepare_watcher_create");
