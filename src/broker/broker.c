@@ -746,8 +746,10 @@ cleanup:
      */
     if (ctx.verbose)
         log_msg ("unloading connector-local");
-    if (unload_module_byname (&ctx, "connector-local", NULL, false) < 0)
-        log_err ("unload connector-local");
+    if (unload_module_byname (&ctx, "connector-local", NULL, false) < 0) {
+        if (errno != ENOENT)
+            log_err ("unload connector-local");
+    }
     if (ctx.verbose)
         log_msg ("finalizing modules");
     modhash_destroy (ctx.modhash);
