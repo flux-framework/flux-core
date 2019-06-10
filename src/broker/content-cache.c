@@ -41,6 +41,7 @@ static const uint32_t default_flush_batch_limit = 256;
 
 
 struct cache_entry {
+    flux_t *h;
     void *data;
     int len;
     char *blobref;
@@ -162,8 +163,12 @@ static void cache_entry_destroy (void *arg)
             free (e->data);
         if (e->blobref)
             free (e->blobref);
-        assert (!e->load_requests || zlist_size (e->load_requests) == 0);
-        assert (!e->store_requests || zlist_size (e->store_requests) == 0);
+        if (e->load_requests && zlist_size (e->load_requests) > 0)
+            flux_log (e->h, LOG_ERR, "%s: load_requests not empty",
+                      __FUNCTION__);
+        if (e->store_requests && zlist_size (e->store_requests) > 0)
+            flux_log (e->h, LOG_ERR, "%s: store_requests not empty",
+                      __FUNCTION__);
         message_list_destroy (&e->load_requests);
         message_list_destroy (&e->store_requests);
         free (e);
@@ -174,7 +179,7 @@ static void cache_entry_destroy (void *arg)
  * Initially only the digest is filled in;  defaults for the rest (zeroed).
  * Returns entry on success, NULL with errno set on failure.
  */
-static struct cache_entry *cache_entry_create (const char *blobref)
+static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
 {
     struct cache_entry *e = malloc (sizeof (*e));
     if (!e) {
@@ -182,6 +187,7 @@ static struct cache_entry *cache_entry_create (const char *blobref)
         return NULL;
     }
     memset (e, 0, sizeof (*e));
+    e->h = h;
     if (!(e->blobref = strdup (blobref))) {
         free (e);
         errno = ENOMEM;
@@ -247,6 +253,8 @@ static struct cache_entry *lookup_entry (content_cache_t *cache,
  */
 static void remove_entry (content_cache_t *cache, struct cache_entry *e)
 {
+    assert (!e->load_requests || zlist_size (e->load_requests) == 0);
+    assert (!e->store_requests || zlist_size (e->store_requests) == 0);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
@@ -360,7 +368,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOENT;
             goto error;
         }
-        if (!(e = cache_entry_create (blobref))
+        if (!(e = cache_entry_create (h, blobref))
                                             || insert_entry (cache, e) < 0) {
             flux_log_error (h, "content load");
             goto error; /* insert destroys 'e' on failure */
@@ -518,7 +526,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     if (!(e = lookup_entry (cache, blobref))) {
-        if (!(e = cache_entry_create (blobref)))
+        if (!(e = cache_entry_create (h, blobref)))
             goto error;
         if (insert_entry (cache, e) < 0)
             goto error; /* insert destroys 'e' on failure */
