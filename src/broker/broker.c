@@ -480,7 +480,7 @@ int main (int argc, char *argv[])
     if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0)
         log_err_exit ("registering overlay attributes");
     if (hello_register_attrs (ctx.hello, ctx.attrs) < 0)
-        log_err_exit ("configuring attributes");
+        log_err_exit ("configuring hello attributes");
 
     if (rank == 0) {
         if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
