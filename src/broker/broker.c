@@ -642,7 +642,10 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    shutdown_set_flux (ctx.shutdown, ctx.h);
+    if (shutdown_set_flux (ctx.shutdown, ctx.h) < 0) {
+        log_err ("shutdown_set_flux");
+        goto cleanup;
+    }
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services
