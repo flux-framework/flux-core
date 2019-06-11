@@ -611,7 +611,7 @@ int main (int argc, char *argv[])
     /* install heartbeat (including timer on rank 0)
      */
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
-    if (heartbeat_set_attrs (ctx.heartbeat, ctx.attrs) < 0)
+    if (heartbeat_register_attrs (ctx.heartbeat, ctx.attrs) < 0)
         log_err_exit ("initializing heartbeat attributes");
     if (heartbeat_start (ctx.heartbeat) < 0)
         log_err_exit ("heartbeat_start");

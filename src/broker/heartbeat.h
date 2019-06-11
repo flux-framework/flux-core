@@ -40,7 +40,7 @@ int heartbeat_set_rate (heartbeat_t *hb, double rate);
 double heartbeat_get_rate (heartbeat_t *hb);
 
 void heartbeat_set_flux (heartbeat_t *hb, flux_t *h);
-int heartbeat_set_attrs (heartbeat_t *hb, attr_t *attrs);
+int heartbeat_register_attrs (heartbeat_t *hb, attr_t *attrs);
 
 void heartbeat_set_epoch (heartbeat_t *hb, int epoch);
 int heartbeat_get_epoch (heartbeat_t *hb);
