@@ -73,7 +73,7 @@ fluxcmd_PROGRAMS = \
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
-	$(top_builddir)/src/common/libpmi/libpmi.la \
+	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(LIBUTIL)
 
 #
