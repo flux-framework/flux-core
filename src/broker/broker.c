@@ -403,7 +403,10 @@ int main (int argc, char *argv[])
      * zsecurity_comms_init().
      */
     overlay_set_sec (ctx.overlay, ctx.sec);
-    overlay_set_flux (ctx.overlay, ctx.h);
+    if (overlay_set_flux (ctx.overlay, ctx.h) < 0) {
+        log_err ("overlay_set_flux");
+        goto cleanup;
+    }
 
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
