@@ -325,6 +325,15 @@ static void module_destroy (module_t *p)
     assert (p->magic == MODULE_MAGIC);
 
     if (p->t) {
+        if (p->status == FLUX_MODSTATE_INIT) {
+            /* if status == FLUX_MODSTATE_INIT, module never started
+             * in the reactor.  cancel it to avoid pthread_join()
+             * potentially hanging */
+            if ((e = pthread_cancel (p->t)) != 0)
+                log_errn (e, "pthread_cancel");
+            else
+                log_msg ("module %s thread cancelled", p->name);
+        }
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
         if (res == PTHREAD_CANCELED)
