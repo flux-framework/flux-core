@@ -284,7 +284,7 @@ test_expect_success 'job-manager: there is still one job in the queue' '
 	test $(wc -l <list.out) -eq 1
 '
 
-test_expect_success 'job-manager: drain unblocks when last job is canceld' '
+test_expect_success 'job-manager: drain unblocks when last job is canceled' '
 	jobid=$(cut -f1 <list.out) &&
 	run_timeout 5 ${DRAIN_CANCEL} ${jobid}
 '

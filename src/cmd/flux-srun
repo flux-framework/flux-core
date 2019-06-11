@@ -1,0 +1,29 @@
+#!/bin/bash
+
+got_help() {
+    while [[ $1 == -* ]]; do
+        case "$1" in
+            --)          return 1 ;;
+            -h|--help)   return 0 ;;
+        esac
+        shift
+    done
+    return 1
+}
+
+submit_job() {
+    set -o pipefail
+    flux jobspec srun "$@" | flux job submit
+}
+
+if test $# -eq 0 || got_help "$@"; then
+    echo "Usage: flux srun OPTIONS command ..." >&2
+    echo "(see flux-jobspec srun for available OPTIONS)" >&2
+    exit 1
+fi
+
+JOBID=$(submit_job "$@") || exit 1
+
+exec flux job attach $JOBID
+
+# vi: ts=4 sw=4 expandtab

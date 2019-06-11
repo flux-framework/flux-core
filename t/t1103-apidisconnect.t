@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Test api disconnect generation 
+test_description='Test api disconnect generation
 '
 
 . `dirname $0`/sharness.sh

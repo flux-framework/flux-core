@@ -95,6 +95,7 @@ TESTSCRIPTS = \
 	t2300-sched-simple.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
+	t2500-job-attach.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \

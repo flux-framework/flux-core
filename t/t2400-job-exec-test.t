@@ -18,7 +18,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
 
 job_kvsdir()    { flux job id --to=kvs $1; }
-exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; } 
+exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 exec_testattr() {
 	${jq} --arg key "$1" --arg value $2 \
 	      '.attributes.system.exec.test[$key] = $value'
@@ -100,7 +100,7 @@ test_expect_success HAVE_JQ 'job-exec: simulate epilog/cleanup tasks' '
 #
 # XXX: Trying to generate an exception during cleanup is racy, however,
 #  there is not currently another way to do this until we have a *real*
-#  epilog script which could be triggered by events. If this test becoms
+#  epilog script which could be triggered by events. If this test becomes
 #  a problem, we can disable it until that time.
 #
 test_expect_success HAVE_JQ 'job-exec: exception during cleanup' '
