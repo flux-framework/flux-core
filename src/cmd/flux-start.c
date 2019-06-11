@@ -343,7 +343,7 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
         log_err_exit ("%s: flux_subprocess_read_line", __FUNCTION__);
 
     if (lenp) {
-        rc = pmi_simple_server_request (ctx.pmi.srv, ptr, cli);
+        rc = pmi_simple_server_request (ctx.pmi.srv, ptr, cli, cli->rank);
         if (rc < 0)
             log_err_exit ("%s: pmi_simple_server_request", __FUNCTION__);
         if (rc == 1)
