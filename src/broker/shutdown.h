@@ -38,6 +38,10 @@ void shutdown_destroy (shutdown_t *s);
  */
 int shutdown_set_flux (shutdown_t *s, flux_t *h);
 
+/* Set shutdown grace.  If grace == 0., overlay size will be used to
+ * get estimate */
+int shutdown_set_grace (shutdown_t *s, double grace);
+
 /* Register a shutdown callback to be called
  * 1) when the grace timeout is armed, and
  * 2) when the grace timeout expires.
@@ -52,7 +56,7 @@ int shutdown_get_rc (shutdown_t *s);
 /* Call shutdown_arm() when shutdown should begin.
  * This sends the "cmb.shutdown" event to all ranks.
  */
-int shutdown_arm (shutdown_t *s, double grace, int rc, const char *fmt, ...);
+int shutdown_arm (shutdown_t *s, int rc, const char *fmt, ...);
 
 /* Call shutdown_disarm() once the clean shutdown path has succeeded.
  * This disarms the timer on the local rank only.

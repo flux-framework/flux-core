@@ -543,20 +543,6 @@ int main (int argc, char *argv[])
      */
     unsetenv ("FLUX_URI");
 
-    /* If shutdown_grace was not provided on the command line,
-     * make a guess.
-     */
-    if (ctx.shutdown_grace == 0) {
-        if (size < 16)
-            ctx.shutdown_grace = 1;
-        else if (size < 128)
-            ctx.shutdown_grace = 2;
-        else if (size < 1024)
-            ctx.shutdown_grace = 4;
-        else
-            ctx.shutdown_grace = 10;
-    }
-
     if (ctx.verbose) {
         const char *parent = overlay_get_parent (ctx.overlay);
         const char *child = overlay_get_child (ctx.overlay);
@@ -644,6 +630,10 @@ int main (int argc, char *argv[])
 
     if (shutdown_set_flux (ctx.shutdown, ctx.h) < 0) {
         log_err ("shutdown_set_flux");
+        goto cleanup;
+    }
+    if (shutdown_set_grace (ctx.shutdown, ctx.shutdown_grace) < 0) {
+        log_err ("shutdown_set_grace");
         goto cleanup;
     }
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -925,15 +915,13 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
         case 1: /* init completed */
             if (rc != 0) {
                 new_level = 3;
-                shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
-                              rc, "run level 1 %s", exit_string);
+                shutdown_arm (ctx->shutdown, rc, "run level 1 %s", exit_string);
             } else
                 new_level = 2;
             break;
         case 2: /* initial program completed */
             new_level = 3;
-            shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
-                          rc, "run level 2 %s", exit_string);
+            shutdown_arm (ctx->shutdown, rc, "run level 2 %s", exit_string);
             break;
         case 3: /* finalization completed */
             break;
@@ -1855,7 +1843,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
 
-    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
+    shutdown_arm (ctx->shutdown, 0,
                   "signal %d (%s)", signum, strsignal (signum));
 }
 

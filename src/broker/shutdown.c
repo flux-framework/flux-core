@@ -129,6 +129,27 @@ int shutdown_set_flux (shutdown_t *s, flux_t *h)
     return 0;
 }
 
+int shutdown_set_grace (shutdown_t *s, double grace)
+{
+    /* Determine estimate if one not provided */
+    if (grace == 0) {
+        uint32_t size;
+        if (flux_get_size (s->h, &size) < 0)
+            return -1;
+        if (size < 16)
+            s->grace = 1;
+        else if (size < 128)
+            s->grace = 2;
+        else if (size < 1024)
+            s->grace = 4;
+        else
+            s->grace = 10;
+    }
+    else
+        s->grace = grace;
+    return 0;
+}
+
 void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg)
 {
     s->cb = cb;
@@ -181,8 +202,7 @@ done:
     return rc;
 }
 
-int shutdown_arm (shutdown_t *s, double grace, int exitcode,
-                  const char *fmt, ...)
+int shutdown_arm (shutdown_t *s, int exitcode, const char *fmt, ...)
 {
     va_list ap;
     flux_msg_t *msg = NULL;
@@ -190,7 +210,7 @@ int shutdown_arm (shutdown_t *s, double grace, int exitcode,
 
     if (!s->timer) {
         va_start (ap, fmt);
-        msg = shutdown_vencode (grace, exitcode, s->myrank, fmt, ap);
+        msg = shutdown_vencode (s->grace, exitcode, s->myrank, fmt, ap);
         va_end (ap);
         if (!msg || flux_send (s->h, msg, 0) < 0)
             goto done;
