@@ -119,8 +119,10 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    if (!(p->h = flux_open (uri, 0)))
-        log_err_exit ("flux_open %s", uri);
+    if (!(p->h = flux_open (uri, 0))) {
+        log_err ("flux_open %s", uri);
+        goto done;
+    }
     rankstr = xasprintf ("%"PRIu32, p->rank);
     if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
@@ -131,10 +133,14 @@ static void *module_thread (void *arg)
 
     /* Block all signals
      */
-    if (sigfillset (&signal_set) < 0)
-        log_err_exit ("%s: sigfillset", p->name);
-    if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
-        log_errn_exit (errnum, "pthread_sigmask");
+    if (sigfillset (&signal_set) < 0) {
+        log_err ("%s: sigfillset", p->name);
+        goto done;
+    }
+    if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0) {
+        log_errn (errnum, "pthread_sigmask");
+        goto done;
+    }
 
     /* Run the module's main().
      */
