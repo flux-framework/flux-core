@@ -139,7 +139,7 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
+static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
@@ -380,7 +380,10 @@ int main (int argc, char *argv[])
 
     /* Prepare signal handling
      */
-    broker_handle_signals (&ctx, sigwatchers);
+    if (broker_handle_signals (&ctx, sigwatchers) < 0) {
+        log_err ("broker_handle_signals");
+        goto cleanup;
+    }
 
     /* Initialize security context.
      * Delay calling zsecurity_comms_init() so that we can defer creating
@@ -1248,7 +1251,7 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
-static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
+static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 {
     int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
                       SIGALRM };
@@ -1256,12 +1259,17 @@ static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
         w = flux_signal_watcher_create (ctx->reactor, sigs[i], signal_cb, ctx);
-        if (!w)
-            log_err_exit ("flux_signal_watcher_create");
-        if (zlist_push (sigwatchers, w) < 0)
-            oom ();
+        if (!w) {
+            log_err ("flux_signal_watcher_create");
+            return -1;
+        }
+        if (zlist_push (sigwatchers, w) < 0) {
+            log_errn (ENOMEM, "zlist_push");
+            return -1;
+        }
         flux_watcher_start (w);
     }
+    return 0;
 }
 
 static void broker_unhandle_signals (zlist_t *sigwatchers)
