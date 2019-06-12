@@ -665,7 +665,10 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    handlers = broker_add_services (&ctx);
+    if (!(handlers = broker_add_services (&ctx))) {
+        log_err ("broker_add_services");
+        goto cleanup;
+    }
 
     /* Initialize comms module infrastructure.
      */
@@ -1592,12 +1595,16 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
         if (!nodeset_member (svc->nodeset, overlay_get_rank (ctx->overlay)))
             continue;
         if (service_add (ctx->services, svc->name, NULL,
-                          route_to_handle, ctx) < 0)
-            log_err_exit ("error registering service for %s", svc->name);
+                         route_to_handle, ctx) < 0) {
+            log_err ("error registering service for %s", svc->name);
+            return NULL;
+        }
     }
 
-    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0)
-        log_err_exit ("error registering message handlers");
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0) {
+        log_err ("error registering message handlers");
+        return NULL;
+    }
     return handlers;
 }
 
