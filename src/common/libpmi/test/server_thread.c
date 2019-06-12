@@ -64,8 +64,6 @@ static int s_kvs_put (void *arg, const char *kvsname, const char *key,
 {
     struct pmi_server_context *ctx = arg;
 
-    diag ("%s: %s::%s = %s", __func__, kvsname, key, val);
-
     assert (ctx->magic == MAGIC_VALUE);
     zhashx_update (ctx->kvs, key, (char *)val);
 
@@ -77,8 +75,6 @@ static int s_kvs_get (void *arg, void *client,
 {
     struct pmi_server_context *ctx = arg;
     char *value;
-
-    diag ("%s: %s::%s", __func__, kvsname, key);
 
     assert (ctx->magic == MAGIC_VALUE);
     value = zhashx_lookup (ctx->kvs, key);
@@ -104,13 +100,11 @@ static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     assert (ctx->magic == MAGIC_VALUE);
     if (dgetline (fd, ctx->buf, sizeof (ctx->buf)) < 0) {
-        diag ("dgetline: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
     }
-    rc = pmi_simple_server_request (ctx->pmi, ctx->buf, &fd, cli->rank);
+    rc = pmi_simple_server_request (ctx->pmi, ctx->buf, cli, cli->rank);
     if (rc < 0) {
-        diag ("pmi_simple_server_request: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
     }
@@ -164,6 +158,11 @@ static void *server_thread (void *arg)
     return NULL;
 }
 
+void s_trace (void *arg, const char *buf)
+{
+    diag ("%s", buf);
+}
+
 struct pmi_server_context *pmi_server_create (int *cfd, int size)
 {
     struct pmi_simple_ops server_ops = {
@@ -171,6 +170,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         .kvs_get = s_kvs_get,
         .barrier_enter = s_barrier_enter,
         .response_send = s_send_response,
+        .debug_trace = s_trace,
     };
     struct pmi_server_context *ctx;
     int i;
@@ -203,7 +203,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
                                          ctx->size,     // size
                                          ctx->size,     // local procs
                                          "bleepgorp",   // kvsname
-                                         0,             // flags
+                                         PMI_SIMPLE_SERVER_TRACE,
                                          ctx);
     if (!ctx->pmi)
         BAIL_OUT ("pmi_simple_server_create failed");
