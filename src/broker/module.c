@@ -316,9 +316,13 @@ done:
 
 static void module_destroy (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     int e;
     void *res;
+
+    if (!p)
+        return;
+
+    assert (p->magic == MODULE_MAGIC);
 
     if (p->t) {
         if ((e = pthread_join (p->t, &res)) != 0)
@@ -536,12 +540,18 @@ module_t *module_add (modhash_t *mh, const char *path)
     p->digest = xstrdup (zfile_digest (zf));
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
-    if (!(p->uuid = zuuid_new ()))
-        oom ();
-    if (!(p->rmmod = zlist_new ()))
-        oom ();
-    if (!(p->subs = zlist_new ()))
-        oom ();
+    if (!(p->uuid = zuuid_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+    if (!(p->rmmod = zlist_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+    if (!(p->subs = zlist_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
 
     p->rank = mh->rank;
     p->broker_h = mh->broker_h;
@@ -549,14 +559,20 @@ module_t *module_add (modhash_t *mh, const char *path)
 
     /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zsock_new_pair (NULL)))
-        log_err_exit ("zsock_new_pair");
-    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
-        log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
+    if (!(p->sock = zsock_new_pair (NULL))) {
+        log_err ("zsock_new_pair");
+        goto cleanup;
+    }
+    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
+        log_err ("zsock_bind inproc://%s", module_get_uuid (p));
+        goto cleanup;
+    }
     if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
                                                  p->sock, FLUX_POLLIN,
-                                                 module_cb, p)))
-        log_err_exit ("flux_zmq_watcher_create");
+                                                 module_cb, p))) {
+        log_err ("flux_zmq_watcher_create");
+        goto cleanup;
+    }
     /* Set creds for connection.
      * Since this is a point to point connection between broker threads,
      * credentials are always those of the instance owner.
@@ -571,6 +587,10 @@ module_t *module_add (modhash_t *mh, const char *path)
     zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
     return p;
+
+cleanup:
+    module_destroy (p);
+    return NULL;
 }
 
 void module_remove (modhash_t *mh, module_t *p)
