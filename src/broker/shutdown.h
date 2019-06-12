@@ -38,7 +38,7 @@ void shutdown_destroy (shutdown_t *s);
  */
 void shutdown_set_flux (shutdown_t *s, flux_t *h);
 
-/* Reigster a shutdown callback to be called
+/* Register a shutdown callback to be called
  * 1) when the grace timeout is armed, and
  * 2) when the grace timeout expires.
  */
