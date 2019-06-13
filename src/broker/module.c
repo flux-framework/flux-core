@@ -119,8 +119,10 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    if (!(p->h = flux_open (uri, 0)))
-        log_err_exit ("flux_open %s", uri);
+    if (!(p->h = flux_open (uri, 0))) {
+        log_err ("flux_open %s", uri);
+        goto done;
+    }
     rankstr = xasprintf ("%"PRIu32, p->rank);
     if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
@@ -131,10 +133,14 @@ static void *module_thread (void *arg)
 
     /* Block all signals
      */
-    if (sigfillset (&signal_set) < 0)
-        log_err_exit ("%s: sigfillset", p->name);
-    if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
-        log_errn_exit (errnum, "pthread_sigmask");
+    if (sigfillset (&signal_set) < 0) {
+        log_err ("%s: sigfillset", p->name);
+        goto done;
+    }
+    if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0) {
+        log_errn (errnum, "pthread_sigmask");
+        goto done;
+    }
 
     /* Run the module's main().
      */
@@ -310,11 +316,24 @@ done:
 
 static void module_destroy (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     int e;
     void *res;
 
+    if (!p)
+        return;
+
+    assert (p->magic == MODULE_MAGIC);
+
     if (p->t) {
+        if (p->status == FLUX_MODSTATE_INIT) {
+            /* if status == FLUX_MODSTATE_INIT, module never started
+             * in the reactor.  cancel it to avoid pthread_join()
+             * potentially hanging */
+            if ((e = pthread_cancel (p->t)) != 0)
+                log_errn (e, "pthread_cancel");
+            else
+                log_msg ("module %s thread cancelled", p->name);
+        }
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
         if (res == PTHREAD_CANCELED)
@@ -530,12 +549,18 @@ module_t *module_add (modhash_t *mh, const char *path)
     p->digest = xstrdup (zfile_digest (zf));
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
-    if (!(p->uuid = zuuid_new ()))
-        oom ();
-    if (!(p->rmmod = zlist_new ()))
-        oom ();
-    if (!(p->subs = zlist_new ()))
-        oom ();
+    if (!(p->uuid = zuuid_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+    if (!(p->rmmod = zlist_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+    if (!(p->subs = zlist_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
 
     p->rank = mh->rank;
     p->broker_h = mh->broker_h;
@@ -543,14 +568,20 @@ module_t *module_add (modhash_t *mh, const char *path)
 
     /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zsock_new_pair (NULL)))
-        log_err_exit ("zsock_new_pair");
-    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
-        log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
+    if (!(p->sock = zsock_new_pair (NULL))) {
+        log_err ("zsock_new_pair");
+        goto cleanup;
+    }
+    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
+        log_err ("zsock_bind inproc://%s", module_get_uuid (p));
+        goto cleanup;
+    }
     if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
                                                  p->sock, FLUX_POLLIN,
-                                                 module_cb, p)))
-        log_err_exit ("flux_zmq_watcher_create");
+                                                 module_cb, p))) {
+        log_err ("flux_zmq_watcher_create");
+        goto cleanup;
+    }
     /* Set creds for connection.
      * Since this is a point to point connection between broker threads,
      * credentials are always those of the instance owner.
@@ -565,6 +596,10 @@ module_t *module_add (modhash_t *mh, const char *path)
     zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
     return p;
+
+cleanup:
+    module_destroy (p);
+    return NULL;
 }
 
 void module_remove (modhash_t *mh, module_t *p)

@@ -62,7 +62,7 @@ void heartbeat_set_flux (heartbeat_t *hb, flux_t *h)
     hb->h = h;
 }
 
-int heartbeat_set_attrs (heartbeat_t *hb, attr_t *attrs)
+int heartbeat_register_attrs (heartbeat_t *hb, attr_t *attrs)
 {
     if (attr_add_active_int (attrs, "heartbeat-epoch",
                              &hb->epoch, FLUX_ATTRFLAG_READONLY) < 0)

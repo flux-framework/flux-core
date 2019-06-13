@@ -102,7 +102,9 @@ void shutdown_handler (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-void shutdown_set_flux (shutdown_t *s, flux_t *h)
+/* Cleanup not done in this function, responsibiility of caller to
+ * call shutdown_destroy() eventually */
+int shutdown_set_flux (shutdown_t *s, flux_t *h)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
 
@@ -110,14 +112,21 @@ void shutdown_set_flux (shutdown_t *s, flux_t *h)
 
     match.topic_glob = "shutdown";
     if (!(s->shutdown = flux_msg_handler_create (s->h, match,
-                                                 shutdown_handler, s)))
-        log_err_exit ("flux_msg_handler_create");
+                                                 shutdown_handler, s))) {
+        log_err ("flux_msg_handler_create");
+        return -1;
+    }
     flux_msg_handler_start (s->shutdown);
-    if (flux_event_subscribe (s->h, "shutdown") < 0)
-        log_err_exit ("flux_event_subscribe");
+    if (flux_event_subscribe (s->h, "shutdown") < 0){
+        log_err ("flux_event_subscribe");
+        return -1;
+    }
 
-    if (flux_get_rank (s->h, &s->myrank) < 0)
-        log_err_exit ("flux_get_rank");
+    if (flux_get_rank (s->h, &s->myrank) < 0) {
+        log_err ("flux_get_rank");
+        return -1;
+    }
+    return 0;
 }
 
 void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg)

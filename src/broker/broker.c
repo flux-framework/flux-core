@@ -139,7 +139,7 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
+static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
@@ -168,7 +168,7 @@ static void init_attrs (attr_t *attrs, pid_t pid);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-static int exit_rc = 0;
+static int exit_rc = 1;
 
 #define OPTIONS "+vM:X:k:s:g:EIS:"
 static const struct option longopts[] = {
@@ -284,12 +284,12 @@ static int setup_profiling (const char *program, int rank)
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
-    zlist_t *sigwatchers;
+    zlist_t *sigwatchers = NULL;
     int sec_typemask = ZSECURITY_TYPE_CURVE;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
-    flux_msg_handler_t **handlers;
+    flux_msg_handler_t **handlers = NULL;
     const char *boot_method;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -348,8 +348,10 @@ int main (int argc, char *argv[])
 
     /* Initailize zeromq context
      */
-    if (!zsys_init ())
-        log_err_exit ("zsys_init");
+    if (!zsys_init ()) {
+        log_err ("zsys_init");
+        goto cleanup;
+    }
     zsys_set_logstream (stderr);
     zsys_set_logident ("flux-broker");
     zsys_handler_set (NULL);
@@ -359,36 +361,52 @@ int main (int argc, char *argv[])
 
     /* Set up the flux reactor.
      */
-    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
-        log_err_exit ("flux_reactor_create");
+    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD))) {
+        log_err ("flux_reactor_create");
+        goto cleanup;
+    }
 
     /* Set up flux handle.
      * The handle is used for simple purposes such as logging.
      */
-    if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
-        log_err_exit ("flux_handle_create");
-    if (flux_set_reactor (ctx.h, ctx.reactor) < 0)
-        log_err_exit ("flux_set_reactor");
+    if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0))) {
+        log_err ("flux_handle_create");
+        goto cleanup;
+    }
+    if (flux_set_reactor (ctx.h, ctx.reactor) < 0) {
+        log_err ("flux_set_reactor");
+        goto cleanup;
+    }
 
     /* Prepare signal handling
      */
-    broker_handle_signals (&ctx, sigwatchers);
+    if (broker_handle_signals (&ctx, sigwatchers) < 0) {
+        log_err ("broker_handle_signals");
+        goto cleanup;
+    }
 
     /* Initialize security context.
      * Delay calling zsecurity_comms_init() so that we can defer creating
      * the libzmq work thread until we are ready to communicate.
      */
     const char *keydir;
-    if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
-        log_err_exit ("getattr security.keydir");
-    if (!(ctx.sec = zsecurity_create (sec_typemask, keydir)))
-        log_err_exit ("zsecurity_create");
+    if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0) {
+        log_err ("getattr security.keydir");
+        goto cleanup;
+    }
+    if (!(ctx.sec = zsecurity_create (sec_typemask, keydir))) {
+        log_err ("zsecurity_create");
+        goto cleanup;
+    }
 
     /* The first call to overlay_bind() or overlay_connect() calls
      * zsecurity_comms_init().
      */
     overlay_set_sec (ctx.overlay, ctx.sec);
-    overlay_set_flux (ctx.overlay, ctx.h);
+    if (overlay_set_flux (ctx.overlay, ctx.h) < 0) {
+        log_err ("overlay_set_flux");
+        goto cleanup;
+    }
 
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
@@ -396,14 +414,20 @@ int main (int argc, char *argv[])
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)
      */
-    if (publisher_set_flux (ctx.publisher, ctx.h) < 0)
-        log_err_exit ("publisher_set_flux");
+    if (publisher_set_flux (ctx.publisher, ctx.h) < 0) {
+        log_err ("publisher_set_flux");
+        goto cleanup;
+    }
     if (publisher_set_sender (ctx.publisher, "handle_event",
-                              (publisher_send_f)handle_event, &ctx) < 0)
-        log_err_exit ("publisher_set_sender");
+                              (publisher_send_f)handle_event, &ctx) < 0) {
+        log_err ("publisher_set_sender");
+        goto cleanup;
+    }
 
-    if (create_rundir (ctx.attrs) < 0)
-        log_err_exit ("create_rundir");
+    if (create_rundir (ctx.attrs) < 0) {
+        log_err ("create_rundir");
+        goto cleanup;
+    }
 
     /* Set & create broker.rundir *after* overlay initialization,
      * when broker rank is determined.
@@ -415,29 +439,41 @@ int main (int argc, char *argv[])
      */
     if (attr_get (ctx.attrs, "boot.method", &boot_method, NULL) < 0) {
         boot_method = "pmi";
-        if (attr_add (ctx.attrs, "boot.method", boot_method, 0))
-            log_err_exit ("setattr boot.method");
+        if (attr_add (ctx.attrs, "boot.method", boot_method, 0)) {
+            log_err ("setattr boot.method");
+            goto cleanup;
+        }
     }
-    if (attr_set_flags (ctx.attrs, "boot.method", FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        log_err_exit ("attr_set_flags boot.method");
+    if (attr_set_flags (ctx.attrs,
+                        "boot.method",
+                        FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("attr_set_flags boot.method");
+        goto cleanup;
+    }
     if (!strcmp (boot_method, "config")) {
-        if (boot_config (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
-            log_msg_exit ("bootstrap failed");
+        if (boot_config (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
+            log_msg ("bootstrap failed");
+            goto cleanup;
+        }
     }
     else if (!strcmp (boot_method, "pmi")) {
         double elapsed_sec;
         struct timespec start_time;
         monotime (&start_time);
-        if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
-            log_msg_exit ("bootstrap failed");
+        if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
+            log_msg ("bootstrap failed");
+            goto cleanup;
+        }
         elapsed_sec = monotime_since (start_time) / 1000;
         flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", elapsed_sec);
 
     }
-    else
-        log_err_exit ("unknown boot method: %s", boot_method);
-    uint32_t rank = overlay_get_rank(ctx.overlay);
-    uint32_t size = overlay_get_size(ctx.overlay);
+    else {
+        log_err ("unknown boot method: %s", boot_method);
+        goto cleanup;
+    }
+    uint32_t rank = overlay_get_rank (ctx.overlay);
+    uint32_t size = overlay_get_size (ctx.overlay);
 
     assert (size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
@@ -448,8 +484,10 @@ int main (int argc, char *argv[])
         log_msg ("boot: rank=%d size=%d session-id=%s", rank, size, sid);
     }
 
-    if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        log_err_exit ("attr_set_flags session-id");
+    if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("attr_set_flags session-id");
+        goto cleanup;
+    }
 
     // Setup profiling
     setup_profiling (argv[0], rank);
@@ -457,8 +495,10 @@ int main (int argc, char *argv[])
     /* If persist-filesystem or persist-directory are set, initialize those,
      * but only on rank 0.
      */
-    if (create_persistdir (ctx.attrs, rank) < 0)
-        log_err_exit ("create_persistdir");
+    if (create_persistdir (ctx.attrs, rank) < 0) {
+        log_err ("create_persistdir");
+        goto cleanup;
+    }
 
     /* Initialize logging.
      * OK to call flux_log*() after this.
@@ -467,24 +507,34 @@ int main (int argc, char *argv[])
 
     /* Allow flux_get_rank() and flux_get_size() to work in the broker.
      */
-    if (create_dummyattrs (ctx.h, rank, size) < 0)
-        log_err_exit ("creating dummy attributes");
+    if (create_dummyattrs (ctx.h, rank, size) < 0) {
+        log_err ("creating dummy attributes");
+        goto cleanup;
+    }
 
     /* Registers message handlers and obtains rank.
      */
-    if (content_cache_set_flux (ctx.cache, ctx.h) < 0)
-        log_err_exit ("content_cache_set_flux");
+    if (content_cache_set_flux (ctx.cache, ctx.h) < 0) {
+        log_err ("content_cache_set_flux");
+        goto cleanup;
+    }
 
     /* Configure attributes.
      */
-    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0)
-        log_err_exit ("registering overlay attributes");
-    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0)
-        log_err_exit ("configuring attributes");
+    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
+        log_err ("registering overlay attributes");
+        goto cleanup;
+    }
+    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
+        log_err ("configuring hello attributes");
+        goto cleanup;
+    }
 
     if (rank == 0) {
-        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
-            log_err_exit ("configuring runlevel attributes");
+        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
+            log_err ("configuring runlevel attributes");
+            goto cleanup;
+        }
     }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
@@ -521,26 +571,54 @@ int main (int argc, char *argv[])
         const char *rc2 = ctx.init_shell_cmd;
         size_t rc2_len = ctx.init_shell_cmd_len;
 
-        if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0)
-            log_err_exit ("local-uri is not set");
-        if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0)
-            log_err_exit ("conf.rc1_path is not set");
-        if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0)
-            log_err_exit ("conf.rc3_path is not set");
-        if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0)
-            log_err_exit ("conf.pmi_library_path is not set");
+        if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
+            log_err ("local-uri is not set");
+            goto cleanup;
+        }
+        if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0) {
+            log_err ("conf.rc1_path is not set");
+            goto cleanup;
+        }
+        if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0) {
+            log_err ("conf.rc3_path is not set");
+            goto cleanup;
+        }
+        if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0) {
+            log_err ("conf.pmi_library_path is not set");
+            goto cleanup;
+        }
 
         runlevel_set_size (ctx.runlevel, size);
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
         runlevel_set_flux (ctx.runlevel, ctx.h);
 
-        if (runlevel_set_rc (ctx.runlevel, 1, rc1, rc1 ? strlen (rc1) + 1 : 0, uri) < 0)
-            log_err_exit ("runlevel_set_rc 1");
-        if (runlevel_set_rc (ctx.runlevel, 2, rc2, rc2_len, uri) < 0)
-            log_err_exit ("runlevel_set_rc 2");
-        if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc3 ? strlen (rc3) + 1 : 0, uri) < 0)
-            log_err_exit ("runlevel_set_rc 3");
+        if (runlevel_set_rc (ctx.runlevel,
+                             1,
+                             rc1,
+                             rc1 ? strlen (rc1) + 1 : 0,
+                             uri) < 0) {
+            log_err ("runlevel_set_rc 1");
+            goto cleanup;
+        }
+
+        if (runlevel_set_rc (ctx.runlevel,
+                             2,
+                             rc2,
+                             rc2_len,
+                             uri) < 0) {
+            log_err ("runlevel_set_rc 2");
+            goto cleanup;
+        }
+
+        if (runlevel_set_rc (ctx.runlevel,
+                             3,
+                             rc3,
+                             rc3 ? strlen (rc3) + 1 : 0,
+                             uri) < 0) {
+            log_err ("runlevel_set_rc 3");
+            goto cleanup;
+        }
     }
 
     /* If Flux was launched by Flux, now that PMI bootstrap and runlevel
@@ -555,28 +633,48 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         log_msg ("initializing overlay sockets");
-    if (overlay_bind (ctx.overlay) < 0) /* idempotent */
-        log_err_exit ("overlay_bind");
-    if (overlay_connect (ctx.overlay) < 0)
-        log_err_exit ("overlay_connect");
+    if (overlay_bind (ctx.overlay) < 0) { /* idempotent */
+        log_err ("overlay_bind");
+        goto cleanup;
+    }
+    if (overlay_connect (ctx.overlay) < 0) {
+        log_err ("overlay_connect");
+        goto cleanup;
+    }
 
-    shutdown_set_flux (ctx.shutdown, ctx.h);
+    if (shutdown_set_flux (ctx.shutdown, ctx.h) < 0) {
+        log_err ("shutdown_set_flux");
+        goto cleanup;
+    }
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services
      */
-    if (attr_register_handlers (ctx.attrs, ctx.h) < 0)
-        log_err_exit ("attr_register_handlers");
-    if (heaptrace_initialize (ctx.h) < 0)
-        log_msg_exit ("heaptrace_initialize");
-    if (exec_initialize (ctx.h, rank, ctx.attrs) < 0)
-        log_err_exit ("exec_initialize");
-    if (ping_initialize (ctx.h, "cmb") < 0)
-        log_err_exit ("ping_initialize");
-    if (rusage_initialize (ctx.h, "cmb") < 0)
-        log_err_exit ("rusage_initialize");
+    if (attr_register_handlers (ctx.attrs, ctx.h) < 0) {
+        log_err ("attr_register_handlers");
+        goto cleanup;
+    }
+    if (heaptrace_initialize (ctx.h) < 0) {
+        log_err ("heaptrace_initialize");
+        goto cleanup;
+    }
+    if (exec_initialize (ctx.h, rank, ctx.attrs) < 0) {
+        log_err ("exec_initialize");
+        goto cleanup;
+    }
+    if (ping_initialize (ctx.h, "cmb") < 0) {
+        log_err ("ping_initialize");
+        goto cleanup;
+    }
+    if (rusage_initialize (ctx.h, "cmb") < 0) {
+        log_err ("rusage_initialize");
+        goto cleanup;
+    }
 
-    handlers = broker_add_services (&ctx);
+    if (!(handlers = broker_add_services (&ctx))) {
+        log_err ("broker_add_services");
+        goto cleanup;
+    }
 
     /* Initialize comms module infrastructure.
      */
@@ -591,16 +689,22 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         log_msg ("loading connector-local");
-    if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0)
-        log_err_exit ("load_module connector-local");
+    if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0) {
+        log_err ("load_module connector-local");
+        goto cleanup;
+    }
 
     /* install heartbeat (including timer on rank 0)
      */
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
-    if (heartbeat_set_attrs (ctx.heartbeat, ctx.attrs) < 0)
-        log_err_exit ("initializing heartbeat attributes");
-    if (heartbeat_start (ctx.heartbeat) < 0)
-        log_err_exit ("heartbeat_start");
+    if (heartbeat_register_attrs (ctx.heartbeat, ctx.attrs) < 0) {
+        log_err ("initializing heartbeat attributes");
+        goto cleanup;
+    }
+    if (heartbeat_start (ctx.heartbeat) < 0) {
+        log_err ("heartbeat_start");
+        goto cleanup;
+    }
     if (rank == 0 && ctx.verbose)
         log_msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
@@ -611,13 +715,17 @@ int main (int argc, char *argv[])
      */
     hello_set_flux (ctx.hello, ctx.h);
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
-    if (hello_start (ctx.hello) < 0)
-        log_err_exit ("hello_start");
+    if (hello_start (ctx.hello) < 0) {
+        log_err ("hello_start");
+        goto cleanup;
+    }
 
     /* Event loop
      */
     if (ctx.verbose)
         log_msg ("entering event loop");
+    /* Once we enter the reactor, default exit_rc is now 0 */
+    exit_rc = 0;
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err ("flux_reactor_run");
     if (ctx.verbose)
@@ -628,6 +736,10 @@ int main (int argc, char *argv[])
      * the reactor.
      */
     exec_terminate_subprocesses (ctx.h);
+
+cleanup:
+    if (ctx.verbose)
+        log_msg ("cleaning up");
 
     /* Restore default sigmask and actions for SIGINT, SIGTERM
      */
@@ -646,8 +758,10 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         log_msg ("unloading connector-local");
-    if (unload_module_byname (&ctx, "connector-local", NULL, false) < 0)
-        log_err ("unload connector-local");
+    if (unload_module_byname (&ctx, "connector-local", NULL, false) < 0) {
+        if (errno != ENOENT)
+            log_err ("unload connector-local");
+    }
     if (ctx.verbose)
         log_msg ("finalizing modules");
     modhash_destroy (ctx.modhash);
@@ -660,8 +774,6 @@ int main (int argc, char *argv[])
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
 
-    if (ctx.verbose)
-        log_msg ("cleaning up");
     if (ctx.sec)
         zsecurity_destroy (ctx.sec);
     overlay_destroy (ctx.overlay);
@@ -773,7 +885,7 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     broker_ctx_t *ctx = arg;
     if (expired) {
-        if (overlay_get_rank(ctx->overlay) == 0)
+        if (overlay_get_rank (ctx->overlay) == 0)
             exit_rc = shutdown_get_rc (s);
         flux_reactor_stop (flux_get_reactor (ctx->h));
     }
@@ -1148,7 +1260,7 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
-static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
+static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 {
     int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
                       SIGALRM };
@@ -1156,12 +1268,17 @@ static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
         w = flux_signal_watcher_create (ctx->reactor, sigs[i], signal_cb, ctx);
-        if (!w)
-            log_err_exit ("flux_signal_watcher_create");
-        if (zlist_push (sigwatchers, w) < 0)
-            oom ();
+        if (!w) {
+            log_err ("flux_signal_watcher_create");
+            return -1;
+        }
+        if (zlist_push (sigwatchers, w) < 0) {
+            log_errn (ENOMEM, "zlist_push");
+            return -1;
+        }
         flux_watcher_start (w);
     }
+    return 0;
 }
 
 static void broker_unhandle_signals (zlist_t *sigwatchers)
@@ -1481,15 +1598,19 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
     flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
-        if (!nodeset_member (svc->nodeset, overlay_get_rank(ctx->overlay)))
+        if (!nodeset_member (svc->nodeset, overlay_get_rank (ctx->overlay)))
             continue;
         if (service_add (ctx->services, svc->name, NULL,
-                          route_to_handle, ctx) < 0)
-            log_err_exit ("error registering service for %s", svc->name);
+                         route_to_handle, ctx) < 0) {
+            log_err ("error registering service for %s", svc->name);
+            return NULL;
+        }
     }
 
-    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0)
-        log_err_exit ("error registering message handlers");
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0) {
+        log_err ("error registering message handlers");
+        return NULL;
+    }
     return handlers;
 }
 
@@ -1756,7 +1877,7 @@ static int subvert_sendmsg_child (broker_ctx_t *ctx, const flux_msg_t *msg,
     char uuid[16];
     int rc = -1;
 
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, overlay_get_rank(ctx->overlay));
+    snprintf (uuid, sizeof (uuid), "%"PRIu32, overlay_get_rank (ctx->overlay));
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
     snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
@@ -1787,8 +1908,8 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
     uint32_t nodeid, gw;
     uint8_t flags;
     int rc = -1;
-    uint32_t rank = overlay_get_rank(ctx->overlay);
-    uint32_t size = overlay_get_size(ctx->overlay);
+    uint32_t rank = overlay_get_rank (ctx->overlay);
+    uint32_t size = overlay_get_size (ctx->overlay);
     const char *topic;
     char errbuf[64];
     const char *errstr = NULL;
@@ -1866,7 +1987,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    parent = kary_parentof (ctx->tbon_k, overlay_get_rank(ctx->overlay));
+    parent = kary_parentof (ctx->tbon_k, overlay_get_rank (ctx->overlay));
     snprintf (puuid, sizeof (puuid), "%"PRIu32, parent);
 
     /* See if it should go to the parent (backwards!)
@@ -1895,7 +2016,7 @@ done:
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
 
-    if (overlay_get_rank(ctx->overlay) > 0) {
+    if (overlay_get_rank (ctx->overlay) > 0) {
         flux_msg_t *cpy;
         if (!(cpy = flux_msg_copy (msg, true)))
             return -1;

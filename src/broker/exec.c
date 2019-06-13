@@ -36,6 +36,10 @@ void exec_terminate_subprocesses (flux_t *h)
 {
     flux_subprocess_server_t *s = flux_aux_get (h, "flux::exec");
 
+    /* exec_initialize() never called */
+    if (!s)
+        return;
+
     if (flux_subprocess_server_subprocesses_kill (s,
                                                   SIGTERM,
                                                   EXEC_TERMINATE_TIMEOUT) < 0)
