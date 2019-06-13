@@ -30,12 +30,7 @@ typedef struct heartbeat_struct heartbeat_t;
 heartbeat_t *heartbeat_create (void);
 void heartbeat_destroy (heartbeat_t *hb);
 
-/* Default heart rate (seconds) can be set from a command line argument
- * that includes an optional "s" or "ms" unit suffix.
- * Returns -1, EINVAL if rate is out of range (0.1, 30).
- */
-int heartbeat_set_ratestr (heartbeat_t *hb, const char *s);
-
+/* Returns -1, EINVAL if rate is out of range (0.1, 30). */
 int heartbeat_set_rate (heartbeat_t *hb, double rate);
 double heartbeat_get_rate (heartbeat_t *hb);
 

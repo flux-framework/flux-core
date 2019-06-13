@@ -113,6 +113,7 @@ typedef struct {
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
+    double heartbeat_rate;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     struct publisher *publisher;
@@ -235,8 +236,8 @@ void parse_command_line_arguments (int argc, char *argv[],
                 usage ();
             break;
         case 'H':   /* --heartrate SECS */
-            if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
-                log_err_exit ("heartrate `%s'", optarg);
+            if (fsd_parse_duration (optarg, &ctx->heartbeat_rate) < 0)
+                log_err_exit ("heartrate '%s'", optarg);
             break;
         case 'g':   /* --shutdown-grace SECS */
             if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
@@ -327,6 +328,7 @@ int main (int argc, char *argv[])
     /* Set default rolemask for messages sent with flux_send()
      * on the broker's internal handle. */
     ctx.rolemask = FLUX_ROLE_OWNER;
+    ctx.heartbeat_rate = 2;
 
     init_attrs (ctx.attrs, getpid ());
 
@@ -689,6 +691,10 @@ int main (int argc, char *argv[])
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
     if (heartbeat_register_attrs (ctx.heartbeat, ctx.attrs) < 0) {
         log_err ("initializing heartbeat attributes");
+        goto cleanup;
+    }
+    if (heartbeat_set_rate (ctx.heartbeat, ctx.heartbeat_rate) < 0) {
+        log_err ("heartbeat_set_rate");
         goto cleanup;
     }
     if (heartbeat_start (ctx.heartbeat) < 0) {

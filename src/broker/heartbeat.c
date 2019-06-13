@@ -81,17 +81,6 @@ error:
     return -1;
 }
 
-int heartbeat_set_ratestr (heartbeat_t *hb, const char *s)
-{
-    double rate;
-    if (fsd_parse_duration (s, &rate) < 0)
-        goto error;
-    return heartbeat_set_rate (hb, rate);
-error:
-    errno = EINVAL;
-    return -1;
-}
-
 double heartbeat_get_rate (heartbeat_t *hb)
 {
     return hb->rate;
