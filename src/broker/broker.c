@@ -114,6 +114,7 @@ typedef struct {
     shutdown_t *shutdown;
     double shutdown_grace;
     double heartbeat_rate;
+    int sec_typemask;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     struct publisher *publisher;
@@ -198,8 +199,7 @@ static void usage (void)
     exit (1);
 }
 
-void parse_command_line_arguments (int argc, char *argv[],
-                                   broker_ctx_t *ctx, int *sec_typemask)
+void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
 {
     int c;
     int e;
@@ -209,13 +209,13 @@ void parse_command_line_arguments (int argc, char *argv[],
         switch (c) {
         case 's':   /* --security=MODE */
             if (!strcmp (optarg, "none")) {
-                *sec_typemask = 0;
+                ctx->sec_typemask = 0;
             } else if (!strcmp (optarg, "plain")) {
-                *sec_typemask |= ZSECURITY_TYPE_PLAIN;
-                *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
+                ctx->sec_typemask |= ZSECURITY_TYPE_PLAIN;
+                ctx->sec_typemask &= ~ZSECURITY_TYPE_CURVE;
             } else if (!strcmp (optarg, "curve")) {
-                *sec_typemask |= ZSECURITY_TYPE_CURVE;
-                *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
+                ctx->sec_typemask |= ZSECURITY_TYPE_CURVE;
+                ctx->sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
             } else {
                 log_msg_exit ("--security arg must be none|plain|curve");
             }
@@ -286,7 +286,6 @@ int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
     zlist_t *sigwatchers = NULL;
-    int sec_typemask = ZSECURITY_TYPE_CURVE;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
@@ -329,10 +328,11 @@ int main (int argc, char *argv[])
      * on the broker's internal handle. */
     ctx.rolemask = FLUX_ROLE_OWNER;
     ctx.heartbeat_rate = 2;
+    ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
 
     init_attrs (ctx.attrs, getpid ());
 
-    parse_command_line_arguments (argc, argv, &ctx, &sec_typemask);
+    parse_command_line_arguments (argc, argv, &ctx);
 
     if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
         log_err_exit ("content cache attributes");
@@ -396,7 +396,7 @@ int main (int argc, char *argv[])
         log_err ("getattr security.keydir");
         goto cleanup;
     }
-    if (!(ctx.sec = zsecurity_create (sec_typemask, keydir))) {
+    if (!(ctx.sec = zsecurity_create (ctx.sec_typemask, keydir))) {
         log_err ("zsecurity_create");
         goto cleanup;
     }
