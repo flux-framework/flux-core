@@ -74,10 +74,10 @@ int main (int argc, char **argv)
     ok (heartbeat_get_rate (hb) == 2.,
         "heartbeat_get_rate returns default of 2s");
     errno = 0;
-    ok (heartbeat_set_rate (hb, -1) < 1 && errno == EINVAL,
+    ok (heartbeat_set_rate (hb, -1) < 0 && errno == EINVAL,
         "heartbeat_set_rate -1 fails with EINVAL");
     errno = 0;
-    ok (heartbeat_set_rate (hb, 1000000) < 1 && errno == EINVAL,
+    ok (heartbeat_set_rate (hb, 1000000) < 0 && errno == EINVAL,
         "heartbeat_set_rate 1000000 fails with EINVAL");
     ok (heartbeat_set_ratestr (hb, ".250s") == 0,
         "heartbeat_set_ratestr .250s works");
