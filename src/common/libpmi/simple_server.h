@@ -46,7 +46,7 @@ enum {
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     int appnum,
                                                     int universe_size,
-                                                    int local_procs,
+                                                    int local_size,
                                                     const char *kvsname,
                                                     int flags,
                                                     void *arg);
@@ -57,7 +57,7 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
  * Returns 1 indicating finalized / close fd, 0 on success, -1 on failure.
  */
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
-                               const char *buf, void *client);
+                               const char *buf, void *client, int rank);
 
 /* Finalize a barrier.  Set rc to 0 for success, -1 for failure.
  */

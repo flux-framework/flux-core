@@ -8,6 +8,58 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* simple_server.c - protocol engine for PMI-1 wire protocol */
+
+/* Users send request lines on behalf of clients to the protocol engine
+ * via pmi_simple_server_request().
+ *
+ * Callbacks are invoked by the protocol engine in response to requests.
+ * The callbacks are registered via the operations struct:
+ *
+ * response_send
+ *   Send a response line to client.
+ *
+ * kvs_put
+ *   Put a KVS value.  A success/fail response is generated for the client
+ *   upon callback return.
+ *
+ * kvs_get
+ *   Get a KVS value.  No response is generated - it is delayed until
+ *   the user calls pmi_simple_server_kvs_get_complete() or _get_error().
+ *   Meanwhile the protocol engine can process other clients.
+ *
+ * barrier_enter (optional)
+ *   PMI barriers complete once 'universe_size' procs have entered.  If
+ *   local_size == universe_size, the barrier may complete locally and
+ *   this callback is unnecessary.  If local_size < universe_size, multiple
+ *   instances of the protocol engine must contribute to a count held by
+ *   the user to complete the barrier, and this callback is required.
+ *   From this callback, call pmi_simple_server_barrier_complete() once the
+ *   user-held count reaches 'universe_size'.
+ *
+ * debug_trace
+ *   If flags | PMI_SIMPLE_SERVER_TRACE, this callback will be made
+ *   with protocol telemetry for debugging.
+ *
+ * Notes:
+ * - The void *client argument is passed in to pmi_simple_server_request()
+ *   by the user and represents a "client handle" of some sort.  It is passed
+ *   opaquely through the protocol engine to response_send and other callbacks.
+ *
+ * - The void *client argument is captured on first use and stored by rank
+ *   in pmi->clients.  When exiting a barrier, this hash is iterated over to
+ *   generate a response for each client.  When processing the multi-line
+ *   spawn command, a client's hash entry hold intermediate parsing state.
+ *
+ * - This protocol engine is expected to work with line-buffered libsubprocess
+ *   "channels", thus the engine I/O is line-oriented.
+ *
+ * - The following PMI-1 wire protocol commands always return PMI_FAIL:
+ *   publish, unpublish, lookup, spawn.
+ *
+ * - Abort is implemented as a no-op.
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -24,9 +76,11 @@
 #include "keyval.h"
 #include "pmi.h"
 
-
 struct client {
-    zlist_t *mcmd;
+    int rank;
+    void *arg;          // user-supplied void *client argument
+
+    bool mcmd_started;  // client started multi-line spawn command
 };
 
 struct pmi_simple_server {
@@ -35,15 +89,25 @@ struct pmi_simple_server {
     int appnum;
     char *kvsname;
     int universe_size;
-    int local_procs;
-    zlist_t *barrier;
-    zhash_t *clients;
+
+    int local_size;
+    int local_barrier_count;
+
+    zhashx_t *clients;  // struct client hashed by rank
+
     int flags;
 };
 
 
 static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
                                             void *client, int result);
+
+static struct client *client_create (int rank, void *arg);
+static void client_destroy (void **item);
+static int client_hash_insert (zhashx_t *zhx, struct client *cli);
+static struct client *client_hash_lookup (zhashx_t *zhx, int rank);
+static zhashx_t *client_hash_create (void);
+static void client_hash_destroy (zhashx_t *zhx);
 
 
 static void trace (struct pmi_simple_server *pmi,
@@ -64,181 +128,58 @@ static void trace (struct pmi_simple_server *pmi,
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     int appnum,
                                                     int universe_size,
-                                                    int local_procs,
+                                                    int local_size,
                                                     const char *kvsname,
                                                     int flags,
                                                     void *arg)
 {
     struct pmi_simple_server *pmi = calloc (1, sizeof (*pmi));
-    int saved_errno;
 
-    if (!pmi) {
-        errno = ENOMEM;
-        goto error;
-    }
+    if (!pmi)
+        return NULL;
     pmi->ops = ops;
     pmi->arg = arg;
     pmi->appnum = appnum;
-    if (!(pmi->kvsname = strdup (kvsname))) {
-        errno = ENOMEM;
-        goto error;
-    }
     pmi->universe_size = universe_size;
-    pmi->local_procs = local_procs;
-    if (!(pmi->barrier = zlist_new ())) {
+    pmi->local_size = local_size;
+    pmi->flags = flags;
+    pmi->kvsname = strdup (kvsname);
+    pmi->clients = client_hash_create ();
+    if (!pmi->kvsname || !pmi->clients) {
         errno = ENOMEM;
         goto error;
     }
-    pmi->flags = flags;
     return pmi;
 error:
-    saved_errno = errno;
     pmi_simple_server_destroy (pmi);
-    errno = saved_errno;
     return NULL;
 }
 
 void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
 {
     if (pmi) {
-        if (pmi->kvsname)
-            free (pmi->kvsname);
-        zlist_destroy (&pmi->barrier);
-        zhash_destroy (&pmi->clients);
+        int saved_errno = errno;
+        free (pmi->kvsname);
+        client_hash_destroy (pmi->clients);
         free (pmi);
+        errno = saved_errno;
     }
-}
-
-static void client_destroy (void *arg)
-{
-    struct client *c = arg;
-
-    if (c) {
-        if (c->mcmd) {
-            char *cpy;
-            while ((cpy = zlist_pop (c->mcmd)))
-                free (cpy);
-            zlist_destroy (&c->mcmd);
-        }
-        free (c);
-    }
-}
-
-static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
-                         struct client *c)
-{
-    char resp[SIMPLE_MAX_PROTO_LINE+1];
-    char *buf = zlist_first (c->mcmd);
-    int rc = 0;
-
-    resp[0] = '\0';
-    if (keyval_parse_isword (buf, "mcmd", "spawn") == 0) {
-        /* FIXME - spawn not implemented */
-        snprintf (resp, sizeof (resp), "cmd=spawn_result rc=-1\n");
-    }
-    /* unknown mcmd */
-    else {
-        errno = EPROTO;
-        rc = -1;
-    }
-    if (resp[0] != '\0') {
-        trace (pmi, client, "S: %s", resp);
-        if (pmi->ops.response_send (client, resp) < 0)
-            rc = -1;
-    }
-    return rc;
-}
-
-static int mcmd_begin (struct pmi_simple_server *pmi, void *client,
-                       const char *buf)
-{
-    struct client *c;
-    char ptrkey[2*sizeof (void *) + 1];
-    char *cpy = NULL;
-
-    if (!pmi->clients && !(pmi->clients = zhash_new ())) {
-        errno = ENOMEM;
-        return -1;
-    }
-    snprintf (ptrkey, sizeof (ptrkey), "%p", client);
-    if ((c = zhash_lookup (pmi->clients, ptrkey)) != NULL)
-        return -1; /* in progress */
-    if (!(c = calloc (1, sizeof (*c)))) {
-        errno = ENOMEM;
-        return -1;
-    }
-    if (!(c->mcmd = zlist_new ())) {
-        free (c);
-        errno = ENOMEM;
-        return -1;
-    }
-    zhash_update (pmi->clients, ptrkey, c);
-    zhash_freefn (pmi->clients, ptrkey, client_destroy);
-    if (!(cpy = strdup (buf)) || zlist_append (c->mcmd, cpy) < 0) {
-        if (cpy)
-            free (cpy);
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
-}
-
-static int mcmd_inprogress (struct pmi_simple_server *pmi, void *client)
-{
-    char ptrkey[2*sizeof (void *) + 1];
-
-    snprintf (ptrkey, sizeof (ptrkey), "%p", client);
-    if (!pmi->clients || !zhash_lookup (pmi->clients, ptrkey))
-        return 0;
-    return 1;
-}
-
-static int mcmd_append (struct pmi_simple_server *pmi, void *client,
-                        const char *buf)
-{
-    struct client *c;
-    char ptrkey[2*sizeof (void *) + 1];
-    char *cpy = NULL;
-    int rc = 0;
-
-    snprintf (ptrkey, sizeof (ptrkey), "%p", client);
-    if (!pmi->clients || !(c = zhash_lookup (pmi->clients, ptrkey))) {
-        errno = EPROTO;
-        return -1; /* not in progress */
-    }
-    if (!(cpy = strdup (buf)) || zlist_append (c->mcmd, cpy) < 0) {
-        if (cpy)
-            free (cpy);
-        errno = ENOMEM;
-        return -1;
-    }
-    if (!strcmp (buf, "endcmd\n")) {
-        rc = mcmd_execute (pmi, client, c);
-        zhash_delete (pmi->clients, ptrkey);
-    }
-    return rc;
-}
-
-static int barrier_enter (struct pmi_simple_server *pmi, void *client)
-{
-    if (zlist_append (pmi->barrier, client) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
 }
 
 static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 {
     char resp[SIMPLE_MAX_PROTO_LINE+1];
-    void *client;
+    struct client *cli;
     int ret = 0;
 
-    while ((client = zlist_pop (pmi->barrier))) {
+    pmi->local_barrier_count = 0;
+    cli = zhashx_first (pmi->clients);
+    while (cli) {
         snprintf (resp, sizeof (resp), "cmd=barrier_out rc=%d\n", rc);
-        trace (pmi, client, "S: %s", resp);
-        if (pmi->ops.response_send (client, resp) < 0)
+        trace (pmi, cli->arg, "S: %s", resp);
+        if (pmi->ops.response_send (cli->arg, resp) < 0)
             ret = -1;
+        cli = zhashx_next (pmi->clients);
     }
     return ret;
 }
@@ -255,22 +196,33 @@ static int client_respond (struct pmi_simple_server *pmi, void *client,
 }
 
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
-                               const char *buf, void *client)
+                               const char *buf, void *client, int rank)
 {
     char resp[SIMPLE_MAX_PROTO_LINE+1];
     int rc = 0;
+    struct client *cli;
+
+    if (!(cli = client_hash_lookup (pmi->clients, rank))) {
+        if (!(cli = client_create (rank, client)))
+            goto error;
+        if (client_hash_insert (pmi->clients, cli) < 0) {
+            client_destroy ((void **)&cli);
+            goto error;
+        }
+    }
 
     resp[0] = '\0';
     trace (pmi, client, "C: %s", buf);
 
-    /* continue in-progress mcmd */
-    if (mcmd_inprogress (pmi, client)) {
-        rc = mcmd_append (pmi, client, buf);
-        goto done;
+    /* spawn continuation (unimplemented) */
+    if (cli->mcmd_started) {
+        if (strcmp (buf, "endcmd\n") != 0)
+            goto out_noresponse; // ignore protocol between mcmd and endcmd
+        snprintf (resp, sizeof (resp), "cmd=spawn_result rc=-1\n");
+        cli->mcmd_started = false;
     }
-
     /* init */
-    if (keyval_parse_isword (buf, "cmd", "init") == 0) {
+    else if (keyval_parse_isword (buf, "cmd", "init") == 0) {
         unsigned int pmi_version, pmi_subversion;
         if (keyval_parse_uint (buf, "pmi_version", &pmi_version) < 0)
             goto proto;
@@ -368,16 +320,14 @@ put_respond:
             goto proto;
         }
         if (pmi->ops.kvs_get (pmi->arg, client, name, key) == 0)
-            goto done;
+            goto out_noresponse;
         result = PMI_ERR_INVALID_KEY;
 get_respond:
         return (pmi_simple_server_kvs_get_error (pmi, client, result));
     }
     /* barrier */
     else if (keyval_parse_isword (buf, "cmd", "barrier_in") == 0) {
-        if (barrier_enter (pmi, client) < 0)
-            rc = -1;
-        else if (zlist_size (pmi->barrier) == pmi->local_procs) {
+        if (++pmi->local_barrier_count == pmi->local_size) {
             if (pmi->ops.barrier_enter) {
                 if (pmi->ops.barrier_enter (pmi->arg) < 0)
                     if (barrier_exit (pmi, PMI_FAIL) < 0)
@@ -407,8 +357,11 @@ get_respond:
     }
     /* spawn */
     else if (keyval_parse_isword (buf, "mcmd", "spawn") == 0) {
-        rc = mcmd_begin (pmi, client, buf);
+        /* FIXME - not implemented */
+        cli->mcmd_started = true;
+        goto out_noresponse;
     }
+
     /* unknown command */
     else
         goto proto;
@@ -417,10 +370,11 @@ get_respond:
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
     }
-done:
+out_noresponse:
     return rc;
 proto:
     errno = EPROTO;
+error:
     return -1;
 }
 
@@ -446,6 +400,85 @@ int pmi_simple_server_kvs_get_complete (struct pmi_simple_server *pmi,
                                                  PMI_ERR_INVALID_KEY));
     snprintf (resp, sizeof (resp), "cmd=get_result rc=0 value=%s\n", val);
     return (client_respond (pmi, client, resp));
+}
+
+static struct client *client_create (int rank, void *arg)
+{
+    struct client *cli;
+
+    if (!(cli = calloc (1, sizeof (*cli))))
+        return NULL;
+    cli->rank = rank;
+    cli->arg = arg;
+
+    return cli;
+}
+
+/* zhashx_destructor_fn footprint */
+static void client_destroy (void **item)
+{
+    free (*item);
+    *item = NULL;
+}
+
+/* zhashx_hash_fn footprint */
+static size_t client_hasher (const void *key)
+{
+    const int *rank = key;
+    return *rank;
+}
+
+/* zhashx_comparator_fn footprint */
+static int client_hash_key_cmp (const void *key1, const void *key2)
+{
+    const int *r1 = key1;
+    const int *r2 = key2;
+
+    return (*r1 == *r2 ? 0 : (*r1 < *r2 ? -1 : 1));
+}
+
+static struct client *client_hash_lookup (zhashx_t *zhx, int rank)
+{
+    struct client *cli;
+
+    if (!(cli = zhashx_lookup (zhx, &rank))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return cli;
+}
+
+static int client_hash_insert (zhashx_t *zhx, struct client *cli)
+{
+    if (zhashx_insert (zhx, &cli->rank, cli) < 0) {
+        errno = EEXIST;
+        return -1;
+    }
+    return 0;
+}
+
+static void client_hash_destroy (zhashx_t *zhx)
+{
+    zhashx_destroy (&zhx);
+}
+
+static zhashx_t *client_hash_create (void)
+{
+    zhashx_t *zhx;
+
+    if (!(zhx = zhashx_new ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    zhashx_set_destructor (zhx, client_destroy);
+
+    zhashx_set_key_hasher (zhx, client_hasher);
+    zhashx_set_key_comparator (zhx, client_hash_key_cmp);
+    zhashx_set_key_duplicator (zhx, NULL);
+    zhashx_set_key_destructor (zhx, NULL);
+
+    return zhx;
 }
 
 /*

@@ -14,7 +14,9 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/simple_client.h"
+#include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/dgetline.h"
+#include "src/common/libpmi/keyval.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libflux/reactor.h"
 
@@ -22,6 +24,86 @@
 
 #include "server_thread.h"
 
+int fake_publish (int fd, const char *service, const char *port)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (dprintf (fd, "cmd=publish_name service=%s port=%s\n",
+                 service, port) < 0)
+        return PMI_FAIL;
+    if (dgetline (fd, buf, sizeof (buf)) < 0)
+        return PMI_FAIL;
+    if (keyval_parse_isword (buf, "cmd", "publish_result") < 0)
+        return PMI_FAIL;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
+
+int fake_unpublish (int fd, const char *service)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (dprintf (fd, "cmd=unpublish_name service=%s\n", service) < 0)
+        return PMI_FAIL;
+    if (dgetline (fd, buf, sizeof (buf)) < 0)
+        return PMI_FAIL;
+    if (keyval_parse_isword (buf, "cmd", "unpublish_result") < 0)
+        return PMI_FAIL;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
+
+int fake_lookup (int fd, const char *service)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (dprintf (fd, "cmd=lookup_name service=%s\n", service) < 0)
+        return PMI_FAIL;
+    if (dgetline (fd, buf, sizeof (buf)) < 0)
+        return PMI_FAIL;
+    if (keyval_parse_isword (buf, "cmd", "lookup_result") < 0)
+        return PMI_FAIL;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
+
+int fake_spawn (int fd)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (dprintf (fd, "mcmd=spawn\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "nprocs=1\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "execname=foo\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "totspawns=1\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "spawnssofar=1\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "argcnt=0\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "preput_num=0\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "info_num=0\n") < 0)
+        return PMI_FAIL;
+    if (dprintf (fd, "endcmd\n") < 0)
+        return PMI_FAIL;
+    if (dgetline (fd, buf, sizeof (buf)) < 0)
+        return PMI_FAIL;
+    if (keyval_parse_isword (buf, "cmd", "spawn_result") < 0)
+        return PMI_FAIL;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
 
 int main (int argc, char *argv[])
 {
@@ -76,7 +158,6 @@ int main (int argc, char *argv[])
                                            cli->kvsname_max) == PMI_SUCCESS
         && strlen (name) > 0,
         "pmi_simple_client_kvs_get_my_name OK");
-    diag ("kvsname=%s", name);
 
     /* put foo=bar / commit / barier / get foo
      */
@@ -143,6 +224,22 @@ int main (int argc, char *argv[])
     pmi_set_barrier_exit_failure (srv, 0);
     ok (pmi_simple_client_barrier (cli) == PMI_SUCCESS,
         "pmi_simple_client_barrier OK (rigged errors cleared)");
+
+    /* publish */
+    ok (fake_publish (cfd[0], "foo", "bar") == PMI_FAIL,
+        "publish fails (unimplemented)");
+
+    /* unpublish */
+    ok (fake_unpublish (cfd[0], "foo") == PMI_FAIL,
+        "unpublish fails (unimplemented)");
+
+    /* lookup */
+    ok (fake_lookup (cfd[0], "foo") == PMI_FAIL,
+        "lookup fails (unimplemented)");
+
+    /* spawn */
+    ok (fake_spawn (cfd[0]) == PMI_FAIL,
+        "spawn fails (unimplemented)");
 
     /* finalize
      */

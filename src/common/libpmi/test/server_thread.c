@@ -27,11 +27,19 @@
 
 #include "server_thread.h"
 
+struct pmi_server_context;
+
+struct client {
+    int sfd;
+    int rank;
+    struct pmi_server_context *ctx;
+};
+
 #define MAGIC_VALUE 0x5354534a
 struct pmi_server_context {
     int magic;
     pthread_t t;
-    int *sfd;
+    struct client *cli;
     zhashx_t *kvs;
     struct pmi_simple_server *pmi;
     int size;
@@ -56,8 +64,6 @@ static int s_kvs_put (void *arg, const char *kvsname, const char *key,
 {
     struct pmi_server_context *ctx = arg;
 
-    diag ("%s: %s::%s = %s", __func__, kvsname, key, val);
-
     assert (ctx->magic == MAGIC_VALUE);
     zhashx_update (ctx->kvs, key, (char *)val);
 
@@ -69,8 +75,6 @@ static int s_kvs_get (void *arg, void *client,
 {
     struct pmi_server_context *ctx = arg;
     char *value;
-
-    diag ("%s: %s::%s", __func__, kvsname, key);
 
     assert (ctx->magic == MAGIC_VALUE);
     value = zhashx_lookup (ctx->kvs, key);
@@ -89,19 +93,18 @@ static int s_send_response (void *client, const char *buf)
 static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
-    struct pmi_server_context *ctx = arg;
+    struct client *cli = arg;
+    struct pmi_server_context *ctx = cli->ctx;
     int fd = flux_fd_watcher_get_fd (w);
     int rc;
 
     assert (ctx->magic == MAGIC_VALUE);
     if (dgetline (fd, ctx->buf, sizeof (ctx->buf)) < 0) {
-        diag ("dgetline: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
     }
-    rc = pmi_simple_server_request (ctx->pmi, ctx->buf, &fd);
+    rc = pmi_simple_server_request (ctx->pmi, ctx->buf, cli, cli->rank);
     if (rc < 0) {
-        diag ("pmi_simple_server_request: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
     }
@@ -138,8 +141,11 @@ static void *server_thread (void *arg)
     if (!(w = calloc (ctx->size, sizeof (w[0]))))
         BAIL_OUT ("calloc failed");
     for (i = 0; i < ctx->size; i++) {
-        if (!(w[i] = flux_fd_watcher_create (reactor, ctx->sfd[i],
-                                             FLUX_POLLIN, s_io_cb, ctx)))
+        if (!(w[i] = flux_fd_watcher_create (reactor,
+                                             ctx->cli[i].sfd,
+                                             FLUX_POLLIN,
+                                             s_io_cb,
+                                             &ctx->cli[i])))
             BAIL_OUT ("flux_fd_watcher_create failed");
         flux_watcher_start (w[i]);
     }
@@ -152,6 +158,11 @@ static void *server_thread (void *arg)
     return NULL;
 }
 
+void s_trace (void *arg, const char *buf)
+{
+    diag ("%s", buf);
+}
+
 struct pmi_server_context *pmi_server_create (int *cfd, int size)
 {
     struct pmi_simple_ops server_ops = {
@@ -159,6 +170,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         .kvs_get = s_kvs_get,
         .barrier_enter = s_barrier_enter,
         .response_send = s_send_response,
+        .debug_trace = s_trace,
     };
     struct pmi_server_context *ctx;
     int i;
@@ -167,7 +179,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         BAIL_OUT ("calloc failed");
     ctx->magic = MAGIC_VALUE;
     ctx->size = size;
-    if (!(ctx->sfd = calloc (size, sizeof (ctx->sfd[0]))))
+    if (!(ctx->cli = calloc (size, sizeof (ctx->cli[0]))))
         BAIL_OUT ("calloc bailed");
 
     if (!(ctx->kvs = zhashx_new ()))
@@ -181,7 +193,9 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fd) < 0)
             BAIL_OUT ("socketpair failed");
         cfd[i] = fd[0];
-        ctx->sfd[i] = fd[1];
+        ctx->cli[i].sfd = fd[1];
+        ctx->cli[i].rank = i;
+        ctx->cli[i].ctx = ctx;
     }
 
     ctx->pmi = pmi_simple_server_create (server_ops,
@@ -189,7 +203,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
                                          ctx->size,     // size
                                          ctx->size,     // local procs
                                          "bleepgorp",   // kvsname
-                                         0,             // flags
+                                         PMI_SIMPLE_SERVER_TRACE,
                                          ctx);
     if (!ctx->pmi)
         BAIL_OUT ("pmi_simple_server_create failed");
@@ -205,7 +219,7 @@ void pmi_server_destroy (struct pmi_server_context *ctx)
         BAIL_OUT ("pthread_join failed");
     pmi_simple_server_destroy (ctx->pmi);
     zhashx_destroy (&ctx->kvs);
-    free (ctx->sfd);
+    free (ctx->cli);
     ctx->magic = ~MAGIC_VALUE;
     free (ctx);
 }

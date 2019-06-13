@@ -11,22 +11,30 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS)
 
-noinst_LTLIBRARIES = libpmi.la
+noinst_LTLIBRARIES = \
+	libpmi_client.la \
+	libpmi_server.la
 
-libpmi_la_SOURCES = \
-	simple_server.h \
-	simple_server.c \
-	simple_client.c \
-	simple_client.h \
-	pmi.c \
+libpmi_common_sources = \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
-	keyval.h \
+	keyval.h
+
+libpmi_client_la_SOURCES = \
+	simple_client.c \
+	simple_client.h \
+	pmi.c \
 	dgetline.c \
 	dgetline.h \
 	clique.c \
-	clique.h
+	clique.h \
+	$(libpmi_common_sources)
+
+libpmi_server_la_SOURCES = \
+	simple_server.h \
+	simple_server.c \
+	$(libpmi_common_sources)
 
 fluxinclude_HEADERS = \
 	pmi.h
@@ -38,7 +46,8 @@ TESTS = test_keyval.t \
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libpmi/libpmi.la \
+	$(top_builddir)/src/common/libpmi/libpmi_client.la \
+	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
