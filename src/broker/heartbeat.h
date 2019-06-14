@@ -45,7 +45,7 @@ int heartbeat_register_attrs (heartbeat_t *hb, attr_t *attrs);
 void heartbeat_set_epoch (heartbeat_t *hb, int epoch);
 int heartbeat_get_epoch (heartbeat_t *hb);
 
-int heartbeat_start (heartbeat_t *hb); /* rank 0 only */
+int heartbeat_start (heartbeat_t *hb);
 void heartbeat_stop (heartbeat_t *hb);
 
 #endif /* !_BROKER_HEARTBEAT_H */
