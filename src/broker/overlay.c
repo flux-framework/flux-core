@@ -516,7 +516,7 @@ static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
     int rc = -1;
 
     if (!strcmp (name, "tbon.parent-endpoint"))
-        *val = overlay_get_parent(overlay);
+        *val = overlay_get_parent (overlay);
     else {
         errno = ENOENT;
         goto done;
