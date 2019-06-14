@@ -105,6 +105,7 @@ typedef struct {
      */
     bool verbose;
     int event_recv_seq;
+    zlist_t *sigwatchers;
     struct service_switch *services;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
@@ -137,8 +138,7 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
-static void broker_unhandle_signals (zlist_t *sigwatchers);
+static int broker_handle_signals (broker_ctx_t *ctx);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
@@ -281,7 +281,6 @@ static int setup_profiling (const char *program, int rank)
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
-    zlist_t *sigwatchers = NULL;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
@@ -291,9 +290,8 @@ int main (int argc, char *argv[])
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
 
-    if (!(sigwatchers = zlist_new ()))
+    if (!(ctx.sigwatchers = zlist_new ()))
         oom ();
-
     if (!(ctx.modhash = modhash_create ()))
         oom ();
     if (!(ctx.services = service_switch_create ()))
@@ -378,7 +376,7 @@ int main (int argc, char *argv[])
 
     /* Prepare signal handling
      */
-    if (broker_handle_signals (&ctx, sigwatchers) < 0) {
+    if (broker_handle_signals (&ctx) < 0) {
         log_err ("broker_handle_signals");
         goto cleanup;
     }
@@ -759,9 +757,7 @@ cleanup:
     attr_destroy (ctx.attrs);
     content_cache_destroy (ctx.cache);
 
-    broker_unhandle_signals (sigwatchers);
-    zlist_destroy (&sigwatchers);
-
+    zlist_destroy (&ctx.sigwatchers);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
@@ -1244,7 +1240,14 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
-static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
+static void broker_destroy_sigwatcher (void *data)
+{
+    flux_watcher_t *w = data;
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+}
+
+static int broker_handle_signals (broker_ctx_t *ctx)
 {
     int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
                       SIGALRM };
@@ -1256,23 +1259,14 @@ static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
             log_err ("flux_signal_watcher_create");
             return -1;
         }
-        if (zlist_push (sigwatchers, w) < 0) {
+        if (zlist_push (ctx->sigwatchers, w) < 0) {
             log_errn (ENOMEM, "zlist_push");
             return -1;
         }
+        zlist_freefn (ctx->sigwatchers, w, broker_destroy_sigwatcher, false);
         flux_watcher_start (w);
     }
     return 0;
-}
-
-static void broker_unhandle_signals (zlist_t *sigwatchers)
-{
-    flux_watcher_t *w;
-
-    while ((w = zlist_pop (sigwatchers))) {
-        flux_watcher_stop (w);
-        flux_watcher_destroy (w);
-    }
 }
 
 /**
