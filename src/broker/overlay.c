@@ -132,8 +132,8 @@ void overlay_set_init_callback (overlay_t *ov, overlay_init_cb_f cb, void *arg)
     ov->init_arg = arg;
 }
 
-void overlay_init (overlay_t *overlay,
-                   uint32_t size, uint32_t rank, int tbon_k)
+int overlay_init (overlay_t *overlay,
+                  uint32_t size, uint32_t rank, int tbon_k)
 {
     overlay->size = size;
     overlay->rank = rank;
@@ -142,7 +142,8 @@ void overlay_init (overlay_t *overlay,
     overlay->tbon_maxlevel = kary_levelof (tbon_k, size - 1);
     overlay->tbon_descendants = kary_sum_descendants (tbon_k, size, rank);
     if (overlay->init_cb)
-        (*overlay->init_cb) (overlay, overlay->init_arg);
+        return (*overlay->init_cb) (overlay, overlay->init_arg);
+    return 0;
 }
 
 uint32_t overlay_get_rank (overlay_t *ov)
