@@ -343,10 +343,15 @@ static void jobinfo_complete (struct jobinfo *job)
     }
 }
 
-static void jobinfo_started (struct jobinfo *job)
+static void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
+    job->running = 1;
     if (h && job->req) {
+        va_list ap;
+        va_start (ap, fmt);
+        jobinfo_emit_event_vpack_nowait (job, "running", fmt, ap);
+        va_end (ap);
         if (jobinfo_respond (h, job, "start", 0) < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
     }
@@ -715,9 +720,7 @@ static int jobinfo_start_timer (struct jobinfo *job)
         }
         flux_watcher_start (job->timer);
         snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
-        jobinfo_emit_event_pack_nowait (job, "running", "{ s:s }",
-                                        "timer", timebuf);
-        job->running = 1;
+        jobinfo_started (job, "{ s:s }", "timer", timebuf);
     }
     else
         return -1;
@@ -759,7 +762,6 @@ static int jobinfo_start_execution (struct jobinfo *job)
         jobinfo_fatal_error (job, errno, "start timer failed");
         return -1;
     }
-    jobinfo_started (job);
     if (job->needs_cleanup)
         jobinfo_add_cleanup (job, "epilog simulator", ersatz_epilog);
     return 0;
