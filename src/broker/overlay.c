@@ -36,7 +36,7 @@ struct endpoint {
 };
 
 struct overlay_struct {
-    zsecurity_t *sec;
+    zsecurity_t *sec;             /* security context (MT-safe) */
     bool sec_initialized;
     flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
@@ -92,6 +92,8 @@ static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
 void overlay_destroy (overlay_t *ov)
 {
     if (ov) {
+        if (ov->sec)
+            zsecurity_destroy (ov->sec);
         if (ov->heartbeat)
             flux_msg_handler_destroy (ov->heartbeat);
         if (ov->h)
@@ -143,11 +145,6 @@ void overlay_init (overlay_t *overlay,
         (*overlay->init_cb) (overlay, overlay->init_arg);
 }
 
-void overlay_set_sec (overlay_t *ov, zsecurity_t *sec)
-{
-    ov->sec = sec;
-}
-
 uint32_t overlay_get_rank (overlay_t *ov)
 {
     return ov->rank;
@@ -175,6 +172,19 @@ int overlay_set_flux (overlay_t *ov, flux_t *h)
     flux_msg_handler_start (ov->heartbeat);
     if (flux_event_subscribe (ov->h, "hb") < 0) {
         log_err ("flux_event_subscribe");
+        return -1;
+    }
+    return 0;
+}
+
+int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir)
+{
+    if (!keydir) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(ov->sec = zsecurity_create (sec_typemask, keydir))) {
+        log_err ("zsecurity_create");
         return -1;
     }
     return 0;

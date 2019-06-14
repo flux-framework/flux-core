@@ -83,10 +83,6 @@ typedef enum {
 } request_error_mode_t;
 
 typedef struct {
-    /* 0MQ
-     */
-    zsecurity_t *sec;             /* security context (MT-safe) */
-
     /* Reactor
      */
     flux_t *h;
@@ -387,26 +383,22 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Initialize security context.
-     * Delay calling zsecurity_comms_init() so that we can defer creating
-     * the libzmq work thread until we are ready to communicate.
+    /* The first call to overlay_bind() or overlay_connect() calls
+     * zsecurity_comms_init().  Delay calling zsecurity_comms_init()
+     * so that we can defer creating the libzmq work thread until we
+     * are ready to communicate.
      */
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0) {
         log_err ("getattr security.keydir");
         goto cleanup;
     }
-    if (!(ctx.sec = zsecurity_create (ctx.sec_typemask, keydir))) {
-        log_err ("zsecurity_create");
-        goto cleanup;
-    }
-
-    /* The first call to overlay_bind() or overlay_connect() calls
-     * zsecurity_comms_init().
-     */
-    overlay_set_sec (ctx.overlay, ctx.sec);
     if (overlay_set_flux (ctx.overlay, ctx.h) < 0) {
         log_err ("overlay_set_flux");
+        goto cleanup;
+    }
+    if (overlay_setup_sec (ctx.overlay, ctx.sec_typemask, keydir) < 0) {
+        log_err ("overlay_setup_sec");
         goto cleanup;
     }
 
@@ -770,8 +762,6 @@ cleanup:
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
 
-    if (ctx.sec)
-        zsecurity_destroy (ctx.sec);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);

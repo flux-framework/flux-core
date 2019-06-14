@@ -28,8 +28,8 @@ void overlay_set_init_callback (overlay_t *ov,
 
 /* These need to be called before connect/bind.
  */
-void overlay_set_sec (overlay_t *ov, zsecurity_t *sec);
 int overlay_set_flux (overlay_t *ov, flux_t *h);
+int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir);
 void overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
 
