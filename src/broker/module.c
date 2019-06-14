@@ -129,7 +129,11 @@ static void *module_thread (void *arg)
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
-    modservice_register (p->h, p);
+
+    if (modservice_register (p->h, p) < 0) {
+        log_err ("%s: modservice_register", p->name);
+        goto done;
+    }
 
     /* Block all signals
      */
