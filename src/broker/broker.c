@@ -767,12 +767,7 @@ cleanup:
     publisher_destroy (ctx.publisher);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    if (ctx.subscriptions) {
-        char *s;
-        while ((s = zlist_pop (ctx.subscriptions)))
-            free (s);
-        zlist_destroy (&ctx.subscriptions);
-    }
+    zlist_destroy (&ctx.subscriptions);
     runlevel_destroy (ctx.runlevel);
     free (ctx.init_shell_cmd);
 
@@ -2073,6 +2068,7 @@ static int broker_subscribe (void *impl, const char *topic)
         goto nomem;
     if (zlist_append (ctx->subscriptions, cpy) < 0)
         goto nomem;
+    zlist_freefn (ctx->subscriptions, cpy, free, true);
     return 0;
 nomem:
     free (cpy);
@@ -2087,7 +2083,6 @@ static int broker_unsubscribe (void *impl, const char *topic)
     while (s) {
         if (!strcmp (s, topic)) {
             zlist_remove (ctx->subscriptions, s);
-            free (s);
             break;
         }
         s = zlist_next (ctx->subscriptions);
