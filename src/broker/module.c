@@ -36,7 +36,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libutil/iterators.h"
 
 #include "heartbeat.h"
@@ -718,8 +717,10 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name)
     char *uuid;
     module_t *result = NULL;
 
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
+    if (!(uuids = zhash_keys (mh->zh_byuuid))) {
+        errno = ENOMEM;
+        return NULL;
+    }
     uuid = zlist_first (uuids);
     while (uuid) {
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
@@ -738,14 +739,22 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name)
 int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
 {
     module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
+    char *cpy = NULL;
     int rc = -1;
 
     if (!p) {
         errno = ENOENT;
         goto done;
     }
-    if (zlist_push (p->subs, xstrdup (topic)) < 0)
-        oom ();
+    if (!(cpy = strdup (topic))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (zlist_push (p->subs, cpy) < 0) {
+        free (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     rc = 0;
 done:
     return rc;

@@ -14,7 +14,6 @@
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
@@ -61,6 +60,8 @@ struct sleeper {
     flux_msg_t *msg;
     void *arg;
 };
+
+void logbuf_destroy (logbuf_t *logbuf);
 
 static void sleeper_destroy (struct sleeper *s)
 {
@@ -194,18 +195,29 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 
 static logbuf_t *logbuf_create (void)
 {
-    logbuf_t *logbuf = xzmalloc (sizeof (*logbuf));
+    logbuf_t *logbuf = calloc (1, sizeof (*logbuf));
+    if (!logbuf) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     logbuf->magic = LOGBUF_MAGIC;
     logbuf->forward_level = default_forward_level;
     logbuf->critical_level = default_critical_level;
     logbuf->stderr_level = default_stderr_level;
     logbuf->level = default_level;
     logbuf->ring_size = default_ring_size;
-    if (!(logbuf->buf = zlist_new ()))
-        oom();
-    if (!(logbuf->sleepers = zlist_new ()))
-        oom();
+    if (!(logbuf->buf = zlist_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+    if (!(logbuf->sleepers = zlist_new ())) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     return logbuf;
+cleanup:
+    logbuf_destroy (logbuf);
+    return NULL;
 }
 
 void logbuf_destroy (logbuf_t *logbuf)
