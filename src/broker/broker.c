@@ -328,9 +328,6 @@ int main (int argc, char *argv[])
 
     parse_command_line_arguments (argc, argv, &ctx);
 
-    if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
-        log_err_exit ("content cache attributes");
-
     /* Block all signals, saving old mask and actions for SIGINT, SIGTERM.
      */
     sigset_t sigmask;
@@ -470,6 +467,12 @@ int main (int argc, char *argv[])
     assert (size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
 
+    /* Must be called after overlay setup */
+    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
+        log_err ("registering overlay attributes");
+        goto cleanup;
+    }
+
     if (ctx.verbose) {
         const char *sid = "unknown";
         (void)attr_get (ctx.attrs, "session-id", &sid, NULL);
@@ -510,23 +513,9 @@ int main (int argc, char *argv[])
         log_err ("content_cache_set_flux");
         goto cleanup;
     }
-
-    /* Configure attributes.
-     */
-    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
-        log_err ("registering overlay attributes");
+    if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
+        log_err ("content cache attributes");
         goto cleanup;
-    }
-    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
-        log_err ("configuring hello attributes");
-        goto cleanup;
-    }
-
-    if (rank == 0) {
-        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
-            log_err ("configuring runlevel attributes");
-            goto cleanup;
-        }
     }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
@@ -548,6 +537,11 @@ int main (int argc, char *argv[])
         const char *rc1, *rc3, *pmi, *uri;
         const char *rc2 = ctx.init_shell_cmd;
         size_t rc2_len = ctx.init_shell_cmd_len;
+
+        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
+            log_err ("configuring runlevel attributes");
+            goto cleanup;
+        }
 
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
             log_err ("local-uri is not set");
@@ -701,6 +695,10 @@ int main (int argc, char *argv[])
      */
     hello_set_flux (ctx.hello, ctx.h);
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
+    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
+        log_err ("configuring hello attributes");
+        goto cleanup;
+    }
     if (hello_start (ctx.hello) < 0) {
         log_err ("hello_start");
         goto cleanup;
