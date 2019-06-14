@@ -232,19 +232,12 @@ static void emit_event_continuation (flux_future_t *f, void *arg)
     jobinfo_decref (job);
 }
 
-/*
- *  Send an event "open loop" -- takes a reference to the job and
- *   releases it in the continuation, logging an error if one was
- *   received.
- */
-static int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
-                                           const char *name,
-                                           const char *fmt, ...)
+static int jobinfo_emit_event_vpack_nowait (struct jobinfo *job,
+                                            const char *name,
+                                            const char *fmt,
+                                            va_list ap)
 {
-    va_list ap;
-    va_start (ap, fmt);
     flux_future_t *f = jobinfo_emit_event_vpack (job, name, fmt, ap);
-    va_end (ap);
     if (f == NULL)
         return -1;
     jobinfo_incref (job);
@@ -257,8 +250,25 @@ error:
     jobinfo_decref (job);
     flux_future_destroy (f);
     return -1;
+
 }
 
+/*
+ *  Send an event "open loop" -- takes a reference to the job and
+ *   releases it in the continuation, logging an error if one was
+ *   received.
+ */
+static int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
+                                           const char *name,
+                                           const char *fmt, ...)
+{
+    int rc = -1;
+    va_list ap;
+    va_start (ap, fmt);
+    rc = jobinfo_emit_event_vpack_nowait (job, name, fmt, ap);
+    va_end (ap);
+    return rc;
+}
 
 static void jobinfo_add_cleanup (struct jobinfo *job, const char *name,
                                  cleanup_task_f fn)
