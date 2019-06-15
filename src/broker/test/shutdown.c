@@ -89,6 +89,7 @@ int main (int argc, char **argv)
     ok ((sh = shutdown_create ()) != NULL,
         "shutdown_create works");
     shutdown_set_flux (sh, h);
+    shutdown_set_grace (sh, 0.1);
     shutdown_set_callback (sh, shutdown_cb, NULL);
 
     matchlog.topic_glob = "log.append";
@@ -97,7 +98,7 @@ int main (int argc, char **argv)
         "created log.append watcher");
     flux_msg_handler_start (log_w);
 
-    ok (shutdown_arm (sh, 0.1, 42, "testing %d %d %d", 1, 2, 3) == 0,
+    ok (shutdown_arm (sh, 42, "testing %d %d %d", 1, 2, 3) == 0,
         "shutdown event sent, starting reactor");
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "flux reactor exited normally");
@@ -105,7 +106,7 @@ int main (int argc, char **argv)
     /* Make sure shutdown_disarm unwires timer.
      * (other watchers have already stopped themselves above)
      */
-    ok (shutdown_arm (sh, 0.1, 42, "testing %d %d %d", 1, 2, 3) == 0,
+    ok (shutdown_arm (sh, 42, "testing %d %d %d", 1, 2, 3) == 0,
         "shutdown event sent, then disarmed, starting reactor");
     shutdown_disarm (sh);
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,

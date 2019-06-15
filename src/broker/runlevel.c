@@ -81,8 +81,6 @@ static int runlevel_set_mode (runlevel_t *r, const char *val)
 {
     if (!strcmp (val, "normal"))
         r->mode = "normal";
-    if (!strcmp (val, "normal"))
-        r->mode = "normal";
     else if (!strcmp (val, "none"))
         r->mode = "none";
     else {

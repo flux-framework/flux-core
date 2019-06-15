@@ -170,10 +170,11 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
         goto error;
     }
 
-    overlay_init (overlay,
-                  (uint32_t)pmi_params.size,
-                  (uint32_t)pmi_params.rank,
-                  tbon_k);
+    if (overlay_init (overlay,
+                      (uint32_t)pmi_params.size,
+                      (uint32_t)pmi_params.rank,
+                      tbon_k)< 0)
+        goto error;
 
     /* Set session-id attribute from PMI appnum if not already set.
      */

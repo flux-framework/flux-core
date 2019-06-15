@@ -16,7 +16,7 @@
 
 typedef struct overlay_struct overlay_t;
 typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
-typedef void (*overlay_init_cb_f)(overlay_t *ov, void *arg);
+typedef int (*overlay_init_cb_f)(overlay_t *ov, void *arg);
 
 overlay_t *overlay_create (void);
 void overlay_destroy (overlay_t *ov);
@@ -28,9 +28,9 @@ void overlay_set_init_callback (overlay_t *ov,
 
 /* These need to be called before connect/bind.
  */
-void overlay_set_sec (overlay_t *ov, zsecurity_t *sec);
 int overlay_set_flux (overlay_t *ov, flux_t *h);
-void overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
+int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir);
+int overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
 
 /* Accessors

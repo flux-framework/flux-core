@@ -36,7 +36,7 @@ struct endpoint {
 };
 
 struct overlay_struct {
-    zsecurity_t *sec;
+    zsecurity_t *sec;             /* security context (MT-safe) */
     bool sec_initialized;
     flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
@@ -92,6 +92,8 @@ static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
 void overlay_destroy (overlay_t *ov)
 {
     if (ov) {
+        if (ov->sec)
+            zsecurity_destroy (ov->sec);
         if (ov->heartbeat)
             flux_msg_handler_destroy (ov->heartbeat);
         if (ov->h)
@@ -130,8 +132,8 @@ void overlay_set_init_callback (overlay_t *ov, overlay_init_cb_f cb, void *arg)
     ov->init_arg = arg;
 }
 
-void overlay_init (overlay_t *overlay,
-                   uint32_t size, uint32_t rank, int tbon_k)
+int overlay_init (overlay_t *overlay,
+                  uint32_t size, uint32_t rank, int tbon_k)
 {
     overlay->size = size;
     overlay->rank = rank;
@@ -140,12 +142,8 @@ void overlay_init (overlay_t *overlay,
     overlay->tbon_maxlevel = kary_levelof (tbon_k, size - 1);
     overlay->tbon_descendants = kary_sum_descendants (tbon_k, size, rank);
     if (overlay->init_cb)
-        (*overlay->init_cb) (overlay, overlay->init_arg);
-}
-
-void overlay_set_sec (overlay_t *ov, zsecurity_t *sec)
-{
-    ov->sec = sec;
+        return (*overlay->init_cb) (overlay, overlay->init_arg);
+    return 0;
 }
 
 uint32_t overlay_get_rank (overlay_t *ov)
@@ -175,6 +173,19 @@ int overlay_set_flux (overlay_t *ov, flux_t *h)
     flux_msg_handler_start (ov->heartbeat);
     if (flux_event_subscribe (ov->h, "hb") < 0) {
         log_err ("flux_event_subscribe");
+        return -1;
+    }
+    return 0;
+}
+
+int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir)
+{
+    if (!keydir) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(ov->sec = zsecurity_create (sec_typemask, keydir))) {
+        log_err ("zsecurity_create");
         return -1;
     }
     return 0;
@@ -516,7 +527,7 @@ static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
     int rc = -1;
 
     if (!strcmp (name, "tbon.parent-endpoint"))
-        *val = overlay_get_parent(overlay);
+        *val = overlay_get_parent (overlay);
     else {
         errno = ENOENT;
         goto done;

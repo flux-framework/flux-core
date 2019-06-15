@@ -184,7 +184,8 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
 
     /* Initialize overlay network parameters.
      */
-    overlay_init (overlay, size, rank, tbon_k);
+    if (overlay_init (overlay, size, rank, tbon_k) < 0)
+        goto done;
     overlay_set_child (overlay, get_cf_endpoint (cf, rank));
     if (rank > 0) {
         int prank = kary_parentof (tbon_k, rank);

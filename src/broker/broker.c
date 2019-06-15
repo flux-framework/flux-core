@@ -83,10 +83,6 @@ typedef enum {
 } request_error_mode_t;
 
 typedef struct {
-    /* 0MQ
-     */
-    zsecurity_t *sec;             /* security context (MT-safe) */
-
     /* Reactor
      */
     flux_t *h;
@@ -109,10 +105,13 @@ typedef struct {
      */
     bool verbose;
     int event_recv_seq;
+    zlist_t *sigwatchers;
     struct service_switch *services;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
+    double heartbeat_rate;
+    int sec_typemask;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     struct publisher *publisher;
@@ -139,8 +138,7 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
-static void broker_unhandle_signals (zlist_t *sigwatchers);
+static int broker_handle_signals (broker_ctx_t *ctx);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
@@ -159,7 +157,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
-static void create_broker_rundir (overlay_t *ov, void *arg);
+static int create_broker_rundir (overlay_t *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
@@ -197,8 +195,7 @@ static void usage (void)
     exit (1);
 }
 
-void parse_command_line_arguments (int argc, char *argv[],
-                                   broker_ctx_t *ctx, int *sec_typemask)
+void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
 {
     int c;
     int e;
@@ -208,13 +205,13 @@ void parse_command_line_arguments (int argc, char *argv[],
         switch (c) {
         case 's':   /* --security=MODE */
             if (!strcmp (optarg, "none")) {
-                *sec_typemask = 0;
+                ctx->sec_typemask = 0;
             } else if (!strcmp (optarg, "plain")) {
-                *sec_typemask |= ZSECURITY_TYPE_PLAIN;
-                *sec_typemask &= ~ZSECURITY_TYPE_CURVE;
+                ctx->sec_typemask |= ZSECURITY_TYPE_PLAIN;
+                ctx->sec_typemask &= ~ZSECURITY_TYPE_CURVE;
             } else if (!strcmp (optarg, "curve")) {
-                *sec_typemask |= ZSECURITY_TYPE_CURVE;
-                *sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
+                ctx->sec_typemask |= ZSECURITY_TYPE_CURVE;
+                ctx->sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
             } else {
                 log_msg_exit ("--security arg must be none|plain|curve");
             }
@@ -235,8 +232,8 @@ void parse_command_line_arguments (int argc, char *argv[],
                 usage ();
             break;
         case 'H':   /* --heartrate SECS */
-            if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
-                log_err_exit ("heartrate `%s'", optarg);
+            if (fsd_parse_duration (optarg, &ctx->heartbeat_rate) < 0)
+                log_err_exit ("heartrate '%s'", optarg);
             break;
         case 'g':   /* --shutdown-grace SECS */
             if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
@@ -284,8 +281,6 @@ static int setup_profiling (const char *program, int rank)
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
-    zlist_t *sigwatchers = NULL;
-    int sec_typemask = ZSECURITY_TYPE_CURVE;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
@@ -295,9 +290,8 @@ int main (int argc, char *argv[])
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
 
-    if (!(sigwatchers = zlist_new ()))
+    if (!(ctx.sigwatchers = zlist_new ()))
         oom ();
-
     if (!(ctx.modhash = modhash_create ()))
         oom ();
     if (!(ctx.services = service_switch_create ()))
@@ -327,13 +321,12 @@ int main (int argc, char *argv[])
     /* Set default rolemask for messages sent with flux_send()
      * on the broker's internal handle. */
     ctx.rolemask = FLUX_ROLE_OWNER;
+    ctx.heartbeat_rate = 2;
+    ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
 
     init_attrs (ctx.attrs, getpid ());
 
-    parse_command_line_arguments (argc, argv, &ctx, &sec_typemask);
-
-    if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
-        log_err_exit ("content cache attributes");
+    parse_command_line_arguments (argc, argv, &ctx);
 
     /* Block all signals, saving old mask and actions for SIGINT, SIGTERM.
      */
@@ -380,31 +373,27 @@ int main (int argc, char *argv[])
 
     /* Prepare signal handling
      */
-    if (broker_handle_signals (&ctx, sigwatchers) < 0) {
+    if (broker_handle_signals (&ctx) < 0) {
         log_err ("broker_handle_signals");
         goto cleanup;
     }
 
-    /* Initialize security context.
-     * Delay calling zsecurity_comms_init() so that we can defer creating
-     * the libzmq work thread until we are ready to communicate.
+    /* The first call to overlay_bind() or overlay_connect() calls
+     * zsecurity_comms_init().  Delay calling zsecurity_comms_init()
+     * so that we can defer creating the libzmq work thread until we
+     * are ready to communicate.
      */
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0) {
         log_err ("getattr security.keydir");
         goto cleanup;
     }
-    if (!(ctx.sec = zsecurity_create (sec_typemask, keydir))) {
-        log_err ("zsecurity_create");
-        goto cleanup;
-    }
-
-    /* The first call to overlay_bind() or overlay_connect() calls
-     * zsecurity_comms_init().
-     */
-    overlay_set_sec (ctx.overlay, ctx.sec);
     if (overlay_set_flux (ctx.overlay, ctx.h) < 0) {
         log_err ("overlay_set_flux");
+        goto cleanup;
+    }
+    if (overlay_setup_sec (ctx.overlay, ctx.sec_typemask, keydir) < 0) {
+        log_err ("overlay_setup_sec");
         goto cleanup;
     }
 
@@ -478,6 +467,12 @@ int main (int argc, char *argv[])
     assert (size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
 
+    /* Must be called after overlay setup */
+    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
+        log_err ("registering overlay attributes");
+        goto cleanup;
+    }
+
     if (ctx.verbose) {
         const char *sid = "unknown";
         (void)attr_get (ctx.attrs, "session-id", &sid, NULL);
@@ -518,23 +513,9 @@ int main (int argc, char *argv[])
         log_err ("content_cache_set_flux");
         goto cleanup;
     }
-
-    /* Configure attributes.
-     */
-    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
-        log_err ("registering overlay attributes");
+    if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
+        log_err ("content cache attributes");
         goto cleanup;
-    }
-    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
-        log_err ("configuring hello attributes");
-        goto cleanup;
-    }
-
-    if (rank == 0) {
-        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
-            log_err ("configuring runlevel attributes");
-            goto cleanup;
-        }
     }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
@@ -542,20 +523,6 @@ int main (int argc, char *argv[])
      * instance is not made inadvertantly.
      */
     unsetenv ("FLUX_URI");
-
-    /* If shutdown_grace was not provided on the command line,
-     * make a guess.
-     */
-    if (ctx.shutdown_grace == 0) {
-        if (size < 16)
-            ctx.shutdown_grace = 1;
-        else if (size < 128)
-            ctx.shutdown_grace = 2;
-        else if (size < 1024)
-            ctx.shutdown_grace = 4;
-        else
-            ctx.shutdown_grace = 10;
-    }
 
     if (ctx.verbose) {
         const char *parent = overlay_get_parent (ctx.overlay);
@@ -570,6 +537,11 @@ int main (int argc, char *argv[])
         const char *rc1, *rc3, *pmi, *uri;
         const char *rc2 = ctx.init_shell_cmd;
         size_t rc2_len = ctx.init_shell_cmd_len;
+
+        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
+            log_err ("configuring runlevel attributes");
+            goto cleanup;
+        }
 
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
             log_err ("local-uri is not set");
@@ -646,6 +618,10 @@ int main (int argc, char *argv[])
         log_err ("shutdown_set_flux");
         goto cleanup;
     }
+    if (shutdown_set_grace (ctx.shutdown, ctx.shutdown_grace) < 0) {
+        log_err ("shutdown_set_grace");
+        goto cleanup;
+    }
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services
@@ -701,6 +677,10 @@ int main (int argc, char *argv[])
         log_err ("initializing heartbeat attributes");
         goto cleanup;
     }
+    if (heartbeat_set_rate (ctx.heartbeat, ctx.heartbeat_rate) < 0) {
+        log_err ("heartbeat_set_rate");
+        goto cleanup;
+    }
     if (heartbeat_start (ctx.heartbeat) < 0) {
         log_err ("heartbeat_start");
         goto cleanup;
@@ -715,6 +695,10 @@ int main (int argc, char *argv[])
      */
     hello_set_flux (ctx.hello, ctx.h);
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
+    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
+        log_err ("configuring hello attributes");
+        goto cleanup;
+    }
     if (hello_start (ctx.hello) < 0) {
         log_err ("hello_start");
         goto cleanup;
@@ -771,11 +755,7 @@ cleanup:
     attr_destroy (ctx.attrs);
     content_cache_destroy (ctx.cache);
 
-    broker_unhandle_signals (sigwatchers);
-    zlist_destroy (&sigwatchers);
-
-    if (ctx.sec)
-        zsecurity_destroy (ctx.sec);
+    zlist_destroy (&ctx.sigwatchers);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
@@ -785,12 +765,7 @@ cleanup:
     publisher_destroy (ctx.publisher);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    if (ctx.subscriptions) {
-        char *s;
-        while ((s = zlist_pop (ctx.subscriptions)))
-            free (s);
-        zlist_destroy (&ctx.subscriptions);
-    }
+    zlist_destroy (&ctx.subscriptions);
     runlevel_destroy (ctx.runlevel);
     free (ctx.init_shell_cmd);
 
@@ -925,15 +900,13 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
         case 1: /* init completed */
             if (rc != 0) {
                 new_level = 3;
-                shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
-                              rc, "run level 1 %s", exit_string);
+                shutdown_arm (ctx->shutdown, rc, "run level 1 %s", exit_string);
             } else
                 new_level = 2;
             break;
         case 2: /* initial program completed */
             new_level = 3;
-            shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
-                          rc, "run level 2 %s", exit_string);
+            shutdown_arm (ctx->shutdown, rc, "run level 2 %s", exit_string);
             break;
         case 3: /* finalization completed */
             break;
@@ -1028,35 +1001,51 @@ done:
     return rc;
 }
 
-void create_broker_rundir (overlay_t *ov, void *arg)
+static int create_broker_rundir (overlay_t *ov, void *arg)
 {
     attr_t *attrs = arg;
     uint32_t rank;
     const char *rundir;
     const char *local_uri;
     char *broker_rundir = NULL;
+    char *uri = NULL;
+    int rv = -1;
 
-    if (attr_get (attrs, "rundir", &rundir, NULL) < 0)
-        log_msg_exit ("create_broker_rundir: rundir attribute not set");
+    if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
+        log_msg ("create_broker_rundir: rundir attribute not set");
+        goto cleanup;
+    }
 
     rank = overlay_get_rank (ov);
-    if (asprintf (&broker_rundir, "%s/%u", rundir, rank) < 0)
-        log_err_exit ("create_broker_rundir: asprintf");
-    if (mkdir (broker_rundir, 0700) < 0)
-        log_err_exit ("create_broker_rundir: mkdir (%s)", broker_rundir);
+    if (asprintf (&broker_rundir, "%s/%u", rundir, rank) < 0) {
+        log_err ("create_broker_rundir: asprintf");
+        goto cleanup;
+    }
+    if (mkdir (broker_rundir, 0700) < 0) {
+        log_err ("create_broker_rundir: mkdir (%s)", broker_rundir);
+        goto cleanup;
+    }
     if (attr_add (attrs, "broker.rundir", broker_rundir,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        log_err_exit ("create_broker_rundir: attr_add broker.rundir");
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("create_broker_rundir: attr_add broker.rundir");
+        goto cleanup;
+    }
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        char *uri;
-        if (asprintf (&uri, "local://%s", broker_rundir) < 0)
-            log_err_exit ("create_broker_rundir: asprintf (uri)");
-        if (attr_add (attrs, "local-uri", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            log_err_exit ("create_broker_rundir: attr_add (local-uri)");
-        free (uri);
+        if (asprintf (&uri, "local://%s", broker_rundir) < 0) {
+            log_err ("create_broker_rundir: asprintf (uri)");
+            goto cleanup;
+        }
+        if (attr_add (attrs, "local-uri", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("create_broker_rundir: attr_add (local-uri)");
+            goto cleanup;
+        }
     }
+    rv = 0;
+cleanup:
+    free (uri);
     free (broker_rundir);
+    return rv;
 }
 
 /* If 'persist-directory' set, validate it, make it immutable, done.
@@ -1260,7 +1249,14 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
-static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
+static void broker_destroy_sigwatcher (void *data)
+{
+    flux_watcher_t *w = data;
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+}
+
+static int broker_handle_signals (broker_ctx_t *ctx)
 {
     int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
                       SIGALRM };
@@ -1272,23 +1268,14 @@ static int broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
             log_err ("flux_signal_watcher_create");
             return -1;
         }
-        if (zlist_push (sigwatchers, w) < 0) {
+        if (zlist_push (ctx->sigwatchers, w) < 0) {
             log_errn (ENOMEM, "zlist_push");
             return -1;
         }
+        zlist_freefn (ctx->sigwatchers, w, broker_destroy_sigwatcher, false);
         flux_watcher_start (w);
     }
     return 0;
-}
-
-static void broker_unhandle_signals (zlist_t *sigwatchers)
-{
-    flux_watcher_t *w;
-
-    while ((w = zlist_pop (sigwatchers))) {
-        flux_watcher_stop (w);
-        flux_watcher_destroy (w);
-    }
 }
 
 /**
@@ -1855,7 +1842,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
 
-    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
+    shutdown_arm (ctx->shutdown, 0,
                   "signal %d (%s)", signum, strsignal (signum));
 }
 
@@ -2095,6 +2082,7 @@ static int broker_subscribe (void *impl, const char *topic)
         goto nomem;
     if (zlist_append (ctx->subscriptions, cpy) < 0)
         goto nomem;
+    zlist_freefn (ctx->subscriptions, cpy, free, true);
     return 0;
 nomem:
     free (cpy);
@@ -2109,7 +2097,6 @@ static int broker_unsubscribe (void *impl, const char *topic)
     while (s) {
         if (!strcmp (s, topic)) {
             zlist_remove (ctx->subscriptions, s);
-            free (s);
             break;
         }
         s = zlist_next (ctx->subscriptions);

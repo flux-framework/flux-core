@@ -54,7 +54,7 @@ int main (int argc, char **argv)
     heartbeat_t *hb;
     flux_msg_handler_t *w;
 
-    plan (18);
+    plan (16);
 
     check_codec ();
 
@@ -74,15 +74,11 @@ int main (int argc, char **argv)
     ok (heartbeat_get_rate (hb) == 2.,
         "heartbeat_get_rate returns default of 2s");
     errno = 0;
-    ok (heartbeat_set_rate (hb, -1) < 1 && errno == EINVAL,
+    ok (heartbeat_set_rate (hb, -1) < 0 && errno == EINVAL,
         "heartbeat_set_rate -1 fails with EINVAL");
     errno = 0;
-    ok (heartbeat_set_rate (hb, 1000000) < 1 && errno == EINVAL,
+    ok (heartbeat_set_rate (hb, 1000000) < 0 && errno == EINVAL,
         "heartbeat_set_rate 1000000 fails with EINVAL");
-    ok (heartbeat_set_ratestr (hb, ".250s") == 0,
-        "heartbeat_set_ratestr .250s works");
-    ok (heartbeat_get_rate (hb) == 0.250,
-        "heartbeat_get_rate returns what was set");
     ok (heartbeat_set_rate (hb, 0.1) == 0,
         "heartbeat_set_rate 0.1 works");
     ok (heartbeat_get_rate (hb) == 0.1,
