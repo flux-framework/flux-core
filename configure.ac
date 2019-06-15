@@ -420,6 +420,7 @@ AC_CONFIG_FILES( \
   src/common/libaggregate/Makefile \
   src/common/libschedutil/Makefile \
   src/common/libeventlog/Makefile \
+  src/common/libresource/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \

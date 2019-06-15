@@ -15,9 +15,7 @@ fluxmod_LTLIBRARIES = \
 	job-exec.la
 
 job_exec_la_SOURCES = \
-	job-exec.c \
-	rset.c \
-	rset.h
+	job-exec.c
 
 job_exec_la_LDFLAGS = \
 	$(fluxmod_ldflags) \
@@ -28,27 +26,3 @@ job_exec_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS)
-
-test_ldadd = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(JANSSON_LIBS)
-
-test_cppflags = \
-	$(AM_CPPFLAGS)
-
-TESTS = \
-	test_rset.t
-
-check_PROGRAMS = \
-	$(TESTS)
-
-test_rset_t_SOURCES = \
-	rset.c \
-	rset.h \
-	test/rset.c
-test_rset_t_CPPFLAGS = \
-	$(test_cppflags)
-test_rset_t_LDADD = \
-	$(test_ldadd)

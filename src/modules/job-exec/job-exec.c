@@ -89,7 +89,7 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libeventlog/eventlog.h"
-#include "rset.h"
+#include "src/common/libresource/rset.h"
 
 struct job_exec_ctx {
     flux_t *              h;
