@@ -14,8 +14,6 @@
 #include <czmq.h>
 #include <jansson.h>
 
-#include "src/common/libutil/xzmalloc.h"
-
 #include "attr.h"
 
 struct attr_struct {
@@ -46,13 +44,28 @@ static void entry_destroy (void *arg)
 
 static struct entry *entry_create (const char *name, const char *val, int flags)
 {
-    struct entry *e = xzmalloc (sizeof (*e));
-    if (name)
-        e->name = xstrdup (name);
-    if (val)
-        e->val = xstrdup (val);
+    struct entry *e = calloc (1, sizeof (*e));
+    if (!e) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (name) {
+        if (!(e->name = strdup (name))) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
+    }
+    if (val) {
+        if (!(e->val = strdup (val))) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
+    }
     e->flags = flags;
     return e;
+cleanup:
+    entry_destroy (e);
+    return NULL;
 }
 
 int attr_delete (attr_t *attrs, const char *name, bool force)
@@ -137,7 +150,14 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
                 goto done;
             if (e->val)
                 free (e->val);
-            e->val = tmp ? xstrdup (tmp) : NULL;
+            if (tmp) {
+                if (!(e->val = strdup (tmp))) {
+                    errno = ENOMEM;
+                    goto done;
+                }
+            }
+            else
+                e->val = NULL;
         }
     }
     if (val)
@@ -172,7 +192,14 @@ int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
     }
     if (e->val)
         free (e->val);
-    e->val = val ? xstrdup (val) : NULL;
+    if (val) {
+        if (!(e->val = strdup (val))) {
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+    else
+        e->val = NULL;
     rc = 0;
 done:
     return rc;

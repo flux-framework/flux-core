@@ -186,10 +186,16 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
      */
     if (overlay_init (overlay, size, rank, tbon_k) < 0)
         goto done;
-    overlay_set_child (overlay, get_cf_endpoint (cf, rank));
+    if (overlay_set_child (overlay, get_cf_endpoint (cf, rank)) < 0) {
+        log_err ("overlay_set_child");
+        goto done;
+    }
     if (rank > 0) {
         int prank = kary_parentof (tbon_k, rank);
-        overlay_set_parent (overlay, get_cf_endpoint (cf, prank));
+        if (overlay_set_parent (overlay, get_cf_endpoint (cf, prank)) < 0) {
+            log_err ("overlay_set_parent");
+            goto done;
+        }
     }
 
     /* Update attributes.

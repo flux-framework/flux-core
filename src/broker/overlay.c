@@ -83,8 +83,12 @@ static void endpoint_destroy (struct endpoint *ep)
 
 static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
 {
-    struct endpoint *ep = xzmalloc (sizeof (*ep));
-    ep->uri = xvasprintf (fmt, ap);
+    struct endpoint *ep = calloc (1, sizeof (*ep));
+    if (vasprintf (&ep->uri, fmt, ap) < 0) {
+        free (ep);
+        errno = ENOMEM;
+        return NULL;
+    }
     return ep;
 }
 
@@ -250,14 +254,17 @@ void overlay_checkin_child (overlay_t *ov, const char *uuid)
     child->lastseen = ov->epoch;
 }
 
-void overlay_set_parent (overlay_t *ov, const char *fmt, ...)
+int overlay_set_parent (overlay_t *ov, const char *fmt, ...)
 {
+    int rc = -1;
     if (ov->parent)
         endpoint_destroy (ov->parent);
     va_list ap;
     va_start (ap, fmt);
-    ov->parent = endpoint_vcreate (fmt, ap);
+    if ((ov->parent = endpoint_vcreate (fmt, ap)))
+        rc = 0;
     va_end (ap);
+    return rc;
 }
 
 const char *overlay_get_parent (overlay_t *ov)
@@ -317,14 +324,17 @@ void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
     ov->parent_arg = arg;
 }
 
-void overlay_set_child (overlay_t *ov, const char *fmt, ...)
+int overlay_set_child (overlay_t *ov, const char *fmt, ...)
 {
+    int rc = -1;
     if (ov->child)
         endpoint_destroy (ov->child);
     va_list ap;
     va_start (ap, fmt);
-    ov->child = endpoint_vcreate (fmt, ap);
+    if ((ov->child = endpoint_vcreate (fmt, ap)))
+        rc = 0;
     va_end (ap);
+    return rc;
 }
 
 const char *overlay_get_child (overlay_t *ov)

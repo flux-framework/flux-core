@@ -29,7 +29,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -184,7 +183,13 @@ static int register_event (modservice_ctx_t *ctx, const char *name,
     flux_msg_handler_t *mh = NULL;
     int rc = -1;
 
-    match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
+    if (asprintf (&match.topic_glob,
+                  "%s.%s",
+                  module_get_name (ctx->p),
+                  name) < 0) {
+        log_err ("asprintf");
+        goto cleanup;
+    }
     if (!(mh = flux_msg_handler_create (ctx->h, match, cb, ctx->p))) {
         log_err ("flux_msg_handler_create");
         goto cleanup;
@@ -215,7 +220,13 @@ static int register_request (modservice_ctx_t *ctx, const char *name,
     flux_msg_handler_t *mh = NULL;
     int rc = -1;
 
-    match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
+    if (asprintf (&match.topic_glob,
+                  "%s.%s",
+                  module_get_name (ctx->p),
+                  name) < 0) {
+        log_err ("asprintf");
+        goto cleanup;
+    }
     if (!(mh = flux_msg_handler_create (ctx->h, match, cb, ctx->p))) {
         log_err ("flux_msg_handler_create");
         goto cleanup;

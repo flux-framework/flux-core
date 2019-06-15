@@ -14,7 +14,6 @@
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
 
@@ -103,8 +102,13 @@ static void logbuf_entry_destroy (struct logbuf_entry *e)
 
 static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 {
-    struct logbuf_entry *e = xzmalloc (sizeof (*e));
-    e->buf = xzmalloc (len);
+    struct logbuf_entry *e = calloc (1, sizeof (*e));
+    if (!e)
+        return NULL;
+    if (!(e->buf = calloc (1, len))) {
+        free (e);
+        return NULL;
+    }
     memcpy (e->buf, buf, len);
     e->len = len;
     return e;
@@ -178,7 +182,10 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 
     if (logbuf->ring_size > 0) {
         logbuf_trim (logbuf, logbuf->ring_size - 1);
-        e = logbuf_entry_create (buf, len);
+        if (!(e = logbuf_entry_create (buf, len))) {
+            errno = ENOMEM;
+            return -1;
+        }
         e->seq = logbuf->seq++;
         if (zlist_append (logbuf->buf, e) < 0) {
             logbuf_entry_destroy (e);
@@ -301,17 +308,22 @@ static int logbuf_set_ring_size (logbuf_t *logbuf, int size)
  */
 static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
 {
+    char *filename;
     FILE *f;
     if (logbuf->rank > 0)
         return 0;
     if (!(f = fopen (destination, "a")))
         return -1;
+    if (!(filename = strdup (destination))) {
+        fclose (f);
+        return -1;
+    }
     if (logbuf->filename)
         free (logbuf->filename);
     if (logbuf->f)
         fclose (logbuf->f);
-    logbuf->filename = xstrdup (destination);
     logbuf->f = f;
+    logbuf->filename = filename;
     return 0;
 }
 

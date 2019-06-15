@@ -40,7 +40,7 @@ uint32_t overlay_get_size (overlay_t *ov);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  */
-void overlay_set_parent (overlay_t *ov, const char *fmt, ...);
+int overlay_set_parent (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_parent (overlay_t *ov);
 void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
 int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg);
@@ -48,7 +48,7 @@ int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg);
 /* The child is where other ranks connect to send requests.
  * This is the ROUTER side of parent sockets described above.
  */
-void overlay_set_child (overlay_t *ov, const char *fmt, ...);
+int overlay_set_child (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_child (overlay_t *ov);
 void overlay_set_child_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
 int overlay_sendmsg_child (overlay_t *ov, const flux_msg_t *msg);

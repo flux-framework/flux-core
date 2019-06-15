@@ -16,7 +16,6 @@
 #include <assert.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
@@ -50,7 +49,10 @@ static char * format_endpoint (attr_t *attrs, const char *endpoint)
     const char *rundir;
     char error[200];
 
-    buf = xzmalloc (ENDPOINT_MAX + 1);
+    if (!(buf = calloc (1, ENDPOINT_MAX + 1))) {
+        errno = ENOMEM;
+        return NULL;
+    }
 
     ptr = (char *)endpoint;
     while (*ptr) {
@@ -187,7 +189,10 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
                                                         "tcp://%h:*") < 0)
         goto error;
 
-    overlay_set_child (overlay, tbonendpoint);
+    if (overlay_set_child (overlay, tbonendpoint) < 0) {
+        log_err ("overlay_set_child");
+        goto error;
+    }
 
     /* Bind to addresses to expand URI wildcards, so we can exchange
      * the real addresses.
@@ -245,7 +250,10 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
             log_msg ("broker_pmi_kvs_get: %s", pmi_strerror (result));
             goto error;
         }
-        overlay_set_parent (overlay, "%s", val);
+        if (overlay_set_parent (overlay, "%s", val) < 0) {
+            log_err ("overlay_set_parent");
+            goto error;
+        }
     }
 
     result = broker_pmi_barrier (pmi);
