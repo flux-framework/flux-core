@@ -330,6 +330,7 @@ static int jobinfo_respond (flux_t *h, struct jobinfo *job,
 static void jobinfo_complete (struct jobinfo *job)
 {
     flux_t *h = job->ctx->h;
+    job->running = 0;
     if (h && job->req) {
         jobinfo_emit_event_pack_nowait (job, "complete",
                                         "{ s:i }",
@@ -360,7 +361,6 @@ static void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
 static void jobinfo_kill (struct jobinfo *job)
 {
     flux_watcher_stop (job->timer);
-    job->running = 0;
     job->wait_status = 0x9; /* Killed */
 
     /* XXX: Manually send "finish" event here since our timer_cb won't
