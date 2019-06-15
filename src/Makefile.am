@@ -2,7 +2,7 @@
 
 #This order is *important*, common must precede modules,
 #		            modules must precede lib
-SUBDIRS = common modules broker connectors bindings cmd test
+SUBDIRS = common modules broker shell connectors bindings cmd test
 
 check-local: all
 
