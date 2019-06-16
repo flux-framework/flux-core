@@ -145,6 +145,33 @@ double resource_set_expiration (struct resource_set *r)
     return r->expiration;
 }
 
+json_t *resource_set_children (struct resource_set *r, int rank)
+{
+    size_t i;
+    json_t *entry;
+    json_t *children;
+    const char *ranks;
+    struct idset *ids;
+    bool found;
+
+    json_array_foreach (r->R_lite, i, entry) {
+        if (json_unpack_ex (entry,
+                            NULL,
+                            0,
+                            "{s:s s:o}",
+                            "rank", &ranks,
+                            "children", &children) < 0)
+            return NULL;
+        if (!(ids = idset_decode (ranks)))
+            return NULL;
+        found = idset_test (ids, rank);
+        idset_destroy (ids);
+        if (found)
+            return (children);
+    }
+    return NULL;
+}
+
 
 /* vi: ts=4 sw=4 expandtab
  */
