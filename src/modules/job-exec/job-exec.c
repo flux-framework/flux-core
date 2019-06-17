@@ -33,29 +33,32 @@
  * event posted.
  *
  * Jobspec and R are parsed as soon as asynchronous initialization tasks
- * complete. If any of these steps fail, or a mock exception is configured
- * for "init", an exec initialization exception is thrown.
+ * complete. If any of these steps fail, an exec initialization exception
+ * is thrown. Finally, the implementation "init" method is called.
  *
  * JOB STARTING/RUNNING:
  *
- * The current exec service fakes a running job by initiating a timer for
- * the configured duration of the job, or 10us by default. The "start"
- * response to the job manager is sent just before the timer is started,
- * to simulate the condition when all job shells have been launched.
+ * After initialization is complete, the exec service emits a "starting"
+ * event to the exec eventlog and calls the implementaton "start" method.
+ * Once all job shells or equivalent are running, the exec implementation
+ * should invoke jobinfo_started(), which emits a "running" event to the
+ * exec eventlog and sends the "start" response to the job-manager.
  *
  * JOB FINISH/CLEANUP:
  *
- * When the timer callback fires, then a "finish" response is sent to
- * the job-manager (with status set by TEST CONFIGURATION), and any
- * configured "cleanup" tasks are initiated. By default, no cleanup work
- * is configured unless the attributes.system.exec.test.cleanup_duration
- * key is set in the jobspec.  This simulates a "job epilog" that takes
- * some amount of time.
+ * As tasks/job shells exit, the exec implementation should call
+ * jobinfo_tasks_complete(), which emits a "complete" event to the exec
+ * eventlog, sends a "finish" response to the job-manager, emits a
+ * "cleanup.start" event in the exec eventlog, and finally invokes
+ * the exec implementation's "cleanup" method on the completed ranks.
+ * (NB: currently a subset of ranks is not supported)
  *
  * JOB FINALIZATION:
  *
- * Once optional cleanup tasks have completed, the job is "finalized", which
- * includes the following steps, in order:
+ * Once cleanup tasks have completed, the exec implementation should call
+ * jobinfo_cleanup_complete(), which emits "cleanup.finish" to the exec
+ * eventlog, and then calls jobinfo_finalize, which performs the following
+ * tasks:
  *
  *  - terminating "done" event is posted to the exec.eventlog
  *  - the guest namespace, now quiesced, is copied to the primary namespace
@@ -82,14 +85,17 @@
 #include "config.h"
 #endif
 #include <czmq.h>
-#include <jansson.h>
 #include <flux/core.h>
-#include <flux/idset.h>
 
-#include "src/common/libutil/fluid.h"
-#include "src/common/libutil/fsd.h"
 #include "src/common/libeventlog/eventlog.h"
-#include "rset.h"
+#include "job-exec.h"
+
+extern struct exec_implementation testexec;
+
+static struct exec_implementation * implementations[] = {
+    &testexec,
+    NULL
+};
 
 struct job_exec_ctx {
     flux_t *              h;
@@ -97,64 +103,23 @@ struct job_exec_ctx {
     zhashx_t *            jobs;
 };
 
-
-/*  Exec system testing configuration:
- *  Set from jobspec attributes.system.exec.test object, if any.
- */
-struct testconf {
-    double                run_duration;     /* duration of fake job in sec  */
-    double                cleanup_duration; /* if > 0., duration of epilog  */
-    int                   wait_status;      /* reported status for "finish" */
-    const char *          mock_exception;   /* fake excetion at this site   */
-                                            /* ("init", or "run")           */
-};
-
-struct jobinfo {
-    flux_jobid_t          id;
-    char                  ns [64];
-    flux_msg_t *          req;
-    uint32_t              userid;
-    int                   flags;
-
-    struct resource_set * R;
-    json_t *              jobspec;
-
-    uint8_t               needs_cleanup:1;
-    uint8_t               has_namespace:1;
-    uint8_t               exception_in_progress:1;
-    uint8_t               running:1;
-    uint8_t               finalizing:1;
-
-    int                   wait_status;
-
-    int                   refcount;
-
-    struct testconf       testconf;
-    flux_watcher_t *      timer;
-
-    zhashx_t *            cleanup;
-    struct job_exec_ctx * ctx;
-};
-
-typedef flux_future_t * (*cleanup_task_f) (struct jobinfo *job);
-
-static void jobinfo_incref (struct jobinfo *job)
+void jobinfo_incref (struct jobinfo *job)
 {
     job->refcount++;
 }
 
-static void jobinfo_decref (struct jobinfo *job)
+void jobinfo_decref (struct jobinfo *job)
 {
     if (job && (--job->refcount == 0)) {
         int saved_errno = errno;
         zhashx_delete (job->ctx->jobs, &job->id);
+        if (job->impl && job->impl->exit)
+            (*job->impl->exit) (job);
         job->ctx = NULL;
         flux_msg_destroy (job->req);
         job->req = NULL;
         resource_set_destroy (job->R);
         json_decref (job->jobspec);
-        flux_watcher_destroy (job->timer);
-        zhashx_destroy (&job->cleanup);
         free (job);
         errno = saved_errno;
     }
@@ -163,7 +128,6 @@ static void jobinfo_decref (struct jobinfo *job)
 static struct jobinfo * jobinfo_new (void)
 {
     struct jobinfo *job = calloc (1, sizeof (*job));
-    job->cleanup = zhashx_new ();
     job->refcount = 1;
     return job;
 }
@@ -258,9 +222,9 @@ error:
  *   releases it in the continuation, logging an error if one was
  *   received.
  */
-static int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
-                                           const char *name,
-                                           const char *fmt, ...)
+int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
+                                    const char *name,
+                                    const char *fmt, ...)
 {
     int rc = -1;
     va_list ap;
@@ -269,13 +233,6 @@ static int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
     va_end (ap);
     return rc;
 }
-
-static void jobinfo_add_cleanup (struct jobinfo *job, const char *name,
-                                 cleanup_task_f fn)
-{
-    (void) zhashx_insert (job->cleanup, name, (void *) fn);
-}
-
 
 static int jobid_respond_error (flux_t *h, flux_jobid_t id,
                                 const flux_msg_t *msg,
@@ -327,7 +284,7 @@ static int jobinfo_respond (flux_t *h, struct jobinfo *job,
                                            "data");
 }
 
-static void jobinfo_complete (struct jobinfo *job)
+static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
 {
     flux_t *h = job->ctx->h;
     job->running = 0;
@@ -344,10 +301,11 @@ static void jobinfo_complete (struct jobinfo *job)
     }
 }
 
-static void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
+void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
     job->running = 1;
+    job->needs_cleanup = 1;
     if (h && job->req) {
         va_list ap;
         va_start (ap, fmt);
@@ -360,15 +318,7 @@ static void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
 
 static void jobinfo_kill (struct jobinfo *job)
 {
-    flux_watcher_stop (job->timer);
-    job->wait_status = 0x9; /* Killed */
-
-    /* XXX: Manually send "finish" event here since our timer_cb won't
-     *  fire after we've canceled it. In a real workload a kill request
-     *  sent to all ranks would terminate processes that would exit and
-     *  report wait status through normal channels.
-     */
-    jobinfo_complete (job);
+    (*job->impl->kill) (job, SIGKILL);
 }
 
 static int jobinfo_finalize (struct jobinfo *job);
@@ -399,14 +349,16 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
     }
     if (job->running)
         jobinfo_kill (job);
+    if (job->needs_cleanup) /* Do not finalize, wait for cleanup to finish */
+        return;
     if (jobinfo_finalize (job) < 0) {
         flux_log_error (h, "jobinfo_fatal_verror: jobinfo_finalize");
         jobinfo_decref (job);
     }
 }
 
-static void jobinfo_fatal_error (struct jobinfo *job, int errnum,
-                                 const char *fmt, ...)
+void jobinfo_fatal_error (struct jobinfo *job, int errnum,
+                          const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
     int saved_errno = errno;
@@ -417,58 +369,6 @@ static void jobinfo_fatal_error (struct jobinfo *job, int errnum,
         va_end (ap);
     }
     errno = saved_errno;
-}
-
-static double jobspec_duration (flux_t *h, json_t *jobspec)
-{
-    double duration = 0.;
-    if (json_unpack (jobspec, "{s:{s:{s:F}}}",
-                              "attributes", "system",
-                              "duration", &duration) < 0)
-        return -1.;
-    return duration;
-}
-
-static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
-{
-    const char *tclean = NULL;
-    const char *trun = NULL;
-    json_t *test = NULL;
-    json_error_t err;
-
-    /* get/set defaults */
-    conf->run_duration = jobspec_duration (h, jobspec);
-    conf->cleanup_duration = -1.;
-    conf->wait_status = 0;
-    conf->mock_exception = NULL;
-
-    if (json_unpack_ex (jobspec, &err, 0,
-                     "{s:{s:{s:{s:o}}}}",
-                     "attributes", "system", "exec",
-                     "test", &test) < 0)
-        return 0;
-    if (json_unpack_ex (test, &err, 0,
-                        "{s?s s?s s?i s?s}",
-                        "run_duration", &trun,
-                        "cleanup_duration", &tclean,
-                        "wait_status", &conf->wait_status,
-                        "mock_exception", &conf->mock_exception) < 0) {
-        flux_log (h, LOG_ERR, "init_testconf: %s", err.text);
-        return -1;
-    }
-    if (trun && fsd_parse_duration (trun, &conf->run_duration) < 0)
-        flux_log (h, LOG_ERR, "Unable to parse run duration: %s", trun);
-    if (tclean && fsd_parse_duration (tclean, &conf->cleanup_duration) < 0)
-        flux_log (h, LOG_ERR, "Unable to parse cleanup duration: %s", tclean);
-    return 0;
-}
-
-/*  Return true if a mock exception was configured for call site "where"
- */
-static bool jobinfo_mock_exception (struct jobinfo *job, const char *where)
-{
-    const char *s = job->testconf.mock_exception;
-    return (s && strcmp (where, s) == 0);
 }
 
 static void namespace_delete (flux_future_t *f, void *arg)
@@ -512,9 +412,8 @@ done:
  *   2. Copy the namespace into the primary
  *   3. Delete the guest namespace
  */
-static void namespace_move (flux_future_t *fprev, void *arg)
+static flux_future_t * namespace_move (struct jobinfo *job)
 {
-    struct jobinfo *job = arg;
     flux_t *h = job->ctx->h;
     flux_future_t *f = NULL;
     flux_future_t *fnext = NULL;
@@ -528,57 +427,40 @@ static void namespace_move (flux_future_t *fprev, void *arg)
         flux_log_error (h, "namespace_move: flux_future_and_then");
         goto error;
     }
-    flux_future_continue (fprev, fnext);
-    flux_future_destroy (fprev);
-    return;
+    return fnext;
 error:
-    flux_future_continue_error (fprev, errno, NULL);
     flux_future_destroy (f);
     flux_future_destroy (fnext);
-    flux_future_destroy (fprev);
+    return NULL;
 }
 
-/*  Start all cleanup tasks on the cleanup list and return
- *   a composite future that will be ready when everything is done.
+static void cleanup_complete_cb (flux_future_t *f, void *arg)
+{
+    struct jobinfo *job = arg;
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (job->h, "cleanup_complete_cb: event_pack");
+    flux_future_destroy (f);
+
+    /* XXX: when cleanup ranks are tracked, only finalize once all
+     *  involved ranks have completed cleanup. For now though, only
+     *  one cleanup_complete call is expected.
+     */
+    if (jobinfo_finalize (job) < 0) {
+        flux_log_error (job->h, "cleanup_complete_cb: jobinfo_finalize");
+        jobinfo_decref (job);
+    }
+}
+
+/* Notify job-exec that any "cleanup" tasks including epilog have
+ *  completed on ranks with return code `rc`.
+ *
+ * XXX: ranks ignored for now
  */
-static void jobinfo_cleanup (flux_future_t *fprev, void *arg)
+void jobinfo_cleanup_complete (struct jobinfo *job,
+                               const struct idset *ranks,
+                               int rc)
 {
-    struct jobinfo *job = arg;
-    flux_t *h = job->ctx->h;
-    cleanup_task_f fn;
     flux_future_t *f = NULL;
-    flux_future_t *cf = NULL;
-
-    if (!(cf = flux_future_wait_all_create ())) {
-        flux_log_error (job->ctx->h, "flux_future_wait_all_create");
-        goto error;
-    }
-    flux_future_set_flux (cf, h);
-
-    fn = zhashx_first (job->cleanup);
-    while (fn) {
-        const char *name = zhashx_cursor (job->cleanup);
-        if (!(f = (*fn) (job))) {
-            flux_log_error (h, "%s",
-                            (const char *) zhashx_cursor (job->cleanup));
-            goto error;
-        }
-        flux_future_push (cf, name, f);
-        fn = zhashx_next (job->cleanup);
-    }
-    flux_future_continue (fprev, cf);
-    flux_future_destroy (fprev);
-    return;
-error:
-    flux_future_continue_error (fprev, errno, NULL);
-    flux_future_destroy (fprev);
-}
-
-static void emit_cleanup_finish (flux_future_t *prev, void *arg)
-{
-    struct jobinfo *job = arg;
-    flux_future_t *f = NULL;
-    int rc = flux_future_get (prev, NULL);
 
     /*  XXX: It isn't clear what to do if a cleanup task fails.
      *   For now, log the return code from the cleanup composite
@@ -587,69 +469,95 @@ static void emit_cleanup_finish (flux_future_t *prev, void *arg)
      */
     if (rc < 0)
         f = jobinfo_emit_event_pack (job, "cleanup.finish",
-                                     "{ s:i s:s }",
+                                     "{ s:s s:i s:s }",
+                                     "ranks", "all",
                                      "rc", rc,
                                      "note", strerror (errno));
     else
         f = jobinfo_emit_event_pack (job, "cleanup.finish",
-                                     "{ s:i }",
+                                     "{ s:s s:i }",
+                                     "ranks", "all",
                                      "rc", rc);
-
-    if (!f)
-        flux_future_continue_error (prev, errno, NULL);
-    else
-        flux_future_continue (prev, f);
-    flux_future_destroy (prev);
-}
-
-/*  Start all cleanup tasks:
- *   1. emit cleanup.start event to exec.eventlog
- *   2. start all cleanup work in parallel
- *   3. emit cleanup.done event to exec.eventlog
- *  Returns a chained future that will be fulfilled when these steps
- *   are complete.
- */
-static flux_future_t * jobinfo_start_cleanup (struct jobinfo *job)
-{
-    flux_future_t *f = NULL;
-    flux_future_t *fnext = NULL;
-
-    /* Skip cleanup if there are no items on the cleanup list.
-     * (e.g. an exception ocurred during job preparation)
-     */
-    if (zhashx_size (job->cleanup) == 0) {
-        /* Return an empty, fulfilled future */
-        if (!(f = flux_future_create (NULL, NULL)))
-            goto error;
-        flux_future_set_flux (f, job->ctx->h);
-        flux_future_fulfill (f, NULL, NULL);
-        return f;
+   if (flux_future_then (f, -1., cleanup_complete_cb, job) < 0) {
+        jobinfo_respond_error (job, errno, "cleanup complete error");
+        flux_future_destroy (f);
     }
-
-    /*  O/w, create cleanup composite future sandwiched by
-     *   cleanup.start and cleanup.finish events in the eventlog
-     */
-    if (!(f = jobinfo_emit_event_pack (job, "cleanup.start", NULL)))
-        goto error;
-    if (!(fnext = flux_future_and_then (f, jobinfo_cleanup, job)))
-        goto error;
-    f = fnext;
-    if (!(fnext = flux_future_and_then (f, emit_cleanup_finish, job)))
-        goto error;
-    return fnext;
-error:
-    flux_future_destroy (f);
-    flux_future_destroy (fnext);
-    return NULL;
 }
 
-static void jobinfo_release (flux_future_t *f, void *arg)
+static void jobinfo_start_cleanup_cb (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
-    if (jobinfo_send_release (job, NULL) < 0)
+
+    /*  Log error if cleanup.start event failed */
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (job->h, "jobinfo_emit_event (cleanup.start)");
+    flux_future_destroy (f);
+
+    if ((*job->impl->cleanup) (job, NULL) < 0)
+        flux_log_error (job->h, "%s: cleanup()", job->impl->name);
+}
+
+/*  Initiate cleanup on ranks in idset, if necessary */
+static void jobinfo_start_cleanup (struct jobinfo *job,
+                                   const struct idset *idset)
+{
+    flux_future_t *f = NULL;
+
+    /* XXX: idset ignored for now */
+
+    if (!(f = jobinfo_emit_event_pack (job, "cleanup.start",
+                                            "{ s:s }",
+                                            "ranks", "all"))) {
+        flux_log_error (job->h, "jobinfo_emit_event_pack");
+        goto error;
+    }
+    if (flux_future_then (f, -1., jobinfo_start_cleanup_cb, job) < 0) {
+        flux_log_error (job->h, "flux_future_then");
+        goto error;
+    }
+    return;
+error:
+    jobinfo_respond_error (job, errno, "cleanup start error");
+    flux_future_destroy (f);
+}
+
+/* Notify job-exec that shells on ranks are complete.
+ * XXX: currently assumes ranks equivalent to "all"
+ */
+void jobinfo_tasks_complete (struct jobinfo *job,
+                             const struct idset *ranks,
+                             int wait_status)
+{
+    assert (job->running == 1);
+    if (wait_status > job->wait_status)
+        job->wait_status = wait_status;
+
+    /* XXX: ranks ignored for now until partial release supported
+     *  only call jobinfo_complete() once all tasks have completed.
+     */
+    jobinfo_complete (job, ranks);
+
+    /* Start cleanup tasks on completed ranks */
+    jobinfo_start_cleanup (job, ranks);
+}
+
+
+static int jobinfo_release (struct jobinfo *job)
+{
+    int rc = jobinfo_send_release (job, NULL);
+    if (rc < 0) {
         flux_log_error (job->ctx->h, "jobinfo_send_release");
+        jobinfo_respond_error (job, errno, "job release error");
+    }
     /* Should be final destruction */
     jobinfo_decref (job);
+    return rc;
+}
+
+static void namespace_move_cb (flux_future_t *f, void *arg)
+{
+    struct jobinfo *job = arg;
+    jobinfo_release (job);
     flux_future_destroy (f);
 }
 
@@ -662,108 +570,33 @@ static void jobinfo_release (flux_future_t *f, void *arg)
 static int jobinfo_finalize (struct jobinfo *job)
 {
     flux_future_t *f = NULL;
-    flux_future_t *fnext = NULL;
 
     if (job->finalizing)
         return 0;
     job->finalizing = 1;
 
-    if (!(f = jobinfo_start_cleanup (job)))
-        goto error;
-    if (job->has_namespace &&
-        !(fnext = flux_future_and_then (f, namespace_move, job)))
-        goto error;
-    if (flux_future_then (fnext, -1., jobinfo_release, job) < 0)
-        goto error;
+    if (job->has_namespace) {
+        flux_future_t *f = namespace_move (job);
+        if (!f || flux_future_then (f, -1., namespace_move_cb, job) < 0)
+            goto error;
+    }
+    else if (jobinfo_release (job) < 0)
+        goto error_release;
     return 0;
 error:
     jobinfo_respond_error (job, errno, "finalize error");
+error_release:
     flux_future_destroy (f);
-    flux_future_destroy (fnext);
     return -1;
-}
-
-/* Timer callback, post the "finish" event and start "cleanup" tasks.
- */
-void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
-{
-    struct jobinfo *job = arg;
-    job->running = 0;
-    job->wait_status = job->testconf.wait_status;
-    jobinfo_complete (job);
-    if (jobinfo_finalize (job) < 0)
-        flux_log_error (job->ctx->h, "jobinfo_finalize");
-}
-
-/*  Start a timer to simulate job shell execution. A start event
- *   is sent before the timer is started, and the "finish" event
- *   is sent when the timer fires (simulating the exit of the final
- *   job shell.)
- */
-static int jobinfo_start_timer (struct jobinfo *job)
-{
-    flux_t *h = job->ctx->h;
-    flux_reactor_t *r = flux_get_reactor (h);
-    double t = job->testconf.run_duration;
-
-    /*  For now, if a job duration wasn't found, complete job almost
-     *   immediately.
-     */
-    if (t < 0.)
-        t = 1.e-5;
-    if (t > 0.) {
-        char timebuf[256];
-        job->timer = flux_timer_watcher_create (r, t, 0., timer_cb, job);
-        if (!job->timer) {
-            flux_log_error (h, "jobinfo_start: timer_create");
-            return -1;
-        }
-        flux_watcher_start (job->timer);
-        snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
-        jobinfo_started (job, "{ s:s }", "timer", timebuf);
-    }
-    else
-        return -1;
-    return 0;
-}
-
-void epilog_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
-{
-    flux_future_fulfill ((flux_future_t *) arg, NULL, NULL);
-    flux_watcher_destroy (w);
-}
-
-static flux_future_t * ersatz_epilog (struct jobinfo *job)
-{
-    flux_t *h = job->ctx->h;
-    flux_reactor_t *r = flux_get_reactor (h);
-    flux_future_t *f = NULL;
-    flux_watcher_t *timer = NULL;
-    double t = job->testconf.cleanup_duration;
-
-    if (!(f = flux_future_create (NULL, NULL)))
-        return NULL;
-    flux_future_set_flux (f, h);
-
-    if (!(timer = flux_timer_watcher_create (r, t, 0.,
-                                             epilog_timer_cb, f))) {
-        flux_log_error (h, "flux_timer_watcher_create");
-        flux_future_fulfill_error (f, errno, "flux_timer_watcher_create");
-    }
-    flux_watcher_start (timer);
-    return f;
 }
 
 static int jobinfo_start_execution (struct jobinfo *job)
 {
     jobinfo_emit_event_pack_nowait (job, "starting", NULL);
-    if (jobinfo_start_timer (job) < 0) {
-        jobinfo_fatal_error (job, errno, "start timer failed");
+    if ((*job->impl->start) (job) < 0) {
+        jobinfo_fatal_error (job, errno, "%s: start failed", job->impl->name);
         return -1;
     }
-    if (job->needs_cleanup)
-        jobinfo_add_cleanup (job, "epilog simulator", ersatz_epilog);
     return 0;
 }
 
@@ -790,6 +623,29 @@ static const char * jobinfo_kvs_lookup_get (flux_future_t *f, const char *name)
     if (flux_kvs_lookup_get (child, &result) < 0)
         return NULL;
     return result;
+}
+
+static int jobinfo_load_implementation (struct jobinfo *job)
+{
+    int i = 0;
+    int rc = -1;
+    struct exec_implementation *impl;
+
+    while ((impl = implementations[i]) && impl->name) {
+        /*
+         *  Immediately fail if any implementation init method returns < 0.
+         *  If rc > 0, then select this implementation and skip others,
+         *  O/w, continue with the list.
+         */
+        if ((rc = (*impl->init) (job)) < 0)
+            return -1;
+        else if (rc > 0) {
+            job->impl = impl;
+            return 0;
+        }
+        i++;
+    }
+    return -1;
 }
 
 /*  Completion for jobinfo_initialize(), finish init of jobinfo using
@@ -824,22 +680,12 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "reading jobspec: %s", error.text);
         goto done;
     }
-    if (init_testconf (job->ctx->h, &job->testconf, job->jobspec) < 0) {
-        jobinfo_fatal_error (job, errno, "failed to initialize testconf");
-        goto done;
-    }
-    if (job->testconf.cleanup_duration > 0.)
-        job->needs_cleanup = 1;
-    if (jobinfo_mock_exception (job, "init")) {
-        jobinfo_fatal_error (job, 0, "mock initialization exception generated");
+    if (jobinfo_load_implementation (job) < 0) {
+        jobinfo_fatal_error (job, errno, "failed to initialize implementation");
         goto done;
     }
     if (jobinfo_start_execution (job) < 0) {
         jobinfo_fatal_error (job, errno, "failed to start execution");
-        goto done;
-    }
-    if (jobinfo_mock_exception (job, "run")) {
-        jobinfo_fatal_error (job, 0, "mock run exception generated");
         goto done;
     }
 done:
@@ -966,6 +812,12 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     if (!(job = jobinfo_new ()))
         return -1;
 
+    /* Copy flux handle for each job to allow implementation access.
+     * (This could also be done with an accessor, but choose the simpler
+     *  approach for now)
+     */
+    job->h = ctx->h;
+
     if (!(job->req = flux_msg_copy (msg, true))) {
         flux_log_error (ctx->h, "start: flux_msg_copy");
         jobinfo_decref (job);
@@ -979,6 +831,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
                                              "id", &job->id,
                                              "userid", &job->userid) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
+        jobinfo_decref (job);
         return -1;
     }
     if (job_get_ns_name (job->ns, sizeof (job->ns), job->id) < 0) {

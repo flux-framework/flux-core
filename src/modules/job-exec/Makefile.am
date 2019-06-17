@@ -15,9 +15,11 @@ fluxmod_LTLIBRARIES = \
 	job-exec.la
 
 job_exec_la_SOURCES = \
+	job-exec.h \
 	job-exec.c \
 	rset.c \
-	rset.h
+	rset.h \
+	testexec.c
 
 job_exec_la_LDFLAGS = \
 	$(fluxmod_ldflags) \
