@@ -19,13 +19,16 @@ hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
 
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
+exec_test() {
+	${jq} '.attributes.system.exec.test = {}'
+}
 exec_testattr() {
 	${jq} --arg key "$1" --arg value $2 \
 	      '.attributes.system.exec.test[$key] = $value'
 }
 
 test_expect_success 'job-exec: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
+        flux jobspec srun -n1 hostname | exec_test > basic.json
 '
 test_expect_success 'job-exec: load job-exec,sched-simple modules' '
 	#  Add fake by_rank configuration to kvs:
@@ -56,8 +59,9 @@ test_expect_success 'job-exec: exec.eventlog exists with expected states' '
 	tail -1 eventlog.1.out | grep "done"
 '
 test_expect_success 'job-exec: canceling job during execution works' '
-	jobid=$(flux jobspec srun -t 1 hostname | flux job submit) &&
-	flux job wait-event -t 2.5 ${jobid} start &&
+	jobid=$(flux jobspec srun -t 1 hostname | \
+		 exec_test | flux job submit) &&
+	flux job wait-event -vt 2.5 ${jobid} start &&
 	flux job cancel ${jobid} &&
 	flux job wait-event -t 2.5 ${jobid} exception &&
 	flux job wait-event -t 2.5 ${jobid} finish | grep status=9 &&
