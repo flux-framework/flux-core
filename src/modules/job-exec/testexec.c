@@ -239,9 +239,8 @@ static int testexec_init (struct jobinfo *job)
         jobinfo_fatal_error (job, errno, "failed to initialize testconf");
         return -1;
     }
-    // XXX: testexec always enabled for now
-    //else if (!conf.enabled)
-    //    return 0;
+    else if (!conf.enabled)
+        return 0;
     if (!(te = testexec_create (conf))) {
         jobinfo_fatal_error (job, errno, "failed to init test exec module");
         return -1;

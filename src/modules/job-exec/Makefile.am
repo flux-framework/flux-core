@@ -29,7 +29,8 @@ job_exec_la_SOURCES = \
 	job-exec.c \
 	rset.c \
 	rset.h \
-	testexec.c
+	testexec.c \
+	exec.c
 
 job_exec_la_LDFLAGS = \
 	$(fluxmod_ldflags) \
@@ -39,6 +40,7 @@ job_exec_la_LIBADD = \
 	$(fluxmod_ldadd) \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	libbulk-exec.la \
 	$(ZMQ_LIBS)
 
 bulk_exec_SOURCES = \

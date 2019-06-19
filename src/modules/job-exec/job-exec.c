@@ -91,9 +91,11 @@
 #include "job-exec.h"
 
 extern struct exec_implementation testexec;
+extern struct exec_implementation bulkexec;
 
 static struct exec_implementation * implementations[] = {
     &testexec,
+    &bulkexec,
     NULL
 };
 
@@ -820,9 +822,9 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     if (!(job->req = flux_msg_copy (msg, true))) {
         flux_log_error (ctx->h, "start: flux_msg_copy");
-        jobinfo_decref (job);
         if (flux_respond_error (ctx->h, msg, errno, "flux_msg_copy failed") < 0)
             flux_log_error (ctx->h, "flux_respond_error");
+        jobinfo_decref (job);
         return -1;
     }
     job->ctx = ctx;
