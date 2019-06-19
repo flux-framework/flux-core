@@ -63,7 +63,7 @@ log "broker.pid=$(flux getattr broker.pid)\n"
 #  Reload scheduler so we can insert a fake resource set:
 flux module remove sched-simple
 flux kvs put --json \
-    resource.hwloc.by_rank="{\"[1-$NNODES]\":{\"Core\":$CPN}}"
+    resource.hwloc.by_rank="{\"[0-$(($NNODES-1))]\":{\"Core\":$CPN}}"
 flux jobspec srun hostname | jq '.attributes.system.duration = .0001' > job.json
 flux module load sched-simple
 
@@ -86,6 +86,10 @@ if test -z "$NOEXEC"; then
     runtime=$(flux job wait-event $last clean | awk '{print $1}')
     log_timing_msg ran $starttime $runtime
 fi
+
+flux job drain
+
+flux job eventlog $last
 
 t_done=$(date +%s.%N)
 log_timing_msg "total walltime for" $t_start $t_done
