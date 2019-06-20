@@ -67,6 +67,7 @@ TESTSCRIPTS = \
 	t0020-emit-jobspec.t \
 	t0021-flux-jobspec.t \
 	t0022-jj-reader.t \
+	t0030-iobuf.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
 	t1003-kvs-stress.t \
@@ -192,6 +193,8 @@ check_PROGRAMS = \
 	kvs/issue1876 \
 	kvs/waitcreate_cancel \
 	kvs/setrootevents \
+	iobuf/iobuf-service \
+	iobuf/iobuf-rpc \
 	request/treq \
 	request/rpc \
 	barrier/tbarrier \
@@ -419,3 +422,13 @@ sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
 sched_simple_jj_reader_LDADD = \
 	$(top_builddir)/src/modules/sched-simple/libjj.la \
 	$(test_ldadd)
+
+iobuf_iobuf_service_SOURCES = iobuf/iobuf-service.c
+iobuf_iobuf_service_CPPFLAGS = $(test_cppflags)
+iobuf_iobuf_service_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+iobuf_iobuf_rpc_SOURCES = iobuf/iobuf-rpc.c
+iobuf_iobuf_rpc_CPPFLAGS = $(test_cppflags)
+iobuf_iobuf_rpc_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)

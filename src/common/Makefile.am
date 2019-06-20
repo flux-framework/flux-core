@@ -12,7 +12,8 @@ SUBDIRS = libtap \
           libsubprocess \
           libaggregate \
           libschedutil \
-	  libeventlog
+	  libeventlog \
+	  libiobuf
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
@@ -29,6 +30,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(builddir)/libeventlog/libeventlog.la \
+	$(builddir)/libiobuf/libiobuf.la \
 	$(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) $(LIBRT) $(FLUX_SECURITY_LIBS) $(LIBSODIUM_LIBS)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
