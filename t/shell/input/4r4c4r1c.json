@@ -1,9 +1,15 @@
-[ { "children": { "core": "0-3" }, "rank": 0 },
-  { "children": { "core": "0-3" }, "rank": 1 },
-  { "children": { "core": "0-3" }, "rank": 2 },
-  { "children": { "core": "0-3" }, "rank": 3 },
-  { "children": { "core": "0" }, "rank": 4 },
-  { "children": { "core": "0" }, "rank": 5 },
-  { "children": { "core": "0" }, "rank": 6 },
-  { "children": { "core": "0" }, "rank": 7 }
-]
+{
+        "version": 1,
+        "execution":{
+                "R_lite":[
+			{ "children": { "core": "0-3" }, "rank": "0" },
+			{ "children": { "core": "0-3" }, "rank": "1" },
+			{ "children": { "core": "0-3" }, "rank": "2" },
+			{ "children": { "core": "0-3" }, "rank": "3" },
+			{ "children": { "core": "0" }, "rank": "4" },
+			{ "children": { "core": "0" }, "rank": "5" },
+			{ "children": { "core": "0" }, "rank": "6" },
+			{ "children": { "core": "0" }, "rank": "7" }
+		]
+	}
+}

@@ -18,6 +18,8 @@
 #include <jansson.h>
 #include <czmq.h>   /* zlist_t */
 
+#include "src/common/libidset/idset.h"
+
 #include "rcalc.h"
 
 struct rankinfo {
@@ -149,6 +151,59 @@ static int rankinfo_get (json_t *o, struct rankinfo *ri)
     return (0);
 }
 
+static int expand_rank_ranges_one (json_t *out, json_t *entry)
+{
+    const char *rank;
+    json_t *children;
+    struct idset *ids;
+    unsigned int id;
+    json_t *n;
+
+    if (json_unpack_ex (entry, NULL, 0,
+                        "{s:s s:o}",
+                        "rank", &rank,
+                        "children", &children) < 0)
+        return -1;
+    if (!(ids = idset_decode (rank)))
+        return -1;
+    id = idset_first (ids);
+    while (id != IDSET_INVALID_ID) {
+        if (!(n = json_pack ("{s:i s:O}",
+                             "rank", id,
+                             "children", children)))
+            return -1;
+        if (json_array_append_new (out, n) < 0) {
+            json_decref (n);
+            return -1;
+        }
+        id = idset_next (ids, id);
+    }
+    idset_destroy (ids);
+    return 0;
+}
+
+/* Convert from R version 1 internal R_lite object to the earlier wreck R_lite
+ * object understood by this module.  They are the same except Rv1 specifies
+ * ranks as an idset rather than integer, allowing for compact representation.
+ */
+static json_t *expand_rank_ranges (json_t *R_lite)
+{
+    json_t *out;
+    json_t *entry;
+    size_t index;
+
+    if (!(out = json_array ())) // accumulate new array
+        return NULL;
+    json_array_foreach (R_lite, index, entry) {
+        if (expand_rank_ranges_one (out, entry) < 0)
+            goto error;
+    }
+    return out;
+error:
+    json_decref (out);
+    return NULL;
+}
+
 void rcalc_destroy (rcalc_t *r)
 {
     json_decref (r->json);
@@ -161,12 +216,25 @@ void rcalc_destroy (rcalc_t *r)
 static rcalc_t * rcalc_create_json (json_t *o)
 {
     int i;
+    int version;
+    json_t *R_lite;
     rcalc_t *r = calloc (1, sizeof (*r));
     if (!r)
         return (NULL);
-    /* Take new reference on json object and assign it to r */
-    json_incref (o);
-    r->json = o;
+    if (json_unpack_ex (o, NULL, 0,
+                        "{s:i s:{s:o}}",
+                        "version", &version,
+                        "execution",
+                        "R_lite", &R_lite) < 0)
+        goto fail;
+    if (version != 1) {
+        errno = EINVAL;
+        goto fail;
+    }
+    if (!(r->json = expand_rank_ranges (R_lite))) {
+        errno = EINVAL;
+        goto fail;
+    }
     r->nranks = json_array_size (r->json);
     r->ranks = calloc (r->nranks, sizeof (struct rankinfo));
     r->alloc = calloc (r->nranks, sizeof (struct allocinfo));
@@ -187,7 +255,7 @@ rcalc_t *rcalc_create (const char *json_in)
     rcalc_t *r = NULL;
     json_t *o = NULL;
 
-    if (!(o = json_loads (json_in, JSON_DECODE_ANY, 0))) {
+    if (!(o = json_loads (json_in, 0, 0))) {
         errno = EINVAL;
         return (NULL);
     }
@@ -200,7 +268,7 @@ rcalc_t *rcalc_createf (FILE *fp)
 {
     rcalc_t *r;
     json_t *o;
-    if (!(o = json_loadf (fp, JSON_DECODE_ANY, 0))) {
+    if (!(o = json_loadf (fp, 0, 0))) {
         errno = EINVAL;
         return (NULL);
     }
