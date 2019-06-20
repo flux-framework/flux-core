@@ -14,7 +14,9 @@ noinst_LTLIBRARIES = libshell.la
 
 libshell_la_SOURCES = \
 	jobspec.c \
-	jobspec.h
+	jobspec.h \
+	rcalc.c \
+	rcalc.h
 
 TESTS =
 
