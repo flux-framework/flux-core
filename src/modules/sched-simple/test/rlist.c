@@ -202,6 +202,138 @@ static void test_simple (void)
     rlist_destroy (copy);
 }
 
+const char by_rank_issue2202[] = "{\
+  \"0\": {\
+    \"Package\": 1,\
+    \"Core\": 1,\
+    \"PU\": 1,\
+    \"cpuset\": \"0\"\
+  },\
+  \"1\": {\
+    \"Package\": 1,\
+    \"Core\": 1,\
+    \"PU\": 1,\
+    \"cpuset\": \"1\"\
+  },\
+  \"2\": {\
+    \"Package\": 1,\
+    \"Core\": 1,\
+    \"PU\": 1,\
+    \"cpuset\": \"2\"\
+  },\
+  \"3\": {\
+    \"Package\": 1,\
+    \"Core\": 1,\
+    \"PU\": 1,\
+    \"cpuset\": \"3\"\
+  }\
+}";
+
+const char by_rank_issue2202b[] = "{\
+\"0\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"0-1\"\
+  },\
+  \"1\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"0,2\"\
+  },\
+  \"2\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"0,3\"\
+  },\
+  \"3\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"3-4\"\
+  }\
+}";
+
+
+static void test_issue2202 (void)
+{
+    char *result = NULL;
+    struct rlist *a = NULL;
+
+    struct rlist *rl = rlist_from_hwloc_by_rank (by_rank_issue2202);
+    ok (rl != NULL, "issue2202: rlist_from_by_rank");
+    if (!rl)
+        BAIL_OUT ("unable to create rlist from by_rank_issue2202");
+
+    result = rlist_dumps (rl);
+    is (result,
+        "rank0/core0 rank1/core1 rank2/core2 rank3/core3",
+        "issue2202: rlist_dumps works");
+    free (result);
+
+    a = rlist_alloc (rl, "best-fit", 1, 1, 1);
+    ok (a != NULL,
+        "issue2202: rlist_alloc worked");
+    if (a) {
+        result = rlist_dumps (a);
+        is (result, "rank0/core0", "issue2202: allocated %s", result);
+        free (result);
+        result = rlist_dumps (rl);
+        is (result,
+            "rank1/core1 rank2/core2 rank3/core3",
+            "issue2202: remaining: %s", result);
+        free (result);
+        ok (rlist_free (rl, a) == 0,
+            "issue2202: rlist_free worked: %s", strerror (errno));
+        result = rlist_dumps (rl);
+        is (result,
+            "rank0/core0 rank1/core1 rank2/core2 rank3/core3",
+            "issue2202: rlist now has all cores again");
+        free (result);
+        rlist_destroy (a);
+    }
+    rlist_destroy (rl);
+
+
+    /*  Part B:  test with multiple cores per rank, same cpuset size
+     */
+    rl = rlist_from_hwloc_by_rank (by_rank_issue2202b);
+    ok (rl != NULL, "issue2202: rlist_from_hwloc_by_rank");
+    if (!rl)
+        BAIL_OUT ("unable to create rlist from by_rank_issue2202b");
+
+    result = rlist_dumps (rl);
+    is (result,
+        "rank0/core[0-1] rank1/core[0,2] rank2/core[0,3] rank3/core[3-4]",
+        "issue2202b: rlist_dumps works");
+    free (result);
+
+    a = rlist_alloc (rl, "best-fit", 1, 1, 1);
+    ok (a != NULL,
+        "issue2202b: rlist_alloc worked");
+    if (a) {
+        result = rlist_dumps (a);
+        is (result, "rank0/core0", "issue2202b: allocated %s", result);
+        free (result);
+        result = rlist_dumps (rl);
+        is (result,
+            "rank0/core1 rank1/core[0,2] rank2/core[0,3] rank3/core[3-4]",
+            "issue2202b: remaining: %s", result);
+        free (result);
+        ok (rlist_free (rl, a) == 0,
+            "issue2202b: rlist_free worked: %s", strerror (errno));
+        result = rlist_dumps (rl);
+        is (result,
+            "rank0/core[0-1] rank1/core[0,2] rank2/core[0,3] rank3/core[3-4]",
+            "issue2202b: rlist now has all cores again");
+        free (result);
+        rlist_destroy (a);
+    }
+    rlist_destroy (rl);
+}
+
 static void test_dumps (void)
 {
     char *result = NULL;
@@ -249,6 +381,7 @@ int main (int ac, char *av[])
     run_test_entries (test_2n_4c,       2, 4);
     run_test_entries (test_6n_4c,       6, 4);
     run_test_entries (test_1024n_4c, 1024, 4);
+    test_issue2202 ();
 
     done_testing ();
 }
