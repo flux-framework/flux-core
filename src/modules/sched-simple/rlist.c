@@ -83,11 +83,40 @@ static struct rnode *rlist_find_rank (struct rlist *rl, uint32_t rank)
     return NULL;
 }
 
+/*  Compare two values from idset_first()/idset_next():
+ *  Returns:
+ *    0   : if x == y
+ *    > 0 : if x > y
+ *    < 0 : if x < y
+ *
+ *  Where IDSET_INVALID_ID is considered to come before all numbers.
+ */
+static int idset_val_cmp (unsigned int x, unsigned int y)
+{
+    if (x == y)
+        return 0;
+    else if (x == IDSET_INVALID_ID)
+        return -1;
+    else if (y == IDSET_INVALID_ID)
+        return  1;
+    else
+        return (x - y);
+}
+
 static int idset_cmp (struct idset *set1, struct idset *set2)
 {
-    if (idset_equal (set1, set2))
-        return 0;
-    return idset_count (set1) - idset_count (set2);
+    int rv = 0;
+    if (!idset_equal (set1, set2)) {
+        /*  Sort on the first non-equal integer (see idset_val_cmp())
+         */
+        unsigned int a = idset_first (set1);
+        unsigned int b = idset_first (set2);
+        while ((rv = idset_val_cmp (a, b)) == 0) {
+            a = idset_next (set1, a);
+            b = idset_next (set2, b);
+        }
+    }
+    return rv;
 }
 
 static int idset_add_set (struct idset *set, struct idset *new)
