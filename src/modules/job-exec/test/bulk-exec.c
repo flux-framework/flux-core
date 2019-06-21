@@ -64,6 +64,26 @@ void on_output (struct bulk_exec *exec, flux_subprocess_t *p,
     fprintf (fp, "%d: %s", rank, data);
 }
 
+static void kill_cb (flux_future_t *f, void *arg)
+{
+    if (flux_future_get (f, NULL) < 0)
+        log_err ("bulk_exec_kill");
+    flux_future_destroy (f);
+}
+
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg)
+{
+    struct bulk_exec *exec = arg;
+    int signum = flux_signal_watcher_get_signum (w);
+
+    log_msg ("sending signal %d to all tasks\n", signum);
+    flux_future_t *f = bulk_exec_kill (exec, signum);
+    if (!f || (flux_future_then (f, -1., kill_cb, exec) < 0))
+        log_err ("SIGINT: failed to forward signal %d", signum);
+    flux_watcher_stop (w);
+}
+
 static unsigned int idset_pop (struct idset *idset)
 {
     unsigned int id = idset_first (idset);
@@ -109,10 +129,8 @@ void push_commands (struct bulk_exec *exec,
     free (cwd);
 
     per_cmd = count/ncmds;
-    fprintf (stderr, "per_cmd = %d\n", per_cmd);
     while (idset_count (idset)) {
         struct idset *ids = idset_pop_n (idset, per_cmd);
-        fprintf (stderr, "ids = %s\n", idset_encode (ids, IDSET_FLAG_RANGE));
         if (bulk_exec_push_cmd (exec, ids, cmd, 0) < 0)
             log_err_exit ("bulk_exec_push_cmd");
         idset_destroy (ids);
@@ -207,9 +225,16 @@ int main (int ac, char **av)
     if (bulk_exec_start (h, exec) < 0)
         log_err_exit ("bulk_exec_start");
 
+    flux_watcher_t *w = flux_signal_watcher_create (flux_get_reactor (h),
+                                                    SIGINT,
+                                                    signal_cb,
+                                                    exec);
+    flux_watcher_start (w);
+
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    flux_watcher_destroy (w);
     idset_destroy (idset);
     bulk_exec_destroy (exec);
     flux_close (h);
