@@ -11,7 +11,10 @@ flux setattr log-stderr-level 1
 #  Set path to jq(1)
 #
 jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
+if test -z "$jq"; then
+    skip_all='jq not found. Skipping all tests'
+    test_done
+fi
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
@@ -19,13 +22,14 @@ hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
 
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
+exec_test()     { ${jq} '.attributes.system.exec.test = {}'; }
 exec_testattr() {
 	${jq} --arg key "$1" --arg value $2 \
 	      '.attributes.system.exec.test[$key] = $value'
 }
 
 test_expect_success 'job-exec: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
+        flux jobspec srun -n1 hostname | exec_test > basic.json
 '
 test_expect_success 'job-exec: load job-exec,sched-simple modules' '
 	#  Add fake by_rank configuration to kvs:
@@ -56,8 +60,9 @@ test_expect_success 'job-exec: exec.eventlog exists with expected states' '
 	tail -1 eventlog.1.out | grep "done"
 '
 test_expect_success 'job-exec: canceling job during execution works' '
-	jobid=$(flux jobspec srun -t 1 hostname | flux job submit) &&
-	flux job wait-event -t 2.5 ${jobid} start &&
+	jobid=$(flux jobspec srun -t 1 hostname | \
+		 exec_test | flux job submit) &&
+	flux job wait-event -vt 2.5 ${jobid} start &&
 	flux job cancel ${jobid} &&
 	flux job wait-event -t 2.5 ${jobid} exception &&
 	flux job wait-event -t 2.5 ${jobid} finish | grep status=9 &&
@@ -65,7 +70,7 @@ test_expect_success 'job-exec: canceling job during execution works' '
 	flux job wait-event -t 2.5 ${jobid} clean &&
 	exec_eventlog $jobid | grep "complete" | grep "\"status\":9"
 '
-test_expect_success HAVE_JQ 'job-exec: mock exception during initialization' '
+test_expect_success 'job-exec: mock exception during initialization' '
 	flux jobspec srun hostname | \
 	  exec_testattr mock_exception init > ex1.json &&
 	jobid=$(flux job submit ex1.json) &&
@@ -77,7 +82,7 @@ test_expect_success HAVE_JQ 'job-exec: mock exception during initialization' '
 	flux job eventlog ${jobid} > eventlog.${jobid}.out &&
 	test_must_fail grep "finish" eventlog.${jobid}.out
 '
-test_expect_success HAVE_JQ 'job-exec: mock exception during run' '
+test_expect_success 'job-exec: mock exception during run' '
 	flux jobspec srun hostname | \
 	  exec_testattr mock_exception run > ex2.json &&
 	jobid=$(flux job submit ex2.json) &&
@@ -88,7 +93,7 @@ test_expect_success HAVE_JQ 'job-exec: mock exception during run' '
 	flux job eventlog ${jobid} > eventlog.${jobid}.out &&
 	grep "finish status=9" eventlog.${jobid}.out
 '
-test_expect_success HAVE_JQ 'job-exec: simulate epilog/cleanup tasks' '
+test_expect_success 'job-exec: simulate epilog/cleanup tasks' '
 	flux jobspec srun hostname | \
 	  exec_testattr cleanup_duration 0.01s > cleanup.json &&
 	jobid=$(flux job submit cleanup.json) &&
@@ -103,7 +108,7 @@ test_expect_success HAVE_JQ 'job-exec: simulate epilog/cleanup tasks' '
 #  epilog script which could be triggered by events. If this test becomes
 #  a problem, we can disable it until that time.
 #
-test_expect_success HAVE_JQ 'job-exec: exception during cleanup' '
+test_expect_success 'job-exec: exception during cleanup' '
 	flux jobspec srun hostname | \
 	  exec_testattr cleanup_duration 1s > cleanup-long.json &&
 	jobid=$(flux job submit cleanup-long.json) &&

@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import re
+import os
 import sys
 import math
 import logging
@@ -70,7 +71,7 @@ def create_slurm_style_jobspec(
                 "attributes": {},
             }
         ],
-        "attributes": {"system": {}},
+        "attributes": {"system": {"cwd": os.getcwd()}},
     }
     if walltime:
         jobspec["attributes"]["system"]["duration"] = walltime

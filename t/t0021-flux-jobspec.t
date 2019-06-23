@@ -178,5 +178,8 @@ test_expect_success HAVE_JQ 'specifying -N8 -n25 -c2 should produce (in total) 8
     grep -q "Number of tasks is not an integer multiple of the number of nodes." all-three-5.warning.err
 '
 
+test_expect_success HAVE_JQ 'current working directory encoded in jobspec' '
+    flux jobspec srun hostname | jq -e ".attributes.system.cwd = \"$(pwd)\""
+'
 
 test_done
