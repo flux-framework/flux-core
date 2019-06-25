@@ -428,6 +428,7 @@ AC_CONFIG_FILES( \
   src/bindings/python/_flux/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
+  src/shell/Makefile \
   src/connectors/Makefile \
   src/connectors/local/Makefile \
   src/connectors/shmem/Makefile \
