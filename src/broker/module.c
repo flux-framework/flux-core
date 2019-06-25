@@ -35,8 +35,6 @@
 #endif
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libutil/iterators.h"
 
 #include "heartbeat.h"
@@ -108,7 +106,7 @@ static void *module_thread (void *arg)
     assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
     int errnum;
-    char *uri = xasprintf ("shmem://%s", zuuid_str (p->uuid));
+    char *uri = NULL;
     char **av = NULL;
     char *rankstr = NULL;
     int ac;
@@ -119,11 +117,18 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
+    if (asprintf (&uri, "shmem://%s", zuuid_str (p->uuid)) < 0) {
+        log_err ("asprintf");
+        goto done;
+    }
     if (!(p->h = flux_open (uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
     }
-    rankstr = xasprintf ("%"PRIu32, p->rank);
+    if (asprintf (&rankstr, "%"PRIu32, p->rank) < 0) {
+        log_err ("asprintf");
+        goto done;
+    }
     if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
         goto done;
@@ -149,7 +154,10 @@ static void *module_thread (void *arg)
     /* Run the module's main().
      */
     ac = argz_count (p->argz, p->argz_len);
-    av = xzmalloc (sizeof (av[0]) * (ac + 1));
+    if (!(av = calloc (1, sizeof (av[0]) * (ac + 1)))) {
+        log_errn (ENOMEM, "calloc");
+        goto done;
+    }
     argz_extract (p->argz, p->argz_len, av);
     if (p->main (p->h, ac, av) < 0) {
         mod_main_errno = errno;
@@ -377,10 +385,12 @@ static void module_destroy (module_t *p)
 int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
-    char *topic = xasprintf ("%s.shutdown", p->name);
-    flux_future_t *f;
+    char *topic = NULL;
+    flux_future_t *f = NULL;
     int rc = -1;
 
+    if (asprintf (&topic, "%s.shutdown", p->name) < 0)
+        goto done;
     if (!(f = flux_rpc (p->broker_h, topic, NULL,
                           FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
         goto done;
@@ -544,13 +554,23 @@ module_t *module_add (modhash_t *mh, const char *path)
         errno = ENOENT;
         return NULL;
     }
-    p = xzmalloc (sizeof (*p));
-    p->name = xstrdup (*mod_namep);
+    if (!(p = calloc (1, sizeof (*p)))) {
+        dlclose (dso);
+        errno = ENOMEM;
+        return NULL;
+    }
     p->magic = MODULE_MAGIC;
     p->main = mod_main;
     p->dso = dso;
+    if (!(p->name = strdup (*mod_namep))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     zf = zfile_new (NULL, path);
-    p->digest = xstrdup (zfile_digest (zf));
+    if (!(p->digest = strdup (zfile_digest (zf)))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
     if (!(p->uuid = zuuid_new ())) {
@@ -718,8 +738,10 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name)
     char *uuid;
     module_t *result = NULL;
 
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
+    if (!(uuids = zhash_keys (mh->zh_byuuid))) {
+        errno = ENOMEM;
+        return NULL;
+    }
     uuid = zlist_first (uuids);
     while (uuid) {
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
@@ -738,14 +760,22 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name)
 int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
 {
     module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
+    char *cpy = NULL;
     int rc = -1;
 
     if (!p) {
         errno = ENOENT;
         goto done;
     }
-    if (zlist_push (p->subs, xstrdup (topic)) < 0)
-        oom ();
+    if (!(cpy = strdup (topic))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (zlist_push (p->subs, cpy) < 0) {
+        free (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     rc = 0;
 done:
     return rc;

@@ -15,7 +15,6 @@
 #include <errno.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
 #include "shutdown.h"

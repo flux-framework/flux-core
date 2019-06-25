@@ -20,7 +20,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
 

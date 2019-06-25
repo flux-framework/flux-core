@@ -920,18 +920,25 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
 
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
 {
-    char *s;
-    s = xasprintf ("%"PRIu32, rank);
-    if (flux_attr_set_cacheonly (h, "rank", s) < 0)
-        return -1;
-    free (s);
+    char *rank_str = NULL;
+    char *size_str = NULL;
+    int rc = -1;
 
-    s = xasprintf ("%"PRIu32, size);
-    if (flux_attr_set_cacheonly (h, "size", s) < 0)
-        return -1;
-    free (s);
+    if (asprintf (&rank_str, "%"PRIu32, rank) < 0)
+        goto cleanup;
+    if (flux_attr_set_cacheonly (h, "rank", rank_str) < 0)
+        goto cleanup;
 
-    return 0;
+    if (asprintf (&size_str, "%"PRIu32, size) < 0)
+        goto cleanup;
+    if (flux_attr_set_cacheonly (h, "size", size_str) < 0)
+        goto cleanup;
+
+    rc = 0;
+cleanup:
+    free (rank_str);
+    free (size_str);
+    return rc;
 }
 
 /*  Handle global rundir attribute.
@@ -1100,7 +1107,8 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
         if (attr_set_flags (attrs, "persist-filesystem",
                                                 FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
-        tmpl = xasprintf ("%s/fluxP-%s-XXXXXX", persist_fs, sid);
+        if (asprintf (&tmpl, "%s/fluxP-%s-XXXXXX", persist_fs, sid) < 0)
+            goto done;
         if (!(dir = mkdtemp (tmpl)))
             goto done;
         if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)

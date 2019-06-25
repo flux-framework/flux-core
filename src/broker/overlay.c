@@ -18,7 +18,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/kary.h"
@@ -84,8 +83,12 @@ static void endpoint_destroy (struct endpoint *ep)
 
 static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
 {
-    struct endpoint *ep = xzmalloc (sizeof (*ep));
-    ep->uri = xvasprintf (fmt, ap);
+    struct endpoint *ep = calloc (1, sizeof (*ep));
+    if (vasprintf (&ep->uri, fmt, ap) < 0) {
+        free (ep);
+        errno = ENOMEM;
+        return NULL;
+    }
     return ep;
 }
 
@@ -251,14 +254,17 @@ void overlay_checkin_child (overlay_t *ov, const char *uuid)
     child->lastseen = ov->epoch;
 }
 
-void overlay_set_parent (overlay_t *ov, const char *fmt, ...)
+int overlay_set_parent (overlay_t *ov, const char *fmt, ...)
 {
+    int rc = -1;
     if (ov->parent)
         endpoint_destroy (ov->parent);
     va_list ap;
     va_start (ap, fmt);
-    ov->parent = endpoint_vcreate (fmt, ap);
+    if ((ov->parent = endpoint_vcreate (fmt, ap)))
+        rc = 0;
     va_end (ap);
+    return rc;
 }
 
 const char *overlay_get_parent (overlay_t *ov)
@@ -318,14 +324,17 @@ void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
     ov->parent_arg = arg;
 }
 
-void overlay_set_child (overlay_t *ov, const char *fmt, ...)
+int overlay_set_child (overlay_t *ov, const char *fmt, ...)
 {
+    int rc = -1;
     if (ov->child)
         endpoint_destroy (ov->child);
     va_list ap;
     va_start (ap, fmt);
-    ov->child = endpoint_vcreate (fmt, ap);
+    if ((ov->child = endpoint_vcreate (fmt, ap)))
+        rc = 0;
     va_end (ap);
+    return rc;
 }
 
 const char *overlay_get_child (overlay_t *ov)
@@ -365,7 +374,7 @@ int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg)
         return 0;
     FOREACH_ZHASH (ov->children, uuid, child) {
         if (!(cpy = flux_msg_copy (msg, true)))
-            oom ();
+            goto done;
         if (flux_msg_enable_route (cpy) < 0)
             goto done;
         if (flux_msg_push_route (cpy, uuid) < 0)

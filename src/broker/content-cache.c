@@ -16,7 +16,6 @@
 #include <inttypes.h>
 #include <czmq.h>
 #include <flux/core.h>
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/log.h"
@@ -638,8 +637,9 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!cache->backing && backing) {
+        if (!(cache->backing_name = strdup (name)))
+            goto error;
         cache->backing = 1;
-        cache->backing_name = xstrdup (name);
         flux_log (h, LOG_DEBUG,
                 "content backing store: enabled %s", name);
         (void)cache_flush (cache);
