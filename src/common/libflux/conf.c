@@ -34,6 +34,7 @@ static struct config default_config[] = {
     { "cmdhelp_pattern",INSTALLED_CMDHELP_PATTERN,  INTREE_CMDHELP_PATTERN },
     { "pmi_library_path",
                         INSTALLED_PMI_LIBRARY_PATH, INTREE_PMI_LIBRARY_PATH },
+    { "shell_path",     INSTALLED_SHELL_PATH,       INTREE_SHELL_PATH },
     { "keydir",         NULL,                       INTREE_KEYDIR },
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
     { "rundir",         INSTALLED_RUNDIR,           NULL },
