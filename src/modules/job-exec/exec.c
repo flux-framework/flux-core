@@ -130,6 +130,10 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: flux_cmd_create");
         goto err;
     }
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0) {
+        flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
+        goto err;
+    }
     if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
         || flux_cmd_argv_append (cmd, "%ju", (uintmax_t) job->id) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
