@@ -25,11 +25,6 @@ test_expect_success 'job-exec: load job-exec,sched-simple modules' '
 	flux module load -r 0 sched-simple &&
 	flux module load -r 0 job-exec
 '
-test_expect_success 'job-exec: no configured job shell uses /bin/true' '
-	id=$(flux jobspec srun hostname | flux job submit) &&
-	flux job attach ${id} &&
-	flux dmesg | grep "$id: no configured job shell, using /bin/true"
-'
 test_expect_success 'job-exec: set dummy test job shell' '
 	flux setattr job-exec.job-shell $SHARNESS_TEST_SRCDIR/job-exec/dummy.sh
 '
