@@ -40,7 +40,6 @@ struct barrier {
     zhash_t *clients;
     struct barrier_ctx *ctx;
     int errnum;
-    flux_watcher_t *debug_timer;
 };
 
 static int exit_event_send (flux_t *h, const char *name, int errnum);
@@ -84,19 +83,11 @@ error:
     return NULL;
 }
 
-static void debug_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
-{
-    struct barrier *b = arg;
-    flux_log (b->ctx->h, LOG_DEBUG, "debug %s %d", b->name, b->nprocs);
-}
-
 static void barrier_destroy (struct barrier *b)
 {
     if (b) {
         int saved_errno = errno;
         flux_log (b->ctx->h, LOG_DEBUG, "destroy %s %d", b->name, b->nprocs);
-        flux_watcher_destroy (b->debug_timer);
         zhash_destroy (&b->clients);
         free (b->name);
         free (b);
@@ -120,21 +111,6 @@ static struct barrier *barrier_create (struct barrier_ctx *ctx,
         goto error;
     }
     b->ctx = ctx;
-
-    /* Start a timer for some debug
-     */
-    if (ctx->rank == 0) {
-        flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
-        b->debug_timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
-                                                    1.0,
-                                                    1.0,
-                                                    debug_timer_cb,
-                                                    b);
-        if (!b->debug_timer)
-            goto error;
-        flux_watcher_start (b->debug_timer);
-
-    }
     return b;
 error:
     barrier_destroy (b);
@@ -199,6 +175,9 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         zhash_update (ctx->barriers, b->name, b);
         zhash_freefn (ctx->barriers, b->name, (zhash_free_fn *)barrier_destroy);
+        if (ctx->rank == 0)
+            flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
+
     }
 
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
