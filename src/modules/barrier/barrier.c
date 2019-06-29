@@ -23,13 +23,11 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 
-const double barrier_reduction_timeout_sec = 0.001;
+const double reduction_timeout = 0.001; // sec
 
 struct barrier_ctx {
     zhash_t *barriers;
     flux_t *h;
-    bool timer_armed;
-    flux_watcher_t *timer;
     uint32_t rank;
 };
 
@@ -40,18 +38,21 @@ struct barrier {
     zhash_t *clients;
     struct barrier_ctx *ctx;
     int errnum;
+    flux_watcher_t *timer;
+    bool timer_armed;
 };
 
 static int exit_event_send (flux_t *h, const char *name, int errnum);
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg);
+static void reduction_timeout_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg);
 
 static void barrier_ctx_destroy (struct barrier_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
         zhash_destroy (&ctx->barriers);
-        flux_watcher_destroy (ctx->timer);
         free (ctx);
         errno = saved_errno;
     }
@@ -69,13 +70,6 @@ static struct barrier_ctx *barrier_ctx_create (flux_t *h)
     }
     if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
-    ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
-                                            barrier_reduction_timeout_sec,
-                                            0.,
-                                            timeout_cb,
-                                            ctx);
-    if (!ctx->timer)
-        goto error;
     ctx->h = h;
     return ctx;
 error:
@@ -90,6 +84,7 @@ static void barrier_destroy (struct barrier *b)
         flux_log (b->ctx->h, LOG_DEBUG, "destroy %s %d", b->name, b->nprocs);
         zhash_destroy (&b->clients);
         free (b->name);
+        flux_watcher_destroy (b->timer);
         free (b);
         errno = saved_errno;
     }
@@ -110,6 +105,15 @@ static struct barrier *barrier_create (struct barrier_ctx *ctx,
         errno = ENOMEM;
         goto error;
     }
+    if (ctx->rank > 0) {
+        b->timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
+                                              reduction_timeout,
+                                              0.,
+                                              reduction_timeout_cb,
+                                              b);
+        if (!b->timer)
+            goto error;
+    }
     b->ctx = ctx;
     return b;
 error:
@@ -128,17 +132,17 @@ static int barrier_add_client (struct barrier *b,
     return 0;
 }
 
-static void send_enter_request (struct barrier_ctx *ctx, struct barrier *b)
+static void send_enter_request (flux_t *h, struct barrier *b)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
+    if (!(f = flux_rpc_pack (h, "barrier.enter", FLUX_NODEID_UPSTREAM,
                              FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
                              "name", b->name,
                              "count", b->count,
                              "nprocs", b->nprocs,
                              "internal", true))) {
-        flux_log_error (ctx->h, "sending barrier.enter request");
+        flux_log_error (h, "sending barrier.enter request");
         goto done;
     }
 done:
@@ -202,12 +206,10 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log_error (ctx->h, "exit_event_send");
     }
-    else if (ctx->rank > 0 && !ctx->timer_armed) {
-        flux_timer_watcher_reset (ctx->timer,
-                                  barrier_reduction_timeout_sec,
-                                  0.);
-        flux_watcher_start (ctx->timer);
-        ctx->timer_armed = true;
+    else if (ctx->rank > 0 && !b->timer_armed) {
+        flux_timer_watcher_reset (b->timer, reduction_timeout, 0.);
+        flux_watcher_start (b->timer);
+        b->timer_armed = true;
     }
     free (sender);
     return;
@@ -287,21 +289,16 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
-                        int revents, void *arg)
+static void reduction_timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
+                                  int revents, void *arg)
 {
-    struct barrier_ctx *ctx = arg;
-    const char *key;
-    struct barrier *b;
+    struct barrier *b = arg;
 
-    assert (ctx->rank != 0);
-    ctx->timer_armed = false; /* one shot */
-
-    FOREACH_ZHASH (ctx->barriers, key, b) {
-        if (b->count > 0) {
-            send_enter_request (ctx, b);
-            b->count = 0;
-        }
+    assert (b->ctx->rank != 0);
+    b->timer_armed = false; /* one shot */
+    if (b->count > 0) {
+        send_enter_request (b->ctx->h, b);
+        b->count = 0;
     }
 }
 
