@@ -99,6 +99,14 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority);
  */
 int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key);
 
+/* Same as above but construct key relative to job guest directory,
+ * and if FLUX_KVS_NAMESPACE is set, assume guest is the root directory.
+ */
+int flux_job_kvs_guest_key (char *buf,
+                            int bufsz,
+                            flux_jobid_t id,
+                            const char *key);
+
 /* Job eventlog watch functions
  */
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id);

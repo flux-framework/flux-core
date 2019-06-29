@@ -230,6 +230,35 @@ int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key)
     return len;
 }
 
+int flux_job_kvs_guest_key (char *buf,
+                            int bufsz,
+                            flux_jobid_t id,
+                            const char *key)
+{
+    char idstr[32];
+    int len;
+
+    if (!buf || !bufsz) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (getenv ("FLUX_KVS_NAMESPACE"))
+        len = snprintf (buf, bufsz, "%s", key ? key : ".");
+    else {
+        if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
+            return -1;
+        len = snprintf (buf, bufsz, "job.%s.guest%s%s",
+                        idstr,
+                        key ? "." : "",
+                        key ? key : "");
+    }
+    if (len >= bufsz) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return len;
+}
+
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;

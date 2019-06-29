@@ -16,7 +16,9 @@ libshell_la_SOURCES = \
 	jobspec.c \
 	jobspec.h \
 	rcalc.c \
-	rcalc.h
+	rcalc.h \
+	guestkvs.h \
+	guestkvs.c
 
 TESTS =
 
