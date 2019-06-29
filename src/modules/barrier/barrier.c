@@ -27,23 +27,23 @@
 
 const double barrier_reduction_timeout_sec = 0.001;
 
-typedef struct {
+struct barrier_ctx {
     zhash_t *barriers;
     flux_t *h;
     bool timer_armed;
     flux_watcher_t *timer;
     uint32_t rank;
-} barrier_ctx_t;
+};
 
-typedef struct _barrier_struct {
+struct barrier {
     char *name;
     int nprocs;
     int count;
     zhash_t *clients;
-    barrier_ctx_t *ctx;
+    struct barrier_ctx *ctx;
     int errnum;
     flux_watcher_t *debug_timer;
-} barrier_t;
+};
 
 static int exit_event_send (flux_t *h, const char *name, int errnum);
 static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -51,7 +51,7 @@ static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static void freectx (void *arg)
 {
-    barrier_ctx_t *ctx = arg;
+    struct barrier_ctx *ctx = arg;
     if (ctx) {
         zhash_destroy (&ctx->barriers);
         if (ctx->timer)
@@ -60,9 +60,9 @@ static void freectx (void *arg)
     }
 }
 
-static barrier_ctx_t *getctx (flux_t *h)
+static struct barrier_ctx *getctx (flux_t *h)
 {
-    barrier_ctx_t *ctx = (barrier_ctx_t *)flux_aux_get (h, "flux::barrier");
+    struct barrier_ctx *ctx = flux_aux_get (h, "flux::barrier");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -92,13 +92,13 @@ error:
 static void debug_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
-    barrier_t *b = arg;
+    struct barrier *b = arg;
     flux_log (b->ctx->h, LOG_DEBUG, "debug %s %d", b->name, b->nprocs);
 }
 
 static void barrier_destroy (void *arg)
 {
-    barrier_t *b = arg;
+    struct barrier *b = arg;
 
     if (b->debug_timer) {
         flux_log (b->ctx->h, LOG_DEBUG, "destroy %s %d", b->name, b->nprocs);
@@ -111,11 +111,13 @@ static void barrier_destroy (void *arg)
     return;
 }
 
-static barrier_t *barrier_create (barrier_ctx_t *ctx, const char *name, int nprocs)
+static struct barrier *barrier_create (struct barrier_ctx *ctx,
+                                       const char *name,
+                                       int nprocs)
 {
-    barrier_t *b;
+    struct barrier *b;
 
-    b = xzmalloc (sizeof (barrier_t));
+    b = xzmalloc (sizeof (*b));
     b->name = xstrdup (name);
     b->nprocs = nprocs;
     if (!(b->clients = zhash_new ()))
@@ -142,7 +144,9 @@ done:
     return b;
 }
 
-static int barrier_add_client (barrier_t *b, char *sender, const flux_msg_t *msg)
+static int barrier_add_client (struct barrier *b,
+                               char *sender,
+                               const flux_msg_t *msg)
 {
     flux_msg_t *cpy = flux_msg_copy (msg, true);
     if (!cpy || zhash_insert (b->clients, sender, cpy) < 0)
@@ -151,7 +155,7 @@ static int barrier_add_client (barrier_t *b, char *sender, const flux_msg_t *msg
     return 0;
 }
 
-static void send_enter_request (barrier_ctx_t *ctx, barrier_t *b)
+static void send_enter_request (struct barrier_ctx *ctx, struct barrier *b)
 {
     flux_future_t *f;
 
@@ -178,8 +182,8 @@ done:
 static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    barrier_ctx_t *ctx = arg;
-    barrier_t *b;
+    struct barrier_ctx *ctx = arg;
+    struct barrier *b;
     char *sender = NULL;
     const char *name;
     int count, nprocs, internal;
@@ -237,10 +241,10 @@ done:
 static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    barrier_ctx_t *ctx = arg;
+    struct barrier_ctx *ctx = arg;
     char *sender;
     const char *key;
-    barrier_t *b;
+    struct barrier *b;
 
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
@@ -273,8 +277,8 @@ done:
 static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
-    barrier_ctx_t *ctx = arg;
-    barrier_t *b;
+    struct barrier_ctx *ctx = arg;
+    struct barrier *b;
     const char *name;
     int errnum;
     const char *key;
@@ -304,9 +308,9 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
 static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
 {
-    barrier_ctx_t *ctx = arg;
+    struct barrier_ctx *ctx = arg;
     const char *key;
-    barrier_t *b;
+    struct barrier *b;
 
     assert (ctx->rank != 0);
     ctx->timer_armed = false; /* one shot */
@@ -329,7 +333,7 @@ static struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
-    barrier_ctx_t *ctx = getctx (h);
+    struct barrier_ctx *ctx = getctx (h);
     flux_msg_handler_t **handlers = NULL;
 
     if (!ctx)
