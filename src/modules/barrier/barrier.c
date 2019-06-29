@@ -125,9 +125,13 @@ static int barrier_add_client (struct barrier *b,
                                char *sender,
                                const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = flux_msg_copy (msg, true);
-    if (!cpy || zhash_insert (b->clients, sender, cpy) < 0)
+    flux_msg_t *cpy = flux_msg_copy (msg, false);
+    if (!cpy)
         return -1;
+    if (zhash_insert (b->clients, sender, cpy) < 0) {
+        flux_msg_destroy (cpy);
+        return -1;
+    }
     zhash_freefn (b->clients, sender, (zhash_free_fn *)flux_msg_destroy);
     return 0;
 }
