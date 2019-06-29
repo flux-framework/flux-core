@@ -49,43 +49,40 @@ static int exit_event_send (flux_t *h, const char *name, int errnum);
 static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg);
 
-static void freectx (void *arg)
+static void barrier_ctx_destroy (struct barrier_ctx *ctx)
 {
-    struct barrier_ctx *ctx = arg;
     if (ctx) {
+        int saved_errno = errno;
         zhash_destroy (&ctx->barriers);
-        if (ctx->timer)
-            flux_watcher_destroy (ctx->timer);
+        flux_watcher_destroy (ctx->timer);
         free (ctx);
+        errno = saved_errno;
     }
 }
 
-static struct barrier_ctx *getctx (flux_t *h)
+static struct barrier_ctx *barrier_ctx_create (flux_t *h)
 {
-    struct barrier_ctx *ctx = flux_aux_get (h, "flux::barrier");
+    struct barrier_ctx *ctx;
 
-    if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->barriers = zhash_new ())) {
-            errno = ENOMEM;
-            goto error;
-        }
-        if (flux_get_rank (h, &ctx->rank) < 0) {
-            flux_log_error (h, "flux_get_rank");
-            goto error;
-        }
-        if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
-                       barrier_reduction_timeout_sec, 0., timeout_cb, ctx) )) {
-            flux_log_error (h, "flux_timer_watacher_create");
-            goto error;
-        }
-        ctx->h = h;
-        if (flux_aux_set (h, "flux::barrier", ctx, freectx) < 0)
-            goto error;
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    if (!(ctx->barriers = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
     }
+    if (flux_get_rank (h, &ctx->rank) < 0)
+        goto error;
+    ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
+                                            barrier_reduction_timeout_sec,
+                                            0.,
+                                            timeout_cb,
+                                            ctx);
+    if (!ctx->timer)
+        goto error;
+    ctx->h = h;
     return ctx;
 error:
-    freectx (ctx);
+    barrier_ctx_destroy (ctx);
     return NULL;
 }
 
@@ -333,11 +330,13 @@ static struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
-    struct barrier_ctx *ctx = getctx (h);
+    struct barrier_ctx *ctx;
     flux_msg_handler_t **handlers = NULL;
 
-    if (!ctx)
+    if (!(ctx = barrier_ctx_create (h))) {
+        flux_log_error (h, "barrier_ctx_create");
         goto done;
+    }
     if (flux_event_subscribe (h, "barrier.") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         goto done;
@@ -348,11 +347,13 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done;
+        goto done_delvec;
     }
     rc = 0;
-done:
+done_delvec:
     flux_msg_handler_delvec (handlers);
+done:
+    barrier_ctx_destroy (ctx);
     return rc;
 }
 
