@@ -521,8 +521,10 @@ int main (int argc, char *argv[])
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
      * instance is not made inadvertantly.
+     * Also ensure any KVS namespace used by job shell is not used here.
      */
     unsetenv ("FLUX_URI");
+    unsetenv ("FLUX_KVS_NAMESPACE");
 
     if (ctx.verbose) {
         const char *parent = overlay_get_parent (ctx.overlay);
