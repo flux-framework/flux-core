@@ -53,6 +53,13 @@ test_expect_success 'barrier: succeeds with name=NULL inside SLURM step' '
 test_expect_success 'enter request with empty payload fails with EPROTO(71)' '
 	${RPC} barrier.enter 71 </dev/null
 '
+
+test_expect_success 'barrier: works with guest user' '
+	newid=$(($(id -u)+1)) &&
+	FLUX_HANDLE_ROLEMASK=0x02 FLUX_HANDLE_USERID=${newid} \
+		${tbarrier} --nprocs 1 guest-test
+'
+
 test_expect_success 'barrier: remove barrier module' '
 	flux module remove -r all barrier
 '
