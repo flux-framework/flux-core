@@ -24,7 +24,8 @@
  * or a client disconnects before the barrier completes.
  *
  * Notes:
- * - Barrier names must be unique across the instance.
+ * - Guests may use the barrier service.
+ * - Barrier names must be unique, per user, across the instance.
  * - Upon receipt of a barrier.enter or barrier.update request, a timer
  *   is started to open a short window in time, within which concurrent
  *   requests may be batched.  After expiration, a combined request is
@@ -65,9 +66,14 @@ struct barrier {
     int errnum;
     flux_watcher_t *timer;
     bool timer_armed;
+    uint32_t owner;
 };
 
-static int exit_event_send (flux_t *h, const char *name, int errnum);
+static int exit_event_send (flux_t *h,
+                            const char *name,
+                            uint32_t owner,
+                            int errnum);
+
 static void reduction_timeout_cb (flux_reactor_t *r,
                                   flux_watcher_t *w,
                                   int revents,
@@ -117,12 +123,14 @@ static void barrier_destroy (struct barrier *b)
 
 static struct barrier *barrier_create (struct barrier_ctx *ctx,
                                        const char *name,
-                                       int nprocs)
+                                       int nprocs,
+                                       uint32_t owner)
 {
     struct barrier *b;
 
     if (!(b = calloc (1, sizeof (*b))))
         return NULL;
+    b->owner = owner;
     if (!(b->name = strdup (name)))
         goto error;
     b->nprocs = nprocs;
@@ -161,17 +169,72 @@ static int barrier_add_client (struct barrier *b,
     return 0;
 }
 
+static char *barrier_key (const char *name, uint32_t owner)
+{
+    char *key;
+
+    if (asprintf (&key, "%"PRIu32":%s", owner, name) < 0)
+        return NULL;
+    return key;
+}
+
+static int barrier_delete (struct barrier_ctx *ctx,
+                           const char *name,
+                           uint32_t owner)
+{
+    char *key;
+
+    if (!(key = barrier_key (name, owner)))
+        return -1;
+    zhash_delete (ctx->barriers, key);
+    free (key);
+    return 0;
+}
+
+static struct barrier *barrier_lookup (struct barrier_ctx *ctx,
+                                       const char *name,
+                                       uint32_t owner)
+{
+    struct barrier *b;
+    char *key;
+
+    if (!(key = barrier_key (name, owner)))
+        return NULL;
+    b = zhash_lookup (ctx->barriers, key);
+    free (key);
+    return b;
+}
+
+static int barrier_insert (struct barrier_ctx *ctx, struct barrier *b)
+{
+    char *key;
+    int rc = -1;
+
+    if (!(key = barrier_key (b->name, b->owner)))
+        return -1;
+    if (zhash_insert (ctx->barriers, key, b) < 0)
+        goto out;
+    zhash_freefn (ctx->barriers, key, (zhash_free_fn *)barrier_destroy);
+    rc = 0;
+out:
+    free (key);
+    return rc;
+}
+
 static struct barrier *barrier_lookup_create (struct barrier_ctx *ctx,
                                               const char *name,
-                                              int nprocs)
+                                              int nprocs,
+                                              uint32_t owner)
 {
     struct barrier *b;
 
-    if (!(b = zhash_lookup (ctx->barriers, name))) {
-        if (!(b = barrier_create (ctx, name, nprocs)))
+    if (!(b = barrier_lookup (ctx, name, owner))) {
+        if (!(b = barrier_create (ctx, name, nprocs, owner)))
             return NULL;
-        zhash_update (ctx->barriers, b->name, b);
-        zhash_freefn (ctx->barriers, b->name, (zhash_free_fn *)barrier_destroy);
+        if (barrier_insert (ctx, b) < 0) {
+            barrier_destroy (b);
+            return NULL;
+        }
         if (ctx->rank == 0)
             flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
     }
@@ -185,7 +248,7 @@ static int barrier_update (struct barrier *b, int count)
 {
     b->count += count;
     if (b->count == b->nprocs) {
-        if (exit_event_send (b->ctx->h, b->name, 0) < 0) {
+        if (exit_event_send (b->ctx->h, b->name, b->owner, 0) < 0) {
             flux_log_error (b->ctx->h, "exit_event_send");
             return -1;
         }
@@ -206,10 +269,11 @@ static void send_update_request (flux_t *h, struct barrier *b)
                              "barrier.update",
                              FLUX_NODEID_UPSTREAM,
                              FLUX_RPC_NORESPONSE,
-                             "{s:s s:i s:i}",
+                             "{s:s s:i s:i s:i}",
                              "name", b->name,
                              "count", b->count,
-                             "nprocs", b->nprocs))) {
+                             "nprocs", b->nprocs,
+                             "owner", b->owner))) {
         flux_log_error (h, "sending barrier.update request");
         goto done;
     }
@@ -227,17 +291,19 @@ static void update_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct barrier *b;
     const char *name;
     int count, nprocs;
+    int owner;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:i s:i !}",
+                             "{s:s s:i s:i s:i !}",
                              "name", &name,
                              "count", &count,
-                             "nprocs", &nprocs) < 0) {
+                             "nprocs", &nprocs,
+                             "owner", &owner) < 0) {
         flux_log_error (h, "barrier.update request");
         return;
     }
-    if (!(b = barrier_lookup_create (ctx, name, nprocs))) {
+    if (!(b = barrier_lookup_create (ctx, name, nprocs, owner))) {
         flux_log_error (h, "barrier_lookup_create");
         return;
     }
@@ -255,6 +321,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
     char *sender = NULL;
     const char *name;
     int nprocs;
+    uint32_t owner;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -264,13 +331,15 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         goto error;
-    if (!(b = barrier_lookup_create (ctx, name, nprocs)))
+    if (flux_msg_get_userid (msg, &owner) < 0)
+        goto error;
+    if (!(b = barrier_lookup_create (ctx, name, nprocs, owner)))
         goto error;
 
     if (barrier_add_client (b, sender, msg) < 0) {
         flux_log (ctx->h, LOG_ERR, "abort %s due to double entry by %s",
                   name, sender);
-        if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
+        if (exit_event_send (ctx->h, b->name, b->owner, ECONNABORTED) < 0)
             flux_log_error (ctx->h, "exit_event_send");
         errno = EEXIST;
         goto error;
@@ -291,28 +360,47 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     struct barrier_ctx *ctx = arg;
-    char *sender;
+    char *sender = NULL;
     const char *key;
     struct barrier *b;
+    uint32_t userid;
+    uint32_t rolemask;
 
+    if (flux_msg_get_userid (msg, &userid) < 0)
+        goto error;
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        goto error;
     if (flux_msg_get_route_first (msg, &sender) < 0)
-        return;
+        goto error;
     FOREACH_ZHASH (ctx->barriers, key, b) {
         if (zhash_lookup (b->clients, sender)) {
-            if (exit_event_send (h, b->name, ECONNABORTED) < 0)
+            if (!(rolemask & FLUX_ROLE_OWNER) && b->owner != userid) {
+                flux_log (h, LOG_ERR,
+                          "client userid mismatch %"PRIu32" != %"PRIu32,
+                          userid, b->owner);
+            }
+            else if (exit_event_send (h, b->name, b->owner, ECONNABORTED) < 0)
                 flux_log_error (h, "exit_event_send");
         }
     }
     free (sender);
+    return;
+error:
+    flux_log_error (h, "barrier.disconnect");
+    free (sender);
 }
 
-static int exit_event_send (flux_t *h, const char *name, int errnum)
+static int exit_event_send (flux_t *h,
+                            const char *name,
+                            uint32_t owner,
+                            int errnum)
 {
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!(msg = flux_event_pack ("barrier.exit", "{s:s s:i}",
+    if (!(msg = flux_event_pack ("barrier.exit", "{s:s s:i s:i}",
                                  "name", name,
+                                 "owner", owner,
                                  "errnum", errnum)))
         goto done;
     if (flux_send (h, msg, 0) < 0)
@@ -332,14 +420,16 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
     int errnum;
     const char *key;
     flux_msg_t *req;
+    int owner;
 
-    if (flux_event_unpack (msg, NULL, "{s:s s:i !}",
+    if (flux_event_unpack (msg, NULL, "{s:s s:i s:i !}",
                            "name", &name,
+                           "owner", &owner,
                            "errnum", &errnum) < 0) {
         flux_log_error (h, "%s: decoding event", __FUNCTION__);
         return;
     }
-    if ((b = zhash_lookup (ctx->barriers, name))) {
+    if ((b = barrier_lookup (ctx, name, owner))) {
         b->errnum = errnum;
         FOREACH_ZHASH (b->clients, key, req) {
             int rc;
@@ -350,7 +440,7 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
             if (rc < 0)
                 flux_log_error (h, "%s: sending enter response", __FUNCTION__);
         }
-        zhash_delete (ctx->barriers, name);
+        barrier_delete (ctx, name, owner);
     }
 }
 
@@ -371,7 +461,7 @@ static struct flux_msg_handler_spec htab[] = {
     {   FLUX_MSGTYPE_REQUEST,
         "barrier.enter",
         enter_request_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {   FLUX_MSGTYPE_REQUEST,
         "barrier.update",
@@ -381,7 +471,7 @@ static struct flux_msg_handler_spec htab[] = {
     {   FLUX_MSGTYPE_REQUEST,
         "barrier.disconnect",
         disconnect_request_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {   FLUX_MSGTYPE_EVENT,
         "barrier.exit",
