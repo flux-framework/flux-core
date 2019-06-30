@@ -8,6 +8,31 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* distributed barrier service
+ *
+ * Each client sends a barrier.enter request with (name, nprocs) tuple.
+ * The request is cached on the local broker rank, and after a short
+ * delay to await concurrent requests, a count is sent upstream
+ * via the internal barrier.update request (no response).  Once the
+ * count reaches nprocs a barrier.exit event is published.  Upon receiving
+ * the barrier.exit event, cached barrier.enter requests on all ranks are
+ * answered.
+ *
+ * The barrier.exit event contains an errnum field.  If zero, the barrier
+ * completed successfully.  If non-zero, the barrier is aborted with an
+ * error.  An error may occur if a client tries to enter the barrier twice,
+ * or a client disconnects before the barrier completes.
+ *
+ * Notes:
+ * - Barrier names must be unique across the instance.
+ * - Upon receipt of a barrier.enter or barrier.update request, a timer
+ *   is started to open a short window in time, within which concurrent
+ *   requests may be batched.  After expiration, a combined request is
+ *   sent upstream.
+ * - The timer is re-armed if another request is received.  This process
+ *   may continue until the barrier is complete.
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -136,30 +161,92 @@ static int barrier_add_client (struct barrier *b,
     return 0;
 }
 
-static void send_enter_request (flux_t *h, struct barrier *b)
+static struct barrier *barrier_lookup_create (struct barrier_ctx *ctx,
+                                              const char *name,
+                                              int nprocs)
+{
+    struct barrier *b;
+
+    if (!(b = zhash_lookup (ctx->barriers, name))) {
+        if (!(b = barrier_create (ctx, name, nprocs)))
+            return NULL;
+        zhash_update (ctx->barriers, b->name, b);
+        zhash_freefn (ctx->barriers, b->name, (zhash_free_fn *)barrier_destroy);
+        if (ctx->rank == 0)
+            flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
+    }
+    return b;
+}
+
+/* If the count has been reached, terminate the barrier;
+ * o/w set timer to pass count upstream and zero it here.
+ */
+static int barrier_update (struct barrier *b, int count)
+{
+    b->count += count;
+    if (b->count == b->nprocs) {
+        if (exit_event_send (b->ctx->h, b->name, 0) < 0) {
+            flux_log_error (b->ctx->h, "exit_event_send");
+            return -1;
+        }
+    }
+    else if (b->ctx->rank > 0 && !b->timer_armed) {
+        flux_timer_watcher_reset (b->timer, reduction_timeout, 0.);
+        flux_watcher_start (b->timer);
+        b->timer_armed = true;
+    }
+    return 0;
+}
+
+static void send_update_request (flux_t *h, struct barrier *b)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (h, "barrier.enter", FLUX_NODEID_UPSTREAM,
-                             FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
+    if (!(f = flux_rpc_pack (h,
+                             "barrier.update",
+                             FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:s s:i s:i}",
                              "name", b->name,
                              "count", b->count,
-                             "nprocs", b->nprocs,
-                             "internal", true))) {
-        flux_log_error (h, "sending barrier.enter request");
+                             "nprocs", b->nprocs))) {
+        flux_log_error (h, "sending barrier.update request");
         goto done;
     }
 done:
     flux_future_destroy (f);
 }
 
-/* Barrier entry happens in two ways:
- * - client calling flux_barrier ()
- * - downstream barrier plugin sending count upstream.
- * In the first case only, we track client uuid to handle disconnect and
- * notification upon barrier termination.
+/* Handle count update from downstream barrier module.
+ * No response is expected.
  */
+static void update_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
+{
+    struct barrier_ctx *ctx = arg;
+    struct barrier *b;
+    const char *name;
+    int count, nprocs;
 
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i s:i !}",
+                             "name", &name,
+                             "count", &count,
+                             "nprocs", &nprocs) < 0) {
+        flux_log_error (h, "barrier.update request");
+        return;
+    }
+    if (!(b = barrier_lookup_create (ctx, name, nprocs))) {
+        flux_log_error (h, "barrier_lookup_create");
+        return;
+    }
+    barrier_update (b, count);
+}
+
+/* Handle client request to enter barrier.
+ * Response is normally deferred until barrier is complete.
+ */
 static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
@@ -167,54 +254,29 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct barrier *b;
     char *sender = NULL;
     const char *name;
-    int count, nprocs, internal;
+    int nprocs;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:b !}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:i !}",
                              "name", &name,
-                             "count", &count,
-                             "nprocs", &nprocs,
-                             "internal", &internal) < 0)
+                             "nprocs", &nprocs) < 0)
         goto error;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         goto error;
+    if (!(b = barrier_lookup_create (ctx, name, nprocs)))
+        goto error;
 
-    if (!(b = zhash_lookup (ctx->barriers, name))) {
-        if (!(b = barrier_create (ctx, name, nprocs)))
-            goto error;
-        zhash_update (ctx->barriers, b->name, b);
-        zhash_freefn (ctx->barriers, b->name, (zhash_free_fn *)barrier_destroy);
-        if (ctx->rank == 0)
-            flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
-
-    }
-
-    /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
-     * A client (internal == false) can only enter barrier once.
-     */
-    if (internal == false) {
-        if (barrier_add_client (b, sender, msg) < 0) {
-            flux_log (ctx->h, LOG_ERR, "abort %s due to double entry by %s",
-                      name, sender);
-            if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
-                flux_log_error (ctx->h, "exit_event_send");
-            errno = EEXIST;
-            goto error;
-        }
-    }
-
-    /* If the count has been reached, terminate the barrier;
-     * o/w set timer to pass count upstream and zero it here.
-     */
-    b->count += count;
-    if (b->count == b->nprocs) {
-        if (exit_event_send (ctx->h, b->name, 0) < 0)
+    if (barrier_add_client (b, sender, msg) < 0) {
+        flux_log (ctx->h, LOG_ERR, "abort %s due to double entry by %s",
+                  name, sender);
+        if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
             flux_log_error (ctx->h, "exit_event_send");
+        errno = EEXIST;
+        goto error;
     }
-    else if (ctx->rank > 0 && !b->timer_armed) {
-        flux_timer_watcher_reset (b->timer, reduction_timeout, 0.);
-        flux_watcher_start (b->timer);
-        b->timer_armed = true;
-    }
+    if (barrier_update (b, 1) < 0)
+        goto error;
     free (sender);
     return;
 error:
@@ -225,7 +287,6 @@ error:
 /* Upon client disconnect, abort any pending barriers it was
  * participating in.
  */
-
 static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
@@ -301,15 +362,32 @@ static void reduction_timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
     assert (b->ctx->rank != 0);
     b->timer_armed = false; /* one shot */
     if (b->count > 0) {
-        send_enter_request (b->ctx->h, b);
+        send_update_request (b->ctx->h, b);
         b->count = 0;
     }
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "barrier.enter",       enter_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "barrier.disconnect",  disconnect_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "barrier.exit",        exit_event_cb, 0 },
+    {   FLUX_MSGTYPE_REQUEST,
+        "barrier.enter",
+        enter_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "barrier.update",
+        update_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "barrier.disconnect",
+        disconnect_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_EVENT,
+        "barrier.exit",
+        exit_event_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
