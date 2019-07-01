@@ -33,7 +33,7 @@ test_expect_success HAVE_JQ 'attach: submit a job and cancel it' '
 '
 
 test_expect_success HAVE_JQ 'attach: exit code reflects cancellation' '
-	test_must_fail flux job attach $(cat jobid2)
+	! flux job attach $(cat jobid2)
 '
 
 # Usage run_attach seq
@@ -56,7 +56,7 @@ test_expect_success HAVE_JQ 'attach: two SIGINTs cancel a job' '
 	kill -INT $pid &&
 	sleep 0.2 &&
 	kill -INT $pid &&
-	test_must_fail wait $pid
+	! wait $pid
 '
 
 test_expect_success HAVE_JQ 'attach: SIGINT+SIGTSTP detaches from job' '
