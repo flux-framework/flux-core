@@ -12,11 +12,34 @@
 #include "config.h"
 #endif
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <errno.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "fsd.h"
+
+static int is_invalid_duration (double d)
+{
+    switch (fpclassify (d)) {
+        case FP_NORMAL:     // [[fallthrough]]
+        case FP_SUBNORMAL:  // [[fallthrough]]
+        case FP_ZERO:       // [[fallthrough]]
+            break;          // OK
+        case FP_INFINITE:   // [[fallthrough]]
+        case FP_NAN:        // [[fallthrough]]
+        default:            // something else, bad
+            errno = EINVAL;
+            return -1;
+    }
+
+    if (d < 0.) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return 0;
+}
 
 int fsd_parse_duration (const char *s, double *dp)
 {
@@ -27,7 +50,12 @@ int fsd_parse_duration (const char *s, double *dp)
         return -1;
     }
     d = strtod (s, &p);
-    if ((d < 0.) || (*p && *(p+1))) {
+
+    if (is_invalid_duration (d)) {
+        return -1;
+    }
+
+    if (*p && *(p + 1)) {
         errno = EINVAL;
         return -1;
     }
@@ -61,7 +89,7 @@ int fsd_parse_duration (const char *s, double *dp)
 
 int fsd_format_duration (char *buf, size_t len, double duration)
 {
-    if (buf == NULL || len <= 0 || duration < 0.) {
+    if (buf == NULL || len <= 0 || is_invalid_duration(duration)) {
         errno = EINVAL;
         return -1;
     }
