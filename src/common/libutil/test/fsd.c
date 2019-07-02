@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include <math.h>
 #include <string.h>
 #include <errno.h>
 
@@ -32,6 +33,10 @@ int main(int argc, char** argv)
         "fsd_parse_duration (1.0f) is an error");
     ok (fsd_parse_duration ("1.0sec", &d) < 0 && errno == EINVAL,
         "fsd_parse_duration (1.0sec) is an error");
+    ok (fsd_parse_duration ("NaNs", &d) < 0 && errno == EINVAL,
+        "fsd_parse_duration (NaNs) is an error");
+    ok (fsd_parse_duration ("infinites", &d) < 0 && errno == EINVAL,
+        "fsd_parse_duration (infinites) is an error");
 
     ok (fsd_parse_duration ("0", &d) == 0,
         "fsd_parse_duration (0) returns success");
@@ -72,6 +77,12 @@ int main(int argc, char** argv)
     ok (fsd_parse_duration ("1.0d", &d) == 0,
         "fsd_parse_duration (1.0d) returns success");
     ok (d == 24. * 60. * 60., "got d == %g", d);
+
+    ok (fsd_format_duration (buf, sizeof (buf), NAN) < 0 && errno == EINVAL,
+        "fsd_format_duration with NaN duration. returns EINVAL");
+
+    ok (fsd_format_duration (buf, sizeof (buf), INFINITY) < 0 && errno == EINVAL,
+        "fsd_format_duration with INF duration. returns EINVAL");
 
     ok (fsd_format_duration (buf, sizeof (buf), -1.) < 0 && errno == EINVAL,
         "fsd_format_duration with duration < 0. returns EINVAL");
