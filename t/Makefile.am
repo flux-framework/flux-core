@@ -99,6 +99,7 @@ TESTSCRIPTS = \
 	t2500-job-attach.t \
 	t2600-job-shell-rcalc.t \
 	t2601-job-shell-standalone.t \
+	t2602-job-shell.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
