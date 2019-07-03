@@ -40,7 +40,7 @@ flux_shell_LDADD = \
 
 flux_shell_LDFLAGS =
 
-TESTS =
+TESTS = test_jobspec.t
 
 test_ldadd = \
 	$(builddir)/libshell.la \
@@ -59,3 +59,7 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
+
+test_jobspec_t_SOURCES = test/jobspec.c
+test_jobspec_t_CPPFLAGS = $(test_cppflags)
+test_jobspec_t_LDADD = $(test_ldadd)
