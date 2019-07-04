@@ -28,14 +28,13 @@
  *   the user calls pmi_simple_server_kvs_get_complete() or _get_error().
  *   Meanwhile the protocol engine can process other clients.
  *
- * barrier_enter (optional)
- *   PMI barriers complete once 'universe_size' procs have entered.  If
- *   local_size == universe_size, the barrier may complete locally and
- *   this callback is unnecessary.  If local_size < universe_size, multiple
- *   instances of the protocol engine must contribute to a count held by
- *   the user to complete the barrier, and this callback is required.
- *   From this callback, call pmi_simple_server_barrier_complete() once the
- *   user-held count reaches 'universe_size'.
+ * barrier_enter
+ *   PMI barriers complete once 'universe_size' procs have entered.
+ *   This callback is called once 'local_size' procs have entered.
+ *   It should execute a distributed barrier over the number of instances
+ *   of the protocol engine, then call pmi_simple_server_barrier_complete().
+ *   If local_size == universe_size, this callback may be NULL
+ *   (but if defined it will still be called).
  *
  * debug_trace
  *   If flags | PMI_SIMPLE_SERVER_TRACE, this callback will be made
