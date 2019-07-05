@@ -209,8 +209,8 @@ int main (int argc, char *argv[])
             log_err_exit ("shell_task_create index=%d", i);
         if (shell_task_pmi_enable (task, shell_pmi_task_ready, pmi) < 0)
             log_err_exit ("shell_task_pmi_enable");
-        if (shell_task_io_enable (task, shell_io_task_ready, io) < 0)
-            log_err_exit ("shell_task_io_enable");
+        //if (shell_task_io_enable (task, shell_io_task_ready, io) < 0)
+        //    log_err_exit ("shell_task_io_enable");
         if (shell_task_start (task, r, task_completion_cb, info) < 0)
             log_err_exit ("shell_task_start index=%d", i);
 
