@@ -15,7 +15,14 @@ from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 
 
-_THEN_HANDLES = set()
+# Reference count dictionary to keep futures with a pending `then` callback
+# alive, even if there are no remaining references to the future in the user's
+# program scope. When a callback is first set on the future, add an entry to the
+# dictionary with the future itself as the key and a value of 1. Whenever a
+# future's callback is run, decrement the count in the dictionary for that
+# future, and whenever reset is called on a future, increment the counter. If
+# the counter hits 0, delete the reference to the future from the dictionary.
+_THEN_HANDLES = {}
 
 
 @ffi.def_extern()
@@ -25,9 +32,12 @@ def continuation_callback(c_future, opaque_handle):
         assert c_future == py_future.pimpl.handle
         py_future.then_cb(py_future, py_future.then_arg)
     finally:
-        # allow future object to be garbage collected now that all
-        # registered callbacks have completed
-        py_future.cleanup_then()
+        _THEN_HANDLES[py_future] -= 1
+        if _THEN_HANDLES[py_future] <= 0:
+            # allow future object to be garbage collected now that all
+            # registered callbacks have completed
+            py_future.cb_handle = None
+            del _THEN_HANDLES[py_future]
 
 
 class Future(WrapperPimpl):
@@ -64,16 +74,6 @@ class Future(WrapperPimpl):
         self.then_arg = None
         self.cb_handle = None
 
-    def cleanup_then(self):
-        self.then_cb = None
-        self.then_arg = None
-        self.cb_handle = None
-        if self in _THEN_HANDLES:
-            _THEN_HANDLES.remove(self)
-
-    def __del__(self):
-        self.cleanup_then()
-
     def error_string(self):
         try:
             errmsg = self.pimpl.error_string()
@@ -98,6 +98,8 @@ class Future(WrapperPimpl):
             raise EnvironmentError(
                 errno.EEXIST, "then callback already exists for this future"
             )
+        if callback is None:
+            raise ValueError("Callback cannot be None")
 
         self.then_cb = callback
         self.then_arg = arg
@@ -105,9 +107,21 @@ class Future(WrapperPimpl):
         self.pimpl.then(timeout, lib.continuation_callback, self.cb_handle)
 
         # ensure that this future object is not garbage collected with a
-        # callback outstanding. Particularly important for anonymous calls.
-        # For example, `f.rpc.('topic').then(cb)`
-        _THEN_HANDLES.add(self)
+        # callback outstanding. Particularly important for anonymous calls and
+        # streaming RPCs.  For example, `f.rpc('topic').then(cb)`
+        _THEN_HANDLES[self] = 1
+
+        # return self to enable further chaining of the future.
+        # For example `f.rpc('topic').then(cb).wait_for(-1)
+        return self
+
+    def reset(self):
+        self.pimpl.reset()
+
+        if self.cb_handle is not None:
+            # ensure that this future object is not garbage collected with a
+            # callback outstanding. Particularly important for streaming RPCs.
+            _THEN_HANDLES[self] += 1
 
     def is_ready(self):
         return self.pimpl.is_ready()

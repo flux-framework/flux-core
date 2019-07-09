@@ -16,6 +16,7 @@ import gc
 import errno
 import unittest
 
+import six.moves
 import flux
 import flux.constants
 from flux.core.inner import ffi
@@ -107,6 +108,37 @@ class TestHandle(unittest.TestCase):
             future.wait_for(0)
         except EnvironmentError as e:
             self.fail("future.wait_for raised an unexpected exception: {}".format(e))
+
+    def test_07_streaming_rpcs(self):
+        def continuation_cb(future, arg):
+            arg["count"] += 1
+            if arg["count"] >= arg["target"]:
+                self.f.reactor_stop(self.f.get_reactor())
+            future.reset()
+
+        def service_cb(fh, t, msg, arg):
+            for x in six.moves.range(msg.payload["count"]):
+                fh.respond(msg, {"seq": x})
+
+        fut = self.f.service_register("rpctest")
+        self.f.future_get(fut, ffi.NULL)
+        watcher = self.f.msg_watcher_create(
+            service_cb, flux.constants.FLUX_MSGTYPE_REQUEST, "rpctest.multi"
+        )
+        self.assertIsNotNone(watcher)
+        watcher.start()
+
+        arg = {"count": 0, "target": 3}
+        self.f.rpc("rpctest.multi", {"count": arg["target"]}).then(
+            continuation_cb, arg=arg
+        )
+        ret = self.f.reactor_run(self.f.get_reactor(), 0)
+        self.assertEqual(arg["count"], arg["target"])
+
+        watcher.stop()
+        watcher.destroy()
+        fut = self.f.service_unregister("rpctest")
+        self.assertEqual(self.f.future_get(fut, ffi.NULL), 0)
 
 
 if __name__ == "__main__":

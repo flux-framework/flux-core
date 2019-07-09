@@ -14,6 +14,7 @@ import six
 
 from flux.wrapper import Wrapper
 from flux.util import check_future_error
+from flux.future import Future
 from _flux._core import ffi, lib
 
 
@@ -34,12 +35,15 @@ def submit_async(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, f
     elif not isinstance(jobspec, six.binary_type):
         raise TypeError("jobpsec must be a string (either binary or unicode)")
 
-    future = RAW.submit(flux_handle, jobspec, priority, flags)
-    return future
+    future_handle = RAW.submit(flux_handle, jobspec, priority, flags)
+    return Future(future_handle)
 
 
 @check_future_error
 def submit_get_id(future):
+    if future is None or future == ffi.NULL:
+        raise EnvironmentError(errno.EINVAL, "future must not be None/NULL")
+    future.wait_for()  # ensure the future is fulfilled
     jobid = ffi.new("flux_jobid_t[1]")
     RAW.submit_get_id(future, jobid)
     return int(jobid[0])

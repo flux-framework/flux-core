@@ -14,6 +14,7 @@ from flux.wrapper import Wrapper
 from flux.rpc import RPC
 from flux.mrpc import MRPC
 from flux.message import Message
+from flux.util import encode_topic, encode_payload
 from flux.core.inner import raw
 from _flux._core import ffi, lib
 
@@ -74,6 +75,19 @@ class Flux(Wrapper):
             message = message.handle
         return self.flux_send(message, flags)
 
+    def respond(self, message, payload=None):
+        """Respond to a flux rpc
+
+        :param message: The message to respond to
+        :type message: Message
+        :param payload: The (optional) payload to include in the response
+        :type payload: None, str, bytes, unicode, or json-serializable
+        """
+        if isinstance(message, Message):
+            message = message.handle
+        payload = encode_payload(payload)
+        return self.flux_respond(message, payload)
+
     def recv(
         self,
         type_mask=raw.FLUX_MSGTYPE_ANY,
@@ -128,6 +142,16 @@ class Flux(Wrapper):
 
     def event_recv(self, topic=None):
         return self.recv(type_mask=raw.FLUX_MSGTYPE_EVENT, topic_glob=topic)
+
+    def event_subscribe(self, topic):
+        """Subscribe to events
+
+        :param topic: The event's topic to subscribe to
+        :type topic: str, bytes, or unicode
+        :raises EnvironmentError: if the topic is None or NULL
+        :raises TypeError: if the topic is not a str, bytes, or unicode
+        """
+        return self.flux_event_subscribe(encode_topic(topic))
 
     def msg_watcher_create(
         self,

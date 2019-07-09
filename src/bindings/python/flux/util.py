@@ -11,12 +11,13 @@
 import sys
 import errno
 import json
+import logging
 
 import six
 
 from flux.core.inner import ffi, raw
 
-__all__ = ["check_future_error", "encode_payload", "encode_topic"]
+__all__ = ["check_future_error", "encode_payload", "encode_topic", "CLIMain"]
 
 
 def check_future_error(func):
@@ -61,3 +62,30 @@ def encode_topic(topic):
         errmsg = "Topic must be a string, not {}".format(type(topic))
         raise TypeError(errno.EINVAL, errmsg)
     return topic
+
+
+class CLIMain(object):
+    def __init__(self, logger=None):
+        if logger is None:
+            self.logger = logging.getLogger()
+        else:
+            self.logger = logger
+
+    def __call__(self, main_func):
+        logging.basicConfig(
+            level=logging.INFO, format="%(module)s: %(levelname)s: %(message)s"
+        )
+        exit_code = 0
+        try:
+            main_func()
+        except SystemExit as ex:  # don't intercept sys.exit calls
+            exit_code = ex
+        except Exception as ex:  # pylint: disable=broad-except
+            exit_code = 1
+            self.logger.error(str(ex))
+            import traceback
+
+            self.logger.debug(traceback.format_exc())
+        finally:
+            logging.shutdown()
+            sys.exit(exit_code)
