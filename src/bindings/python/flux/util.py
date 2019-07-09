@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
 import re
 import sys
 import errno
@@ -27,6 +28,7 @@ __all__ = [
     "encode_topic",
     "CLIMain",
     "parse_fsd",
+    "modfind",
 ]
 
 
@@ -70,6 +72,25 @@ def encode_topic(topic):
     except TypeError:
         errmsg = "Topic must be a string, not {}".format(topic, type(topic))
         raise EnvironmentError(errno.EINVAL, errmsg)
+
+def modfind(modname):
+    """Search FLUX_MODULE_PATH for a shared library (.so) of a given name
+
+    :param modname: name of the module to search for
+    :type modname: str, bytes, unicode
+    :returns: path of the first matching shared library in FLUX_MODULE_PATH
+    """
+    searchpath = os.getenv("FLUX_MODULE_PATH")
+    if searchpath is None:
+        raise ValueError("FLUX_MODULE_PATH not set")
+    modname = six.ensure_binary(modname)
+    ret = raw.modfind(searchpath, modname, ffi.NULL, ffi.NULL)
+    if ret is None:
+        raise EnvironmentError(
+            errno.ENOENT, "{} not found in module search path".format(modname)
+        )
+    return ret
+
 
 class CLIMain(object):
     def __init__(self, logger=None):
