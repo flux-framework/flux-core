@@ -8,7 +8,7 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
-PMINFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pminfo
+PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
@@ -57,9 +57,9 @@ test_expect_success 'job-shell: /bin/false exit code propagated' '
 	grep -q status=256 false.finish.out
 '
 test_expect_success 'job-shell: PMI works' '
-        id=$(flux jobspec srun -N4 ${PMINFO} | flux job submit) &&
-	flux job wait-event $id finish >pminfo.out 2>pminfo.err &&
-	flux dmesg | grep kvsname= | grep size=4 >pminfo.dmesg
+        id=$(flux jobspec srun -N4 ${PMI_INFO} | flux job submit) &&
+	flux job wait-event $id finish >pmi_info.out 2>pmi_info.err &&
+	flux dmesg | grep kvsname= | grep size=4 >pmi_info.dmesg
 '
 test_expect_success 'job-shell: PMI KVS works' '
         id=$(flux jobspec srun -N4 ${KVSTEST} | flux job submit) &&
