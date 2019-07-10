@@ -57,6 +57,8 @@ int shell_task_pmi_enable (struct shell_task *task,
 
 /* Call readline once shell_task_pmi_ready_f has been called
  * indicating a line of PMI protocol from the task is ready.
+ * Sets 'line' to the data read (do not free).
+ * Returns number of bytes read, or -1 on error.
  */
 int shell_task_pmi_readline (struct shell_task *task, const char **line);
 
@@ -74,6 +76,8 @@ int shell_task_io_enable (struct shell_task *task,
 
 /* Call once shell_task_io_ready_f has been called, indicating
  * stdout or stderr from the task is ready.
+ * Sets 'line' to the data read (do not free).
+ * Returns number of bytes read, or -1 on error.
  */
 int shell_task_io_readline (struct shell_task *task,
                             const char *name,
