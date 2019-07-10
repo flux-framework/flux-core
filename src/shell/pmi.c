@@ -147,7 +147,7 @@ static int shell_pmi_kvs_get (void *arg,
                                sizeof (nkey),
                                pmi->info->jobid,
                                key) < 0) {
-            log_err ("key buffer overflow");
+            log_err ("shell_pmi_kvs_key");
             goto out;
         }
         if (!(f = flux_kvs_lookup (pmi->h, NULL, 0, nkey))) {
