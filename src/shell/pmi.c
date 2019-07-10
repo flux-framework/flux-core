@@ -14,15 +14,15 @@
  * Much of the work is done by the PMI-1 wire protocol engine in
  * libpmi/simple_server.c and libsubprocess socketpair channels.
  *
- * In task.c, shell_task_pmi_enable() sets up the subprocess channel and
- * sets PMI_FD, PMI_RANK, and PMI_SIZE environment variables.
- * The shell registers a callback from this module, shell_pmi_task_ready(),
- * with the subprocess.  The callback is invoked when the client has sent
- * a PMI request on the channel.
+ * In task.c, shell_task_pmi_enable() sets up the subprocess channel,
+ * sets the PMI_FD, PMI_RANK, and PMI_SIZE environment variables, and
+ * arranges for a callback to be invoked when the client has sent
+ * a PMI request on the channel.  The shell mainline registers
+ * shell_pmi_task_ready(), below, as this callback.
  *
- * The callback reads the request from the channel and pushes it into the
- * PMI-1 protocol engine.  If the request can be immediately answered,
- * the shell_pmi_response_send() callback registered with the engine
+ * shell_pmi_task_ready() reads the request from the channel and pushes
+ * it into the PMI-1 protocol engine.  If the request can be immediately
+ * answered, the shell_pmi_response_send() callback registered with the engine
  * is invoked, which writes the response to the subprocess channel.
  *
  * Other requests have callbacks from the engine to provide data,
