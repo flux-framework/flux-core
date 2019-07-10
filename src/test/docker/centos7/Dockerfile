@@ -53,6 +53,7 @@ RUN yum -y update \
       ruby \
       sqlite \
       valgrind \
+      valgrind-devel \
       man-db \
       aspell \
       aspell-en \
