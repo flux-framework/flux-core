@@ -35,7 +35,7 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     const char *jobspec;
 
     if (flux_kvs_lookup_get (f, &jobspec) < 0) {
-        flux_log_error (ctx->h, "sched.free lookup R");
+        flux_log_error (ctx->h, "sched.alloc lookup R");
         goto error;
     }
     ctx->alloc_cb (ctx->h, msg, jobspec, ctx->arg);
@@ -96,7 +96,7 @@ static void free_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     return;
 error:
-    flux_log_error (ctx->h, "sched.alloc");
+    flux_log_error (ctx->h, "sched.free");
     if (flux_respond_error (ctx->h, msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "sched.free respond_error");
     flux_future_destroy (f);
