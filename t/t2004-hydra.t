@@ -6,7 +6,7 @@ test_description='Test that MPICH Hydra can launch Flux'
 # Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
-PMINFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pminfo
+PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 
 if ! which mpiexec.hydra 2>/dev/null; then
     skip_all='skipping hydra-launching-flux tests, mpiexec.hydra unavailable'
@@ -38,7 +38,7 @@ test_expect_success 'Hydra sets PMI_SIZE to uniform value' '
 '
 
 test_expect_success 'Flux libpmi-client wire protocol works with Hydra' '
-	mpiexec.hydra -n 4 ${PMINFO}
+	mpiexec.hydra -n 4 ${PMI_INFO}
 '
 
 test_expect_success 'Hydra can launch Flux' '
