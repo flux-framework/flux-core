@@ -49,12 +49,12 @@ test_expect_success 'job-shell: execute 2 tasks per rank' '
 test_expect_success 'job-shell: /bin/true exit code propagated' '
         id=$(flux jobspec srun -n1 /bin/true | flux job submit) &&
 	flux job wait-event $id finish >true.finish.out &&
-	grep -q status=0 true.finish.out
+	grep status=0 true.finish.out
 '
 test_expect_success 'job-shell: /bin/false exit code propagated' '
         id=$(flux jobspec srun -n1 /bin/false | flux job submit) &&
 	flux job wait-event $id finish >false.finish.out &&
-	grep -q status=256 false.finish.out
+	grep status=256 false.finish.out
 '
 test_expect_success 'job-shell: PMI works' '
         id=$(flux jobspec srun -N4 ${PMI_INFO} | flux job submit) &&
