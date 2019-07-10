@@ -209,8 +209,8 @@ int main (int argc, char *argv[])
             log_err_exit ("shell_task_create index=%d", i);
         if (shell_task_pmi_enable (task, shell_pmi_task_ready, pmi) < 0)
             log_err_exit ("shell_task_pmi_enable");
-        //if (shell_task_io_enable (task, shell_io_task_ready, io) < 0)
-        //    log_err_exit ("shell_task_io_enable");
+        if (shell_task_io_enable (task, shell_io_task_ready, io) < 0)
+            log_err_exit ("shell_task_io_enable");
         if (shell_task_start (task, r, task_completion_cb, info) < 0)
             log_err_exit ("shell_task_start index=%d", i);
 
@@ -225,7 +225,10 @@ int main (int argc, char *argv[])
     if (flux_reactor_run (r, 0) < 0)
         log_err ("flux_reactor_run");
 
-    /* Destroy completed tasks, reducing exit codes to 'rc'.
+    /* Process completed tasks:
+     * - flush any buffered stdout, stderr
+     * - reduce exit codes to shell 'rc'
+     * - destroy
      */
     rc = 0;
     if (tasks) {
@@ -234,6 +237,7 @@ int main (int argc, char *argv[])
         while ((task = zlist_pop (tasks))) {
             if (rc < task->rc)
                 rc = task->rc;
+            shell_io_task_flush (io, task);
             shell_task_destroy (task);
         }
         zlist_destroy (&tasks);

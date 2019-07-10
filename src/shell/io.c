@@ -71,6 +71,13 @@ void shell_io_task_ready (struct shell_task *task, const char *name, void *arg)
     } while (len > 0);
 }
 
+void shell_io_task_flush (struct shell_io *io, struct shell_task *task)
+{
+    shell_io_task_ready (task, "STDOUT", io);
+    shell_io_task_ready (task, "STDERR", io);
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -24,6 +24,8 @@ struct shell_io *shell_io_create (flux_t *h, struct shell_info *info);
 // shell_task_io_ready_f callback footprint
 void shell_io_task_ready (struct shell_task *task, const char *name, void *arg);
 
+void shell_io_task_flush (struct shell_io *io, struct shell_task *task);
+
 #endif /* !SHELL_IO_H */
 
 /*
