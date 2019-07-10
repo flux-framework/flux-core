@@ -49,7 +49,6 @@ test_expect_success \
 		--wrap=--error-exitcode=1 \
 		--wrap=--suppressions=$VALGRIND_SUPPRESSIONS \
 		-o,--shutdown-grace=${VALGRIND_SHUTDOWN_GRACE} \
-		-o,--setattr=job-exec.job-shell=/bin/true \
 		 ${VALGRIND_WORKLOAD}
 '
 test_done
