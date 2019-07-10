@@ -11,7 +11,7 @@ FLUX_SHELL=${FLUX_BUILD_DIR}/src/shell/flux-shell
 jq=$(which jq 2>/dev/null)
 test -n "$jq" && test_set_prereq HAVE_JQ
 
-PMINFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pminfo
+PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 
 test_expect_success 'flux-shell: generate 1-task jobspec and matching R' '
@@ -131,9 +131,9 @@ test_expect_success HAVE_JQ 'flux-shell: environ in jobspec is set for task' '
 	grep -q ENVTEST=foo printenv2.out
 '
 test_expect_success 'flux-shell: shell PMI works' '
-	flux jobspec srun -N1 -n8 ${PMINFO} >j8pmi &&
+	flux jobspec srun -N1 -n8 ${PMI_INFO} >j8pmi &&
 	${FLUX_SHELL} -v -s -r 0 -j j8pmi -R R8 51 \
-		>pminfo.out 2>pminfo.err
+		>pmi_info.out 2>pmi_info.err
 '
 test_expect_success 'flux-shell: shell PMI KVS works' '
 	flux jobspec srun -N1 -n8 ${KVSTEST} >j8kvs &&
