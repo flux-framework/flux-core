@@ -45,14 +45,15 @@ RUN yum -y update \
       python-six \
       python-yaml \
       python-jsonschema \
-      python34-devel \
-      python34-cffi \
-      python34-six \
-      python34-yaml \
-      python34-jsonschema \
+      python36-devel \
+      python36-cffi \
+      python36-six \
+      python36-yaml \
+      python36-jsonschema \
       ruby \
       sqlite \
       valgrind \
+      valgrind-devel \
       man-db \
       aspell \
       aspell-en \
