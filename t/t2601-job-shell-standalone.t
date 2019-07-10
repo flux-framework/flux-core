@@ -14,6 +14,8 @@ test -n "$jq" && test_set_prereq HAVE_JQ
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 
+unset FLUX_URI
+
 test_expect_success 'flux-shell: generate 1-task jobspec and matching R' '
 	flux jobspec srun -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
@@ -101,8 +103,10 @@ test_expect_success 'flux-shell: 1: FLUX_TASK_LOCAL_ID, TASK_RANK set' '
 test_expect_success 'flux-shell: FLUX_JOB_SIZE, JOB_NNODES, JOB_ID set' '
 	grep -q FLUX_JOB_SIZE=2 printenv.out &&
 	grep -q FLUX_JOB_NNODES=1 printenv.out &&
-	grep -q FLUX_JOB_ID=42 printenv.out &&
-	! grep -q FLUX_URI printenv.out
+	grep -q FLUX_JOB_ID=42 printenv.out
+'
+test_expect_success 'flux-shell: FLUX_URI is not set by shell' '
+	test_must_fail grep FLUX_URI printenv.out
 '
 test_expect_success 'flux-shell: 0: PMI_RANK set' '
 	grep -q PMI_RANK=0 printenv.out
