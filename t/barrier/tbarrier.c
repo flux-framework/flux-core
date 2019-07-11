@@ -21,11 +21,12 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
 
-#define OPTIONS "hqn:t:"
+#define OPTIONS "hqn:t:D"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"quiet",      no_argument,        0, 'q'},
     {"early-exit", no_argument,        0, 'E'},
+    {"double-entry", no_argument,      0, 'D'},
     {"nprocs",     required_argument,  0, 'n'},
     {"test-iterations", required_argument,  0, 't'},
     { 0, 0, 0, 0 },
@@ -52,6 +53,7 @@ int main (int argc, char *argv[])
     int iter = 1;
     int i;
     bool Eopt = false;
+    bool Dopt = false;
 
     log_init ("tbarrier");
 
@@ -71,6 +73,9 @@ int main (int argc, char *argv[])
                 break;
             case 'E': /* --early-exit */
                 Eopt = true;
+                break;
+            case 'D': /* --double-entry */
+                Dopt = true;
                 break;
             default:
                 usage ();
@@ -96,6 +101,14 @@ int main (int argc, char *argv[])
             else
                 log_err_exit ("flux_barrier");
         }
+        if (Dopt) {
+            flux_future_t *f2;
+            if (!(f2 = flux_barrier (h, tname, nprocs)))
+                log_err_exit ("flux_barrier (second)");
+            if (flux_future_get (f2, NULL) < 0)
+                log_err ("barrier completion failed (second)");
+            flux_future_destroy (f2);
+        }
         if (!Eopt) {
             if (flux_future_get (f, NULL) < 0)
                 log_err_exit ("barrier completion failed");
@@ -103,8 +116,8 @@ int main (int argc, char *argv[])
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
                     tname ? tname : "NULL", nprocs, monotime_since (t0));
-        free (tname);
         flux_future_destroy (f);
+        free (tname);
     }
 
     flux_close (h);
