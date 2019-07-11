@@ -40,8 +40,49 @@ def create_slot(label, count, with_child):
     return slot
 
 
+def get_environment(l=[{}]):
+    """
+    Return current environment as specified by argument `l`, a list of
+    dicts possibly provided by the --export command line option.
+    If "ALL" is set always export all environment variables, else if
+    "NONE" is set, export an empty environment.
+    """
+    environ = {}
+
+    # Argument from --export is a list of dicts. Combine this list into
+    #  a single "exports" dict:
+    exports = {k: v for e in l for (k, v) in e.items()}
+
+    # If --export option not used then return current environment:
+    if not exports:
+        return dict(os.environ)
+    # If --export=NONE then return empty environment:
+    elif "NONE" in exports:
+        return {}
+    # If --export=ALL,... then start with current environment, possibly
+    # modified by export --export arguments:
+    elif "ALL" in exports:
+        del exports["ALL"]
+        environ = dict(os.environ)
+
+    # Set each env var to provided value, e.g. --export=FOO=bar,
+    #  or current value if not provided, e.g. --export=FOO :
+    for k, v in exports.items():
+        try:
+            environ[k] = v or os.environ[k]
+        except KeyError:
+            logger.error("Variable {} not found in current env".format(k))
+            sys.exit(1)
+    return environ
+
+
 def create_slurm_style_jobspec(
-    command, num_tasks, cores_per_task, num_nodes=0, walltime=None
+    command,
+    num_tasks,
+    cores_per_task,
+    num_nodes=0,
+    walltime=None,
+    environ=get_environment(),
 ):
     core = create_resource("core", cores_per_task)
     if num_nodes > 0:
@@ -72,7 +113,7 @@ def create_slurm_style_jobspec(
                 "attributes": {},
             }
         ],
-        "attributes": {"system": {"cwd": os.getcwd()}},
+        "attributes": {"system": {"cwd": os.getcwd(), "environment": environ}},
     }
     if walltime:
         jobspec["attributes"]["system"]["duration"] = walltime
@@ -138,9 +179,18 @@ def slurm_jobspec(args):
         logger.error(str(e))
         sys.exit(1)
     t = slurm_walltime_to_duration(args.time)
+    environ = get_environment(args.export)
     return create_slurm_style_jobspec(
-        args.command, args.ntasks, args.cpus_per_task, args.nodes, t
+        args.command, args.ntasks, args.cpus_per_task, args.nodes, t, environ
     )
+
+
+def kv_list_split(s):
+    """
+    Split a key/value list with optional values, e.g. 'FOO,BAR=baz,...'
+    and return a dict.
+    """
+    return dict((a, b) for a, _, b in [x.partition("=") for x in s.split(",")])
 
 
 def get_slurm_common_parser():
@@ -160,6 +210,14 @@ def get_slurm_common_parser():
         "[days-]hours:minutes:seconds",
     )
     slurm_parser.add_argument("-o", "--output", help="location of stdout redirection")
+    slurm_parser.add_argument(
+        "--export",
+        metavar="[ALL|NONE|VARS]",
+        action="append",
+        type=kv_list_split,
+        default=[{}],
+        help="List or specify environment variables to export",
+    )
     slurm_parser.add_argument("command", nargs=argparse.REMAINDER)
     return slurm_parser
 
