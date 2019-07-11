@@ -251,7 +251,7 @@ int modservice_register (flux_t *h, module_t *p)
     modservice_ctx_t *ctx = getctx (h, p);
     flux_reactor_t *r = flux_get_reactor (h);
 
-    if (!ctx)
+    if (!ctx || !r)
         return -1;
 
     if (register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER) < 0)

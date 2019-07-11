@@ -80,12 +80,13 @@ flux_future_t *flux_barrier (flux_t *h, const char *name, int nprocs)
     if (!name && !(name = generate_unique_name (h)))
         return NULL;
 
-    return flux_rpc_pack (h, "barrier.enter", FLUX_NODEID_ANY, 0,
-                          "{s:s s:i s:i s:b}",
+    return flux_rpc_pack (h,
+                          "barrier.enter",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:s s:i}",
                            "name", name,
-                           "count", 1,
-                           "nprocs", nprocs,
-                           "internal", false);
+                           "nprocs", nprocs);
 }
 
 /*

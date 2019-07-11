@@ -33,13 +33,13 @@ test_expect_success 'barrier: blocks while incomplete' '
 	  ${tbarrier} --nprocs 2 xyz
 '
 
-test_expect_success 'barrier: fails with name=NULL outside of LWJ' '
+test_expect_success 'barrier: fails with name=NULL outside of job' '
 	unset FLUX_JOB_ID &&
 	unset SLURM_STEPID &&
 	test_expect_code 1 ${tbarrier} --nprocs 1
 '
 
-test_expect_success 'barrier: succeeds with name=NULL inside LWJ' '
+test_expect_success 'barrier: succeeds with name=NULL inside Flux job' '
 	unset SLURM_STEPID &&
         FLUX_JOB_ID=1 && export FLUX_JOB_ID &&
 	flux exec -n ${tbarrier} --nprocs ${SIZE}
@@ -53,6 +53,35 @@ test_expect_success 'barrier: succeeds with name=NULL inside SLURM step' '
 test_expect_success 'enter request with empty payload fails with EPROTO(71)' '
 	${RPC} barrier.enter 71 </dev/null
 '
+
+test_expect_success 'barrier: works with guest user' '
+	newid=$(($(id -u)+1)) &&
+	FLUX_HANDLE_ROLEMASK=0x02 FLUX_HANDLE_USERID=${newid} \
+		${tbarrier} --nprocs 1 guest-test
+'
+
+test_expect_success 'barrier: disconnect destroys barrier' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		barrier barrier.exit \
+                "${tbarrier} --nprocs 2 --early-exit discon" >discon.out &&
+	grep barrier.exit discon.out
+'
+test_expect_success 'barrier: disconnect destroys guest barrier' '
+	newid=$(($(id -u)+1)) &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		barrier barrier.exit \
+		"FLUX_HANDLE_ROLEMASK=0x02 FLUX_HANDLE_USERID=${newid} \
+                ${tbarrier} --nprocs 2 --early-exit gdiscon" >gdiscon.out &&
+	grep barrier.exit gdiscon.out
+'
+test_expect_success 'barrier: double entry by one client fails with EEXIST' '
+	test_must_fail ${tbarrier} --double-entry --nprocs 2 double-test \
+		2>double.err &&
+	grep "File exists" double.err
+'
+
 test_expect_success 'barrier: remove barrier module' '
 	flux module remove -r all barrier
 '

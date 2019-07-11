@@ -21,10 +21,12 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
 
-#define OPTIONS "hqn:t:"
+#define OPTIONS "hqn:t:D"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"quiet",      no_argument,        0, 'q'},
+    {"early-exit", no_argument,        0, 'E'},
+    {"double-entry", no_argument,      0, 'D'},
     {"nprocs",     required_argument,  0, 'n'},
     {"test-iterations", required_argument,  0, 't'},
     { 0, 0, 0, 0 },
@@ -34,7 +36,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] [name]\n"
+"Usage: tbarrier [-q] [-n NPROCS] [-t ITER] [-E] [name]\n"
 );
     exit (1);
 }
@@ -50,6 +52,8 @@ int main (int argc, char *argv[])
     int nprocs = 1;
     int iter = 1;
     int i;
+    bool Eopt = false;
+    bool Dopt = false;
 
     log_init ("tbarrier");
 
@@ -66,6 +70,12 @@ int main (int argc, char *argv[])
                 break;
             case 't': /* --test-iterations N */
                 iter = strtoul (optarg, NULL, 10);
+                break;
+            case 'E': /* --early-exit */
+                Eopt = true;
+                break;
+            case 'D': /* --double-entry */
+                Dopt = true;
                 break;
             default:
                 usage ();
@@ -87,17 +97,27 @@ int main (int argc, char *argv[])
             tname = xasprintf ("%s.%d", name, i);
         if (!(f = flux_barrier (h, tname, nprocs))) {
             if (errno == EINVAL && tname == NULL)
-                log_msg_exit ("%s", "provide barrier name if not running as LWJ");
+                log_msg_exit ("%s", "provide barrier name if not running in job");
             else
                 log_err_exit ("flux_barrier");
         }
-        if (flux_future_get (f, NULL) < 0)
-            log_err_exit ("barrier completion failed");
+        if (Dopt) {
+            flux_future_t *f2;
+            if (!(f2 = flux_barrier (h, tname, nprocs)))
+                log_err_exit ("flux_barrier (second)");
+            if (flux_future_get (f2, NULL) < 0)
+                log_err ("barrier completion failed (second)");
+            flux_future_destroy (f2);
+        }
+        if (!Eopt) {
+            if (flux_future_get (f, NULL) < 0)
+                log_err_exit ("barrier completion failed");
+        }
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
                     tname ? tname : "NULL", nprocs, monotime_since (t0));
-        free (tname);
         flux_future_destroy (f);
+        free (tname);
     }
 
     flux_close (h);
