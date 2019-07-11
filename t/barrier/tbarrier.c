@@ -87,7 +87,7 @@ int main (int argc, char *argv[])
             tname = xasprintf ("%s.%d", name, i);
         if (!(f = flux_barrier (h, tname, nprocs))) {
             if (errno == EINVAL && tname == NULL)
-                log_msg_exit ("%s", "provide barrier name if not running as LWJ");
+                log_msg_exit ("%s", "provide barrier name if not running in job");
             else
                 log_err_exit ("flux_barrier");
         }

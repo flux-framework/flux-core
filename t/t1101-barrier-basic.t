@@ -33,13 +33,13 @@ test_expect_success 'barrier: blocks while incomplete' '
 	  ${tbarrier} --nprocs 2 xyz
 '
 
-test_expect_success 'barrier: fails with name=NULL outside of LWJ' '
+test_expect_success 'barrier: fails with name=NULL outside of job' '
 	unset FLUX_JOB_ID &&
 	unset SLURM_STEPID &&
 	test_expect_code 1 ${tbarrier} --nprocs 1
 '
 
-test_expect_success 'barrier: succeeds with name=NULL inside LWJ' '
+test_expect_success 'barrier: succeeds with name=NULL inside Flux job' '
 	unset SLURM_STEPID &&
         FLUX_JOB_ID=1 && export FLUX_JOB_ID &&
 	flux exec -n ${tbarrier} --nprocs ${SIZE}
