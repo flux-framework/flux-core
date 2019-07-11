@@ -21,8 +21,6 @@
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
 
 const double barrier_reduction_timeout_sec = 0.001;
@@ -93,19 +91,17 @@ static void debug_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_log (b->ctx->h, LOG_DEBUG, "debug %s %d", b->name, b->nprocs);
 }
 
-static void barrier_destroy (void *arg)
+static void barrier_destroy (struct barrier *b)
 {
-    struct barrier *b = arg;
-
-    if (b->debug_timer) {
+    if (b) {
+        int saved_errno = errno;
         flux_log (b->ctx->h, LOG_DEBUG, "destroy %s %d", b->name, b->nprocs);
-        flux_watcher_stop (b->debug_timer);
         flux_watcher_destroy (b->debug_timer);
+        zhash_destroy (&b->clients);
+        free (b->name);
+        free (b);
+        errno = saved_errno;
     }
-    zhash_destroy (&b->clients);
-    free (b->name);
-    free (b);
-    return;
 }
 
 static struct barrier *barrier_create (struct barrier_ctx *ctx,
@@ -114,31 +110,35 @@ static struct barrier *barrier_create (struct barrier_ctx *ctx,
 {
     struct barrier *b;
 
-    b = xzmalloc (sizeof (*b));
-    b->name = xstrdup (name);
+    if (!(b = calloc (1, sizeof (*b))))
+        return NULL;
+    if (!(b->name = strdup (name)))
+        goto error;
     b->nprocs = nprocs;
-    if (!(b->clients = zhash_new ()))
-        oom ();
+    if (!(b->clients = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     b->ctx = ctx;
-    zhash_insert (ctx->barriers, b->name, b);
-    zhash_freefn (ctx->barriers, b->name, barrier_destroy);
 
     /* Start a timer for some debug
      */
     if (ctx->rank == 0) {
         flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
         b->debug_timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
-                                                    1.0, 1.0,
-                                                    debug_timer_cb, b);
-        if (!b->debug_timer) {
-            flux_log_error (ctx->h, "flux_timer_watcher_create");
-            goto done;
-        }
+                                                    1.0,
+                                                    1.0,
+                                                    debug_timer_cb,
+                                                    b);
+        if (!b->debug_timer)
+            goto error;
         flux_watcher_start (b->debug_timer);
 
     }
-done:
     return b;
+error:
+    barrier_destroy (b);
+    return NULL;
 }
 
 static int barrier_add_client (struct barrier *b,
@@ -189,28 +189,29 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              "name", &name,
                              "count", &count,
                              "nprocs", &nprocs,
-                             "internal", &internal) < 0
-                || flux_msg_get_route_first (msg, &sender) < 0) {
-        flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
-        flux_respond_error (ctx->h, msg, errno, NULL);
-        goto done;
+                             "internal", &internal) < 0)
+        goto error;
+    if (flux_msg_get_route_first (msg, &sender) < 0)
+        goto error;
+
+    if (!(b = zhash_lookup (ctx->barriers, name))) {
+        if (!(b = barrier_create (ctx, name, nprocs)))
+            goto error;
+        zhash_update (ctx->barriers, b->name, b);
+        zhash_freefn (ctx->barriers, b->name, (zhash_free_fn *)barrier_destroy);
     }
 
-    if (!(b = zhash_lookup (ctx->barriers, name)))
-        b = barrier_create (ctx, name, nprocs);
-
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
-     * A client, distinguished by internal == false, can only enter barrier once.
+     * A client (internal == false) can only enter barrier once.
      */
     if (internal == false) {
         if (barrier_add_client (b, sender, msg) < 0) {
-            flux_respond_error (ctx->h, msg, EEXIST, NULL);
-            flux_log (ctx->h, LOG_ERR,
-                        "abort %s due to double entry by client %s",
-                        name, sender);
+            flux_log (ctx->h, LOG_ERR, "abort %s due to double entry by %s",
+                      name, sender);
             if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
                 flux_log_error (ctx->h, "exit_event_send");
-            goto done;
+            errno = EEXIST;
+            goto error;
         }
     }
 
@@ -221,14 +222,19 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (b->count == b->nprocs) {
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log_error (ctx->h, "exit_event_send");
-    } else if (ctx->rank > 0 && !ctx->timer_armed) {
-        flux_timer_watcher_reset (ctx->timer, barrier_reduction_timeout_sec, 0.);
+    }
+    else if (ctx->rank > 0 && !ctx->timer_armed) {
+        flux_timer_watcher_reset (ctx->timer,
+                                  barrier_reduction_timeout_sec,
+                                  0.);
         flux_watcher_start (ctx->timer);
         ctx->timer_armed = true;
     }
-done:
-    if (sender)
-        free (sender);
+    free (sender);
+    return;
+error:
+    flux_respond_error (ctx->h, msg, errno, NULL);
+    free (sender);
 }
 
 /* Upon client disconnect, abort any pending barriers it was
