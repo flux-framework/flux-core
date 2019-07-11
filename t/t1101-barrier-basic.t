@@ -60,6 +60,23 @@ test_expect_success 'barrier: works with guest user' '
 		${tbarrier} --nprocs 1 guest-test
 '
 
+test_expect_success 'barrier: disconnect destroys barrier' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		barrier barrier.exit \
+                "${tbarrier} --nprocs 2 --early-exit discon" >discon.out &&
+	grep barrier.exit discon.out
+'
+test_expect_success 'barrier: disconnect destroys guest barrier' '
+	newid=$(($(id -u)+1)) &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		barrier barrier.exit \
+		"FLUX_HANDLE_ROLEMASK=0x02 FLUX_HANDLE_USERID=${newid} \
+                ${tbarrier} --nprocs 2 --early-exit gdiscon" >gdiscon.out &&
+	grep barrier.exit gdiscon.out
+'
+
 test_expect_success 'barrier: remove barrier module' '
 	flux module remove -r all barrier
 '
