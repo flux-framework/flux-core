@@ -76,6 +76,11 @@ test_expect_success 'barrier: disconnect destroys guest barrier' '
                 ${tbarrier} --nprocs 2 --early-exit gdiscon" >gdiscon.out &&
 	grep barrier.exit gdiscon.out
 '
+test_expect_success 'barrier: double entry by one client fails with EEXIST' '
+	test_must_fail ${tbarrier} --double-entry --nprocs 2 double-test \
+		2>double.err &&
+	grep "File exists" double.err
+'
 
 test_expect_success 'barrier: remove barrier module' '
 	flux module remove -r all barrier
