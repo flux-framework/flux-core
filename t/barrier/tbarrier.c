@@ -25,6 +25,7 @@
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"quiet",      no_argument,        0, 'q'},
+    {"early-exit", no_argument,        0, 'E'},
     {"nprocs",     required_argument,  0, 'n'},
     {"test-iterations", required_argument,  0, 't'},
     { 0, 0, 0, 0 },
@@ -34,7 +35,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] [name]\n"
+"Usage: tbarrier [-q] [-n NPROCS] [-t ITER] [-E] [name]\n"
 );
     exit (1);
 }
@@ -50,6 +51,7 @@ int main (int argc, char *argv[])
     int nprocs = 1;
     int iter = 1;
     int i;
+    bool Eopt = false;
 
     log_init ("tbarrier");
 
@@ -66,6 +68,9 @@ int main (int argc, char *argv[])
                 break;
             case 't': /* --test-iterations N */
                 iter = strtoul (optarg, NULL, 10);
+                break;
+            case 'E': /* --early-exit */
+                Eopt = true;
                 break;
             default:
                 usage ();
@@ -91,8 +96,10 @@ int main (int argc, char *argv[])
             else
                 log_err_exit ("flux_barrier");
         }
-        if (flux_future_get (f, NULL) < 0)
-            log_err_exit ("barrier completion failed");
+        if (!Eopt) {
+            if (flux_future_get (f, NULL) < 0)
+                log_err_exit ("barrier completion failed");
+        }
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
                     tname ? tname : "NULL", nprocs, monotime_since (t0));
