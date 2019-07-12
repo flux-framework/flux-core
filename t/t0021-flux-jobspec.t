@@ -179,7 +179,60 @@ test_expect_success HAVE_JQ 'specifying -N8 -n25 -c2 should produce (in total) 8
 '
 
 test_expect_success HAVE_JQ 'current working directory encoded in jobspec' '
-    flux jobspec srun hostname | jq -e ".attributes.system.cwd = \"$(pwd)\""
+    flux jobspec srun hostname | jq -e ".attributes.system.cwd == \"$(pwd)\""
+'
+
+test_expect_success HAVE_JQ 'current environment encoded in jobspec' '
+    flux python -c "import os,json; print (json.dumps(dict(os.environ)))" | \
+        jq -S . >environ.expected &&
+    flux jobspec srun hostname | \
+        jq -S -e ".attributes.system.environment" > environ.output &&
+    flux jobspec srun --export=ALL hostname | \
+        jq -S -e ".attributes.system.environment" > environ.output2 &&
+    test_cmp environ.expected environ.output &&
+    test_cmp environ.expected environ.output2
+'
+
+test_expect_success HAVE_JQ 'jobspec srun --export=NONE works' '
+    flux jobspec srun --export=NONE hostname | \
+	jq -e "(.attributes.system.environment | length) == 0"
+'
+
+test_expect_success HAVE_JQ 'jobspec srun --export=VAR works' '
+    FOO=bar flux jobspec srun --export=FOO hostname | \
+        jq -e "(.attributes.system.environment | length) == 1 and \
+               .attributes.system.environment.FOO == \"bar\""
+'
+
+test_expect_success HAVE_JQ 'jobspec srun --export=VAR=val works' '
+    FOO=bar flux jobspec srun --export=FOO=baz hostname | \
+        jq -e "(.attributes.system.environment | length) == 1 and \
+               .attributes.system.environment.FOO == \"baz\""
+'
+
+test_expect_success HAVE_JQ 'jobspec srun --export=VAR,VAR2,... works' '
+    FOO=bar BAR=foo flux jobspec srun --export=FOO,BAR hostname | \
+        jq -e "(.attributes.system.environment | length) == 2 and \
+               .attributes.system.environment.FOO == \"bar\" and \
+               .attributes.system.environment.BAR == \"foo\"" &&
+    FOO=bar BAR=foo flux jobspec srun --export=FOO --export=BAR hostname | \
+        jq -e "(.attributes.system.environment | length) == 2 and \
+               .attributes.system.environment.FOO == \"bar\" and \
+               .attributes.system.environment.BAR == \"foo\""
+'
+
+test_expect_success HAVE_JQ 'jobspec srun --export=ALL,VAR=val works' '
+    FLOOP=boop \
+      flux python -c "import os,json; print (json.dumps(dict(os.environ)))" | \
+        jq -S . >floop.expected &&
+    flux jobspec srun --export=ALL,FLOOP=boop hostname | \
+        jq -S ".attributes.system.environment" > floop.output &&
+    test_cmp floop.expected floop.output
+'
+
+test_expect_success HAVE_JQ 'jobspec srun --export fails for nonexistent var' '
+    unset SOUP &&
+    test_must_fail flux jobspec srun --export=SOUP hostname
 '
 
 test_done
