@@ -17,8 +17,8 @@ test_expect_success 'basic rexec functionality (process success)' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec /bin/true
 '
 
-test_must_fail 'basic rexec functionality (process fail)' '
-	${FLUX_BUILD_DIR}/t/rexec/rexec /bin/false
+test_expect_success 'basic rexec functionality (process fail)' '
+	! ${FLUX_BUILD_DIR}/t/rexec/rexec /bin/false
 '
 
 test_expect_success 'basic rexec - cwd correct' '
