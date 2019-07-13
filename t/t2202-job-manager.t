@@ -103,7 +103,7 @@ test_expect_success 'job-manager: queue contains 3 jobs' '
 '
 
 test_expect_success 'job-manager: queue is sorted in priority order' '
-	cat >list3_pri.exp <<-EOT
+	cat >list3_pri.exp <<-EOT &&
 	31
 	16
 	0
@@ -113,7 +113,7 @@ test_expect_success 'job-manager: queue is sorted in priority order' '
 '
 
 test_expect_success 'job-manager: flux job list --count shows highest priority jobs' '
-	cat >list3_lim2.exp <<-EOT
+	cat >list3_lim2.exp <<-EOT &&
 	31
 	16
 	EOT
