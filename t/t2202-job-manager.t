@@ -107,7 +107,7 @@ test_expect_success 'job-manager: queue is sorted in priority order' '
 	31
 	16
 	0
-	EOT &&
+	EOT
 	cut -f4 <list3.out >list3_pri.out &&
 	test_cmp list3_pri.exp list3_pri.out
 '
@@ -116,8 +116,8 @@ test_expect_success 'job-manager: flux job list --count shows highest priority j
 	cat >list3_lim2.exp <<-EOT
 	31
 	16
-	EOT &&
-	flux job list -s -c 2 >list3_lim2.out &&
+	EOT
+	flux job list -s -c 2 | cut -f4 >list3_lim2.out &&
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 
