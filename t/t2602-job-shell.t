@@ -24,7 +24,7 @@ test_expect_success 'job-shell: execute across all ranks' '
         id=$(flux jobspec srun -N4 bash -c \
             "flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
             | flux job submit) &&
-        flux job wait-event $id clean &&
+        flux job attach --show-events $id &&
         kvsdir=$(flux job id --to=kvs $id).guest &&
         test $(flux kvs get ${kvsdir}.test1.0) = 0 &&
         test $(flux kvs get ${kvsdir}.test1.1) = 0 &&
@@ -35,7 +35,7 @@ test_expect_success 'job-shell: execute 2 tasks per rank' '
         id=$(flux jobspec srun -N4 -n8 bash -c \
             "flux kvs put test2.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
             | flux job submit) &&
-        flux job wait-event $id clean &&
+        flux job attach --show-events $id &&
         kvsdir=$(flux job id --to=kvs $id).guest &&
         test $(flux kvs get ${kvsdir}.test2.0) = 0 &&
         test $(flux kvs get ${kvsdir}.test2.1) = 1 &&
