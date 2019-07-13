@@ -26,7 +26,7 @@ test_expect_success 'job-shell: execute across all ranks' '
             | flux job submit) &&
         flux job attach --show-events $id &&
         kvsdir=$(flux job id --to=kvs $id) &&
-	sort >test1.exp <<-EOT
+	sort >test1.exp <<-EOT &&
 	${kvsdir}.guest.test1.0 = 0
 	${kvsdir}.guest.test1.1 = 0
 	${kvsdir}.guest.test1.2 = 0
@@ -41,7 +41,7 @@ test_expect_success 'job-shell: execute 2 tasks per rank' '
             | flux job submit) &&
         flux job attach --show-events $id &&
         kvsdir=$(flux job id --to=kvs $id) &&
-	sort >test2.exp <<-EOT
+	sort >test2.exp <<-EOT &&
 	${kvsdir}.guest.test2.0 = 0
 	${kvsdir}.guest.test2.1 = 1
 	${kvsdir}.guest.test2.2 = 0
