@@ -73,7 +73,7 @@ test_expect_success 'trailing cr/lf are stripped' '
 '
 
 test_expect_success 'embedded blank log messages are ignored' '
-	cat >blank.in <<-EOT
+	cat >blank.in <<-EOT &&
 	foo
 	bar
 	baz
