@@ -689,8 +689,16 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                 log_err_exit ("flux_job_event_watch_cancel");
         }
     }
-    if (ctx->show_events && strcmp (name, "exception") != 0)
-        fprintf (stderr, "job-event: %s\n", name);
+    if (ctx->show_events && strcmp (name, "exception") != 0) {
+        char *s = NULL;
+        if (context && !(s = json_dumps (context, JSON_COMPACT)))
+            log_err_exit ("error re-encoding context");
+        fprintf (stderr, "job-event: %s%s%s\n",
+                 name,
+                 s ? " " : "",
+                 s ? s : "");
+        free (s);
+    }
     json_decref (o);
     flux_future_reset (f);
     return;
