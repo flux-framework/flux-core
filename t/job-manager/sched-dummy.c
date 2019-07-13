@@ -179,7 +179,13 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-int hello_cb (flux_t *h, const char *R, void *arg)
+int hello_cb (flux_t *h,
+              flux_jobid_t id,
+              int priority,
+              uint32_t userid,
+              double t_submit,
+              const char *R,
+              void *arg)
 {
     struct sched_ctx *sc = arg;
 

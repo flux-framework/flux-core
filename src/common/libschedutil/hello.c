@@ -16,12 +16,16 @@
 
 #include "hello.h"
 
-static int schedutil_hello_job (flux_t *h, flux_jobid_t id,
+static int schedutil_hello_job (flux_t *h,
+                                flux_jobid_t id,
+                                int priority,
+                                uint32_t userid,
+                                double t_submit,
                                 hello_f *cb, void *arg)
 {
     char key[64];
     flux_future_t *f;
-    const char *s;
+    const char *R;
 
     if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
         errno = EPROTO;
@@ -29,9 +33,9 @@ static int schedutil_hello_job (flux_t *h, flux_jobid_t id,
     }
     if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
         return -1;
-    if (flux_kvs_lookup_get (f, &s) < 0)
+    if (flux_kvs_lookup_get (f, &R) < 0)
         goto error;
-    if (cb (h, s, arg) < 0)
+    if (cb (h, id, priority, userid, t_submit, R, arg) < 0)
         goto error;
     flux_future_destroy (f);
     return 0;
@@ -72,7 +76,13 @@ int schedutil_hello (flux_t *h, hello_f *cb, void *arg)
             errno = EPROTO;
             goto error;
         }
-        if (schedutil_hello_job (h, id, cb, arg) < 0)
+        if (schedutil_hello_job (h,
+                                 id,
+                                 priority,
+                                 userid,
+                                 t_submit,
+                                 cb,
+                                 arg) < 0)
             goto error;
     }
     flux_future_destroy (f);

@@ -213,7 +213,13 @@ err:
         flux_log_error (h, "alloc: flux_respond_error");
 }
 
-static int hello_cb (flux_t *h, const char *R, void *arg)
+static int hello_cb (flux_t *h,
+                     flux_jobid_t id,
+                     int priority,
+                     uint32_t userid,
+                     double t_submit,
+                     const char *R,
+                     void *arg)
 {
     char *s;
     int rc = -1;
