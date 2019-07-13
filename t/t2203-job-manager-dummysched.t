@@ -93,8 +93,23 @@ test_expect_success 'job-manager: canceled job has exception, free events' '
 '
 
 test_expect_success 'job-manager: reload sched-dummy --cores=4' '
+	flux dmesg -C &&
 	flux module remove -r 0 sched-dummy &&
-	flux module load -r 0 ${SCHED_DUMMY} --cores=4
+	flux module load -r 0 ${SCHED_DUMMY} --cores=4 &&
+	flux dmesg | grep "hello_cb:" >hello.dmesg
+'
+
+test_expect_success 'job-manager: hello handshake found jobs 1 3' '
+	grep id=$(cat job1.id) hello.dmesg &&
+	grep id=$(cat job3.id) hello.dmesg
+'
+
+test_expect_success 'job-manager: hello handshake priority is default' '
+	grep priority=16 hello.dmesg
+'
+
+test_expect_success 'job-manager: hello handshake userid is expected' '
+	grep userid=$(id -u) hello.dmesg
 '
 
 test_expect_success 'job-manager: job state RIRRR' '

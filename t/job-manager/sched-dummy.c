@@ -189,7 +189,14 @@ int hello_cb (flux_t *h,
 {
     struct sched_ctx *sc = arg;
 
-    flux_log (h, LOG_DEBUG, "%s: R=%s", __FUNCTION__, R);
+    flux_log (h, LOG_DEBUG,
+              "%s: id=%ju priority=%d userid=%u t_submit=%0.1f R=%s",
+              __func__,
+              (uintmax_t)id,
+              priority,
+              (unsigned int)userid,
+              t_submit,
+              R);
     sc->cores_free--;
     return 0;
 }
