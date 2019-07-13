@@ -25,26 +25,34 @@ test_expect_success 'job-shell: execute across all ranks' '
             "flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
             | flux job submit) &&
         flux job attach --show-events $id &&
-        kvsdir=$(flux job id --to=kvs $id).guest &&
-        test $(flux kvs get ${kvsdir}.test1.0) = 0 &&
-        test $(flux kvs get ${kvsdir}.test1.1) = 0 &&
-        test $(flux kvs get ${kvsdir}.test1.2) = 0 &&
-        test $(flux kvs get ${kvsdir}.test1.3) = 0
+        kvsdir=$(flux job id --to=kvs $id) &&
+	sort >test1.exp <<-EOT
+	${kvsdir}.guest.test1.0 = 0
+	${kvsdir}.guest.test1.1 = 0
+	${kvsdir}.guest.test1.2 = 0
+	${kvsdir}.guest.test1.3 = 0
+	EOT
+	flux kvs dir ${kvsdir}.guest.test1 | sort >test1.out &&
+	test_cmp test1.exp test1.out
 '
 test_expect_success 'job-shell: execute 2 tasks per rank' '
         id=$(flux jobspec srun -N4 -n8 bash -c \
             "flux kvs put test2.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
             | flux job submit) &&
         flux job attach --show-events $id &&
-        kvsdir=$(flux job id --to=kvs $id).guest &&
-        test $(flux kvs get ${kvsdir}.test2.0) = 0 &&
-        test $(flux kvs get ${kvsdir}.test2.1) = 1 &&
-        test $(flux kvs get ${kvsdir}.test2.2) = 0 &&
-        test $(flux kvs get ${kvsdir}.test2.3) = 1 &&
-        test $(flux kvs get ${kvsdir}.test2.4) = 0 &&
-        test $(flux kvs get ${kvsdir}.test2.5) = 1 &&
-        test $(flux kvs get ${kvsdir}.test2.6) = 0 &&
-        test $(flux kvs get ${kvsdir}.test2.7) = 1
+        kvsdir=$(flux job id --to=kvs $id) &&
+	sort >test2.exp <<-EOT
+	${kvsdir}.guest.test2.0 = 0
+	${kvsdir}.guest.test2.1 = 1
+	${kvsdir}.guest.test2.2 = 0
+	${kvsdir}.guest.test2.3 = 1
+	${kvsdir}.guest.test2.4 = 0
+	${kvsdir}.guest.test2.5 = 1
+	${kvsdir}.guest.test2.6 = 0
+	${kvsdir}.guest.test2.7 = 1
+	EOT
+	flux kvs dir ${kvsdir}.guest.test2 | sort >test2.out &&
+	test_cmp test2.exp test2.out
 '
 test_expect_success 'job-shell: /bin/true exit code propagated' '
         id=$(flux jobspec srun -n1 /bin/true | flux job submit) &&
