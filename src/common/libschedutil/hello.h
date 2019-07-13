@@ -13,16 +13,23 @@
 
 #include <flux/core.h>
 
-/* Callback for ingesting allocated R's.
+/* Callback for ingesting R + metadata for jobs that have resources
  * Return 0 on success, -1 on failure with errno set.
  * Failure of the callback aborts iteration and causes schedutil_hello()
  * to return -1 with errno passed through.
  */
-typedef int (hello_f)(flux_t *h, const char *R, void *arg);
+typedef int (hello_f)(flux_t *h,
+                      flux_jobid_t id,
+                      int priority,
+                      uint32_t userid,
+                      double t_submit,
+                      const char *R,
+                      void *arg);
 
 /* Send hello announcement to job-manager.
  * The job-manager responds with a list of jobs that have resources assigned.
- * This function looks up R for each job and passes it 'cb' with 'arg'.
+ * This function looks up R for each job and passes R + metadata to 'cb'
+ * with 'arg'.
  */
 int schedutil_hello (flux_t *h, hello_f *cb, void *arg);
 
