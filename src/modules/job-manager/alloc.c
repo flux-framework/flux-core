@@ -14,8 +14,8 @@
  *
  * 1) Scheduler sends job-manager.sched-hello request:
  *   <empty payload>
- * Job manager responds with array of jobids that have allocated resources:
- *   {"alloc":[I,I,I,...]}
+ * Job manager responds with array of job objects that have allocated resources:
+ *   {"alloc":[{"id":I, "priority":i, "userid":i, "t_submit":f},{},{},...]}
  * Scheduler should read those jobs' R from KVS and mark resources allocated.
  *
  * 2) Scheduler sends job-manager.sched-ready request:
@@ -307,7 +307,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     struct alloc_ctx *ctx = arg;
     struct job *job;
     json_t *o = NULL;
-    json_t *jobid;
+    json_t *entry;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -317,10 +317,14 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     job = queue_first (ctx->queue);
     while (job) {
         if (job->has_resources) {
-            if (!(jobid = json_integer (job->id)))
+            if (!(entry = json_pack ("{s:I s:i s:i s:f}",
+                                     "id", job->id,
+                                     "priority", job->priority,
+                                     "userid", job->userid,
+                                     "t_submit", job->t_submit)))
                 goto nomem;
-            if (json_array_append_new (o, jobid) < 0) {
-                json_decref (jobid);
+            if (json_array_append_new (o, entry) < 0) {
+                json_decref (entry);
                 goto nomem;
             }
         }

@@ -45,8 +45,8 @@ error:
 int schedutil_hello (flux_t *h, hello_f *cb, void *arg)
 {
     flux_future_t *f;
-    json_t *ids;
-    json_t *id;
+    json_t *jobs;
+    json_t *entry;
     size_t index;
 
     if (!h || !cb) {
@@ -56,11 +56,23 @@ int schedutil_hello (flux_t *h, hello_f *cb, void *arg)
     if (!(f = flux_rpc (h, "job-manager.sched-hello",
                         NULL, FLUX_NODEID_ANY, 0)))
         return -1;
-    if (flux_rpc_get_unpack (f, "{s:o}", "alloc", &ids) < 0)
+    if (flux_rpc_get_unpack (f, "{s:o}", "alloc", &jobs) < 0)
         goto error;
-    json_array_foreach (ids, index, id) {
-        flux_jobid_t jobid = json_integer_value (id);
-        if (schedutil_hello_job (h, jobid, cb, arg) < 0)
+    json_array_foreach (jobs, index, entry) {
+        flux_jobid_t id;
+        int priority;
+        uint32_t userid;
+        double t_submit;
+
+        if (json_unpack (entry, "{s:I s:i s:i s:f}",
+                                "id", &id,
+                                "priority", &priority,
+                                "userid", &userid,
+                                "t_submit", &t_submit) < 0) {
+            errno = EPROTO;
+            goto error;
+        }
+        if (schedutil_hello_job (h, id, cb, arg) < 0)
             goto error;
     }
     flux_future_destroy (f);
