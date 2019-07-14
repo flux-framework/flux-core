@@ -122,6 +122,11 @@ struct shell_task *shell_task_create (struct shell_info *info,
                               getenv ("FLUX_URI")) < 0)
             goto error;
     }
+    if (getenv ("FLUX_KVS_NAMESPACE")) {
+        if (flux_cmd_setenvf (task->cmd, 1, "FLUX_KVS_NAMESPACE", "%s",
+                              getenv ("FLUX_KVS_NAMESPACE")) < 0)
+            goto error;
+    }
     return task;
 error:
     shell_task_destroy (task);
