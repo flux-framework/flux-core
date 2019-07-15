@@ -87,11 +87,10 @@ static void local_output (struct subprocess_channel *c,
                           flux_watcher_t *w, int revents,
                           flux_subprocess_output_f output_cb)
 {
-    bool eof_set = false;
-
     if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb;
+        bool eof_set = false;
         if (!c->eof_sent_to_caller) {
+            flux_buffer_t *fb;
 
             if (!(fb = flux_buffer_read_watcher_get_buffer (w))) {
                 flux_log_error (c->p->h, "flux_buffer_read_watcher_get_buffer");
@@ -107,40 +106,23 @@ static void local_output (struct subprocess_channel *c,
 
         output_cb (c->p, c->name);
 
-        if (c->p->state == FLUX_SUBPROCESS_EXITED && !c->eof_sent_to_caller) {
+        if (eof_set) {
+            flux_watcher_stop (w);
 
-            if (!(fb = flux_buffer_read_watcher_get_buffer (w))) {
-                flux_log_error (c->p->h, "flux_buffer_read_watcher_get_buffer");
-                return;
-            }
-
-            if (!flux_buffer_bytes (fb)) {
-
-                output_cb (c->p, c->name);
-
-                c->eof_sent_to_caller = true;
-                eof_set = true;
-                c->p->channels_eof_sent++;
+            /* if the read pipe is ended, then we can go ahead and close
+             * the write side as well.  Note that there is no need to
+             * "flush" the write buffer.  If we've received the EOF on the
+             * read side, no more writes matter.
+             */
+            if (c->flags & CHANNEL_WRITE) {
+                flux_watcher_stop (c->buffer_write_w);
+                c->closed = true;
             }
         }
     }
     else
         flux_log_error (c->p->h, "flux_buffer_read_watcher on %s: 0x%X:",
                         c->name, revents);
-
-    if (eof_set) {
-        flux_watcher_stop (w);
-
-        /* if the read pipe is ended, then we can go ahead and close
-         * the write side as well.  Note that there is no need to
-         * "flush" the write buffer.  If we've received the EOF on the
-         * read side, no more writes matter.
-         */
-        if (c->flags & CHANNEL_WRITE) {
-            flux_watcher_stop (c->buffer_write_w);
-            c->closed = true;
-        }
-    }
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
         subprocess_check_completed (c->p);
