@@ -25,20 +25,19 @@ test_expect_success 'job-exec: load job-exec,sched-simple modules' '
 	flux module load -r 0 sched-simple &&
 	flux module load -r 0 job-exec
 '
-test_expect_success 'job-exec: no configured job shell uses /bin/true' '
-	id=$(flux jobspec srun hostname | flux job submit) &&
-	flux job attach ${id} &&
-	flux dmesg | grep "$id: no configured job shell, using /bin/true"
-'
 test_expect_success 'job-exec: set dummy test job shell' '
 	flux setattr job-exec.job-shell $SHARNESS_TEST_SRCDIR/job-exec/dummy.sh
 '
 test_expect_success 'job-exec: execute dummy job shell across all ranks' '
-	flux srun -N4 "flux kvs put test1.\$BROKER_RANK=\$JOB_SHELL_RANK" &&
-	test $(flux kvs get test1.0) = 0 &&
-	test $(flux kvs get test1.1) = 1 &&
-	test $(flux kvs get test1.2) = 2 &&
-	test $(flux kvs get test1.3) = 3
+	id=$(flux jobspec srun -N4 \
+	    "flux kvs put test1.\$BROKER_RANK=\$JOB_SHELL_RANK" \
+	    | flux job submit) &&
+	flux job wait-event $id clean &&
+	kvsdir=$(flux job id --to=kvs $id).guest &&
+	test $(flux kvs get ${kvsdir}.test1.0) = 0 &&
+	test $(flux kvs get ${kvsdir}.test1.1) = 1 &&
+	test $(flux kvs get ${kvsdir}.test1.2) = 2 &&
+	test $(flux kvs get ${kvsdir}.test1.3) = 3
 '
 test_expect_success 'job-exec: job shell output sent to flux log' '
 	id=$(flux jobspec srun -n 1 "echo Hello from job \$JOBID" \

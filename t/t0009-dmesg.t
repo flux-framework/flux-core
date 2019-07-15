@@ -73,14 +73,15 @@ test_expect_success 'trailing cr/lf are stripped' '
 '
 
 test_expect_success 'embedded blank log messages are ignored' '
-	cat <<-EOT
+	cat >blank.in <<-EOT &&
 	foo
 	bar
 	baz
 
 	nerp
-	EOT | flux logger --appname=embtest &&
-	test $(flux dmesg | grep linesplit1 | wc -l) -eq 4
+	EOT
+	flux logger --appname=embtest <blank.in &&
+	test $(flux dmesg | grep embtest | wc -l) -eq 4
 '
 
 # Try to make flux dmesg get an EPROTO error

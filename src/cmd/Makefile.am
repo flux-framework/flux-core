@@ -88,7 +88,9 @@ builtin-cmds.c : builtin builtin-cmds-list.sh
 #
 noinst_SCRIPTS = \
 	python
-python: Makefile
+python_sanity:
+	test $(PYTHON) != $(abs_builddir)/python
+python: Makefile python_sanity
 	$(AM_V_GEN)printf "#!/bin/sh\nexec $(PYTHON) \"\$$@\"\n" > python \
 	  && chmod 755 python
 clean-local:

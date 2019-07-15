@@ -9,7 +9,7 @@
 #  After reading JOBID on command line, the dummy job shell script
 #  gathers the following variables for the job:
 #
-#  KVSDIR          Main KVS directory for this job
+#  FLUX_KVS_NAMESPACE   Guest KVS namespace for this job
 #  NAMESPACE       Guest KVS directory for this job
 #  BROKER_RANK     Flux broker rank on which shell is executing
 #  JOBSPEC         Jobspec for this job
@@ -45,13 +45,11 @@ declare -r JOBID=$1
 #
 #  Fetch read-only job information and verify all values found:
 #
-declare -r KVSDIR=$(flux job id --to=kvs $JOBID).guest
-declare -r NAMESPACE=${KVSDIR}.guest
 declare -r BROKER_RANK=$(flux getattr rank)
 declare -r JOBSPEC=$(flux job info $JOBID jobspec)
 declare -r R=$(flux job info $JOBID R)
 
-for var in KVSDIR BROKER_RANK JOBSPEC R; do
+for var in FLUX_KVS_NAMESPACE BROKER_RANK JOBSPEC R; do
     [[ -z "${!var}" ]] && die "Unable to determine ${var}!"
 done
 

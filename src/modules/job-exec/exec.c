@@ -27,7 +27,6 @@
 #include "rset.h"
 
 extern char **environ;
-static const char dummy_job_shell[] = "/bin/true";
 static const char *default_cwd = "/tmp";
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
@@ -41,13 +40,11 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
 
 static const char *job_shell_path (struct jobinfo *job)
 {
+    int conf_flags = getenv ("FLUX_CONF_INTREE") ? CONF_FLAG_INTREE : 0;
+    const char *default_job_shell = flux_conf_get ("shell_path", conf_flags);
     const char *path = jobspec_get_job_shell (job->jobspec);
-    if (!path && !(path = flux_attr_get(job->h, "job-exec.job-shell"))) {
-        path = dummy_job_shell;
-        flux_log (job->h, LOG_INFO,
-                  "%ju: no configured job shell, using %s",
-                  (uintmax_t) job->id, path);
-    }
+    if (!path && !(path = flux_attr_get (job->h, "job-exec.job-shell")))
+        path = default_job_shell;
     return path;
 }
 
@@ -128,6 +125,10 @@ static int exec_init (struct jobinfo *job)
     }
     if (!(cmd = flux_cmd_create (0, NULL, environ))) {
         flux_log_error (job->h, "exec_init: flux_cmd_create");
+        goto err;
+    }
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0) {
+        flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
         goto err;
     }
     if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0

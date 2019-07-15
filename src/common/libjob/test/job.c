@@ -17,22 +17,38 @@
 #include "src/common/libtap/tap.h"
 
 struct jobkey_input {
+    bool guest;
+    bool namespace_set;
     flux_jobid_t id;
     const char *key;
     const char *expected;
 };
 
 struct jobkey_input jobkeytab[] = {
-    { 1, NULL,           "job.0000.0000.0000.0001" },
-    { 2, "foo",          "job.0000.0000.0000.0002.foo" },
-    { 3, "a.b.c",        "job.0000.0000.0000.0003.a.b.c" },
-    { 0xdeadbeef, NULL,  "job.0000.0000.dead.beef" },
+    { false, false, 1, NULL,           "job.0000.0000.0000.0001" },
+    { false, false, 2, "foo",          "job.0000.0000.0000.0002.foo" },
+    { false, false, 3, "a.b.c",        "job.0000.0000.0000.0003.a.b.c" },
+    { false, false, 3, "a.b.c.",        "job.0000.0000.0000.0003.a.b.c." },
+    { false, false, 0xdeadbeef, NULL,  "job.0000.0000.dead.beef" },
 
     /* expected failure: overflow */
-    { 4, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", NULL },
+    { false, false, 4, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", NULL },
 
-    { 0, NULL, NULL },
+    /* guest (FLUX_KVS_NAMESPACE unset) */
+    { true, false, 1, NULL,           "job.0000.0000.0000.0001.guest" },
+    { true, false, 2, "foo",          "job.0000.0000.0000.0002.guest.foo" },
+    { true, false, 3, "a.b.c",        "job.0000.0000.0000.0003.guest.a.b.c" },
+    { true, false, 3, "a.b.c.",        "job.0000.0000.0000.0003.guest.a.b.c." },
+
+    /* guest (FLUX_KVS_NAMESPACE set) */
+    { true, true, 1, NULL,           "." },
+    { true, true, 2, "foo",          "foo" },
+    { true, true, 3, "a.b.c",        "a.b.c" },
+    { true, true, 3, "a.b.c.",        "a.b.c." },
+
+    { false, false, 0, NULL, NULL },
 };
+
 bool is_jobkeytab_end (struct jobkey_input *try)
 {
     if (try->id == 0 && !try->key && !try->expected)
@@ -47,7 +63,13 @@ void check_one_jobkey (struct jobkey_input *try)
     bool valid = false;
 
     memset (path, 0, sizeof (path));
-    len = flux_job_kvs_key (path, sizeof (path), try->id, try->key);
+    if (try->namespace_set)
+        setenv ("FLUX_KVS_NAMESPACE", "foo", 1);
+    if (try->guest)
+        len = flux_job_kvs_guest_key (path, sizeof (path), try->id, try->key);
+    else
+        len = flux_job_kvs_key (path, sizeof (path), try->id, try->key);
+    unsetenv ("FLUX_KVS_NAMESPACE");
 
     if (try->expected) {
         if (len >= 0 && len == strlen (try->expected)

@@ -648,6 +648,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     json_t *o;
     const char *name;
     json_t *context;
+    int status;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
@@ -676,16 +677,28 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     }
     else {
         if (!strcmp (name, "finish")) {
-            if (json_unpack (context, "{s:i}", "status", &ctx->exit_code) < 0)
+            if (json_unpack (context, "{s:i}", "status", &status) < 0)
                 log_err_exit ("error decoding finish context");
+            if (WIFSIGNALED (status))
+                ctx->exit_code = WTERMSIG (status) + 128;
+            else if (WIFEXITED (status))
+                ctx->exit_code = WEXITSTATUS (status);
         }
         else if (!strcmp (name, "clean")) {
             if (flux_job_event_watch_cancel (f) < 0)
                 log_err_exit ("flux_job_event_watch_cancel");
         }
     }
-    if (ctx->show_events && strcmp (name, "exception") != 0)
-        fprintf (stderr, "job-event: %s\n", name);
+    if (ctx->show_events && strcmp (name, "exception") != 0) {
+        char *s = NULL;
+        if (context && !(s = json_dumps (context, JSON_COMPACT)))
+            log_err_exit ("error re-encoding context");
+        fprintf (stderr, "job-event: %s%s%s\n",
+                 name,
+                 s ? " " : "",
+                 s ? s : "");
+        free (s);
+    }
     json_decref (o);
     flux_future_reset (f);
     return;

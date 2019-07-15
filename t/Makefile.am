@@ -97,6 +97,9 @@ TESTSCRIPTS = \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
 	t2500-job-attach.t \
+	t2600-job-shell-rcalc.t \
+	t2601-job-shell-standalone.t \
+	t2602-job-shell.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
@@ -143,6 +146,8 @@ EXTRA_DIST= \
 	rc/rc3-kvs \
 	rc/rc3-testenv \
 	rc/rc3-job \
+	shell/input \
+	shell/output \
 	jobspec
 
 dist_check_SCRIPTS = \
@@ -195,7 +200,8 @@ check_PROGRAMS = \
 	rexec/rexec_signal \
 	rexec/rexec_ps \
 	ingest/submitbench \
-	sched-simple/jj-reader
+	sched-simple/jj-reader \
+	shell/rcalc
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -363,6 +369,12 @@ request_req_la_CPPFLAGS = $(test_cppflags)
 request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 request_req_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+shell_rcalc_SOURCES = shell/rcalc.c
+shell_rcalc_CPPFLAGS = $(test_cppflags)
+shell_rcalc_LDADD = \
+        $(top_builddir)/src/shell/libshell.la \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
