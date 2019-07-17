@@ -28,6 +28,8 @@ job_manager_la_SOURCES = job-manager.c \
 			 restart.c \
 			 raise.h \
 			 raise.c \
+			 kill.h \
+			 kill.c \
 			 alloc.h \
 			 alloc.c \
 			 start.h \
