@@ -901,6 +901,37 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
     return subprocess_read (p, stream, 0, lenp, true, true);
 }
 
+int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream)
+{
+    struct subprocess_channel *c;
+    flux_buffer_t *fb;
+
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!stream)
+        stream = "STDOUT";
+
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_READ)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (p->local) {
+        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w))) {
+            errno = ENOSYS;     /* something */
+            return -1;
+        }
+    }
+    else
+        fb = c->read_buffer;
+
+    return flux_buffer_is_readonly (fb);
+}
+
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f = NULL;
