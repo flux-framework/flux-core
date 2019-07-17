@@ -25,10 +25,10 @@
 
 #include "task.h"
 #include "io.h"
+#include "shell.h"
 
 struct shell_io {
-    flux_t *h;
-    struct shell_info *info;
+    flux_shell_t *shell;
 };
 
 void shell_io_destroy (struct shell_io *io)
@@ -40,14 +40,13 @@ void shell_io_destroy (struct shell_io *io)
     }
 }
 
-struct shell_io *shell_io_create (flux_t *h, struct shell_info *info)
+struct shell_io *shell_io_create (flux_shell_t *shell)
 {
     struct shell_io *io;
 
     if (!(io = calloc (1, sizeof (*io))))
         return NULL;
-    io->h = h;
-    io->info = info;
+    io->shell = shell;
 
     return io;
 }

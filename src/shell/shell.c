@@ -274,7 +274,7 @@ int main (int argc, char *argv[])
 
     /* Create handler for stdio.
      */
-    if (!(shell.io = shell_io_create (shell.h, shell.info)))
+    if (!(shell.io = shell_io_create (&shell)))
         log_err_exit ("shell_io_create");
 
     /* Create tasks
