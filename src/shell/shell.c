@@ -32,6 +32,7 @@
 #include "io.h"
 #include "pmi.h"
 #include "task.h"
+#include "kill.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -324,6 +325,13 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     return 0;
 }
 
+static int shell_pre_exec (flux_shell_t *shell)
+{
+    if (kill_event_init (shell) < 0)
+        return -1;
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -371,6 +379,11 @@ int main (int argc, char *argv[])
      */
     if (!(shell.io = shell_io_create (&shell)))
         log_err_exit ("shell_io_create");
+
+    /* Call shell pre-task execution initialization.
+     */
+    if (shell_pre_exec (&shell) < 0)
+        log_err_exit ("shell_prepare");
 
     /* Barrier to ensure initialization has completed across all shells.
      */
