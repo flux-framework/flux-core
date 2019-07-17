@@ -14,13 +14,14 @@
 #include <flux/core.h>
 #include <czmq.h>
 
+#include "shell.h"
 #include "info.h"
 #include "task.h"
 
 struct shell_pmi;
 
 void shell_pmi_destroy (struct shell_pmi *pmi);
-struct shell_pmi *shell_pmi_create (flux_t *h, struct shell_info *info);
+struct shell_pmi *shell_pmi_create (flux_shell_t *shell);
 
 // shell_task_pmi_ready_f callback footprint
 void shell_pmi_task_ready (struct shell_task *task, void *arg);

@@ -24,7 +24,6 @@
 #include <flux/core.h>
 
 #include "task.h"
-#include "info.h"
 #include "io.h"
 
 struct shell_io {

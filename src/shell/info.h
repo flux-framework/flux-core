@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "shell.h"
 #include "jobspec.h"
 #include "rcalc.h"
 
@@ -23,23 +24,16 @@ struct shell_info {
     flux_jobid_t jobid;
     int shell_rank;
     int shell_size;
-    bool verbose;
     struct jobspec *jobspec;
     rcalc_t *rcalc;
     struct rcalc_rankinfo rankinfo;
 };
 
 /* Create shell_info.
- * If jobspec or R are NULL, or broker_rank == -1, then
- * missing info is fetched from the Flux instance.
- * Otherwise h may be NULL.
+ * Check for jobspec, R, and broker rank on cmdline or fetch from
+ *  job-info service
  */
-struct shell_info *shell_info_create (flux_t *h,
-                                      flux_jobid_t jobid,
-                                      int broker_rank,
-                                      const char *jobspec,
-                                      const char *R,
-                                      bool verbose);
+struct shell_info *shell_info_create (flux_shell_t *shell);
 
 void shell_info_destroy (struct shell_info *info);
 
