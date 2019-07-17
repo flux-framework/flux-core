@@ -191,6 +191,18 @@ flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason)
     return flux_job_raise (h, id, "cancel", 0, reason);
 }
 
+flux_future_t *flux_job_kill (flux_t *h, flux_jobid_t id, int signum)
+{
+    if (!h || signum <= 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return flux_rpc_pack (h, "job-manager.kill", FLUX_NODEID_ANY, 0,
+                             "{s:I s:i}",
+                             "id", id,
+                             "signum", signum);
+}
+
 flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
 {
     flux_future_t *f;
