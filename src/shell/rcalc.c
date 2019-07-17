@@ -206,6 +206,8 @@ error:
 
 void rcalc_destroy (rcalc_t *r)
 {
+    if (r == NULL)
+        return;
     json_decref (r->json);
     free (r->ranks);
     free (r->alloc);
