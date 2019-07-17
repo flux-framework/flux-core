@@ -17,6 +17,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/read_all.h"
 
 #include "info.h"
 #include "jobspec.h"
@@ -84,54 +85,107 @@ static flux_future_t *lookup_job_info (flux_t *h,
     return f;
 }
 
-struct shell_info *shell_info_create (flux_t *h,
-                                      flux_jobid_t jobid,
-                                      int broker_rank,
-                                      const char *jobspec,
-                                      const char *R,
-                                      bool verbose)
+/* Read content of file 'optarg' and return it or NULL on failure (log error).
+ * Caller must free returned result.
+ */
+static char *parse_arg_file (const char *optarg)
+{
+    int fd;
+    ssize_t size;
+    void *buf = NULL;
+
+    if (!strcmp (optarg, "-"))
+        fd = STDIN_FILENO;
+    else {
+        if ((fd = open (optarg, O_RDONLY)) < 0) {
+            log_err ("error opening %s", optarg);
+            return NULL;
+        }
+    }
+    if ((size = read_all (fd, &buf)) < 0)
+        log_err ("error reading %s", optarg);
+    if (fd != STDIN_FILENO)
+        (void)close (fd);
+    return buf;
+}
+
+/* If option 'name' exists, read it as a file and exit on failure.
+ * O/w, return NULL.
+ */
+static char *optparse_check_and_loadfile (optparse_t *p, const char *name)
+{
+    char *result = NULL;
+    const char *path = optparse_get_str (p, name, NULL);
+    if (path) {
+        if (!(result = parse_arg_file (path)))
+            exit (1);
+        return result;
+    }
+    return NULL;
+}
+
+/*  Read jobinfo (jobspec, R) from provided values or fetch from
+ *   the job-info service
+ */
+static int shell_init_jobinfo (flux_shell_t *shell,
+                               struct shell_info *info,
+                               const char *jobspec,
+                               const char *R)
+{
+    int rc = -1;
+    flux_future_t *f = NULL;
+    json_error_t error;
+
+    if (!shell->standalone) {
+        /* Fetch missing jobinfo from broker job-info service */
+        if (!shell->h) {
+            log_msg ("Invalid arguments: h==NULL and R or jobspec are unset");
+            return -1;
+        }
+        if (!(f = lookup_job_info (shell->h, shell->jobid, jobspec, R))
+                || lookup_job_info_get (f, &jobspec, &R) < 0)
+            goto out;
+    }
+    if (!(info->jobspec = jobspec_parse (jobspec, &error))) {
+        log_msg ("error parsing jobspec: %s", error.text);
+        goto out;
+    }
+    if (!(info->rcalc = rcalc_create (R))) {
+        log_msg ("error decoding R");
+        goto out;
+    }
+    rc = 0;
+out:
+    flux_future_destroy (f);
+    return rc;
+}
+
+struct shell_info *shell_info_create (flux_shell_t *shell)
 {
     struct shell_info *info;
-    json_error_t error;
-    flux_future_t *f = NULL;
+    char *R = NULL;
+    char *jobspec = NULL;
+    int broker_rank = shell->broker_rank;
 
     if (!(info = calloc (1, sizeof (*info)))) {
         log_err ("shell_info_create");
         return NULL;
     }
-    info->jobid = jobid;
-    info->verbose = verbose;
-    if (broker_rank == -1) {
-        uint32_t rank;
-        if (!h) {
-            log_err ("Invalid arguments: h==NULL and broker_rank is unset");
-            goto error;
-        }
-        if (flux_get_rank (h, &rank) < 0) {
-            log_err ("error fetching broker rank");
-            goto error;
-        }
-        broker_rank = rank;
-    }
-    if (!R || !jobspec) {
-        if (!h) {
-            log_err ("Invalid arguments: h==NULL and R or jobspec are unset");
-            goto error;
-        }
-        if (!(f = lookup_job_info (h, jobid, jobspec, R)))
-            goto error;
-        if (lookup_job_info_get (f, &jobspec, &R) < 0)
-            goto error;
-    }
-    if (!(info->jobspec = jobspec_parse (jobspec, &error))) {
-        log_msg ("error parsing jobspec: %s", error.text);
+    info->jobid = shell->jobid;
+
+    /*  Check for jobspec and/or R on cmdline:
+     */
+    jobspec = optparse_check_and_loadfile (shell->p, "jobspec");
+    R = optparse_check_and_loadfile (shell->p, "resources");
+
+    if (shell_init_jobinfo (shell, info, jobspec, R) < 0)
         goto error;
-    }
-    if (!(info->rcalc = rcalc_create (R))) {
-        log_msg ("error decoding R");
-        goto error;
-    }
-    if (rcalc_distribute (info->rcalc, info->jobspec->task_count) < 0) {
+
+    /* Done with potentially allocated jobspec, R strings */
+    free (jobspec);
+    free (R);
+
+   if (rcalc_distribute (info->rcalc, info->jobspec->task_count) < 0) {
         log_msg ("error distributing %d tasks over R",
                  info->jobspec->task_count);
         goto error;
@@ -142,7 +196,7 @@ struct shell_info *shell_info_create (flux_t *h,
     }
     info->shell_size = rcalc_total_nodes (info->rcalc);
     info->shell_rank = info->rankinfo.nodeid;
-    if (verbose) {
+    if (shell->verbose) {
         if (info->shell_rank == 0)
             log_msg ("0: task_count=%d slot_count=%d "
                      "cores_per_slot=%d slots_per_node=%d",
@@ -162,10 +216,8 @@ struct shell_info *shell_info_create (flux_t *h,
                      info->rankinfo.global_basis,
                      info->rankinfo.cores);
     }
-    flux_future_destroy (f);
     return info;
 error:
-    flux_future_destroy (f);
     shell_info_destroy (info);
     return NULL;
 }

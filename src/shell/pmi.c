@@ -41,7 +41,7 @@
  * the number of shells as "nprocs".  Gets are serviced from the cache,
  * with fall-through to a flux_kvs_lookup().
  *
- * If info->verbose is true (shell --verbose flag was provided), the
+ * If shell->verbose is true (shell --verbose flag was provided), the
  * protocol engine emits client and server telemetry to stderr, and
  * shell_pmi_task_ready() logs read errors, EOF, and finalization to stderr
  * in a compatible format.
@@ -71,15 +71,13 @@
 #include "src/common/libutil/log.h"
 
 #include "task.h"
-#include "info.h"
 #include "pmi.h"
 
 #define FQ_KVS_KEY_MAX (SIMPLE_KVS_KEY_MAX + 128)
 #define KVSNAME "pmi"
 
 struct shell_pmi {
-    flux_t *h;
-    struct shell_info *info;
+    flux_shell_t *shell;
     struct pmi_simple_server *server;
     zhashx_t *kvs;
     int cycle;      // count cycles of put / barrier / get
@@ -133,24 +131,25 @@ static int shell_pmi_kvs_get (void *arg,
                               const char *key)
 {
     struct shell_pmi *pmi = arg;
+    flux_t *h = pmi->shell->h;
     const char *val = NULL;
 
     if ((val = zhashx_lookup (pmi->kvs, key))) {
         pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
         return 0;
     }
-    if (pmi->info->shell_size > 1) {
+    if (pmi->shell->info->shell_size > 1) {
         char nkey[FQ_KVS_KEY_MAX];
         flux_future_t *f = NULL;
 
         if (shell_pmi_kvs_key (nkey,
                                sizeof (nkey),
-                               pmi->info->jobid,
+                               pmi->shell->jobid,
                                key) < 0) {
             log_err ("shell_pmi_kvs_key");
             goto out;
         }
-        if (!(f = flux_kvs_lookup (pmi->h, NULL, 0, nkey))) {
+        if (!(f = flux_kvs_lookup (h, NULL, 0, nkey))) {
             log_err ("flux_kvs_lookup");
             goto out;
         }
@@ -187,16 +186,16 @@ static int shell_pmi_barrier_enter (void *arg)
     const char *key;
     const char *val;
     char name[64];
-    int nprocs = pmi->info->shell_size;
+    int nprocs = pmi->shell->info->shell_size;
     flux_future_t *f;
     char nkey[FQ_KVS_KEY_MAX];
 
-    if (pmi->info->shell_size == 1) { // all local: no further sync needed
+    if (nprocs == 1) { // all local: no further sync needed
         pmi_simple_server_barrier_complete (pmi->server, 0);
         return 0;
     }
     snprintf (name, sizeof (name), "pmi.%ju.%d",
-             (uintmax_t)pmi->info->jobid,
+             (uintmax_t)pmi->shell->jobid,
              pmi->cycle++);
     if (!(txn = flux_kvs_txn_create ())) {
         log_err ("flux_kvs_txn_create");
@@ -207,7 +206,7 @@ static int shell_pmi_barrier_enter (void *arg)
         key = zhashx_cursor (pmi->kvs);
         if (shell_pmi_kvs_key (nkey,
                                sizeof (nkey),
-                               pmi->info->jobid,
+                               pmi->shell->jobid,
                                key) < 0) {
             log_err ("key buffer overflow");
             goto error;
@@ -218,7 +217,7 @@ static int shell_pmi_barrier_enter (void *arg)
         }
         val = zhashx_next (pmi->kvs);
     }
-    if (!(f = flux_kvs_fence (pmi->h, NULL, 0, name, nprocs, txn))) {
+    if (!(f = flux_kvs_fence (pmi->shell->h, NULL, 0, name, nprocs, txn))) {
         log_err ("flux_kvs_fence");
         goto error;
     }
@@ -258,24 +257,24 @@ void shell_pmi_task_ready (struct shell_task *task, void *arg)
 
     len = shell_task_pmi_readline (task, &line);
     if (len < 0) {
-        if (pmi->info->verbose)
+        if (pmi->shell->verbose)
             fprintf (stderr, "%d: C: pmi read error: %s\n",
                      task->rank, flux_strerror (errno));
         return;
     }
     if (len == 0) {
-        if (pmi->info->verbose)
+        if (pmi->shell->verbose)
             fprintf (stderr, "%d: C: pmi EOF\n", task->rank);
         return;
     }
     rc = pmi_simple_server_request (pmi->server, line, task, task->rank);
     if (rc < 0) {
-        if (pmi->info->verbose)
+        if (pmi->shell->verbose)
             fprintf (stderr, "%d: S: pmi request error\n", task->rank);
         return;
     }
     if (rc == 1) {
-        if (pmi->info->verbose)
+        if (pmi->shell->verbose)
             fprintf (stderr, "%d: S: pmi finalized\n", task->rank);
     }
 }
@@ -317,17 +316,17 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .debug_trace    = shell_pmi_debug_trace,
 };
 
-struct shell_pmi *shell_pmi_create (flux_t *h, struct shell_info *info)
+struct shell_pmi *shell_pmi_create (flux_shell_t *shell)
 {
     struct shell_pmi *pmi;
-    int flags = info->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
+    struct shell_info *info = shell->info;
+    int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
-    pmi->h = h;
-    pmi->info = info;
+    pmi->shell = shell;
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
-                                                  info->jobid,
+                                                  shell->jobid,
                                                   info->jobspec->task_count,
                                                   info->rankinfo.ntasks,
                                                   "pmi",
