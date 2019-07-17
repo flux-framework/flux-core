@@ -183,6 +183,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp)))
         log_err_exit ("flux_subprocess_read_line");
 
+#if 0
     /* if process exited, read remaining stuff or EOF, otherwise
      * wait for future newline */
     if (!lenp
@@ -191,6 +192,15 @@ void output_cb (flux_subprocess_t *p, const char *stream)
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp)))
             log_err_exit ("flux_subprocess_read");
     }
+#else
+    if (!lenp) {
+        int ret = flux_subprocess_read_eof_reached (p, stream);
+        if (ret > 0) {
+            if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp)))
+                log_err_exit ("flux_subprocess_read");
+        }
+    }
+#endif
 
     if (lenp) {
         if (optparse_getopt (opts, "labelio", NULL) > 0)

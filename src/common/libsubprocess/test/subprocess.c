@@ -613,6 +613,9 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read returned correct data");
     }
     else {
+        ok (flux_subprocess_read_eof_reached (p, stream) > 0,
+            "flux_subprocess_read_eof_reached saw EOF on %s", stream);
+
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
         ok (ptr != NULL
             && lenp == 0,

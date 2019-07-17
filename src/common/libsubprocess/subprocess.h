@@ -339,6 +339,8 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
                                                const char *stream,
                                                int *lenp);
 
+int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream);
+
 /*
  *  Create RPC to send signal `signo` to subprocess `p`.
  *  This call returns a flux_future_t. Use flux_future_then(3) to register

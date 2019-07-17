@@ -85,6 +85,7 @@ static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
 
         if (!ret) {
             ebr->eof_read = true;
+            (void)flux_buffer_readonly (ebr->fb);
             ev_io_stop (ebr->loop, iow);
         }
         else if (ret == space) {
