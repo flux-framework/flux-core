@@ -83,6 +83,11 @@ int shell_task_io_readline (struct shell_task *task,
                             const char *name,
                             const char **line);
 
+/* Test whether stream 'name' has reached EOF.
+ * Call after shell_task_io_readline() returns 0.
+ */
+bool shell_task_io_at_eof (struct shell_task *task, const char *name);
+
 
 #endif /* !SHELL_TASK_H */
 
