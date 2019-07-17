@@ -89,6 +89,9 @@ int shell_task_io_readline (struct shell_task *task,
 bool shell_task_io_at_eof (struct shell_task *task, const char *name);
 
 
+/* Send signal `signum` to shell task */
+int shell_task_kill (struct shell_task *task, int signum);
+
 #endif /* !SHELL_TASK_H */
 
 /*

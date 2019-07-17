@@ -258,6 +258,22 @@ int shell_task_start (struct shell_task *task,
     return 0;
 }
 
+int shell_task_kill (struct shell_task *task, int signum)
+{
+    int rc;
+    flux_future_t *f;
+    if (!task->proc) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (!(f = flux_subprocess_kill (task->proc, signum)))
+        return -1;
+
+    rc = flux_future_get (f, NULL);
+    flux_future_destroy (f);
+    return rc;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
