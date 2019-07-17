@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
@@ -161,6 +162,78 @@ static void shell_finalize (flux_shell_t *shell)
     flux_close (shell->h);
 
     optparse_destroy (shell->p);
+
+    zhashx_destroy (&shell->completion_refs);
+}
+
+static void item_free (void **item)
+{
+    if (item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+
+static void shell_init (flux_shell_t *shell)
+{
+    memset (shell, 0, sizeof (struct flux_shell));
+    if (!(shell->completion_refs = zhashx_new ()))
+        log_err_exit ("zhashx_new");
+    zhashx_set_destructor (shell->completion_refs, item_free);
+}
+
+int flux_shell_add_completion_ref (flux_shell_t *shell,
+                                   const char *fmt, ...)
+{
+    int rc = -1;
+    int *intp = NULL;
+    char *ref = NULL;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if ((rc = vasprintf (&ref, fmt, ap)) < 0)
+        goto out;
+    if (!(intp = zhashx_lookup (shell->completion_refs, ref))) {
+        if (!(intp = calloc (1, sizeof (*intp))))
+            goto out;
+        if (zhashx_insert (shell->completion_refs, ref, intp) < 0) {
+            free (intp);
+            goto out;
+        }
+    }
+    rc = ++(*intp);
+out:
+    free (ref);
+    va_end (ap);
+    return (rc);
+
+}
+
+int flux_shell_remove_completion_ref (flux_shell_t *shell,
+                                      const char *fmt, ...)
+{
+    int rc = -1;
+    int *intp;
+    va_list ap;
+    char *ref = NULL;
+
+    va_start (ap, fmt);
+    if ((rc = vasprintf (&ref, fmt, ap)) < 0)
+        goto out;
+    if (!(intp = zhashx_lookup (shell->completion_refs, ref))) {
+        errno = ENOENT;
+        goto out;
+    }
+    if (--(*intp) == 0) {
+        zhashx_delete (shell->completion_refs, ref);
+        if (zhashx_size (shell->completion_refs) == 0)
+            flux_reactor_stop (shell->r);
+    }
+    rc = 0;
+out:
+    free (ref);
+    va_end (ap);
+    return (rc);
 }
 
 int main (int argc, char *argv[])
@@ -170,7 +243,7 @@ int main (int argc, char *argv[])
 
     log_init (shell_name);
 
-    memset (&shell, 0, sizeof (struct flux_shell));
+    shell_init (&shell);
 
     shell_parse_cmdline (&shell, argc, argv);
 
