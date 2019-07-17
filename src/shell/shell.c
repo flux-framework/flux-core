@@ -77,6 +77,9 @@ static void task_completion_cb (struct shell_task *task, void *arg)
 
     if (shell->verbose)
         log_msg ("task %d complete status=%d", task->rank, task->rc);
+
+    if (flux_shell_remove_completion_ref (shell, "task%d", task->rank) < 0)
+        log_err ("failed to remove task%d completion reference", task->rank);
 }
 
 static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
@@ -293,10 +296,13 @@ int main (int argc, char *argv[])
         if (zlist_append (shell.tasks, task) < 0)
             log_msg_exit ("zlist_append failed");
 
+        if (flux_shell_add_completion_ref (&shell, "task%d", task->rank) < 0)
+            log_msg_exit ("flux_shell_add_completion_ref");
+
     }
 
     /* Main reactor loop
-     * Exits once final task exits.
+     * Exits when all completion references released
      */
     if (flux_reactor_run (shell.r, 0) < 0)
         log_err ("flux_reactor_run");
