@@ -30,7 +30,9 @@ flux_shell_SOURCES = \
 	pmi.c \
 	pmi.h \
 	io.c \
-	io.h
+	io.h \
+	svc.c \
+	svc.h
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \

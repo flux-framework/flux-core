@@ -29,6 +29,7 @@ struct flux_shell {
     flux_reactor_t *r;
 
     struct shell_info *info;
+    struct shell_svc *svc;
     struct shell_io *io;
     struct shell_pmi *pmi;
     zlist_t *tasks;

@@ -28,6 +28,7 @@
 
 #include "shell.h"
 #include "info.h"
+#include "svc.h"
 #include "io.h"
 #include "pmi.h"
 #include "task.h"
@@ -159,6 +160,7 @@ static void shell_finalize (flux_shell_t *shell)
     }
     shell_io_destroy (shell->io);
     shell_pmi_destroy (shell->pmi);
+    shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
     flux_reactor_destroy (shell->r);
@@ -263,6 +265,11 @@ int main (int argc, char *argv[])
      */
     if (!(shell.info = shell_info_create (&shell)))
         exit (1);
+
+    /* Register service on the leader shell.
+     */
+    if (!(shell.svc = shell_svc_create (&shell)))
+        log_err_exit ("shell_svc_create");
 
     /* Create PMI engine
      * Uses 'h' for KVS access only if info->shell_size > 1.
