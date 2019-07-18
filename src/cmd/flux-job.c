@@ -98,6 +98,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "show-events", .key = 'E', .has_arg = 0,
       .usage = "Show job events on stderr",
     },
+    { .name = "label", .key = 'l', .has_arg = 0,
+      .usage = "Label output by rank",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -708,6 +711,46 @@ done:
     flux_watcher_stop (ctx->sigtstp_w);
 }
 
+void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
+{
+    char key[128];
+    flux_future_t *f;
+    json_t *output = NULL;
+    size_t index;
+    json_t *entry;
+    int rank;
+    const char *name;
+    int len;
+    const char *data;
+
+    if (flux_job_kvs_guest_key (key, sizeof (key), id, "output") < 0)
+        log_err_exit ("flux_job_kvs_guest_key");
+    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get_unpack (f, "o", &output) < 0) {
+        if (errno != ENOENT || !missing_ok)
+            log_err_exit ("%s", key);
+    }
+
+    json_array_foreach (output, index, entry) {
+        if (json_unpack (entry,
+                         "{s:i s:s s:i s:s}",
+                         "rank", &rank,
+                         "name", &name,
+                         "len", &len,
+                         "data", &data) < 0)
+            log_msg_exit ("malfomed JSON entry");
+        if (len > 0) {
+            FILE *fp = !strcmp (name, "STDOUT") ? stdout : stderr;
+            if (optparse_hasopt (p, "label"))
+                fprintf (fp, "%d: ", rank);
+            fwrite (data, len, 1, fp);
+        }
+    }
+
+    flux_future_destroy (f);
+}
+
 int cmd_attach (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -748,6 +791,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
+
+    print_output (ctx.h, ctx.id, p, ctx.exit_code == 0 ? false : true);
 
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
