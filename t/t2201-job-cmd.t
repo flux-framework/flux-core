@@ -248,4 +248,58 @@ test_expect_success 'flux-job: attach fails on invalid jobid' '
 	test_must_fail flux job attach $((${validjob}+1))
 '
 
+test_expect_success 'flux-job: kill fails without jobid argument' '
+	test_must_fail flux job kill
+'
+
+test_expect_success 'flux-job: kill fails on invalid jobid' '
+	test_expect_code 1 flux job kill $((${validjob}+1))
+'
+
+test_expect_success 'flux-job: kill fails on non-running job' '
+	test_expect_code 1 flux job kill ${validjob} 2>kill.err &&
+	cat <<-EOF >kill.expected &&
+	flux-job: kill ${validjob}: job is not running
+	EOF
+	test_cmp kill.expected kill.err
+'
+
+test_expect_success 'flux-job: kill fails with invalid signal name' '
+	test_expect_code 1 flux job kill -s SIGFAKE ${validjob} 2>kill.err2 &&
+	cat <<-EOF >kill.expected2 &&
+	flux-job: kill: Invalid signal SIGFAKE
+	EOF
+	test_cmp kill.expected2 kill.err2
+'
+
+test_expect_success 'flux-job: kill fails with invalid signal number' '
+	test_expect_code 1 flux job kill -s 0 ${validjob} 2>kill.err2 &&
+	cat <<-EOF >kill.expected2 &&
+	flux-job: kill: Invalid signal 0
+	EOF
+	test_cmp kill.expected2 kill.err2
+'
+
+test_expect_success 'flux-job: kill fails with invalid signal number' '
+	test_expect_code 1 flux job kill -s 144 ${validjob} 2>kill.err2 &&
+	cat <<-EOF >kill.expected2 &&
+	flux-job: kill ${validjob}: Invalid signal number
+	EOF
+	test_cmp kill.expected2 kill.err2
+'
+
+runas() {
+	userid=$1 && shift
+	FLUX_HANDLE_USERID=$userid FLUX_HANDLE_ROLEMASK=0x2 "$@"
+}
+
+test_expect_success 'flux-job: kill fails for wrong userid' '
+        test_expect_code 1 \
+		runas 9999 flux job kill ${validjob} 2> kill.guest.err&&
+	cat <<-EOF >kill.guest.expected &&
+	flux-job: kill ${validjob}: guests may only send signals to their own jobs
+	EOF
+	test_cmp kill.guest.expected kill.guest.err
+'
+
 test_done
