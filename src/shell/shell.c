@@ -241,6 +241,31 @@ out:
     return (rc);
 }
 
+static int shell_barrier (flux_shell_t *shell, const char *name)
+{
+    flux_future_t *f;
+    char fqname[128];
+
+    if (shell->standalone || shell->info->shell_size == 1)
+        return 0; // NO-OP
+    if (snprintf (fqname,
+                  sizeof (fqname),
+                  "shell-%ju-%s",
+                  (uintmax_t)shell->info->jobid,
+                   name) >= sizeof (fqname)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f = flux_barrier (shell->h, fqname, shell->info->shell_size)))
+        return -1;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -283,6 +308,11 @@ int main (int argc, char *argv[])
      */
     if (!(shell.io = shell_io_create (&shell)))
         log_err_exit ("shell_io_create");
+
+    /* Barrier to ensure initialization has completed across all shells.
+     */
+    if (shell_barrier (&shell, "init") < 0)
+        log_err_exit ("shell_barrier");
 
     /* Create tasks
      */
