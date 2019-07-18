@@ -124,8 +124,8 @@ static char *optparse_check_and_loadfile (optparse_t *p, const char *name)
     return NULL;
 }
 
-/*  Read jobinfo (jobspec, R) from provided values or fetch from
- *   the job-info service
+/*  Fetch jobinfo (jobspec, R) from job-info service if not provided on
+ *   command line, and parse.
  */
 static int shell_init_jobinfo (flux_shell_t *shell,
                                struct shell_info *info,
@@ -136,10 +136,10 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     flux_future_t *f = NULL;
     json_error_t error;
 
-    if (!shell->standalone) {
+    if (!R || !jobspec) {
         /* Fetch missing jobinfo from broker job-info service */
-        if (!shell->h) {
-            log_msg ("Invalid arguments: h==NULL and R or jobspec are unset");
+        if (shell->standalone) {
+            log_msg ("Invalid arguments: standalone and R/jobspec are unset");
             return -1;
         }
         if (!(f = lookup_job_info (shell->h, shell->jobid, jobspec, R))
