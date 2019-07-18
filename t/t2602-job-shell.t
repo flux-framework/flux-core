@@ -107,6 +107,62 @@ test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
 	sort -snk1 <lptest4_raw.err >lptest4.err &&
 	test_cmp lptest4.exp lptest4.err
 '
+test_expect_success 'job-shell: test shell kill event handling' '
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	flux job wait-event $id start &&
+	flux job kill $id &&
+	flux job wait-event $id finish >kill1.finish.out &&
+	grep status=$((15+128<<8)) kill1.finish.out
+'
+test_expect_success 'job-shell: test shell kill event handling: SIGKILL' '
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	flux job wait-event $id start &&
+	flux job kill -s SIGKILL $id &&
+	flux job wait-event $id finish >kill2.finish.out &&
+	grep status=$((9+128<<8)) kill2.finish.out
+'
+test_expect_success 'job-shell: test shell kill event handling: numeric signal' '
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	flux job wait-event $id start &&
+	flux job kill -s 2 $id &&
+	flux job wait-event $id finish >kill3.finish.out &&
+	grep status=$((2+128<<8)) kill3.finish.out
+'
+grep_dmesg() {
+	i=0
+	flux dmesg | grep "$1"
+	while [ $? -ne 0 ] && [ $i -lt 25 ]
+	do
+	    sleep 0.1
+	    i=$((i+1))
+	    flux dmesg | grep "$1"
+	done
+        if [ "$i" -eq "25" ]
+	then
+	    return 1
+	fi
+        return 0
+}
+test_expect_success 'job-shell: mangled shell kill event logged' '
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	flux job wait-event $id start &&
+	flux event pub shell-${id}.kill "{}" &&
+	flux job kill ${id} &&
+	flux job wait-event -vt 1 $id finish >kill4.finish.out &&
+	test_debug "cat kill4.finish.out" &&
+	grep_dmesg "kill: ignoring malformed event" &&
+	grep status=$((15+128<<8)) kill4.finish.out
+'
+test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	flux job wait-event $id start &&
+	flux event pub shell-${id}.kill "{\"signum\":199}" &&
+	flux job kill ${id} &&
+	flux job wait-event $id finish >kill5.finish.out &&
+	test_debug "cat kill5.finish.out" &&
+	grep_dmesg "signal 199: Invalid argument" &&
+	grep status=$((15+128<<8)) kill5.finish.out
+'
 test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
         flux module remove -r 0 job-exec &&
         flux module remove -r 0 sched-simple &&
