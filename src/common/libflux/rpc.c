@@ -369,11 +369,11 @@ done:
     return f;
 }
 
-static flux_future_t *flux_rpc_vpack (flux_t *h,
-                                      const char *topic,
-                                      uint32_t nodeid,
-                                      int flags,
-                                      const char *fmt, va_list ap)
+flux_future_t *flux_rpc_vpack (flux_t *h,
+                               const char *topic,
+                               uint32_t nodeid,
+                               int flags,
+                               const char *fmt, va_list ap)
 {
     flux_msg_t *msg;
     flux_future_t *f = NULL;
