@@ -66,13 +66,13 @@ test_expect_success 'job-shell: /bin/false exit code propagated' '
 '
 test_expect_success 'job-shell: PMI works' '
         id=$(flux jobspec srun -N4 ${PMI_INFO} | flux job submit) &&
-	flux job wait-event $id finish >pmi_info.out 2>pmi_info.err &&
-	flux dmesg | grep kvsname= | grep size=4 >pmi_info.dmesg
+	flux job attach $id >pmi_info.out 2>pmi_info.err &&
+	grep size=4 pmi_info.out
 '
 test_expect_success 'job-shell: PMI KVS works' '
         id=$(flux jobspec srun -N4 ${KVSTEST} | flux job submit) &&
-	flux job wait-event $id finish >kvstest.out 2>kvstest.err &&
-	flux dmesg | grep "t phase" >kvstest.dmesg
+	flux job attach $id >kvstest.out 2>kvstest.err &&
+	grep "t phase" kvstest.out
 '
 test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
         flux module remove -r 0 job-exec &&
