@@ -2,20 +2,12 @@
 
 NJOBS=${NJOBS:-10}
 
-flux jobspec srun -n 1 /bin/true > job.json
+flux jobspec srun /bin/true > job.json
 for i in `seq 1 $NJOBS`; do
-     id=$(flux job submit < job.json)
-     echo id=$id
+    id[$i]=$(flux job submit < job.json)
+    echo ${id[$i]} submitted
 done
-
-#  Test job cancelation
-set -x
-id=$(flux jobspec srun -t 1 -n 1 /bin/true | flux job submit)
-flux job wait-event ${id} start
-flux job cancel ${id}
-flux job wait-event ${id} clean
-
-# Test info fetch
-flux job info ${id} eventlog jobspec R
-
-flux job drain
+for i in `seq 1 $NJOBS`; do
+    flux job attach ${id[$i]}
+    echo ${id[$i]} complete
+done

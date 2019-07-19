@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -x
+
+#  Test job cancel
+id=$(flux jobspec srun sleep 60 | flux job submit)
+flux job wait-event ${id} start
+flux job cancel ${id}
+flux job wait-event ${id} clean
