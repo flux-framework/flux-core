@@ -245,6 +245,10 @@ static void remote_out_prep_cb (flux_reactor_t *r,
 {
     struct subprocess_channel *c = arg;
 
+    /* We won't handle line buffering as a special case.  Since line
+     * buffering is enabled on the server side, we can safely assume
+     * we only get data when a line is available */
+
     /* no need to handle failure states, on fatal error, these
      * reactors are closed */
     if (flux_buffer_bytes (c->read_buffer) > 0

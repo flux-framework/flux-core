@@ -247,6 +247,19 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *   - STDOUT_BUFSIZE - set buffer size on stdout
  *   - STDERR_BUFSIZE - set buffer size on stderr
  *
+ *  "LINE_BUFFER" option
+ *
+ *    By default, output callbacks such as 'on_stdout' and 'on_stderr'
+ *    are called when a line of data is available (with the exception
+ *    with data after a subprocess has exited).  By setting this
+ *    option to "false", output callbacks will be called whenever any
+ *    amount of data is available.  These options can also be set to
+ *    "true" to keep default behavior of line buffering.
+ *
+ *    - name + "_LINE_BUFFER" - configuring line buffering on channel name
+ *    - STDOUT_LINE_BUFFER - configure line buffering for stdout
+ *    - STDERR_LINE_BUFFER - configure line buffering for stderr
+ *
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);

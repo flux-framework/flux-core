@@ -206,11 +206,18 @@ static int channel_local_setup (flux_subprocess_t *p,
     }
 
     if ((channel_flags & CHANNEL_READ) && out_cb) {
+        int wflag;
+
+        if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
+            flux_log_error (p->h, "cmd_option_line_buffer");
+            goto error;
+        }
+
         c->buffer_read_w = flux_buffer_read_watcher_create (p->reactor,
                                                             c->parent_fd,
                                                             buffer_size,
                                                             out_cb,
-                                                            0,
+                                                            wflag,
                                                             c);
         if (!c->buffer_read_w) {
             flux_log_error (p->h, "flux_buffer_read_watcher_create");
