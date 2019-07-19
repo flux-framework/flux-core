@@ -154,14 +154,14 @@ static int channel_local_setup (flux_subprocess_t *p,
                                 flux_watcher_f in_cb,
                                 flux_watcher_f out_cb,
                                 const char *name,
-                                int channel_flags,
-                                int buffer_size)
+                                int channel_flags)
 {
     struct subprocess_channel *c = NULL;
     int fds[2] = { -1, -1 };
     char *e = NULL;
     int save_errno;
     int fd_flags;
+    int buffer_size;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
         flux_log_error (p->h, "calloc");
@@ -184,6 +184,11 @@ static int channel_local_setup (flux_subprocess_t *p,
 
     if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
         flux_log_error (p->h, "fd_set_nonblocking");
+        goto error;
+    }
+
+    if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
+        flux_log_error (p->h, "cmd_option_bufsize");
         goto error;
     }
 
@@ -260,8 +265,6 @@ error:
 
 static int local_setup_stdio (flux_subprocess_t *p)
 {
-    int buffer_size;
-
     if (p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)
         return 0;
 
@@ -269,43 +272,31 @@ static int local_setup_stdio (flux_subprocess_t *p)
      * and/or write, and the buffer's automatically get a NUL char
      * appended on reads */
 
-    if ((buffer_size = cmd_option_bufsize (p, "STDIN")) < 0)
-        return -1;
-
     if (channel_local_setup (p,
                              NULL,
                              local_in_cb,
                              NULL,
                              "STDIN",
-                             CHANNEL_WRITE,
-                             buffer_size) < 0)
+                             CHANNEL_WRITE) < 0)
         return -1;
 
     if (p->ops.on_stdout) {
-        if ((buffer_size = cmd_option_bufsize (p, "STDOUT")) < 0)
-            return -1;
-
         if (channel_local_setup (p,
                                  p->ops.on_stdout,
                                  NULL,
                                  local_stdout_cb,
                                  "STDOUT",
-                                 CHANNEL_READ,
-                                 buffer_size) < 0)
+                                 CHANNEL_READ) < 0)
             return -1;
     }
 
     if (p->ops.on_stderr) {
-        if ((buffer_size = cmd_option_bufsize (p, "STDERR")) < 0)
-            return -1;
-
         if (channel_local_setup (p,
                                  p->ops.on_stderr,
                                  NULL,
                                  local_stderr_cb,
                                  "STDERR",
-                                 CHANNEL_READ,
-                                 buffer_size) < 0)
+                                 CHANNEL_READ) < 0)
             return -1;
     }
 
@@ -332,18 +323,12 @@ static int local_setup_channels (flux_subprocess_t *p)
 
     name = zlist_first (channels);
     while (name) {
-        int buffer_size;
-
-        if ((buffer_size = cmd_option_bufsize (p, name)) < 0)
-            return -1;
-
         if (channel_local_setup (p,
                                  p->ops.on_channel_out,
                                  local_in_cb,
                                  p->ops.on_channel_out ? local_out_cb : NULL,
                                  name,
-                                 channel_flags,
-                                 buffer_size) < 0)
+                                 channel_flags) < 0)
             return -1;
         name = zlist_next (channels);
     }
