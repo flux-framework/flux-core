@@ -21,7 +21,6 @@
 
 #include <flux/core.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 
 #include "subprocess.h"
@@ -50,10 +49,8 @@ int cmd_option_bufsize (flux_subprocess_t *p, const char *name)
     const char *val;
     int rv = -1;
 
-    if (asprintf (&var, "%s_BUFSIZE", name) < 0) {
-        log_err ("asprintf");
+    if (asprintf (&var, "%s_BUFSIZE", name) < 0)
         goto cleanup;
-    }
 
     if ((val = flux_cmd_getopt (p->cmd, var))) {
         char *endptr;
