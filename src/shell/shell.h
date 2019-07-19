@@ -64,6 +64,10 @@ int flux_shell_add_completion_ref (flux_shell_t *shell,
 int flux_shell_remove_completion_ref (flux_shell_t *shell,
                                       const char *fmt, ...);
 
+/*  Send signal `sig` to all currently running tasks in shell.
+ */
+void flux_shell_killall (flux_shell_t *shell, int sig);
+
 #endif /* !_SHELL_H */
 
 /*

@@ -187,6 +187,17 @@ static void shell_init (flux_shell_t *shell)
     zhashx_set_destructor (shell->completion_refs, item_free);
 }
 
+void flux_shell_killall (flux_shell_t *shell, int signum)
+{
+    struct shell_task *task;
+    task = zlist_first (shell->tasks);
+    while (task) {
+        if (shell_task_kill (task, signum) < 0)
+            log_err ("kill task %d: signal %d", task->rank, signum);
+        task = zlist_next (shell->tasks);
+    }
+}
+
 int flux_shell_add_completion_ref (flux_shell_t *shell,
                                    const char *fmt, ...)
 {
