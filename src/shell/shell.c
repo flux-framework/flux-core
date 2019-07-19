@@ -33,6 +33,7 @@
 #include "pmi.h"
 #include "task.h"
 #include "kill.h"
+#include "signals.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -328,6 +329,8 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 static int shell_pre_exec (flux_shell_t *shell)
 {
     if (kill_event_init (shell) < 0)
+        return -1;
+    if (signals_init (shell) < 0)
         return -1;
     return 0;
 }
