@@ -230,20 +230,23 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
 
 /*
  *  Set generic string options for command object `cmd`. As with environment
- *   variables, this function adds the option `var` to with value `val` to
+ *   variables, this function adds the option `var` with value `val` to
  *   the options array for this command. This can be used to enable optional
  *   behavior for executed processes (e.g. setpgrp(2))
  *
  *  String options, note that name indicates the 'name' argument used
  *  in flux_cmd_add_channel() above.
  *
- *  name + "_BUFSIZE" = buffer size
- *  STDIN_BUFSIZE = buffer size
- *  STDOUT_BUFSIZE = buffer size
- *  STDERR_BUFSIZE = buffer size
+ *  "BUFSIZE" option
  *
- *  By default, stdio and channels use an internal buffer of 1 meg.
- *  The buffer size can be adjusted with this option.
+ *   By default, stdio and channels use an internal buffer of 1 meg.
+ *   The buffer size can be adjusted with this option.
+ *
+ *   - name + "_BUFSIZE" - set buffer size on channel name
+ *   - STDIN_BUFSIZE - set buffer size on stdin
+ *   - STDOUT_BUFSIZE - set buffer size on stdout
+ *   - STDERR_BUFSIZE - set buffer size on stderr
+ *
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
@@ -308,10 +311,10 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  *   "STDOUT".
  *
  *   Returns pointer to buffer on success and NULL on error with errno
- *   set.  If reading from "STDOUT" or "STDERR", buffer is guaranteed
- *   to be NUL terminated.  User shall not free returned pointer.
- *   Length of buffer returned can optionally returned in 'lenp'.  A
- *   length of 0 indicates that the subprocess has closed this stream.
+ *   set.  Buffer is guaranteed to be NUL terminated.  User shall not
+ *   free returned pointer.  Length of buffer returned can optionally
+ *   returned in 'lenp'.  A length of 0 indicates that the subprocess
+ *   has closed this stream.
  */
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
@@ -324,9 +327,9 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
  *   "STDOUT".
  *
  *   Returns pointer to buffer on success and NULL on error with errno
- *   set.  If reading from "STDOUT" or "STDERR", buffer is guaranteed
- *   to be NUL terminated.  User shall not free returned pointer.
- *   Length of buffer returned can optionally returned in 'lenp'.
+ *   set.  Buffer will include newline character and is guaranteed to
+ *   be NUL terminated.  User shall not free returned pointer.  Length
+ *   of buffer returned can optionally returned in 'lenp'.
  */
 const char *flux_subprocess_read_line (flux_subprocess_t *p,
                                        const char *stream,
