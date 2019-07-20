@@ -280,7 +280,8 @@ static int testexec_kill (struct jobinfo *job, int signum)
      *  sent to all ranks would terminate processes that would exit and
      *  report wait status through normal channels.
      */
-    jobinfo_tasks_complete (job, te->ranks, signum);
+    if (job->running)
+        jobinfo_tasks_complete (job, te->ranks, signum);
     return 0;
 }
 
