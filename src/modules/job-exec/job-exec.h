@@ -69,6 +69,9 @@ struct jobinfo {
 
     int                   wait_status;
 
+    double                kill_timeout; /* grace time between sigterm,kill */
+    flux_watcher_t       *kill_timer;
+
     /* Exec implementation for this job */
     struct exec_implementation *impl;
     void *                      data;
