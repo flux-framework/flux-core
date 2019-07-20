@@ -59,7 +59,32 @@ test_expect_success 'job-exec: job exception kills job shells' '
 	flux job wait-event -vt 1 $id start &&
 	flux job cancel $id &&
 	flux job wait-event -vt 1 $id clean &&
-	flux job eventlog $id | grep status=9
+	flux job eventlog $id | grep status=15
+'
+test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
+	flux setattr job-exec.kill_timeout 0.2 &&
+	cat <<-EOF >trap-sigterm.sh &&
+	#!/bin/sh
+	trap "echo trap-sigterm got SIGTERM" 15
+	flux kvs put trap-ready=1
+	sleep 60 &
+	pid=\$!
+	wait \$pid
+	sleep 60
+	EOF
+	chmod +x trap-sigterm.sh &&
+	id=$(TRAP=15 flux jobspec srun -N4 ./trap-sigterm.sh \
+	        | flux job submit) &&
+	flux job wait-event -vt 1 $id start &&
+	flux kvs get --waitcreate \
+		--namespace=$(flux job id --to=hex $id) \
+		trap-ready &&
+	flux job cancel $id &&
+	sleep 0.2 &&
+	flux dmesg | grep $id &&
+	flux job wait-event -vt 2 $id clean &&
+	flux dmesg | grep "trap-sigterm got SIGTERM" &&
+	flux setattr --expunge job-exec.kill_timeout
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '
 	id=$(flux jobspec srun -N1 /bin/true \
