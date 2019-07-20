@@ -141,6 +141,53 @@ static void shell_connect_flux (flux_shell_t *shell)
     }
 }
 
+
+int flux_shell_add_event_handler (flux_shell_t *shell,
+                                  const char *subtopic,
+                                  flux_msg_handler_f cb,
+                                  void *arg)
+{
+    struct flux_match match = FLUX_MATCH_EVENT;
+    char *topic;
+    flux_msg_handler_t *mh = NULL;
+
+    if (!shell->h) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (asprintf (&topic,
+                  "shell-%ju.%s",
+                  (uintmax_t) shell->jobid,
+                  subtopic) < 0) {
+        log_err ("add_event: asprintf");
+        return -1;
+    }
+    match.topic_glob = topic;
+    if (!(mh = flux_msg_handler_create (shell->h, match, cb, arg))) {
+        log_err ("add_event: flux_msg_handler_create");
+        free (topic);
+        return -1;
+    }
+    free (topic);
+
+    /*  Destroy msg handler on flux_close (h) */
+    flux_aux_set (shell->h, NULL, mh, (flux_free_f) flux_msg_handler_destroy);
+    flux_msg_handler_start (mh);
+    return 0;
+}
+
+static void shell_events_subscribe (flux_shell_t *shell)
+{
+    if (shell->h) {
+        char *topic;
+        if (asprintf (&topic, "shell-%ju.", (uintmax_t) shell->jobid) < 0)
+            log_err_exit ("shell subscribe: asprintf");
+        if (flux_event_subscribe (shell->h, topic) < 0)
+            log_err_exit ("shell subscribe: flux_event_subscribe");
+        free (topic);
+    }
+}
+
 static void shell_finalize (flux_shell_t *shell)
 {
     /* Process completed tasks:
@@ -296,6 +343,10 @@ int main (int argc, char *argv[])
     /* Connect to broker, or if standalone, open loopback connector.
      */
     shell_connect_flux (&shell);
+
+    /* Subscribe to shell-<id>.* events. (no-op on loopback connector)
+     */
+    shell_events_subscribe (&shell);
 
     /* Populate 'struct shell_info' for general use by shell components.
      * Fetches missing info from shell handle if set.

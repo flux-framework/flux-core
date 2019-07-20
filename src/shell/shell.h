@@ -68,6 +68,15 @@ int flux_shell_remove_completion_ref (flux_shell_t *shell,
  */
 void flux_shell_killall (flux_shell_t *shell, int sig);
 
+
+/*  Add an event handler for shell event `subtopic`. Message handler
+ *  will be auto-destroyed on flux handle destruction at shell shutdown.
+ */
+int flux_shell_add_event_handler (flux_shell_t *shell,
+                                  const char *subtopic,
+                                  flux_msg_handler_f cb,
+                                  void *arg);
+
 #endif /* !_SHELL_H */
 
 /*
