@@ -202,7 +202,8 @@ check_PROGRAMS = \
 	rexec/rexec_ps \
 	ingest/submitbench \
 	sched-simple/jj-reader \
-	shell/rcalc
+	shell/rcalc \
+	shell/lptest
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -375,6 +376,11 @@ shell_rcalc_SOURCES = shell/rcalc.c
 shell_rcalc_CPPFLAGS = $(test_cppflags)
 shell_rcalc_LDADD = \
         $(top_builddir)/src/shell/libshell.la \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+shell_lptest_SOURCES = shell/lptest.c
+shell_lptest_CPPFLAGS = $(test_cppflags)
+shell_lptest_LDADD = \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
