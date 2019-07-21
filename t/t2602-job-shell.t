@@ -10,6 +10,7 @@ flux setattr log-stderr-level 1
 
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
+LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 
@@ -73,6 +74,38 @@ test_expect_success 'job-shell: PMI KVS works' '
         id=$(flux jobspec srun -N4 ${KVSTEST} | flux job submit) &&
 	flux job attach $id >kvstest.out 2>kvstest.err &&
 	grep "t phase" kvstest.out
+'
+
+test_expect_success 'job-shell: create expected I/O output' '
+	${LPTEST} | sed -e "s/^/0: /" >lptest.exp &&
+	(for i in $(seq 0 3); do \
+		${LPTEST} | sed -e "s/^/$i: /"; \
+	done) >lptest4.exp
+'
+test_expect_success 'job-shell: verify output of 1-task lptest job' '
+        id=$(flux jobspec srun -n1 ${LPTEST} | flux job submit) &&
+	flux job wait-event $id finish &&
+	flux job attach -l $id >lptest.out &&
+	test_cmp lptest.exp lptest.out
+'
+test_expect_success 'job-shell: verify output of 1-task lptest job on stderr' '
+        id=$(flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
+		| flux job submit) &&
+	flux job attach -l $id 2>lptest.err &&
+	test_cmp lptest.exp lptest.err
+'
+test_expect_success 'job-shell: verify output of 4-task lptest job' '
+        id=$(flux jobspec srun -N4 ${LPTEST} | flux job submit) &&
+	flux job attach -l $id >lptest4_raw.out &&
+	sort -snk1 <lptest4_raw.out >lptest4.out &&
+	test_cmp lptest4.exp lptest4.out
+'
+test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
+        id=$(flux jobspec srun -N4 bash -c "${LPTEST} 1>&2" \
+		| flux job submit) &&
+	flux job attach -l $id 2>lptest4_raw.err &&
+	sort -snk1 <lptest4_raw.err >lptest4.err &&
+	test_cmp lptest4.exp lptest4.err
 '
 test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
         flux module remove -r 0 job-exec &&
