@@ -38,6 +38,7 @@ TESTS = \
 check_PROGRAMS = \
 	$(TESTS) \
 	test_echo \
+	test_multi_echo \
 	test_fork_sleep
 
 TEST_EXTENSIONS = .t
@@ -65,5 +66,7 @@ test_subprocess_t_CPPFLAGS = \
 test_subprocess_t_LDADD = $(test_ldadd)
 
 test_echo_SOURCES = test/test_echo.c
+
+test_multi_echo_SOURCES = test/test_multi_echo.c
 
 test_fork_sleep_SOURCES = test/test_fork_sleep.c

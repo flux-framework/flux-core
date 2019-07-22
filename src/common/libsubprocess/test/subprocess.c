@@ -1719,6 +1719,182 @@ void test_bufsize_error (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+/* Line buffering tests are technically racy.  If the stdout in the
+ * test_multi_echo command occurs fast enough, a single on_stdout
+ * callback could occur.  But hopefully by repeating the word "hi" a
+ * lot of times, the probability of that occuring is zero if line
+ * buffering is not working.
+ *
+ * I pick 2200 to make sure we output enough to surpass 4096 bytes of
+ * output (i.e. 2200 * 2 bytes > 4096 bytes).
+*/
+
+void line_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *ptr;
+    int lenp = 0;
+    int *counter;
+
+    if (!strcasecmp (stream, "STDOUT"))
+        counter = &stdout_output_cb_count;
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    if ((*counter) == 0) {
+        ptr = flux_subprocess_read_line (p, stream, &lenp);
+        ok (ptr != NULL && lenp == 4401,
+            "flux_subprocess_read_line read line correctly");
+    }
+    else {
+        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ok (ptr != NULL && lenp == 0,
+            "flux_subprocess_read on %s read EOF", stream);
+    }
+
+    (*counter)++;
+}
+
+void test_line_buffer_default (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-c", "2200", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = line_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* == 2 times means we got a single line and EOF */
+    ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_line_buffer_enable (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-c", "2200", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "true") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = line_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* == 2 times means we got a single line and EOF */
+    ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void count_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    int *counter;
+
+    if (!strcasecmp (stream, "STDOUT"))
+        counter = &stdout_output_cb_count;
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    (void)flux_subprocess_read_line (p, stream, NULL);
+    (*counter)++;
+}
+
+void test_line_buffer_disable (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-c", "2200", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = count_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* we care about greater than two, that it's not a single line and EOF */
+    ok (stdout_output_cb_count > 2, "stdout output callback got more than 2 calls: %d", stdout_output_cb_count);
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_line_buffer_error (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/true", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "ABCD") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_channel_out = flux_standard_output,
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
+    };
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p == NULL
+        && errno == EINVAL,
+        "flux_local_exec fails with EINVAL due to bad line_buffer input");
+
+    flux_cmd_destroy (cmd);
+}
+
 void shmem_hook_cb (flux_subprocess_t *p, void *arg)
 {
     int *shmem_count = arg;
@@ -1877,6 +2053,14 @@ int main (int argc, char *argv[])
     test_bufsize (r);
     diag ("bufsize_error");
     test_bufsize_error (r);
+    diag ("line_buffer_default");
+    test_line_buffer_default (r);
+    diag ("line_buffer_enable");
+    test_line_buffer_enable (r);
+    diag ("line_buffer_disable");
+    test_line_buffer_disable (r);
+    diag ("line_buffer_error");
+    test_line_buffer_error (r);
     diag ("pre_exec_hook");
     test_pre_exec_hook (r);
     diag ("post_fork_hook");
