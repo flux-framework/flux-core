@@ -62,10 +62,6 @@ void shell_task_destroy (struct shell_task *task)
 {
     if (task) {
         int saved_errno = errno;
-        if (task->io_cb) {
-            task->io_cb (task, "STDOUT", task->io_cb_arg);
-            task->io_cb (task, "STDERR", task->io_cb_arg);
-        }
         flux_cmd_destroy (task->cmd);
         flux_subprocess_destroy (task->proc);
         free (task);
@@ -155,13 +151,18 @@ int shell_task_io_readline (struct shell_task *task,
     if (!(buf = flux_subprocess_read_line (task->proc, name, &len)))
         return -1;
     if (len == 0) {
-        if (flux_subprocess_state (task->proc) == FLUX_SUBPROCESS_EXITED) {
+        if (flux_subprocess_read_eof_reached (task->proc, name)) {
             if (!(buf = flux_subprocess_read (task->proc, name, -1, &len)))
                 return -1;
         }
     }
     *line = buf;
     return len;
+}
+
+bool shell_task_io_at_eof (struct shell_task *task, const char *name)
+{
+    return flux_subprocess_read_eof_reached (task->proc, name);
 }
 
 int shell_task_pmi_enable (struct shell_task *task,

@@ -164,7 +164,7 @@ static void exec_kill_cb (flux_future_t *f, void *arg)
     struct jobinfo *job = arg;
     if (flux_future_get (f, NULL) < 0)
         flux_log_error (job->h, "%ju: exec_kill", (uintmax_t) job->id);
-    jobinfo_incref (job);
+    jobinfo_decref (job);
     flux_future_destroy (f);
 }
 

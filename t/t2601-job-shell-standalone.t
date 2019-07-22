@@ -4,7 +4,10 @@ test_description='Test flux-shell in --standalone mode'
 
 . `dirname $0`/sharness.sh
 
-FLUX_SHELL=${FLUX_BUILD_DIR}/src/shell/flux-shell
+# Needed for loop:// connector in standalone mode
+export FLUX_CONNECTOR_PATH=${FLUX_BUILD_DIR}/src/connectors
+
+FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest

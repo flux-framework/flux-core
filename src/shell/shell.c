@@ -28,6 +28,7 @@
 
 #include "shell.h"
 #include "info.h"
+#include "svc.h"
 #include "io.h"
 #include "pmi.h"
 #include "task.h"
@@ -123,7 +124,7 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
 
 static void shell_connect_flux (flux_shell_t *shell)
 {
-    if (!(shell->h = flux_open (NULL, 0)))
+    if (!(shell->h = flux_open (shell->standalone ? "loop://" : NULL, 0)))
         log_err_exit ("flux_open");
 
     /*  Set reactor for flux handle to our custom created reactor.
@@ -159,6 +160,7 @@ static void shell_finalize (flux_shell_t *shell)
     }
     shell_io_destroy (shell->io);
     shell_pmi_destroy (shell->pmi);
+    shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
     flux_reactor_destroy (shell->r);
@@ -239,6 +241,31 @@ out:
     return (rc);
 }
 
+static int shell_barrier (flux_shell_t *shell, const char *name)
+{
+    flux_future_t *f;
+    char fqname[128];
+
+    if (shell->standalone || shell->info->shell_size == 1)
+        return 0; // NO-OP
+    if (snprintf (fqname,
+                  sizeof (fqname),
+                  "shell-%ju-%s",
+                  (uintmax_t)shell->info->jobid,
+                   name) >= sizeof (fqname)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f = flux_barrier (shell->h, fqname, shell->info->shell_size)))
+        return -1;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -255,14 +282,20 @@ int main (int argc, char *argv[])
     if (!(shell.r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
 
-    if (!shell.standalone)
-        shell_connect_flux (&shell);
+    /* Connect to broker, or if standalone, open loopback connector.
+     */
+    shell_connect_flux (&shell);
 
     /* Populate 'struct shell_info' for general use by shell components.
      * Fetches missing info from shell handle if set.
      */
     if (!(shell.info = shell_info_create (&shell)))
         exit (1);
+
+    /* Register service on the leader shell.
+     */
+    if (!(shell.svc = shell_svc_create (&shell)))
+        log_err_exit ("shell_svc_create");
 
     /* Create PMI engine
      * Uses 'h' for KVS access only if info->shell_size > 1.
@@ -274,8 +307,13 @@ int main (int argc, char *argv[])
 
     /* Create handler for stdio.
      */
-    if (!(shell.io = shell_io_create (shell.h, shell.info)))
+    if (!(shell.io = shell_io_create (&shell)))
         log_err_exit ("shell_io_create");
+
+    /* Barrier to ensure initialization has completed across all shells.
+     */
+    if (shell_barrier (&shell, "init") < 0)
+        log_err_exit ("shell_barrier");
 
     /* Create tasks
      */

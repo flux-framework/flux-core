@@ -29,6 +29,12 @@ flux_future_t *flux_rpc (flux_t *h, const char *topic, const char *s,
 flux_future_t *flux_rpc_pack (flux_t *h, const char *topic, uint32_t nodeid,
                               int flags, const char *fmt, ...);
 
+flux_future_t *flux_rpc_vpack (flux_t *h,
+                               const char *topic,
+                               uint32_t nodeid,
+                               int flags,
+                               const char *fmt, va_list ap);
+
 flux_future_t *flux_rpc_raw (flux_t *h, const char *topic,
                              const void *data, int len,
                              uint32_t nodeid, int flags);

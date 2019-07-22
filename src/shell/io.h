@@ -15,11 +15,12 @@
 
 #include "info.h"
 #include "task.h"
+#include "shell.h"
 
 struct shell_io;
 
 void shell_io_destroy (struct shell_io *io);
-struct shell_io *shell_io_create (flux_t *h, struct shell_info *info);
+struct shell_io *shell_io_create (flux_shell_t *shell);
 
 // shell_task_io_ready_f callback footprint
 void shell_io_task_ready (struct shell_task *task, const char *name, void *arg);
