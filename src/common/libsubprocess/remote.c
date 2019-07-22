@@ -580,6 +580,8 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
     }
     else if (!flux_rpc_get_unpack (f, "{ s:i }", "eof", &eof)) {
         c->read_eof_received = true;
+        if (flux_buffer_readonly (c->read_buffer) < 0)
+            flux_log_error (p->h, "flux_buffer_readonly");
     }
 
     rv = 0;
