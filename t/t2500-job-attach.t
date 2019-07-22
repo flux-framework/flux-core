@@ -59,7 +59,8 @@ test_expect_success 'attach: SIGINT+SIGTSTP detaches from job' '
 
 test_expect_success 'attach: detached job was not canceled' '
 	flux job eventlog $(cat jobid4) >events4 &&
-	test_must_fail grep -q cancel events4
+	test_must_fail grep -q cancel events4 &&
+	flux job cancel $(cat jobid4)
 '
 
 # Simple tests for flux srun
