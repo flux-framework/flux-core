@@ -682,10 +682,16 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         if (!strcmp (name, "finish")) {
             if (json_unpack (context, "{s:i}", "status", &status) < 0)
                 log_err_exit ("error decoding finish context");
-            if (WIFSIGNALED (status))
+            if (WIFSIGNALED (status)) {
                 ctx->exit_code = WTERMSIG (status) + 128;
-            else if (WIFEXITED (status))
+                log_msg ("task(s) %s", strsignal (WTERMSIG (status)));
+            }
+            else if (WIFEXITED (status)) {
                 ctx->exit_code = WEXITSTATUS (status);
+                if (ctx->exit_code != 0)
+                    log_msg ("task(s) exited with exit code %d",
+                             ctx->exit_code);
+            }
         }
         else if (!strcmp (name, "clean")) {
             if (flux_job_event_watch_cancel (f) < 0)
