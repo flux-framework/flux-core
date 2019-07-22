@@ -41,6 +41,7 @@ static struct optparse_option cmdopts[] = {
 
 extern char **environ;
 
+uint32_t rank_range;
 uint32_t rank_count;
 uint32_t started = 0;
 uint32_t exited = 0;
@@ -105,7 +106,7 @@ void completion_cb (flux_subprocess_t *p)
 
         /* use exit code as key for hash */
         if (!(idset = zhashx_lookup (exitsets, buf))) {
-            if (!(idset = idset_create (rank_count, 0)))
+            if (!(idset = idset_create (rank_range, 0)))
                 log_err_exit ("idset_create");
             if (zhashx_insert (exitsets, buf, idset) < 0)
                 log_err_exit ("zhashx_insert");
@@ -352,20 +353,22 @@ int main (int argc, char *argv[])
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
 
+    if (flux_get_size (h, &rank_range) < 0)
+        log_err_exit ("flux_get_size");
+
     if (optparse_getopt (opts, "rank", &optargp) > 0
         && strcmp (optargp, "all")) {
         if (!(ns = idset_decode (optargp)))
             log_err_exit ("idset_decode");
-        if (flux_get_size (h, &rank_count) < 0)
-            log_err_exit ("flux_get_size");
+        if (!(rank_count = idset_count (ns)))
+            log_err_exit ("idset_count");
     }
     else {
-        if (flux_get_size (h, &rank_count) < 0)
-            log_err_exit ("flux_get_size");
         if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
             log_err_exit ("idset_create");
-        if (idset_range_set (ns, 0, rank_count - 1) < 0)
+        if (idset_range_set (ns, 0, rank_range - 1) < 0)
             log_err_exit ("idset_range_set");
+        rank_count = rank_range;
     }
 
     if (!(hanging = idset_copy (ns)))

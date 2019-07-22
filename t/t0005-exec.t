@@ -26,6 +26,11 @@ test_expect_success 'exec to specific rank' '
 test_expect_success 'exec to "all" ranks' '
 	flux exec -n -r all /bin/true
 '
+
+test_expect_success 'exec to subset of ranks' '
+	flux exec -n -r 2-3 /bin/true
+'
+
 test_expect_success 'exec to non-existent rank is an error' '
 	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
 '
@@ -168,9 +173,29 @@ test_expect_success 'signal forwarding works' '
 	test_expect_code 143 run_timeout 5 ./test_signal.sh TERM
 '
 
-test_expect_success 'flux-exec: stdin bcast' '
+test_expect_success 'flux-exec: stdin bcast to all ranks (default)' '
+	count=$(echo Hello | flux exec cat | grep -c Hello) &&
+	test "$count" = "4"
+'
+
+test_expect_success 'flux-exec: stdin bcast to all ranks (all)' '
+	count=$(echo Hello | flux exec -rall cat | grep -c Hello) &&
+	test "$count" = "4"
+'
+
+test_expect_success 'flux-exec: stdin bcast to all ranks (0-3)' '
 	count=$(echo Hello | flux exec -r0-3 cat | grep -c Hello) &&
 	test "$count" = "4"
+'
+
+test_expect_success 'flux-exec: stdin bcast to 1 rank' '
+	count=$(echo Hello | flux exec -r1 cat | grep -c Hello) &&
+	test "$count" = "1"
+'
+
+test_expect_success 'flux-exec: stdin bcast to not all ranks' '
+	count=$(echo Hello | flux exec -r0-2 cat | grep -c Hello) &&
+	test "$count" = "3"
 '
 
 test_expect_success 'stdin redirect from /dev/null works without -n' '
