@@ -198,7 +198,8 @@ static struct exec_cmd *exec_cmd_create (const struct idset *ranks,
         return NULL;
     if (!(c->ranks = idset_copy (ranks)))
         goto err;
-    c->cmd = flux_cmd_copy (cmd);
+    if (!(c->cmd = flux_cmd_copy (cmd)))
+        goto err;
     c->flags = flags;
     return (c);
 err:
