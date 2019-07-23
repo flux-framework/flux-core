@@ -356,7 +356,17 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
                                                const char *stream,
                                                int *lenp);
 
-int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream);
+/* Determine if the read stream has is closed / received an EOF.  This
+ * function can be useful if you are reading lines via
+ * flux_subprocess_read_line() or flux_subprocess_read_trimmed_line()
+ * in output callbacks.  Those functions will return length 0 when no
+ * lines are available, making it difficult to determine if the stream
+ * has been closed and there is any non-newline terminated data left
+ * available for reading with flux_subprocess_read().  Returns > 0 on
+ * closed / eof seen, 0 if not, -1 on error.
+ */
+int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                        const char *stream);
 
 /*
  *  Create RPC to send signal `signo` to subprocess `p`.

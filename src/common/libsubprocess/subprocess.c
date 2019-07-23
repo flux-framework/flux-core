@@ -901,7 +901,7 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
     return subprocess_read (p, stream, 0, lenp, true, true);
 }
 
-int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream)
+int flux_subprocess_read_stream_closed (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -921,10 +921,8 @@ int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream)
     }
 
     if (p->local) {
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w))) {
-            errno = ENOSYS;     /* something */
+        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
             return -1;
-        }
     }
     else
         fb = c->read_buffer;

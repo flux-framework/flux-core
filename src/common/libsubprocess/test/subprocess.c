@@ -628,8 +628,8 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line returned correct data len");
     }
     else {
-        ok (flux_subprocess_read_eof_reached (p, stream) > 0,
-            "flux_subprocess_read_eof_reached saw EOF on %s", stream);
+        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+            "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
         ok (ptr != NULL
