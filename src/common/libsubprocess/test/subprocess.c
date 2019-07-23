@@ -326,6 +326,9 @@ void output_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strcmp (ptr, cmpbuf),
             "flux_subprocess_read_line returned correct data");
+        /* 1 + 2 + 1 for ':', "hi", '\n' */
+        ok (lenp == (strlen (stream) + 1 + 2 + 1),
+            "flux_subprocess_read_line returned correct data len");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -473,6 +476,9 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strcmp (ptr, cmpbuf),
             "flux_subprocess_read_line returned correct data");
+        /* 1 + 2 + 1 for ':', "hi", '\n' */
+        ok (lenp == (strlen (stream) + 1 + 2 + 1),
+            "flux_subprocess_read_line returned correct data len");
     }
     else {
         ptr = flux_subprocess_read (p, NULL, -1, &lenp);
@@ -611,6 +617,9 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strcmp (ptr, cmpbuf),
             "flux_subprocess_read returned correct data");
+        /* 1 + 2 + 1 for ':', "hi" */
+        ok (lenp == (strlen (stream) + 1 + 2),
+            "flux_subprocess_read_line returned correct data len");
     }
     else {
         ok (flux_subprocess_read_eof_reached (p, stream) > 0,
@@ -747,6 +756,8 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strcmp (ptr, "foo\n"),
             "flux_subprocess_read_line returned correct data");
+        ok (lenp == 4,
+            "flux_subprocess_read_line returned correct data len");
     }
     else if ((*counter) == 1) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
@@ -756,6 +767,8 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strcmp (ptr, "bar\n"),
             "flux_subprocess_read_line returned correct data");
+        ok (lenp == 4,
+            "flux_subprocess_read_line returned correct data len");
     }
     else if ((*counter) == 2) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
@@ -765,6 +778,8 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strcmp (ptr, "bo\n"),
             "flux_subprocess_read_line returned correct data");
+        ok (lenp == 3,
+            "flux_subprocess_read_line returned correct data len");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -927,6 +942,8 @@ void env_passed_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strncmp (ptr, "FOOBAR=foobaz", 13),
             "environment variable FOOBAR in subprocess");
+        ok (lenp == 14,
+            "flux_subprocess_read_line returned correct data len");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -1331,6 +1348,7 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
 
         ok (!strncmp (ptr, "FOO=", 4),
             "environment variable FOO created in subprocess");
+        /* no length check, can't predict channel FD value */
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
