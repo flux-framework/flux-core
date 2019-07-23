@@ -201,6 +201,9 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_subprocess_read_line (NULL, "STDOUT", NULL) == NULL
         && errno == EINVAL,
         "flux_subprocess_read_line fails with NULL pointer inputs");
+    ok (flux_subprocess_read_trimmed_line (NULL, "STDOUT", NULL) == NULL
+        && errno == EINVAL,
+        "flux_subprocess_read_trimmed_line fails with NULL pointer inputs");
     ok (flux_subprocess_kill (NULL, 0) == NULL
         && errno == EINVAL,
         "flux_subprocess_kill fails with NULL pointer inputs");
@@ -274,6 +277,9 @@ void test_errors (flux_reactor_t *r)
     ok (flux_subprocess_read_line (p, "foo", NULL) == NULL
         && errno == EINVAL,
         "flux_subprocess_read_line returns EINVAL on bad stream");
+    ok (flux_subprocess_read_trimmed_line (p, "foo", NULL) == NULL
+        && errno == EINVAL,
+        "flux_subprocess_read_trimmed_line returns EINVAL on bad stream");
     ok (flux_subprocess_kill (p, 0) == NULL
         && errno == EINVAL,
         "flux_subprocess_kill returns EINVAL on illegal signum");
