@@ -163,7 +163,7 @@ test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	grep_dmesg "signal 199: Invalid argument" &&
 	grep status=$((15+128<<8)) kill5.finish.out
 '
-test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
+test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
         flux module remove -r 0 job-exec &&
         flux module remove -r 0 sched-simple &&
         flux module remove barrier
