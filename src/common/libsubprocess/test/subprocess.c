@@ -325,7 +325,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
         sprintf (cmpbuf, "%s:hi\n", stream);
 
         ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read_line returned correct data", stream);
+            "flux_subprocess_read_line returned correct data");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -472,7 +472,7 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
         sprintf (cmpbuf, "%s:hi\n", stream);
 
         ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read_line returned correct data", "STDOUT");
+            "flux_subprocess_read_line returned correct data");
     }
     else {
         ptr = flux_subprocess_read (p, NULL, -1, &lenp);
@@ -681,7 +681,7 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
         sprintf (cmpbuf, "%s:hi", stream);
 
         ok (!strcmp (ptr, cmpbuf),
-            "flux_subprocess_read_trimmed_line returned correct data", stream);
+            "flux_subprocess_read_trimmed_line returned correct data");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -746,7 +746,7 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "foo\n"),
-            "flux_subprocess_read_line returned correct data", stream);
+            "flux_subprocess_read_line returned correct data");
     }
     else if ((*counter) == 1) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
@@ -764,7 +764,7 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "bo\n"),
-            "flux_subprocess_read_line returned correct data", stream);
+            "flux_subprocess_read_line returned correct data");
     }
     else {
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -1525,7 +1525,7 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "bob\n"),
-            "flux_subprocess_read_line returned correct data", stream);
+            "flux_subprocess_read_line returned correct data");
     }
     else if (multiple_lines_channel_cb_count == 1) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
@@ -1534,7 +1534,7 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "dan\n"),
-            "flux_subprocess_read_line returned correct data %s", stream);
+            "flux_subprocess_read_line returned correct data");
     }
     else if (multiple_lines_channel_cb_count == 2) {
         ptr = flux_subprocess_read_line (p, stream, &lenp);
@@ -1543,7 +1543,7 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_read_line on %s success", stream);
 
         ok (!strcmp (ptr, "jo\n"),
-            "flux_subprocess_read_line returned correct data", stream);
+            "flux_subprocess_read_line returned correct data");
 
         ok (flux_subprocess_close (p, "TEST_CHANNEL") == 0,
             "flux_subprocess_close success");
