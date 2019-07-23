@@ -341,8 +341,9 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer will include newline character and is guaranteed to
- *   be NUL terminated.  User shall not free returned pointer.  Length
- *   of buffer returned can optionally returned in 'lenp'.
+ *   be NUL terminated.  If no line is available, returns pointer and
+ *   length of zero.  User shall not free returned pointer.  Length of
+ *   buffer returned can optionally returned in 'lenp'.
  */
 const char *flux_subprocess_read_line (flux_subprocess_t *p,
                                        const char *stream,
