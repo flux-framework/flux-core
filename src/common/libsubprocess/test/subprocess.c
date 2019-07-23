@@ -273,7 +273,7 @@ void test_errors (flux_reactor_t *r)
         "flux_subprocess_read returns EINVAL on bad stream");
     ok (flux_subprocess_read_line (p, "foo", NULL) == NULL
         && errno == EINVAL,
-        "flux_subprocess_read returns EINVAL on bad stream");
+        "flux_subprocess_read_line returns EINVAL on bad stream");
     ok (flux_subprocess_kill (p, 0) == NULL
         && errno == EINVAL,
         "flux_subprocess_kill returns EINVAL on illegal signum");
