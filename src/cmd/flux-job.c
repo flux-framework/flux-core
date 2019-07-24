@@ -106,11 +106,11 @@ static struct optparse_option attach_opts[] =  {
 
 static struct optparse_option id_opts[] =  {
     { .name = "from", .key = 'f', .has_arg = 1,
-      .arginfo = "dec|kvs|words",
+      .arginfo = "dec|kvs|hex|words",
       .usage = "Convert jobid from specified form",
     },
     { .name = "to", .key = 't', .has_arg = 1,
-      .arginfo = "dec|kvs|words",
+      .arginfo = "dec|kvs|hex|words",
       .usage = "Convert jobid to specified form",
     },
     OPTPARSE_TABLE_END
@@ -817,6 +817,10 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     if (!strcmp (from, "dec")) {
         id = parse_arg_unsigned (src, "input");
     }
+    else if (!strcmp (from, "hex")) {
+        if (fluid_decode (src, &id, FLUID_STRING_DOTHEX) < 0)
+            log_msg_exit ("%s: malformed input", src);
+    }
     else if (!strcmp (from, "kvs")) {
         if (strncmp (src, "job.", 4) != 0)
             log_msg_exit ("%s: missing 'job.' prefix", src);
@@ -837,6 +841,10 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     }
     else if (!strcmp (to, "kvs")) {
         if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
+            log_msg_exit ("error encoding id");
+    }
+    else if (!strcmp (to, "hex")) {
+        if (fluid_encode (dst, dstsz, id, FLUID_STRING_DOTHEX) < 0)
             log_msg_exit ("error encoding id");
     }
     else if (!strcmp (to, "words")) {
