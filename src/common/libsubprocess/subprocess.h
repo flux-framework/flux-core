@@ -368,6 +368,26 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
 int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
                                         const char *stream);
 
+/* flux_subprocess_getline() is a special case function
+ * that behaves identically to flux_subprocess_read_line() but handles
+ * several common special cases.  It requires the stream of data to be
+ * line buffered (by default on, see LINE_BUFFER under
+ * flux_cmd_setopt()).
+ *
+ * - if the stream of data has internally completed (i.e. the
+ *   subprocess has closed the stream / EOF has been received) but the
+ *   last data on the stream does not terminate in a newline
+ *   character, this function will return that last data without the
+ *   trailing newline.
+ * - if the stream has been closed / reached EOF, lenp will be set to
+ *   0.
+ * - if the stream is not line buffered, NULL and errno = EPERM will
+ *   be returned.
+ */
+const char *flux_subprocess_getline (flux_subprocess_t *p,
+                                     const char *stream,
+                                     int *lenp);
+
 /*
  *  Create RPC to send signal `signo` to subprocess `p`.
  *  This call returns a flux_future_t. Use flux_future_then(3) to register

@@ -148,14 +148,8 @@ int shell_task_io_readline (struct shell_task *task,
     const char *buf;
     int len;
 
-    if (!(buf = flux_subprocess_read_line (task->proc, name, &len)))
+    if (!(buf = flux_subprocess_getline (task->proc, name, &len)))
         return -1;
-    if (len == 0) {
-        if (flux_subprocess_read_stream_closed (task->proc, name)) {
-            if (!(buf = flux_subprocess_read (task->proc, name, -1, &len)))
-                return -1;
-        }
-    }
     *line = buf;
     return len;
 }

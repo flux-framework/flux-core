@@ -248,16 +248,9 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
     assert (r);
     assert (r->level == 1 || r->level == 3);
 
-    if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
-        flux_log_error (r->h, "%s: flux_subprocess_read_line", __FUNCTION__);
+    if (!(ptr = flux_subprocess_getline (p, stream, &lenp))) {
+        flux_log_error (r->h, "%s: flux_subprocess_getline", __FUNCTION__);
         return;
-    }
-
-    if (!lenp) {
-        if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-            flux_log_error (r->h, "%s: flux_subprocess_read", __FUNCTION__);
-            return;
-        }
     }
 
     if (lenp && r->io_cb)

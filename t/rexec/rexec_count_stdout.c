@@ -53,6 +53,9 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp;
 
+    /* Do not use flux_subprocess_getline(), testing is against
+     * streams that are line buffered and not line buffered */
+
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
         log_err ("flux_subprocess_read_line");
         return;
