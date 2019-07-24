@@ -245,13 +245,10 @@ static void remote_out_prep_cb (flux_reactor_t *r,
 {
     struct subprocess_channel *c = arg;
 
-    /* We won't handle line buffering as a special case.  Since line
-     * buffering is enabled on the server side, we can safely assume
-     * we only get data when a line is available */
-
     /* no need to handle failure states, on fatal error, these
      * reactors are closed */
-    if (flux_buffer_bytes (c->read_buffer) > 0
+    if ((c->line_buffered && flux_buffer_lines (c->read_buffer) > 0)
+        || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)
         || (c->read_eof_received && !c->eof_sent_to_caller))
         flux_watcher_start (c->out_idle_w);
 }
@@ -265,7 +262,11 @@ static void remote_out_check_cb (flux_reactor_t *r,
 
     flux_watcher_stop (c->out_idle_w);
 
-    if (flux_buffer_bytes (c->read_buffer) > 0) {
+    if ((c->line_buffered
+         && (flux_buffer_lines (c->read_buffer) > 0
+             || (c->read_eof_received
+                 && flux_buffer_bytes (c->read_buffer) > 0)))
+        || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)) {
         c->output_f (c->p, c->name);
     }
 
