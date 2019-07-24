@@ -245,6 +245,10 @@ static void remote_out_prep_cb (flux_reactor_t *r,
 {
     struct subprocess_channel *c = arg;
 
+    /* We won't handle line buffering as a special case.  Since line
+     * buffering is enabled on the server side, we can safely assume
+     * we only get data when a line is available */
+
     /* no need to handle failure states, on fatal error, these
      * reactors are closed */
     if (flux_buffer_bytes (c->read_buffer) > 0
@@ -293,15 +297,20 @@ static void remote_out_check_cb (flux_reactor_t *r,
 static int remote_channel_setup (flux_subprocess_t *p,
                                  flux_subprocess_output_f output_f,
                                  const char *name,
-                                 int channel_flags,
-                                 int buffer_size)
+                                 int channel_flags)
 {
     struct subprocess_channel *c = NULL;
     char *e = NULL;
     int save_errno;
+    int buffer_size;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
         flux_log_error (p->h, "calloc");
+        goto error;
+    }
+
+    if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
+        flux_log_error (p->h, "cmd_option_bufsize");
         goto error;
     }
 
@@ -395,43 +404,29 @@ static int remote_channel_setup (flux_subprocess_t *p,
 
 static int remote_setup_stdio (flux_subprocess_t *p)
 {
-    int buffer_size;
-
     /* stdio is identical to channels, except they are limited to read
      * and/or write, and the buffer's automatically get a NUL char
      * appended on reads */
 
-    if ((buffer_size = cmd_option_bufsize (p, "STDIN")) < 0)
-        return -1;
-
     if (remote_channel_setup (p,
                               NULL,
                               "STDIN",
-                              CHANNEL_WRITE,
-                              buffer_size) < 0)
+                              CHANNEL_WRITE) < 0)
         return -1;
 
     if (p->ops.on_stdout) {
-        if ((buffer_size = cmd_option_bufsize (p, "STDOUT")) < 0)
-            return -1;
-
         if (remote_channel_setup (p,
                                   p->ops.on_stdout,
                                   "STDOUT",
-                                  CHANNEL_READ,
-                                  buffer_size) < 0)
+                                  CHANNEL_READ) < 0)
             return -1;
     }
 
     if (p->ops.on_stderr) {
-        if ((buffer_size = cmd_option_bufsize (p, "STDERR")) < 0)
-            return -1;
-
         if (remote_channel_setup (p,
                                   p->ops.on_stderr,
                                   "STDERR",
-                                  CHANNEL_READ,
-                                  buffer_size) < 0)
+                                  CHANNEL_READ) < 0)
             return -1;
     }
 
@@ -458,16 +453,10 @@ static int remote_setup_channels (flux_subprocess_t *p)
 
     name = zlist_first (channels);
     while (name) {
-        int buffer_size;
-
-        if ((buffer_size = cmd_option_bufsize (p, name)) < 0)
-            return -1;
-
         if (remote_channel_setup (p,
                                   p->ops.on_channel_out,
                                   name,
-                                  channel_flags,
-                                  buffer_size) < 0)
+                                  channel_flags) < 0)
             return -1;
         name = zlist_next (channels);
     }
