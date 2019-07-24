@@ -356,10 +356,8 @@ void flux_standard_output (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    /* if process exited, read remaining stuff or EOF, otherwise
-     * wait for future newline */
-    if (!lenp
-        && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
+    /* we're at the end of the stream, read any lingering data */
+    if (!lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
             log_err ("flux_standard_output: read_line");
             return;
