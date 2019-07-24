@@ -70,7 +70,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 void io_cb (flux_subprocess_t *p, const char *stream)
 {
     const char *ptr;
-    int lenp;
+    int ret, lenp;
 
     if (strcasecmp (stream, "STDOUT")
         && strcasecmp (stream, "STDERR")) {
@@ -83,6 +83,14 @@ void io_cb (flux_subprocess_t *p, const char *stream)
         exit (1);
     }
     if (ptr && lenp == 0)
+        fprintf (stderr, "stream %s got EOF\n", stream);
+
+    /* extra coverage for EOF */
+    if ((ret = flux_subprocess_read_stream_closed (p, stream)) < 0) {
+        perror ("flux_subprocess_read");
+        exit (1);
+    }
+    if (ret > 0)
         fprintf (stderr, "stream %s got EOF\n", stream);
 }
 
