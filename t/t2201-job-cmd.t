@@ -10,10 +10,12 @@ fi
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
 MAXJOBID_KVS="job.ffff.ffff.ffff.ffff"
+MAXJOBID_HEX="ffff.ffff.ffff.ffff"
 MAXJOBID_WORDS="natural-analyze-verbal--natural-analyze-verbal"
 
 MINJOBID_DEC=0
 MINJOBID_KVS="job.0000.0000.0000.0000"
+MINJOBID_HEX="0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 
 test_under_flux 1 job
@@ -112,6 +114,13 @@ test_expect_success 'flux-job: id --from=kvs works' '
 	test "$jobid" = "$MINJOBID_DEC"
 '
 
+test_expect_success 'flux-job: id --from=hex works' '
+	jobid=$(flux job id --from=hex $MAXJOBID_HEX) &&
+	test "$jobid" = "$MAXJOBID_DEC" &&
+	jobid=$(flux job id --from=hex $MINJOBID_HEX) &&
+	test "$jobid" = "$MINJOBID_DEC"
+'
+
 test_expect_success 'flux-job: id --to=dec works' '
 	jobid=$(flux job id --to=dec $MAXJOBID_DEC) &&
 	test "$jobid" = "$MAXJOBID_DEC" &&
@@ -131,6 +140,13 @@ test_expect_success 'flux-job: id --to=kvs works' '
 	test "$jobid" = "$MAXJOBID_KVS" &&
 	jobid=$(flux job id --to=kvs $MINJOBID_DEC) &&
 	test "$jobid" = "$MINJOBID_KVS"
+'
+
+test_expect_success 'flux-job: id --to=hex works' '
+	jobid=$(flux job id --to=hex $MAXJOBID_DEC) &&
+	test "$jobid" = "$MAXJOBID_HEX" &&
+	jobid=$(flux job id --to=hex $MINJOBID_DEC) &&
+	test "$jobid" = "$MINJOBID_HEX"
 '
 
 test_expect_success 'flux-job: id --from=kvs fails on bad input' '
