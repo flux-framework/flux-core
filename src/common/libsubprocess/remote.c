@@ -347,6 +347,16 @@ static int remote_channel_setup (flux_subprocess_t *p,
     }
 
     if (channel_flags & CHANNEL_READ) {
+        int wflag;
+
+        if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
+            flux_log_error (p->h, "cmd_option_line_buffer");
+            goto error;
+        }
+
+        if (wflag)
+            c->line_buffered = true;
+
         if (!(c->read_buffer = flux_buffer_create (buffer_size))) {
             flux_log_error (p->h, "flux_buffer_create");
             goto error;
