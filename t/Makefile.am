@@ -93,6 +93,7 @@ TESTSCRIPTS = \
 	t2205-job-info-security.t \
 	t2206-job-manager-bulk-state.t \
 	t2300-sched-simple.t \
+	t2301-schedutil-outstanding-requests.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
@@ -175,7 +176,8 @@ dist_check_SCRIPTS = \
 	job-manager/drain-cancel.py \
 	job-manager/drain-undrain.py \
 	job-manager/bulk-state.py \
-	job-exec/dummy.sh
+	job-exec/dummy.sh \
+	schedutil/req_and_unload.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

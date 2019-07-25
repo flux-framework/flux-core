@@ -148,6 +148,13 @@ int schedutil_alloc_respond_R (schedutil_t *util, const flux_msg_t *msg,
     }
     if (flux_future_then (f, -1, alloc_continuation, ctx) < 0)
         goto error;
+    if (!schedutil_hang_responses (util)) {
+        if (flux_future_then (f, -1, alloc_continuation, util) < 0)
+            goto error;
+    }
+    /* else: intentionally do not register a continuation to force
+     * a permanent outstanding request for testing
+     */
     schedutil_add_outstanding_future (util, f);
     return 0;
 error:

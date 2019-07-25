@@ -76,8 +76,12 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_msg_decref (msg);
         goto error_future;
     }
-    if (flux_future_then (f, -1, alloc_continuation, util) < 0)
-        goto error_future;
+    if (!schedutil_hang_responses (util)) {
+        if (flux_future_then (f, -1, alloc_continuation, util) < 0)
+            goto error_future;
+    }
+    // else: intentionally do not register a continuation to force a permanent
+    // outstanding request for testing
     if (schedutil_add_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.alloc unable to add outstanding future");
 
@@ -136,8 +140,13 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_msg_decref (msg);
         goto error_future;
     }
-    if (flux_future_then (f, -1, free_continuation, util) < 0)
-        goto error_future;
+    if (!schedutil_hang_responses (util)) {
+        if (flux_future_then (f, -1, free_continuation, util) < 0)
+            goto error_future;
+    }
+    /* else: intentionally do not register a continuation to force
+     * a permanent outstanding request for testing
+     */
     if (schedutil_add_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to add outstanding future");
 

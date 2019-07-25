@@ -38,3 +38,10 @@ int schedutil_remove_outstanding_future (schedutil_t *util,
  */
 int schedutil_ops_register (schedutil_t *util);
 void schedutil_ops_unregister (schedutil_t *util);
+
+/* Testing interfaces
+ *
+ * Check to see if the scheduler has the debug flag set such
+ * that responses should hang, forcing outstanding requests to exist.
+ */
+bool schedutil_hang_responses (const schedutil_t *util);

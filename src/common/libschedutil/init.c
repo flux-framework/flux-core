@@ -17,6 +17,17 @@
 #include "init.h"
 #include "schedutil_private.h"
 
+/* flux module debug --setbit 0x8000 sched
+ * flux module debug --clearbit 0x8000 sched
+ */
+enum module_debug_flags {
+    /* alloc and free responses received while this is set
+     * will never get a response
+     */
+    DEBUG_HANG_RESPONSES = 0x8000, // 16th bit
+};
+
+
 schedutil_t *schedutil_create (flux_t *h,
                                op_alloc_f *alloc_cb,
                                op_free_f *free_cb,
@@ -88,6 +99,11 @@ void schedutil_destroy (schedutil_t *util)
         errno = saved_errno;
     }
     return;
+}
+
+bool schedutil_hang_responses (const schedutil_t *util)
+{
+    return flux_module_debug_test (util->h, DEBUG_HANG_RESPONSES, false);
 }
 
 int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
