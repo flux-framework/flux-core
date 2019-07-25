@@ -16,6 +16,9 @@ noinst_LTLIBRARIES = \
 
 libschedutil_la_SOURCES = \
 	schedutil.h \
+	schedutil_private.h \
+	init.h \
+	init.c \
 	hello.h \
 	hello.c \
 	ready.h \
@@ -26,3 +29,6 @@ libschedutil_la_SOURCES = \
 	alloc.c \
 	free.h \
 	free.c
+
+libschedutil_la_LIBADD = \
+	$(ZMQ_LIBS)

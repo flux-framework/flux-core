@@ -47,18 +47,6 @@ typedef void (op_exception_f)(flux_t *h,
                               int severity,
                               void *arg);
 
-/* Register callbacks for alloc, free, exception.
- */
-struct ops_context *schedutil_ops_register (flux_t *h,
-                                            op_alloc_f *alloc_cb,
-                                            op_free_f *free_cb,
-                                            op_exception_f *exception_cb,
-                                            void *arg);
-
-/* Unregister callbacks.
- */
-void schedutil_ops_unregister (struct ops_context *ctx);
-
 #endif /* !_FLUX_SCHEDUTIL_OPS_H */
 
 /*

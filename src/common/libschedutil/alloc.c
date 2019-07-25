@@ -13,6 +13,8 @@
 #endif
 #include <flux/core.h>
 
+#include "schedutil_private.h"
+#include "init.h"
 #include "alloc.h"
 
 int schedutil_alloc_request_decode (const flux_msg_t *msg,
@@ -48,16 +50,16 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
     return rc;
 }
 
-int schedutil_alloc_respond_note (flux_t *h, const flux_msg_t *msg,
+int schedutil_alloc_respond_note (schedutil_t *util, const flux_msg_t *msg,
                                   const char *note)
 {
-    return schedutil_alloc_respond (h, msg, 1, note);
+    return schedutil_alloc_respond (util->h, msg, 1, note);
 }
 
-int schedutil_alloc_respond_denied (flux_t *h, const flux_msg_t *msg,
+int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,
                                     const char *note)
 {
-    return schedutil_alloc_respond (h, msg, 2, note);
+    return schedutil_alloc_respond (util->h, msg, 2, note);
 }
 
 struct alloc {
@@ -108,8 +110,9 @@ error:
 
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
-    flux_t *h = flux_future_get_flux (f);
-    struct alloc *ctx = arg;
+    schedutil_t *util = arg;
+    flux_t *h = util->h;
+    struct alloc *ctx = flux_future_aux_get (f, "flux::alloc_ctx");
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "commit R");
@@ -119,7 +122,6 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "alloc response");
         goto error;
     }
-    alloc_destroy (ctx);
     flux_future_destroy (f);
     return;
 error:
@@ -128,16 +130,21 @@ error:
     flux_future_destroy (f);
 }
 
-int schedutil_alloc_respond_R (flux_t *h, const flux_msg_t *msg,
+int schedutil_alloc_respond_R (schedutil_t *util, const flux_msg_t *msg,
                                const char *R, const char *note)
 {
     struct alloc *ctx;
     flux_future_t *f;
+    flux_t *h = util->h;
 
     if (!(ctx = alloc_create (msg, R, note)))
         return -1;
     if (!(f = flux_kvs_commit (h, NULL, 0, ctx->txn)))
         goto error;
+    if (flux_future_aux_set (f, "flux::alloc_ctx",
+                             ctx, (flux_free_f)alloc_destroy) < 0) {
+        goto error;
+    }
     if (flux_future_then (f, -1, alloc_continuation, ctx) < 0)
         goto error;
     return 0;

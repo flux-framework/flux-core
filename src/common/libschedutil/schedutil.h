@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+#include "init.h"
 #include "hello.h"
 #include "ready.h"
 #include "alloc.h"

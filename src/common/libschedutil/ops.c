@@ -16,45 +16,48 @@
 #include <jansson.h>
 
 #include "src/common/libutil/errno_safe.h"
-
+#include "schedutil_private.h"
+#include "init.h"
 #include "ops.h"
-
-struct ops_context {
-    flux_t *h;
-    flux_msg_handler_t **handlers;
-    op_alloc_f *alloc_cb;
-    op_free_f *free_cb;
-    op_exception_f *exception_cb;
-    void *arg;
-};
 
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
-    struct ops_context *ctx = arg;
+    schedutil_t *util = arg;
     const flux_msg_t *msg = flux_future_aux_get (f, "flux::alloc_request");
+    flux_t *h = util->h;
+
+    if (util == NULL) {
+        errno = EINVAL;
+        goto error;
+    }
     const char *jobspec;
 
     if (flux_kvs_lookup_get (f, &jobspec) < 0) {
-        flux_log_error (ctx->h, "sched.alloc lookup R");
+        flux_log_error (h, "sched.alloc lookup R");
         goto error;
     }
-    ctx->alloc_cb (ctx->h, msg, jobspec, ctx->arg);
+    util->alloc_cb (h, msg, jobspec, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
-    flux_log_error (ctx->h, "sched.alloc");
-    if (flux_respond_error (ctx->h, msg, errno, NULL) < 0)
-        flux_log_error (ctx->h, "sched.alloc respond_error");
+    flux_log_error (h, "sched.alloc");
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "sched.alloc respond_error");
     flux_future_destroy (f);
 }
 
 static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct ops_context *ctx = arg;
+    schedutil_t *util = arg;
     flux_jobid_t id;
     char key[64];
     flux_future_t *f;
+
+    if (util == NULL) {
+        errno = EINVAL;
+        goto error;
+    }
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
@@ -71,7 +74,7 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_msg_decref (msg);
         goto error_future;
     }
-    if (flux_future_then (f, -1, alloc_continuation, ctx) < 0)
+    if (flux_future_then (f, -1, alloc_continuation, util) < 0)
         goto error_future;
     return;
 error_future:
@@ -84,28 +87,31 @@ error:
 
 static void free_continuation (flux_future_t *f, void *arg)
 {
-    struct ops_context *ctx = arg;
+
+    schedutil_t *util = arg;
     const flux_msg_t *msg  = flux_future_aux_get (f, "flux::free_request");
+    flux_t *h = util->h;
+
     const char *R;
 
     if (flux_kvs_lookup_get (f, &R) < 0) {
-        flux_log_error (ctx->h, "sched.free lookup R");
+        flux_log_error (h, "sched.free lookup R");
         goto error;
     }
-    ctx->free_cb (ctx->h, msg, R, ctx->arg);
+    util->free_cb (h, msg, R, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
-    flux_log_error (ctx->h, "sched.free");
-    if (flux_respond_error (ctx->h, msg, errno, NULL) < 0)
-        flux_log_error (ctx->h, "sched.free respond_error");
+    flux_log_error (h, "sched.free");
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "sched.free respond_error");
     flux_future_destroy (f);
 }
 
 static void free_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
-    struct ops_context *ctx = arg;
+    schedutil_t *util = arg;
     flux_jobid_t id;
     flux_future_t *f;
     char key[64];
@@ -125,7 +131,7 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_msg_decref (msg);
         goto error_future;
     }
-    if (flux_future_then (f, -1, free_continuation, ctx) < 0)
+    if (flux_future_then (f, -1, free_continuation, util) < 0)
         goto error_future;
     return;
 error_future:
@@ -139,7 +145,7 @@ error:
 static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
-    struct ops_context *ctx = arg;
+    schedutil_t *util = arg;
     flux_jobid_t id;
     const char *type;
     int severity;
@@ -151,7 +157,7 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "job-exception event");
         return;
     }
-    ctx->exception_cb (h, id, type, severity, ctx->arg);
+    util->exception_cb (h, id, type, severity, util->cb_arg);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -197,50 +203,35 @@ static void service_unregister (flux_t *h)
     flux_future_destroy (f);
 }
 
-struct ops_context *schedutil_ops_register (flux_t *h,
-                                            op_alloc_f *alloc_cb,
-                                            op_free_f *free_cb,
-                                            op_exception_f *exception_cb,
-                                            void *arg)
+int schedutil_ops_register (schedutil_t *util)
 {
-    struct ops_context *ctx;
+    flux_t *h = util->h;
 
-    if (!h || !alloc_cb || !free_cb || !exception_cb) {
+    if (!util) {
         errno = EINVAL;
-        return NULL;
+        return -1;
     }
-    if (!(ctx = calloc (1, sizeof (*ctx))))
-        return NULL;
     if (service_register (h) < 0)
         goto error;
-    ctx->h = h;
-    ctx->alloc_cb = alloc_cb;
-    ctx->free_cb = free_cb;
-    ctx->exception_cb = exception_cb;
-    ctx->arg = arg;
-
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+    if (flux_msg_handler_addvec (h, htab, util, &util->handlers) < 0)
         goto error;
     if (flux_event_subscribe (h, "job-exception") < 0)
         goto error;
-    return ctx;
+    return 0;
 error:
-    schedutil_ops_unregister (ctx);
-    return NULL;
+    schedutil_ops_unregister (util);
+    return -1;
 }
 
-
-void schedutil_ops_unregister (struct ops_context *ctx)
+void schedutil_ops_unregister (schedutil_t *util)
 {
-    if (ctx) {
-        int saved_errno = errno;
-        (void)service_unregister (ctx->h);
-        (void)flux_event_unsubscribe (ctx->h, "job-exception");
-        flux_msg_handler_delvec (ctx->handlers);
-        free (ctx);
-        errno = saved_errno;
-    }
-}
+    if (!util)
+        return;
+
+    service_unregister (util->h);
+    (void)flux_event_unsubscribe (util->h, "job-exception");
+    flux_msg_handler_delvec (util->handlers);
+ }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

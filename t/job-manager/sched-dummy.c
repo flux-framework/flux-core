@@ -45,7 +45,7 @@ struct job {
 
 struct sched_ctx {
     flux_t *h;
-    struct ops_context *sched_ops;
+    schedutil_t *schedutil_ctx;
     optparse_t *opt;
     struct job *job; // backlog of 1 alloc request
     int cores_total;
@@ -89,19 +89,20 @@ void try_alloc (struct sched_ctx *sc)
 {
     if (sc->job) {
         if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
-            if (schedutil_alloc_respond_denied (sc->h, sc->job->msg,
+            if (schedutil_alloc_respond_denied (sc->schedutil_ctx,
+                                                sc->job->msg,
                                                 "DEBUG_FAIL_ALLOC") < 0)
                 flux_log_error (sc->h, "schedutil_alloc_respond_denied");
             goto done;
         }
         if (sc->cores_free > 0) {
-            if (schedutil_alloc_respond_R (sc->h, sc->job->msg,
+            if (schedutil_alloc_respond_R (sc->schedutil_ctx, sc->job->msg,
                                            "1core", NULL) < 0)
                 flux_log_error (sc->h, "schedutil_alloc_respond_R");
             sc->cores_free--;
             goto done;
         }
-        if (schedutil_alloc_respond_note (sc->h, sc->job->msg,
+        if (schedutil_alloc_respond_note (sc->schedutil_ctx, sc->job->msg,
                                           "no cores available") < 0)
             flux_log_error (sc->h, "schedutil_alloc_respond_note");
     }
@@ -121,7 +122,9 @@ void exception_cb (flux_t *h, flux_jobid_t id,
         return;
     (void)snprintf (note, sizeof(note),
                     "alloc aborted due to exception type=%s", type);
-    if (schedutil_alloc_respond_denied (h, sc->job->msg, note) < 0)
+    if (schedutil_alloc_respond_denied (sc->schedutil_ctx,
+                                        sc->job->msg,
+                                        note) < 0)
         flux_log_error (h, "%s: alloc_respond_denied", __FUNCTION__);
     job_destroy (sc->job);
     sc->job = NULL;
@@ -137,7 +140,7 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
     flux_log (h, LOG_DEBUG, "free: id=%llu R=%s",
               (unsigned long long)id, R);
     sc->cores_free++;
-    if (schedutil_free_respond (h, msg) < 0)
+    if (schedutil_free_respond (sc->schedutil_ctx, msg) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     try_alloc (sc);
     return;
@@ -226,7 +229,7 @@ void sched_destroy (struct sched_ctx *sc)
 {
     if (sc) {
         int saved_errno = errno;
-        schedutil_ops_unregister (sc->sched_ops);
+        schedutil_destroy (sc->schedutil_ctx);
         optparse_destroy (sc->opt);
         if (sc->job) {
             /* Causes job-manager to pause scheduler interface.
@@ -248,12 +251,13 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
     if (!(sc = calloc (1, sizeof (*sc))))
         return NULL;
     sc->h = h;
-    if (!(sc->sched_ops = schedutil_ops_register (h,
-                                                  alloc_cb,
-                                                  free_cb,
-                                                  exception_cb,
-                                                  sc))) {
-        flux_log_error (h, "schedutil_ops_register");
+    sc->schedutil_ctx = schedutil_create (h,
+                                          alloc_cb,
+                                          free_cb,
+                                          exception_cb,
+                                          sc);
+    if (sc->schedutil_ctx == NULL) {
+        flux_log_error (h, "schedutil_create");
         goto error;
     }
     if (!(sc->opt = options_parse (argc, argv))) {
@@ -277,11 +281,11 @@ int mod_main (flux_t *h, int argc, char *argv[])
     if (!(sc = sched_create (h, argc, argv)))
         return -1;
     flux_log (h, LOG_DEBUG, "res pool is %d cores", sc->cores_total);
-    if (schedutil_hello (h, hello_cb, sc) < 0) {
+    if (schedutil_hello (sc->schedutil_ctx, hello_cb, sc) < 0) {
         flux_log_error (h, "schedutil_hello");
         goto done;
     }
-    if (schedutil_ready (h, "single", &count) < 0) {
+    if (schedutil_ready (sc->schedutil_ctx, "single", &count) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto done;
     }

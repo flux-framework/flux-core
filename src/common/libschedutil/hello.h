@@ -13,6 +13,8 @@
 
 #include <flux/core.h>
 
+#include "init.h"
+
 /* Callback for ingesting R + metadata for jobs that have resources
  * Return 0 on success, -1 on failure with errno set.
  * Failure of the callback aborts iteration and causes schedutil_hello()
@@ -31,7 +33,7 @@ typedef int (hello_f)(flux_t *h,
  * This function looks up R for each job and passes R + metadata to 'cb'
  * with 'arg'.
  */
-int schedutil_hello (flux_t *h, hello_f *cb, void *arg);
+int schedutil_hello (schedutil_t *util, hello_f *cb, void *arg);
 
 #endif /* !_FLUX_SCHEDUTIL_HELLO_H */
 

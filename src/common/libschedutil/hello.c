@@ -14,6 +14,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "schedutil_private.h"
+#include "init.h"
 #include "hello.h"
 
 static int schedutil_hello_job (flux_t *h,
@@ -46,18 +48,18 @@ error:
     return -1;
 }
 
-int schedutil_hello (flux_t *h, hello_f *cb, void *arg)
+int schedutil_hello (schedutil_t *util, hello_f *cb, void *arg)
 {
     flux_future_t *f;
     json_t *jobs;
     json_t *entry;
     size_t index;
 
-    if (!h || !cb) {
+    if (!util || !cb) {
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_rpc (h, "job-manager.sched-hello",
+    if (!(f = flux_rpc (util->h, "job-manager.sched-hello",
                         NULL, FLUX_NODEID_ANY, 0)))
         return -1;
     if (flux_rpc_get_unpack (f, "{s:o}", "alloc", &jobs) < 0)
@@ -76,7 +78,7 @@ int schedutil_hello (flux_t *h, hello_f *cb, void *arg)
             errno = EPROTO;
             goto error;
         }
-        if (schedutil_hello_job (h,
+        if (schedutil_hello_job (util->h,
                                  id,
                                  priority,
                                  userid,

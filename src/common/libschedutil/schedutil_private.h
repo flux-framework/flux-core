@@ -8,24 +8,21 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_SCHEDUTIL_FREE_H
-#define _FLUX_SCHEDUTIL_FREE_H
-
+#include <czmq.h>
 #include <flux/core.h>
 
 #include "init.h"
 
-/* Decode a free request.
- * Returns 0 on success, -1 on failure with errno set.
- */
-int schedutil_free_request_decode (const flux_msg_t *msg, flux_jobid_t *id);
+struct schedutil_ctx {
+    flux_t *h;
+    flux_msg_handler_t **handlers;
+    op_alloc_f *alloc_cb;
+    op_free_f *free_cb;
+    op_exception_f *exception_cb;
+    void *cb_arg;
+};
 
-/* Respond to a free request.
+/* (Un-)register callbacks for alloc, free, exception.
  */
-int schedutil_free_respond (schedutil_t *util, const flux_msg_t *msg);
-
-#endif /* !_FLUX_SCHEDUTIL_FREE_H */
-
-/*
- * vi:tabstop=4 shiftwidth=4 expandtab
- */
+int schedutil_ops_register (schedutil_t *util);
+void schedutil_ops_unregister (schedutil_t *util);
