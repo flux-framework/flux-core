@@ -341,8 +341,9 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer will include newline character and is guaranteed to
- *   be NUL terminated.  User shall not free returned pointer.  Length
- *   of buffer returned can optionally returned in 'lenp'.
+ *   be NUL terminated.  If no line is available, returns pointer and
+ *   length of zero.  User shall not free returned pointer.  Length of
+ *   buffer returned can optionally returned in 'lenp'.
  */
 const char *flux_subprocess_read_line (flux_subprocess_t *p,
                                        const char *stream,
@@ -355,7 +356,37 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
                                                const char *stream,
                                                int *lenp);
 
-int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream);
+/* Determine if the read stream has is closed / received an EOF.  This
+ * function can be useful if you are reading lines via
+ * flux_subprocess_read_line() or flux_subprocess_read_trimmed_line()
+ * in output callbacks.  Those functions will return length 0 when no
+ * lines are available, making it difficult to determine if the stream
+ * has been closed and there is any non-newline terminated data left
+ * available for reading with flux_subprocess_read().  Returns > 0 on
+ * closed / eof seen, 0 if not, -1 on error.
+ */
+int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                        const char *stream);
+
+/* flux_subprocess_getline() is a special case function
+ * that behaves identically to flux_subprocess_read_line() but handles
+ * several common special cases.  It requires the stream of data to be
+ * line buffered (by default on, see LINE_BUFFER under
+ * flux_cmd_setopt()).
+ *
+ * - if the stream of data has internally completed (i.e. the
+ *   subprocess has closed the stream / EOF has been received) but the
+ *   last data on the stream does not terminate in a newline
+ *   character, this function will return that last data without the
+ *   trailing newline.
+ * - if the stream has been closed / reached EOF, lenp will be set to
+ *   0.
+ * - if the stream is not line buffered, NULL and errno = EPERM will
+ *   be returned.
+ */
+const char *flux_subprocess_getline (flux_subprocess_t *p,
+                                     const char *stream,
+                                     int *lenp);
 
 /*
  *  Create RPC to send signal `signo` to subprocess `p`.

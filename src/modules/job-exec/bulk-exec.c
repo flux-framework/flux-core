@@ -162,15 +162,9 @@ static void exec_output_cb (flux_subprocess_t *p, const char *stream)
     const char *s;
     int len;
 
-    if (!(s = flux_subprocess_read_line (p, stream, &len))) {
-        flux_log_error (exec->h, "flux_subprocess_read_line");
+    if (!(s = flux_subprocess_getline (p, stream, &len))) {
+        flux_log_error (exec->h, "flux_subprocess_getline");
         return;
-    }
-    if (!len && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
-        if (!(s = flux_subprocess_read (p, stream, -1, &len))) {
-            flux_log_error (exec->h, "flux_subprocess_read");
-            return;
-        }
     }
     if (len) {
         int rank = flux_subprocess_rank (p);

@@ -148,21 +148,15 @@ int shell_task_io_readline (struct shell_task *task,
     const char *buf;
     int len;
 
-    if (!(buf = flux_subprocess_read_line (task->proc, name, &len)))
+    if (!(buf = flux_subprocess_getline (task->proc, name, &len)))
         return -1;
-    if (len == 0) {
-        if (flux_subprocess_read_eof_reached (task->proc, name)) {
-            if (!(buf = flux_subprocess_read (task->proc, name, -1, &len)))
-                return -1;
-        }
-    }
     *line = buf;
     return len;
 }
 
 bool shell_task_io_at_eof (struct shell_task *task, const char *name)
 {
-    return flux_subprocess_read_eof_reached (task->proc, name);
+    return flux_subprocess_read_stream_closed (task->proc, name);
 }
 
 int shell_task_pmi_enable (struct shell_task *task,

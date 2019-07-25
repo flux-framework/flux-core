@@ -351,15 +351,16 @@ void flux_standard_output (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp;
 
+    /* Do not use flux_subprocess_getline(), this should work
+     * regardless if stream is line buffered or not */
+
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
         log_err ("flux_standard_output: read_line");
         return;
     }
 
-    /* if process exited, read remaining stuff or EOF, otherwise
-     * wait for future newline */
-    if (!lenp
-        && flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
+    /* we're at the end of the stream, read any lingering data */
+    if (!lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
             log_err ("flux_standard_output: read_line");
             return;
@@ -830,7 +831,9 @@ static const char *subprocess_read (flux_subprocess_t *p,
                                     const char *stream,
                                     int len, int *lenp,
                                     bool read_line,
-                                    bool trimmed)
+                                    bool trimmed,
+                                    bool line_buffered_required,
+                                    int *readonly)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -855,12 +858,21 @@ static const char *subprocess_read (flux_subprocess_t *p,
         return NULL;
     }
 
+    if (line_buffered_required && !c->line_buffered) {
+        errno = EPERM;
+        return NULL;
+    }
+
     if (p->local) {
         if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
             return NULL;
     }
     else
         fb = c->read_buffer;
+
+    /* if readonly marked, indicates EOF received */
+    if (readonly)
+        (*readonly) = flux_buffer_is_readonly (fb);
 
     if (read_line) {
         if (trimmed) {
@@ -884,24 +896,24 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
                                   int len, int *lenp)
 {
-    return subprocess_read (p, stream, len, lenp, false, false);
+    return subprocess_read (p, stream, len, lenp, false, false, false, NULL);
 }
 
 const char *flux_subprocess_read_line (flux_subprocess_t *p,
                                        const char *stream,
                                        int *lenp)
 {
-    return subprocess_read (p, stream, 0, lenp, true, false);
+    return subprocess_read (p, stream, 0, lenp, true, false, false, NULL);
 }
 
 const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
                                                const char *stream,
                                                int *lenp)
 {
-    return subprocess_read (p, stream, 0, lenp, true, true);
+    return subprocess_read (p, stream, 0, lenp, true, true, false, NULL);
 }
 
-int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream)
+int flux_subprocess_read_stream_closed (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -921,15 +933,33 @@ int flux_subprocess_read_eof_reached (flux_subprocess_t *p, const char *stream)
     }
 
     if (p->local) {
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w))) {
-            errno = ENOSYS;     /* something */
+        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
             return -1;
-        }
     }
     else
         fb = c->read_buffer;
 
     return flux_buffer_is_readonly (fb);
+}
+
+const char *flux_subprocess_getline (flux_subprocess_t *p,
+                                     const char *stream,
+                                     int *lenp)
+{
+    const char *ptr;
+    int len, readonly;
+
+    ptr = subprocess_read (p, stream, 0, &len, true, false, true, &readonly);
+
+    /* if no lines available and EOF received, read whatever is
+     * lingering in the buffer */
+    if (ptr && len == 0 && readonly > 0)
+        ptr = flux_subprocess_read (p, stream, -1, &len);
+
+    if (lenp)
+        (*lenp) = len;
+
+    return ptr;
 }
 
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)

@@ -203,4 +203,14 @@ test_expect_success 'rexec line buffering can be disabled' '
         test "$count" -gt 2
 '
 
+# the last line of output is "bar" without a newline.  "EOF" is output
+# from "rexec_getline", so if everything is working correctly, we
+# should see the concatenation "barEOF" at the end of the output.
+test_expect_success 'rexec read_getline call works on remote streams' '
+	/bin/echo -en "foo\nbar" | ${FLUX_BUILD_DIR}/t/rexec/rexec_getline -i STDIN ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
+        echo "foo" > expected &&
+        echo "barEOF" >> expected &&
+        test_cmp expected output
+'
+
 test_done

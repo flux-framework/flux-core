@@ -213,6 +213,9 @@ static int channel_local_setup (flux_subprocess_t *p,
             goto error;
         }
 
+        if (wflag)
+            c->line_buffered = true;
+
         c->buffer_read_w = flux_buffer_read_watcher_create (p->reactor,
                                                             c->parent_fd,
                                                             buffer_size,

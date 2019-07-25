@@ -201,6 +201,7 @@ check_PROGRAMS = \
 	rexec/rexec_signal \
 	rexec/rexec_ps \
 	rexec/rexec_count_stdout \
+	rexec/rexec_getline \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
@@ -407,6 +408,11 @@ rexec_rexec_ps_LDADD = \
 rexec_rexec_count_stdout_SOURCES = rexec/rexec_count_stdout.c
 rexec_rexec_count_stdout_CPPFLAGS = $(test_cppflags)
 rexec_rexec_count_stdout_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+rexec_rexec_getline_SOURCES = rexec/rexec_getline.c
+rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
+rexec_rexec_getline_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
