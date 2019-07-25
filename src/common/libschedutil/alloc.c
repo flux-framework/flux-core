@@ -118,6 +118,7 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "commit R");
         goto error;
     }
+    schedutil_remove_outstanding_future (util, f);
     if (schedutil_alloc_respond (h, ctx->msg, 0, ctx->note) < 0) {
         flux_log_error (h, "alloc response");
         goto error;
@@ -147,6 +148,7 @@ int schedutil_alloc_respond_R (schedutil_t *util, const flux_msg_t *msg,
     }
     if (flux_future_then (f, -1, alloc_continuation, ctx) < 0)
         goto error;
+    schedutil_add_outstanding_future (util, f);
     return 0;
 error:
     alloc_destroy (ctx);

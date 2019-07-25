@@ -23,8 +23,8 @@
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
     schedutil_t *util = arg;
-    const flux_msg_t *msg = flux_future_aux_get (f, "flux::alloc_request");
     flux_t *h = util->h;
+    const flux_msg_t *msg = flux_future_aux_get (f, "schedutil::msg");
 
     if (util == NULL) {
         errno = EINVAL;
@@ -36,6 +36,8 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "sched.alloc lookup R");
         goto error;
     }
+    if (schedutil_remove_outstanding_future (util, f) < 0)
+        flux_log_error (h, "sched.alloc unable to remove outstanding future");
     util->alloc_cb (h, msg, jobspec, util->cb_arg);
     flux_future_destroy (f);
     return;
@@ -68,7 +70,7 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
         goto error;
     if (flux_future_aux_set (f,
-                             "flux::alloc_request",
+                             "schedutil::msg",
                              (void *)flux_msg_incref (msg),
                              (flux_free_f)flux_msg_decref) < 0) {
         flux_msg_decref (msg);
@@ -76,6 +78,9 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (flux_future_then (f, -1, alloc_continuation, util) < 0)
         goto error_future;
+    if (schedutil_add_outstanding_future (util, f) < 0)
+        flux_log_error (h, "sched.alloc unable to add outstanding future");
+
     return;
 error_future:
     flux_future_destroy (f);
@@ -87,17 +92,17 @@ error:
 
 static void free_continuation (flux_future_t *f, void *arg)
 {
-
     schedutil_t *util = arg;
-    const flux_msg_t *msg  = flux_future_aux_get (f, "flux::free_request");
+    const flux_msg_t *msg = flux_future_aux_get (f, "schedutil::msg");
     flux_t *h = util->h;
-
     const char *R;
 
     if (flux_kvs_lookup_get (f, &R) < 0) {
         flux_log_error (h, "sched.free lookup R");
         goto error;
     }
+    if (schedutil_remove_outstanding_future (util, f) < 0)
+        flux_log_error (h, "sched.free unable to remove outstanding future");
     util->free_cb (h, msg, R, util->cb_arg);
     flux_future_destroy (f);
     return;
@@ -125,7 +130,7 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
         goto error;
     if (flux_future_aux_set (f,
-                             "flux::free_request",
+                             "schedutil::msg",
                              (void *)flux_msg_incref (msg),
                              (flux_free_f)flux_msg_decref) < 0) {
         flux_msg_decref (msg);
@@ -133,6 +138,9 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (flux_future_then (f, -1, free_continuation, util) < 0)
         goto error_future;
+    if (schedutil_add_outstanding_future (util, f) < 0)
+        flux_log_error (h, "sched.free unable to add outstanding future");
+
     return;
 error_future:
     flux_future_destroy (f);

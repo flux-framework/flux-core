@@ -37,6 +37,8 @@ schedutil_t *schedutil_create (flux_t *h,
     util->free_cb = free_cb;
     util->exception_cb = exception_cb;
     util->cb_arg = cb_arg;
+    if ((util->outstanding_futures = zlistx_new ()) == NULL)
+        goto error;
     if (schedutil_ops_register (util) < 0)
         goto error;
     if (flux_event_subscribe (h, "job-exception") < 0)
@@ -49,13 +51,57 @@ error:
     return NULL;
 }
 
+static void respond_to_outstanding_msgs (schedutil_t *util)
+{
+    int rc = 0;
+    flux_future_t *fut;
+    flux_msg_t *msg;
+    for (fut = zlistx_first (util->outstanding_futures);
+         fut;
+         fut = zlistx_next (util->outstanding_futures))
+        {
+            msg = flux_future_aux_get (fut, "schedutil::msg");
+            rc = flux_respond_error (util->h,
+                                     msg,
+                                     ENOSYS,
+                                     "automatic ENOSYS response "
+                                     "from schedutil");
+            if (rc != 0) {
+                flux_log (util->h,
+                          LOG_ERR,
+                          "schedutil: error in responding to "
+                          "outstanding messages");
+            }
+            flux_future_destroy (fut);
+        }
+    zlistx_purge (util->outstanding_futures);
+}
+
 void schedutil_destroy (schedutil_t *util)
 {
     if (util) {
         int saved_errno = errno;
+        respond_to_outstanding_msgs (util);
+        zlistx_destroy (&util->outstanding_futures);
         schedutil_ops_unregister (util);
         free (util);
         errno = saved_errno;
     }
     return;
+}
+
+int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
+{
+    if (zlistx_add_end (util->outstanding_futures, fut) == NULL)
+        return -1;
+    return 0;
+}
+
+int schedutil_remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
+{
+    if (!zlistx_find (util->outstanding_futures, fut))
+        return -1;
+    if (zlistx_detach_cur (util->outstanding_futures) == NULL)
+        return -1;
+    return 0;
 }

@@ -20,7 +20,19 @@ struct schedutil_ctx {
     op_free_f *free_cb;
     op_exception_f *exception_cb;
     void *cb_arg;
+    zlistx_t *outstanding_futures;
 };
+
+/*
+ * Add/remove futures that have associated outstandings messages whose response
+ * is blocked on the future's fulfillment.  Schedutil will automatically reply
+ * to the msg with ENOSYS and destroy the future when the scheduler gets
+ * unloaded.
+ * Return 0 on success and -1 on error.
+ */
+int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
+int schedutil_remove_outstanding_future (schedutil_t *util,
+                                         flux_future_t *fut);
 
 /* (Un-)register callbacks for alloc, free, exception.
  */
