@@ -844,9 +844,9 @@ done:
 
 void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
 {
-    char key[128];
+    const char *s;
     flux_future_t *f;
-    json_t *output = NULL;
+    json_t *output;
     size_t index;
     json_t *entry;
     int rank;
@@ -854,15 +854,22 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
     int len;
     const char *data;
 
-    if (flux_job_kvs_guest_key (key, sizeof (key), id, "output") < 0)
-        log_err_exit ("flux_job_kvs_guest_key");
-    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get_unpack (f, "o", &output) < 0) {
-        if (errno != ENOENT || !missing_ok)
-            log_err_exit ("%s", key);
+    if (!(f = flux_rpc_pack (h,
+                             "job-info.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:[s] s:i}",
+                             "id", id,
+                             "keys", "guest.output",
+                             "flags", 0)))
+        log_err_exit ("job-info.lookup");
+    if (flux_rpc_get_unpack (f, "{s:s}", "guest.output", &s) < 0) {
+        if (errno == ENOENT && missing_ok)
+            goto out;
+        log_err_exit ("guest.output");
     }
-
+    if (!(output = json_loads (s, 0, NULL)))
+        log_msg_exit ("error decoding guest.output");
     json_array_foreach (output, index, entry) {
         if (json_unpack (entry,
                          "{s:i s:s s:i s:s}",
@@ -878,7 +885,8 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
             fwrite (data, len, 1, fp);
         }
     }
-
+    json_decref (output);
+out:
     flux_future_destroy (f);
 }
 
