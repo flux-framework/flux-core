@@ -32,6 +32,8 @@
 #include "io.h"
 #include "pmi.h"
 #include "task.h"
+#include "kill.h"
+#include "signals.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -141,6 +143,53 @@ static void shell_connect_flux (flux_shell_t *shell)
     }
 }
 
+
+int flux_shell_add_event_handler (flux_shell_t *shell,
+                                  const char *subtopic,
+                                  flux_msg_handler_f cb,
+                                  void *arg)
+{
+    struct flux_match match = FLUX_MATCH_EVENT;
+    char *topic;
+    flux_msg_handler_t *mh = NULL;
+
+    if (!shell->h) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (asprintf (&topic,
+                  "shell-%ju.%s",
+                  (uintmax_t) shell->jobid,
+                  subtopic) < 0) {
+        log_err ("add_event: asprintf");
+        return -1;
+    }
+    match.topic_glob = topic;
+    if (!(mh = flux_msg_handler_create (shell->h, match, cb, arg))) {
+        log_err ("add_event: flux_msg_handler_create");
+        free (topic);
+        return -1;
+    }
+    free (topic);
+
+    /*  Destroy msg handler on flux_close (h) */
+    flux_aux_set (shell->h, NULL, mh, (flux_free_f) flux_msg_handler_destroy);
+    flux_msg_handler_start (mh);
+    return 0;
+}
+
+static void shell_events_subscribe (flux_shell_t *shell)
+{
+    if (shell->h) {
+        char *topic;
+        if (asprintf (&topic, "shell-%ju.", (uintmax_t) shell->jobid) < 0)
+            log_err_exit ("shell subscribe: asprintf");
+        if (flux_event_subscribe (shell->h, topic) < 0)
+            log_err_exit ("shell subscribe: flux_event_subscribe");
+        free (topic);
+    }
+}
+
 static void shell_finalize (flux_shell_t *shell)
 {
     /* Process completed tasks:
@@ -185,6 +234,17 @@ static void shell_init (flux_shell_t *shell)
     if (!(shell->completion_refs = zhashx_new ()))
         log_err_exit ("zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
+}
+
+void flux_shell_killall (flux_shell_t *shell, int signum)
+{
+    struct shell_task *task;
+    task = zlist_first (shell->tasks);
+    while (task) {
+        if (shell_task_kill (task, signum) < 0)
+            log_err ("kill task %d: signal %d", task->rank, signum);
+        task = zlist_next (shell->tasks);
+    }
 }
 
 int flux_shell_add_completion_ref (flux_shell_t *shell,
@@ -266,6 +326,15 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     return 0;
 }
 
+static int shell_pre_exec (flux_shell_t *shell)
+{
+    if (kill_event_init (shell) < 0)
+        return -1;
+    if (signals_init (shell) < 0)
+        return -1;
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -285,6 +354,10 @@ int main (int argc, char *argv[])
     /* Connect to broker, or if standalone, open loopback connector.
      */
     shell_connect_flux (&shell);
+
+    /* Subscribe to shell-<id>.* events. (no-op on loopback connector)
+     */
+    shell_events_subscribe (&shell);
 
     /* Populate 'struct shell_info' for general use by shell components.
      * Fetches missing info from shell handle if set.
@@ -309,6 +382,11 @@ int main (int argc, char *argv[])
      */
     if (!(shell.io = shell_io_create (&shell)))
         log_err_exit ("shell_io_create");
+
+    /* Call shell pre-task execution initialization.
+     */
+    if (shell_pre_exec (&shell) < 0)
+        log_err_exit ("shell_prepare");
 
     /* Barrier to ensure initialization has completed across all shells.
      */

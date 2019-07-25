@@ -89,6 +89,10 @@ flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
  */
 flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason);
 
+/* Deliver a signal to a job.
+ */
+flux_future_t *flux_job_kill (flux_t *h, flux_jobid_t id, int signum);
+
 /* Change job priority.
  */
 flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority);

@@ -88,7 +88,10 @@
 #include <flux/core.h>
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/fsd.h"
 #include "job-exec.h"
+
+#define DEFAULT_KILL_TIMEOUT 5.0
 
 extern struct exec_implementation testexec;
 extern struct exec_implementation bulkexec;
@@ -114,6 +117,7 @@ void jobinfo_decref (struct jobinfo *job)
 {
     if (job && (--job->refcount == 0)) {
         int saved_errno = errno;
+        flux_watcher_destroy (job->kill_timer);
         zhashx_delete (job->ctx->jobs, &job->id);
         if (job->impl && job->impl->exit)
             (*job->impl->exit) (job);
@@ -131,6 +135,7 @@ static struct jobinfo * jobinfo_new (void)
 {
     struct jobinfo *job = calloc (1, sizeof (*job));
     job->refcount = 1;
+    job->kill_timeout = DEFAULT_KILL_TIMEOUT;
     return job;
 }
 
@@ -318,9 +323,24 @@ void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
     }
 }
 
+static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                           int revents, void *arg)
+{
+    struct jobinfo *job = arg;
+    flux_log (job->h,
+              LOG_DEBUG,
+              "Sending SIGKILL to job %ju",
+              (uintmax_t) job->id);
+    (*job->impl->kill) (job, SIGKILL);
+}
+
 static void jobinfo_kill (struct jobinfo *job)
 {
-    (*job->impl->kill) (job, SIGKILL);
+    (*job->impl->kill) (job, SIGTERM);
+    job->kill_timer = flux_timer_watcher_create (flux_get_reactor (job->h),
+                                                 job->kill_timeout, 0.,
+                                                 kill_timer_cb, job);
+    flux_watcher_start (job->kill_timer);
 }
 
 static int jobinfo_finalize (struct jobinfo *job);
@@ -806,6 +826,15 @@ static int job_get_ns_name (char *buf, int bufsz, flux_jobid_t id)
     return fluid_encode (buf, bufsz, id, FLUID_STRING_DOTHEX);
 }
 
+static double job_get_kill_timeout (flux_t *h)
+{
+    double t = DEFAULT_KILL_TIMEOUT;
+    const char *kto = flux_attr_get (h, "job-exec.kill_timeout");
+    if (kto && fsd_parse_duration (kto, &t) < 0)
+        flux_log_error (h, "job-exec.kill_timeout=%s", kto);
+    return t;
+}
+
 static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 {
     flux_future_t *f = NULL;
@@ -819,6 +848,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
      *  approach for now)
      */
     job->h = ctx->h;
+    job->kill_timeout = job_get_kill_timeout (job->h);
 
     if (!(job->req = flux_msg_copy (msg, true))) {
         flux_log_error (ctx->h, "start: flux_msg_copy");

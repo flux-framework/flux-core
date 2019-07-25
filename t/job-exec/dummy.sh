@@ -97,6 +97,12 @@ get_command() {
     COMMAND=($(json_get "$JOBSPEC" '.tasks[0].command[]' | tr '\n' ' '))
 }
 
+get_traps() {
+    TRAP=$(json_get "$JOBSPEC" '.attributes.system.environment.TRAP')
+    if test "x$TRAP" != "xnull" ; then
+        trap "/bin/echo got signal $TRAP" $TRAP
+    fi
+}
 
 #
 #  Gather remaining job information:
@@ -105,10 +111,10 @@ get_job_shell_rank
 get_nnodes
 get_duration
 get_command
+get_traps
 
 #
 #  Run specified COMMAND:
 #
 echo Running  "${COMMAND[@]}"
 eval "${COMMAND[@]}"
-

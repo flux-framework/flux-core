@@ -152,4 +152,12 @@ test_expect_success 'flux-shell: shell exits with highest task exit value' '
 		>exit.out 2>exit.err
 '
 
+test_expect_success 'flux-shell: shell forwards signals to tasks' '
+	flux jobspec srun -n1 bash -c "kill \$PPID; sleep 10" > j9 &&
+	test_expect_code  $((128+15)) \
+		${FLUX_SHELL} -v -s -r 0 -j j9 -R R8 69 \
+			>sigterm.out 2>sigterm.err &&
+	grep "forwarding signal 15" sigterm.err
+'
+
 test_done
