@@ -57,6 +57,7 @@ static void local_channel_flush (struct subprocess_channel *c)
         c->eof_sent_to_caller = true;
         c->p->channels_eof_sent++;
         flux_watcher_stop (c->buffer_read_w);
+        c->buffer_read_w_started = false;
 
         if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
             subprocess_check_completed (c->p);
@@ -662,16 +663,26 @@ static int local_exec (flux_subprocess_t *p)
     return 0;
 }
 
-static void start_local_watchers (flux_subprocess_t *p)
+static int start_local_watchers (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
 
     c = zhash_first (p->channels);
     while (c) {
+        int ret;
         flux_watcher_start (c->buffer_write_w);
-        flux_watcher_start (c->buffer_read_w);
+        if ((ret = cmd_option_stream_stop (p, c->name)) < 0)
+            return -1;
+        if (ret) {
+            flux_watcher_start (c->buffer_read_stopped_w);
+        }
+        else {
+            flux_watcher_start (c->buffer_read_w);
+            c->buffer_read_w_started = true;
+        }
         c = zhash_next (p->channels);
     }
+    return 0;
 }
 
 int subprocess_local_setup (flux_subprocess_t *p)
@@ -684,7 +695,8 @@ int subprocess_local_setup (flux_subprocess_t *p)
         return -1;
     if (local_exec (p) < 0)
         return -1;
-    start_local_watchers (p);
+    if (start_local_watchers (p) < 0)
+        return -1;
     return 0;
 }
 
