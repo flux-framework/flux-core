@@ -26,6 +26,8 @@ int completion_cb_count;
 int completion_fail_cb_count;
 int stdout_output_cb_count;
 int stderr_output_cb_count;
+int stdout_output_cb_len_count;
+int stderr_output_cb_len_count;
 int output_default_stream_cb_count;
 int multiple_lines_stdout_output_cb_count;
 int multiple_lines_stderr_output_cb_count;
@@ -42,6 +44,7 @@ int channel_in_cb_count;
 int channel_in_and_out_cb_count;
 int multiple_lines_channel_cb_count;
 int channel_nul_terminate_cb_count;
+int timer_cb_count;
 
 static int fdcount (void)
 {
@@ -189,6 +192,16 @@ void test_basic_errors (flux_reactor_t *r)
         "flux_rexec fails with cmd with no cwd");
     flux_cmd_destroy (cmd);
 
+    ok (flux_subprocess_stream_start (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_subprocess_stream_start fails with NULL pointer inputs");
+    ok (flux_subprocess_stream_stop (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_subprocess_stream_stop fails with NULL pointer inputs");
+    ok (flux_subprocess_stream_status (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_subprocess_stream_status fails with NULL pointer inputs");
+
     ok (flux_subprocess_write (NULL, "STDIN", "foo", 3) < 0
         && errno == EINVAL,
         "flux_subprocess_write fails with NULL pointer inputs");
@@ -262,6 +275,15 @@ void test_errors (flux_reactor_t *r)
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
+    ok (flux_subprocess_stream_start (p, NULL) < 0
+        && errno == EINVAL,
+        "flux_subprocess_stream_start returns EINVAL on bad stream");
+    ok (flux_subprocess_stream_stop (p, NULL) < 0
+        && errno == EINVAL,
+        "flux_subprocess_stream_stop returns EINVAL on bad stream");
+    ok (flux_subprocess_stream_status (p, NULL) < 0
+        && errno == EINVAL,
+        "flux_subprocess_stream_status returns EINVAL on bad stream");
     ok (flux_subprocess_write (p, NULL, NULL, 0) < 0
         && errno == EINVAL,
         "flux_subprocess_write returns EINVAL on bad input");
@@ -1922,7 +1944,7 @@ void test_bufsize_error (flux_reactor_t *r)
  *
  * I pick 2200 to make sure we output enough to surpass 4096 bytes of
  * output (i.e. 2200 * 2 bytes > 4096 bytes).
-*/
+ */
 
 void line_output_cb (flux_subprocess_t *p, const char *stream)
 {
@@ -2025,6 +2047,8 @@ void count_output_cb (flux_subprocess_t *p, const char *stream)
 
     if (!strcasecmp (stream, "STDOUT"))
         counter = &stdout_output_cb_count;
+    else if (!strcasecmp (stream, "STDERR"))
+        counter = &stderr_output_cb_count;
     else {
         ok (false, "unexpected stream %s", stream);
         return;
@@ -2089,6 +2113,393 @@ void test_line_buffer_error (flux_reactor_t *r)
     ok (p == NULL
         && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad line_buffer input");
+
+    flux_cmd_destroy (cmd);
+}
+
+void test_stream_start_stop_basic (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = output_cb,
+        .on_stderr = output_cb,
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    ok (flux_subprocess_stream_status (p, "STDOUT") > 0,
+        "flux_subprocess_stream_status says STDOUT is started");
+    ok (flux_subprocess_stream_status (p, "STDERR") > 0,
+        "flux_subprocess_stream_status says STDERR is started");
+
+    ok (!flux_subprocess_stream_stop (p, "STDOUT"),
+        "flux_subprocess_stream_stop on STDOUT success");
+    ok (!flux_subprocess_stream_stop (p, "STDERR"),
+        "flux_subprocess_stream_stop on STDERR success");
+
+    ok (flux_subprocess_stream_status (p, "STDOUT") == 0,
+        "flux_subprocess_stream_status says STDOUT is stopped");
+    ok (flux_subprocess_stream_status (p, "STDERR") == 0,
+        "flux_subprocess_stream_status says STDERR is stopped");
+
+    ok (!flux_subprocess_stream_start (p, "STDOUT"),
+        "flux_subprocess_stream_start on STDOUT success");
+    ok (!flux_subprocess_stream_start (p, "STDERR"),
+        "flux_subprocess_stream_start on STDERR success");
+
+    ok (flux_subprocess_stream_status (p, "STDOUT") > 0,
+        "flux_subprocess_stream_status says STDOUT is started");
+    ok (flux_subprocess_stream_status (p, "STDERR") > 0,
+        "flux_subprocess_stream_status says STDERR is started");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
+    ok (stderr_output_cb_count == 2, "stderr output callback called 2 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *ptr;
+    int lenp = 0;
+    int *counter;
+    int *len_counter;
+
+    if (!strcasecmp (stream, "STDOUT")) {
+        counter = &stdout_output_cb_count;
+        len_counter = &stdout_output_cb_len_count;
+    }
+    else if (!strcasecmp (stream, "STDERR")) {
+        counter = &stderr_output_cb_count;
+        len_counter = &stderr_output_cb_len_count;
+    }
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    ptr = flux_subprocess_read (p, stream, -1, &lenp);
+    (*counter)++;
+    (*len_counter)+= lenp;
+
+    if (ptr && lenp && (*len_counter) == 10001) {
+        if (!strcmp (stream, "STDERR")) {
+            ok (stdout_output_cb_count == 0
+                && stdout_output_cb_len_count == 0,
+                "received all stderr data and stdout output is still 0");
+            ok (!flux_subprocess_stream_start (p, "STDOUT"),
+                "flux_subprocess_stream_start on STDOUT success");
+        }
+    }
+}
+
+/* How this tests works is we output "hi" alot of times without line
+ * buffering on both stdout and stderr.  After starting the
+ * subprocess, we immediately disable the stdout stream.  The goal is
+ * we get all the stderr via callback, then re-enable the stdout
+ * stream, and get the rest of the stdout.
+ *
+ * This test is racy, as its always possible stderr just arrives
+ * before stdout under normal circumstances, but the probability of
+ * that occuring is low given how much we output.
+ */
+void test_stream_start_stop_initial_stop (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-E", "-c", "5000", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (6, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    ok (flux_cmd_setopt (cmd, "STDERR_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDERR_LINE_BUFFER success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = start_stdout_after_stderr_cb,
+        .on_stderr = start_stdout_after_stderr_cb,
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    stdout_output_cb_len_count = 0;
+    stderr_output_cb_len_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    ok (!flux_subprocess_stream_stop (p, "STDOUT"),
+        "flux_subprocess_stream_stop on STDOUT success");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* potential for == 2, b/c could all be buffered before STDOUT
+     * callback is re-started */
+    ok (stdout_output_cb_count >= 2, "stdout output callback called >= 2 times: %d",
+        stdout_output_cb_count);
+    /* we would hope stderr is called > 2 times, but there's
+     * potentially racy behavior and its only called 2 times.  This
+     * isn't seen in practice. */
+    ok (stderr_output_cb_count > 2, "stderr output callback called > 2 times: %d",
+        stderr_output_cb_count);
+    ok (stdout_output_cb_len_count == 10001, "stdout_output_cb_len_count is 10001");
+    ok (stderr_output_cb_len_count == 10001, "stderr_output_cb_len_count is 10001");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void mid_stop_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
+{
+    flux_subprocess_t *p = arg;
+    ok (stdout_output_cb_count == 1,
+        "stdout callback has not been called since timer activated");
+    ok (!flux_subprocess_stream_start (p, "STDOUT"),
+        "flux_subprocess_stream_start on STDOUT success");
+    timer_cb_count++;
+    flux_watcher_stop (w);
+}
+
+void mid_stop_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *ptr;
+    int lenp = 0;
+    int *counter;
+
+    if (!strcasecmp (stream, "STDOUT"))
+        counter = &stdout_output_cb_count;
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    ptr = flux_subprocess_read (p, stream, -1, &lenp);
+    if (stdout_output_cb_count == 0) {
+        flux_watcher_t *tw = NULL;
+        ok (ptr && lenp > 0,
+            "flux_subprocess_read read data on STDOUT: %d", lenp);
+        ok (!flux_subprocess_stream_stop (p, "STDOUT"),
+            "flux_subprocess_stream_stop on STDOUT success");
+        ok ((tw = flux_subprocess_aux_get (p, "tw")) != NULL,
+            "flux_subprocess_aux_get timer success");
+        flux_watcher_start (tw);
+    }
+    else if (stdout_output_cb_count == 1) {
+        ok (ptr && lenp > 0,
+            "flux_subprocess_read read data on STDOUT: %d", lenp);
+        ok (timer_cb_count == 1,
+            "next stdout callback called after time callback called");
+    }
+    (*counter)++;
+}
+
+/* How this tests works is we output "hi" alot of times without line
+ * buffering on stdout.  After the first callback, we stop the output
+ * stream, and setup a timer.  For a bit of time, we should see no
+ * more stdout, and after the timer expires, we'll re-eanble the
+ * stdout stream.
+ *
+ * This test is racy, as its always possible stdout is just delayed,
+ * but the probability of that occuring is low given how much we
+ * output.
+ */
+void test_stream_start_stop_mid_stop (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-c", "5000", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    flux_watcher_t *tw = NULL;
+
+    ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = mid_stop_cb,
+        .on_stderr = NULL,
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    timer_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok ((tw = flux_timer_watcher_create (r, 2.0, 0.0,
+                                         mid_stop_timer_cb, p)) != NULL,
+        "flux_timer_watcher_create success");
+
+    ok (!flux_subprocess_aux_set (p, "tw", tw, NULL),
+        "flux_subprocess_aux_set timer success");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* could be == to 3 if output occurs fast enough, but chances are
+     * it'll be > 3 */
+    ok (stdout_output_cb_count >= 3, "stdout output callback called >= 3 times: %d",
+        stdout_output_cb_count);
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    ok (timer_cb_count == 1, "timer callback called 1 time");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+    flux_watcher_destroy (tw);
+}
+
+/* How this tests works is we output "hi" alot of times without line
+ * buffering on both stdout and stderr.  We initially disable stdout
+ * callbacks via STREAM_STOP.  So the goal is we get all the
+ * stderr via callback and no stdout via callback.  After we get all
+ * the stderr, we can re-enable stdout and get all of that data.
+ *
+ * This test is racy, as its always possible stderr just arrives
+ * before stdout under normal circumstances, but the probability of
+ * that occuring is low given how much we output.
+  */
+void test_stream_stop_enable (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-E", "-c", "5000", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (6, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    ok (flux_cmd_setopt (cmd, "STDERR_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDERR_LINE_BUFFER success");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_STREAM_STOP", "true") == 0,
+        "flux_cmd_setopt set STDOUT_STREAM_STOP success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = start_stdout_after_stderr_cb,
+        .on_stderr = start_stdout_after_stderr_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    stdout_output_cb_len_count = 0;
+    stderr_output_cb_len_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* potential for == 2, b/c could all be buffered before STDOUT
+     * callback is started */
+    ok (stdout_output_cb_count >= 2, "stdout output callback called >= 2 times: %d",
+        stdout_output_cb_count);
+    /* we would hope stderr is called > 2 times, but there's
+     * potentially racy behavior and its only called 2 times.  This
+     * isn't seen in practice. */
+    ok (stderr_output_cb_count > 2, "stderr output callback called > 2 times: %d",
+        stderr_output_cb_count);
+    ok (stdout_output_cb_len_count == 10001, "stdout_output_cb_len_count is 10001");
+    ok (stderr_output_cb_len_count == 10001, "stderr_output_cb_len_count is 10001");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+/* disabled the test should work like a normal test */
+void test_stream_stop_disable (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-E", "-c", "5000", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (6, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
+
+    ok (flux_cmd_setopt (cmd, "STDERR_LINE_BUFFER", "false") == 0,
+        "flux_cmd_setopt set STDERR_LINE_BUFFER success");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_STREAM_STOP", "false") == 0,
+        "flux_cmd_setopt set STDOUT_STREAM_STOP success");
+
+    ok (flux_cmd_setopt (cmd, "STDERR_STREAM_STOP", "false") == 0,
+        "flux_cmd_setopt set STDERR_STREAM_STOP success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = count_output_cb,
+        .on_stderr = count_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdout_output_cb_count > 2, "stdout output callback called > 2 times: %d",
+        stdout_output_cb_count);
+    ok (stderr_output_cb_count > 2, "stderr output callback called > 2 times: %d",
+        stderr_output_cb_count);
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_stream_stop_error (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/true", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "STDOUT_STREAM_STOP", "ABCD") == 0,
+        "flux_cmd_setopt set STDOUT_STREAM_STOP success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_channel_out = flux_standard_output,
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
+    };
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p == NULL
+        && errno == EINVAL,
+        "flux_local_exec fails with EINVAL due to bad stream_stop input");
 
     flux_cmd_destroy (cmd);
 }
@@ -2263,6 +2674,18 @@ int main (int argc, char *argv[])
     test_line_buffer_disable (r);
     diag ("line_buffer_error");
     test_line_buffer_error (r);
+    diag ("stream_start_stop_basic");
+    test_stream_start_stop_basic (r);
+    diag ("stream_start_stop_initial_stop");
+    test_stream_start_stop_initial_stop (r);
+    diag ("stream_start_stop_mid_stop");
+    test_stream_start_stop_mid_stop (r);
+    diag ("stream_stop_enable");
+    test_stream_stop_enable (r);
+    diag ("stream_stop_disable");
+    test_stream_stop_disable (r);
+    diag ("stream_stop_error");
+    test_stream_stop_error (r);
     diag ("pre_exec_hook");
     test_pre_exec_hook (r);
     diag ("post_fork_hook");
