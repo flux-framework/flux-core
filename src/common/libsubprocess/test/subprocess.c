@@ -1956,11 +1956,11 @@ void line_output_cb (flux_subprocess_t *p, const char *stream)
 
 void test_line_buffer_default (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-c", "2200", "hi", NULL };
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-c", "2200", "hi", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
-    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+    ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
@@ -1987,11 +1987,11 @@ void test_line_buffer_default (flux_reactor_t *r)
 
 void test_line_buffer_enable (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-c", "2200", "hi", NULL };
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-c", "2200", "hi", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
-    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+    ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
 
     ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "true") == 0,
         "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
@@ -2036,11 +2036,11 @@ void count_output_cb (flux_subprocess_t *p, const char *stream)
 
 void test_line_buffer_disable (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-c", "2200", "hi", NULL };
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-c", "2200", "hi", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
-    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+    ok ((cmd = flux_cmd_create (5, av, environ)) != NULL, "flux_cmd_create");
 
     ok (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", "false") == 0,
         "flux_cmd_setopt set STDOUT_LINE_BUFFER success");
