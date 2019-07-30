@@ -68,6 +68,7 @@
 #include <flux/core.h>
 
 #include "src/common/libpmi/simple_server.h"
+#include "src/common/libpmi/clique.h"
 #include "src/common/libutil/log.h"
 
 #include "task.h"
@@ -279,6 +280,57 @@ void shell_pmi_task_ready (struct shell_task *task, void *arg)
     }
 }
 
+/* Generate 'PMI_process_mapping' key (see RFC 13) for MPI clique computation.
+ *
+ * Create an array of pmi_map_block structures, sized for worst case mapping
+ * (no compression possible).  Walk through the rcalc info for each shell rank.
+ * If shell's mapping looks identical to previous one, increment block->nodes;
+ * otherwise consume another array slot.  Finally, encode to string, put it
+ * in the local KVS hash, and free array.
+ */
+int init_clique (struct shell_pmi *pmi)
+{
+    struct pmi_map_block *blocks;
+    int nblocks;
+    int i;
+    char val[SIMPLE_KVS_VAL_MAX];
+
+    if (!(blocks = calloc (pmi->shell->info->shell_size, sizeof (*blocks))))
+        return -1;
+    nblocks = 0;
+
+    for (i = 0; i < pmi->shell->info->shell_size; i++) {
+        struct rcalc_rankinfo ri;
+
+        if (rcalc_get_nth (pmi->shell->info->rcalc, i, &ri) < 0)
+            goto error;
+        if (nblocks == 0 || blocks[nblocks - 1].procs != ri.ntasks) {
+            blocks[nblocks].nodeid = i;
+            blocks[nblocks].procs = ri.ntasks;
+            blocks[nblocks].nodes = 1;
+            nblocks++;
+        }
+        else
+            blocks[nblocks - 1].nodes++;
+    }
+    /* If value exceeds SIMPLE_KVS_VAL_MAX, skip setting the key
+     * without generating an error.  The client side will not treat
+     * a missing key as an error.  It should be unusual though so log it.
+     */
+    if (pmi_process_mapping_encode (blocks, nblocks, val, sizeof (val)) < 0) {
+        log_err ("pmi_process_mapping_encode");
+        goto out;
+    }
+    zhashx_update (pmi->kvs, "PMI_process_mapping", val);
+out:
+    free (blocks);
+    return 0;
+error:
+    free (blocks);
+    errno = EINVAL;
+    return -1;
+}
+
 void shell_pmi_destroy (struct shell_pmi *pmi)
 {
     if (pmi) {
@@ -339,6 +391,8 @@ struct shell_pmi *shell_pmi_create (flux_shell_t *shell)
     }
     zhashx_set_destructor (pmi->kvs, kvs_value_destructor);
     zhashx_set_duplicator (pmi->kvs, kvs_value_duplicator);
+    if (init_clique (pmi) < 0)
+        goto error;
     return pmi;
 error:
     shell_pmi_destroy (pmi);
