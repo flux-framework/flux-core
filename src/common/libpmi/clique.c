@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdarg.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -19,6 +20,43 @@
 
 #include "pmi.h"
 #include "clique.h"
+
+static int catprintf (char **buf, int *bufsz, const char *fmt, ...)
+{
+    va_list ap;
+    int n;
+
+    va_start (ap, fmt);
+    n = vsnprintf (*buf, *bufsz, fmt, ap);
+    va_end (ap);
+    if (n >= *bufsz)
+        return -1;
+    *bufsz -= n;
+    *buf += n;
+    return 0;
+}
+
+int pmi_process_mapping_encode (struct pmi_map_block *blocks,
+                                int nblocks,
+                                char *buf,
+                                int bufsz)
+{
+    int i;
+
+    if (catprintf (&buf, &bufsz, "(vector,") < 0)
+        return -1;
+    for (i = 0; i < nblocks; i++) {
+        if (catprintf (&buf, &bufsz, "%s(%d,%d,%d)",
+                       i > 0 ? "," : "",
+                       blocks[i].nodeid,
+                       blocks[i].nodes,
+                       blocks[i].procs) < 0)
+            return -1;
+    }
+    if (catprintf (&buf, &bufsz, ")") < 0)
+        return -1;
+    return 0;
+}
 
 static int parse_block (const char *s, struct pmi_map_block *block)
 {

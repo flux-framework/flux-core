@@ -19,7 +19,9 @@ libpmi_common_sources = \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
-	keyval.h
+	keyval.h \
+	clique.c \
+	clique.h
 
 libpmi_client_la_SOURCES = \
 	simple_client.c \
@@ -27,8 +29,6 @@ libpmi_client_la_SOURCES = \
 	pmi.c \
 	dgetline.c \
 	dgetline.h \
-	clique.c \
-	clique.h \
 	$(libpmi_common_sources)
 
 libpmi_server_la_SOURCES = \

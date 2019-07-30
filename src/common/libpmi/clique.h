@@ -41,6 +41,14 @@ struct pmi_map_block {
 int pmi_process_mapping_parse (const char *s,
                                struct pmi_map_block **blocks, int *nblocks);
 
+/* Generate PMI_process_mapping value string from array of pmi_map_blocks,
+ * and place it in 'buf'.  Result will be null terminated.
+ */
+int pmi_process_mapping_encode (struct pmi_map_block *blocks,
+                                int nblocks,
+                                char *buf,
+                                int bufsz);
+
 
 /* Determine the nodeid that will start 'rank', and return it in 'nodeid'.
  */
