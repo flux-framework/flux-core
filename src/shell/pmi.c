@@ -205,6 +205,10 @@ static int shell_pmi_barrier_enter (void *arg)
     val = zhashx_first (pmi->kvs);
     while (val) {
         key = zhashx_cursor (pmi->kvs);
+        if (!strcmp (key, "PMI_process_mapping")) {
+            val = zhashx_next (pmi->kvs);
+            continue;
+        }
         if (shell_pmi_kvs_key (nkey,
                                sizeof (nkey),
                                pmi->shell->jobid,
