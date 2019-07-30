@@ -135,6 +135,13 @@ test_expect_success 'flux-shell: shell PMI works' '
 	${FLUX_SHELL} -v -s -r 0 -j j8pmi -R R8 51 \
 		>pmi_info.out 2>pmi_info.err
 '
+test_expect_success 'flux-shell: shell PMI exports clique info' '
+	flux jobspec srun -N1 -n8 ${PMI_INFO} -c >j8pmi_clique &&
+	${FLUX_SHELL} -v -s -r 0 -j j8pmi_clique -R R8 51 \
+		>pmi_clique.out 2>pmi_clique.err &&
+	COUNT=$(grep "clique=0,1,2,3,4,5,6,7" pmi_clique.out | wc -l) &&
+	test ${COUNT} -eq 8
+'
 test_expect_success 'flux-shell: shell PMI KVS works' '
 	flux jobspec srun -N1 -n8 ${KVSTEST} >j8kvs &&
 	${FLUX_SHELL} -v -s -r 0 -j j8kvs -R R8 52 \
