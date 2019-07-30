@@ -27,10 +27,10 @@
  *
  * Other requests have callbacks from the engine to provide data,
  * which is fed back to the engine, which then calls shell_pmi_response_send().
- * These are kvs_get, kvs_put, and barrier.  Although the protocol engine
+ * These are kvs_get, kvs_put, and barrier.  Although the task
  * is effectively blocked while these callbacks are handled, they are
- * implemented with asynchronous continuation callbacks so that the shell's
- * reactor remains live while they are waiting for an answer.
+ * implemented with asynchronous continuation callbacks so that other tasks
+ * and the shell's reactor remain live while the task awaits an answer.
  *
  * The PMI KVS supports a put / barrier / get pattern.  The barrier
  * distributes KVS data that was "put" so that it is available to "get".
