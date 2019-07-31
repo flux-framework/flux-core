@@ -237,8 +237,6 @@ int shell_task_start (struct shell_task *task,
 {
     int flags = 0;
 
-    if (!task->io_cb)
-        flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
     task->proc = flux_local_exec (r, flags, task->cmd, &subproc_ops, NULL);
     if (!task->proc)
         return -1;
