@@ -894,6 +894,8 @@ int mod_main (flux_t *h, int ac, char **av)
     int rc = -1;
     flux_msg_handler_t **handlers = NULL;
     cron_ctx_t *ctx = cron_ctx_create (h);
+    if (ctx == NULL)
+        return -1;
 
     process_args (ctx, ac, av);
 
