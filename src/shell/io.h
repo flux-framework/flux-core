@@ -23,7 +23,7 @@ void shell_io_destroy (struct shell_io *io);
 struct shell_io *shell_io_create (flux_shell_t *shell);
 
 // shell_task_io_ready_f callback footprint
-void shell_io_task_ready (struct shell_task *task, const char *name, void *arg);
+void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg);
 
 #endif /* !SHELL_IO_H */
 

@@ -99,7 +99,7 @@ static void shell_io_write_completion (flux_future_t *f, void *arg)
 
 static int shell_io_write (struct shell_io *io,
                            int rank,
-                           const char *name,
+                           const char *stream,
                            const char *data,
                            int len)
 {
@@ -111,7 +111,7 @@ static int shell_io_write (struct shell_io *io,
                              0,
                              "{s:i s:s s:i s:s}",
                              "rank", rank,
-                             "name", name,
+                             "stream", stream,
                              "len", len,
                              "data", data)))
         return -1;
@@ -129,7 +129,7 @@ static int shell_io_flush (struct shell_io *io)
     json_t *entry;
     size_t index;
     int rank;
-    const char *name;
+    const char *stream;
     const char *data;
     int len;
     FILE *f;
@@ -138,11 +138,11 @@ static int shell_io_flush (struct shell_io *io)
         if (json_unpack (entry,
                          "{s:i s:s s:i s:s}",
                          "rank", &rank,
-                         "name", &name,
+                         "stream", &stream,
                          "len", &len,
                          "data", &data) < 0)
             return -1;
-        f = !strcmp (name, "STDOUT") ? stdout : stderr;
+        f = !strcmp (stream, "STDOUT") ? stdout : stderr;
         if (len > 0) {
             fprintf (f, "%d: ", rank);
             fwrite (data, len, 1, f);
@@ -229,19 +229,19 @@ error:
 }
 
 // shell_task_io_ready_f callback footprint
-void shell_io_task_ready (struct shell_task *task, const char *name, void *arg)
+void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg)
 {
     struct shell_io *io = arg;
     const char *data;
     int len;
 
-    len = shell_task_io_readline (task, name, &data);
+    len = shell_task_io_readline (task, stream, &data);
     if (len < 0) {
-        log_err ("read %s task %d", name, task->rank);
+        log_err ("read %s task %d", stream, task->rank);
     }
-    else if (len > 0 || (len == 0 && shell_task_io_at_eof (task, name))) {
-        if (shell_io_write (io, task->rank, name, data, len) < 0)
-            log_err ("write %s task %d", name, task->rank);
+    else if (len > 0 || (len == 0 && shell_task_io_at_eof (task, stream))) {
+        if (shell_io_write (io, task->rank, stream, data, len) < 0)
+            log_err ("write %s task %d", stream, task->rank);
     }
 }
 
