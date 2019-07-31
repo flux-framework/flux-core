@@ -143,6 +143,17 @@ static int parse_bootstrap_option (optparse_t *opts)
     log_msg_exit("Unknown bootstrap method \"%s\"", bootstrap);
 }
 
+/* Various things will go wrong with module loading, process execution, etc.
+ *  when current directory can't be found. Exit early with error to avoid
+ *  chaotic stream of error messages later in startup.
+ */
+static void sanity_check_working_directory (void)
+{
+    char buf [PATH_MAX+1024];
+    if (!getcwd (buf, sizeof (buf)))
+        log_err_exit ("Unable to get current working directory");
+}
+
 int main (int argc, char *argv[])
 {
     int e, status = 0;
@@ -154,6 +165,8 @@ int main (int argc, char *argv[])
     int bootstrap;
 
     log_init ("flux-start");
+
+    sanity_check_working_directory ();
 
     ctx.opts = optparse_create ("flux-start");
     if (optparse_add_option_table (ctx.opts, opts) != OPTPARSE_SUCCESS)
