@@ -203,6 +203,16 @@ int main (int argc, char *argv[])
         "flux_cmd_getenv (FOO) == 24");
     flux_cmd_unsetenv (cmd, "FOO");
 
+    // Test opt overwrite
+    ok (flux_cmd_setopt (cmd, "FOO", "BAR") >= 0,
+        "flux_cmd_setopt");
+    is (flux_cmd_getopt (cmd, "FOO"), "BAR",
+        "flux_cmd_getopt (cmd, 'FOO') == BAR");
+    ok (flux_cmd_setopt (cmd, "FOO", "BAZ") >= 0,
+        "flux_cmd_setopt");
+    is (flux_cmd_getopt (cmd, "FOO"), "BAZ",
+        "flux_cmd_getopt (cmd, 'FOO') == BAZ");
+
     diag ("Copy a flux_cmd_t and and ensure it matches source cmd");
     copy = flux_cmd_copy (cmd);
     ok (copy != NULL, "flux_cmd_copy");
