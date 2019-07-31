@@ -126,6 +126,16 @@ test_expect_success 'flux-start --wrap option works with --size' '
 	test "$(grep -c test-wrap wrap2.output)" = "2"
 '
 
+test_expect_success 'flux-start dies gracefully when run from removed dir' '
+	mkdir foo && (
+	 cd foo &&
+	 unset FLUX_RC1_PATH &&
+	 unset FLUX_RC3_PATH &&
+	 rmdir ../foo &&
+	 test_must_fail flux start /bin/true )
+'
+
+
 test_expect_success 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
         mkdir -p test-under-flux && (
