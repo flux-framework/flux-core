@@ -1,3 +1,81 @@
+flux-core version 0.12.0 - 2019-08-01
+-------------------------------------
+
+## Summary:
+
+This version of flux-core replaces the old execution prototype, "wreck",
+with a new job submission and execution protocol. The new system does
+not yet have support for all the features of the prototype, however it
+is capable of running jobs specified in version 1 jobspec format with
+an advanced and performant job submission API.
+
+For early adopters:
+ 
+ * To generate jobspec, see `flux jobspec`
+ * To submit jobspec, see `flux job submit`
+ * Instead of `flux wreckrun` try `flux srun`
+ * Instead of `flux wreck ls` try `flux job list`
+ * Instead of `flux wreck kill/cancel` try `flux job kill/cancel`
+ * Job events are recorded detailed eventlog, see `flux job eventlog <id>`
+ * Experience job synchronization with `flux job wait-event`
+ * Attach to submitted jobs with `flux job attach`
+ * Want info about a job? Try `flux job info`
+ * Waiting for all jobs to complete? Try `flux job drain`
+
+### New Features:
+
+ * new job submit api and `flux job submit` command (#1910, #1918)
+ * add job exception and cancellation support (#1976)
+ * support validation for submitted jobspec (#1913, #1922)
+ * add `flux jobspec` jobspec generation script (#1920, #1964)
+ * add a simple default node/core fcfs scheduler, sched-simple
+   (#2038, #2053, #2203)
+ * add `flux job info`, `eventlog`, `wait-event`, `attach`
+   (#2071, #2085, #2098, #2112, #2114, #2115, #2137, #2142, #2269, #2084)
+ * add `flux job drain` (#2092)
+ * add flux-shell, the flux job shell (#2211, #2240, #2246, #2244, #2278)
+ * add `flux srun` (#2179, #2227)
+
+### Improvements:
+ 
+ * libsubprocess updates (#2158, #2152, #2167, #2174, #2230, #2254, #2262,
+    #2265)
+ * job-manager: add exec and scheduler interfaces, add job state machine:
+    (#2025, #2031, #2067, #2068, #2077, #2146, #2198, #2231)
+ * job-manager: add state transition events (#2109)
+ * job-manager: other improvements (#2047, #2062)
+ * replace resource-hwloc module (#1968)
+ * standardize parsing of duration in most tools (#2095, #2216)
+ * add guest support to barrier module (#2215)
+ * add broker `rundir` attribute (#2121) 
+ * kvs: remove namespace prefix support (#1943)
+ * kvs: support namespace symlinks (#1949)
+ * kvs: new kvs namespace command (#1985)
+ * python: add futures support (#2023)
+ * improve signature of `flux_respond` and `flux_respond_error` (#2120)
+
+### Fixes
+
+ * misc build and test system fixes (#1912, #1914, #1915, #1925, #1941,
+    #2004, #2014, #2019, #2022, #2028, #2034, #2037, #2058, #2104, #2133,
+    #2124, #2177, #2221, #2128, #2229)
+ * misc flux-broker fixes (#2172, #2178, #2175, #2181, #2194, #2197, 
+ * misc kvs fixes (#1907, #1936, #1945, #1946, #1966, #1949, #1965, #1969,
+    #1971, #1977, #2011, #2016, #2018, #2056, #2059, #2064, #2126, #2130,
+    #2136, #2138)
+ * remove kvs classic library (#2017)
+ * misc python fixes (#1934, #1962, #2046, #2218)
+ * misc libflux-core fixes (#1939, #1942, #1956, #1982, #2091, #2097, #2099,
+    #2153, #2164)
+ * do not version libpmi*.so (#1992)
+ * ensure system python path is not pushed to front of PYTHONPATH (#2144)
+ * flux-exec fixes: (#1997, #2005, #2248)
+ * libpmi fixes (#2185)
+ * libidset fixes (#1928, #1975, #1978, #2060)
+ * jobspec fixes and updates (#1996, #2081, #2096)
+ * other fixes (#1989, #2090, #2151, #2280, #2282)
+
+ 
 flux-core version 0.11.0 - 2019-01-03
 -------------------------------------
 
