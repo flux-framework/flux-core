@@ -47,6 +47,23 @@ typedef void (schedutil_exception_cb_f)(flux_t *h,
                                         int severity,
                                         void *arg);
 
+/* Callback for when the schedutil library becomes idle.
+ * More specifically, idle means that all oustanding requests or futures within
+ * the schedutil library have been responded to and fulfilled, respectively.
+ * Useful for determining when to properly reply to any `quiescent` requests
+ * sent during a simulation.
+ */
+typedef void (schedutil_idle_f)(flux_t *h,
+                                void *arg);
+
+/* Callback for when the schedutil library becomes busy.
+ * More specifically, bust means that an oustanding request or future now exists
+ * within the schedutil library. Useful for determining when to delay replying
+ * to any `quiescent` requests sent during a simulation.
+ */
+typedef void (schedutil_busy_f)(flux_t *h,
+                                void *arg);
+
 #endif /* !_FLUX_SCHEDUTIL_OPS_H */
 
 /*

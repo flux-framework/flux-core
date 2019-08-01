@@ -255,6 +255,8 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
                                           alloc_cb,
                                           free_cb,
                                           exception_cb,
+                                          NULL,
+                                          NULL,
                                           sc);
     if (sc->schedutil_ctx == NULL) {
         flux_log_error (h, "schedutil_create");

@@ -32,6 +32,8 @@ schedutil_t *schedutil_create (flux_t *h,
                                schedutil_alloc_cb_f *alloc_cb,
                                schedutil_free_cb_f *free_cb,
                                schedutil_exception_cb_f *exception_cb,
+                               schedutil_idle_f *idle_cb,
+                               schedutil_busy_f *busy_cb,
                                void *cb_arg)
 {
     schedutil_t *util;
@@ -47,6 +49,8 @@ schedutil_t *schedutil_create (flux_t *h,
     util->alloc_cb = alloc_cb;
     util->free_cb = free_cb;
     util->exception_cb = exception_cb;
+    util->idle_cb = idle_cb;
+    util->busy_cb = busy_cb;
     util->cb_arg = cb_arg;
     if ((util->outstanding_futures = zlistx_new ()) == NULL)
         goto error;
@@ -110,6 +114,13 @@ int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
 {
     if (zlistx_add_end (util->outstanding_futures, fut) == NULL)
         return -1;
+
+    // If this is the first future, we have gone from idle to busy, so call the
+    // corresponding busy cb (if it is set)
+    if (zlistx_size (util->outstanding_futures) == 1 && util->busy_cb) {
+        flux_log (util->h, LOG_DEBUG, "schedutil: running idle_cb");
+        util->busy_cb (util->h, util->cb_arg);
+    }
     return 0;
 }
 
@@ -119,5 +130,12 @@ int schedutil_remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
         return -1;
     if (zlistx_detach_cur (util->outstanding_futures) == NULL)
         return -1;
+
+    // If this is the last future, we have gone from busy to idle, so call the
+    // corresponding idle cb (if it is set)
+    if (zlistx_size (util->outstanding_futures) == 0 && util->idle_cb) {
+        flux_log (util->h, LOG_DEBUG, "schedutil: running idle_cb");
+        util->idle_cb (util->h, util->cb_arg);
+    }
     return 0;
 }

@@ -19,6 +19,8 @@ struct schedutil_ctx {
     schedutil_alloc_cb_f *alloc_cb;
     schedutil_free_cb_f *free_cb;
     schedutil_exception_cb_f *exception_cb;
+    schedutil_idle_f *idle_cb;
+    schedutil_busy_f *busy_cb;
     void *cb_arg;
     zlistx_t *outstanding_futures;
 };

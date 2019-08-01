@@ -355,7 +355,13 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (h, ss, argc, argv) < 0)
         return -1;
 
-    ss->util_ctx = schedutil_create (h, alloc_cb, free_cb, exception_cb, ss);
+    ss->util_ctx = schedutil_create (h,
+                                     alloc_cb,
+                                     free_cb,
+                                     exception_cb,
+                                     NULL,
+                                     NULL,
+                                     ss);
     if (ss->util_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
         goto done;
