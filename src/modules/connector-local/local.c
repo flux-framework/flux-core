@@ -88,6 +88,8 @@ struct local_service {
     char * name;            /* service name                   */
     flux_msg_handler_t *mh; /* local msg handler for requests */
     client_t *client;       /* client which handles requests  */
+    unsigned int active:1;  /* service is active on broker    */
+    unsigned int orphan:1;  /* client has disconnected        */
 };
 
 static void client_destroy (client_t *c);
@@ -574,6 +576,7 @@ error:
 
 static void local_service_start (struct local_service *ls)
 {
+    ls->active = 1;
     flux_msg_handler_start (ls->mh);
 }
 
@@ -602,6 +605,9 @@ static struct local_service *local_service_add (mod_local_ctx_t *ctx,
     return ls;
 }
 
+static void local_service_deregister (mod_local_ctx_t *ctx,
+                                      struct local_service *ls);
+
 static void service_add_continuation (flux_future_t *f, void *arg)
 {
     struct local_service *ls = arg;
@@ -614,10 +620,20 @@ static void service_add_continuation (flux_future_t *f, void *arg)
         saved_errno = errno;
         local_service_remove (ls);
     }
+    else if (ls->orphan) {
+        /* client detached while we were waiting for service.add reply.
+         *  immediately deregister service and remove local service
+         *  (without responding to now dead client)
+         */
+        mod_local_ctx_t *ctx = flux_future_aux_get (f, "ctx");
+        local_service_deregister (ctx, ls);
+        goto out;
+    }
     else
         local_service_start (ls);
     if (client_respond (c, msg, rc < 0 ? saved_errno : 0) < 0)
         flux_log_error (c->ctx->h, "service_add_continuation: client_respond");
+out:
     flux_future_destroy (f);
 }
 
@@ -657,6 +673,7 @@ static int service_add_request (client_t *c, const flux_msg_t *msg)
         goto error;
     }
     flux_future_aux_set (f, "msg", copy, (flux_free_f) flux_msg_destroy);
+    flux_future_aux_set (f, "ctx", ctx, NULL);
     return 0;
 error:
     flux_future_destroy (f);
@@ -861,6 +878,13 @@ static void deregister_service_noreply (mod_local_ctx_t *ctx, const char *name)
         flux_future_aux_set (f, "service_name", s, (flux_free_f) free);
 }
 
+static void local_service_deregister (mod_local_ctx_t *ctx,
+                                      struct local_service *ls)
+{
+    deregister_service_noreply (ctx, ls->name);
+    local_service_remove (ls);
+}
+
 static void client_deregister_services (client_t *c)
 {
     mod_local_ctx_t *ctx = c->ctx;
@@ -871,6 +895,14 @@ static void client_deregister_services (client_t *c)
         if (ls->client == c) {
             if (!toremove && !(toremove = zlist_new ())) {
                 flux_log_error (ctx->h, "client_deregister: zlist_new");
+                break;
+            }
+            if (!ls->active) {
+                /*  client removed before service.add response was received.
+                 *   mark this service as an orphan so it is destroyed from
+                 *   the service.add continuation.
+                 */
+                ls->orphan = 1;
                 break;
             }
             if (zlist_push (toremove, ls) < 0) {
