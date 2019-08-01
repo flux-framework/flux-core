@@ -157,6 +157,7 @@ dist_check_SCRIPTS = \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
 	issues/t1760-kvs-use-after-free.sh \
+	issues/t2281-service-add-crash.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
