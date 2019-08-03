@@ -830,7 +830,7 @@ static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpa
     if (!(cmd = flux_cmd_create (0, NULL, environ)))
         goto error;
 
-    if (flux_cmd_argv_append (cmd, "%s", shell) < 0)
+    if (flux_cmd_argv_append (cmd, shell) < 0)
         goto error;
 
     for (i = 0; i < ac; i++) {

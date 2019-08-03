@@ -482,7 +482,7 @@ const char *flux_cmd_arg (const flux_cmd_t *cmd, int n)
     return arg;
 }
 
-int flux_cmd_argv_append (flux_cmd_t *cmd, const char *fmt, ...)
+int flux_cmd_argv_appendf (flux_cmd_t *cmd, const char *fmt, ...)
 {
     int rc = 0;
     int errnum = 0;
@@ -493,6 +493,21 @@ int flux_cmd_argv_append (flux_cmd_t *cmd, const char *fmt, ...)
     va_end (ap);
     errno = errnum;
     return (rc);
+}
+
+int flux_cmd_argv_append (flux_cmd_t *cmd, const char *arg)
+{
+    int e;
+    if (arg == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    e = argz_add (&cmd->argz, &cmd->argz_len, arg);
+    if (e) {
+        errno = e;
+        return -1;
+    }
+    return 0;
 }
 
 static int flux_cmd_setenv (flux_cmd_t *cmd, const char *k, const char *v,

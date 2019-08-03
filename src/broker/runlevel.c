@@ -382,10 +382,12 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
     flux_cmd_unsetenv (cmd, "PMI_FD");
     flux_cmd_unsetenv (cmd, "PMI_RANK");
     flux_cmd_unsetenv (cmd, "PMI_SIZE");
-    if (local_uri && flux_cmd_setenvf (cmd, 1, "FLUX_URI", local_uri) < 0)
+    if (local_uri && flux_cmd_setenvf (cmd, 1, "FLUX_URI",
+                                       "%s", local_uri) < 0)
         goto error;
     if (level == 1 || level == 3) {
-        if (flux_cmd_setenvf (cmd, 1, "FLUX_NODESET_MASK", r->nodeset) < 0)
+        if (flux_cmd_setenvf (cmd, 1, "FLUX_NODESET_MASK",
+                              "%s", r->nodeset) < 0)
             goto error;
     }
     r->rc[level].cmd = cmd;

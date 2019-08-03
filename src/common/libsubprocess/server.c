@@ -348,7 +348,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
-    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", s->local_uri) < 0)
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "%s", s->local_uri) < 0)
         goto error;
 
     if (flux_respond_pack (s->h, msg, "{s:s s:i}",
