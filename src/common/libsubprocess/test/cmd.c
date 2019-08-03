@@ -83,8 +83,8 @@ void set_cmd_attributes (flux_cmd_t *cmd)
         "flux_cmd_argv_append");
     ok (flux_cmd_argv_append (cmd, "foo") >= 0,
         "flux_cmd_argv_append");
-    ok (flux_cmd_argv_append (cmd, "bar") >= 0,
-        "flux_cmd_argv_append");
+    ok (flux_cmd_argv_appendf (cmd, "%s", "bar") >= 0,
+        "flux_cmd_argv_appendf");
 
     // Test setenvf
     ok (flux_cmd_setenvf (cmd, 0, "PATH", "/bin:/usr/bin") >= 0,
