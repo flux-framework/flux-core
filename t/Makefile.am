@@ -158,6 +158,7 @@ dist_check_SCRIPTS = \
         issues/t0821-kvs-segfault.sh \
 	issues/t1760-kvs-use-after-free.sh \
 	issues/t2281-service-add-crash.sh \
+	issues/t2284-initial-program-format-chars.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
