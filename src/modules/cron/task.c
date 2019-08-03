@@ -287,9 +287,9 @@ static flux_cmd_t *exec_cmd_create (struct cron_task *t,
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_create");
         goto error;
     }
-    if (flux_cmd_argv_append (cmd, "%s", "sh") < 0
-        || flux_cmd_argv_append (cmd, "%s", "-c") < 0
-        || flux_cmd_argv_append (cmd, "%s", command) < 0) {
+    if (flux_cmd_argv_append (cmd, "sh") < 0
+        || flux_cmd_argv_append (cmd, "-c") < 0
+        || flux_cmd_argv_append (cmd, command) < 0) {
         flux_log_error (t->h, "exec_cmd_create: flux_cmd_argv_append");
         goto error;
     }

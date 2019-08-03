@@ -132,7 +132,7 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
-        || flux_cmd_argv_append (cmd, "%ju", (uintmax_t) job->id) < 0) {
+        || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
         goto err;
     }

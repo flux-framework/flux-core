@@ -177,7 +177,12 @@ void flux_cmd_destroy (flux_cmd_t *cmd);
 /*
  *  Append formatted string to argv of `cmd`.
  */
-int flux_cmd_argv_append (flux_cmd_t *cmd, const char *fmt, ...);
+int flux_cmd_argv_appendf (flux_cmd_t *cmd, const char *fmt, ...);
+
+/*
+ *  Append string to argv of `cmd`.
+ */
+int flux_cmd_argv_append (flux_cmd_t *cmd, const char *arg);
 
 /*
  *  Return the current argument count for `cmd`.
