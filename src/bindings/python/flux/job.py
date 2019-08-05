@@ -124,6 +124,7 @@ class Jobspec(object):
         with open(filename, "rb") as infile:
             return cls.from_yaml_stream(infile)
 
+    @staticmethod
     def _create_resource(res_type, count, with_child=None):
         if with_child is not None and not isinstance(
             with_child, collectionsAbc.Sequence
@@ -140,12 +141,21 @@ class Jobspec(object):
             res["with"] = with_child
         return res
 
-    def _create_slot(self, label, count, with_child):
-        slot = self._create_resource("slot", count, with_child)
+    @classmethod
+    def _create_slot(cls, label, count, with_child):
+        slot = cls._create_resource("slot", count, with_child)
         slot["label"] = label
         return slot
 
-    def set_duration(self, duration):
+    @property
+    def duration(self):
+        try:
+            return self.jobspec["attributes"]["system"]["duration"]
+        except KeyError:
+            return None
+
+    @duration.setter
+    def duration(self, duration):
         """
         Assign a time limit to the job.  The duration may be:
         - a float in seconds
@@ -162,9 +172,20 @@ class Jobspec(object):
             raise ValueError("duration must not be negative")
         if math.isnan(time) or math.isinf(time):
             raise ValueError("duration must be a normal, finite value")
-        self.jobspec["attributes"]["system"]["duration"] = time
+        self.setattr("system.duration", time)
 
-    def set_cwd(self, cwd):
+    @property
+    def cwd(self):
+        """
+        Get working directory of job.
+        """
+        try:
+            return self.jobspec["attributes"]["system"]["cwd"]
+        except KeyError:
+            return None
+
+    @cwd.setter
+    def cwd(self, cwd):
         """
         Set working directory of job.
         """
@@ -172,13 +193,24 @@ class Jobspec(object):
             raise ValueError("cwd must be a string")
         self.jobspec["attributes"]["system"]["cwd"] = cwd
 
-    def set_environment(self, environ):
+    @property
+    def environment(self):
+        """
+        Get (entire) environment of job.
+        """
+        try:
+            return self.jobspec["attributes"]["system"]["environment"]
+        except KeyError:
+            return None
+
+    @environment.setter
+    def environment(self, environ):
         """
         Set (entire) environment of job.
         """
         if not isinstance(environ, collectionsAbc.Mapping):
             raise ValueError("environment must be a mapping")
-        self.jobspec["attributes"]["system"]["environment"] = environ
+        self.setattr("system.environment", environ)
 
     def _set_treedict(self, in_dict, key, val):
         """
@@ -205,6 +237,22 @@ class Jobspec(object):
 
     def dumps(self):
         return json.dumps(self.jobspec)
+
+    @property
+    def resources(self):
+        return self.jobspec.get("resources", None)
+
+    @property
+    def tasks(self):
+        return self.jobspec.get("tasks", None)
+
+    @property
+    def attributes(self):
+        return self.jobspec.get("attributes", None)
+
+    @property
+    def version(self):
+        return self.jobspec.get("version", None)
 
 
 class JobspecV1(Jobspec):
@@ -241,9 +289,9 @@ class JobspecV1(Jobspec):
                 raise ValueError("node count must be an integer >= 1 (if set)")
             if num_nodes > num_tasks:
                 raise ValueError("node count must not be greater than task count")
-        children = [self._create_resource("core", cores_per_task)]
+        children = [cls._create_resource("core", cores_per_task)]
         if gpus_per_task is not None:
-            children.append(self._create_resource("gpu", gpus_per_task))
+            children.append(cls._create_resource("gpu", gpus_per_task))
         if num_nodes is not None:
             num_slots = int(math.ceil(num_tasks / float(num_nodes)))
             if num_tasks % num_nodes != 0:
@@ -251,11 +299,11 @@ class JobspecV1(Jobspec):
                 task_count_dict = {"total": num_tasks}
             else:
                 task_count_dict = {"per_slot": 1}
-            slot = self._create_slot("task", num_slots, children)
-            resource_section = self._create_resource("node", num_nodes, [slot])
+            slot = cls._create_slot("task", num_slots, children)
+            resource_section = cls._create_resource("node", num_nodes, [slot])
         else:
             task_count_dict = {"per_slot": 1}
-            slot = self._create_slot("task", num_tasks, children)
+            slot = cls._create_slot("task", num_tasks, children)
             resource_section = slot
 
         resources = [resource_section]

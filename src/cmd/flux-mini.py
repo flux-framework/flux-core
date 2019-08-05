@@ -196,10 +196,10 @@ class SubmitCmd:
             gpus_per_task=args.gpus_per_task,
             num_nodes=args.nodes,
         )
-        jobspec.set_cwd(os.getcwd())
-        jobspec.set_environment(dict(os.environ))
+        jobspec.cwd = os.getcwd()
+        jobspec.environment = dict(os.environ)
         if args.time_limit is not None:
-            jobspec.set_duration(args.time_limit)
+            jobspec.duration = args.time_limit
 
         if args.job_name is not None:
             jobspec.setattr("system.job.name", args.job_name)
