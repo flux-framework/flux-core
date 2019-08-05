@@ -17,10 +17,12 @@ import json
 import yaml
 
 import unittest
+from glob import glob
+
 
 import flux
 from flux import job
-from flux.job import ffi
+from flux.job import Jobspec, JobspecV1, ffi
 
 
 def __flux_size():
@@ -37,19 +39,19 @@ class TestJob(unittest.TestCase):
     def setUpClass(self):
         self.fh = flux.Flux()
 
-        jobspec_dir = os.path.abspath(
+        self.jobspec_dir = os.path.abspath(
             os.path.join(os.environ["FLUX_SOURCE_DIR"], "t", "jobspec")
         )
 
         # get a valid jobspec
-        basic_jobspec_fname = os.path.join(jobspec_dir, "valid", "basic_v1.yaml")
+        basic_jobspec_fname = os.path.join(self.jobspec_dir, "valid", "basic_v1.yaml")
         with open(basic_jobspec_fname, "rb") as infile:
             basic_yaml = infile.read()
-        self.jobspec = yaml_to_json(basic_yaml)
+        self.basic_jobspec = yaml_to_json(basic_yaml)
 
     def test_00_null_submit(self):
         with self.assertRaises(EnvironmentError) as error:
-            job.submit(ffi.NULL, self.jobspec)
+            job.submit(ffi.NULL, self.basic_jobspec)
         self.assertEqual(error.exception.errno, errno.EINVAL)
 
         with self.assertRaises(EnvironmentError) as error:
@@ -65,8 +67,28 @@ class TestJob(unittest.TestCase):
             job.submit(self.fh, 0)
 
     def test_02_sync_submit(self):
-        jobid = job.submit(self.fh, self.jobspec)
+        jobid = job.submit(self.fh, self.basic_jobspec)
         self.assertGreater(jobid, 0)
+
+    def test_03_invalid_construction(self):
+        for cls in [Jobspec, JobspecV1]:
+            for invalid_jobspec_filepath in glob(
+                os.path.join(self.jobspec_dir, "invalid", "*.yaml")
+            ):
+                with self.assertRaises(
+                    (ValueError, TypeError, yaml.scanner.ScannerError)
+                ) as cm:
+                    cls.from_yaml_file(invalid_jobspec_filepath)
+
+    def test_04_valid_construction(self):
+        for jobspec_filepath in glob(os.path.join(self.jobspec_dir, "valid", "*.yaml")):
+            Jobspec.from_yaml_file(jobspec_filepath)
+
+    def test_05_valid_v1_construction(self):
+        for jobspec_filepath in glob(
+            os.path.join(self.jobspec_dir, "valid_v1", "*.yaml")
+        ):
+            JobspecV1.from_yaml_file(jobspec_filepath)
 
 
 if __name__ == "__main__":

@@ -94,16 +94,33 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     return status
 
 
+def _validate_keys(expected, given, keys_optional=False, allow_additional=False):
+    if not isinstance(expected, set):
+        expected = set(expected)
+    if not isinstance(given, set):
+        given = set(given)
+    if not keys_optional:
+        for req_key in expected.difference(given):
+            raise ValueError("Missing key ({})".format(req_key))
+    if not allow_additional:
+        for extraneous_key in given.difference(expected):
+            raise ValueError("Extraneous key ({})".format(extraneous_key))
+
+
 class Jobspec(object):
+    top_level_keys = set(["resources", "tasks", "version", "attributes"])
+
     def __init__(self, resources, tasks, version, attributes=None):
         if not isinstance(resources, collectionsAbc.Sequence):
             raise TypeError("resources must be a sequence")
         if not isinstance(tasks, collectionsAbc.Sequence):
             raise TypeError("tasks must be a sequence")
-        if not isinstance(attributes, collectionsAbc.Sequence):
-            raise TypeError("attributes must be a sequence")
         if not isinstance(version, int):
             raise TypeError("version must be an integer")
+        if attributes is not None and not isinstance(
+            attributes, collectionsAbc.Mapping
+        ):
+            raise TypeError("attributes must be a mapping")
         elif version < 1:
             raise ValueError("version must be >= 1")
 
@@ -114,15 +131,112 @@ class Jobspec(object):
             "version": version,
         }
 
+        for res in self.resource_walk():
+            self._validate_resource(res)
+
+        for task in tasks:
+            self._validate_task(task)
+
+        if attributes is not None:
+            self._validate_attributes(attributes)
+
     @classmethod
     def from_yaml_stream(cls, yaml_stream):
         jobspec = yaml.safe_load(yaml_stream)
+        _validate_keys(cls.top_level_keys, jobspec.keys())
         return cls(**jobspec)
 
     @classmethod
     def from_yaml_file(cls, filename):
         with open(filename, "rb") as infile:
             return cls.from_yaml_stream(infile)
+
+    @staticmethod
+    def _validate_complex_range(range_dict):
+        if "min" not in range_dict:
+            raise ValueError("min must be in range")
+        if len(range_dict) > 1:
+            _validate_keys(["min", "max", "operator", "operand"], range_dict.keys())
+        for key in ["min", "max", "operand"]:
+            if key not in range_dict:
+                continue
+            if not isinstance(range_dict[key], six.integer_types):
+                raise TypeError("{} must be an int".format(key))
+            elif range_dict[key] < 1:
+                raise ValueError("{} must be > 0".format(key))
+        valid_operator_values = ["+", "*", "^"]
+        if (
+            "operator" in range_dict
+            and range_dict["operator"] not in valid_operator_values
+        ):
+            raise ValueError("operator must be one of {}".format(valid_operator_values))
+
+    @classmethod
+    def _validate_resource(cls, res):
+        if not isinstance(res, collectionsAbc.Mapping):
+            raise TypeError("resource must be a mapping")
+
+        # validate the 'type' key
+        if "type" not in res:
+            raise ValueError("type is a required key for resources")
+        if not isinstance(res["type"], six.string_types):
+            raise TypeError("type must be a string")
+
+        # validate the 'count' key
+        if "count" not in res:
+            raise ValueError("count is a required key for resources")
+        count = res["count"]
+        if isinstance(count, collectionsAbc.Mapping):
+            cls._validate_complex_range(count)
+        elif not isinstance(count, six.integer_types):
+            raise TypeError("count must be an int or mapping")
+        elif count < 1:
+            raise ValueError("count must be > 0")
+
+        # validate the string keys
+        for key in ["id", "unit", "label"]:
+            if key in res and not isinstance(res[key], six.string_types):
+                raise TypeError("{} must be a string".format(key))
+
+        # validate the 'exclusive' key
+        if "exclusive" in res:
+            if res["exclusive"] not in [True, False]:
+                raise TypeError("exclusive must be a boolean")
+
+        # validate that slots have a 'label'
+        if res["type"] == "slot" and "label" not in res:
+            raise ValueError("slots must have labels")
+
+    @staticmethod
+    def _validate_task(task):
+        if not isinstance(task, collectionsAbc.Mapping):
+            raise TypeError("task must be a mapping")
+
+        _validate_keys(["command", "slot", "count"], task.keys(), allow_additional=True)
+
+        if not isinstance(task["count"], collectionsAbc.Mapping):
+            raise TypeError("count must be a mapping")
+
+        if not isinstance(task["slot"], six.string_types):
+            raise TypeError("slot must be a string")
+
+        if "attributes" in task and not isinstance(
+            task["attributes"], collectionsAbc.Mapping
+        ):
+            raise TypeError("count must be a mapping")
+
+        command = task["command"]
+        if not (
+            (  # sequence of strings - N.B. also true for just a plain string
+                isinstance(command, collectionsAbc.Sequence)
+                and all(isinstance(x, six.string_types) for x in command)
+            )
+        ) or isinstance(command, six.string_types):
+            raise TypeError("command must be a list of strings")
+
+    @staticmethod
+    def _validate_attributes(attributes):
+        _validate_keys(["system", "user"], attributes.keys(), keys_optional=True)
 
     @staticmethod
     def _create_resource(res_type, count, with_child=None):
@@ -253,6 +367,23 @@ class Jobspec(object):
     @property
     def version(self):
         return self.jobspec.get("version", None)
+
+    def resource_walk(self):
+        """
+        Traverse the resources in the `resources` section of the jobspec.
+
+        Performs a depth-first, pre-order traversal.
+        """
+
+        def walk_helper(res_list):
+            for resource in res_list:
+                yield resource
+                children = resource.get("with", [])
+                # TODO: convert to `yield from` after dropping 2.7
+                for res in walk_helper(children):
+                    yield res
+
+        return walk_helper(self.resources)
 
 
 class JobspecV1(Jobspec):
