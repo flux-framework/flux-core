@@ -18,7 +18,7 @@ import six
 import yaml
 
 from flux.wrapper import Wrapper
-from flux.util import check_future_error
+from flux.util import check_future_error, parse_fsd
 from flux.future import Future
 from _flux._core import ffi, lib
 
@@ -145,26 +145,6 @@ class Jobspec(object):
         slot["label"] = label
         return slot
 
-    def _parse_fsd(self, s):
-        m = re.match(r".*([smhd])$", s)
-        try:
-            n = float(s[:-1] if m else s)
-        except:
-            raise ValueError("invalid Flux standard duration")
-        unit = m.group(1) if m else "s"
-
-        if unit == "m":
-            seconds = timedelta(minutes=n).total_seconds()
-        elif unit == "h":
-            seconds = timedelta(hours=n).total_seconds()
-        elif unit == "d":
-            seconds = timedelta(days=n).total_seconds()
-        else:
-            seconds = n
-        if seconds < 0 or math.isnan(seconds) or math.isinf(seconds):
-            raise ValueError("invalid Flux standard duration")
-        return seconds
-
     def set_duration(self, duration):
         """
         Assign a time limit to the job.  The duration may be:
@@ -173,7 +153,7 @@ class Jobspec(object):
         A duration of zero is interpreted as "not set".
         """
         if isinstance(duration, six.string_types):
-            time = self._parse_fsd(duration)
+            time = parse_fsd(duration)
         elif isinstance(duration, float):
             time = duration
         else:
