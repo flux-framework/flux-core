@@ -18,7 +18,7 @@ import json
 
 import flux
 from flux import job
-from flux.job import JobSpec
+from flux.job import JobspecV1
 from flux import util
 from flux import constants
 
@@ -189,7 +189,7 @@ class SubmitCmd:
         if not args.command:
             raise ValueError("job command and arguments are missing")
 
-        jobspec = JobSpec(
+        jobspec = JobspecV1.from_command(
             args.command,
             num_tasks=args.ntasks,
             cores_per_task=args.cores_per_task,

@@ -7,6 +7,7 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
+from __future__ import print_function
 
 import math
 import json
@@ -93,73 +94,58 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     return status
 
 
-class JobSpec:
-    def __init__(
-        self, command, num_tasks=1, cores_per_task=1, gpus_per_task=None, num_nodes=None
-    ):
-        """
-        Constructor builds the minimum legal v1 jobspec.
-        Use setters to assign additional properties.
-        """
-        if not isinstance(command, (list, tuple)) or not command:
-            raise ValueError("command must be a non-empty list or tuple")
-        if not isinstance(num_tasks, int) or num_tasks < 1:
-            raise ValueError("task count must be a integer >= 1")
-        if not isinstance(cores_per_task, int) or cores_per_task < 1:
-            raise ValueError("cores per task must be an integer >= 1")
-        if gpus_per_task is not None:
-            if not isinstance(gpus_per_task, int) or gpus_per_task < 1:
-                raise ValueError("gpus per task must be an integer >= 1")
-        if num_nodes is not None:
-            if not isinstance(num_nodes, int) or num_nodes < 1:
-                raise ValueError("node count must be an integer >= 1 (if set)")
-            if num_nodes > num_tasks:
-                raise ValueError("node count must not be greater than task count")
-        children = [self.__create_resource("core", cores_per_task)]
-        if gpus_per_task is not None:
-            children.append(self.__create_resource("gpu", gpus_per_task))
-        if num_nodes is not None:
-            num_slots = int(math.ceil(num_tasks / float(num_nodes)))
-            if num_tasks % num_nodes != 0:
-                # N.B. uneven distribution results in wasted task slots
-                task_count_dict = {"total": num_tasks}
-            else:
-                task_count_dict = {"per_slot": 1}
-            slot = self.__create_slot("task", num_slots, children)
-            resource_section = self.__create_resource("node", num_nodes, [slot])
-        else:
-            task_count_dict = {"per_slot": 1}
-            slot = self.__create_slot("task", num_tasks, children)
-            resource_section = slot
+class Jobspec(object):
+    def __init__(self, resources, tasks, version, attributes=None):
+        if not isinstance(resources, collectionsAbc.Sequence):
+            raise TypeError("resources must be a sequence")
+        if not isinstance(tasks, collectionsAbc.Sequence):
+            raise TypeError("tasks must be a sequence")
+        if not isinstance(attributes, collectionsAbc.Sequence):
+            raise TypeError("attributes must be a sequence")
+        if not isinstance(version, int):
+            raise TypeError("version must be an integer")
+        elif version < 1:
+            raise ValueError("version must be >= 1")
 
         self.jobspec = {
-            "version": 1,
-            "resources": [resource_section],
-            "tasks": [{"command": command, "slot": "task", "count": task_count_dict}],
-            "attributes": {"system": {"duration": 0}},
+            "resources": resources,
+            "tasks": tasks,
+            "attributes": attributes,
+            "version": version,
         }
 
-    def __create_resource(self, res_type, count, with_child=[]):
-        assert isinstance(
+    @classmethod
+    def from_yaml_stream(cls, yaml_stream):
+        jobspec = yaml.safe_load(yaml_stream)
+        return cls(**jobspec)
+
+    @classmethod
+    def from_yaml_file(cls, filename):
+        with open(filename, "rb") as infile:
+            return cls.from_yaml_stream(infile)
+
+    def _create_resource(res_type, count, with_child=None):
+        if with_child is not None and not isinstance(
             with_child, collectionsAbc.Sequence
-        ), "child resource must be a sequence"
-        assert not isinstance(
-            with_child, six.string_types
-        ), "child resource must not be a string"
-        assert count > 0, "resource count must be > 0"
+        ):
+            raise TypeError("child resource must None or a sequence")
+        elif with_child is not None and isinstance(with_child, six.string_types):
+            raise TypeError("child resource must not be a string")
+        if not count > 0:
+            raise ValueError("resource count must be > 0")
 
         res = {"type": res_type, "count": count}
 
-        if len(with_child) > 0:
+        if with_child:
             res["with"] = with_child
         return res
 
-    def __create_slot(self, label, count, with_child):
-        slot = self.__create_resource("slot", count, with_child)
+    def _create_slot(self, label, count, with_child):
+        slot = self._create_resource("slot", count, with_child)
         slot["label"] = label
         return slot
 
-    def __parse_fsd(self, s):
+    def _parse_fsd(self, s):
         m = re.match(r".*([smhd])$", s)
         try:
             n = float(s[:-1] if m else s)
@@ -187,7 +173,7 @@ class JobSpec:
         A duration of zero is interpreted as "not set".
         """
         if isinstance(duration, six.string_types):
-            time = self.__parse_fsd(duration)
+            time = self._parse_fsd(duration)
         elif isinstance(duration, float):
             time = duration
         else:
@@ -214,14 +200,14 @@ class JobSpec:
             raise ValueError("environment must be a mapping")
         self.jobspec["attributes"]["system"]["environment"] = environ
 
-    def __set_treedict(self, in_dict, key, val):
+    def _set_treedict(self, in_dict, key, val):
         """
-        __set_treedict(d, "a.b.c", 42) is like d[a][b][c] = 42
+        _set_treedict(d, "a.b.c", 42) is like d[a][b][c] = 42
         but levels are created on demand.
         """
         path = key.split(".", 1)
         if len(path) == 2:
-            self.__set_treedict(in_dict.setdefault(path[0], {}), path[1], val)
+            self._set_treedict(in_dict.setdefault(path[0], {}), path[1], val)
         else:
             in_dict[key] = val
 
@@ -229,7 +215,7 @@ class JobSpec:
         """
         set job attribute
         """
-        self.__set_treedict(self.jobspec, "attributes." + key, val)
+        self._set_treedict(self.jobspec, "attributes." + key, val)
 
     def setattr_shopt(self, key, val):
         """
@@ -239,3 +225,60 @@ class JobSpec:
 
     def dumps(self):
         return json.dumps(self.jobspec)
+
+
+class JobspecV1(Jobspec):
+    def __init__(self, resources, tasks, attributes=None, version=1):
+        """
+        Constructor for Version 1 of the Jobspec
+
+        :param version: included to allow for usage like JobspecV1(**jobspec)
+        """
+        if version != 1:
+            raise ValueError("version must be 1")
+        super(JobspecV1, self).__init__(
+            resources, tasks, version=version, attributes=attributes
+        )
+
+    @classmethod
+    def from_command(
+        cls, command, num_tasks=1, cores_per_task=1, gpus_per_task=None, num_nodes=None
+    ):
+        """
+        Factory function that builds the minimum legal v1 jobspec.
+
+        Use setters to assign additional properties.
+        """
+        if not isinstance(num_tasks, int) or num_tasks < 1:
+            raise ValueError("task count must be a integer >= 1")
+        if not isinstance(cores_per_task, int) or cores_per_task < 1:
+            raise ValueError("cores per task must be an integer >= 1")
+        if gpus_per_task is not None:
+            if not isinstance(gpus_per_task, int) or gpus_per_task < 1:
+                raise ValueError("gpus per task must be an integer >= 1")
+        if num_nodes is not None:
+            if not isinstance(num_nodes, int) or num_nodes < 1:
+                raise ValueError("node count must be an integer >= 1 (if set)")
+            if num_nodes > num_tasks:
+                raise ValueError("node count must not be greater than task count")
+        children = [self._create_resource("core", cores_per_task)]
+        if gpus_per_task is not None:
+            children.append(self._create_resource("gpu", gpus_per_task))
+        if num_nodes is not None:
+            num_slots = int(math.ceil(num_tasks / float(num_nodes)))
+            if num_tasks % num_nodes != 0:
+                # N.B. uneven distribution results in wasted task slots
+                task_count_dict = {"total": num_tasks}
+            else:
+                task_count_dict = {"per_slot": 1}
+            slot = self._create_slot("task", num_slots, children)
+            resource_section = self._create_resource("node", num_nodes, [slot])
+        else:
+            task_count_dict = {"per_slot": 1}
+            slot = self._create_slot("task", num_tasks, children)
+            resource_section = slot
+
+        resources = [resource_section]
+        tasks = [{"command": command, "slot": "task", "count": task_count_dict}]
+        attributes = {"system": {"duration": 0}}
+        return cls(resources, tasks, attributes=attributes)
