@@ -131,7 +131,7 @@ class Jobspec(object):
             "version": version,
         }
 
-        for res in self.resource_walk():
+        for res in self:
             self._validate_resource(res)
 
         for task in tasks:
@@ -368,22 +368,87 @@ class Jobspec(object):
     def version(self):
         return self.jobspec.get("version", None)
 
-    def resource_walk(self):
+    def __iter__(self):
         """
-        Traverse the resources in the `resources` section of the jobspec.
+        Iterate over the resources in the `resources` section of the jobspec.
 
         Performs a depth-first, pre-order traversal.
         """
 
-        def walk_helper(res_list):
+        def iter_helper(res_list):
             for resource in res_list:
                 yield resource
                 children = resource.get("with", [])
-                # TODO: convert to `yield from` after dropping 2.7
-                for res in walk_helper(children):
+                # PY2: convert to `yield from` after dropping 2.7
+                for res in iter_helper(children):
                     yield res
 
-        return walk_helper(self.resources)
+        return iter_helper(self.resources)
+
+    def resource_walk(self):
+        """
+        Traverse the resources in the `resources` section of the jobspec.
+
+        Performs a depth-first, pre-order traversal. Yields a tuple containing
+        (parent, resource, count).  `parent` is None when `resource` is a
+        top-level resource. `count` is the number of that resource including the
+        multiplicative effects of the `with` clause in ancestor resources.  For
+        example, the following resource section, will yield a count of 2 for the
+        `slot` and a count of 8 for the `core` resource.
+
+        ```yaml
+        - type: slot
+          count: 2
+          with:
+            - type: core
+              count: 4
+        ```
+        """
+
+        def walk_helper(res_list, parent, count):
+            for resource in res_list:
+                res_count = count * resource["count"]
+                yield (parent, resource, res_count)
+                children = resource.get("with", [])
+                # PY2: convert to `yield from` after dropping 2.7
+                for walk_tuple in walk_helper(children, resource, res_count):
+                    yield walk_tuple
+
+        return walk_helper(self.resources, None, 1)
+
+    def resource_counts(self):
+        """
+        Compute the counts of each resource type in the jobspec
+
+        The following jobspec would return
+        `{ "slot": 12, "core": 18, "memory": 242 }`
+
+        ```yaml
+        - type: slot
+          count: 2
+          with:
+            - type: core
+              count: 4
+            - type: memory
+              count: 1
+              unit: GB
+        - type: slot
+          count: 10
+          with:
+            - type: core
+              count: 1
+            - type: memory
+              count: 24
+              unit: GB
+        ```
+
+        Note: the current implementation ignores the `unit` label and assumes
+        they are consist across resources
+        """
+        count_dict = collections.defaultdict(lambda: 0)
+        for _, resource, count in self.resource_walk():
+            count_dict[resource["type"]] += count
+        return count_dict
 
 
 class JobspecV1(Jobspec):

@@ -14,11 +14,10 @@ import os
 import errno
 import sys
 import json
-import yaml
-
 import unittest
 from glob import glob
 
+import yaml
 
 import flux
 from flux import job
@@ -89,6 +88,22 @@ class TestJob(unittest.TestCase):
             os.path.join(self.jobspec_dir, "valid_v1", "*.yaml")
         ):
             JobspecV1.from_yaml_file(jobspec_filepath)
+
+    def test_06_iter(self):
+        jobspec_fname = os.path.join(self.jobspec_dir, "valid", "use_case_2.4.yaml")
+        jobspec = Jobspec.from_yaml_file(jobspec_fname)
+        self.assertEqual(len(list(jobspec)), 7)
+        self.assertEqual(len(list([x for x in jobspec if x["type"] == "core"])), 2)
+        self.assertEqual(len(list([x for x in jobspec if x["type"] == "slot"])), 2)
+
+    def test_07_count(self):
+        jobspec_fname = os.path.join(self.jobspec_dir, "valid", "use_case_2.4.yaml")
+        jobspec = Jobspec.from_yaml_file(jobspec_fname)
+        count_dict = jobspec.resource_counts()
+        self.assertEqual(count_dict["node"], 1)
+        self.assertEqual(count_dict["slot"], 11)
+        self.assertEqual(count_dict["core"], 16)
+        self.assertEqual(count_dict["memory"], 64)
 
 
 if __name__ == "__main__":
