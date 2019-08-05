@@ -39,7 +39,9 @@ RAW = JobWrapper()
 
 
 def submit_async(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
-    if isinstance(jobspec, six.text_type):
+    if isinstance(jobspec, Jobspec):
+        jobspec = jobspec.dumps()
+    elif isinstance(jobspec, six.text_type):
         jobspec = jobspec.encode("utf-8")
     elif jobspec is None or jobspec == ffi.NULL:
         # catch this here rather than in C for a better error message
@@ -349,8 +351,8 @@ class Jobspec(object):
         """
         self.setattr("system.shell.options." + key, val)
 
-    def dumps(self):
-        return json.dumps(self.jobspec)
+    def dumps(self, **kwargs):
+        return json.dumps(self.jobspec, **kwargs)
 
     @property
     def resources(self):

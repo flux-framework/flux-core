@@ -105,6 +105,11 @@ class TestJob(unittest.TestCase):
         self.assertEqual(count_dict["core"], 16)
         self.assertEqual(count_dict["memory"], 64)
 
+    def test_08_jobspec_submit(self):
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        jobid = job.submit(self.fh, jobspec)
+        self.assertGreater(jobid, 0)
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
