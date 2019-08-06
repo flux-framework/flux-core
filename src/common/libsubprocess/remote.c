@@ -25,6 +25,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/macros.h"
+#include "src/common/libioencode/ioencode.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -130,9 +131,10 @@ static void remote_in_prep_cb (flux_reactor_t *r,
 static int remote_write (struct subprocess_channel *c)
 {
     flux_future_t *f = NULL;
+    json_t *io = NULL;
     const void *ptr;
-    char *s_data = NULL;
-    int lenp, s_len;
+    int lenp;
+    bool eof = false;
     int rv = -1;
 
     if (!(ptr = flux_buffer_read (c->write_buffer, -1, &lenp))) {
@@ -140,55 +142,70 @@ static int remote_write (struct subprocess_channel *c)
         goto error;
     }
 
-    s_len = sodium_base64_encoded_len (lenp, sodium_base64_VARIANT_ORIGINAL);
+    assert (lenp);
 
-    if (!(s_data = calloc (1, s_len))) {
-        flux_log_error (c->p->h, "calloc");
+    /* if closed / EOF about to be sent, can attach to this RPC to
+     * avoid extra RPC */
+    if (!flux_buffer_bytes (c->write_buffer)
+        && c->closed
+        && !c->write_eof_sent)
+        eof = true;
+
+    /* rank not needed, set to 0 */
+    if (!(io = ioencode (c->name, 0, ptr, lenp, eof))) {
+        flux_log_error (c->p->h, "ioencode");
         goto error;
     }
 
-    sodium_bin2base64 (s_data, s_len, ptr, lenp,
-                       sodium_base64_VARIANT_ORIGINAL);
-
     if (!(f = flux_rpc_pack (c->p->h, "cmb.rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
-                             "{ s:i s:s s:s s:i }",
+                             "{ s:i s:O }",
                              "pid", c->p->pid,
-                             "name", c->name,
-                             "data", s_data,
-                             "close", 0))) {
+                             "io", io))) {
         flux_log_error (c->p->h, "flux_rpc_pack");
-        return -1;
+        goto error;
     }
 
+    if (eof)
+        c->write_eof_sent = true;
     rv = 0;
- error:
+error:
     /* no response */
     flux_future_destroy (f);
-    free (s_data);
+    json_decref (io);
     return rv;
 }
 
 static int remote_close (struct subprocess_channel *c)
 {
-    flux_future_t *f;
+    flux_future_t *f = NULL;
+    json_t *io = NULL;
+    int rv = -1;
+
+    /* rank not needed, set to 0 */
+    if (!(io = ioencode (c->name, 0, NULL, 0, true))) {
+        flux_log_error (c->p->h, "ioencode");
+        goto error;
+    }
 
     if (!(f = flux_rpc_pack (c->p->h, "cmb.rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
-                             "{ s:i s:s s:i }",
+                             "{ s:i s:O }",
                              "pid", c->p->pid,
-                             "name", c->name,
-                             "close", 1))) {
+                             "io", io))) {
         flux_log_error (c->p->h, "flux_rpc_pack");
-        return -1;
+        goto error;
     }
 
+    rv = 0;
+error:
     /* no response */
     flux_future_destroy (f);
+    json_decref (io);
 
     /* No need to do a "channel_flush", normal io reactor will handle
      * flush of any data in read buffer */
-    return 0;
+    return rv;
 }
 
 static void remote_in_check_cb (flux_reactor_t *r,
@@ -528,15 +545,20 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
                           int rank, pid_t pid)
 {
     struct subprocess_channel *c;
-    const char *s_data;
+    const char *stream = NULL;
     char *data = NULL;
-    size_t s_len, len, tmp;
-    const char *stream;
-    int eof;
+    int len = 0;
+    bool eof = false;
+    json_t *io = NULL;
     int rv = -1;
 
-    if (flux_rpc_get_unpack (f, "{ s:s }", "stream", &stream)) {
-        flux_log_error (p->h, "flux_rpc_get_unpack EPROTO stream");
+    if (flux_rpc_get_unpack (f, "{ s:o }", "io", &io)) {
+        flux_log_error (p->h, "flux_rpc_get_unpack EPROTO io");
+        goto cleanup;
+    }
+
+    if (iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
+        flux_log_error (p->h, "iodecode");
         goto cleanup;
     }
 
@@ -547,22 +569,8 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
         goto cleanup;
     }
 
-    if (!flux_rpc_get_unpack (f, "{ s:s }", "data", &s_data)) {
-
-        s_len = strlen (s_data);
-        len = BASE64_DECODE_SIZE (s_len);
-
-        if (!(data = calloc (1, len))) {
-            flux_log_error (p->h, "calloc");
-            goto cleanup;
-        }
-
-        if (sodium_base642bin ((unsigned char *)data, len, s_data, s_len,
-                               NULL, &len, NULL,
-                               sodium_base64_VARIANT_ORIGINAL) < 0) {
-            flux_log_error (p->h, "sodium_base642bin");
-            goto cleanup;
-        }
+    if (data && len) {
+        int tmp;
 
         if ((tmp = flux_buffer_write (c->read_buffer, data, len)) < 0) {
             flux_log_error (p->h, "flux_buffer_write");
@@ -572,13 +580,13 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
         /* add list of msgs if there is overflow? */
 
         if (tmp != len) {
-            flux_log_error (p->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %zu",
-                     rank, pid, stream, len);
+            flux_log_error (p->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %d",
+                            rank, pid, stream, len);
             errno = EOVERFLOW;
             goto cleanup;
         }
     }
-    else if (!flux_rpc_get_unpack (f, "{ s:i }", "eof", &eof)) {
+    if (eof) {
         c->read_eof_received = true;
         if (flux_buffer_readonly (c->read_buffer) < 0)
             flux_log_error (p->h, "flux_buffer_readonly");

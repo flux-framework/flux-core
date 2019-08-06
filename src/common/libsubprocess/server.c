@@ -25,6 +25,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/macros.h"
+#include "src/common/libioencode/ioencode.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -205,56 +206,31 @@ error:
     internal_fatal (s, p);
 }
 
-static int rexec_output_data (flux_subprocess_t *p, const char *stream,
-                              flux_subprocess_server_t *s, flux_msg_t *msg,
-                              const char *data, int len)
+static int rexec_output (flux_subprocess_t *p, const char *stream,
+                         flux_subprocess_server_t *s, flux_msg_t *msg,
+                         const char *data, int len, bool eof)
 {
-    char *s_data = NULL;
-    int s_len;
+    json_t *io = NULL;
     int rv = -1;
 
-    assert (len);
-
-    s_len = sodium_base64_encoded_len (len, sodium_base64_VARIANT_ORIGINAL);
-
-    if (!(s_data = calloc (1, s_len))) {
-        flux_log_error (s->h, "%s: calloc", __FUNCTION__);
+    if (!(io = ioencode (stream, s->rank, data, len, eof))) {
+        flux_log_error (s->h, "%s: ioencode", __FUNCTION__);
         goto error;
     }
 
-    sodium_bin2base64 (s_data, s_len, (unsigned char *)data, len,
-                       sodium_base64_VARIANT_ORIGINAL);
-
-    if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:s s:s}",
+    if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:O}",
                            "type", "output",
                            "rank", s->rank,
                            "pid", flux_subprocess_pid (p),
-                           "stream", stream,
-                           "data", s_data) < 0) {
+                           "io", io) < 0) {
         flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
 
     rv = 0;
 error:
-    free (s_data);
+    json_decref (io);
     return rv;
-}
-
-static int rexec_output_eof (flux_subprocess_t *p, const char *stream,
-                             flux_subprocess_server_t *s, flux_msg_t *msg)
-{
-    if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:s s:i}",
-                           "type", "output",
-                           "rank", s->rank,
-                           "pid", flux_subprocess_pid (p),
-                           "stream", stream,
-                           "eof", 1) < 0) {
-        flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
-        return -1;
-    }
-
-    return 0;
 }
 
 static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
@@ -272,11 +248,11 @@ static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if (lenp) {
-        if (rexec_output_data (p, stream, s, msg, ptr, lenp) < 0)
+        if (rexec_output (p, stream, s, msg, ptr, lenp, false) < 0)
             goto error;
     }
     else {
-        if (rexec_output_eof (p, stream, s, msg) < 0)
+        if (rexec_output (p, stream, s, msg, NULL, 0, true) < 0)
             goto error;
     }
 
@@ -398,54 +374,31 @@ cleanup:
 }
 
 static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
-                             const char *name, const char *s_data)
+                             const char *stream, const char *data, int len)
 {
-    int save_errno;
-    size_t s_len, len;
-    char *data = NULL;
-    int tmp, rv = -1;
+    int tmp;
 
-    s_len = strlen (s_data);
-    len = BASE64_DECODE_SIZE (s_len);
-
-    if (!(data = calloc (1, len))) {
-        flux_log_error (s->h, "%s: calloc", __FUNCTION__);
-        goto cleanup;
-    }
-
-    if (sodium_base642bin ((unsigned char *)data, len, s_data, s_len,
-                           NULL, &len, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0) {
-        flux_log_error (s->h, "%s: sodium_base642bin", __FUNCTION__);
-        goto cleanup;
-    }
-
-    if ((tmp = flux_subprocess_write (p, name, data, len)) < 0) {
+    if ((tmp = flux_subprocess_write (p, stream, data, len)) < 0) {
         flux_log_error (s->h, "%s: flux_subprocess_write", __FUNCTION__);
-        goto cleanup;
+        return -1;
     }
 
     /* add list of msgs if there is overflow? */
 
     if (tmp != len) {
-        flux_log_error (s->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %zu",
-                        s->rank, flux_subprocess_pid (p), name, len);
+        flux_log_error (s->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %d",
+                        s->rank, flux_subprocess_pid (p), stream, len);
         errno = EOVERFLOW;
-        goto cleanup;
+        return -1;
     }
 
-    rv = 0;
-cleanup:
-    save_errno = errno;
-    free (data);
-    errno = save_errno;
-    return rv;
+    return 0;
 }
 
 static int close_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
-                             const char *name)
+                             const char *stream)
 {
-    if (flux_subprocess_close (p, name) < 0) {
+    if (flux_subprocess_close (p, stream) < 0) {
         flux_log_error (s->h, "%s: flux_subprocess_close", __FUNCTION__);
         return -1;
     }
@@ -458,17 +411,24 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     flux_subprocess_t *p;
     flux_subprocess_server_t *s = arg;
-    const char *name;
+    const char *stream = NULL;
+    char *data = NULL;
+    int len = 0;
+    bool eof = false;
     pid_t pid;
-    int close_flag;
+    json_t *io = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:s s:i }",
+    if (flux_request_unpack (msg, NULL, "{ s:i s:o }",
                              "pid", &pid,
-                             "name", &name,
-                             "close", &close_flag) < 0) {
+                             "io", &io) < 0) {
         /* can't handle error, no pid to sent errno back to, so just
          * return */
         flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
+        return;
+    }
+
+    if (iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
+        flux_log_error (s->h, "%s: iodecode", __FUNCTION__);
         return;
     }
 
@@ -480,38 +440,32 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
          * removed process from hash.  Don't output error in that
          * case.
          */
-        if (!(errno == ENOENT && close_flag))
+        if (!(errno == ENOENT && eof))
             flux_log_error (s->h, "%s: lookup_pid", __FUNCTION__);
-        return;
+        goto out;
     }
 
     /* Chance subprocess exited/killed/etc. since user write request
      * was sent.
      */
     if (p->state != FLUX_SUBPROCESS_RUNNING)
-        return;
+        goto out;
 
-    if (close_flag) {
-        if (close_subprocess (s, p, name) < 0)
+    if (data && len) {
+        if (write_subprocess (s, p, stream, data, len) < 0)
             goto error;
     }
-    else {
-        const char *data;
-
-        if (flux_request_unpack (msg, NULL, "{ s:s }",
-                                 "data", &data) < 0) {
-            flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
-            errno = EPROTO;
-            goto error;
-        }
-
-        if (write_subprocess (s, p, name, data) < 0)
+    if (eof) {
+        if (close_subprocess (s, p, stream) < 0)
             goto error;
     }
 
+out:
+    free (data);
     return;
 
 error:
+    free (data);
     internal_fatal (s, p);
 }
 
