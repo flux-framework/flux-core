@@ -586,7 +586,8 @@ int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val)
         return -1;
     }
     /* autofree is set on cmd->opts, so val is automatically strdup'd */
-    return zhash_insert (cmd->opts, var, (char *) val);
+    zhash_update (cmd->opts, var, (char *) val);
+    return 0;
 }
 
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var)

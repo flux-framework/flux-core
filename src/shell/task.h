@@ -80,13 +80,13 @@ int shell_task_io_enable (struct shell_task *task,
  * Returns number of bytes read, or -1 on error.
  */
 int shell_task_io_readline (struct shell_task *task,
-                            const char *name,
+                            const char *stream,
                             const char **line);
 
-/* Test whether stream 'name' has reached EOF.
+/* Test whether stream has reached EOF.
  * Call after shell_task_io_readline() returns 0.
  */
-bool shell_task_io_at_eof (struct shell_task *task, const char *name);
+bool shell_task_io_at_eof (struct shell_task *task, const char *stream);
 
 
 /* Send signal `signum` to shell task */

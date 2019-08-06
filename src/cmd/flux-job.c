@@ -850,7 +850,7 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
     size_t index;
     json_t *entry;
     int rank;
-    const char *name;
+    const char *stream;
     int len;
     const char *data;
 
@@ -874,12 +874,12 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
         if (json_unpack (entry,
                          "{s:i s:s s:i s:s}",
                          "rank", &rank,
-                         "name", &name,
+                         "stream", &stream,
                          "len", &len,
                          "data", &data) < 0)
             log_msg_exit ("malfomed JSON entry");
         if (len > 0) {
-            FILE *fp = !strcmp (name, "STDOUT") ? stdout : stderr;
+            FILE *fp = !strcmp (stream, "STDOUT") ? stdout : stderr;
             if (optparse_hasopt (p, "label"))
                 fprintf (fp, "%d: ", rank);
             fwrite (data, len, 1, fp);

@@ -142,21 +142,21 @@ int shell_task_io_enable (struct shell_task *task,
 /* N.B. Ref: cmd/flux-exec.c output_cb()
  */
 int shell_task_io_readline (struct shell_task *task,
-                            const char *name,
+                            const char *stream,
                             const char **line)
 {
     const char *buf;
     int len;
 
-    if (!(buf = flux_subprocess_getline (task->proc, name, &len)))
+    if (!(buf = flux_subprocess_getline (task->proc, stream, &len)))
         return -1;
     *line = buf;
     return len;
 }
 
-bool shell_task_io_at_eof (struct shell_task *task, const char *name)
+bool shell_task_io_at_eof (struct shell_task *task, const char *stream)
 {
-    return flux_subprocess_read_stream_closed (task->proc, name);
+    return flux_subprocess_read_stream_closed (task->proc, stream);
 }
 
 int shell_task_pmi_enable (struct shell_task *task,
@@ -237,8 +237,6 @@ int shell_task_start (struct shell_task *task,
 {
     int flags = 0;
 
-    if (!task->io_cb)
-        flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
     task->proc = flux_local_exec (r, flags, task->cmd, &subproc_ops, NULL);
     if (!task->proc)
         return -1;
