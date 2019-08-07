@@ -19,7 +19,6 @@
  * "output" key in the job's guest KVS namespace.
  *
  * Notes:
- * - EOF is indicated by an object with len = 0
  * - leader takes a completion reference which it gives up once each
  *   task sends an EOF for both stdout and stderr.
  * - all shells (even the leader) send I/O to the service with RPC
@@ -29,7 +28,6 @@
  *   there (checked for error, then destroyed).
  * - In standalone mode, the loop:// connector enables RPCs to work
  * - In standalone mode, output is written to the shell's stdout/stderr not KVS
- * - Output data is encoded as JSON strings (not base64'ed).
  */
 
 #if HAVE_CONFIG_H
@@ -41,6 +39,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libioencode/ioencode.h"
 
 #include "task.h"
 #include "io.h"
@@ -61,18 +60,18 @@ static void shell_io_write_cb (flux_t *h,
                                void *arg)
 {
     struct shell_io *io = arg;
-    int len;        // just decode len for EOF (len==0) detection
+    bool eof = false;
     json_t *o;      // decode output object for appending to io->output array
 
-    if (flux_request_unpack (msg, NULL, "{s:i}", "len", &len) < 0)
-        goto error;
     if (flux_request_unpack (msg, NULL, "o", &o) < 0)
+        goto error;
+    if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
         goto error;
     if (shell_svc_allowed (io->shell->svc, msg) < 0)
         goto error;
     if (json_array_append (io->output, o) < 0)
         goto error;
-    if (len == 0) {
+    if (eof) {
         if (--io->eof_pending == 0) {
             flux_msg_handler_stop (mh);
             if (flux_shell_remove_completion_ref (io->shell, "io-leader") < 0)
@@ -101,52 +100,53 @@ static int shell_io_write (struct shell_io *io,
                            int rank,
                            const char *stream,
                            const char *data,
-                           int len)
+                           int len,
+                           bool eof)
 {
-    flux_future_t *f;
+    flux_future_t *f = NULL;
+    json_t *o = NULL;
 
-    if (!(f = shell_svc_pack (io->shell->svc,
-                             "write",
-                             0,
-                             0,
-                             "{s:i s:s s:i s:s}",
-                             "rank", rank,
-                             "stream", stream,
-                             "len", len,
-                             "data", data)))
-        return -1;
-    if (flux_future_then (f, -1, shell_io_write_completion, io) < 0) {
-        flux_future_destroy (f);
+    if (!(o = ioencode (stream, rank, data, len, eof))) {
+        log_err ("ioencode");
         return -1;
     }
+
+    if (!(f = shell_svc_pack (io->shell->svc, "write", 0, 0, "O", o)))
+        goto error;
+    if (flux_future_then (f, -1, shell_io_write_completion, io) < 0)
+        goto error;
     if (zlist_append (io->pending_writes, f) < 0)
         log_msg ("zlist_append failed");
+    json_decref (o);
     return 0;
+
+error:
+    flux_future_destroy (f);
+    json_decref (o);
+    return -1;
 }
 
 static int shell_io_flush (struct shell_io *io)
 {
     json_t *entry;
     size_t index;
-    int rank;
-    const char *stream;
-    const char *data;
-    int len;
     FILE *f;
 
     json_array_foreach (io->output, index, entry) {
-        if (json_unpack (entry,
-                         "{s:i s:s s:i s:s}",
-                         "rank", &rank,
-                         "stream", &stream,
-                         "len", &len,
-                         "data", &data) < 0)
+        const char *stream = NULL;
+        int rank;
+        char *data = NULL;
+        int len = 0;
+        if (iodecode (entry, &stream, &rank, &data, &len, NULL) < 0) {
+            log_err ("iodecode: %s", json_dumps (entry, 0));
             return -1;
+        }
         f = !strcmp (stream, "STDOUT") ? stdout : stderr;
         if (len > 0) {
             fprintf (f, "%d: ", rank);
             fwrite (data, len, 1, f);
         }
+        free (data);
     }
     return 0;
 }
@@ -239,9 +239,13 @@ void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg
     if (len < 0) {
         log_err ("read %s task %d", stream, task->rank);
     }
-    else if (len > 0 || (len == 0 && shell_task_io_at_eof (task, stream))) {
-        if (shell_io_write (io, task->rank, stream, data, len) < 0)
+    else if (len > 0) {
+        if (shell_io_write (io, task->rank, stream, data, len, false) < 0)
             log_err ("write %s task %d", stream, task->rank);
+    }
+    else if (len == 0 && shell_task_io_at_eof (task, stream)) {
+        if (shell_io_write (io, task->rank, stream, NULL, 0, true) < 0)
+            log_err ("write eof %s task %d", stream, task->rank);
     }
 }
 
