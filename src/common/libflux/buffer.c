@@ -355,6 +355,16 @@ int flux_buffer_lines (flux_buffer_t *fb)
     return cbuf_lines_used (fb->cbuf);
 }
 
+bool flux_buffer_has_line (flux_buffer_t *fb)
+{
+    char buf[1];
+    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+        errno = EINVAL;
+        return false;
+    }
+    return (cbuf_peek_line (fb->cbuf, buf, 0, 1) > 0);
+}
+
 int flux_buffer_drop_line (flux_buffer_t *fb)
 {
     int ret;

@@ -11,6 +11,8 @@
 #ifndef FLUX_BUFFER_H
 #define FLUX_BUFFER_H
 
+#include <stdbool.h>
+
 typedef struct flux_buffer flux_buffer_t;
 
 /* Create buffer.
@@ -72,6 +74,9 @@ int flux_buffer_write (flux_buffer_t *fb, const void *data, int len);
 /* Determines lines available for peeking/reading.  Returns -1
  * on error, >= 0 for lines available */
 int flux_buffer_lines (flux_buffer_t *fb);
+
+/* Return true if buffer has at least one unread line */
+bool flux_buffer_has_line (flux_buffer_t *fb);
 
 /* Drop a line in the buffer.  Returns number of bytes dropped on
  * success. */
