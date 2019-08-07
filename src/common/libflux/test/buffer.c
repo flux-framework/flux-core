@@ -682,129 +682,6 @@ void basic_callback (void)
     close (pipefds[1]);
 }
 
-void read_multiple_cb (flux_buffer_t *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    (*count)++;
-
-    ok ((ptr = flux_buffer_read (fb, 3, &len)) != NULL
-        && len == 3,
-        "flux_buffer_read in callback works");
-
-    ok (len == 3,
-        "read in callback returns correct length");
-
-    ok (!memcmp (ptr, "foo", 3),
-        "read in callback returns expected data");
-}
-
-void read_line_multiple_cb (flux_buffer_t *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    (*count)++;
-
-    ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL
-        && len == 4,
-        "flux_buffer_read_line in callback works");
-
-    ok (!memcmp (ptr, "foo\n", 4),
-        "read line in callback returns expected data");
-}
-
-void multiple_callback (void)
-{
-    flux_buffer_t *fb;
-    int count;
-
-    ok ((fb = flux_buffer_create (FLUX_BUFFER_TEST_MAXSIZE)) != NULL,
-        "flux_buffer_create works");
-
-    /* read callback w/ write */
-
-    count = 0;
-    ok (flux_buffer_set_low_read_cb (fb, read_multiple_cb, 3, &count) == 0,
-        "flux_buffer_set_low_read_cb success");
-
-    ok (flux_buffer_write (fb, "foofoofoo", 9) == 9,
-        "flux_buffer_write success");
-
-    ok (count == 2,
-        "read_cb called two times");
-
-    ok (flux_buffer_bytes (fb) == 3,
-        "flux_buffer_bytes returns 3 leftover bytes in buffer");
-
-    count = 0;
-    ok (flux_buffer_set_low_read_cb (fb, NULL, 3, &count) == 0,
-        "flux_buffer_set_low_read_cb clear callback success");
-
-    ok (flux_buffer_write (fb, "foo", 3) == 3,
-        "flux_buffer_write_line success");
-
-    ok (count == 0,
-        "read_cb cleared successfully");
-
-    ok (flux_buffer_drop (fb, -1) == 6,
-        "flux_buffer_drop cleared all data");
-
-    ok (flux_buffer_bytes (fb) == 0,
-        "flux_buffer_bytes returns 0 with all bytes dropped");
-
-    /* read line callback w/ write_line */
-
-    ok (flux_buffer_lines (fb) == 0,
-        "flux_buffer_lines returns 0 on no line");
-
-    ok (flux_buffer_write (fb, "foo\nfoo\n", 8) == 8,
-        "flux_buffer_write success");
-
-    ok (flux_buffer_lines (fb) == 2,
-        "flux_buffer_lines returns 2 on two lines written");
-
-    count = 0;
-    ok (flux_buffer_set_read_line_cb (fb, read_line_multiple_cb, &count) == 0,
-        "flux_buffer_set_read_line_cb success");
-
-    ok (flux_buffer_write (fb, "foo\n", 4) == 4,
-        "flux_buffer_write success");
-
-    ok (flux_buffer_bytes (fb) == 0,
-        "flux_buffer_bytes returns 0 because callback read all data");
-
-    ok (count == 3,
-        "read_line_cb called three times");
-
-    ok (flux_buffer_lines (fb) == 0,
-        "flux_buffer_lines returns 0 on no line, callback read all data");
-
-    count = 0;
-    ok (flux_buffer_set_read_line_cb (fb, NULL, &count) == 0,
-        "flux_buffer_set_read_line_cb clear callback success");
-
-    ok (flux_buffer_write_line (fb, "foo") == 4,
-        "flux_buffer_write_line success");
-
-    ok (count == 0,
-        "read_line_cb cleared successfully");
-
-    ok (flux_buffer_lines (fb) == 1,
-        "flux_buffer_lines returns 1, callback did not read line");
-
-    ok (flux_buffer_drop (fb, -1) == 4,
-        "flux_buffer_drop cleared all data");
-
-    ok (flux_buffer_lines (fb) == 0,
-        "flux_buffer_lines returns 0 after drop line");
-
-    flux_buffer_destroy (fb);
-}
-
 void disable_read_cb (flux_buffer_t *fb, void *arg)
 {
     int *count = arg;
@@ -1202,7 +1079,6 @@ int main (int argc, char *argv[])
 
     basic ();
     basic_callback ();
-    multiple_callback ();
     disable_callback ();
     corner_case ();
     full_buffer ();
