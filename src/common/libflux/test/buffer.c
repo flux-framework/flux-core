@@ -144,6 +144,8 @@ void basic (void)
 
     ok (flux_buffer_lines (fb) == 1,
         "flux_buffer_lines returns 1 on line written");
+    ok (flux_buffer_has_line (fb) == 1,
+        "flux_buffer_has_line returns true on line written");
 
     ok ((ptr = flux_buffer_peek_line (fb, &len)) != NULL
         && len == 4,
@@ -767,6 +769,8 @@ void disable_callback (void)
 
     ok (flux_buffer_lines (fb) == 0,
         "flux_buffer_lines returns 0 on no line");
+    ok (!flux_buffer_has_line (fb),
+        "flux_buffer_has_line returns false on no line");
 
     count = 0;
     ok (flux_buffer_set_read_line_cb (fb, disable_read_line_cb, &count) == 0,
