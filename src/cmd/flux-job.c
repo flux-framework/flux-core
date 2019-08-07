@@ -877,7 +877,7 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
                          "stream", &stream,
                          "len", &len,
                          "data", &data) < 0)
-            log_msg_exit ("malfomed JSON entry");
+            log_msg_exit ("malformed JSON entry");
         if (len > 0) {
             FILE *fp = !strcmp (stream, "STDOUT") ? stdout : stderr;
             if (optparse_hasopt (p, "label"))
