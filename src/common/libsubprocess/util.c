@@ -97,6 +97,31 @@ cleanup:
     return rv;
 }
 
+int cmd_option_stream_stop (flux_subprocess_t *p, const char *name)
+{
+    char *var;
+    const char *val;
+    int rv = -1;
+
+    if (asprintf (&var, "%s_STREAM_STOP", name) < 0)
+        goto cleanup;
+
+    if ((val = flux_cmd_getopt (p->cmd, var))) {
+        if (!strcasecmp (val, "true"))
+            rv = 1;
+        if (!strcasecmp (val, "false"))
+            rv = 0;
+        else
+            errno = EINVAL;
+    }
+    else
+        rv = 0;
+
+cleanup:
+    free (var);
+    return rv;
+}
+
 /*
  * vi: ts=4 sw=4 expandtab
  */

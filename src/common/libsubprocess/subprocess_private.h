@@ -42,6 +42,12 @@ struct subprocess_channel {
     int child_fd;
     flux_watcher_t *buffer_write_w;
     flux_watcher_t *buffer_read_w;
+    /* buffer_read_stopped_w is a "sub-in" watcher if buffer_read_w is
+     * stopped.  We need to put something into the reactor so we know
+     * that we still need to process it.
+     */
+    flux_watcher_t *buffer_read_stopped_w;
+    bool buffer_read_w_started;
 
     /* remote */
     flux_buffer_t *write_buffer;

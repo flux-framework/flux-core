@@ -267,6 +267,20 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    - STDOUT_LINE_BUFFER - configure line buffering for stdout
  *    - STDERR_LINE_BUFFER - configure line buffering for stderr
  *
+ *  "STREAM_STOP" option
+ *
+ *    By default, the output callbacks such as 'on_stdout' and
+ *    'on_stderr' can immediately begin receiving stdout/stderr data
+ *    once a subprocess has started.  There are circumstances where a
+ *    caller may wish to wait and can have these callbacks stopped by
+ *    default and restarted later by flux_subprocess_stream_start().
+ *    By setting this option to "true", output callbacks will be
+ *    stopped by default.  These options can also be set to "false" to
+ *    keep default behavior.
+ *
+ *    - name + "_STREAM_STOP" - configure start/stop on channel name
+ *    - STDOUT_STREAM_STOP - configure start/stop for stdout
+ *    - STDERR_STREAM_STOP - configure start/stop for stderr
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
@@ -305,6 +319,17 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops);
 
+/* Start / stop a read stream temporarily on local processes.  This
+ * may be useful for flow control.  If you desire to have a stream not
+ * call 'on_stdout' or 'on_stderr' when the local subprocess has
+ * started, see STREAM_STOP configuration above.
+ *
+ * start and stop return 0 for success, -1 on error
+ * status returns > 0 for started, 0 for stopped, -1 on error
+ */
+int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream);
+int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream);
+int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be

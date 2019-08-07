@@ -186,19 +186,19 @@ test_expect_success NO_CHAIN_LINT 'disconnect terminates all running processes' 
 '
 
 test_expect_success 'rexec line buffering works (default)' '
-        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 ${TEST_SUBPROCESS_DIR}/test_multi_echo -c 2200 hi > linebuffer1.out &&
+        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 ${TEST_SUBPROCESS_DIR}/test_multi_echo -O -c 2200 hi > linebuffer1.out &&
         grep "final stdout callback count: 2" linebuffer1.out
 '
 
 test_expect_success 'rexec line buffering works (set to true)' '
-        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 -l true ${TEST_SUBPROCESS_DIR}/test_multi_echo -c 2200 hi > linebuffer2.out &&
+        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 -l true ${TEST_SUBPROCESS_DIR}/test_multi_echo -O -c 2200 hi > linebuffer2.out &&
         grep "final stdout callback count: 2" linebuffer2.out
 '
 
 # test is technically racy, but with 2200 hi outputs, probability is
 # extremely low all data is buffered in one shot.
 test_expect_success 'rexec line buffering can be disabled' '
-        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 -l false ${TEST_SUBPROCESS_DIR}/test_multi_echo -c 2200 hi > linebuffer3.out &&
+        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 -l false ${TEST_SUBPROCESS_DIR}/test_multi_echo -O -c 2200 hi > linebuffer3.out &&
         count=$(grep "final stdout callback count:" linebuffer3.out | awk "{print \$5}") &&
         test "$count" -gt 2
 '

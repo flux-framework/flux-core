@@ -50,6 +50,8 @@ void channel_destroy (void *arg)
             close (c->child_fd);
         flux_watcher_destroy (c->buffer_write_w);
         flux_watcher_destroy (c->buffer_read_w);
+        flux_watcher_destroy (c->buffer_read_stopped_w);
+        c->buffer_read_w_started = false;
 
         flux_buffer_destroy (c->write_buffer);
         flux_buffer_destroy (c->read_buffer);
@@ -91,6 +93,8 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
     c->child_fd = -1;
     c->buffer_write_w = NULL;
     c->buffer_read_w = NULL;
+    c->buffer_read_stopped_w = NULL;
+    c->buffer_read_w_started = false;
 
     c->write_buffer = NULL;
     c->read_buffer = NULL;
@@ -719,6 +723,127 @@ error:
     flux_subprocess_unref (p);
     errno = save_errno;
     return NULL;
+}
+
+int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
+{
+    struct subprocess_channel *c;
+    flux_buffer_t *fb;
+
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!stream)
+        stream = "STDOUT";
+
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_READ)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (p->local) {
+        if (c->buffer_read_w_started)
+            return 0;
+
+        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+            return -1;
+
+        if (!c->buffer_read_stopped_w) {
+            /* use check watcher instead of idle watcher, as idle watcher
+             * could spin reactor */
+            c->buffer_read_stopped_w = flux_check_watcher_create (p->reactor,
+                                                                  NULL,
+                                                                  c);
+            if (!c->buffer_read_stopped_w)
+                return -1;
+        }
+    }
+    else {
+        /* not supported on remote right now */
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* Note that in local.c, we never stop buffer_read_w
+     * (i.e. flux_watcher_stop (c->buffer_read_w)).  The watcher will
+     * be stopped when the subprocess is destroyed.  So if by chance
+     * the caller has already read EOF from this buffer, they can
+     * re-start it without any harm.
+     */
+    flux_watcher_start (c->buffer_read_w);
+    c->buffer_read_w_started = true;
+    flux_watcher_stop (c->buffer_read_stopped_w);
+    return 0;
+}
+
+int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
+{
+    struct subprocess_channel *c;
+    flux_buffer_t *fb;
+
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!stream)
+        stream = "STDOUT";
+
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_READ)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (p->local) {
+        if (!c->buffer_read_w_started)
+            return 0;
+
+        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+            return -1;
+    }
+    else {
+        /* not supported on remote right now */
+        errno = EINVAL;
+        return -1;
+    }
+
+    flux_watcher_stop (c->buffer_read_w);
+    c->buffer_read_w_started = false;
+    flux_watcher_start (c->buffer_read_stopped_w);
+    return 0;
+}
+
+int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
+{
+    struct subprocess_channel *c;
+    int ret;
+
+    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!stream)
+        stream = "STDOUT";
+
+    c = zhash_lookup (p->channels, stream);
+    if (!c || !(c->flags & CHANNEL_READ)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (p->local)
+        ret = c->buffer_read_w_started ? 1 : 0;
+    else {
+        /* fb = c->read_buffer; */
+        assert (0);
+    }
+
+    return ret;
 }
 
 int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
