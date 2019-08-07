@@ -96,7 +96,7 @@ main (int argc, char *argv[])
 
     if ((out + err) == 0
         && (!channel && !channel_out)) {
-        fprintf (stderr, "must specify a way to output");
+        fprintf (stderr, "must specify -O, -E, and/or -C for output\n");
         exit (1);
     }
 
