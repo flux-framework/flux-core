@@ -20,7 +20,7 @@
 static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
 {
     if (ebr->line) {
-        if (flux_buffer_lines (ebr->fb) > 0)
+        if (flux_buffer_has_line (ebr->fb))
             return true;
         /* if eof read, no lines, but left over data non-line data,
          * this data should be flushed to the user */

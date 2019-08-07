@@ -247,7 +247,7 @@ void check_read_cb (flux_buffer_t *fb)
         && flux_buffer_bytes (fb) > fb->cb_len)
             fb->cb (fb, fb->cb_arg);
     else if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
-             && flux_buffer_lines (fb) > 0)
+             && flux_buffer_has_line (fb))
             fb->cb (fb, fb->cb_arg);
 }
 
