@@ -152,7 +152,5 @@ main (int argc, char *argv[])
         }
     }
 
-    close (STDOUT_FILENO);
-    close (STDERR_FILENO);
     exit (0);
 }

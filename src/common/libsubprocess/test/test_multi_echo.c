@@ -49,6 +49,5 @@ main (int argc, char *argv[])
         fflush (stdout);
     }
 
-    close (STDOUT_FILENO);
     exit (0);
 }
