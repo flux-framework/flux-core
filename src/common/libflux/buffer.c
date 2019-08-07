@@ -244,52 +244,11 @@ void check_write_cb (flux_buffer_t *fb)
 void check_read_cb (flux_buffer_t *fb)
 {
     if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ
-        && flux_buffer_bytes (fb) > fb->cb_len) {
-        int count = flux_buffer_bytes (fb);
-
-        /* we will iterate over all data, but only if the user is
-         * reading data.  If the user isn't reading data, we're not
-         * going to infinitely loop
-         */
-        while (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ
-               && count > 0) {
-            int tmp;
-
+        && flux_buffer_bytes (fb) > fb->cb_len)
             fb->cb (fb, fb->cb_arg);
-
-            if ((tmp = flux_buffer_bytes (fb)) < 0)
-                break;
-
-            if (tmp < count && tmp > fb->cb_len)
-                count = tmp;
-            else
-                break;
-        }
-
-    }
     else if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
-             && flux_buffer_lines (fb) > 0) {
-        int count = flux_buffer_lines (fb);
-
-        /* we will iterate over all lines, but only if the user is
-         * reading them.  If the user isn't reading lines, we're not
-         * going to infinitely loop
-         */
-        while (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
-               && count > 0) {
-            int tmp;
-
+             && flux_buffer_lines (fb) > 0)
             fb->cb (fb, fb->cb_arg);
-
-            if ((tmp = flux_buffer_lines (fb)) < 0)
-                break;
-
-            if (tmp < count)
-                count = tmp;
-            else
-                break;
-        }
-    }
 }
 
 int flux_buffer_drop (flux_buffer_t *fb, int len)
