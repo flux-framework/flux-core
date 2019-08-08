@@ -138,13 +138,12 @@ int flux_buffer_readonly (flux_buffer_t *fb)
     return 0;
 }
 
-int flux_buffer_is_readonly (flux_buffer_t *fb)
+bool flux_buffer_is_readonly (flux_buffer_t *fb)
 {
     if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
         errno = EINVAL;
-        return -1;
+        return false;
     }
-
     return fb->readonly;
 }
 

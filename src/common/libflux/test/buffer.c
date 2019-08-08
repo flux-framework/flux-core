@@ -928,9 +928,9 @@ void corner_case (void)
     ok (flux_buffer_readonly (NULL) < 0
         && errno == EINVAL,
         "flux_buffer_readonly fails on NULL pointer");
-    ok (flux_buffer_is_readonly (NULL) < 0
-        && errno == EINVAL,
-        "flux_buffer_is_readonly fails on NULL pointer");
+    errno = 0;
+    ok (!flux_buffer_is_readonly (NULL) && errno == EINVAL,
+        "flux_buffer_is_readonly returns false on NULL pointer");
     ok (flux_buffer_set_low_read_cb (NULL, empty_cb, 0, NULL) < 0
         && errno == EINVAL,
         "flux_buffer_set_low_read_cb fails on NULL pointer");
@@ -1125,13 +1125,13 @@ void readonly_buffer (void)
     ok ((fb = flux_buffer_create (FLUX_BUFFER_TEST_MAXSIZE)) != NULL,
         "flux_buffer_create works");
 
-    ok (flux_buffer_is_readonly (fb) == 0,
+    ok (!flux_buffer_is_readonly (fb),
         "flux buffer is not readonly on creation");
 
     ok (flux_buffer_readonly (fb) == 0,
         "flux buffer readonly set");
 
-    ok (flux_buffer_is_readonly (fb) > 0,
+    ok (flux_buffer_is_readonly (fb),
         "flux buffer is readonly after setting");
 
     flux_buffer_destroy (fb);
