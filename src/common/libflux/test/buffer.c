@@ -871,6 +871,10 @@ void corner_case (void)
     ok (flux_buffer_lines (NULL) < 0
         && errno == EINVAL,
         "flux_buffer_lines fails on NULL pointer");
+    errno = 0;
+    ok (!flux_buffer_has_line (NULL)
+        && errno == EINVAL,
+        "flux_buffer_has_line returns false with errno set on NULL pointer");
     ok (flux_buffer_drop_line (NULL) < 0
         && errno == EINVAL,
         "flux_buffer_drop_line fails on NULL pointer");
