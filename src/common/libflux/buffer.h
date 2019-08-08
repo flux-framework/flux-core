@@ -11,6 +11,8 @@
 #ifndef FLUX_BUFFER_H
 #define FLUX_BUFFER_H
 
+#include <stdbool.h>
+
 typedef struct flux_buffer flux_buffer_t;
 
 /* Create buffer.
@@ -34,11 +36,11 @@ int flux_buffer_space (flux_buffer_t *fb);
  *   Changing a buffer to "readonly" can only be called once and
  *   cannot be disabled.  This is a convenience status can be used to
  *   indicate to users that the buffer is no longer usable.
- * - flux_buffer_is_readonly() returns > 0 if a buffer is readonly, 0
- *   if not, and -1 on error.
+ * - flux_buffer_is_readonly() returns true if a buffer is readonly,
+ *    and false if not.
  */
 int flux_buffer_readonly (flux_buffer_t *fb);
-int flux_buffer_is_readonly (flux_buffer_t *fb);
+bool  flux_buffer_is_readonly (flux_buffer_t *fb);
 
 /* Drop up to [len] bytes of data in the buffer. Set [len] to -1
  * to drop all data.  Returns number of bytes dropped on success.
@@ -72,6 +74,9 @@ int flux_buffer_write (flux_buffer_t *fb, const void *data, int len);
 /* Determines lines available for peeking/reading.  Returns -1
  * on error, >= 0 for lines available */
 int flux_buffer_lines (flux_buffer_t *fb);
+
+/* Return true if buffer has at least one unread line */
+bool flux_buffer_has_line (flux_buffer_t *fb);
 
 /* Drop a line in the buffer.  Returns number of bytes dropped on
  * success. */
