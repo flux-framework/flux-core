@@ -958,7 +958,7 @@ static const char *subprocess_read (flux_subprocess_t *p,
                                     bool read_line,
                                     bool trimmed,
                                     bool line_buffered_required,
-                                    int *readonly)
+                                    bool *readonly)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -1072,13 +1072,14 @@ const char *flux_subprocess_getline (flux_subprocess_t *p,
                                      int *lenp)
 {
     const char *ptr;
-    int len, readonly;
+    int len;
+    bool readonly;
 
     ptr = subprocess_read (p, stream, 0, &len, true, false, true, &readonly);
 
     /* if no lines available and EOF received, read whatever is
      * lingering in the buffer */
-    if (ptr && len == 0 && readonly > 0)
+    if (ptr && len == 0 && readonly)
         ptr = flux_subprocess_read (p, stream, -1, &len);
 
     if (lenp)
