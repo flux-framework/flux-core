@@ -299,8 +299,9 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
-                             "{s:I}",
-                             "id", id)))
+                             "{s:I s:s}",
+                             "id", id,
+                             "path", "eventlog")))
         return NULL;
     return f;
 }
