@@ -37,6 +37,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libioencode/ioencode.h"
 
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
@@ -849,10 +850,6 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
     json_t *output;
     size_t index;
     json_t *entry;
-    int rank;
-    const char *stream;
-    int len;
-    const char *data;
 
     if (!(f = flux_rpc_pack (h,
                              "job-info.lookup",
@@ -871,19 +868,19 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
     if (!(output = json_loads (s, 0, NULL)))
         log_msg_exit ("error decoding guest.output");
     json_array_foreach (output, index, entry) {
-        if (json_unpack (entry,
-                         "{s:i s:s s:i s:s}",
-                         "rank", &rank,
-                         "stream", &stream,
-                         "len", &len,
-                         "data", &data) < 0)
-            log_msg_exit ("malfomed JSON entry");
+        const char *stream = NULL;
+        int rank;
+        char *data = NULL;
+        int len = 0;
+        if (iodecode (entry, &stream, &rank, &data, &len, NULL) < 0)
+            log_msg_exit ("malformed JSON entry");
         if (len > 0) {
             FILE *fp = !strcmp (stream, "STDOUT") ? stdout : stderr;
             if (optparse_hasopt (p, "label"))
                 fprintf (fp, "%d: ", rank);
             fwrite (data, len, 1, fp);
         }
+        free (data);
     }
     json_decref (output);
 out:
