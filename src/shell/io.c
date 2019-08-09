@@ -280,7 +280,7 @@ void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg
     const char *data;
     int len;
 
-    len = shell_task_io_readline (task, stream, &data);
+    data = flux_subprocess_getline (task->proc, stream, &len);
     if (len < 0) {
         log_err ("read %s task %d", stream, task->rank);
     }
@@ -288,7 +288,7 @@ void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg
         if (shell_io_write (io, task->rank, stream, data, len, false) < 0)
             log_err ("write %s task %d", stream, task->rank);
     }
-    else if (len == 0 && shell_task_io_at_eof (task, stream)) {
+    else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
         if (shell_io_write (io, task->rank, stream, NULL, 0, true) < 0)
             log_err ("write eof %s task %d", stream, task->rank);
     }

@@ -29,7 +29,7 @@
  * Standard I/O
  *    Call shell_task_io_enable() to set up callbacks for stdio, stderr.
  *    The provided callback notifies shell when a line can be read from
- *    the channel.  Use the provided shell_task_io_readline() to read it.
+ *    the channel.  Use flux_subprocess_read_line (task->proc, ...) to read it.
  *
  * PMI
  *    Call shell_task_pmi_enable() to set up PMI_FD channel.
@@ -39,7 +39,7 @@
  *    . PMI_SIZE
  *    The provided callback notifies shell main when a line of data
  *    (a PMI wire protocol request) can be read from the channel.
- *    Use the provided shell_task_pmi_readline() and _writeline().
+ *    Use flux_subprocess_read_line (task->proc, ...) to read it.
  *
  * Upon task completion, set task->rc and call shell_task_completion_f
  * supplied to shell task start.
@@ -139,26 +139,6 @@ int shell_task_io_enable (struct shell_task *task,
     return 0;
 }
 
-/* N.B. Ref: cmd/flux-exec.c output_cb()
- */
-int shell_task_io_readline (struct shell_task *task,
-                            const char *stream,
-                            const char **line)
-{
-    const char *buf;
-    int len;
-
-    if (!(buf = flux_subprocess_getline (task->proc, stream, &len)))
-        return -1;
-    *line = buf;
-    return len;
-}
-
-bool shell_task_io_at_eof (struct shell_task *task, const char *stream)
-{
-    return flux_subprocess_read_stream_closed (task->proc, stream);
-}
-
 int shell_task_pmi_enable (struct shell_task *task,
                            shell_task_pmi_ready_f cb,
                            void *arg)
@@ -172,24 +152,6 @@ int shell_task_pmi_enable (struct shell_task *task,
     task->pmi_cb = cb;
     task->pmi_cb_arg = arg;
     return 0;
-}
-
-int shell_task_pmi_readline (struct shell_task *task, const char **line)
-{
-    const char *buf;
-    int len;
-
-    if (!(buf = flux_subprocess_read_line (task->proc, "PMI_FD", &len)))
-        return -1;
-    *line = buf;
-    return len;
-}
-
-int shell_task_pmi_write (struct shell_task *task,
-                          const char *buf,
-                          int len)
-{
-    return flux_subprocess_write (task->proc, "PMI_FD", buf, len);
 }
 
 static void subproc_io_cb (flux_subprocess_t *p, const char *stream)
