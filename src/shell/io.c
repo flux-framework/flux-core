@@ -28,6 +28,8 @@
  *   there (checked for error, then destroyed).
  * - In standalone mode, the loop:// connector enables RPCs to work
  * - In standalone mode, output is written to the shell's stdout/stderr not KVS
+ * - The number of in-flight write requests on each shell is limited to
+ *   shell_io_hwm, to avoid matchtag exhaustion, etc. for chatty tasks.
  */
 
 #if HAVE_CONFIG_H
@@ -52,7 +54,44 @@ struct shell_io {
     int eof_pending;
     zlist_t *pending_writes;
     json_t *output;
+    bool stopped;
 };
+
+static const int shell_io_lwm = 100;
+static const int shell_io_hwm = 1000;
+
+/* Pause/resume output on 'stream' of 'task'.
+ */
+static void shell_io_control_task (struct shell_task *task,
+                                   const char *stream,
+                                   bool stop)
+{
+    if (stop) {
+        if (flux_subprocess_stream_stop (task->proc, stream) < 0)
+            log_err ("flux_subprocess_stream_stop %d:%s", task->rank, stream);
+    }
+    else {
+        if (flux_subprocess_stream_start (task->proc, stream) < 0)
+            log_err ("flux_subprocess_stream_start %d:%s", task->rank, stream);
+    }
+}
+
+/* Pause/resume output for all tasks.
+ */
+static void shell_io_control (struct shell_io *io, bool stop)
+{
+    struct shell_task *task;
+
+    if (io->stopped != stop) {
+        task = zlist_first (io->shell->tasks);
+        while (task) {
+            shell_io_control_task (task, "STDOUT", stop);
+            shell_io_control_task (task, "STDERR", stop);
+            task = zlist_next (io->shell->tasks);
+        }
+        io->stopped = stop;
+    }
+}
 
 static void shell_io_write_cb (flux_t *h,
                                flux_msg_handler_t *mh,
@@ -94,6 +133,9 @@ static void shell_io_write_completion (flux_future_t *f, void *arg)
         log_err ("shell_io_write");
     zlist_remove (io->pending_writes, f);
     flux_future_destroy (f);
+
+    if (zlist_size (io->pending_writes) <= shell_io_lwm)
+        shell_io_control (io, false);
 }
 
 static int shell_io_write (struct shell_io *io,
@@ -118,6 +160,9 @@ static int shell_io_write (struct shell_io *io,
     if (zlist_append (io->pending_writes, f) < 0)
         log_msg ("zlist_append failed");
     json_decref (o);
+
+    if (zlist_size (io->pending_writes) >= shell_io_hwm)
+        shell_io_control (io, true);
     return 0;
 
 error:
