@@ -55,39 +55,11 @@ int shell_task_pmi_enable (struct shell_task *task,
                            shell_task_pmi_ready_f cb,
                            void *arg);
 
-/* Call readline once shell_task_pmi_ready_f has been called
- * indicating a line of PMI protocol from the task is ready.
- * Sets 'line' to the data read (do not free).
- * Returns number of bytes read, or -1 on error.
- */
-int shell_task_pmi_readline (struct shell_task *task, const char **line);
-
-/* Call to write a line of PMI protocol to the task.
- */
-int shell_task_pmi_write (struct shell_task *task,
-                          const char *data,
-                          int len);
-
 /* Call before task_start() to enable stdio capture.
  */
 int shell_task_io_enable (struct shell_task *task,
                           shell_task_io_ready_f cb,
                           void *arg);
-
-/* Call once shell_task_io_ready_f has been called, indicating
- * stdout or stderr from the task is ready.
- * Sets 'line' to the data read (do not free).
- * Returns number of bytes read, or -1 on error.
- */
-int shell_task_io_readline (struct shell_task *task,
-                            const char *stream,
-                            const char **line);
-
-/* Test whether stream has reached EOF.
- * Call after shell_task_io_readline() returns 0.
- */
-bool shell_task_io_at_eof (struct shell_task *task, const char *stream);
-
 
 /* Send signal `signum` to shell task */
 int shell_task_kill (struct shell_task *task, int signum);

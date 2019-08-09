@@ -242,7 +242,7 @@ static int shell_pmi_response_send (void *client, const char *buf)
 {
     struct shell_task *task = client;
 
-    return shell_task_pmi_write (task, buf, strlen (buf));
+    return flux_subprocess_write (task->proc, "PMI_FD", buf, strlen (buf));
 }
 
 static void shell_pmi_debug_trace (void *client, const char *line)
@@ -260,7 +260,7 @@ void shell_pmi_task_ready (struct shell_task *task, void *arg)
     const char *line;
     int rc;
 
-    len = shell_task_pmi_readline (task, &line);
+    line = flux_subprocess_read_line (task->proc, "PMI_FD", &len);
     if (len < 0) {
         if (pmi->shell->verbose)
             fprintf (stderr, "%d: C: pmi read error: %s\n",
