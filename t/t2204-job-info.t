@@ -43,7 +43,16 @@ get_timestamp_field() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-        flux jobspec --format json srun -N1 hostname > test.json
+        flux jobspec --format json srun -N1 sleep inf > test.json
+'
+
+hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
+
+test_expect_success 'load job-exec,sched-simple modules' '
+        #  Add fake by_rank configuration to kvs:
+        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
+        flux module load -r 0 sched-simple &&
+        flux module load -r 0 job-exec
 '
 
 #
@@ -110,6 +119,23 @@ test_expect_success 'flux job eventlog --time-format=offset works' '
 test_expect_success 'flux job eventlog --time-format=invalid fails works' '
         jobid=$(submit_job) &&
 	! flux job eventlog --time-format=invalid $jobid
+'
+
+test_expect_success 'flux job eventlog -p works' '
+        jobid=$(submit_job) &&
+        flux job eventlog -p "eventlog" $jobid > eventlog_path1.out &&
+        grep submit eventlog_path1.out
+'
+
+test_expect_success 'flux job eventlog -p works (guest.exec.eventlog)' '
+        jobid=$(submit_job) &&
+        flux job eventlog -p "guest.exec.eventlog" $jobid > eventlog_path2.out &&
+        grep done eventlog_path2.out
+'
+
+test_expect_success 'flux job eventlog -p fails on invalid path' '
+        jobid=$(submit_job) &&
+        ! flux job eventlog -p "foobar" $jobid
 '
 
 #
@@ -272,7 +298,7 @@ test_expect_success 'flux job info eventlog fails on bad id' '
 test_expect_success 'flux job info jobspec works' '
         jobid=$(submit_job) &&
 	flux job info $jobid jobspec > jobspec_a.out &&
-        grep hostname jobspec_a.out
+        grep sleep jobspec_a.out
 '
 
 test_expect_success 'flux job info jobspec fails on bad id' '
@@ -287,7 +313,7 @@ test_expect_success 'flux job info multiple keys works' '
         jobid=$(submit_job) &&
 	flux job info $jobid eventlog jobspec J > all_info_a.out &&
         grep submit all_info_a.out &&
-        grep hostname all_info_a.out
+        grep sleep all_info_a.out
 '
 
 test_expect_success 'flux job info multiple keys fails on bad id' '
@@ -322,6 +348,14 @@ test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success 'eventlog-watch request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.eventlog-watch 71 </dev/null
+'
+
+#
+# cleanup
+#
+test_expect_success 'remove sched-simple,job-exec modules' '
+        flux module remove -r 0 sched-simple &&
+        flux module remove -r 0 job-exec
 '
 
 test_done

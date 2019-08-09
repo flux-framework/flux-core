@@ -36,6 +36,7 @@ bad_first_event() {
         flux kvs get --raw ${kvsdir}.eventlog \
             | sed -e s/submit/foobar/ \
             | flux kvs put --raw ${kvsdir}.eventlog=-
+        flux job cancel $jobid
         echo $jobid
 }
 
@@ -50,7 +51,16 @@ unset_userid() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-        flux jobspec --format json srun -N1 hostname > test.json
+        flux jobspec --format json srun -N1 sleep inf > test.json
+'
+
+hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
+
+test_expect_success 'load job-exec,sched-simple modules' '
+        #  Add fake by_rank configuration to kvs:
+        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
+        flux module load -r 0 sched-simple &&
+        flux module load -r 0 job-exec
 '
 
 #
@@ -80,6 +90,25 @@ test_expect_success 'flux job eventlog fails on bad first event (user)' '
         jobid=$(bad_first_event 9000) &&
         set_userid 9999 &&
         ! flux job eventlog $jobid &&
+        unset_userid
+'
+
+test_expect_success 'flux job guest.exec.eventlog works via -p (owner)' '
+        jobid=$(submit_job) &&
+        flux job eventlog -p guest.exec.eventlog $jobid
+'
+
+test_expect_success 'flux job guest.exec.eventlog works via -p (user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9000 &&
+        flux job eventlog -p guest.exec.eventlog $jobid &&
+        unset_userid
+'
+
+test_expect_success 'flux job guest.exec.eventlog fails via -p (wrong user)' '
+        jobid=$(submit_job 9000) &&
+        set_userid 9999 &&
+        ! flux job eventlog -p guest.exec.eventlog $jobid &&
         unset_userid
 '
 
@@ -203,6 +232,14 @@ test_expect_success 'flux job info foobar fails (wrong user)' '
         set_userid 9999 &&
         ! flux job info $jobid foobar &&
         unset_userid
+'
+#
+# cleanup
+#
+
+test_expect_success 'remove sched-simple,job-exec modules' '
+        flux module remove -r 0 sched-simple &&
+        flux module remove -r 0 job-exec
 '
 
 test_done
