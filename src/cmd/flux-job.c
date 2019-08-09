@@ -133,6 +133,10 @@ static struct optparse_option eventlog_opts[] =  {
     { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify time format: raw, iso, offset",
     },
+    { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Specify alternate eventlog path suffix "
+               "(e.g. \"guest.exec.eventlog\")",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -223,7 +227,7 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "[-f text|json] [-T raw|iso|offset] id",
+      "[-f text|json] [-T raw|iso|offset] [-p path] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
@@ -1085,6 +1089,7 @@ void entry_format_parse_options (optparse_t *p, struct entry_format *e)
 struct eventlog_ctx {
     optparse_t *p;
     flux_jobid_t id;
+    const char *path;
     struct entry_format e;
 };
 
@@ -1176,10 +1181,13 @@ void eventlog_continuation (flux_future_t *f, void *arg)
     size_t index;
     json_t *value;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:s}", ctx->path, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %lu not found", ctx->id);
+            if (!strcmp (ctx->path, "eventlog"))
+                log_msg_exit ("job %lu not found", ctx->id);
+            else
+                log_msg_exit ("eventlog path %s not found", ctx->path);
         }
         else
             log_err_exit ("flux_job_eventlog_lookup_get");
@@ -1214,13 +1222,14 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     }
 
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.path = optparse_get_str (p, "path", "eventlog");
     ctx.p = p;
     entry_format_parse_options (p, &ctx.e);
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
                              "id", ctx.id,
-                             "keys", "eventlog",
+                             "keys", ctx.path,
                              "flags", 0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., eventlog_continuation, &ctx) < 0)
