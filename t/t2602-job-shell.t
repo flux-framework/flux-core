@@ -144,6 +144,12 @@ test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
 	sort -snk1 <lptest4_raw.err >lptest4.err &&
 	test_cmp lptest4.exp lptest4.err
 '
+test_expect_success 'job-shell: verify 10K line lptest output works' '
+	${LPTEST} 79 10000 | sed -e "s/^/0: /" >lptestXXL.exp &&
+        id=$(flux jobspec srun -n1 ${LPTEST} 79 10000 | flux job submit) &&
+	flux job attach -l $id >lptestXXL.out &&
+	test_cmp lptestXXL.exp lptestXXL.out
+'
 test_expect_success 'job-shell: test shell kill event handling' '
 	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
 	flux job wait-event $id start &&
