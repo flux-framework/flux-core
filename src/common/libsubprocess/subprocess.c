@@ -1088,6 +1088,22 @@ const char *flux_subprocess_getline (flux_subprocess_t *p,
     return ptr;
 }
 
+static flux_future_t *add_pending_signal (flux_subprocess_t *p, int signum)
+{
+    flux_future_t *f;
+    /*  There can only be one pending signal. Return an error if so.
+     */
+    if (p->signal_pending) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if ((f = flux_future_create (NULL, NULL))) {
+        flux_subprocess_aux_set (p, "sp::signal_future", f, NULL);
+        p->signal_pending = signum;
+    }
+    return f;
+}
+
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f = NULL;
@@ -1098,7 +1114,8 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
         return NULL;
     }
 
-    if (p->state != FLUX_SUBPROCESS_RUNNING) {
+    if (p->state != FLUX_SUBPROCESS_RUNNING
+        && p->state != FLUX_SUBPROCESS_INIT) {
         /* XXX right errno? */
         errno = EINVAL;
         return NULL;
@@ -1106,6 +1123,10 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 
     if (p->local) {
         int ret;
+        if (p->pid <= (pid_t) 0) {
+            errno = EINVAL;
+            return NULL;
+        }
         if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP)
             ret = killpg (p->pid, signum);
         else
@@ -1117,12 +1138,17 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
             flux_future_fulfill (f, NULL, NULL);
     }
     else {
-        if (!(f = remote_kill (p, signum))) {
-            int save_errno = errno;
-            f = flux_future_create (NULL, NULL);
-            flux_future_fulfill_error (f, save_errno, NULL);
-        }
+        if (p->state != FLUX_SUBPROCESS_RUNNING)
+            f = add_pending_signal (p, signum);
+        else
+            f = remote_kill (p, signum);
+        if (!f)
+            return NULL;
     }
+    /*  Future must have a reactor in order to call flux_future_then(3):
+     */
+    if (f && !flux_future_get_reactor (f))
+        flux_future_set_reactor (f, p->reactor);
     return f;
 }
 
