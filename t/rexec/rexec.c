@@ -132,6 +132,8 @@ int main (int argc, char *argv[])
     if (flux_cmd_setcwd (cmd, cwd) < 0)
         log_err_exit ("flux_cmd_setcwd");
 
+    free (cwd);
+
     if (optparse_getopt (opts, "stdin2stream", &optargp) > 0) {
         if (strcmp (optargp, "STDIN")
             && strcmp (optargp, "STDOUT")
@@ -160,6 +162,7 @@ int main (int argc, char *argv[])
     /* Clean up.
      */
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
     flux_close (h);
     log_fini ();
 
