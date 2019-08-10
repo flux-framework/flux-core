@@ -158,6 +158,19 @@ test_expect_success 'rexec kill group' '
         grep "subprocess terminated by signal 15" output
 '
 
+test_expect_success 'rexec kill process not yet running' '
+	test_expect_code 143 \
+	    ${FLUX_BUILD_DIR}/t/rexec/rexec -K /bin/sleep 10 > K.out 2>&1 &&
+        grep "subprocess terminated by signal 15" K.out
+'
+
+test_expect_success 'rexec kill with already pending signal gets error' '
+	test_expect_code 143 \
+	    ${FLUX_BUILD_DIR}/t/rexec/rexec -K -K /bin/sleep 10 > KK.out 2>&1 &&
+        grep "subprocess terminated by signal 15" KK.out &&
+	grep "rexec: flux_subprocess_kill: Invalid argument" KK.out
+'
+
 test_expect_success NO_CHAIN_LINT 'rexec ps works' '
         ${FLUX_BUILD_DIR}/t/rexec/rexec -r 1 sleep 100 &
         pid1=$!
