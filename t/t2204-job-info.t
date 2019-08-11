@@ -281,6 +281,28 @@ test_expect_success 'flux job wait-event w/ bad match-context fails (invalid inp
         ! flux job wait-event --match-context=foo $jobid exception
 '
 
+test_expect_success 'flux job wait-event -p works' '
+        jobid=$(submit_job) &&
+        flux job wait-event -p "eventlog" $jobid submit > wait_event_path1.out &&
+        grep submit wait_event_path1.out
+'
+
+test_expect_success 'flux job wait-event -p works (guest.exec.eventlog)' '
+        jobid=$(submit_job) &&
+        flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path2.out &&
+        grep done wait_event_path2.out
+'
+
+test_expect_success 'flux job wait-event -p fails on invalid path' '
+        jobid=$(submit_job) &&
+        ! flux job wait-event -p "foobar" $jobid submit
+'
+
+test_expect_success 'flux job wait-event -p hangs on no event' '
+        jobid=$(submit_job) &&
+        ! run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar
+'
+
 #
 # job info tests
 #
