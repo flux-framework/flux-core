@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* eventlog_watch.c - handle job-info.eventlog-watch &
+/* watch.c - handle job-info.eventlog-watch &
  * job-info.eventlog-watch-cancel for job-info */
 
 #if HAVE_CONFIG_H
@@ -91,6 +91,7 @@ static int watch_key (struct watch_ctx *w)
     }
 
     if (flux_future_then (w->f, -1, watch_continuation, w) < 0) {
+        /* w->f cleanup handled in context destruction */
         flux_log_error (w->ctx->h, "%s: flux_future_then", __FUNCTION__);
         return -1;
     }
