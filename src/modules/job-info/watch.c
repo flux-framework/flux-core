@@ -29,6 +29,7 @@ struct watch_ctx {
     struct info_ctx *ctx;
     flux_msg_t *msg;
     flux_jobid_t id;
+    bool guest;
     char *path;
     flux_future_t *check_f;
     flux_future_t *watch_f;
@@ -54,6 +55,7 @@ static void watch_ctx_destroy (void *data)
 static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
                                            const flux_msg_t *msg,
                                            flux_jobid_t id,
+                                           bool guest,
                                            const char *path)
 {
     struct watch_ctx *w = calloc (1, sizeof (*w));
@@ -64,6 +66,7 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
 
     w->ctx = ctx;
     w->id = id;
+    w->guest = guest;
     if (!(w->path = strdup (path))) {
         errno = ENOMEM;
         goto error;
@@ -109,14 +112,30 @@ static int check_eventlog (struct watch_ctx *w)
 static int watch_key (struct watch_ctx *w)
 {
     char fullpath[128];
+    char ns[128];
+    char *nsptr = NULL;
+    char *pathptr = NULL;
     int flags = (FLUX_KVS_WATCH | FLUX_KVS_WATCH_APPEND);
 
-    if (flux_job_kvs_key (fullpath, sizeof (fullpath), w->id, w->path) < 0) {
-        flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
-        return -1;
+    if (w->guest) {
+        if (flux_job_kvs_namespace (ns, sizeof (ns), w->id) < 0) {
+            flux_log_error (w->ctx->h, "%s: flux_job_kvs_namespace",
+                            __FUNCTION__);
+            return -1;
+        }
+        nsptr = ns;
+        pathptr = w->path;
+    }
+    else {
+        if (flux_job_kvs_key (fullpath, sizeof (fullpath), w->id,
+                              w->path ? w->path : "eventlog") < 0) {
+            flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
+            return -1;
+        }
+        pathptr = fullpath;
     }
 
-    if (!(w->watch_f = flux_kvs_lookup (w->ctx->h, NULL, flags, fullpath))) {
+    if (!(w->watch_f = flux_kvs_lookup (w->ctx->h, nsptr, flags, pathptr))) {
         flux_log_error (w->ctx->h, "%s: flux_kvs_lookup", __FUNCTION__);
         return -1;
     }
@@ -193,7 +212,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     size_t toklen;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
-        if (errno != ENOENT && errno != ENODATA)
+        if (errno != ENOENT && errno != ENODATA && errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
         goto error;
     }
@@ -249,6 +268,7 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     struct watch_ctx *w = NULL;
     flux_jobid_t id;
+    int guest = 0;
     const char *path = NULL;
     const char *errmsg = NULL;
 
@@ -263,8 +283,9 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = "eventlog-watch request rejected without streaming RPC flag";
         goto error;
     }
+    (void)flux_request_unpack (msg, NULL, "{s:b}", "guest", &guest);
 
-    if (!(w = watch_ctx_create (ctx, msg, id, path)))
+    if (!(w = watch_ctx_create (ctx, msg, id, guest, path)))
         goto error;
 
     /* if user requested an alternate path and that alternate path is
