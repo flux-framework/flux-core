@@ -116,20 +116,14 @@ static void watch_continuation (flux_future_t *f, void *arg)
     size_t toklen;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
-        if (errno == ENODATA) {
-            if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-            goto done;
-        }
-        else if (errno != ENOENT)
+        if (errno != ENOENT && errno != ENODATA)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
         goto error;
     }
 
     if (w->cancel) {
-        if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        goto done;
+        errno = ENODATA;
+        goto error;
     }
 
     if (!w->allow) {
@@ -155,7 +149,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
 error:
     if (flux_respond_error (ctx->h, w->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-done:
+
     /* flux future destroyed in watch_ctx_destroy, which is called
      * via zlist_remove() */
     zlist_remove (ctx->watchers, w);
