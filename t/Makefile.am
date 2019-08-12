@@ -200,7 +200,6 @@ check_PROGRAMS = \
 	barrier/tbarrier \
 	reactor/reactorcat \
 	rexec/rexec \
-	rexec/rexec_signal \
 	rexec/rexec_ps \
 	rexec/rexec_count_stdout \
 	rexec/rexec_getline \
@@ -395,11 +394,6 @@ reactor_reactorcat_LDADD = \
 rexec_rexec_SOURCES = rexec/rexec.c
 rexec_rexec_CPPFLAGS = $(test_cppflags)
 rexec_rexec_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-rexec_rexec_signal_SOURCES = rexec/rexec_signal.c
-rexec_rexec_signal_CPPFLAGS = $(test_cppflags)
-rexec_rexec_signal_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 rexec_rexec_ps_SOURCES = rexec/rexec_ps.c

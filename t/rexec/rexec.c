@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <stdio.h>
+#include <signal.h>
 #include <unistd.h>
 #include <string.h>
 #include <inttypes.h>
@@ -26,6 +27,10 @@ extern char **environ;
 static struct optparse_option cmdopts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "rank",
       .usage = "Specify rank for test" },
+    { .name = "kill-immediately", .key = 'K', .has_arg = 0,
+      .usage = "kill subprocesses immediately after exec" },
+    { .name = "kill", .key = 'k', .has_arg = 0,
+      .usage = "kill subprocesses when it is running" },
     { .name = "outputstates", .key = 's', .has_arg = 0, .arginfo = "NONE",
       .usage = "Output state changes as they occur" },
     { .name = "stdin2stream", .key = 'i', .has_arg = 1, .arginfo = "CHANNEL",
@@ -40,9 +45,30 @@ int exit_code = 0;
 void completion_cb (flux_subprocess_t *p)
 {
     int ec = flux_subprocess_exit_code (p);
+    int termsig = flux_subprocess_signaled (p);
 
-    if (ec > exit_code)
+    if (termsig > 0) {
+        exit_code = 128 + termsig;
+        printf ("subprocess terminated by signal %d\n", termsig);
+    }
+    else if (ec > exit_code)
         exit_code = ec;
+}
+
+void kill_cb (flux_future_t *f, void *arg)
+{
+    if (flux_future_get (f, NULL) < 0)
+        log_err ("kill_cb: flux_subprocess_kill");
+    flux_future_destroy (f);
+}
+
+void send_sigterm (flux_subprocess_t *p)
+{
+    flux_future_t *f = flux_subprocess_kill (p, SIGTERM);
+    if (!f)
+        log_err ("flux_subprocess_kill");
+    if (f && flux_future_then (f, -1., kill_cb, p) < 0)
+        log_err ("flux_future_then");
 }
 
 void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -60,6 +86,10 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
         /* just so we fail non-zero */
         if (!exit_code)
             exit_code++;
+    }
+    else if (state == FLUX_SUBPROCESS_RUNNING) {
+        if (optparse_hasopt (opts, "kill"))
+            send_sigterm (p);
     }
 }
 
@@ -105,6 +135,7 @@ int main (int argc, char *argv[])
     const char *optargp;
     int optindex;
     int rank = 0;
+    int n;
 
     log_init ("rexec");
 
@@ -132,6 +163,8 @@ int main (int argc, char *argv[])
     if (flux_cmd_setcwd (cmd, cwd) < 0)
         log_err_exit ("flux_cmd_setcwd");
 
+    free (cwd);
+
     if (optparse_getopt (opts, "stdin2stream", &optargp) > 0) {
         if (strcmp (optargp, "STDIN")
             && strcmp (optargp, "STDOUT")
@@ -151,6 +184,12 @@ int main (int argc, char *argv[])
     if (!(p = flux_rexec (h, rank, 0, cmd, &ops)))
         log_err_exit ("flux_rexec");
 
+    if ((n = optparse_getopt (opts, "kill-immediately", NULL)) > 0) {
+        /* For testing -K is allowed multiple times */
+        while (n--)
+            send_sigterm (p);
+    }
+
     if (optparse_getopt (opts, "stdin2stream", &optargp) > 0)
         stdin2stream (p, optargp);
 
@@ -160,6 +199,7 @@ int main (int argc, char *argv[])
     /* Clean up.
      */
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
     flux_close (h);
     log_fini ();
 

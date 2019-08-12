@@ -82,6 +82,35 @@ static void stop_out_watchers (flux_subprocess_t *p)
 }
 #endif
 
+static void sigpending_cb (flux_future_t *f, void *arg)
+{
+    flux_future_t *prev = arg;
+
+    /* fulfill the original future (prev) returned to the caller of
+     * flux_subprocess_kill() with the result from the actual
+     * remote kill(2) (f).
+     */
+    flux_future_fulfill_with (prev, f);
+    flux_future_destroy (f);
+}
+
+static void fwd_pending_signal (flux_subprocess_t *p)
+{
+    flux_future_t *prev = flux_subprocess_aux_get (p, "sp::signal_future");
+
+    if (p->state == FLUX_SUBPROCESS_RUNNING) {
+        /* Remote process is now running, send pending signal */
+        flux_future_t *f = flux_subprocess_kill (p, p->signal_pending);
+        if (!f || (flux_future_then (f, -1., sigpending_cb, prev) < 0))
+            flux_future_fulfill_error (prev, errno, NULL);
+    }
+    else {
+        /* Remote process exited or failed, not able to send signal */
+        flux_future_fulfill_error (prev, EINVAL, NULL);
+    }
+    p->signal_pending = 0;
+}
+
 static void process_new_state (flux_subprocess_t *p,
                                flux_subprocess_state_t state,
                                int rank, pid_t pid, int errnum, int status)
@@ -109,6 +138,9 @@ static void process_new_state (flux_subprocess_t *p,
         p->failed_errno = errnum;
         stop_io_watchers (p);
     }
+
+    if (p->signal_pending)
+        fwd_pending_signal (p);
 
     if (p->state != p->state_reported)
         state_change_start (p);
