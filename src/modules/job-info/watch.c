@@ -128,7 +128,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
 
     if (!w->allow) {
         if (eventlog_allow (ctx, w->msg, s) < 0)
-            goto error;
+            goto error_cancel;
         w->allow = true;
     }
 
@@ -139,12 +139,23 @@ static void watch_continuation (flux_future_t *f, void *arg)
                                "event", tok, toklen) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack",
                             __FUNCTION__);
-            goto error;
+            goto error_cancel;
         }
     }
 
     flux_future_reset (f);
     return;
+
+error_cancel:
+    /* If we haven't sent a cancellation yet, must do so so that
+     * the future's matchtag will eventually be freed */
+    if (!w->cancel) {
+        int save_errno = errno;
+        if (flux_kvs_lookup_cancel (w->f) < 0)
+            flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+                            __FUNCTION__);
+        errno = save_errno;
+    }
 
 error:
     if (flux_respond_error (ctx->h, w->msg, errno, NULL) < 0)
