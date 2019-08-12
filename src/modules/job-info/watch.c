@@ -26,7 +26,6 @@ struct watch_ctx {
     flux_msg_t *msg;
     flux_jobid_t id;
     flux_future_t *f;
-    int offset;
     bool allow;
     bool cancel;
 };
@@ -74,11 +73,6 @@ static int watch_key (struct watch_ctx *w)
 {
     char key[64];
     int flags = (FLUX_KVS_WATCH | FLUX_KVS_WATCH_APPEND);
-
-    if (w->f) {
-        flux_future_destroy (w->f);
-        w->f = NULL;
-    }
 
     if (flux_job_kvs_key (key, sizeof (key), w->id, "eventlog") < 0) {
         flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
