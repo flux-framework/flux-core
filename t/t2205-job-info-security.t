@@ -9,21 +9,33 @@ test_under_flux 4 job
 # We have to fake a job submission by a guest into the KVS.
 # This method of editing the eventlog preserves newline separators.
 
-# Usage: submit_job [userid]
-# To ensure robustness of tests despite future job manager changes,
-# cancel the job, and wait for clean event.  Optionally, edit the
-# userid
-submit_job() {
+update_job_userid() {
         userid=$1
-        jobid=$(flux job submit test.json)
-        flux job cancel $jobid
-        flux job wait-event $jobid clean >/dev/null
         if test -n "$userid"; then
             kvsdir=$(flux job id --to=kvs $jobid)
             flux kvs get --raw ${kvsdir}.eventlog \
                 | sed -e 's/\("userid":\)[0-9]*/\1'${userid}/ \
                 | flux kvs put --raw ${kvsdir}.eventlog=-
         fi
+}
+
+# Usage: submit_job [userid]
+# To ensure robustness of tests despite future job manager changes,
+# cancel the job, and wait for clean event.  Optionally, edit the
+# userid
+submit_job() {
+        jobid=$(flux job submit test.json)
+        flux job cancel $jobid
+        flux job wait-event $jobid clean >/dev/null
+        update_job_userid $1
+        echo $jobid
+}
+
+# Unlike above, do not cancel the job, the test will cancel the job
+submit_job_live() {
+        jobid=$(flux job submit test.json)
+        flux job wait-event $jobid start >/dev/null
+        update_job_userid $1
         echo $jobid
 }
 
@@ -152,6 +164,28 @@ test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (wrong
         set_userid 9999 &&
         ! flux job wait-event -p guest.exec.eventlog $jobid done &&
         unset_userid
+'
+
+test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, owner)' '
+        jobid=$(submit_job_live) &&
+        flux job wait-event -p guest.exec.eventlog $jobid init &&
+        flux job cancel $jobid
+'
+
+test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, user)' '
+        jobid=$(submit_job_live 9000) &&
+        set_userid 9000 &&
+        flux job wait-event -p guest.exec.eventlog $jobid init &&
+        unset_userid &&
+        flux job cancel $jobid
+'
+
+test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (live job, wrong user)' '
+        jobid=$(submit_job_live 9000) &&
+        set_userid 9999 &&
+        ! flux job wait-event -p guest.exec.eventlog $jobid init &&
+        unset_userid &&
+        flux job cancel $jobid
 '
 
 #
