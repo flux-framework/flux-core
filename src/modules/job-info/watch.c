@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* eventlog_watch.c - handle job-info.eventlog-watch &
+/* watch.c - handle job-info.eventlog-watch &
  * job-info.eventlog-watch-cancel for job-info */
 
 #if HAVE_CONFIG_H
@@ -26,7 +26,6 @@ struct watch_ctx {
     flux_msg_t *msg;
     flux_jobid_t id;
     flux_future_t *f;
-    int offset;
     bool allow;
     bool cancel;
 };
@@ -75,11 +74,6 @@ static int watch_key (struct watch_ctx *w)
     char key[64];
     int flags = (FLUX_KVS_WATCH | FLUX_KVS_WATCH_APPEND);
 
-    if (w->f) {
-        flux_future_destroy (w->f);
-        w->f = NULL;
-    }
-
     if (flux_job_kvs_key (key, sizeof (key), w->id, "eventlog") < 0) {
         flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
         return -1;
@@ -91,6 +85,7 @@ static int watch_key (struct watch_ctx *w)
     }
 
     if (flux_future_then (w->f, -1, watch_continuation, w) < 0) {
+        /* w->f cleanup handled in context destruction */
         flux_log_error (w->ctx->h, "%s: flux_future_then", __FUNCTION__);
         return -1;
     }
@@ -121,25 +116,19 @@ static void watch_continuation (flux_future_t *f, void *arg)
     size_t toklen;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
-        if (errno == ENODATA) {
-            if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-            goto done;
-        }
-        else if (errno != ENOENT)
+        if (errno != ENOENT && errno != ENODATA)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
         goto error;
     }
 
     if (w->cancel) {
-        if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        goto done;
+        errno = ENODATA;
+        goto error;
     }
 
     if (!w->allow) {
         if (eventlog_allow (ctx, w->msg, s) < 0)
-            goto error;
+            goto error_cancel;
         w->allow = true;
     }
 
@@ -150,17 +139,28 @@ static void watch_continuation (flux_future_t *f, void *arg)
                                "event", tok, toklen) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond_pack",
                             __FUNCTION__);
-            goto error;
+            goto error_cancel;
         }
     }
 
     flux_future_reset (f);
     return;
 
+error_cancel:
+    /* If we haven't sent a cancellation yet, must do so so that
+     * the future's matchtag will eventually be freed */
+    if (!w->cancel) {
+        int save_errno = errno;
+        if (flux_kvs_lookup_cancel (w->f) < 0)
+            flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+                            __FUNCTION__);
+        errno = save_errno;
+    }
+
 error:
     if (flux_respond_error (ctx->h, w->msg, errno, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-done:
+
     /* flux future destroyed in watch_ctx_destroy, which is called
      * via zlist_remove() */
     zlist_remove (ctx->watchers, w);

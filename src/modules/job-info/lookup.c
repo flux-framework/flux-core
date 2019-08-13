@@ -115,11 +115,6 @@ static int lookup_keys (struct lookup_ctx *l)
     size_t index;
     json_t *key;
 
-    if (l->f) {
-        flux_future_destroy (l->f);
-        l->f = NULL;
-    }
-
     if (!(fall = flux_future_wait_all_create ())) {
         flux_log_error (l->ctx->h, "%s: flux_wait_all_create", __FUNCTION__);
         goto error;
