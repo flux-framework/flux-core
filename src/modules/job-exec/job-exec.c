@@ -702,6 +702,15 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
     }
     job->has_namespace = 1;
 
+    /*  Release startup reference */
+    jobinfo_decref (job);
+
+    /*  If an exception was received during startup, no need to continue
+     *   with startup
+     */
+    if (job->exception_in_progress)
+        return;
+
     if (!(jobspec = jobinfo_kvs_lookup_get (f, "jobspec"))) {
         jobinfo_fatal_error (job, errno, "unable to fetch jobspec");
         goto done;
@@ -858,6 +867,11 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     if (!(job = jobinfo_new ()))
         return -1;
+
+    /*  Take a reference until initialization complete in case an
+     *   exception is generated during this phase
+     */
+    jobinfo_incref (job);
 
     /* Copy flux handle for each job to allow implementation access.
      * (This could also be done with an accessor, but choose the simpler
