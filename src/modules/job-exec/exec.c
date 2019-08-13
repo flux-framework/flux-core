@@ -162,7 +162,7 @@ static int exec_start (struct jobinfo *job)
 static void exec_kill_cb (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0 && errno != ENOENT)
         flux_log_error (job->h, "%ju: exec_kill", (uintmax_t) job->id);
     jobinfo_decref (job);
     flux_future_destroy (f);
@@ -172,6 +172,11 @@ static int exec_kill (struct jobinfo *job, int signum)
 {
     struct  bulk_exec *exec = job->data;
     flux_future_t *f = bulk_exec_kill (exec, signum);
+    if (!f) {
+        if (errno != ENOENT)
+            flux_log_error (job->h, "%ju: bulk_exec_kill", job->id);
+        return 0;
+    }
 
     flux_log (job->h, LOG_DEBUG,
               "exec_kill: %ju: signal %d",
@@ -179,7 +184,7 @@ static int exec_kill (struct jobinfo *job, int signum)
               signum);
 
     jobinfo_incref (job);
-    if (!f || flux_future_then (f, -1., exec_kill_cb, job) < 0) {
+    if (flux_future_then (f, -1., exec_kill_cb, job) < 0) {
         flux_log_error (job->h, "%ju: exec_kill: flux_future_then", job->id);
         flux_future_destroy (f);
         return -1;
