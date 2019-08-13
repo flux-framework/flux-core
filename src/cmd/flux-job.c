@@ -865,22 +865,31 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
             goto out;
         log_err_exit ("guest.output");
     }
-    if (!(output = json_loads (s, 0, NULL)))
-        log_msg_exit ("error decoding guest.output");
+    if (!(output = eventlog_decode (s)))
+        log_msg_exit ("error decoding guest.output eventlog");
     json_array_foreach (output, index, entry) {
+        json_t *context;
+        const char *name;
         const char *stream = NULL;
         int rank;
         char *data = NULL;
         int len = 0;
-        if (iodecode (entry, &stream, &rank, &data, &len, NULL) < 0)
-            log_msg_exit ("malformed JSON entry");
-        if (len > 0) {
-            FILE *fp = !strcmp (stream, "STDOUT") ? stdout : stderr;
-            if (optparse_hasopt (p, "label"))
-                fprintf (fp, "%d: ", rank);
-            fwrite (data, len, 1, fp);
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
+            log_err_exit ("malformed eventlog");
+        if (!strcmp (name, "header")) {
+            // TODO: acquire per-stream encoding type
         }
-        free (data);
+        else if (!strcmp (name, "data")) {
+            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
+                log_msg_exit ("malformed event context");
+            if (len > 0) {
+                FILE *fp = !strcmp (stream, "STDOUT") ? stdout : stderr;
+                if (optparse_hasopt (p, "label"))
+                    fprintf (fp, "%d: ", rank);
+                fwrite (data, len, 1, fp);
+            }
+            free (data);
+        }
     }
     json_decref (output);
 out:

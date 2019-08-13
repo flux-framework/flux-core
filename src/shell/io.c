@@ -41,6 +41,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
 
 #include "task.h"
@@ -93,6 +94,10 @@ static void shell_io_control (struct shell_io *io, bool stop)
     }
 }
 
+/* Convert 'iodecode' object to an valid RFC 24 data event.
+ * N.B. the iodecode object is a valid "context" for the event.
+ * io->output is a JSON array of eventlog entries.
+ */
 static void shell_io_write_cb (flux_t *h,
                                flux_msg_handler_t *mh,
                                const flux_msg_t *msg,
@@ -100,7 +105,8 @@ static void shell_io_write_cb (flux_t *h,
 {
     struct shell_io *io = arg;
     bool eof = false;
-    json_t *o;      // decode output object for appending to io->output array
+    json_t *o;
+    json_t *entry;
 
     if (flux_request_unpack (msg, NULL, "o", &o) < 0)
         goto error;
@@ -108,8 +114,13 @@ static void shell_io_write_cb (flux_t *h,
         goto error;
     if (shell_svc_allowed (io->shell->svc, msg) < 0)
         goto error;
-    if (json_array_append (io->output, o) < 0)
+    if (!(entry = eventlog_entry_pack (0., "data", "O", o))) // increfs 'o'
         goto error;
+    if (json_array_append_new (io->output, entry) < 0) {
+        json_decref (entry);
+        errno = ENOMEM;
+        goto error;
+    }
     if (eof) {
         if (--io->eof_pending == 0) {
             flux_msg_handler_stop (mh);
@@ -178,20 +189,31 @@ static int shell_io_flush (struct shell_io *io)
     FILE *f;
 
     json_array_foreach (io->output, index, entry) {
+        json_t *context;
+        const char *name;
         const char *stream = NULL;
         int rank;
         char *data = NULL;
         int len = 0;
-        if (iodecode (entry, &stream, &rank, &data, &len, NULL) < 0) {
-            log_err ("iodecode: %s", json_dumps (entry, 0));
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
+            log_err ("eventlog_entry_parse");
             return -1;
         }
-        f = !strcmp (stream, "STDOUT") ? stdout : stderr;
-        if (len > 0) {
-            fprintf (f, "%d: ", rank);
-            fwrite (data, len, 1, f);
+        if (!strcmp (name, "header")) {
+            // TODO: acquire per-stream encoding type
         }
-        free (data);
+        else if (!strcmp (name, "data")) {
+            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
+                log_err ("iodecode");
+                return -1;
+            }
+            f = !strcmp (stream, "STDOUT") ? stdout : stderr;
+            if (len > 0) {
+                fprintf (f, "%d: ", rank);
+                fwrite (data, len, 1, f);
+            }
+            free (data);
+        }
     }
     return 0;
 }
@@ -200,11 +222,15 @@ static int shell_io_commit (struct shell_io *io)
 {
     flux_kvs_txn_t *txn;
     flux_future_t *f = NULL;
+    char *chunk;
+    int saved_errno;
     int rc = -1;
 
-    if (!(txn = flux_kvs_txn_create ()))
+    if (!(chunk = eventlog_encode (io->output)))
         return -1;
-    if (flux_kvs_txn_pack (txn, 0, "output", "O", io->output) < 0)
+    if (!(txn = flux_kvs_txn_create ()))
+        goto out;
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", chunk) < 0)
         goto out;
     if (!(f = flux_kvs_commit (io->shell->h, NULL, 0, txn)))
         goto out;
@@ -212,8 +238,11 @@ static int shell_io_commit (struct shell_io *io)
         goto out;
     rc = 0;
 out:
+    saved_errno = errno;
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
+    free (chunk);
+    errno = saved_errno;
     return rc;
 }
 
@@ -247,6 +276,30 @@ void shell_io_destroy (struct shell_io *io)
     }
 }
 
+/* Append RFC 24 header event to 'output' JSON array.  Assume:
+ * - fixed base64 encoding for stdout, stderr
+ * - no options
+ * - no stdlog
+ */
+static int shell_io_header_append (json_t *output)
+{
+    json_t *o;
+
+    o = eventlog_entry_pack (0, "header",
+                             "{s:i s:{s:s s:s} s:{}}",
+                             "version", 1,
+                             "encoding",
+                               "stdout", "base64",
+                               "stderr", "base64",
+                             "options");
+    if (!o || json_array_append_new (output, o) < 0) {
+        json_decref (o);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
 struct shell_io *shell_io_create (flux_shell_t *shell)
 {
     struct shell_io *io;
@@ -266,6 +319,8 @@ struct shell_io *shell_io_create (flux_shell_t *shell)
             errno = ENOMEM;
             goto error;
         }
+        if (shell_io_header_append (io->output) < 0)
+            goto error;
     }
     return io;
 error:
