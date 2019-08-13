@@ -334,8 +334,15 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     (*job->impl->kill) (job, SIGKILL);
 }
 
-static void jobinfo_kill (struct jobinfo *job)
+/*  Cancel any pending shells to execute with implementations cancel
+ *   method, send SIGTERM to executing shells to notify them to terminate,
+ *   schedule SIGKILL to be sent after kill_timeout seconds.
+ */
+static void jobinfo_cancel (struct jobinfo *job)
 {
+    if (job->impl->cancel)
+        (*job->impl->cancel) (job);
+
     (*job->impl->kill) (job, SIGTERM);
     job->kill_timer = flux_timer_watcher_create (flux_get_reactor (job->h),
                                                  job->kill_timeout, 0.,
@@ -370,7 +377,7 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
             flux_log_error (h, "jobinfo_fatal_verror: jobinfo_respond_error");
     }
     if (job->running)
-        jobinfo_kill (job);
+        jobinfo_cancel (job);
     if (job->needs_cleanup) /* Do not finalize, wait for cleanup to finish */
         return;
     if (jobinfo_finalize (job) < 0) {
