@@ -952,6 +952,7 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (severity == 0
         && (job = zhashx_lookup (ctx->jobs, &id))
+        && (!job->finalizing)
         && (!job->exception_in_progress)) {
         job->exception_in_progress = 1;
         flux_log (h, LOG_DEBUG, "exec aborted: id=%ld", id);
