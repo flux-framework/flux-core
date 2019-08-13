@@ -72,6 +72,7 @@ json_t *ioencode (const char *stream,
     char *base64_data = NULL;
     json_t *o = NULL;
     json_t *rv = NULL;
+    char rankstr[64];
 
     /* data can be NULL and len == 0 if eof true */
     if (!stream
@@ -81,20 +82,20 @@ json_t *ioencode (const char *stream,
         errno = EINVAL;
         return NULL;
     }
-
+    (void)snprintf (rankstr, sizeof (rankstr), "%d", rank);
     if (data && len) {
         if (!(base64_data = bin2base64 (data, len)))
             goto error;
-        if (!(o = json_pack ("{s:s s:i s:s}",
+        if (!(o = json_pack ("{s:s s:s s:s}",
                              "stream", stream,
-                             "rank", rank,
+                             "rank", rankstr,
                              "data", base64_data)))
             goto error;
     }
     else {
-        if (!(o = json_pack ("{s:s s:i}",
+        if (!(o = json_pack ("{s:s s:s}",
                              "stream", stream,
-                             "rank", rank)))
+                             "rank", rankstr)))
             goto error;
     }
     if (eof) {
@@ -115,6 +116,7 @@ int iodecode (json_t *o,
               bool *eofp)
 {
     const char *stream;
+    const char *rankstr;
     int rank;
     const char *base64_data;
     char *bin_data = NULL;
@@ -129,11 +131,11 @@ int iodecode (json_t *o,
         return -1;
     }
 
-    if (json_unpack (o, "{s:s s:i}",
+    if (json_unpack (o, "{s:s s:s}",
                      "stream", &stream,
-                     "rank", &rank) < 0)
+                     "rank", &rankstr) < 0)
         goto cleanup;
-
+    rank = strtoul (rankstr, NULL, 10);
     if (json_unpack (o, "{s:s}", "data", &base64_data) == 0) {
         has_data = true;
         if (!(bin_data = base642bin (base64_data, &bin_len)))
