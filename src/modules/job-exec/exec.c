@@ -187,6 +187,12 @@ static int exec_kill (struct jobinfo *job, int signum)
     return 0;
 }
 
+static int exec_cancel (struct jobinfo *job)
+{
+    struct bulk_exec *exec = job->data;
+    return bulk_exec_cancel (exec);
+}
+
 static int exec_cleanup (struct jobinfo *job, const struct idset *idset)
 {
     /* No epilog supported */
@@ -207,6 +213,7 @@ struct exec_implementation bulkexec = {
     .exit =     exec_exit,
     .start =    exec_start,
     .kill =     exec_kill,
+    .cancel =   exec_cancel,
     .cleanup =  exec_cleanup
 };
 

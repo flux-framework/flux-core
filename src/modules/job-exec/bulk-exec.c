@@ -387,6 +387,34 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec)
     return 0;
 }
 
+/*  Cancel all pending commands.
+ */
+int bulk_exec_cancel (struct bulk_exec *exec)
+{
+    struct exec_cmd *cmd = zlist_first (exec->commands);
+    if (!cmd)
+        return 0;
+
+    while (cmd) {
+        uint32_t rank = idset_first (cmd->ranks);
+        while (rank != IDSET_INVALID_ID) {
+            exec->complete++;
+            if (idset_set (exec->exit_batch, rank) < 0)
+                flux_log_error (exec->h, "bulk_exec_cance: idset_set");
+            rank = idset_next (cmd->ranks, rank);
+        }
+        cmd = zlist_next (exec->commands);
+    }
+    zlist_purge (exec->commands);
+    exec_exit_notify (exec);
+
+    if (exec->complete == exec->total) {
+        if (exec->handlers->on_complete)
+            (*exec->handlers->on_complete) (exec, exec->arg);
+    }
+    return 0;
+}
+
 flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
 {
     flux_subprocess_t *p = zlist_first (exec->processes);
