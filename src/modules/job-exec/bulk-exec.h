@@ -43,6 +43,13 @@ struct bulk_exec_ops {
 
 struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg);
 
+void *bulk_exec_aux_get (struct bulk_exec *exec, const char *key);
+
+int bulk_exec_aux_set (struct bulk_exec *exec,
+                       const char *key,
+                       void *val,
+                       flux_free_f free_fn);
+
 /*  Set maximum number of flux_subprocess_rexex(3) calls per event
  *   loop iteration. (-1 for no max)
  */

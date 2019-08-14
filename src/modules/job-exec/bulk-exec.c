@@ -19,6 +19,7 @@
 #include <flux/idset.h>
 #include <czmq.h>
 
+#include "src/common/libutil/aux.h"
 #include "bulk-exec.h"
 
 struct exec_cmd {
@@ -29,6 +30,8 @@ struct exec_cmd {
 
 struct bulk_exec {
     flux_t *h;
+
+    struct aux_item *aux;
 
     int max_start_per_loop;  /* Max subprocess started per event loop cb */
     int total;               /* Total processes expected to run */
@@ -314,6 +317,7 @@ void bulk_exec_destroy (struct bulk_exec *exec)
     flux_watcher_destroy (exec->prep);
     flux_watcher_destroy (exec->check);
     flux_watcher_destroy (exec->idle);
+    aux_destroy (&exec->aux);
     free (exec);
 }
 
@@ -452,5 +456,15 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
     return cf;
 }
 
+int bulk_exec_aux_set (struct bulk_exec *exec, const char *key,
+                       void *val, flux_free_f free_fn)
+{
+    return (aux_set (&exec->aux, key, val, free_fn));
+}
+
+void * bulk_exec_aux_get (struct bulk_exec *exec, const char *key)
+{
+    return (aux_get (exec->aux, key));
+}
 /* vi: ts=4 sw=4 expandtab
  */

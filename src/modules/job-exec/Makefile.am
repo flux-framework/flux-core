@@ -47,12 +47,12 @@ bulk_exec_SOURCES = \
 	test/bulk-exec.c
 
 bulk_exec_LDADD = \
-	$(fluxmod_ldadd) \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-idset.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	libbulk-exec.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
 	$(ZMQ_LIBS)
 
 test_ldadd = \
