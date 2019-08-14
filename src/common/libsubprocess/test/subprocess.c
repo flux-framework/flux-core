@@ -326,7 +326,7 @@ void test_errors (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
 
-    ok (flux_subprocess_write (p, NULL, "foo", 3) < 0
+    ok (flux_subprocess_write (p, "STDIN", "foo", 3) < 0
         && errno == EPIPE,
         "flux_subprocess_write returns EPIPE b/c process already completed");
 
@@ -504,7 +504,7 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
     int lenp = 0;
 
     if (output_default_stream_cb_count == 0) {
-        ptr = flux_subprocess_read_line (p, NULL, &lenp);
+        ptr = flux_subprocess_read_line (p, "STDOUT", &lenp);
         ok (ptr != NULL
             && lenp > 0,
             "flux_subprocess_read_line on %s success", "STDOUT");
@@ -521,41 +521,13 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream) > 0,
             "flux_subprocess_read_stream_closed saw EOF on %s", "STDOUT");
 
-        ptr = flux_subprocess_read (p, NULL, -1, &lenp);
+        ptr = flux_subprocess_read (p, "STDOUT", -1, &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", "STDOUT");
     }
 
     output_default_stream_cb_count++;
-}
-
-void test_basic_stdout_default_stream (flux_reactor_t *r)
-{
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "hi", NULL };
-    flux_cmd_t *cmd;
-    flux_subprocess_t *p = NULL;
-
-    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
-
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_default_stream_cb
-    };
-    completion_cb_count = 0;
-    output_default_stream_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
-    ok (p != NULL, "flux_local_exec");
-
-    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
-        "subprocess state == RUNNING after flux_local_exec");
-
-    int rc = flux_reactor_run (r, 0);
-    ok (rc == 0, "flux_reactor_run returned zero status");
-    ok (completion_cb_count == 1, "completion callback called 1 time");
-    ok (output_default_stream_cb_count == 2, "stdout output default stream callback called 2 times");
-    flux_subprocess_destroy (p);
-    flux_cmd_destroy (cmd);
 }
 
 void test_basic_stdin (flux_reactor_t *r)
@@ -582,40 +554,6 @@ void test_basic_stdin (flux_reactor_t *r)
         "flux_subprocess_write success");
 
     ok (flux_subprocess_close (p, "STDIN") == 0,
-        "flux_subprocess_close success");
-
-    int rc = flux_reactor_run (r, 0);
-    ok (rc == 0, "flux_reactor_run returned zero status");
-    ok (completion_cb_count == 1, "completion callback called 1 time");
-    ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
-    flux_subprocess_destroy (p);
-    flux_cmd_destroy (cmd);
-}
-
-void test_basic_stdin_default_stream (flux_reactor_t *r)
-{
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", NULL };
-    flux_cmd_t *cmd;
-    flux_subprocess_t *p = NULL;
-
-    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
-
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb,
-        .on_stdout = output_cb
-    };
-    completion_cb_count = 0;
-    stdout_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
-    ok (p != NULL, "flux_local_exec");
-
-    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
-        "subprocess state == RUNNING after flux_local_exec");
-
-    ok (flux_subprocess_write (p, NULL, "hi", 2) == 2,
-        "flux_subprocess_write success");
-
-    ok (flux_subprocess_close (p, NULL) == 0,
         "flux_subprocess_close success");
 
     int rc = flux_reactor_run (r, 0);
@@ -2612,12 +2550,8 @@ int main (int argc, char *argv[])
     test_basic_stdout_and_stderr (r);
     diag ("basic_default_output");
     test_basic_default_output (r);
-    diag ("basic_stdout_default_stream");
-    test_basic_stdout_default_stream (r);
     diag ("basic_stdin");
     test_basic_stdin (r);
-    diag ("basic_stdin_default_stream");
-    test_basic_stdin_default_stream (r);
     diag ("basic_no_newline");
     test_basic_no_newline (r);
     diag ("basic_trimmed_line");

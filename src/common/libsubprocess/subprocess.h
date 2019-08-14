@@ -333,8 +333,7 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be
- *  "STDIN" or the name of a stream specified with
- *  flux_cmd_add_channel().  If 'stream' is NULL, defaults to "STDIN".
+ *  "STDIN" or the name of a stream specified with flux_cmd_add_channel().
  *
  *  Returns the total amount of data successfully buffered.
  */
@@ -344,16 +343,14 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
 /*
  *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
  *  'stream' can be "STDIN" or the name of a stream specified with
- *  flux_cmd_add_channel().  If 'stream' is NULL, defaults to "STDIN".
+ *  flux_cmd_add_channel().
  */
 int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Read up to `len` bytes of unread data from stream `stream`.  To
  *   read all data, specify 'len' of -1.  'stream' can be "STDOUT",
- *   "STDERR", or the name of a stream specified with
- *   flux_cmd_add_channel().  If 'stream' is NULL, defaults to
- *   "STDOUT".
+ *   "STDERR", or the name of a stream specified with flux_cmd_add_channel().
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer is guaranteed to be NUL terminated.  User shall not
@@ -368,8 +365,7 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
 /*
  *  Read line unread data from stream `stream`.  'stream' can be
  *   "STDOUT", "STDERR", or the name of a stream specified with
- *   flux_cmd_add_channel().  If 'stream' is NULL, defaults to
- *   "STDOUT".
+ *   flux_cmd_add_channel().
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer will include newline character and is guaranteed to
