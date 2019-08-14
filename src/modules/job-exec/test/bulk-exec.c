@@ -60,7 +60,7 @@ void on_output (struct bulk_exec *exec, flux_subprocess_t *p,
                 int data_len, void *arg)
 {
     int rank = flux_subprocess_rank (p);
-    FILE *fp = strcmp (stream, "STDOUT") == 0 ? stdout : stderr;
+    FILE *fp = strcmp (stream, "stdout") == 0 ? stdout : stderr;
     fprintf (fp, "%d: %s", rank, data);
 }
 

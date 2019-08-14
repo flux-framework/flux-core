@@ -86,8 +86,8 @@ static void shell_io_control (struct shell_io *io, bool stop)
     if (io->stopped != stop) {
         task = zlist_first (io->shell->tasks);
         while (task) {
-            shell_io_control_task (task, "STDOUT", stop);
-            shell_io_control_task (task, "STDERR", stop);
+            shell_io_control_task (task, "stdout", stop);
+            shell_io_control_task (task, "stderr", stop);
             task = zlist_next (io->shell->tasks);
         }
         io->stopped = stop;
@@ -207,7 +207,7 @@ static int shell_io_flush (struct shell_io *io)
                 log_err ("iodecode");
                 return -1;
             }
-            f = !strcmp (stream, "STDOUT") ? stdout : stderr;
+            f = !strcmp (stream, "stdout") ? stdout : stderr;
             if (len > 0) {
                 fprintf (f, "%d: ", rank);
                 fwrite (data, len, 1, f);

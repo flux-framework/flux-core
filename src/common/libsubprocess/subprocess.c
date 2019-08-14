@@ -351,7 +351,7 @@ int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
 void flux_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
-    FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
+    FILE *fstream = !strcasecmp (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 

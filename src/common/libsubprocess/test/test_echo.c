@@ -45,14 +45,14 @@ void output (const char *str)
     if (out) {
         fprintf (stdout,
                  "%s%s",
-                 prefix ? "STDOUT:" : "",
+                 prefix ? "stdout:" : "",
                  str);
         fflush (stdout);
     }
     if (err) {
         fprintf (stderr,
                  "%s%s",
-                 prefix ? "STDERR:" : "",
+                 prefix ? "stderr:" : "",
                  str);
         fflush (stderr);
     }

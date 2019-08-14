@@ -883,7 +883,7 @@ void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
             if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
                 log_msg_exit ("malformed event context");
             if (len > 0) {
-                FILE *fp = !strcmp (stream, "STDOUT") ? stdout : stderr;
+                FILE *fp = !strcmp (stream, "stdout") ? stdout : stderr;
                 if (optparse_hasopt (p, "label"))
                     fprintf (fp, "%d: ", rank);
                 fwrite (data, len, 1, fp);

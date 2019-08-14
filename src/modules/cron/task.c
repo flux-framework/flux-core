@@ -234,7 +234,7 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
 
     assert (t);
 
-    if (!strcmp (stream, "STDERR"))
+    if (!strcmp (stream, "stderr"))
         is_stderr = true;
 
     if (!(ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp))) {
