@@ -296,15 +296,15 @@ test_expect_success 'flux job info multiple keys fails on bad id' '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (include eventlog)' '
         jobid=$(flux job submit test.json) &&
-        activekvsdir=$(flux job id --to=kvs $jobid) &&
-        flux kvs unlink ${activekvsdir}.jobspec &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+        flux kvs unlink ${kvsdir}.jobspec &&
 	! flux job info $jobid eventlog jobspec J > all_info_b.out
 '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventlog)' '
         jobid=$(flux job submit test.json) &&
-        activekvsdir=$(flux job id --to=kvs $jobid) &&
-        flux kvs unlink ${activekvsdir}.jobspec &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+        flux kvs unlink ${kvsdir}.jobspec &&
 	! flux job info $jobid jobspec J > all_info_b.out
 '
 
