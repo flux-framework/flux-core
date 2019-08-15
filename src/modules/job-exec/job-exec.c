@@ -69,7 +69,8 @@
  * TEST CONFIGURATION
  *
  * The job-exec module supports an object in the jobspec under
- * attributes.system.exec.test, which supports the following keys
+ * attributes.system.exec.test, which enables mock execution and
+ * supports the following keys
  *
  * {
  *   "run_duration":s,      - alternate/override attributes.system.duration
@@ -77,6 +78,14 @@
  *   "wait_status":i        - report this value as status in the "finish" resp
  *   "mock_exception":s     - mock an exception during this phase of job
  *                             execution (currently "init" and "run")
+ * }
+ *
+ * The "bulk" execution implementation supports testing and other
+ * paramters under attributes.system.exec.bulkexec, including:
+ *
+ * {
+ *   "mock_exception":s     - cancel job after a certain number of shells
+ *                            have been launched.
  * }
  *
  */
