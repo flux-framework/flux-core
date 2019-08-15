@@ -823,7 +823,10 @@ err:
  */
 static int job_get_ns_name (char *buf, int bufsz, flux_jobid_t id)
 {
-    return fluid_encode (buf, bufsz, id, FLUID_STRING_DOTHEX);
+    int n = snprintf (buf, bufsz - 1, "job-%ju", id);
+    if (n < 0 || n > bufsz - 1)
+        return -1;
+    return 0;
 }
 
 static double job_get_kill_timeout (flux_t *h)

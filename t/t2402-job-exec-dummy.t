@@ -77,7 +77,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	        | flux job submit) &&
 	flux job wait-event -vt 1 $id start &&
 	flux kvs get --waitcreate \
-		--namespace=$(flux job id --to=hex $id) \
+		--namespace="job-$id" \
 		trap-ready &&
 	flux job cancel $id &&
 	sleep 0.2 &&
