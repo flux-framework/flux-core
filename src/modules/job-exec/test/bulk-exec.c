@@ -24,6 +24,7 @@
 #include "src/common/libutil/log.h"
 
 extern char **environ;
+static int cancel_after = 0;
 
 void started (struct bulk_exec *exec, void *arg)
 {
@@ -32,7 +33,9 @@ void started (struct bulk_exec *exec, void *arg)
 
 void complete (struct bulk_exec *exec, void *arg)
 {
+    flux_t *h = arg;
     log_msg ("complete");
+    flux_reactor_stop (flux_get_reactor (h));
 }
 
 void exited (struct bulk_exec *exec, void *arg, const struct idset *ids)
@@ -82,6 +85,17 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (!f || (flux_future_then (f, -1., kill_cb, exec) < 0))
         log_err ("SIGINT: failed to forward signal %d", signum);
     flux_watcher_stop (w);
+}
+
+static void check_cancel_cb (flux_reactor_t *r, flux_watcher_t *w,
+                             int revents, void *arg)
+{
+    struct bulk_exec *exec = arg;
+    if (cancel_after && bulk_exec_current (exec) >= cancel_after) {
+        log_msg ("cancelling remaining commands");
+        bulk_exec_cancel (exec);
+        flux_watcher_stop (w);
+    }
 }
 
 static unsigned int idset_pop (struct idset *idset)
@@ -169,6 +183,12 @@ int main (int ac, char **av)
           .arginfo = "N",
           .usage = "Internally, split into N 'cmds'"
         },
+        { .name = "cancel-after",
+          .key  = 'c',
+          .has_arg = 1,
+          .arginfo = "NCMDS",
+          .usage = "Cancel after NCMDS cmds have been launched"
+        },
         OPTPARSE_TABLE_END
     };
 
@@ -231,10 +251,18 @@ int main (int ac, char **av)
                                                     exec);
     flux_watcher_start (w);
 
+    flux_watcher_t *cw = NULL;
+    if ((cancel_after = optparse_get_int (p, "cancel-after", 0)) > 0) {
+        cw = flux_check_watcher_create (flux_get_reactor (h),
+                                        check_cancel_cb,
+                                        exec);
+        flux_watcher_start (cw);
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
     flux_watcher_destroy (w);
+    flux_watcher_destroy (cw);
     idset_destroy (idset);
     bulk_exec_destroy (exec);
     flux_close (h);
