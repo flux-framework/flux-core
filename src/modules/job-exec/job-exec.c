@@ -69,7 +69,8 @@
  * TEST CONFIGURATION
  *
  * The job-exec module supports an object in the jobspec under
- * attributes.system.exec.test, which supports the following keys
+ * attributes.system.exec.test, which enables mock execution and
+ * supports the following keys
  *
  * {
  *   "run_duration":s,      - alternate/override attributes.system.duration
@@ -77,6 +78,14 @@
  *   "wait_status":i        - report this value as status in the "finish" resp
  *   "mock_exception":s     - mock an exception during this phase of job
  *                             execution (currently "init" and "run")
+ * }
+ *
+ * The "bulk" execution implementation supports testing and other
+ * paramters under attributes.system.exec.bulkexec, including:
+ *
+ * {
+ *   "mock_exception":s     - cancel job after a certain number of shells
+ *                            have been launched.
  * }
  *
  */
@@ -311,12 +320,11 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
 void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
-    job->running = 1;
-    job->needs_cleanup = 1;
     if (h && job->req) {
         va_list ap;
         va_start (ap, fmt);
         jobinfo_emit_event_vpack_nowait (job, "running", fmt, ap);
+        job->running = 1;
         va_end (ap);
         if (jobinfo_respond (h, job, "start", 0) < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
@@ -334,8 +342,15 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     (*job->impl->kill) (job, SIGKILL);
 }
 
-static void jobinfo_kill (struct jobinfo *job)
+/*  Cancel any pending shells to execute with implementations cancel
+ *   method, send SIGTERM to executing shells to notify them to terminate,
+ *   schedule SIGKILL to be sent after kill_timeout seconds.
+ */
+static void jobinfo_cancel (struct jobinfo *job)
 {
+    if (job->impl->cancel)
+        (*job->impl->cancel) (job);
+
     (*job->impl->kill) (job, SIGTERM);
     job->kill_timer = flux_timer_watcher_create (flux_get_reactor (job->h),
                                                  job->kill_timeout, 0.,
@@ -369,10 +384,12 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
         if (jobinfo_respond_error (job, errnum, msg) < 0)
             flux_log_error (h, "jobinfo_fatal_verror: jobinfo_respond_error");
     }
-    if (job->running)
-        jobinfo_kill (job);
-    if (job->needs_cleanup) /* Do not finalize, wait for cleanup to finish */
+
+    if (job->started) {
+        jobinfo_cancel (job);
         return;
+    }
+    /* If job wasn't started, then finalize manually here */
     if (jobinfo_finalize (job) < 0) {
         flux_log_error (h, "jobinfo_fatal_verror: jobinfo_finalize");
         jobinfo_decref (job);
@@ -550,7 +567,7 @@ void jobinfo_tasks_complete (struct jobinfo *job,
                              const struct idset *ranks,
                              int wait_status)
 {
-    assert (job->running == 1);
+    assert (job->started == 1);
     if (wait_status > job->wait_status)
         job->wait_status = wait_status;
 
@@ -615,6 +632,10 @@ error_release:
 static int jobinfo_start_execution (struct jobinfo *job)
 {
     jobinfo_emit_event_pack_nowait (job, "starting", NULL);
+    /* Set started flag before calling 'start' method because we want to
+     *  be sure to clean up properly if an exception occurs
+     */
+    job->started = 1;
     if ((*job->impl->start) (job) < 0) {
         jobinfo_fatal_error (job, errno, "%s: start failed", job->impl->name);
         return -1;
@@ -685,6 +706,12 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         goto done;
     }
     job->has_namespace = 1;
+
+    /*  If an exception was received during startup, no need to continue
+     *   with startup
+     */
+    if (job->exception_in_progress)
+        goto done;
 
     if (!(jobspec = jobinfo_kvs_lookup_get (f, "jobspec"))) {
         jobinfo_fatal_error (job, errno, "unable to fetch jobspec");
@@ -809,9 +836,6 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
         || flux_future_push (f, "ns", f_kvs))
         goto err;
 
-    /* Increase refcount during init phase in case job is canceled:
-     */
-    jobinfo_incref (job);
     return f;
 err:
     flux_log_error (job->ctx->h, "jobinfo_kvs_lookup/namespace_create");
@@ -842,6 +866,11 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     if (!(job = jobinfo_new ()))
         return -1;
+
+    /*  Take a reference until initialization complete in case an
+     *   exception is generated during this phase
+     */
+    jobinfo_incref (job);
 
     /* Copy flux handle for each job to allow implementation access.
      * (This could also be done with an accessor, but choose the simpler
@@ -923,6 +952,7 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (severity == 0
         && (job = zhashx_lookup (ctx->jobs, &id))
+        && (!job->finalizing)
         && (!job->exception_in_progress)) {
         job->exception_in_progress = 1;
         flux_log (h, LOG_DEBUG, "exec aborted: id=%ld", id);

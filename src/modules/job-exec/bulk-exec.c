@@ -19,6 +19,7 @@
 #include <flux/idset.h>
 #include <czmq.h>
 
+#include "src/common/libutil/aux.h"
 #include "bulk-exec.h"
 
 struct exec_cmd {
@@ -29,6 +30,8 @@ struct exec_cmd {
 
 struct bulk_exec {
     flux_t *h;
+
+    struct aux_item *aux;
 
     int max_start_per_loop;  /* Max subprocess started per event loop cb */
     int total;               /* Total processes expected to run */
@@ -60,33 +63,14 @@ int bulk_exec_rc (struct bulk_exec *exec)
     return (exec->exit_status);
 }
 
-static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+int bulk_exec_current (struct bulk_exec *exec)
 {
-    struct bulk_exec *exec = flux_subprocess_aux_get (p, "job-exec::exec");
-    if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (++exec->started == exec->total) {
-            if (exec->handlers->on_start)
-                (*exec->handlers->on_start) (exec, exec->arg);
-        }
-    }
-    else if (state == FLUX_SUBPROCESS_FAILED
-            || state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        int errnum = flux_subprocess_fail_errno (p);
-        int code = EXIT_CODE(1);
+    return zlist_size (exec->processes);
+}
 
-        if (errnum == EPERM || errnum == EACCES)
-            code = EXIT_CODE(126);
-        else if (errnum == ENOENT)
-            code = EXIT_CODE(127);
-        else if (errnum == EHOSTUNREACH)
-            code = EXIT_CODE(68);
-
-        if (code > exec->exit_status)
-            exec->exit_status = code;
-
-        if (exec->handlers->on_error)
-            (*exec->handlers->on_error) (exec, p, exec->arg);
-    }
+int bulk_exec_total (struct bulk_exec *exec)
+{
+    return exec->total;
 }
 
 static int exec_exit_notify (struct bulk_exec *exec)
@@ -138,6 +122,18 @@ static void exit_batch_append (struct bulk_exec *exec, flux_subprocess_t *p)
     }
 }
 
+static void exec_add_completed (struct bulk_exec *exec, flux_subprocess_t *p)
+{
+    /* Append this process to the current batch for notification */
+    exit_batch_append (exec, p);
+
+    if (++exec->complete == exec->total) {
+        exec_exit_notify (exec);
+        if (exec->handlers->on_complete)
+            (*exec->handlers->on_complete) (exec, exec->arg);
+    }
+}
+
 static void exec_complete_cb (flux_subprocess_t *p)
 {
     int status = flux_subprocess_status (p);
@@ -146,13 +142,37 @@ static void exec_complete_cb (flux_subprocess_t *p)
     if (status > exec->exit_status)
         exec->exit_status = status;
 
-    /* Append this process to the current batch for notification */
-    exit_batch_append (exec, p);
+    exec_add_completed (exec, p);
+}
 
-    if (++exec->complete == exec->total) {
-        exec_exit_notify (exec);
-        if (exec->handlers->on_complete)
-            (*exec->handlers->on_complete) (exec, exec->arg);
+static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+{
+    struct bulk_exec *exec = flux_subprocess_aux_get (p, "job-exec::exec");
+    if (state == FLUX_SUBPROCESS_RUNNING) {
+        if (++exec->started == exec->total) {
+            if (exec->handlers->on_start)
+                (*exec->handlers->on_start) (exec, exec->arg);
+        }
+    }
+    else if (state == FLUX_SUBPROCESS_FAILED
+            || state == FLUX_SUBPROCESS_EXEC_FAILED) {
+        int errnum = flux_subprocess_fail_errno (p);
+        int code = EXIT_CODE(1);
+
+        if (errnum == EPERM || errnum == EACCES)
+            code = EXIT_CODE(126);
+        else if (errnum == ENOENT)
+            code = EXIT_CODE(127);
+        else if (errnum == EHOSTUNREACH)
+            code = EXIT_CODE(68);
+
+        if (code > exec->exit_status)
+            exec->exit_status = code;
+
+        if (exec->handlers->on_error)
+            (*exec->handlers->on_error) (exec, p, exec->arg);
+
+        exec_add_completed (exec, p);
     }
 }
 
@@ -314,6 +334,7 @@ void bulk_exec_destroy (struct bulk_exec *exec)
     flux_watcher_destroy (exec->prep);
     flux_watcher_destroy (exec->check);
     flux_watcher_destroy (exec->idle);
+    aux_destroy (&exec->aux);
     free (exec);
 }
 
@@ -387,6 +408,34 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec)
     return 0;
 }
 
+/*  Cancel all pending commands.
+ */
+int bulk_exec_cancel (struct bulk_exec *exec)
+{
+    struct exec_cmd *cmd = zlist_first (exec->commands);
+    if (!cmd)
+        return 0;
+
+    while (cmd) {
+        uint32_t rank = idset_first (cmd->ranks);
+        while (rank != IDSET_INVALID_ID) {
+            exec->complete++;
+            if (idset_set (exec->exit_batch, rank) < 0)
+                flux_log_error (exec->h, "bulk_exec_cance: idset_set");
+            rank = idset_next (cmd->ranks, rank);
+        }
+        cmd = zlist_next (exec->commands);
+    }
+    zlist_purge (exec->commands);
+    exec_exit_notify (exec);
+
+    if (exec->complete == exec->total) {
+        if (exec->handlers->on_complete)
+            (*exec->handlers->on_complete) (exec, exec->arg);
+    }
+    return 0;
+}
+
 flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
 {
     flux_subprocess_t *p = zlist_first (exec->processes);
@@ -396,12 +445,9 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
         return NULL;
     flux_future_set_flux (cf, exec->h);
 
-    if (!p) {
-        flux_future_fulfill_error (cf, ENOENT, NULL);
-        return (cf);
-    }
     while (p) {
-        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
+        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
+            || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT) {
             flux_future_t *f = NULL;
             char s[64];
             if (!(f = flux_subprocess_kill (p, signum))) {
@@ -421,8 +467,28 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
         }
         p = zlist_next (exec->processes);
     }
+
+    /*  If no child futures were pushed into the wait_all future `cf`,
+     *   then no signals were sent and we should immediately return ENOENT.
+     */
+    if (!flux_future_first_child (cf)) {
+        flux_future_destroy (cf);
+        errno = ENOENT;
+        return NULL;
+    }
+
     return cf;
 }
 
+int bulk_exec_aux_set (struct bulk_exec *exec, const char *key,
+                       void *val, flux_free_f free_fn)
+{
+    return (aux_set (&exec->aux, key, val, free_fn));
+}
+
+void * bulk_exec_aux_get (struct bulk_exec *exec, const char *key)
+{
+    return (aux_get (exec->aux, key));
+}
 /* vi: ts=4 sw=4 expandtab
  */

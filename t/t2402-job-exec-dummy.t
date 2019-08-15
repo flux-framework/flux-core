@@ -92,7 +92,21 @@ test_expect_success 'job-exec: invalid job shell generates exception' '
 	     | flux job submit) &&
 	flux job wait-event -vt 1 $id clean
 '
+test_expect_success 'job-exec: exception during init terminates job' '
+	id=$(flux jobspec srun -N2 sleep 30 \
+	     | $jq ".attributes.system.exec.bulkexec.mock_exception = \"init\"" \
+	     | flux job submit) &&
+	flux job wait-event -vt 1 $id clean
+'
+test_expect_success 'job-exec: exception while starting terminates job' '
+	id=$(flux jobspec srun -N2 sleep 30 \
+	     | $jq ".attributes.system.exec.bulkexec.mock_exception = \"starting\"" \
+	     | flux job submit) &&
+	flux job wait-event -vt 1 $id clean
+'
 test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
+	flux job list &&
+	flux job drain &&
 	flux module remove job-exec &&
 	flux module remove sched-simple
 '

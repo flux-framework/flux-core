@@ -38,6 +38,8 @@ struct jobinfo;
  *   - kill:    signal executing job shells, e.g. due to exception or other
  *              fatal error.
  *
+ *   - cancel:  cancel any pending work (i.e. shells yet to be executed)
+ *
  *   - cleanup: Initiate any cleanup (epilog) on ranks.
  */
 struct exec_implementation {
@@ -46,6 +48,7 @@ struct exec_implementation {
     void (*exit)    (struct jobinfo *job);
     int  (*start)   (struct jobinfo *job);
     int  (*kill)    (struct jobinfo *job, int signum);
+    int  (*cancel)  (struct jobinfo *job);
     int  (*cleanup) (struct jobinfo *job, const struct idset *ranks);
 };
 
@@ -61,11 +64,12 @@ struct jobinfo {
     struct resource_set * R;         /* Fetched and parsed resource set R */
     json_t *              jobspec;   /* Fetched jobspec */
 
-    uint8_t               needs_cleanup:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;
-    uint8_t               running:1;
-    uint8_t               finalizing:1;
+
+    uint8_t               started:1;     /* some or all shells are starting */
+    uint8_t               running:1;     /* all shells are running */
+    uint8_t               finalizing:1;  /* in process of cleanup */
 
     int                   wait_status;
 
