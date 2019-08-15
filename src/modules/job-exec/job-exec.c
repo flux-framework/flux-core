@@ -320,12 +320,11 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
 void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
-    job->running = 1;
-    job->needs_cleanup = 1;
     if (h && job->req) {
         va_list ap;
         va_start (ap, fmt);
         jobinfo_emit_event_vpack_nowait (job, "running", fmt, ap);
+        job->running = 1;
         va_end (ap);
         if (jobinfo_respond (h, job, "start", 0) < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
@@ -385,10 +384,12 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
         if (jobinfo_respond_error (job, errnum, msg) < 0)
             flux_log_error (h, "jobinfo_fatal_verror: jobinfo_respond_error");
     }
-    if (job->running)
+
+    if (job->started) {
         jobinfo_cancel (job);
-    if (job->needs_cleanup) /* Do not finalize, wait for cleanup to finish */
         return;
+    }
+    /* If job wasn't started, then finalize manually here */
     if (jobinfo_finalize (job) < 0) {
         flux_log_error (h, "jobinfo_fatal_verror: jobinfo_finalize");
         jobinfo_decref (job);
@@ -566,7 +567,7 @@ void jobinfo_tasks_complete (struct jobinfo *job,
                              const struct idset *ranks,
                              int wait_status)
 {
-    assert (job->running == 1);
+    assert (job->started == 1);
     if (wait_status > job->wait_status)
         job->wait_status = wait_status;
 
@@ -631,6 +632,10 @@ error_release:
 static int jobinfo_start_execution (struct jobinfo *job)
 {
     jobinfo_emit_event_pack_nowait (job, "starting", NULL);
+    /* Set started flag before calling 'start' method because we want to
+     *  be sure to clean up properly if an exception occurs
+     */
+    job->started = 1;
     if ((*job->impl->start) (job) < 0) {
         jobinfo_fatal_error (job, errno, "%s: start failed", job->impl->name);
         return -1;
@@ -702,14 +707,11 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
     }
     job->has_namespace = 1;
 
-    /*  Release startup reference */
-    jobinfo_decref (job);
-
     /*  If an exception was received during startup, no need to continue
      *   with startup
      */
     if (job->exception_in_progress)
-        return;
+        goto done;
 
     if (!(jobspec = jobinfo_kvs_lookup_get (f, "jobspec"))) {
         jobinfo_fatal_error (job, errno, "unable to fetch jobspec");
@@ -834,9 +836,6 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
         || flux_future_push (f, "ns", f_kvs))
         goto err;
 
-    /* Increase refcount during init phase in case job is canceled:
-     */
-    jobinfo_incref (job);
     return f;
 err:
     flux_log_error (job->ctx->h, "jobinfo_kvs_lookup/namespace_create");

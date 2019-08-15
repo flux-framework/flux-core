@@ -64,11 +64,12 @@ struct jobinfo {
     struct resource_set * R;         /* Fetched and parsed resource set R */
     json_t *              jobspec;   /* Fetched jobspec */
 
-    uint8_t               needs_cleanup:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;
-    uint8_t               running:1;
-    uint8_t               finalizing:1;
+
+    uint8_t               started:1;     /* some or all shells are starting */
+    uint8_t               running:1;     /* all shells are running */
+    uint8_t               finalizing:1;  /* in process of cleanup */
 
     int                   wait_status;
 
