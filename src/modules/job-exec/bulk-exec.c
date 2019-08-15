@@ -443,7 +443,8 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
         return (cf);
     }
     while (p) {
-        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
+        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
+            || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT) {
             flux_future_t *f = NULL;
             char s[64];
             if (!(f = flux_subprocess_kill (p, signum))) {
