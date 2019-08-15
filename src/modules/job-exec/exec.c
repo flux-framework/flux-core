@@ -273,7 +273,7 @@ static int exec_kill (struct jobinfo *job, int signum)
               signum);
 
     jobinfo_incref (job);
-    if (flux_future_then (f, -1., exec_kill_cb, job) < 0) {
+    if (flux_future_then (f, 3., exec_kill_cb, job) < 0) {
         flux_log_error (job->h, "%ju: exec_kill: flux_future_then", job->id);
         flux_future_destroy (f);
         return -1;
