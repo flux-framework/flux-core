@@ -276,6 +276,18 @@ int flux_job_kvs_guest_key (char *buf,
     return len;
 }
 
+int flux_job_kvs_namespace (char *buf, int bufsz, flux_jobid_t id)
+{
+    int len;
+    if (buffer_arg_check (buf, bufsz) < 0)
+        return -1;
+    if ((len = snprintf (buf, bufsz, "job-%ju", id)) >= bufsz) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return len;
+}
+
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;

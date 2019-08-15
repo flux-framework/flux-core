@@ -111,6 +111,14 @@ int flux_job_kvs_guest_key (char *buf,
                             flux_jobid_t id,
                             const char *key);
 
+
+/* Write KVS job namespace name to to buffer 'buf'.
+ * Returns string length on success or < 0 on failure.
+ */
+int flux_job_kvs_namespace (char *buf,
+                            int bufsz,
+                            flux_jobid_t id);
+
 /* Job eventlog watch functions
  */
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id);
