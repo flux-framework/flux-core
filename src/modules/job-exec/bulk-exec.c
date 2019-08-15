@@ -445,10 +445,6 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
         return NULL;
     flux_future_set_flux (cf, exec->h);
 
-    if (!p) {
-        flux_future_fulfill_error (cf, ENOENT, NULL);
-        return (cf);
-    }
     while (p) {
         if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
             || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT) {
@@ -471,6 +467,16 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
         }
         p = zlist_next (exec->processes);
     }
+
+    /*  If no child futures were pushed into the wait_all future `cf`,
+     *   then no signals were sent and we should immediately return ENOENT.
+     */
+    if (!flux_future_first_child (cf)) {
+        flux_future_destroy (cf);
+        errno = ENOENT;
+        return NULL;
+    }
+
     return cf;
 }
 
