@@ -73,35 +73,6 @@ int bulk_exec_total (struct bulk_exec *exec)
     return exec->total;
 }
 
-static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
-{
-    struct bulk_exec *exec = flux_subprocess_aux_get (p, "job-exec::exec");
-    if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (++exec->started == exec->total) {
-            if (exec->handlers->on_start)
-                (*exec->handlers->on_start) (exec, exec->arg);
-        }
-    }
-    else if (state == FLUX_SUBPROCESS_FAILED
-            || state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        int errnum = flux_subprocess_fail_errno (p);
-        int code = EXIT_CODE(1);
-
-        if (errnum == EPERM || errnum == EACCES)
-            code = EXIT_CODE(126);
-        else if (errnum == ENOENT)
-            code = EXIT_CODE(127);
-        else if (errnum == EHOSTUNREACH)
-            code = EXIT_CODE(68);
-
-        if (code > exec->exit_status)
-            exec->exit_status = code;
-
-        if (exec->handlers->on_error)
-            (*exec->handlers->on_error) (exec, p, exec->arg);
-    }
-}
-
 static int exec_exit_notify (struct bulk_exec *exec)
 {
     if (exec->handlers->on_exit)
@@ -151,6 +122,18 @@ static void exit_batch_append (struct bulk_exec *exec, flux_subprocess_t *p)
     }
 }
 
+static void exec_add_completed (struct bulk_exec *exec, flux_subprocess_t *p)
+{
+    /* Append this process to the current batch for notification */
+    exit_batch_append (exec, p);
+
+    if (++exec->complete == exec->total) {
+        exec_exit_notify (exec);
+        if (exec->handlers->on_complete)
+            (*exec->handlers->on_complete) (exec, exec->arg);
+    }
+}
+
 static void exec_complete_cb (flux_subprocess_t *p)
 {
     int status = flux_subprocess_status (p);
@@ -159,13 +142,37 @@ static void exec_complete_cb (flux_subprocess_t *p)
     if (status > exec->exit_status)
         exec->exit_status = status;
 
-    /* Append this process to the current batch for notification */
-    exit_batch_append (exec, p);
+    exec_add_completed (exec, p);
+}
 
-    if (++exec->complete == exec->total) {
-        exec_exit_notify (exec);
-        if (exec->handlers->on_complete)
-            (*exec->handlers->on_complete) (exec, exec->arg);
+static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+{
+    struct bulk_exec *exec = flux_subprocess_aux_get (p, "job-exec::exec");
+    if (state == FLUX_SUBPROCESS_RUNNING) {
+        if (++exec->started == exec->total) {
+            if (exec->handlers->on_start)
+                (*exec->handlers->on_start) (exec, exec->arg);
+        }
+    }
+    else if (state == FLUX_SUBPROCESS_FAILED
+            || state == FLUX_SUBPROCESS_EXEC_FAILED) {
+        int errnum = flux_subprocess_fail_errno (p);
+        int code = EXIT_CODE(1);
+
+        if (errnum == EPERM || errnum == EACCES)
+            code = EXIT_CODE(126);
+        else if (errnum == ENOENT)
+            code = EXIT_CODE(127);
+        else if (errnum == EHOSTUNREACH)
+            code = EXIT_CODE(68);
+
+        if (code > exec->exit_status)
+            exec->exit_status = code;
+
+        if (exec->handlers->on_error)
+            (*exec->handlers->on_error) (exec, p, exec->arg);
+
+        exec_add_completed (exec, p);
     }
 }
 
