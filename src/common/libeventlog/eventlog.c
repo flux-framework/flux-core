@@ -295,10 +295,32 @@ json_t *eventlog_entry_pack (double timestamp,
     return rv;
 }
 
+/* Concatenate *buf + s + \n, growing *buf as needed.
+ */
+static int append_string_nl (char **buf, int *bufsz, int used, const char *s)
+{
+    int slen = strlen (s);
+
+    /* Grow buf for s + \n + \0 */
+    if (*bufsz < used + slen + 2) {
+        int nbufsz = used + slen + 2;
+        char *nbuf = realloc (*buf, nbufsz);
+        if (!nbuf)
+            return -1;
+        *buf = nbuf;
+        *bufsz = nbufsz;
+    }
+    strcpy (*buf + used, s);
+    strcpy (*buf + used + slen, "\n");
+
+    return used + slen + 1;
+}
+
 char *eventlog_entry_encode (json_t *entry)
 {
-    char *s = NULL;
-    char *rv = NULL;
+    char *s;
+    char *buf = NULL;
+    int bufsz = 0;
 
     if (!entry || !eventlog_entry_validate (entry)) {
         errno = EINVAL;
@@ -308,13 +330,41 @@ char *eventlog_entry_encode (json_t *entry)
         errno = ENOMEM;
         return NULL;
     }
-    if (asprintf (&rv, "%s\n", s) < 0) {
+    if (append_string_nl (&buf, &bufsz, 0, s) < 0) {
         free (s);
+        errno = ENOMEM;
         return NULL;
     }
-
     free (s);
-    return rv;
+    return buf;
+}
+
+char *eventlog_encode (json_t *array)
+{
+    json_t *value;
+    size_t index;
+    char *buf = NULL;
+    int bufsz = 0;
+    int used = 0;
+
+    if (!array || !json_is_array (array)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    json_array_foreach (array, index, value) {
+        char *s = json_dumps (value, JSON_COMPACT);
+
+        if (!s || (used = append_string_nl (&buf, &bufsz, used, s)) < 0) {
+            free (s);
+            free (buf);
+            errno = ENOMEM;
+            return NULL;
+        }
+        free (s);
+    }
+    if (!buf) // empty JSON array returns empty string (tests expect it)
+        buf = calloc (1, 1);
+    return buf;
 }
 
 /*

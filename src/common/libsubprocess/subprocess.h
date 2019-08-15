@@ -59,9 +59,9 @@ typedef enum {
  */
 enum {
     /* flux_exec(): let parent stdin, stdout, stderr, carry to child.
-     * Do not create "STDIN", "STDOUT", or "STDERR" channels.  Subsequently,
+     * Do not create "stdin", "stdout", or "stderr" channels.  Subsequently,
      * flux_subprocess_write()/close()/read()/read_line() will fail on
-     * streams of "STDIN", "STDOUT", or "STDERR".
+     * streams of "stdin", "stdout", or "stderr".
      */
     FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH = 1,
     /* flux_exec(): call setpgrp() before exec(2) */
@@ -250,9 +250,9 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *   The buffer size can be adjusted with this option.
  *
  *   - name + "_BUFSIZE" - set buffer size on channel name
- *   - STDIN_BUFSIZE - set buffer size on stdin
- *   - STDOUT_BUFSIZE - set buffer size on stdout
- *   - STDERR_BUFSIZE - set buffer size on stderr
+ *   - stdin_BUFSIZE - set buffer size on stdin
+ *   - stdout_BUFSIZE - set buffer size on stdout
+ *   - stderr_BUFSIZE - set buffer size on stderr
  *
  *  "LINE_BUFFER" option
  *
@@ -264,8 +264,8 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    "true" to keep default behavior of line buffering.
  *
  *    - name + "_LINE_BUFFER" - configuring line buffering on channel name
- *    - STDOUT_LINE_BUFFER - configure line buffering for stdout
- *    - STDERR_LINE_BUFFER - configure line buffering for stderr
+ *    - stdout_LINE_BUFFER - configure line buffering for stdout
+ *    - stderr_LINE_BUFFER - configure line buffering for stderr
  *
  *  "STREAM_STOP" option
  *
@@ -279,8 +279,8 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    keep default behavior.
  *
  *    - name + "_STREAM_STOP" - configure start/stop on channel name
- *    - STDOUT_STREAM_STOP - configure start/stop for stdout
- *    - STDERR_STREAM_STOP - configure start/stop for stderr
+ *    - stdout_STREAM_STOP - configure start/stop for stdout
+ *    - stderr_STREAM_STOP - configure start/stop for stderr
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
@@ -333,8 +333,7 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be
- *  "STDIN" or the name of a stream specified with
- *  flux_cmd_add_channel().  If 'stream' is NULL, defaults to "STDIN".
+ *  "stdin" or the name of a stream specified with flux_cmd_add_channel().
  *
  *  Returns the total amount of data successfully buffered.
  */
@@ -343,17 +342,15 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
 
 /*
  *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
- *  'stream' can be "STDIN" or the name of a stream specified with
- *  flux_cmd_add_channel().  If 'stream' is NULL, defaults to "STDIN".
+ *  'stream' can be "stdin" or the name of a stream specified with
+ *  flux_cmd_add_channel().
  */
 int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Read up to `len` bytes of unread data from stream `stream`.  To
- *   read all data, specify 'len' of -1.  'stream' can be "STDOUT",
- *   "STDERR", or the name of a stream specified with
- *   flux_cmd_add_channel().  If 'stream' is NULL, defaults to
- *   "STDOUT".
+ *   read all data, specify 'len' of -1.  'stream' can be "stdout",
+ *   "stderr", or the name of a stream specified with flux_cmd_add_channel().
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer is guaranteed to be NUL terminated.  User shall not
@@ -367,9 +364,8 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
 
 /*
  *  Read line unread data from stream `stream`.  'stream' can be
- *   "STDOUT", "STDERR", or the name of a stream specified with
- *   flux_cmd_add_channel().  If 'stream' is NULL, defaults to
- *   "STDOUT".
+ *   "stdout", "stderr", or the name of a stream specified with
+ *   flux_cmd_add_channel().
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer will include newline character and is guaranteed to

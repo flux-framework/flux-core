@@ -60,7 +60,7 @@ void stdin2stream (flux_subprocess_t *p, const char *stream)
     }
 
     /* do not close for channel, b/c can race w/ data coming back */
-    if (!strcmp (stream, "STDIN")) {
+    if (!strcmp (stream, "stdin")) {
         if (flux_subprocess_close (p, stream) < 0)
             log_err_exit ("flux_subprocess_close");
     }
@@ -70,7 +70,7 @@ void stdin2stream (flux_subprocess_t *p, const char *stream)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
+    FILE *fstream = !strcmp (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 
@@ -127,9 +127,9 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_cmd_setcwd");
 
     if (optparse_getopt (opts, "stdin2stream", &optargp) > 0) {
-        if (strcmp (optargp, "STDIN")
-            && strcmp (optargp, "STDOUT")
-            && strcmp (optargp, "STDERR")) {
+        if (strcmp (optargp, "stdin")
+            && strcmp (optargp, "stdout")
+            && strcmp (optargp, "stderr")) {
             if (flux_cmd_add_channel (cmd, optargp) < 0)
                 log_err_exit ("flux_cmd_add_channel");
             ops.on_channel_out = flux_standard_output;

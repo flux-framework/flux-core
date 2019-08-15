@@ -351,7 +351,7 @@ int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
 void flux_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
-    FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
+    FILE *fstream = !strcasecmp (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 
@@ -730,13 +730,12 @@ int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
     struct subprocess_channel *c;
     flux_buffer_t *fb;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
-
-    if (!stream)
-        stream = "STDOUT";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_READ)) {
@@ -784,13 +783,12 @@ int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
     struct subprocess_channel *c;
     flux_buffer_t *fb;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
-
-    if (!stream)
-        stream = "STDOUT";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_READ)) {
@@ -822,13 +820,12 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
     struct subprocess_channel *c;
     int ret;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
-
-    if (!stream)
-        stream = "STDOUT";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_READ)) {
@@ -853,7 +850,9 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
     flux_buffer_t *fb;
     int ret;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
@@ -862,9 +861,6 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
         errno = EINVAL;
         return -1;
     }
-
-    if (!stream)
-        stream = "STDIN";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_WRITE)) {
@@ -911,13 +907,12 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
-
-    if (!stream)
-        stream = "STDIN";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_WRITE)) {
@@ -964,7 +959,9 @@ static const char *subprocess_read (flux_subprocess_t *p,
     flux_buffer_t *fb;
     const char *ptr;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return NULL;
     }
@@ -973,9 +970,6 @@ static const char *subprocess_read (flux_subprocess_t *p,
         errno = EINVAL;
         return NULL;
     }
-
-    if (!stream)
-        stream = "STDOUT";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_READ)) {
@@ -1043,13 +1037,12 @@ int flux_subprocess_read_stream_closed (flux_subprocess_t *p, const char *stream
     struct subprocess_channel *c;
     flux_buffer_t *fb;
 
-    if (!p || p->magic != SUBPROCESS_MAGIC || (p->local && p->in_hook)) {
+    if (!p || !stream
+           || p->magic != SUBPROCESS_MAGIC
+           || (p->local && p->in_hook)) {
         errno = EINVAL;
         return -1;
     }
-
-    if (!stream)
-        stream = "STDOUT";
 
     c = zhash_lookup (p->channels, stream);
     if (!c || !(c->flags & CHANNEL_READ)) {

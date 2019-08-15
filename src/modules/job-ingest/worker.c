@@ -37,7 +37,7 @@
  *   of the current queue depth, which may challenge subprocess buffer
  *   management.
  *
- * - Worker is stopped by closing STDIN, but worker_stop() may return
+ * - Worker is stopped by closing stdin, but worker_stop() may return
  *   before it is known to have stopped, leaving the broker to clean up
  *   with no possibility of reporting errors to the caller.
  *
@@ -183,8 +183,8 @@ error:
 }
 
 /* Subprocess output available
- * STDERR is logged
- * STDOUT fulfills future at the top of the worker's queue.
+ * stderr is logged
+ * stdout fulfills future at the top of the worker's queue.
  */
 static void worker_output_cb (flux_subprocess_t *p, const char *stream)
 {
@@ -198,7 +198,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
     }
     if (len == 0) // EOF
         return;
-    if (!strcmp (stream, "STDOUT")) {
+    if (!strcmp (stream, "stdout")) {
         flux_future_t *f;
 
         if (!(f = zlist_pop (w->queue))) {
@@ -211,7 +211,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         if (zlist_size (w->queue) == 0)
             worker_inactive (w);
     }
-    else if (!strcmp (stream, "STDERR")) {
+    else if (!strcmp (stream, "stderr")) {
         flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
     }
 }
@@ -243,7 +243,7 @@ flux_future_t *worker_request (struct worker *w, const char *s)
     memcpy (buf, s, bufsz - 1);
     buf[bufsz - 1] = '\n';
     worker_active (w);
-    if (flux_subprocess_write (w->p, "STDIN", buf, bufsz) != bufsz)
+    if (flux_subprocess_write (w->p, "stdin", buf, bufsz) != bufsz)
         goto error;
     if (zlist_append (w->queue, f) < 0)
         goto error;
@@ -258,7 +258,7 @@ error:
     return NULL;
 }
 
-/* Stop a worker by closing its STDIN.
+/* Stop a worker by closing its stdin.
  * This should cause it to exit, then worker_completion_cb() will destroy it.
  * Just in case we have to destroy the worker before then, add it to w->trash.
  */
@@ -266,7 +266,7 @@ static void worker_stop (struct worker *w)
 {
     if (w->p) {
         int saved_errno = errno;
-        if (flux_subprocess_close (w->p, "STDIN") < 0) {
+        if (flux_subprocess_close (w->p, "stdin") < 0) {
             flux_log_error (w->h, "%s: flux_subprocess_close", w->name);
             return;
         }

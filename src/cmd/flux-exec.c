@@ -177,7 +177,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
+    FILE *fstream = !strcmp (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 
@@ -207,7 +207,7 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
         while (p) {
             if (flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT
                 || flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
-                if (flux_subprocess_write (p, "STDIN", ptr, lenp) < 0)
+                if (flux_subprocess_write (p, "stdin", ptr, lenp) < 0)
                     log_err_exit ("flux_subprocess_write");
             }
             p = zlist_next (subprocesses);
@@ -216,7 +216,7 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     else {
         p = zlist_first (subprocesses);
         while (p) {
-            if (flux_subprocess_close (p, "STDIN") < 0)
+            if (flux_subprocess_close (p, "stdin") < 0)
                 log_err_exit ("flux_subprocess_close");
             p = zlist_next (subprocesses);
         }
@@ -398,13 +398,13 @@ int main (int argc, char *argv[])
     if (optparse_getopt (opts, "verbose", NULL) > 0)
         fprintf (stderr, "%03fms: Sent all requests\n", monotime_since (t0));
 
-    /* -n,--noinput: close subprocess STDIN
+    /* -n,--noinput: close subprocess stdin
      */
     if (optparse_getopt (opts, "noinput", NULL) > 0) {
         flux_subprocess_t *p;
         p = zlist_first (subprocesses);
         while (p) {
-            if (flux_subprocess_close (p, "STDIN") < 0)
+            if (flux_subprocess_close (p, "stdin") < 0)
                 log_err_exit ("flux_subprocess_close");
             p = zlist_next (subprocesses);
         }

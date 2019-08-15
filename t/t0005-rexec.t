@@ -35,13 +35,13 @@ test_expect_success 'basic rexec - env passed through' '
 
 test_expect_success 'basic rexec functionality (echo stdout)' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec ${TEST_SUBPROCESS_DIR}/test_echo -P -O foobar.stdout > output &&
-        echo "STDOUT:foobar.stdout" > expected &&
+        echo "stdout:foobar.stdout" > expected &&
         test_cmp expected output
 '
 
 test_expect_success 'basic rexec functionality (echo stderr)' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec ${TEST_SUBPROCESS_DIR}/test_echo -P -E foobar.stderr > output 2>&1 &&
-        echo "STDERR:foobar.stderr" > expected &&
+        echo "stderr:foobar.stderr" > expected &&
         test_cmp expected output
 '
 
@@ -93,14 +93,14 @@ test_expect_success 'basic rexec fail exec() (check state changes)' '
 '
 
 test_expect_success 'basic rexec stdin' '
-	echo -n "hello" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i STDIN ${TEST_SUBPROCESS_DIR}/test_echo -O -E > output 2>&1 &&
+	echo -n "hello" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -E > output 2>&1 &&
         echo "hello" > expected &&
         echo "hello" >> expected &&
         test_cmp expected output
 '
 
 test_expect_success 'basic rexec stdin / stdout multiple lines' '
-	/bin/echo -en "foo\nbar\nbaz\n" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i STDIN ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
+	/bin/echo -en "foo\nbar\nbaz\n" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
         echo "foo" > expected &&
         echo "bar" >> expected &&
         echo "baz" >> expected &&
@@ -123,7 +123,7 @@ test_expect_success 'rexec check channel FD created' '
 # bytes we're feeding in
 test_expect_success 'rexec channel input' '
 	echo -n "foobar" | ${FLUX_BUILD_DIR}/t/rexec/rexec -i TEST_CHANNEL ${TEST_SUBPROCESS_DIR}/test_echo -c TEST_CHANNEL -P -O -b 6 > output 2>&1 &&
-        echo "STDOUT:foobar" > expected &&
+        echo "stdout:foobar" > expected &&
         test_cmp expected output
 '
 
@@ -223,7 +223,7 @@ test_expect_success 'rexec line buffering can be disabled' '
 # from "rexec_getline", so if everything is working correctly, we
 # should see the concatenation "barEOF" at the end of the output.
 test_expect_success 'rexec read_getline call works on remote streams' '
-	/bin/echo -en "foo\nbar" | ${FLUX_BUILD_DIR}/t/rexec/rexec_getline -i STDIN ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
+	/bin/echo -en "foo\nbar" | ${FLUX_BUILD_DIR}/t/rexec/rexec_getline -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
         echo "foo" > expected &&
         echo "barEOF" >> expected &&
         test_cmp expected output

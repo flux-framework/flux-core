@@ -49,7 +49,7 @@ void completion_cb (flux_subprocess_t *p)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    FILE *fstream = !strcasecmp (stream, "STDERR") ? stderr : stdout;
+    FILE *fstream = !strcmp (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 
@@ -72,7 +72,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     if (lenp)
         fwrite (ptr, lenp, 1, fstream);
 
-    if (!strcasecmp (stream, "STDOUT"))
+    if (!strcasecmp (stream, "stdout"))
         stdout_count++;
 }
 
@@ -124,7 +124,7 @@ int main (int argc, char *argv[])
         if (strcasecmp (optargp, "true")
             && strcasecmp (optargp, "false"))
             log_err_exit ("invalid linebuffer value");
-        if (flux_cmd_setopt (cmd, "STDOUT_LINE_BUFFER", optargp) < 0)
+        if (flux_cmd_setopt (cmd, "stdout_LINE_BUFFER", optargp) < 0)
             log_err_exit ("flux_cmd_setopt");
     }
 

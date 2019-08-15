@@ -881,7 +881,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int loglevel = !strcmp (name, "STDERR") ? LOG_ERR : LOG_INFO;
+    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
     int runlevel = runlevel_get_level (r);
 
     flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);

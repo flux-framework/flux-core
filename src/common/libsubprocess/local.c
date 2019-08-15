@@ -287,7 +287,7 @@ static int local_setup_stdio (flux_subprocess_t *p)
                              NULL,
                              local_in_cb,
                              NULL,
-                             "STDIN",
+                             "stdin",
                              CHANNEL_WRITE) < 0)
         return -1;
 
@@ -296,7 +296,7 @@ static int local_setup_stdio (flux_subprocess_t *p)
                                  p->ops.on_stdout,
                                  NULL,
                                  local_stdout_cb,
-                                 "STDOUT",
+                                 "stdout",
                                  CHANNEL_READ) < 0)
             return -1;
     }
@@ -306,7 +306,7 @@ static int local_setup_stdio (flux_subprocess_t *p)
                                  p->ops.on_stderr,
                                  NULL,
                                  local_stderr_cb,
-                                 "STDERR",
+                                 "stderr",
                                  CHANNEL_READ) < 0)
             return -1;
     }
@@ -451,14 +451,14 @@ static int local_child (flux_subprocess_t *p)
     close_parent_fds (p);
 
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
-        if ((c = zhash_lookup (p->channels, "STDIN"))) {
+        if ((c = zhash_lookup (p->channels, "stdin"))) {
             if (dup2 (c->child_fd, STDIN_FILENO) < 0) {
                 flux_log_error (p->h, "dup2");
                 _exit (1);
             }
         }
 
-        if ((c = zhash_lookup (p->channels, "STDOUT"))) {
+        if ((c = zhash_lookup (p->channels, "stdout"))) {
             if (dup2 (c->child_fd, STDOUT_FILENO) < 0) {
                 flux_log_error (p->h, "dup2");
                 _exit (1);
@@ -467,7 +467,7 @@ static int local_child (flux_subprocess_t *p)
         else
             close (STDOUT_FILENO);
 
-        if ((c = zhash_lookup (p->channels, "STDERR"))) {
+        if ((c = zhash_lookup (p->channels, "stderr"))) {
             if (dup2 (c->child_fd, STDERR_FILENO) < 0) {
                 flux_log_error (p->h, "dup2");
                 _exit (1);

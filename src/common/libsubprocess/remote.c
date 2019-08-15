@@ -470,14 +470,14 @@ static int remote_setup_stdio (flux_subprocess_t *p)
 
     if (remote_channel_setup (p,
                               NULL,
-                              "STDIN",
+                              "stdin",
                               CHANNEL_WRITE) < 0)
         return -1;
 
     if (p->ops.on_stdout) {
         if (remote_channel_setup (p,
                                   p->ops.on_stdout,
-                                  "STDOUT",
+                                  "stdout",
                                   CHANNEL_READ) < 0)
             return -1;
     }
@@ -485,7 +485,7 @@ static int remote_setup_stdio (flux_subprocess_t *p)
     if (p->ops.on_stderr) {
         if (remote_channel_setup (p,
                                   p->ops.on_stderr,
-                                  "STDERR",
+                                  "stderr",
                                   CHANNEL_READ) < 0)
             return -1;
     }

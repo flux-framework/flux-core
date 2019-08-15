@@ -162,23 +162,32 @@ void eventlog_decoding (void)
 {
     char buf[512];
     json_t *o;
+    char *s;
     int i;
 
     /* all good events are good logs */
     for (i = 0; goodevent[i] != NULL; i++) {
         o = eventlog_decode (goodevent[i]);
         ok (o != NULL,
-            "eventlog_decode event=\"%s\" success",
+            "eventlog_decode input=\"%s\" success",
             printable (buf, goodevent[i]));
+        s = eventlog_encode (o);
+        ok (s != NULL && !strcmp (s, goodevent[i]),
+            "eventlog_encode reversed it");
         json_decref (o);
+        free (s);
     }
 
     for (i = 0; goodlog[i] != NULL; i++) {
         o = eventlog_decode (goodlog[i]);
         ok (o != NULL,
-            "eventlog_decode event=\"%s\" success",
+            "eventlog_decode input=\"%s\" success",
             printable (buf, goodlog[i]));
+        s = eventlog_encode (o);
+        ok (s != NULL && !strcmp (s, goodlog[i]),
+            "eventlog_encode reversed it");
         json_decref (o);
+        free (s);
     }
 }
 
