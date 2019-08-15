@@ -63,6 +63,16 @@ int bulk_exec_rc (struct bulk_exec *exec)
     return (exec->exit_status);
 }
 
+int bulk_exec_current (struct bulk_exec *exec)
+{
+    return zlist_size (exec->processes);
+}
+
+int bulk_exec_total (struct bulk_exec *exec)
+{
+    return exec->total;
+}
+
 static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
     struct bulk_exec *exec = flux_subprocess_aux_get (p, "job-exec::exec");
