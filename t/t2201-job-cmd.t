@@ -236,6 +236,12 @@ test_expect_success 'flux-job: id works with spaces in input' '
 	test_cmp despace.exp despace.out
 '
 
+test_expect_success 'flux-job: namespace works' '
+	test "$(flux job namespace 1)" = "job-1" &&
+	test "$(echo 1 | flux job namespace)" = "job-1" &&
+	test_expect_code 1 flux job namespace -1
+'
+
 test_expect_success 'flux-job: attach fails without jobid argument' '
 	test_must_fail flux job attach
 '
