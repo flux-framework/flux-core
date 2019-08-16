@@ -843,13 +843,6 @@ err:
     return NULL;
 }
 
-/*  Create namespace name for jobid 'id'
- */
-static int job_get_ns_name (char *buf, int bufsz, flux_jobid_t id)
-{
-    return fluid_encode (buf, bufsz, id, FLUID_STRING_DOTHEX);
-}
-
 static double job_get_kill_timeout (flux_t *h)
 {
     double t = DEFAULT_KILL_TIMEOUT;
@@ -895,7 +888,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
         jobinfo_decref (job);
         return -1;
     }
-    if (job_get_ns_name (job->ns, sizeof (job->ns), job->id) < 0) {
+    if (flux_job_kvs_namespace (job->ns, sizeof (job->ns), job->id) < 0) {
         jobinfo_fatal_error (job, errno, "failed to create ns name for job");
         flux_log_error (ctx->h, "job_ns_create");
         return -1;
