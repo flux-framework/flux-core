@@ -1163,7 +1163,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
     c = zlist_first (ctx->clients);
     while (c) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (client_send_nocopy (c, &cpy) < 0 && allowed_message (c, msg)) {
+            if (client_send_nocopy (c, &cpy) < 0) {
                 int type = FLUX_MSGTYPE_ANY;
                 const char *topic = "unknown";
                 (void)flux_msg_get_type (msg, &type);
