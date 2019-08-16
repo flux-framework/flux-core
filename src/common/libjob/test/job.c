@@ -215,6 +215,21 @@ void check_statestr(void)
         "flux_job_statetostr (0, false) returned non-NULL");
 }
 
+void check_kvs_namespace (void)
+{
+    char buf[64];
+    ok (flux_job_kvs_namespace (buf, 64, 1234) == strlen ("job-1234"),
+        "flux_job_kvs_namespace works");
+    is (buf, "job-1234",
+        "flux_job_kvs_namespace returns expected namespace name");
+    ok (flux_job_kvs_namespace (buf, 7, 1234) < 0 && errno == EOVERFLOW,
+        "flux_job_kvs_namespace returns EOVERFLOW for too small buffer");
+    ok (flux_job_kvs_namespace (buf, -1, 1234) < 0 && errno == EINVAL,
+        "flux_job_kvs_namespace returns EINVAL on invalid buffer size");
+    ok (flux_job_kvs_namespace (NULL, 64, 1234) < 0 && errno == EINVAL,
+        "flux_job_kvs_namespace returns EINVAL on invalid buffer");
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -225,6 +240,8 @@ int main (int argc, char *argv[])
     check_corner_case ();
 
     check_statestr ();
+
+    check_kvs_namespace ();
 
     done_testing ();
     return 0;

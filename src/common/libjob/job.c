@@ -219,15 +219,22 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
     return f;
 }
 
+static int buffer_arg_check (char *buf, int bufsz)
+{
+    if (!buf || bufsz <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 int flux_job_kvs_key (char *buf, int bufsz, flux_jobid_t id, const char *key)
 {
     char idstr[32];
     int len;
 
-    if (!buf || !bufsz) {
-        errno = EINVAL;
+    if (buffer_arg_check (buf, bufsz) < 0)
         return -1;
-    }
 
     if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)
         return -1;
@@ -250,10 +257,8 @@ int flux_job_kvs_guest_key (char *buf,
     char idstr[32];
     int len;
 
-    if (!buf || !bufsz) {
-        errno = EINVAL;
+    if (buffer_arg_check (buf, bufsz) < 0)
         return -1;
-    }
     if (getenv ("FLUX_KVS_NAMESPACE"))
         len = snprintf (buf, bufsz, "%s", key ? key : ".");
     else {
@@ -265,6 +270,18 @@ int flux_job_kvs_guest_key (char *buf,
                         key ? key : "");
     }
     if (len >= bufsz) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return len;
+}
+
+int flux_job_kvs_namespace (char *buf, int bufsz, flux_jobid_t id)
+{
+    int len;
+    if (buffer_arg_check (buf, bufsz) < 0)
+        return -1;
+    if ((len = snprintf (buf, bufsz, "job-%ju", id)) >= bufsz) {
         errno = EOVERFLOW;
         return -1;
     }
