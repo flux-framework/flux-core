@@ -534,7 +534,7 @@ static void request_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     client_t *c = arg;
-    if (client_send (c, msg) < 0)
+    if (client_send (c, msg) < 0 && errno != EPIPE)
         flux_log_error (c->ctx->h, "request_cb: client_send");
 }
 
@@ -1005,7 +1005,7 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
         return false; // no match - forward to broker
 
 done_respond:
-    if (client_respond (c, msg, rc < 0 ? errno : 0) < 0)
+    if (client_respond (c, msg, rc < 0 ? errno : 0) < 0 && errno == EPIPE)
         flux_log_error (c->ctx->h, "internal_req: %s: client_respond", topic);
 done:
     return true;
@@ -1163,7 +1163,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
     c = zlist_first (ctx->clients);
     while (c) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (client_send_nocopy (c, &cpy) < 0 && allowed_message (c, msg)) {
+            if (client_send_nocopy (c, &cpy) < 0 && errno != EPIPE) {
                 int type = FLUX_MSGTYPE_ANY;
                 const char *topic = "unknown";
                 (void)flux_msg_get_type (msg, &type);
