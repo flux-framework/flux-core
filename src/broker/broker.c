@@ -518,14 +518,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* The previous value of FLUX_URI (refers to enclosing instance)
-     * was stored above.  Clear it here so a connection to the enclosing
-     * instance is not made inadvertantly.
-     * Also ensure any KVS namespace used by job shell is not used here.
-     */
-    unsetenv ("FLUX_URI");
-    unsetenv ("FLUX_KVS_NAMESPACE");
-
     if (ctx.verbose) {
         const char *parent = overlay_get_parent (ctx.overlay);
         const char *child = overlay_get_child (ctx.overlay);
@@ -790,7 +782,8 @@ static struct attrmap attrmap[] = {
     { "FLUX_RC3_PATH",          "broker.rc3_path",          1, 0 },
     { "FLUX_SEC_DIRECTORY",     "security.keydir",          1, 0 },
 
-    { "FLUX_URI",               "parent-uri",               0, 0 },
+    { "FLUX_URI",               "parent-uri",               0, 1 },
+    { "FLUX_KVS_NAMESPACE",     "parent-kvs-namespace",     0, 1 },
     { NULL, NULL, 0, 0 },
 };
 
