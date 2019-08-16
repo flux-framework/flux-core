@@ -778,19 +778,20 @@ struct attrmap {
     const char *env;
     const char *attr;
     uint8_t required:1;
+    uint8_t sanitize:1;
 };
 
 static struct attrmap attrmap[] = {
-    { "FLUX_EXEC_PATH",         "conf.exec_path",           1 },
-    { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1 },
-    { "FLUX_MODULE_PATH",       "conf.module_path",         1 },
-    { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1 },
-    { "FLUX_RC1_PATH",          "broker.rc1_path",          1 },
-    { "FLUX_RC3_PATH",          "broker.rc3_path",          1 },
-    { "FLUX_SEC_DIRECTORY",     "security.keydir",          1 },
+    { "FLUX_EXEC_PATH",         "conf.exec_path",           1, 0 },
+    { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1, 0 },
+    { "FLUX_MODULE_PATH",       "conf.module_path",         1, 0 },
+    { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1, 0 },
+    { "FLUX_RC1_PATH",          "broker.rc1_path",          1, 0 },
+    { "FLUX_RC3_PATH",          "broker.rc3_path",          1, 0 },
+    { "FLUX_SEC_DIRECTORY",     "security.keydir",          1, 0 },
 
-    { "FLUX_URI",               "parent-uri",               0 },
-    { NULL, NULL, 0 },
+    { "FLUX_URI",               "parent-uri",               0, 0 },
+    { NULL, NULL, 0, 0 },
 };
 
 static void init_attrs_from_environment (attr_t *attrs)
@@ -805,6 +806,8 @@ static void init_attrs_from_environment (attr_t *attrs)
             log_msg_exit ("required environment variable %s is not set", m->env);
         if (attr_add (attrs, m->attr, val, flags) < 0)
             log_err_exit ("attr_add %s", m->attr);
+        if (m->sanitize)
+            unsetenv (m->env);
     }
 }
 
