@@ -330,7 +330,7 @@ static unsigned long long parse_arg_unsigned (const char *s, const char *name)
     errno = 0;
     i = strtoull (s, &endptr, 10);
     if (errno != 0 || *endptr != '\0')
-        log_msg_exit ("error parsing %s", name);
+        log_msg_exit ("error parsing %s: \"%s\"", name, s);
     return i;
 }
 
