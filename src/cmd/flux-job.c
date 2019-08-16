@@ -43,6 +43,7 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
 int cmd_attach (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
+int cmd_namespace (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_kill (optparse_t *p, int argc, char **argv);
@@ -253,6 +254,13 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
       "Re-enable job submissions after drain.",
       cmd_undrain,
+      0,
+      NULL
+    },
+    { "namespace",
+      "[id ...]",
+      "Convert job ids to job guest kvs namespace names",
+      cmd_namespace,
       0,
       NULL
     },
@@ -1026,6 +1034,31 @@ int cmd_id (optparse_t *p, int argc, char **argv)
             id_convert (p, argv[optindex++], dst, sizeof (dst));
             printf ("%s\n", dst);
         }
+    }
+    return 0;
+}
+
+static void print_job_namespace (const char *src)
+{
+    char ns[64];
+    flux_jobid_t id = parse_arg_unsigned (src, "jobid");
+    if (flux_job_kvs_namespace (ns, sizeof (ns), id) < 0)
+        log_msg_exit ("error getting kvs namespace for %ju", id);
+    printf ("%s\n", ns);
+}
+
+int cmd_namespace (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+
+    if (optindex == argc) {
+        char src[256];
+        while ((fgets (src, sizeof (src), stdin)))
+            print_job_namespace (trim_string (src));
+    }
+    else {
+        while (optindex < argc)
+            print_job_namespace (argv[optindex++]);
     }
     return 0;
 }
