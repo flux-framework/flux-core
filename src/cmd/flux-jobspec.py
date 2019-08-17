@@ -8,19 +8,20 @@ import logging
 import argparse
 import json
 import collections.abc as abc
+from datetime import timedelta
 
 import yaml
 
 from flux import util
 
 
-def create_resource(res_type, count, with_child=None):
-    if with_child is None:
-        with_child = []
-    else:
-        assert isinstance(with_child, abc.Sequence), "child resource must be a sequence"
-        assert not isinstance(with_child, str), "child resource must not be a string"
-
+def create_resource(res_type, count, with_child=[]):
+    assert isinstance(
+        with_child, abc.Sequence
+    ), "child resource must be a sequence"
+    assert not isinstance(
+        with_child, str
+    ), "child resource must not be a string"
     assert count > 0, "resource count must be > 0"
 
     res = {"type": res_type, "count": count}
@@ -104,7 +105,9 @@ def create_slurm_style_jobspec(
     jobspec = {
         "version": 1,
         "resources": [resource_section],
-        "tasks": [{"command": command, "slot": "task", "count": task_count_dict}],
+        "tasks": [
+            {"command": command, "slot": "task", "count": task_count_dict}
+        ],
         "attributes": {"system": {"cwd": os.getcwd(), "environment": environ}},
     }
     if walltime:
@@ -177,6 +180,180 @@ def slurm_jobspec(args):
     )
 
 
+def positive_nonzero_int(string):
+    value = int(string)
+    if value <= 0:
+        msg = "{} is not positive"
+        raise argparse.ArgumentTypeError(msg)
+    return value
+
+
+def parse_fsd(s):
+    m = re.match(r".*([smhd])$", s)
+    n = float(s[:-1] if m else s)
+    unit = m.group(1) if m else "s"
+
+    if unit == "m":
+        seconds = timedelta(minutes=n).total_seconds()
+    elif unit == "h":
+        seconds = timedelta(hours=n).total_seconds()
+    elif unit == "d":
+        seconds = timedelta(days=n).total_seconds()
+    else:
+        seconds = n
+    return seconds
+
+
+def resource_walker(res):
+    while res is not None and len(res) > 0:
+        if type(res) is dict:
+            yield res
+            res = res.get("with", None)
+        elif type(res) is list:
+            res = res[0]
+
+
+def resource_type_walker(res):
+    for r in resource_walker(res):
+        yield r["type"]
+
+
+def parse_shape(shape, nslots):
+    # type: (str) -> Dict[str, Any]
+    partlist = shape.split("/")
+    if len(partlist) <= 1:
+        partlist = shape.split(">")
+
+    count_re = re.compile(
+        r"(?P<res>[^\[]+)(?:\[(?P<min>\d+)(?::(?P<max>\d+)(?::(?P<stride>\d+))?)?])?"
+    )
+
+    slot_added = False
+    # TODO: manual parsing making me grumpy, may pull in pycparser, or use ply
+    # if I can stomach it (cffi already depends on it), can't handle unit
+    # parsing for counts without doing some more work here
+    res = []
+    for r in reversed(partlist):
+        m = count_re.match(r)
+        if len(m.group("res")) < 1:
+            raise ValueError("invalid shape, no resource name in {}".format(r))
+        if m.group("min") is None:
+            count = 1
+        else:
+            count = int(m.group("min"))
+        if m.group("max") is not None:
+            count = {
+                "min": count,
+                "max": int(m.group("max")),
+                "operator": "+",
+                "operand": 1,
+            }
+            if m.group("stride") is not None:
+                count["operand"] = int(m.group("stride"))
+        if m.group("res") == "slot":
+            if m.group("min") is not None:
+                raise ValueError("slot cannot take count from shape at present")
+            slot_added = True
+            res = [create_slot("task", nslots, res)]
+        else:
+            res = [create_resource(m.group("res"), count, res)]
+    if slot_added:
+        return res
+    else:
+        return [create_slot("task", nslots, res)]
+
+
+def flux_jobspec(args):
+    # set up defaullts for options where presence matters and check invariants
+    if 1 < sum(
+        [
+            a is not None
+            for a in (
+                args.total_tasks,
+                args.tasks_per_slot,
+                args.tasks_per_resource,
+            )
+        ]
+    ):
+        logger.error(
+            "--total-tasks, --tasks-per-slot and --tasks-per-resource are mutually exclusive"
+        )
+        sys.exit(1)
+    if args.slot_shape is not None and args.shape_file is not None:
+        logger.error("--shape and --shape-file are mutually exclusive")
+        sys.exit(1)
+
+    if args.nslots is None:
+        args.nslots = 1
+
+    if args.tasks_per_slot is None:
+        args.tasks_per_slot = 1
+
+    if args.shape_file is not None:
+        args.slot_shape = args.slot_shape_file.read().strip()
+
+    if args.slot_shape is None:
+        args.slot_shape = "node"
+
+    args.slot_shape = parse_shape(args.slot_shape, args.nslots)
+
+    # TODO: validate shape
+
+    if args.total_tasks is not None:
+        task_count_dict = {"total": args.total_tasks}
+    elif args.tasks_per_resource is not None:
+        task_count_dict = {
+            "per_resource": {
+                "type": args.tasks_per_resource[0],
+                "count": args.tasks_per_resource[1],
+            }
+        }
+        # ensure the type exists in the shape
+        if args.tasks_per_resource[0] not in resource_type_walker(args.slot_shape):
+            raise ValueError(
+                "the resource type named by --tasks-per-resource must be in the requested shape"
+            )
+
+    else:
+        task_count_dict = {"per_slot": args.tasks_per_slot}
+
+    if args.dir is None:
+        args.dir = os.getcwd()
+
+    if args.time is None:
+        args.time = parse_fsd("1h")
+
+    if args.env_all and args.env_none:
+        logger.error("--env-all and --env-none cannot be combined")
+        sys.exit(1)
+
+    environ = {}
+    if (not args.env_none) and (args.env_all or args.env is None or len(args.env) == 0):
+        environ = dict(os.environ)
+
+    if args.env is not None:
+        for e in args.env:
+            environ[e.key] = e.value
+
+    jobspec = {
+        "version": 1,
+        "resources": args.slot_shape,
+        "tasks": [
+            {
+                "command": args.command,
+                "slot": "task",
+                "count": task_count_dict,
+                "attributes": {},
+            }
+        ],
+        "attributes": {
+            "system": {"cwd": args.dir, "environment": environ}
+        },
+    }
+    jobspec["attributes"]["system"]["duration"] = args.time
+    return jobspec
+
+
 def kv_list_split(string):
     """
     Split a key/value list with optional values, e.g. 'FOO,BAR=baz,...'
@@ -217,7 +394,9 @@ def get_slurm_common_parser():
         help="time limit. Acceptable formats include minutes[:seconds], "
         "[days-]hours:minutes:seconds",
     )
-    slurm_parser.add_argument("-o", "--output", help="location of stdout redirection")
+    slurm_parser.add_argument(
+        "-o", "--output", help="location of stdout redirection"
+    )
     slurm_parser.add_argument(
         "--export",
         metavar="[ALL|NONE|VARS]",
@@ -228,6 +407,65 @@ def get_slurm_common_parser():
     )
     slurm_parser.add_argument("command", nargs=argparse.REMAINDER)
     return slurm_parser
+
+
+def res_tuple(s):
+    l = s.split(":")
+    return (l[0], int(l[1]) if len(l) > 1 else 1)
+
+
+class EnvVar(object):
+    def __init__(self, s):
+        p = s.split("=")
+        if len(p) == 1:
+            self.key = s
+            self.value = os.environ[s]
+        else:
+            self.key = p[0]
+            self.value = "=".join(p[1:])
+
+def parse_env_var(s):
+    return EnvVar(s)
+
+
+def get_flux_common_parser():
+    """
+    Shared arguments amongst flux run and submit.
+    """
+    flux_parser = argparse.ArgumentParser(add_help=False)
+    # To detect option set or not, defaults are added in flux_jobspec
+    slots = flux_parser.add_argument_group("slots")
+    slots.add_argument("--nslots", type=positive_nonzero_int)
+    slots.add_argument("--shape-file", type=argparse.FileType())
+    slots.add_argument(
+        "--slot-shape",
+        type=str,
+        metavar="SHAPE",
+        help="slot shape, i.e. 'node/core[4]'",
+    )
+    tasks = flux_parser.add_argument_group("tasks")
+    tasks.add_argument("--total-tasks", type=positive_nonzero_int)
+    tasks.add_argument("--tasks-per-slot", type=positive_nonzero_int)
+    tasks.add_argument("--tasks-per-resource", type=res_tuple)
+    job = flux_parser.add_argument_group("job")
+    job.add_argument("--dir", type=str, help="working directory")
+    job.add_argument(
+        "--time", help="time limit as a flux duration, N[smhd]", type=parse_fsd
+    )
+    env = flux_parser.add_argument_group("environment")
+    env.add_argument("--env-all", help="propagate full environment", action='store_true')
+    env.add_argument("--env-none", help="propagate no environment", action='store_true')
+    env.add_argument(
+        "-e",
+        "--env",
+        type=parse_env_var,
+        action="append",
+        help="""add ENV to the environment:
+        either --env=ENV to get $ENV from the current environment or
+        --env=ENV=VAL to override/set""",
+    )
+    flux_parser.add_argument("command", nargs=argparse.REMAINDER)
+    return flux_parser
 
 
 LOGGER = logging.getLogger("flux-jobspec")
@@ -247,6 +485,14 @@ def main():
         formatter_class=util.help_formatter(),
     )
     srun_parser.set_defaults(func=slurm_jobspec)
+
+    flux_parser = get_flux_common_parser()
+    run_parser = subparsers.add_parser(
+        "run",
+        parents=[flux_parser],
+        help="subcommand for jobspec-style CLI arguments",
+    )
+    run_parser.set_defaults(func=flux_jobspec)
 
     args = parser.parse_args()
 
