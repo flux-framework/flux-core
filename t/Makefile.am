@@ -101,6 +101,7 @@ TESTSCRIPTS = \
 	t2601-job-shell-standalone.t \
 	t2602-job-shell.t \
 	t3000-mpi-basic.t \
+	t3100-flux-in-flux.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
 	t9001-pymod.t \
