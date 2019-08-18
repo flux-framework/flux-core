@@ -15,6 +15,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 # cancel the job, and wait for clean event.
 submit_job() {
         jobid=$(flux job submit test.json)
+        flux job wait-event $jobid start >/dev/null
         flux job cancel $jobid
         flux job wait-event $jobid clean >/dev/null
         echo $jobid

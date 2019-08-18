@@ -25,6 +25,7 @@ update_job_userid() {
 # userid
 submit_job() {
         jobid=$(flux job submit test.json)
+        flux job wait-event $jobid start >/dev/null
         flux job cancel $jobid
         flux job wait-event $jobid clean >/dev/null
         update_job_userid $1
