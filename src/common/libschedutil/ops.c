@@ -36,9 +36,9 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "sched.alloc lookup R");
         goto error;
     }
+    util->alloc_cb (h, msg, jobspec, util->cb_arg);
     if (schedutil_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.alloc unable to remove outstanding future");
-    util->alloc_cb (h, msg, jobspec, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
@@ -105,9 +105,9 @@ static void free_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "sched.free lookup R");
         goto error;
     }
+    util->free_cb (h, msg, R, util->cb_arg);
     if (schedutil_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to remove outstanding future");
-    util->free_cb (h, msg, R, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
