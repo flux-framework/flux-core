@@ -17,6 +17,7 @@
  * also quiescent.
  */
 #include <flux/core.h>
+#include <stdbool.h>
 
 #include "simulator.h"
 
@@ -25,6 +26,7 @@ struct simulator {
     flux_msg_handler_t **handlers;
     flux_msg_t *sim_req;
     flux_future_t *sched_req;
+    int num_outstanding_job_starts;
 };
 
 void sim_ctx_destroy (struct simulator *ctx)
@@ -37,6 +39,29 @@ void sim_ctx_destroy (struct simulator *ctx)
         free (ctx);
         errno = saved_errno;
     }
+}
+
+static inline bool is_quiescent (struct simulator *simulator)
+{
+    return (simulator->sched_req == NULL) && (simulator->num_outstanding_job_starts == 0);
+}
+
+static void check_and_respond_to_quiescent_req (struct simulator *simulator)
+{
+    if (simulator->sim_req == NULL || !is_quiescent (simulator)) {
+        // Either not in a simulation or not quiesced
+        return;
+    }
+
+    const char *sim_payload = NULL;
+    flux_msg_get_string (simulator->sim_req, &sim_payload);
+    flux_log (simulator->ctx->h,
+              LOG_DEBUG,
+              "replying to sim quiescent req with (%s)",
+              sim_payload);
+    flux_respond (simulator->ctx->h, simulator->sim_req, sim_payload);
+    flux_msg_destroy (simulator->sim_req);
+    simulator->sim_req = NULL;
 }
 
 static void sched_quiescent_continuation(flux_future_t *f, void *arg)
@@ -53,17 +78,10 @@ static void sched_quiescent_continuation(flux_future_t *f, void *arg)
         return;
     }
 
-    const char *sched_payload = NULL;
-    flux_rpc_get (f, &sched_payload);
-
-    const char *sim_payload = NULL;
-    flux_msg_get_string (simulator->sim_req, &sim_payload);
-    flux_log (ctx->h, LOG_DEBUG, "receive quiescent from sched (%s), replying to sim with (%s)", sched_payload, sim_payload);
-    flux_respond (ctx->h, simulator->sim_req, sim_payload);
-    flux_future_destroy (f);
-    flux_msg_destroy (simulator->sim_req);
+    flux_log (ctx->h, LOG_DEBUG, "receive quiescent from sched");
     simulator->sched_req = NULL;
-    simulator->sim_req = NULL;
+    check_and_respond_to_quiescent_req (simulator);
+    flux_future_destroy (f);
 }
 
 void sim_sending_sched_request (struct simulator *simulator)
@@ -89,6 +107,24 @@ void sim_sending_sched_request (struct simulator *simulator)
         flux_respond_error(ctx->h, simulator->sim_req, errno, "job-manager: sim_sending_sched_request: flux_future_then failed");
 }
 
+void sim_received_alloc_response (struct simulator *simulator)
+{
+    simulator->num_outstanding_job_starts++;
+    flux_log (simulator->ctx->h,
+              LOG_DEBUG,
+              "received an alloc response, outstanding job starts == %d",
+              simulator->num_outstanding_job_starts);
+}
+
+void sim_received_start_response (struct simulator *simulator)
+{
+    simulator->num_outstanding_job_starts--;
+    flux_log (simulator->ctx->h,
+              LOG_DEBUG,
+              "received a start response, outstanding job starts == %d",
+              simulator->num_outstanding_job_starts);
+    check_and_respond_to_quiescent_req (simulator);
+}
 
 /* Handle a job-manager.quiescent request.  We'll first copy the request into
  * ctx for later response, and then kick off the process of verifying that all

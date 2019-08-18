@@ -89,6 +89,7 @@
 #include "event.h"
 
 #include "start.h"
+#include "simulator.h"
 
 struct start {
     struct job_manager *ctx;
@@ -201,6 +202,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!strcmp (type, "start")) {
+        sim_received_start_response (ctx->simulator);
         if (event_job_post_pack (ctx->event, job, "start", NULL) < 0)
             goto error_post;
     }

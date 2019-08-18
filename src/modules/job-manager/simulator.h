@@ -26,6 +26,18 @@ struct simulator *sim_ctx_create (struct job_manager *ctx);
  */
 void sim_sending_sched_request (struct simulator *ctx);
 
+/* Call after receiving an alloc response from the sched.
+ * Delays the quiescent response until the job has been started by
+ * the exec system.
+ */
+void sim_received_alloc_response (struct simulator *ctx);
+
+/* Call after receiving a start response from the exec system.
+ * Triggers a check for quiescense.
+ */
+void sim_received_start_response (struct simulator *ctx);
+
+
 #endif /* ! _FLUX_JOB_MANAGER_SIMULATOR_H */
 
 /*
