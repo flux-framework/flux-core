@@ -12,11 +12,12 @@
 #define _SHELL_INFO_H
 
 #include <flux/core.h>
+#include <flux/shell.h>
+
 #include <jansson.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "shell.h"
 #include "jobspec.h"
 #include "rcalc.h"
 

@@ -71,6 +71,7 @@
 #include "src/common/libpmi/clique.h"
 #include "src/common/libutil/log.h"
 
+#include "internal.h"
 #include "task.h"
 #include "pmi.h"
 

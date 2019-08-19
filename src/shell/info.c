@@ -19,6 +19,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
 
+#include "internal.h"
 #include "info.h"
 #include "jobspec.h"
 

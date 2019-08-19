@@ -47,7 +47,7 @@
 #include "task.h"
 #include "io.h"
 #include "svc.h"
-#include "shell.h"
+#include "internal.h"
 
 struct shell_io {
     flux_shell_t *shell;

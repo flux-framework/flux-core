@@ -12,10 +12,10 @@
 #define SHELL_IO_H
 
 #include <flux/core.h>
+#include <flux/shell.h>
 
 #include "info.h"
 #include "task.h"
-#include "shell.h"
 
 struct shell_io;
 

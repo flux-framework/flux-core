@@ -8,40 +8,17 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _SHELL_H
-#define _SHELL_H
+#ifndef FLUX_SHELL_H
+#define FLUX_SHELL_H
 
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 
-/* Later this typedef may be exported publicly. e.g. to shell plugins,
- * but for now keep it internal to avoid the need for another header.
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_shell flux_shell_t;
-
-struct flux_shell {
-    flux_jobid_t jobid;
-    int broker_rank;
-
-    optparse_t *p;
-    flux_t *h;
-    flux_reactor_t *r;
-
-    struct shell_info *info;
-    struct shell_svc *svc;
-    struct shell_io *io;
-    struct shell_pmi *pmi;
-    zlist_t *tasks;
-
-    zhashx_t *completion_refs;
-
-    int rc;
-
-    bool verbose;
-    bool standalone;
-};
-
 
 /*
  *  Take a "completion reference" on the shell object `shell`.
@@ -77,8 +54,9 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
                                   flux_msg_handler_f cb,
                                   void *arg);
 
-#endif /* !_SHELL_H */
+#ifdef __cplusplus
+}
+#endif
 
-/*
- * vi:tabstop=4 shiftwidth=4 expandtab
- */
+#endif /* !FLUX_SHELL_H */
+

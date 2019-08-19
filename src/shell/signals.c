@@ -29,7 +29,7 @@
 #include "signal.h"
 #include "task.h"
 #include "info.h"
-#include "shell.h"
+#include "internal.h"
 
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)

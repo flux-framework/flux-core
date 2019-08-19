@@ -11,7 +11,7 @@
 #ifndef SHELL_SIGNAL_H
 #define SHELL_SIGNAL_H
 
-#include "shell.h"
+#include <flux/shell.h>
 
 /*  Initialize shell signal handlers
  */

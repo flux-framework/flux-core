@@ -25,7 +25,7 @@
 #include "kill.h"
 #include "task.h"
 #include "info.h"
-#include "shell.h"
+#include "internal.h"
 
 static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)

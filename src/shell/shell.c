@@ -26,7 +26,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
 
-#include "shell.h"
+#include "internal.h"
 #include "info.h"
 #include "svc.h"
 #include "io.h"

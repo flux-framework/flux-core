@@ -23,6 +23,7 @@ fluxlibexec_PROGRAMS = flux-shell
 flux_shell_SOURCES = \
 	shell.c \
 	shell.h \
+	internal.h \
 	info.c \
 	info.h \
 	task.c \

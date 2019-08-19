@@ -12,9 +12,9 @@
 #define SHELL_PMI_H
 
 #include <flux/core.h>
+#include <flux/shell.h>
 #include <czmq.h>
 
-#include "shell.h"
 #include "info.h"
 #include "task.h"
 
