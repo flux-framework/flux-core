@@ -25,4 +25,27 @@ test_expect_success "flux subinstance leaves local_uri, remote_uri in KVS" '
 	flux job info $id guest.flux.remote_uri
 '
 
+test_expect_success "flux --parent works in subinstance" '
+	id=$(flux jobspec srun -n1 \
+               flux start flux --parent kvs put test=ok \
+               | flux job submit) &&
+	flux job attach $id &&
+	flux job info $id guest.test > guest.test &&
+	cat <<-EOF >guest.test.exp &&
+	ok
+	EOF
+	test_cmp guest.test.exp guest.test
+'
+
+test_expect_success "flux --parent --parent works in subinstance" '
+	id=$(flux jobspec srun -n1 \
+              flux start flux start flux --parent --parent kvs put test=ok \
+	      | flux job submit) &&
+	flux job attach $id &&
+	flux job info $id guest.test > guest2.test &&
+	cat <<-EOF >guest2.test.exp &&
+	ok
+	EOF
+	test_cmp guest2.test.exp guest2.test
+'
 test_done
