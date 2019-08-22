@@ -744,6 +744,13 @@ struct attach_ctx {
     flux_watcher_t *sigtstp_w;
     struct timespec t_sigint;
     bool show_events;
+    optparse_t *p;
+    bool started;
+    bool missing_output_ok;
+    int stdout_count;
+    int stderr_count;
+    int stdout_eof_count;
+    int stderr_eof_count;
 };
 
 void attach_cancel_continuation (flux_future_t *f, void *arg)
@@ -821,6 +828,9 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                  severity,
                  note ? note : "");
     }
+    else if (!strcmp (name, "start")) {
+        ctx->started = true;
+    }
     else {
         if (!strcmp (name, "finish")) {
             if (json_unpack (context, "{s:i}", "status", &status) < 0)
@@ -860,57 +870,85 @@ done:
     flux_watcher_stop (ctx->sigtstp_w);
 }
 
-void print_output (flux_t *h, flux_jobid_t id, optparse_t *p, bool missing_ok)
+void print_output_continuation (flux_future_t *f, void *arg)
 {
-    const char *s;
-    flux_future_t *f;
-    json_t *output;
-    size_t index;
-    json_t *entry;
+    struct attach_ctx *ctx = arg;
+    const char *entry;
+    json_t *o;
+    const char *name;
+    json_t *context;
 
-    if (!(f = flux_rpc_pack (h,
-                             "job-info.lookup",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:I s:[s] s:i}",
-                             "id", id,
-                             "keys", "guest.output",
-                             "flags", 0)))
-        log_err_exit ("job-info.lookup");
-    if (flux_rpc_get_unpack (f, "{s:s}", "guest.output", &s) < 0) {
-        if (errno == ENOENT && missing_ok)
-            goto out;
-        log_err_exit ("guest.output");
+    if (flux_job_event_watch_get (f, &entry) < 0) {
+        if (errno == ENODATA
+            || (errno == ENOENT && ctx->missing_output_ok))
+            goto done;
+        log_msg_exit ("flux_job_event_watch_get: %s",
+                      future_strerror (f, errno));
     }
-    if (!(output = eventlog_decode (s)))
-        log_msg_exit ("error decoding guest.output eventlog");
-    json_array_foreach (output, index, entry) {
-        json_t *context;
-        const char *name;
-        const char *stream = NULL;
+    if (!(o = eventlog_entry_decode (entry)))
+        log_err_exit ("eventlog_entry_decode");
+    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+        log_err_exit ("eventlog_entry_parse");
+
+    if (!strcmp (name, "header")) {
+        json_t *o = json_object_get (context, "count");
+        if (!o)
+            log_msg_exit ("io header missing task_count");
+        if (json_unpack (o, "{s:i s:i}",
+                         "stdout", &ctx->stdout_count,
+                         "stderr", &ctx->stderr_count) < 0)
+            log_msg_exit ("error parsing stream counts");
+    }
+    else if (!strcmp (name, "data")) {
+        FILE *fp;
+        int *eof_count_ptr;
+        const char *stream;
         int rank;
-        char *data = NULL;
-        int len = 0;
-        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
-            log_err_exit ("malformed eventlog");
-        if (!strcmp (name, "header")) {
-            // TODO: acquire per-stream encoding type
+        char *data;
+        int len;
+        bool eof;
+        if (iodecode (context, &stream, &rank, &data, &len, &eof) < 0)
+            log_msg_exit ("malformed event context");
+        if (!strcmp (stream, "stdout")) {
+            fp = stdout;
+            eof_count_ptr = &ctx->stdout_eof_count;
         }
-        else if (!strcmp (name, "data")) {
-            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
-                log_msg_exit ("malformed event context");
-            if (len > 0) {
-                FILE *fp = !strcmp (stream, "stdout") ? stdout : stderr;
-                if (optparse_hasopt (p, "label"))
-                    fprintf (fp, "%d: ", rank);
-                fwrite (data, len, 1, fp);
-            }
-            free (data);
+        else {
+            fp = stderr;
+            eof_count_ptr = &ctx->stderr_eof_count;
         }
+        if (len > 0) {
+            if (optparse_hasopt (ctx->p, "label"))
+                fprintf (fp, "%d: ", rank);
+            fwrite (data, len, 1, fp);
+        }
+        if (eof)
+            (*eof_count_ptr)++;
+        free (data);
     }
-    json_decref (output);
-out:
+
+    json_decref (o);
+
+    if (ctx->stdout_eof_count >= ctx->stdout_count
+        && ctx->stderr_eof_count >= ctx->stderr_count)
+        goto done;
+
+    flux_future_reset (f);
+    return;
+done:
     flux_future_destroy (f);
+}
+
+void print_output (struct attach_ctx *ctx)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_job_event_watch (ctx->h, ctx->id, "guest.output")))
+        log_err_exit ("flux_job_event_watch");
+    if (flux_future_then (f, -1., print_output_continuation, ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (ctx->h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
 }
 
 int cmd_attach (optparse_t *p, int argc, char **argv)
@@ -928,6 +966,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     }
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
     ctx.show_events = optparse_hasopt (p, "show-events");
+    ctx.p = p;
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -954,7 +993,11 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
-    print_output (ctx.h, ctx.id, p, ctx.exit_code == 0 ? false : true);
+    /* if job never ran, no output */
+    if (ctx.started) {
+        ctx.missing_output_ok = ctx.exit_code == 0 ? false : true;
+        print_output (&ctx);
+    }
 
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
