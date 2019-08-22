@@ -133,6 +133,10 @@ static struct optparse_option eventlog_opts[] =  {
     { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify time format: raw, iso, offset",
     },
+    { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Specify alternate eventlog path suffix "
+               "(e.g. \"guest.exec.eventlog\")",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -154,6 +158,10 @@ static struct optparse_option wait_event_opts[] =  {
     },
     { .name = "verbose", .key = 'v', .has_arg = 0,
       .usage = "Output all events before matched event",
+    },
+    { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Specify alternate eventlog path suffix "
+               "(e.g. \"guest.exec.eventlog\")",
     },
     OPTPARSE_TABLE_END
 };
@@ -223,14 +231,15 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "[-f text|json] [-T raw|iso|offset] id",
+      "[-f text|json] [-T raw|iso|offset] [-p path] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
       eventlog_opts
     },
     { "wait-event",
-      "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] id event",
+      "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] "
+      "[-p path] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
@@ -925,7 +934,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
 
-    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id)))
+    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id, "eventlog")))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (ctx.f, -1, attach_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -1085,6 +1094,7 @@ void entry_format_parse_options (optparse_t *p, struct entry_format *e)
 struct eventlog_ctx {
     optparse_t *p;
     flux_jobid_t id;
+    const char *path;
     struct entry_format e;
 };
 
@@ -1176,10 +1186,13 @@ void eventlog_continuation (flux_future_t *f, void *arg)
     size_t index;
     json_t *value;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:s}", ctx->path, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %lu not found", ctx->id);
+            if (!strcmp (ctx->path, "eventlog"))
+                log_msg_exit ("job %lu not found", ctx->id);
+            else
+                log_msg_exit ("eventlog path %s not found", ctx->path);
         }
         else
             log_err_exit ("flux_job_eventlog_lookup_get");
@@ -1214,13 +1227,14 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
     }
 
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.path = optparse_get_str (p, "path", "eventlog");
     ctx.p = p;
     entry_format_parse_options (p, &ctx.e);
 
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
                              "id", ctx.id,
-                             "keys", "eventlog",
+                             "keys", ctx.path,
                              "flags", 0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., eventlog_continuation, &ctx) < 0)
@@ -1237,6 +1251,7 @@ struct wait_event_ctx {
     const char *wait_event;
     double timeout;
     flux_jobid_t id;
+    const char *path;
     bool got_event;
     struct entry_format e;
     char *context_key;
@@ -1305,7 +1320,10 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %lu not found", ctx->id);
+            if (!strcmp (ctx->path, "eventlog"))
+                log_msg_exit ("job %lu not found", ctx->id);
+            else
+                log_msg_exit ("eventlog path %s not found", ctx->path);
         }
         else if (errno == ETIMEDOUT) {
             flux_future_destroy (f);
@@ -1367,6 +1385,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
+    ctx.path = optparse_get_str (p, "path", "eventlog");
     entry_format_parse_options (p, &ctx.e);
     if ((str = optparse_get_str (p, "match-context", NULL))) {
         ctx.context_key = xstrdup (str);
@@ -1376,7 +1395,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
         *ctx.context_value++ = '\0';
     }
 
-    if (!(f = flux_job_event_watch (h, ctx.id)))
+    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, ctx.timeout, wait_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");

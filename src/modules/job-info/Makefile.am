@@ -21,7 +21,9 @@ job_info_la_SOURCES = \
 	lookup.h \
 	lookup.c \
 	watch.h \
-	watch.c
+	watch.c \
+	guest_watch.h \
+	guest_watch.c
 
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_info_la_LIBADD = $(fluxmod_libadd) \

@@ -18,6 +18,7 @@
 #include "allow.h"
 #include "lookup.h"
 #include "watch.h"
+#include "guest_watch.h"
 
 static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
@@ -34,6 +35,7 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     watchers_cancel (ctx, sender, FLUX_MATCHTAG_NONE);
+    guest_watchers_cancel (ctx, sender, FLUX_MATCHTAG_NONE);
     free (sender);
 }
 
@@ -41,10 +43,14 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
+    int lookups = zlist_size (ctx->lookups);
+    int watchers = zlist_size (ctx->watchers);
+    int guest_watchers = zlist_size (ctx->guest_watchers);
 
-    if (flux_respond_pack (h, msg, "{s:i s:i}",
-                           "lookups", zlist_size (ctx->lookups),
-                           "watchers", zlist_size (ctx->watchers)) < 0) {
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i}",
+                           "lookups", lookups,
+                           "watchers", watchers,
+                           "guest_watchers", guest_watchers) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -72,6 +78,16 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.guest-eventlog-watch",
+      .cb           = guest_watch_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.guest-eventlog-watch-cancel",
+      .cb           = guest_watch_cancel_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.disconnect",
       .cb           = disconnect_cb,
       .rolemask     = 0
@@ -96,6 +112,10 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             watch_cleanup (ctx);
             zlist_destroy (&ctx->watchers);
         }
+        if (ctx->guest_watchers) {
+            guest_watch_cleanup (ctx);
+            zlist_destroy (&ctx->guest_watchers);
+        }
         free (ctx);
         errno = saved_errno;
     }
@@ -112,6 +132,8 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     if (!(ctx->lookups = zlist_new ()))
         goto error;
     if (!(ctx->watchers = zlist_new ()))
+        goto error;
+    if (!(ctx->guest_watchers = zlist_new ()))
         goto error;
     return ctx;
 error:

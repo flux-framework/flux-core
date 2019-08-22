@@ -19,6 +19,7 @@ struct info_ctx {
     flux_msg_handler_t **handlers;
     zlist_t *lookups;
     zlist_t *watchers;
+    zlist_t *guest_watchers;
 };
 
 #endif /* _FLUX_JOB_INFO_INFO_H */
