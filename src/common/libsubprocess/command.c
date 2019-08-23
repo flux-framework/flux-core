@@ -756,6 +756,34 @@ zlist_t *flux_cmd_channel_list (flux_cmd_t *cmd)
     return cmd->channels;
 }
 
+int flux_cmd_delete_opts (flux_cmd_t *cmd, const char **substrings)
+{
+    zlist_t *keys = NULL;
+    const char *key;
+
+    if (!(keys = zhash_keys (cmd->opts))) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    key = zlist_first (keys);
+    while (key) {
+        const char **str = substrings;
+        while ((*str)) {
+            if (strstr (key, (*str))) {
+                zhash_delete (cmd->opts, key);
+                break;
+            }
+            str++;
+        }
+        key = zlist_next (keys);
+    }
+
+    zlist_destroy (&keys);
+    return 0;
+}
+
+
 /*
  * vi: ts=4 sw=4 expandtab
  */
