@@ -46,11 +46,14 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-optparse.la
+	$(top_builddir)/src/common/libflux-optparse.la \
+	$(LUA_LIB)
 
 flux_shell_LDFLAGS =
 
-TESTS = test_jobspec.t
+TESTS = \
+	test_jobspec.t \
+	test_plugstack.t
 
 test_ldadd = \
 	$(builddir)/libshell.la \
@@ -73,3 +76,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_jobspec_t_SOURCES = test/jobspec.c
 test_jobspec_t_CPPFLAGS = $(test_cppflags)
 test_jobspec_t_LDADD = $(test_ldadd)
+
+test_plugstack_t_SOURCES = test/plugstack.c
+test_plugstack_t_CPPFLAGS = $(test_cppflags)
+test_plugstack_t_LDADD = $(test_ldadd)
