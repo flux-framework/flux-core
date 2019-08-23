@@ -21,9 +21,10 @@
 
 #define CHANNEL_MAGIC    0xcafebeef
 
-#define CHANNEL_READ  0x01
-#define CHANNEL_WRITE 0x02
-#define CHANNEL_FD    0x04
+#define CHANNEL_READ     0x01
+#define CHANNEL_WRITE    0x02
+#define CHANNEL_FD       0x04
+#define CHANNEL_INPUT_FD 0x08
 
 struct subprocess_channel {
     int magic;
@@ -40,6 +41,7 @@ struct subprocess_channel {
     /* local */
     int parent_fd;
     int child_fd;
+    int input_fd;
     flux_watcher_t *buffer_write_w;
     flux_watcher_t *buffer_read_w;
     /* buffer_read_stopped_w is a "sub-in" watcher if buffer_read_w is

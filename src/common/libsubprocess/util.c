@@ -122,6 +122,37 @@ cleanup:
     return rv;
 }
 
+int cmd_option_input_fd (flux_subprocess_t *p, const char *name, int *fdp)
+{
+    char *var;
+    const char *val;
+    int rv = -1;
+
+    (*fdp) = -1;
+
+    if (asprintf (&var, "%s_INPUT_FD", name) < 0)
+        goto cleanup;
+
+    if ((val = flux_cmd_getopt (p->cmd, var))) {
+        char *endptr;
+        int tmp;
+        errno = 0;
+        tmp = strtol (val, &endptr, 10);
+        if (errno
+            || endptr[0] != '\0'
+            || tmp < 0) {
+            errno = EINVAL;
+            goto cleanup;
+        }
+        (*fdp) = tmp;
+    }
+
+    rv = 0;
+cleanup:
+    free (var);
+    return rv;
+}
+
 /*
  * vi: ts=4 sw=4 expandtab
  */

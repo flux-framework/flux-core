@@ -48,6 +48,8 @@ void channel_destroy (void *arg)
             close (c->parent_fd);
         if (c->child_fd != -1)
             close (c->child_fd);
+        if (c->input_fd != -1)
+            close (c->input_fd);
         flux_watcher_destroy (c->buffer_write_w);
         flux_watcher_destroy (c->buffer_read_w);
         flux_watcher_destroy (c->buffer_read_stopped_w);
@@ -91,6 +93,7 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
 
     c->parent_fd = -1;
     c->child_fd = -1;
+    c->input_fd = -1;
     c->buffer_write_w = NULL;
     c->buffer_read_w = NULL;
     c->buffer_read_stopped_w = NULL;
@@ -666,7 +669,9 @@ flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
 static int check_local_only_cmd_options (const flux_cmd_t *cmd)
 {
     /* check for options that do not apply to remote subprocesses */
-    const char *substrings[] = { "STREAM_STOP", NULL };
+    const char *substrings[] = { "STREAM_STOP",
+                                 "INPUT_FD",
+                                 NULL };
 
     return flux_cmd_find_opts (cmd, substrings);
 }

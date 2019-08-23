@@ -282,6 +282,18 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    - name + "_STREAM_STOP" - configure start/stop on channel name
  *    - stdout_STREAM_STOP - configure start/stop for stdout
  *    - stderr_STREAM_STOP - configure start/stop for stderr
+ *
+ *  "INPUT_FD" option
+ *
+ *    By default, standard input is sent to a subprocess via the
+ *    flux_subprocess_write() call and the stream "stdin".  This
+ *    option will inform the subprocess to read stdin directly from a
+ *    specified file descriptor.  As a result, functions liked
+ *    flux_subprocess_write() will return EINVAL when attempting to
+ *    write to "stdin".  This option can only be used on local
+ *    subprocesses.
+ *
+ *    - stdin_INPUT_FD - file descriptor for stdin
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
