@@ -13,6 +13,8 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libshell.la
 
 libshell_la_SOURCES = \
+	plugstack.c \
+	plugstack.h \
 	jobspec.c \
 	jobspec.h \
 	rcalc.c \
