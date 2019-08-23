@@ -16,6 +16,8 @@
 #include <flux/optparse.h>
 #include <flux/shell.h>
 
+#include "src/common/libutil/aux.h"
+
 struct flux_shell {
     flux_jobid_t jobid;
     int broker_rank;
@@ -36,6 +38,8 @@ struct flux_shell {
 
     bool verbose;
     bool standalone;
+
+    struct aux_item *aux;
 };
 
 #endif /* !_SHELL_INTERNAL_H */

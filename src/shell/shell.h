@@ -20,6 +20,13 @@ extern "C" {
 
 typedef struct flux_shell flux_shell_t;
 
+int flux_shell_aux_set (flux_shell_t *shell,
+                        const char *name,
+                        void *aux,
+                        flux_free_f free_fn);
+
+void * flux_shell_aux_get (flux_shell_t *shell, const char *name);
+
 /*
  *  Take a "completion reference" on the shell object `shell`.
  *  This function takes a named reference on the shell so that it will
@@ -59,4 +66,3 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
 #endif
 
 #endif /* !FLUX_SHELL_H */
-

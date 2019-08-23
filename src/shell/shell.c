@@ -143,6 +143,18 @@ static void shell_connect_flux (flux_shell_t *shell)
     }
 }
 
+int flux_shell_aux_set (flux_shell_t *shell,
+                        const char *key,
+                        void *val,
+                        flux_free_f free_fn)
+{
+    return aux_set (&shell->aux, key, val, free_fn);
+}
+
+void * flux_shell_aux_get (flux_shell_t *shell, const char *key)
+{
+    return aux_get (shell->aux, key);
+}
 
 int flux_shell_add_event_handler (flux_shell_t *shell,
                                   const char *subtopic,
@@ -207,6 +219,7 @@ static void shell_finalize (flux_shell_t *shell)
         }
         zlist_destroy (&shell->tasks);
     }
+    aux_destroy (&shell->aux);
     shell_io_destroy (shell->io);
     shell_pmi_destroy (shell->pmi);
     shell_svc_destroy (shell->svc);
