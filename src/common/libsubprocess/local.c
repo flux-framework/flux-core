@@ -13,6 +13,8 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <wait.h>
 #include <unistd.h>
 #include <errno.h>
@@ -155,7 +157,8 @@ static int channel_local_setup (flux_subprocess_t *p,
                                 flux_watcher_f in_cb,
                                 flux_watcher_f out_cb,
                                 const char *name,
-                                int channel_flags)
+                                int channel_flags,
+                                int input_fd)
 {
     struct subprocess_channel *c = NULL;
     int fds[2] = { -1, -1 };
@@ -234,6 +237,12 @@ static int channel_local_setup (flux_subprocess_t *p,
             p->channels_eof_expected++;
         }
     }
+    else {
+        if (channel_flags & CHANNEL_INPUT_FD) {
+            assert (input_fd >= 0);
+            c->input_fd = input_fd;
+        }
+    }
 
     if (channel_flags & CHANNEL_FD) {
         if (asprintf (&e, "%s", name) < 0) {
@@ -280,6 +289,9 @@ error:
 
 static int local_setup_stdio (flux_subprocess_t *p)
 {
+    int flags;
+    int fd;
+
     if (p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)
         return 0;
 
@@ -287,12 +299,21 @@ static int local_setup_stdio (flux_subprocess_t *p)
      * and/or write, and the buffer's automatically get a NUL char
      * appended on reads */
 
+    if (cmd_option_input_fd (p, "stdin", &fd) < 0)
+        return -1;
+
+    if (fd >= 0)
+        flags = CHANNEL_INPUT_FD;
+    else
+        flags = CHANNEL_WRITE;
+
     if (channel_local_setup (p,
                              NULL,
                              local_in_cb,
                              NULL,
                              "stdin",
-                             CHANNEL_WRITE) < 0)
+                             flags,
+                             fd) < 0)
         return -1;
 
     if (p->ops.on_stdout) {
@@ -301,7 +322,8 @@ static int local_setup_stdio (flux_subprocess_t *p)
                                  NULL,
                                  local_stdout_cb,
                                  "stdout",
-                                 CHANNEL_READ) < 0)
+                                 CHANNEL_READ,
+                                 -1) < 0)
             return -1;
     }
 
@@ -311,7 +333,8 @@ static int local_setup_stdio (flux_subprocess_t *p)
                                  NULL,
                                  local_stderr_cb,
                                  "stderr",
-                                 CHANNEL_READ) < 0)
+                                 CHANNEL_READ,
+                                 -1) < 0)
             return -1;
     }
 
@@ -343,7 +366,8 @@ static int local_setup_channels (flux_subprocess_t *p)
                                  local_in_cb,
                                  p->ops.on_channel_out ? local_out_cb : NULL,
                                  name,
-                                 channel_flags) < 0)
+                                 channel_flags,
+                                 -1) < 0)
             return -1;
         name = zlist_next (channels);
     }
@@ -459,8 +483,16 @@ static int local_child (flux_subprocess_t *p)
 
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
         if ((c = zhash_lookup (p->channels, "stdin"))) {
+            assert ((c->flags & CHANNEL_WRITE)
+                    || (c->flags & CHANNEL_INPUT_FD));
             if (c->flags & CHANNEL_WRITE) {
                 if (dup2 (c->child_fd, STDIN_FILENO) < 0) {
+                    flux_log_error (p->h, "dup2");
+                    _exit (1);
+                }
+            }
+            else if (c->flags & CHANNEL_INPUT_FD) {
+                if (dup2 (c->input_fd, STDIN_FILENO) < 0) {
                     flux_log_error (p->h, "dup2");
                     _exit (1);
                 }
