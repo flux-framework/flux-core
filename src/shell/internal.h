@@ -31,6 +31,7 @@ struct flux_shell {
     struct shell_io *io;
     struct shell_pmi *pmi;
     zlist_t *tasks;
+    flux_shell_task_t *current_task;
 
     zhashx_t *completion_refs;
 

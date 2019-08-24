@@ -415,6 +415,8 @@ int main (int argc, char *argv[])
 
         if (!(task = shell_task_create (shell.info, i)))
             log_err_exit ("shell_task_create index=%d", i);
+        shell.current_task = task;
+
         if (shell_task_pmi_enable (task, shell_pmi_task_ready, shell.pmi) < 0)
             log_err_exit ("shell_task_pmi_enable");
         if (shell_task_io_enable (task, shell_io_task_ready, shell.io) < 0)
@@ -429,6 +431,7 @@ int main (int argc, char *argv[])
             log_msg_exit ("flux_shell_add_completion_ref");
 
     }
+    shell.current_task = NULL;
 
     /* Main reactor loop
      * Exits when all completion references released
