@@ -195,6 +195,28 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
     return 0;
 }
 
+int flux_shell_service_register (flux_shell_t *shell,
+                                 const char *method,
+                                 flux_msg_handler_f cb,
+                                 void *arg)
+{
+    return shell_svc_register (shell->svc, method, cb, arg);
+}
+
+flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
+                                    const char *method,
+                                    int shell_rank,
+                                    int flags,
+                                    const char *fmt, ...)
+{
+    flux_future_t *f;
+    va_list ap;
+    va_start (ap, fmt);
+    f = shell_svc_vpack (shell->svc, method, shell_rank, flags, fmt, ap);
+    va_end (ap);
+    return f;
+}
+
 flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
 {
     return shell->current_task;

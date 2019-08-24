@@ -73,15 +73,14 @@ static int build_topic (struct shell_svc *svc,
     return 0;
 }
 
-flux_future_t *shell_svc_pack (struct shell_svc *svc,
-                               const char *method,
-                               int shell_rank,
-                               int flags,
-                               const char *fmt, ...)
+flux_future_t *shell_svc_vpack (struct shell_svc *svc,
+                                const char *method,
+                                int shell_rank,
+                                int flags,
+                                const  char *fmt,
+                                va_list ap)
 {
     char topic[TOPIC_STRING_SIZE];
-    flux_future_t *f;
-    va_list ap;
     int rank;
 
     if (lookup_rank (svc, shell_rank, &rank) < 0)
@@ -89,10 +88,20 @@ flux_future_t *shell_svc_pack (struct shell_svc *svc,
     if (build_topic (svc, method, topic, sizeof (topic)) < 0)
         return NULL;
 
-    va_start (ap, fmt);
-    f = flux_rpc_vpack (svc->shell->h, topic, rank, flags, fmt, ap);
-    va_end (ap);
+    return flux_rpc_vpack (svc->shell->h, topic, rank, flags, fmt, ap);
+}
 
+flux_future_t *shell_svc_pack (struct shell_svc *svc,
+                               const char *method,
+                               int shell_rank,
+                               int flags,
+                               const char *fmt, ...)
+{
+    flux_future_t *f;
+    va_list ap;
+    va_start (ap, fmt);
+    f = shell_svc_vpack (svc, method, shell_rank, flags, fmt, ap);
+    va_end (ap);
     return f;
 }
 

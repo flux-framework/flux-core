@@ -66,6 +66,21 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
                                   flux_msg_handler_f cb,
                                   void *arg);
 
+/*  Register service handler for `method` with the shell
+ */
+int flux_shell_service_register (flux_shell_t *shell,
+                                 const char *method,
+                                 flux_msg_handler_f cb,
+                                 void *arg);
+
+/*  Send an rpc to shell `method` by shell rank
+ */
+flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
+                                    const char *method,
+                                    int shell_rank,
+                                    int flags,
+                                    const char *fmt, ...);
+
 /*  flux_shell_task_t API:
  */
 
