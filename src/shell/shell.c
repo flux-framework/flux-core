@@ -31,7 +31,6 @@
 #include "info.h"
 #include "svc.h"
 #include "io.h"
-#include "pmi.h"
 #include "task.h"
 #include "kill.h"
 #include "signals.h"
@@ -233,7 +232,6 @@ static void shell_finalize (flux_shell_t *shell)
     aux_destroy (&shell->aux);
     plugstack_destroy (shell->plugstack);
     shell_io_destroy (shell->io);
-    shell_pmi_destroy (shell->pmi);
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
@@ -422,14 +420,6 @@ int main (int argc, char *argv[])
      */
     if (!(shell.svc = shell_svc_create (&shell)))
         log_err_exit ("shell_svc_create");
-
-    /* Create PMI engine
-     * Uses 'h' for KVS access only if info->shell_size > 1.
-     * Tasks send PMI wire proto to pmi.c via shell_pmi_task_ready() callback
-     * registered below.
-     */
-    if (!(shell.pmi = shell_pmi_create (&shell)))
-        log_err_exit ("shell_pmi_create");
 
     /* Create handler for stdio.
      */

@@ -31,16 +31,6 @@
  *    The provided callback notifies shell when a line can be read from
  *    the channel.  Use flux_subprocess_read_line (task->proc, ...) to read it.
  *
- * PMI
- *    Call shell_task_pmi_enable() to set up PMI_FD channel.
- *    This sets the following environment variables for the task:
- *    . PMI_FD
- *    . PMI_RANK
- *    . PMI_SIZE
- *    The provided callback notifies shell main when a line of data
- *    (a PMI wire protocol request) can be read from the channel.
- *    Use flux_subprocess_read_line (task->proc, ...) to read it.
- *
  * Upon task completion, set task->rc and call shell_task_completion_f
  * supplied to shell task start.
  *
@@ -171,21 +161,6 @@ int shell_task_io_enable (struct shell_task *task,
     return 0;
 }
 
-int shell_task_pmi_enable (struct shell_task *task,
-                           shell_task_pmi_ready_f cb,
-                           void *arg)
-{
-    if (flux_cmd_add_channel (task->cmd, "PMI_FD") < 0)
-        return -1;
-    if (flux_cmd_setenvf (task->cmd, 1, "PMI_RANK", "%d", task->rank) < 0)
-        return -1;
-    if (flux_cmd_setenvf (task->cmd, 1, "PMI_SIZE", "%d", task->size) < 0)
-        return -1;
-    task->pmi_cb = cb;
-    task->pmi_cb_arg = arg;
-    return 0;
-}
-
 static void subproc_io_cb (flux_subprocess_t *p, const char *stream)
 {
     struct shell_task *task = flux_subprocess_aux_get (p, "flux::task");
@@ -196,10 +171,10 @@ static void subproc_io_cb (flux_subprocess_t *p, const char *stream)
 
 static void subproc_channel_cb (flux_subprocess_t *p, const char *stream)
 {
-    struct shell_task *task = flux_subprocess_aux_get (p, "flux::task");
-
-    if (task->pmi_cb)
-        task->pmi_cb (task, task->pmi_cb_arg);
+    flux_shell_task_t *task = flux_subprocess_aux_get (p, "flux::task");
+    struct channel_watcher *cw = zhashx_lookup (task->subscribers, stream);
+    if (cw)
+        (*cw->cb) (task, stream, cw->arg);
 }
 
 static void subproc_completion_cb (flux_subprocess_t *p)

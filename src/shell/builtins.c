@@ -14,13 +14,25 @@
 #include "config.h"
 #endif
 
+#include "src/common/libutil/log.h"
+
 #include "internal.h"
 #include "builtins.h"
 #include "plugstack.h"
 
 static struct shell_builtin builtin_list_end = { 0 };
 
+/*
+ *  Unfortunate manually maintained list of builtins below.
+ *  Builtin module should export a struct shell_builtin under a
+ *  well known name, with that name listed as 'extern' below.
+ *  Then, the name should be added to the 'builtins' list
+ *  to get the builtin automatically loaded at shell startup.
+ */
+extern struct shell_builtin builtin_pmi;
+
 static struct shell_builtin * builtins [] = {
+    &builtin_pmi,
     &builtin_list_end,
 };
 

@@ -8,22 +8,28 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* PMI-1 service to job
+/* builtin PMI-1 plugin for jobs
  *
  * Provide PMI-1 service so that an MPI or Flux job can bootstrap.
  * Much of the work is done by the PMI-1 wire protocol engine in
  * libpmi/simple_server.c and libsubprocess socketpair channels.
  *
- * In task.c, shell_task_pmi_enable() sets up the subprocess channel,
- * sets the PMI_FD, PMI_RANK, and PMI_SIZE environment variables, and
- * arranges for a callback to be invoked when the client has sent
- * a PMI request on the channel.  The shell mainline registers
- * shell_pmi_task_ready(), below, as this callback.
+ * At startup this module is registered as a builtin shell plugin under
+ * the name "pmi"via an entry in builtins.c builtins array.
  *
- * shell_pmi_task_ready() reads the request from the channel and pushes
- * it into the PMI-1 protocol engine.  If the request can be immediately
- * answered, the shell_pmi_response_send() callback registered with the engine
- * is invoked, which writes the response to the subprocess channel.
+ * At shell "init", the plugin intiailizes a PMI object including the
+ * pmi simple server and empty local kvs cache.
+ *
+ * During each task's "task init" callback, the pmi plugin sets up the
+ * subprocess channel, sets the PMI_FD, PMI_RANK, and PMI_SIZE environment
+ * variables, and subscribes to the newly created PMI_FD channel in order
+ * to read PMI requests.
+ *
+ * The output callback pmi_fd_read_cb() reads the request from the PMI_FD
+ * channel and pushes it into the PMI-1 protocol engine.  If the request
+ * can be immediately answered, the shell_pmi_response_send() callback
+ * registered with the engine is invoked, which writes the response to
+ * the subprocess channel.
  *
  * Other requests have callbacks from the engine to provide data,
  * which is fed back to the engine, which then calls shell_pmi_response_send().
@@ -71,9 +77,9 @@
 #include "src/common/libpmi/clique.h"
 #include "src/common/libutil/log.h"
 
+#include "builtins.h"
 #include "internal.h"
 #include "task.h"
-#include "pmi.h"
 
 #define FQ_KVS_KEY_MAX (SIMPLE_KVS_KEY_MAX + 128)
 #define KVSNAME "pmi"
@@ -267,8 +273,9 @@ static void shell_pmi_debug_trace (void *client, const char *line)
     fprintf (stderr, "%d: %s", task->rank, line);
 }
 
-// shell_task_pmi_ready_f callback footprint
-void shell_pmi_task_ready (struct shell_task *task, void *arg)
+static void pmi_fd_cb (flux_shell_task_t *task,
+                       const char *stream,
+                       void *arg)
 {
     struct shell_pmi *pmi = arg;
     int len;
@@ -307,7 +314,7 @@ void shell_pmi_task_ready (struct shell_task *task, void *arg)
  * otherwise consume another array slot.  Finally, encode to string, put it
  * in the local KVS hash, and free array.
  */
-int init_clique (struct shell_pmi *pmi)
+static int init_clique (struct shell_pmi *pmi)
 {
     struct pmi_map_block *blocks;
     int nblocks;
@@ -379,7 +386,7 @@ out:
     return rc;
 }
 
-void shell_pmi_destroy (struct shell_pmi *pmi)
+static void pmi_destroy (struct shell_pmi *pmi)
 {
     if (pmi) {
         int saved_errno = errno;
@@ -417,7 +424,8 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .debug_trace    = shell_pmi_debug_trace,
 };
 
-struct shell_pmi *shell_pmi_create (flux_shell_t *shell)
+
+static struct shell_pmi *pmi_create (flux_shell_t *shell)
 {
     struct shell_pmi *pmi;
     struct shell_info *info = shell->info;
@@ -447,9 +455,47 @@ struct shell_pmi *shell_pmi_create (flux_shell_t *shell)
         goto error;
     return pmi;
 error:
-    shell_pmi_destroy (pmi);
+    pmi_destroy (pmi);
     return NULL;
 }
+
+static int shell_pmi_init (flux_shell_t *shell)
+{
+    struct shell_pmi *pmi = pmi_create (shell);
+    if (!pmi)
+        return -1;
+    if (flux_shell_aux_set (shell,
+                            "shell::builtin.pmi",
+                            pmi,
+                            (flux_free_f) pmi_destroy) < 0) {
+        pmi_destroy (pmi);
+        return -1;
+    }
+    return 0;
+}
+
+static int shell_pmi_task_init (flux_shell_t *shell)
+{
+    struct shell_pmi *pmi = flux_shell_aux_get (shell, "shell::builtin.pmi");
+    flux_shell_task_t *task = flux_shell_current_task (shell);
+    flux_cmd_t *cmd = flux_shell_task_cmd (task);
+
+    if (flux_cmd_add_channel (cmd, "PMI_FD") < 0)
+        return -1;
+    if (flux_cmd_setenvf (cmd, 1, "PMI_RANK", "%d", task->rank) < 0)
+        return -1;
+    if (flux_cmd_setenvf (cmd, 1, "PMI_SIZE", "%d", task->size) < 0)
+        return -1;
+    if (flux_shell_task_channel_subscribe (task, "PMI_FD", pmi_fd_cb, pmi) < 0)
+        return -1;
+    return 0;
+}
+
+struct shell_builtin builtin_pmi = {
+    .name = "pmi",
+    .init = shell_pmi_init,
+    .task_init = shell_pmi_task_init,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
