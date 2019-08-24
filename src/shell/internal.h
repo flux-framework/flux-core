@@ -17,6 +17,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libutil/aux.h"
+#include "plugstack.h"
 
 struct flux_shell {
     flux_jobid_t jobid;
@@ -32,6 +33,8 @@ struct flux_shell {
     struct shell_pmi *pmi;
     zlist_t *tasks;
     flux_shell_task_t *current_task;
+
+    struct plugstack *plugstack;
 
     zhashx_t *completion_refs;
 

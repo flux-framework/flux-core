@@ -19,6 +19,7 @@
 struct shell_task;
 
 typedef void (*shell_task_completion_f)(struct shell_task *task, void *arg);
+typedef void (*shell_task_pre_exec_f) (struct shell_task *task, void *arg);
 typedef void (*shell_task_pmi_ready_f)(struct shell_task *task, void *arg);
 typedef void (*shell_task_io_ready_f)(struct shell_task *task,
                                       const char *name,
@@ -37,6 +38,9 @@ struct shell_task {
 
     shell_task_completion_f cb;
     void *cb_arg;
+
+    shell_task_pre_exec_f pre_exec_cb;
+    void *pre_exec_arg;
 
     shell_task_pmi_ready_f pmi_cb;
     void *pmi_cb_arg;

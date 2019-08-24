@@ -223,6 +223,12 @@ static flux_subprocess_ops_t subproc_ops = {
     .on_stderr = subproc_io_cb,
 };
 
+static void subproc_preexec_hook (flux_subprocess_t *p, void *arg)
+{
+    flux_shell_task_t *task = arg;
+    if (task->pre_exec_cb)
+        (*task->pre_exec_cb) (task, task->pre_exec_arg);
+}
 
 int shell_task_start (struct shell_task *task,
                       flux_reactor_t *r,
@@ -230,8 +236,12 @@ int shell_task_start (struct shell_task *task,
                       void *arg)
 {
     int flags = 0;
+    flux_subprocess_hooks_t hooks = {
+        .pre_exec = subproc_preexec_hook,
+        .pre_exec_arg = task,
+    };
 
-    task->proc = flux_local_exec (r, flags, task->cmd, &subproc_ops, NULL);
+    task->proc = flux_local_exec (r, flags, task->cmd, &subproc_ops, &hooks);
     if (!task->proc)
         return -1;
     if (flux_subprocess_aux_set (task->proc, "flux::task", task, NULL) < 0) {
