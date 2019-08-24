@@ -36,17 +36,18 @@ RAW = KVSWrapper(ffi, lib, prefixes=["flux_kvs", "flux_kvs_"])
 RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 
-def get_key_direct(flux_handle, key):
+def get_key_raw(flux_handle, key):
     valp = ffi.new("char *[1]")
     future = RAW.flux_kvs_lookup(flux_handle, None, 0, key)
     RAW.flux_kvs_lookup_get(future, valp)
     if valp[0] == ffi.NULL:
         return None
-
-    ret = json.loads(ffi.string(valp[0]).decode("utf-8"))
+    ret = ffi.string(valp[0]).decode("utf-8")
     RAW.flux_future_destroy(future)
     return ret
 
+def get_key_direct(flux_handle, key):
+    return json.loads(get_key_raw(flux_handle, key))
 
 def exists(flux_handle, key):
     try:
