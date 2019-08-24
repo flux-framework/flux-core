@@ -152,23 +152,6 @@ error:
     return NULL;
 }
 
-int shell_task_io_enable (struct shell_task *task,
-                          shell_task_io_ready_f cb,
-                          void *arg)
-{
-    task->io_cb = cb;
-    task->io_cb_arg = arg;
-    return 0;
-}
-
-static void subproc_io_cb (flux_subprocess_t *p, const char *stream)
-{
-    struct shell_task *task = flux_subprocess_aux_get (p, "flux::task");
-
-    if (task->io_cb)
-        task->io_cb (task, stream, task->io_cb_arg);
-}
-
 static void subproc_channel_cb (flux_subprocess_t *p, const char *stream)
 {
     flux_shell_task_t *task = flux_subprocess_aux_get (p, "flux::task");
@@ -194,8 +177,8 @@ static flux_subprocess_ops_t subproc_ops = {
     .on_completion = subproc_completion_cb,
     .on_state_change = NULL,
     .on_channel_out = subproc_channel_cb,
-    .on_stdout = subproc_io_cb,
-    .on_stderr = subproc_io_cb,
+    .on_stdout = subproc_channel_cb,
+    .on_stderr = subproc_channel_cb,
 };
 
 static void subproc_preexec_hook (flux_subprocess_t *p, void *arg)

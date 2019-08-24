@@ -30,7 +30,6 @@
 #include "builtins.h"
 #include "info.h"
 #include "svc.h"
-#include "io.h"
 #include "task.h"
 #include "kill.h"
 #include "signals.h"
@@ -253,7 +252,6 @@ static void shell_finalize (flux_shell_t *shell)
     }
     aux_destroy (&shell->aux);
     plugstack_destroy (shell->plugstack);
-    shell_io_destroy (shell->io);
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
@@ -443,11 +441,6 @@ int main (int argc, char *argv[])
     if (!(shell.svc = shell_svc_create (&shell)))
         log_err_exit ("shell_svc_create");
 
-    /* Create handler for stdio.
-     */
-    if (!(shell.io = shell_io_create (&shell)))
-        log_err_exit ("shell_io_create");
-
     /* Call shell initialization routines and "shell_init" plugins.
      */
     if (shell_init (&shell) < 0)
@@ -477,8 +470,6 @@ int main (int argc, char *argv[])
         if (shell_task_init (&shell) < 0)
             log_err_exit ("shell_task_init");
 
-        if (shell_task_io_enable (task, shell_io_task_ready, shell.io) < 0)
-            log_err_exit ("shell_task_io_enable");
         if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0)
             log_err_exit ("shell_task_start index=%d", i);
 

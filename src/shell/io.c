@@ -45,9 +45,9 @@
 #include "src/common/libioencode/ioencode.h"
 
 #include "task.h"
-#include "io.h"
 #include "svc.h"
 #include "internal.h"
+#include "builtins.h"
 
 struct shell_io {
     flux_shell_t *shell;
@@ -164,7 +164,7 @@ static int shell_io_write (struct shell_io *io,
         return -1;
     }
 
-    if (!(f = shell_svc_pack (io->shell->svc, "write", 0, 0, "O", o)))
+    if (!(f = flux_shell_rpc_pack (io->shell, "write", 0, 0, "O", o)))
         goto error;
     if (flux_future_then (f, -1, shell_io_write_completion, io) < 0)
         goto error;
@@ -313,7 +313,10 @@ struct shell_io *shell_io_create (flux_shell_t *shell)
     if (!(io->pending_writes = zlist_new ()))
         goto error;
     if (shell->info->shell_rank == 0) {
-        if (shell_svc_register (shell->svc, "write", shell_io_write_cb, io) < 0)
+        if (flux_shell_service_register (shell,
+                                         "write",
+                                         shell_io_write_cb,
+                                         io) < 0)
             goto error;
         io->eof_pending = 2 * shell->info->jobspec->task_count;
         if (flux_shell_add_completion_ref (shell, "io-leader") < 0)
@@ -331,8 +334,7 @@ error:
     return NULL;
 }
 
-// shell_task_io_ready_f callback footprint
-void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg)
+static void task_io_cb (struct shell_task *task, const char *stream, void *arg)
 {
     struct shell_io *io = arg;
     const char *data;
@@ -351,6 +353,39 @@ void shell_io_task_ready (struct shell_task *task, const char *stream, void *arg
             log_err ("write eof %s task %d", stream, task->rank);
     }
 }
+
+static int shell_io_task_init (flux_shell_t *shell)
+{
+    struct shell_io *io = flux_shell_aux_get (shell, "shell::builtin.io");
+    flux_shell_task_t *task = flux_shell_current_task (shell);
+    if (flux_shell_task_channel_subscribe (task, "stderr",
+                                           task_io_cb, io) < 0
+        || flux_shell_task_channel_subscribe (task, "stdout",
+                                              task_io_cb, io) < 0)
+        return -1;
+    return 0;
+}
+
+static int shell_io_init (flux_shell_t *shell)
+{
+    struct shell_io *io = shell_io_create (shell);
+    if (!io)
+        return -1;
+    if (flux_shell_aux_set (shell,
+                            "shell::builtin.io",
+                            io,
+                            (flux_free_f) shell_io_destroy) < 0) {
+        shell_io_destroy (io);
+        return -1;
+    }
+    return 0;
+}
+
+struct shell_builtin builtin_output = {
+    .name = "output",
+    .init = shell_io_init,
+    .task_init = shell_io_task_init
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

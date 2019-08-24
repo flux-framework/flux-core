@@ -34,7 +34,6 @@ flux_shell_SOURCES = \
 	task.h \
 	pmi.c \
 	io.c \
-	io.h \
 	svc.c \
 	svc.h \
 	kill.c \

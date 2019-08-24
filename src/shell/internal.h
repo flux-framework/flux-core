@@ -29,7 +29,6 @@ struct flux_shell {
 
     struct shell_info *info;
     struct shell_svc *svc;
-    struct shell_io *io;
     zlist_t *tasks;
     flux_shell_task_t *current_task;
 

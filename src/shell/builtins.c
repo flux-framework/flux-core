@@ -30,9 +30,11 @@ static struct shell_builtin builtin_list_end = { 0 };
  *  to get the builtin automatically loaded at shell startup.
  */
 extern struct shell_builtin builtin_pmi;
+extern struct shell_builtin builtin_output;
 
 static struct shell_builtin * builtins [] = {
     &builtin_pmi,
+    &builtin_output,
     &builtin_list_end,
 };
 

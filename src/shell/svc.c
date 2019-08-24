@@ -35,7 +35,6 @@
 
 #include "internal.h"
 #include "task.h"
-#include "io.h"
 #include "svc.h"
 
 #define TOPIC_STRING_SIZE  128
