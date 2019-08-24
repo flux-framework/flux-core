@@ -27,6 +27,7 @@
 #include "src/common/libutil/log.h"
 
 #include "internal.h"
+#include "builtins.h"
 #include "info.h"
 #include "svc.h"
 #include "io.h"
@@ -261,6 +262,9 @@ static void flux_shell_init (flux_shell_t *shell)
 
     if (!(shell->plugstack = plugstack_create ()))
         log_err_exit ("plugstack_create");
+
+    if (shell_load_builtins (shell) < 0)
+        log_err_exit ("shell_load_builtins");
 }
 
 void flux_shell_killall (flux_shell_t *shell, int signum)

@@ -26,6 +26,8 @@ flux_shell_SOURCES = \
 	shell.c \
 	shell.h \
 	internal.h \
+	builtins.c \
+	builtins.h \
 	info.c \
 	info.h \
 	task.c \
