@@ -33,7 +33,7 @@ flux_shell_SOURCES = \
 	task.c \
 	task.h \
 	pmi.c \
-	io.c \
+	output.c \
 	svc.c \
 	svc.h \
 	kill.c \
