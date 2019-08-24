@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* stdio handling
+/* std output handling
  *
  * Intercept task stdout, stderr and dispose of it according to
  * selected I/O mode.
@@ -24,12 +24,12 @@
  * - all shells (even the leader) send I/O to the service with RPC
  * - Any errors getting I/O to the leader are logged by RPC completion
  *   callbacks.
- * - Any outstanding RPCs at shell_io_destroy() are synchronously waited for
+ * - Any outstanding RPCs at shell_output_destroy() are synchronously waited for
  *   there (checked for error, then destroyed).
  * - In standalone mode, the loop:// connector enables RPCs to work
  * - In standalone mode, output is written to the shell's stdout/stderr not KVS
  * - The number of in-flight write requests on each shell is limited to
- *   shell_io_hwm, to avoid matchtag exhaustion, etc. for chatty tasks.
+ *   shell_output_hwm, to avoid matchtag exhaustion, etc. for chatty tasks.
  */
 
 #if HAVE_CONFIG_H
@@ -49,7 +49,7 @@
 #include "internal.h"
 #include "builtins.h"
 
-struct shell_io {
+struct shell_output {
     flux_shell_t *shell;
     int refcount;
     int eof_pending;
@@ -58,12 +58,12 @@ struct shell_io {
     bool stopped;
 };
 
-static const int shell_io_lwm = 100;
-static const int shell_io_hwm = 1000;
+static const int shell_output_lwm = 100;
+static const int shell_output_hwm = 1000;
 
 /* Pause/resume output on 'stream' of 'task'.
  */
-static void shell_io_control_task (struct shell_task *task,
+static void shell_output_control_task (struct shell_task *task,
                                    const char *stream,
                                    bool stop)
 {
@@ -79,18 +79,18 @@ static void shell_io_control_task (struct shell_task *task,
 
 /* Pause/resume output for all tasks.
  */
-static void shell_io_control (struct shell_io *io, bool stop)
+static void shell_output_control (struct shell_output *out, bool stop)
 {
     struct shell_task *task;
 
-    if (io->stopped != stop) {
-        task = zlist_first (io->shell->tasks);
+    if (out->stopped != stop) {
+        task = zlist_first (out->shell->tasks);
         while (task) {
-            shell_io_control_task (task, "stdout", stop);
-            shell_io_control_task (task, "stderr", stop);
-            task = zlist_next (io->shell->tasks);
+            shell_output_control_task (task, "stdout", stop);
+            shell_output_control_task (task, "stderr", stop);
+            task = zlist_next (out->shell->tasks);
         }
-        io->stopped = stop;
+        out->stopped = stop;
     }
 }
 
@@ -98,12 +98,12 @@ static void shell_io_control (struct shell_io *io, bool stop)
  * N.B. the iodecode object is a valid "context" for the event.
  * io->output is a JSON array of eventlog entries.
  */
-static void shell_io_write_cb (flux_t *h,
+static void shell_output_write_cb (flux_t *h,
                                flux_msg_handler_t *mh,
                                const flux_msg_t *msg,
                                void *arg)
 {
-    struct shell_io *io = arg;
+    struct shell_output *out = arg;
     bool eof = false;
     json_t *o;
     json_t *entry;
@@ -112,44 +112,44 @@ static void shell_io_write_cb (flux_t *h,
         goto error;
     if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
         goto error;
-    if (shell_svc_allowed (io->shell->svc, msg) < 0)
+    if (shell_svc_allowed (out->shell->svc, msg) < 0)
         goto error;
     if (!(entry = eventlog_entry_pack (0., "data", "O", o))) // increfs 'o'
         goto error;
-    if (json_array_append_new (io->output, entry) < 0) {
+    if (json_array_append_new (out->output, entry) < 0) {
         json_decref (entry);
         errno = ENOMEM;
         goto error;
     }
     if (eof) {
-        if (--io->eof_pending == 0) {
+        if (--out->eof_pending == 0) {
             flux_msg_handler_stop (mh);
-            if (flux_shell_remove_completion_ref (io->shell, "io-leader") < 0)
+            if (flux_shell_remove_completion_ref (out->shell, "io-leader") < 0)
                 log_err ("flux_shell_remove_completion_ref");
         }
     }
-    if (flux_respond (io->shell->h, msg, NULL) < 0)
+    if (flux_respond (out->shell->h, msg, NULL) < 0)
         log_err ("flux_respond");
     return;
 error:
-    if (flux_respond_error (io->shell->h, msg, errno, NULL) < 0)
+    if (flux_respond_error (out->shell->h, msg, errno, NULL) < 0)
         log_err ("flux_respond");
 }
 
-static void shell_io_write_completion (flux_future_t *f, void *arg)
+static void shell_output_write_completion (flux_future_t *f, void *arg)
 {
-    struct shell_io *io = arg;
+    struct shell_output *out = arg;
 
     if (flux_future_get (f, NULL) < 0)
-        log_err ("shell_io_write");
-    zlist_remove (io->pending_writes, f);
+        log_err ("shell_output_write");
+    zlist_remove (out->pending_writes, f);
     flux_future_destroy (f);
 
-    if (zlist_size (io->pending_writes) <= shell_io_lwm)
-        shell_io_control (io, false);
+    if (zlist_size (out->pending_writes) <= shell_output_lwm)
+        shell_output_control (out, false);
 }
 
-static int shell_io_write (struct shell_io *io,
+static int shell_output_write (struct shell_output *out,
                            int rank,
                            const char *stream,
                            const char *data,
@@ -164,16 +164,16 @@ static int shell_io_write (struct shell_io *io,
         return -1;
     }
 
-    if (!(f = flux_shell_rpc_pack (io->shell, "write", 0, 0, "O", o)))
+    if (!(f = flux_shell_rpc_pack (out->shell, "write", 0, 0, "O", o)))
         goto error;
-    if (flux_future_then (f, -1, shell_io_write_completion, io) < 0)
+    if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
         goto error;
-    if (zlist_append (io->pending_writes, f) < 0)
+    if (zlist_append (out->pending_writes, f) < 0)
         log_msg ("zlist_append failed");
     json_decref (o);
 
-    if (zlist_size (io->pending_writes) >= shell_io_hwm)
-        shell_io_control (io, true);
+    if (zlist_size (out->pending_writes) >= shell_output_hwm)
+        shell_output_control (out, true);
     return 0;
 
 error:
@@ -182,13 +182,13 @@ error:
     return -1;
 }
 
-static int shell_io_flush (struct shell_io *io)
+static int shell_output_flush (struct shell_output *out)
 {
     json_t *entry;
     size_t index;
     FILE *f;
 
-    json_array_foreach (io->output, index, entry) {
+    json_array_foreach (out->output, index, entry) {
         json_t *context;
         const char *name;
         const char *stream = NULL;
@@ -218,7 +218,7 @@ static int shell_io_flush (struct shell_io *io)
     return 0;
 }
 
-static int shell_io_commit (struct shell_io *io)
+static int shell_output_commit (struct shell_output *out)
 {
     flux_kvs_txn_t *txn;
     flux_future_t *f = NULL;
@@ -226,13 +226,13 @@ static int shell_io_commit (struct shell_io *io)
     int saved_errno;
     int rc = -1;
 
-    if (!(chunk = eventlog_encode (io->output)))
+    if (!(chunk = eventlog_encode (out->output)))
         return -1;
     if (!(txn = flux_kvs_txn_create ()))
         goto out;
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", chunk) < 0)
         goto out;
-    if (!(f = flux_kvs_commit (io->shell->h, NULL, 0, txn)))
+    if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto out;
     if (flux_future_get (f, NULL) < 0)
         goto out;
@@ -246,32 +246,32 @@ out:
     return rc;
 }
 
-void shell_io_destroy (struct shell_io *io)
+void shell_output_destroy (struct shell_output *out)
 {
-    if (io) {
+    if (out) {
         int saved_errno = errno;
-        if (io->pending_writes) {
+        if (out->pending_writes) {
             flux_future_t *f;
 
-            while ((f = zlist_pop (io->pending_writes))) { // leader+follower
+            while ((f = zlist_pop (out->pending_writes))) { // leader+follower
                 if (flux_future_get (f, NULL) < 0)
-                    log_err ("shell_io_write");
+                    log_err ("shell_output_write");
                 flux_future_destroy (f);
             }
-            zlist_destroy (&io->pending_writes);
+            zlist_destroy (&out->pending_writes);
         }
-        if (io->output) { // leader only
-            if (io->shell->standalone) {
-                if (shell_io_flush (io) < 0)
-                    log_err ("shell_io_flush");
+        if (out->output) { // leader only
+            if (out->shell->standalone) {
+                if (shell_output_flush (out) < 0)
+                    log_err ("shell_output_flush");
             }
             else {
-                if (shell_io_commit (io) < 0)
-                    log_err ("shell_io_commit");
+                if (shell_output_commit (out) < 0)
+                    log_err ("shell_output_commit");
             }
         }
-        json_decref (io->output);
-        free (io);
+        json_decref (out->output);
+        free (out);
         errno = saved_errno;
     }
 }
@@ -281,7 +281,7 @@ void shell_io_destroy (struct shell_io *io)
  * - no options
  * - no stdlog
  */
-static int shell_io_header_append (flux_shell_t *shell, json_t *output)
+static int shell_output_header_append (flux_shell_t *shell, json_t *output)
 {
     json_t *o;
 
@@ -303,40 +303,42 @@ static int shell_io_header_append (flux_shell_t *shell, json_t *output)
     return 0;
 }
 
-struct shell_io *shell_io_create (flux_shell_t *shell)
+struct shell_output *shell_output_create (flux_shell_t *shell)
 {
-    struct shell_io *io;
+    struct shell_output *out;
 
-    if (!(io = calloc (1, sizeof (*io))))
+    if (!(out = calloc (1, sizeof (*out))))
         return NULL;
-    io->shell = shell;
-    if (!(io->pending_writes = zlist_new ()))
+    out->shell = shell;
+    if (!(out->pending_writes = zlist_new ()))
         goto error;
     if (shell->info->shell_rank == 0) {
         if (flux_shell_service_register (shell,
                                          "write",
-                                         shell_io_write_cb,
-                                         io) < 0)
+                                         shell_output_write_cb,
+                                         out) < 0)
             goto error;
-        io->eof_pending = 2 * shell->info->jobspec->task_count;
+        out->eof_pending = 2 * shell->info->jobspec->task_count;
         if (flux_shell_add_completion_ref (shell, "io-leader") < 0)
             goto error;
-        if (!(io->output = json_array ())) {
+        if (!(out->output = json_array ())) {
             errno = ENOMEM;
             goto error;
         }
-        if (shell_io_header_append (shell, io->output) < 0)
+        if (shell_output_header_append (shell, out->output) < 0)
             goto error;
     }
-    return io;
+    return out;
 error:
-    shell_io_destroy (io);
+    shell_output_destroy (out);
     return NULL;
 }
 
-static void task_io_cb (struct shell_task *task, const char *stream, void *arg)
+static void task_output_cb (struct shell_task *task,
+                            const char *stream,
+                            void *arg)
 {
-    struct shell_io *io = arg;
+    struct shell_output *out = arg;
     const char *data;
     int len;
 
@@ -345,37 +347,38 @@ static void task_io_cb (struct shell_task *task, const char *stream, void *arg)
         log_err ("read %s task %d", stream, task->rank);
     }
     else if (len > 0) {
-        if (shell_io_write (io, task->rank, stream, data, len, false) < 0)
+        if (shell_output_write (out, task->rank, stream, data, len, false) < 0)
             log_err ("write %s task %d", stream, task->rank);
     }
     else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
-        if (shell_io_write (io, task->rank, stream, NULL, 0, true) < 0)
+        if (shell_output_write (out, task->rank, stream, NULL, 0, true) < 0)
             log_err ("write eof %s task %d", stream, task->rank);
     }
 }
 
-static int shell_io_task_init (flux_shell_t *shell)
+static int shell_output_task_init (flux_shell_t *shell)
 {
-    struct shell_io *io = flux_shell_aux_get (shell, "shell::builtin.io");
+    struct shell_output *out = flux_shell_aux_get (shell,
+                                                  "shell::builtin.output");
     flux_shell_task_t *task = flux_shell_current_task (shell);
     if (flux_shell_task_channel_subscribe (task, "stderr",
-                                           task_io_cb, io) < 0
+                                           task_output_cb, out) < 0
         || flux_shell_task_channel_subscribe (task, "stdout",
-                                              task_io_cb, io) < 0)
+                                              task_output_cb, out) < 0)
         return -1;
     return 0;
 }
 
-static int shell_io_init (flux_shell_t *shell)
+static int shell_output_init (flux_shell_t *shell)
 {
-    struct shell_io *io = shell_io_create (shell);
-    if (!io)
+    struct shell_output *out = shell_output_create (shell);
+    if (!out)
         return -1;
     if (flux_shell_aux_set (shell,
-                            "shell::builtin.io",
-                            io,
-                            (flux_free_f) shell_io_destroy) < 0) {
-        shell_io_destroy (io);
+                            "shell::builtin.output",
+                            out,
+                            (flux_free_f) shell_output_destroy) < 0) {
+        shell_output_destroy (out);
         return -1;
     }
     return 0;
@@ -383,8 +386,8 @@ static int shell_io_init (flux_shell_t *shell)
 
 struct shell_builtin builtin_output = {
     .name = "output",
-    .init = shell_io_init,
-    .task_init = shell_io_task_init
+    .init = shell_output_init,
+    .task_init = shell_output_task_init
 };
 
 /*
