@@ -14,6 +14,8 @@
 #include <flux/core.h>
 #include "info.h"
 
+#include <czmq.h>
+
 struct shell_task;
 
 typedef void (*shell_task_completion_f)(struct shell_task *task, void *arg);
@@ -29,6 +31,9 @@ struct shell_task {
     flux_subprocess_t *proc;
     flux_cmd_t *cmd;
     int rc;
+
+    /* Hash of output channel subscribers for this task */
+    zhashx_t *subscribers;
 
     shell_task_completion_f cb;
     void *cb_arg;

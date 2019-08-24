@@ -54,9 +54,25 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <flux/core.h>
+#include <flux/shell.h>
 
 #include "task.h"
 #include "info.h"
+
+struct channel_watcher {
+    flux_shell_task_io_f *cb;
+    void *arg;
+};
+
+/*  free() wrapper for zhashx_destructor_fn
+ */
+static void zh_free (void **x)
+{
+    if (x && *x) {
+        free (*x);
+        *x = NULL;
+    }
+}
 
 void shell_task_destroy (struct shell_task *task)
 {
@@ -64,9 +80,24 @@ void shell_task_destroy (struct shell_task *task)
         int saved_errno = errno;
         flux_cmd_destroy (task->cmd);
         flux_subprocess_destroy (task->proc);
+        zhashx_destroy (&task->subscribers);
         free (task);
         errno = saved_errno;
     }
+}
+
+struct shell_task *shell_task_new (void)
+{
+    struct shell_task *task = calloc (1, sizeof (*task));
+    if (!task)
+        goto error;
+    if (!(task->subscribers = zhashx_new ()))
+        goto error;
+    zhashx_set_destructor (task->subscribers, zh_free);
+    return (task);
+error:
+    shell_task_destroy (task);
+    return NULL;
 }
 
 struct shell_task *shell_task_create (struct shell_info *info,
@@ -77,8 +108,9 @@ struct shell_task *shell_task_create (struct shell_info *info,
     json_t *entry;
     size_t i;
 
-    if (!(task = calloc (1, sizeof (*task))))
+    if (!(task = shell_task_new ()))
         return NULL;
+
     task->rank = info->rankinfo.global_basis + index;
     task->size = info->jobspec->task_count;
     if (!(task->cmd = flux_cmd_create (0,
@@ -226,6 +258,37 @@ int shell_task_kill (struct shell_task *task, int signum)
     rc = flux_future_get (f, NULL);
     flux_future_destroy (f);
     return rc;
+}
+
+/*  flux_shell_task_t API implementation:
+ */
+
+flux_cmd_t *flux_shell_task_cmd (flux_shell_task_t *task)
+{
+    return task->cmd;
+}
+
+flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task)
+{
+    return task->proc;
+}
+
+int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
+                                       const char *name,
+                                       flux_shell_task_io_f cb,
+                                       void *arg)
+{
+    struct channel_watcher *cw = calloc (1, sizeof (*cw));
+    if (!cw)
+        return -1;
+    cw->cb = cb;
+    cw->arg = arg;
+    if (zhashx_insert (task->subscribers, name, cw) < 0) {
+        free (cw);
+        errno = EEXIST;
+        return -1;
+    }
+    return 0;
 }
 
 /*

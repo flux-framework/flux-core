@@ -190,6 +190,11 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
     return 0;
 }
 
+flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
+{
+    return shell->current_task;
+}
+
 static void shell_events_subscribe (flux_shell_t *shell)
 {
     if (shell->h) {
