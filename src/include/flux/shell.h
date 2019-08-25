@@ -1,5 +1,5 @@
 /************************************************************\
- * Copyright 2014 Lawrence Livermore National Security, LLC
+ * Copyright 2019 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
  *
  * This file is part of the Flux resource manager framework.
