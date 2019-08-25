@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/log.h"
@@ -37,7 +38,6 @@ static const uint32_t default_cache_purge_large_entry = 256;
 static const uint32_t default_blob_size_limit = 1048576*1024;
 
 static const uint32_t default_flush_batch_limit = 256;
-
 
 struct cache_entry {
     flux_t *h;
@@ -82,12 +82,12 @@ struct content_cache {
 static void flush_respond (content_cache_t *cache);
 static int cache_flush (content_cache_t *cache);
 
-static void message_list_destroy (zlist_t **l)
+static void request_list_destroy (zlist_t **l)
 {
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     if (*l) {
         while ((msg = zlist_pop (*l)))
-            flux_msg_destroy (msg);
+            flux_msg_decref (msg);
         zlist_destroy (l);
     }
 }
@@ -96,16 +96,18 @@ static void message_list_destroy (zlist_t **l)
  * The list is always run to completion, then destroyed.
  * On error, log at LOG_ERR level.
  */
-static void respond_requests_raw (zlist_t **l, flux_t *h,
-                                  const void *data, int len,
-                                  const char *type)
+static void request_list_respond_raw (zlist_t **l,
+                                      flux_t *h,
+                                      const void *data,
+                                      int len,
+                                      const char *type)
 {
     if (*l) {
-        flux_msg_t *msg;
+        const flux_msg_t *msg;
         while ((msg = zlist_pop (*l))) {
             if (flux_respond_raw (h, msg, data, len) < 0)
                 flux_log_error (h, "%s (%s):", __FUNCTION__, type);
-            flux_msg_destroy (msg);
+            flux_msg_decref (msg);
         }
         zlist_destroy (l);
     }
@@ -113,43 +115,40 @@ static void respond_requests_raw (zlist_t **l, flux_t *h,
 
 /* Same as above only send errnum, errmsg response
  */
-static void respond_requests_error (zlist_t **l, flux_t *h,
-                                    int errnum, const char *errmsg,
-                                    const char *type)
+static void request_list_respond_error (zlist_t **l,
+                                        flux_t *h,
+                                        int errnum,
+                                        const char *errmsg,
+                                        const char *type)
 {
     if (*l) {
-        flux_msg_t *msg;
+        const flux_msg_t *msg;
         while ((msg = zlist_pop (*l))) {
             if (flux_respond_error (h, msg, errnum, errmsg) < 0)
                 flux_log_error (h, "%s (%s):", __FUNCTION__, type);
-            flux_msg_destroy (msg);
+            flux_msg_decref (msg);
         }
         zlist_destroy (l);
     }
 }
 
-
 /* Add request message to a list, creating the list as needed.
  * Returns 0 on succes, -1 on failure with errno set.
  */
-static int defer_request (zlist_t **l, const flux_msg_t *msg)
+static int request_list_add (zlist_t **l, const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = NULL;
-
     if (!*l) {
-        if (!(*l = zlist_new ()))
-            goto nomem;
+        if (!(*l = zlist_new ())) {
+            errno = ENOMEM;
+            return -1;
+        }
     }
-    if (!(cpy = flux_msg_copy (msg, false)))
-        goto error;
-    if (zlist_append (*l, cpy) < 0)
-        goto nomem;
+    if (zlist_append (*l, (void *)flux_msg_incref (msg)) < 0) {
+        flux_msg_decref (msg);
+        errno = ENOMEM;
+        return -1;
+    }
     return 0;
-nomem:
-    errno = ENOMEM;
-error:
-    flux_msg_destroy (cpy);
-    return -1;
 }
 
 /* Destroy a cache entry
@@ -168,8 +167,8 @@ static void cache_entry_destroy (void *arg)
         if (e->store_requests && zlist_size (e->store_requests) > 0)
             flux_log (e->h, LOG_ERR, "%s: store_requests not empty",
                       __FUNCTION__);
-        message_list_destroy (&e->load_requests);
-        message_list_destroy (&e->store_requests);
+        request_list_destroy (&e->load_requests);
+        request_list_destroy (&e->store_requests);
         free (e);
     }
 }
@@ -299,11 +298,19 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         cache->acct_size += len;
     }
     e->lastused = cache->epoch;
-    respond_requests_raw (&e->load_requests, cache->h, e->data, e->len, "load");
+    request_list_respond_raw (&e->load_requests,
+                              cache->h,
+                              e->data,
+                              e->len,
+                              "load");
     flux_future_destroy (f);
     return;
 error:
-    respond_requests_error (&e->load_requests, cache->h, errno, NULL, "load");
+    request_list_respond_error (&e->load_requests,
+                                cache->h,
+                                errno,
+                                NULL,
+                                "load");
     remove_entry (cache, e);
     flux_future_destroy (f);
 }
@@ -376,7 +383,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     if (!e->valid) {
         if (cache_load (cache, e) < 0)
             goto error;
-        if (defer_request (&e->load_requests, msg) < 0) {
+        if (request_list_add (&e->load_requests, msg) < 0) {
             flux_log_error (h, "content load");
             goto error;
         }
@@ -454,13 +461,20 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
         cache->acct_dirty--;
         e->dirty = 0;
     }
-    respond_requests_raw (&e->store_requests, cache->h,
-                          e->blobref, strlen (e->blobref) + 1, "store");
+    request_list_respond_raw (&e->store_requests,
+                              cache->h,
+                              e->blobref,
+                              strlen (e->blobref) + 1,
+                              "store");
     flux_future_destroy (f);
     cache_resume_flush (cache);
     return;
 error:
-    respond_requests_error (&e->store_requests, cache->h, errno, NULL, "store");
+    request_list_respond_error (&e->store_requests,
+                                cache->h,
+                                errno,
+                                NULL,
+                                "store");
     flux_future_destroy (f);
     cache_resume_flush (cache);
 }
@@ -538,8 +552,11 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             cache->acct_valid++;
             cache->acct_size += len;
         }
-        respond_requests_raw (&e->load_requests, cache->h,
-                              e->data, e->len, "load");
+        request_list_respond_raw (&e->load_requests,
+                                  cache->h,
+                                  e->data,
+                                  e->len,
+                                  "load");
         if (!e->dirty) {
             e->dirty = 1;
             cache->acct_dirty++;
@@ -551,7 +568,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             if (cache_store (cache, e) < 0)
                 goto error;
             if (cache->rank > 0) {  /* write-through */
-                if (defer_request (&e->store_requests, msg) < 0)
+                if (request_list_add (&e->store_requests, msg) < 0)
                     goto error;
                 return;
             }
@@ -733,15 +750,21 @@ error:
 static void flush_respond (content_cache_t *cache)
 {
     if (!cache->acct_dirty) {
-        respond_requests_raw (&cache->flush_requests, cache->h,
-                              NULL, 0, "flush");
+        request_list_respond_raw (&cache->flush_requests,
+                                  cache->h,
+                                  NULL,
+                                  0,
+                                  "flush");
     }
     else {
         errno = EIO;
         if (cache->rank == 0 && !cache->backing)
             errno = ENOSYS;
-        respond_requests_error (&cache->flush_requests, cache->h,
-                                errno, NULL, "flush");
+        request_list_respond_error (&cache->flush_requests,
+                                    cache->h,
+                                    errno,
+                                    NULL,
+                                    "flush");
     }
 }
 
@@ -756,7 +779,7 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
         if (cache_flush (cache) < 0)
             goto error;
         if (cache->acct_dirty > 0) {
-            if (defer_request (&cache->flush_requests, msg) < 0)
+            if (request_list_add (&cache->flush_requests, msg) < 0)
                 goto error;
             return;
         }
@@ -957,7 +980,7 @@ void content_cache_destroy (content_cache_t *cache)
         if (cache->backing_name)
             free (cache->backing_name);
         zhash_destroy (&cache->entries);
-        message_list_destroy (&cache->flush_requests);
+        request_list_destroy (&cache->flush_requests);
         free (cache);
     }
 }
