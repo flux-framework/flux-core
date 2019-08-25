@@ -38,8 +38,7 @@ flux_shell_SOURCES = \
 	svc.c \
 	svc.h \
 	kill.c \
-	signals.c \
-	signals.h
+	signals.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
