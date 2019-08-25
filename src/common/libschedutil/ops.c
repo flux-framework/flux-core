@@ -15,6 +15,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "ops.h"
 
 struct ops_context {
@@ -29,7 +31,7 @@ struct ops_context {
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
     struct ops_context *ctx = arg;
-    flux_msg_t *msg = flux_future_aux_get (f, "flux::alloc_request");
+    const flux_msg_t *msg = flux_future_aux_get (f, "flux::alloc_request");
     const char *jobspec;
 
     if (flux_kvs_lookup_get (f, &jobspec) < 0) {
@@ -53,7 +55,6 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     char key[64];
     flux_future_t *f;
-    flux_msg_t *cpy;
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
@@ -63,11 +64,11 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
         goto error;
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto error_future;
-    if (flux_future_aux_set (f, "flux::alloc_request",
-                             cpy, (flux_free_f)flux_msg_destroy) < 0) {
-        flux_msg_destroy (cpy);
+    if (flux_future_aux_set (f,
+                             "flux::alloc_request",
+                             (void *)flux_msg_incref (msg),
+                             (flux_free_f)flux_msg_decref) < 0) {
+        flux_msg_decref (msg);
         goto error_future;
     }
     if (flux_future_then (f, -1, alloc_continuation, ctx) < 0)
@@ -84,7 +85,7 @@ error:
 static void free_continuation (flux_future_t *f, void *arg)
 {
     struct ops_context *ctx = arg;
-    flux_msg_t *msg = flux_future_aux_get (f, "flux::free_request");
+    const flux_msg_t *msg  = flux_future_aux_get (f, "flux::free_request");
     const char *R;
 
     if (flux_kvs_lookup_get (f, &R) < 0) {
@@ -108,7 +109,6 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     flux_future_t *f;
     char key[64];
-    flux_msg_t *cpy;
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
@@ -118,11 +118,11 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
         goto error;
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto error_future;
-    if (flux_future_aux_set (f, "flux::free_request",
-                             cpy, (flux_free_f)flux_msg_destroy) < 0) {
-        flux_msg_destroy (cpy);
+    if (flux_future_aux_set (f,
+                             "flux::free_request",
+                             (void *)flux_msg_incref (msg),
+                             (flux_free_f)flux_msg_decref) < 0) {
+        flux_msg_decref (msg);
         goto error_future;
     }
     if (flux_future_then (f, -1, free_continuation, ctx) < 0)

@@ -62,7 +62,7 @@ int schedutil_alloc_respond_denied (flux_t *h, const flux_msg_t *msg,
 
 struct alloc {
     char *note;
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     flux_kvs_txn_t *txn;
 };
 
@@ -71,7 +71,7 @@ static void alloc_destroy (struct alloc *ctx)
     if (ctx) {
         int saved_errno = errno;
         flux_kvs_txn_destroy (ctx->txn);
-        flux_msg_destroy (ctx->msg);
+        flux_msg_decref (ctx->msg);
         free (ctx->note);
         free (ctx);
         errno = saved_errno;
@@ -93,8 +93,7 @@ static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
     }
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if (!(ctx->msg = flux_msg_copy (msg, true)))
-        goto error;
+    ctx->msg = flux_msg_incref (msg);
     if (note && !(ctx->note = strdup (note)))
         goto error;
     if (!(ctx->txn = flux_kvs_txn_create ()))
