@@ -131,7 +131,7 @@ void jobinfo_decref (struct jobinfo *job)
         if (job->impl && job->impl->exit)
             (*job->impl->exit) (job);
         job->ctx = NULL;
-        flux_msg_destroy (job->req);
+        flux_msg_decref (job->req);
         job->req = NULL;
         resource_set_destroy (job->R);
         json_decref (job->jobspec);
@@ -872,13 +872,8 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     job->h = ctx->h;
     job->kill_timeout = job_get_kill_timeout (job->h);
 
-    if (!(job->req = flux_msg_copy (msg, true))) {
-        flux_log_error (ctx->h, "start: flux_msg_copy");
-        if (flux_respond_error (ctx->h, msg, errno, "flux_msg_copy failed") < 0)
-            flux_log_error (ctx->h, "flux_respond_error");
-        jobinfo_decref (job);
-        return -1;
-    }
+    job->req = flux_msg_incref (msg);
+
     job->ctx = ctx;
 
     if (flux_request_unpack (job->req, NULL, "{s:I, s:i}",
