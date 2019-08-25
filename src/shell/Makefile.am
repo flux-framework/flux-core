@@ -8,7 +8,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS)
+	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS) \
+	$(LUA_INCLUDE)
 
 noinst_LTLIBRARIES = libshell.la
 
@@ -37,7 +38,6 @@ flux_shell_SOURCES = \
 	svc.c \
 	svc.h \
 	kill.c \
-	kill.h \
 	signals.c \
 	signals.h
 

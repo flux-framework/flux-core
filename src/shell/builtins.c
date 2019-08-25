@@ -31,10 +31,12 @@ static struct shell_builtin builtin_list_end = { 0 };
  */
 extern struct shell_builtin builtin_pmi;
 extern struct shell_builtin builtin_output;
+extern struct shell_builtin builtin_kill;
 
 static struct shell_builtin * builtins [] = {
     &builtin_pmi,
     &builtin_output,
+    &builtin_kill,
     &builtin_list_end,
 };
 

@@ -31,7 +31,6 @@
 #include "info.h"
 #include "svc.h"
 #include "task.h"
-#include "kill.h"
 #include "signals.h"
 
 static char *shell_name = "flux-shell";
@@ -377,8 +376,6 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
 static int shell_init (flux_shell_t *shell)
 {
-    if (kill_event_init (shell) < 0)
-        return -1;
     if (signals_init (shell) < 0)
         return -1;
     return plugstack_call (shell->plugstack, "flux_shell_init", 1, shell);
