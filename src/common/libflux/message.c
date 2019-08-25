@@ -325,24 +325,23 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
     flux_msg_t *msg;
     uint8_t const *p = buf;
     zframe_t *zf;
-    int saved_errno;
 
     if (!(msg = flux_msg_create_common ()))
-        goto nomem;
+        return NULL;
     if (!(msg->zmsg = zmsg_new ()))
         goto nomem;
     while (p - (uint8_t *)buf < size) {
         size_t n = *p++;
         if (n == 0xff) {
             if (size - (p - (uint8_t *)buf) < 4) {
-                saved_errno = EINVAL;
+                errno = EINVAL;
                 goto error;
             }
             n = ntohl (*(uint32_t *)p);
             p += 4;
         }
         if (size - (p - (uint8_t *)buf) < n) {
-            saved_errno = EINVAL;
+            errno = EINVAL;
             goto error;
         }
         if (!(zf = zframe_new (p, n)))
@@ -353,10 +352,9 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
     }
     return msg;
 nomem:
-    saved_errno = EINVAL;
+    errno = ENOMEM;
 error:
     flux_msg_destroy (msg);
-    errno = saved_errno;
     return NULL;
 }
 
