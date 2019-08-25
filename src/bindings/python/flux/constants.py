@@ -17,7 +17,7 @@ from _flux._core import lib
 MOD = sys.modules[__name__]
 # Inject enum/define names matching ^FLUX_[A-Z_]+$ into module
 ALL_LIST = []
-PATTERN = re.compile("^FLUX_[A-Z_]+")
+PATTERN = re.compile("^(FLUX|FLUID)_[A-Z_]+")
 for k in dir(lib):
     if PATTERN.match(k):
         setattr(MOD, k, getattr(lib, k))

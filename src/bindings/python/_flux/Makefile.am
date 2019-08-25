@@ -30,7 +30,9 @@ _core_build.py: $(MAKE_BINDING)
 		--modname _core \
 		--add_sub '.*va_list.*|||' \
 		--additional_headers src/bindings/python/_flux/callbacks.h \
+		                     src/common/libutil/fluid.h \
 		--ignore_header 'macros' \
+		--extra_source '#include <src/common/libutil/fluid.h>' \
 		src/include/flux/core.h
 
 BUILT_SOURCES= _core.c
