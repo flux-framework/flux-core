@@ -19,6 +19,7 @@ import collections
 import six
 import yaml
 
+import flux.constants
 from flux.wrapper import Wrapper
 from flux.util import check_future_error, parse_fsd
 from flux.future import Future
@@ -561,3 +562,60 @@ class JobspecV1(Jobspec):
         tasks = [{"command": command, "slot": "task", "count": task_count_dict}]
         attributes = {"system": {"duration": 0}}
         return cls(resources, tasks, attributes=attributes)
+
+def convert_id(jobid, src="dec", dst="dec"):
+    valid_id_types = six.string_types + six.integer_types
+    if not any((isinstance(jobid, id_type) for id_type in valid_id_types)):
+        raise TypeError("Jobid must be an integer or string, not {}".format(type(jobid)))
+
+    valid_formats = ("dec", "hex", "kvs", "words")
+    if src not in valid_formats:
+        raise EnvironmentError(errno.EINVAL, "src must be one of {}", valid_formats)
+    if dst not in valid_formats:
+        raise EnvironmentError(errno.EINVAL, "dst must be one of {}", valid_formats)
+
+    if isinstance(jobid, six.text_type):
+        jobid = jobid.encode('utf-8')
+
+    if src == dst:
+        return jobid
+
+    dec_jobid = ffi.new('uint64_t [1]') # uint64_t*
+    if src == "dec":
+        dec_jobid = jobid
+    elif src == "hex":
+        if (lib.fluid_decode (jobid, dec_jobid, flux.constants.FLUID_STRING_DOTHEX) < 0):
+            raise EnvironmentError(errno.EINVAL, "malformed jobid: {}".format(src));
+        dec_jobid = dec_jobid[0]
+    elif src == "kvs":
+        if jobid[0:4] != 'job.':
+            raise EnvironmentError(errno.EINVAL, "missing 'job.' prefix")
+        if (lib.fluid_decode (jobid[4:], dec_jobid, flux.constants.FLUID_STRING_DOTHEX) < 0):
+            raise EnvironmentError(errno.EINVAL, "malformed jobid: {}".format(src));
+        dec_jobid = dec_jobid[0]
+    elif src == "words":
+        if (lib.fluid_decode (jobid, dec_jobid, flux.constants.FLUID_STRING_MNEMONIC) < 0):
+            raise EnvironmentError(errno.EINVAL, "malformed jobid: {}".format(src));
+        dec_jobid = dec_jobid[0]
+
+
+    buf_size = 64
+    buf = ffi.new('char []', buf_size)
+    def encode(id_format):
+        pass
+
+    if dst == 'dec':
+        return dec_jobid
+    elif dst == 'kvs':
+        key_len = RAW.flux_job_kvs_key(buf, buf_size, dec_jobid, ffi.NULL)
+        if key_len < 0:
+            raise RuntimeError("error enconding id")
+        return ffi.string(buf, key_len).decode('utf-8')
+    elif dst == 'hex':
+        if (lib.fluid_encode (buf, buf_size, dec_jobid, flux.constants.FLUID_STRING_DOTHEX) < 0):
+            raise RuntimeError("error enconding id")
+        return ffi.string(buf).decode('utf-8')
+    elif dst == 'words':
+        if (lib.fluid_encode (buf, buf_size, dec_jobid, flux.constants.FLUID_STRING_MNEMONIC) < 0):
+            raise RuntimeError("error enconding id")
+        return ffi.string(buf).decode('utf-8')

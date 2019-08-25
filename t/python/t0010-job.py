@@ -16,6 +16,7 @@ import sys
 import json
 import unittest
 import datetime
+import itertools
 from glob import glob
 
 import yaml
@@ -137,6 +138,52 @@ class TestJob(unittest.TestCase):
         jobspec.environment = new_env
         self.assertEqual(jobspec.environment, new_env)
 
+    def test_12_convert_id(self):
+        variants = {
+            "dec": 74859937792,
+            "hex": "0000.0011.6e00.0000",
+            "words": "algebra-arizona-susan--album-academy-academy",
+        }
+        variants["kvs"] = 'job.{}'.format(variants['hex'])
+
+        for (src_type, src_value), (dest_type, dest_value) in \
+            itertools.product(six.iteritems(variants), repeat=2):
+
+            converted_value = job.convert_id(src_value, src_type, dest_type)
+            self.assertEqual(
+                converted_value,
+                dest_value,
+                msg="Failed to convert id of type {} into an id of type {} ({} != {})".format(
+                    src_type,
+                    dest_type,
+                    converted_value,
+                    dest_value,
+                )
+            )
+
+    def test_13_convert_id_unicode(self):
+        converted_value = job.convert_id(
+            u"algebra-arizona-susan--album-academy-academy",
+            "words",
+            "hex")
+        self.assertEqual(converted_value, u"0000.0011.6e00.0000")
+        self.assertEqual(converted_value, b"0000.0011.6e00.0000")
+
+    def test_05_convert_id_errors(self):
+        with self.assertRaises(TypeError) as error:
+            job.convert_id(5.0)
+
+        with self.assertRaises(EnvironmentError) as error:
+            job.convert_id(74859937792, src="foo")
+        self.assertEqual(error.exception.errno, errno.EINVAL)
+
+        with self.assertRaises(EnvironmentError) as error:
+            job.convert_id(74859937792, dst="foo")
+        self.assertEqual(error.exception.errno, errno.EINVAL)
+
+        with self.assertRaises(EnvironmentError) as error:
+            job.convert_id("foo.bar", src="kvs")
+        self.assertEqual(error.exception.errno, errno.EINVAL)
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
