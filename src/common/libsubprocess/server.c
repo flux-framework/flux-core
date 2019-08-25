@@ -22,6 +22,7 @@
 
 #include <flux/core.h>
 
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/macros.h"
@@ -33,6 +34,33 @@
 #include "remote.h"
 #include "server.h"
 #include "util.h"
+
+static const char *auxkey = "flux::rexec";
+
+struct rexec {
+    const flux_msg_t *msg;          // rexec request message
+    flux_subprocess_server_t *s;    // server context
+};
+
+static void rexec_destroy (struct rexec *rex)
+{
+    if (rex) {
+        flux_msg_decref (rex->msg);
+        ERRNO_SAFE_FREE (rex);
+    }
+}
+
+static struct rexec *rexec_create (const flux_msg_t *msg,
+                                   flux_subprocess_server_t *s)
+{
+    struct rexec *rex;
+
+    if ((rex = calloc (1, sizeof (*rex)))) {
+        rex->msg = flux_msg_incref (msg);
+        rex->s = s;
+    }
+    return rex;
+}
 
 static void subprocesses_free_fn (void *arg)
 {
@@ -111,27 +139,25 @@ cleanup:
 
 static void subprocess_cleanup (flux_subprocess_t *p)
 {
-    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
 
-    assert (s && msg);
+    assert (rex != NULL);
 
-    remove_pid (s, p);
+    remove_pid (rex->s, p);
 }
 
 static void rexec_completion_cb (flux_subprocess_t *p)
 {
-    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
 
-    assert (s && msg);
+    assert (rex != NULL);
 
     if (p->state != FLUX_SUBPROCESS_FAILED) {
         /* no fallback if this fails */
-        if (flux_respond_pack (s->h, msg, "{s:s s:i}",
+        if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i}",
                                "type", "complete",
-                               "rank", s->rank) < 0)
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
+                               "rank", rex->s->rank) < 0)
+            flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
     subprocess_cleanup (p);
@@ -157,58 +183,62 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
     }
 }
 
-static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
+static void rexec_state_change_cb (flux_subprocess_t *p,
+                                   flux_subprocess_state_t state)
 {
-    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
 
-    assert (s && msg);
+    assert (rex != NULL);
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (store_pid (s, p) < 0)
+        if (store_pid (rex->s, p) < 0)
             goto error;
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
+        if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
                                "type", "state",
-                               "rank", s->rank,
+                               "rank", rex->s->rank,
                                "pid", flux_subprocess_pid (p),
                                "state", state) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
     } else if (state == FLUX_SUBPROCESS_EXITED) {
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
+        if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
                                "type", "state",
-                               "rank", s->rank,
+                               "rank", rex->s->rank,
                                "state", state,
                                "status", flux_subprocess_status (p)) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
     } else if (state == FLUX_SUBPROCESS_FAILED) {
-        if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:i}",
+        if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
                                "type", "state",
-                               "rank", s->rank,
+                               "rank", rex->s->rank,
                                "state", FLUX_SUBPROCESS_FAILED,
                                "errno", p->failed_errno) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
         subprocess_cleanup (p);
     } else {
         errno = EPROTO;
-        flux_log_error (s->h, "%s: illegal state", __FUNCTION__);
+        flux_log_error (rex->s->h, "%s: illegal state", __FUNCTION__);
         goto error;
     }
 
     return;
 
 error:
-    internal_fatal (s, p);
+    internal_fatal (rex->s, p);
 }
 
-static int rexec_output (flux_subprocess_t *p, const char *stream,
-                         flux_subprocess_server_t *s, flux_msg_t *msg,
-                         const char *data, int len, bool eof)
+static int rexec_output (flux_subprocess_t *p,
+                         const char *stream,
+                         flux_subprocess_server_t *s,
+                         const flux_msg_t *msg,
+                         const char *data,
+                         int len,
+                         bool eof)
 {
     json_t *io = NULL;
     int rv = -1;
@@ -235,37 +265,30 @@ error:
 
 static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
 {
-    flux_subprocess_server_t *s = flux_subprocess_aux_get (p, "server_ctx");
-    flux_msg_t *msg = (flux_msg_t *) flux_subprocess_aux_get (p, "msg");
+    struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
     const char *ptr;
     int lenp;
 
-    assert (s && msg);
+    assert (rex != NULL);
 
     if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-        flux_log_error (s->h, "%s: flux_subprocess_read", __FUNCTION__);
+        flux_log_error (rex->s->h, "%s: flux_subprocess_read", __FUNCTION__);
         goto error;
     }
 
     if (lenp) {
-        if (rexec_output (p, stream, s, msg, ptr, lenp, false) < 0)
+        if (rexec_output (p, stream, rex->s, rex->msg, ptr, lenp, false) < 0)
             goto error;
     }
     else {
-        if (rexec_output (p, stream, s, msg, NULL, 0, true) < 0)
+        if (rexec_output (p, stream, rex->s, rex->msg, NULL, 0, true) < 0)
             goto error;
     }
 
     return;
 
 error:
-    internal_fatal (s, p);
-}
-
-static void flux_msg_destroy_wrapper (void *arg)
-{
-    flux_msg_t *msg = arg;
-    flux_msg_destroy (msg);
+    internal_fatal (rex->s, p);
 }
 
 static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -274,7 +297,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_subprocess_server_t *s = arg;
     const char *cmd_str;
     flux_cmd_t *cmd = NULL;
-    flux_msg_t *copy = NULL;
+    struct rexec *rex;
     flux_subprocess_t *p = NULL;
     flux_subprocess_ops_t ops = {
         .on_completion = rexec_completion_cb,
@@ -351,13 +374,15 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto cleanup;
     }
 
-    if (!(copy = flux_msg_copy (msg, true)))
+    if (!(rex = rexec_create (msg, s)))
         goto error;
-    if (flux_subprocess_aux_set (p, "msg", copy, flux_msg_destroy_wrapper) < 0)
+    if (flux_subprocess_aux_set (p,
+                                auxkey,
+                                rex,
+                                (flux_free_f)rexec_destroy) < 0) {
+        rexec_destroy (rex);
         goto error;
-    copy = NULL;                /* owned by 'p' now */
-    if (flux_subprocess_aux_set (p, "server_ctx", s, NULL) < 0)
-        goto error;
+    }
 
     flux_cmd_destroy (cmd);
     free (env);
@@ -369,7 +394,6 @@ error:
 cleanup:
     flux_cmd_destroy (cmd);
     free (env);
-    flux_msg_destroy (copy);
     flux_subprocess_unref (p);
 }
 
@@ -503,11 +527,10 @@ error:
 
 char *subprocess_sender (flux_subprocess_t *p)
 {
-    flux_msg_t *msg;
+    struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
     char *sender;
 
-    msg = flux_subprocess_aux_get (p, "msg");
-    if (!msg || flux_msg_get_route_first (msg, &sender) < 0)
+    if (!rex || flux_msg_get_route_first (rex->msg, &sender) < 0)
         return NULL;
 
     return sender;
@@ -630,9 +653,9 @@ static void server_signal_subprocess (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f;
     if (!(f = flux_subprocess_kill (p, signum))) {
-        flux_subprocess_server_t *s;
-        s = flux_subprocess_aux_get (p, "server_ctx");
-        flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
+        struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
+
+        flux_log_error (rex->s->h, "%s: flux_subprocess_kill", __FUNCTION__);
         return;
     }
     flux_future_destroy (f);
