@@ -23,7 +23,7 @@
 
 /* State for one watcher */
 struct watcher {
-    flux_msg_t *request;        // request message
+    const flux_msg_t *request;  // request message
     uint32_t rolemask;          // request cred
     uint32_t userid;            // request cred
     int rootseq;                // last root sequence number sent
@@ -85,7 +85,7 @@ static void watcher_destroy (struct watcher *w)
 {
     if (w) {
         int saved_errno = errno;
-        flux_msg_destroy (w->request);
+        flux_msg_decref (w->request);
         free (w->key);
         if (w->lookups) {
             flux_future_t *f;
@@ -106,8 +106,7 @@ static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
 
     if (!(w = calloc (1, sizeof (*w))))
         return NULL;
-    if (!(w->request = flux_msg_copy (msg, true)))
-        goto error;
+    w->request = flux_msg_incref (msg);
     if (flux_msg_get_rolemask (msg, &w->rolemask) < 0
             || flux_msg_get_userid (msg, &w->userid) < 0)
         goto error;
