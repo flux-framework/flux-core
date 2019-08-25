@@ -84,7 +84,7 @@ struct job_ingest_ctx {
 struct job {
     fluid_t id;         // jobid
 
-    flux_msg_t *msg;    // copy of submit request message
+    const flux_msg_t *msg; // submit request message
     const char *J;      // signed jobspec
     uint32_t userid;    // submitting userid
     uint32_t rolemask;  // submitting rolemask
@@ -106,13 +106,14 @@ struct batch {
 
 static int make_key (char *buf, int bufsz, struct job *job, const char *name);
 
+/* Free decoded jobspec after it has been transferred to the batch txn,
+ * to conserve memory.
+ */
 static void job_clean (struct job *job)
 {
     if (job) {
         free (job->jobspec);
         job->jobspec = NULL;
-        (void)flux_msg_set_payload (job->msg, NULL, 0);
-        job->J = NULL;
     }
 }
 
@@ -121,7 +122,7 @@ static void job_destroy (struct job *job)
     if (job) {
         int saved_errno = errno;
         free (job->jobspec);
-        flux_msg_destroy (job->msg);
+        flux_msg_decref (job->msg);
         free (job);
         errno = saved_errno;
     }
@@ -134,8 +135,7 @@ static struct job *job_create (const flux_msg_t *msg,
 
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
-    if (!(job->msg = flux_msg_copy (msg, true)))
-        goto error;
+    job->msg = flux_msg_incref (msg);
     if (flux_request_unpack (job->msg, NULL, "{s:s s:i s:i}",
                              "J", &job->J,
                              "priority", &job->priority,
