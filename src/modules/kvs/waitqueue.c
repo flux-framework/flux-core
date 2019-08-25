@@ -20,7 +20,7 @@ struct handler {
     flux_msg_handler_f cb;
     flux_t *h;
     flux_msg_handler_t *mh;
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     void *arg;
 };
 
@@ -70,11 +70,7 @@ wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
         w->hand.arg = arg;
         w->hand.h = h;
         w->hand.mh = mh;
-        if (msg && !(w->hand.msg = flux_msg_copy (msg, true))) {
-            wait_destroy (w);
-            errno = ENOMEM;
-            return NULL;
-        }
+        w->hand.msg = flux_msg_incref (msg);
     }
     return w;
 }
@@ -84,7 +80,7 @@ void wait_destroy (wait_t *w)
     if (w) {
         assert (w->magic == WAIT_MAGIC);
         assert (w->usecount == 0);
-        flux_msg_destroy (w->hand.msg);
+        flux_msg_decref (w->hand.msg);
         w->magic = ~WAIT_MAGIC;
         free (w);
     }
