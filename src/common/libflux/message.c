@@ -1325,28 +1325,27 @@ error:
     return NULL;
 }
 
-struct map_struct {
+struct typemap {
     const char *name;
     const char *sname;
     int type;
 };
 
-static struct map_struct msgtype_map[] = {
+static struct typemap typemap[] = {
     { "request", ">", FLUX_MSGTYPE_REQUEST },
     { "response", "<", FLUX_MSGTYPE_RESPONSE},
     { "event", "e", FLUX_MSGTYPE_EVENT},
     { "keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
 };
-static const int msgtype_map_len = 
-                            sizeof (msgtype_map) / sizeof (msgtype_map[0]);
+static const int typemap_len = sizeof (typemap) / sizeof (typemap[0]);
 
 const char *flux_msg_typestr (int type)
 {
     int i;
 
-    for (i = 0; i < msgtype_map_len; i++)
-        if ((type & msgtype_map[i].type))
-            return msgtype_map[i].name;
+    for (i = 0; i < typemap_len; i++)
+        if ((type & typemap[i].type))
+            return typemap[i].name;
     return "unknown";
 }
 
@@ -1354,9 +1353,9 @@ static const char *msgtype_shortstr (int type)
 {
     int i;
 
-    for (i = 0; i < msgtype_map_len; i++)
-        if ((type & msgtype_map[i].type))
-            return msgtype_map[i].sname;
+    for (i = 0; i < typemap_len; i++)
+        if ((type & typemap[i].type))
+            return typemap[i].sname;
     return "?";
 }
 
