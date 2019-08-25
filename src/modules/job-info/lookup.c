@@ -23,7 +23,7 @@
 
 struct lookup_ctx {
     struct info_ctx *ctx;
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     flux_jobid_t id;
     json_t *keys;
     bool check_eventlog;
@@ -38,7 +38,7 @@ static void lookup_ctx_destroy (void *data)
 {
     if (data) {
         struct lookup_ctx *ctx = data;
-        flux_msg_destroy (ctx->msg);
+        flux_msg_decref (ctx->msg);
         json_decref (ctx->keys);
         flux_future_destroy (ctx->f);
         free (ctx);
@@ -66,10 +66,7 @@ static struct lookup_ctx *lookup_ctx_create (struct info_ctx *ctx,
         goto error;
     }
 
-    if (!(l->msg = flux_msg_copy (msg, true))) {
-        flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
-        goto error;
-    }
+    l->msg = flux_msg_incref (msg);
 
     return l;
 
