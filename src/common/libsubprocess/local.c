@@ -169,66 +169,70 @@ static int channel_local_setup (flux_subprocess_t *p,
         goto error;
     }
 
-    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fds) < 0) {
-        flux_log_error (p->h, "socketpair");
-        goto error;
-    }
+    if ((channel_flags & CHANNEL_READ)
+        || (channel_flags & CHANNEL_WRITE)) {
 
-    c->parent_fd = fds[0];
-    c->child_fd = fds[1];
-
-    /* set fds[] to -1, on error is now subprocess_free()'s
-     * responsibility
-     */
-    fds[0] = -1;
-    fds[1] = -1;
-
-    if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
-        flux_log_error (p->h, "fd_set_nonblocking");
-        goto error;
-    }
-
-    if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
-        flux_log_error (p->h, "cmd_option_bufsize");
-        goto error;
-    }
-
-    if ((channel_flags & CHANNEL_WRITE) && in_cb) {
-        c->buffer_write_w = flux_buffer_write_watcher_create (p->reactor,
-                                                              c->parent_fd,
-                                                              buffer_size,
-                                                              in_cb,
-                                                              0,
-                                                              c);
-        if (!c->buffer_write_w) {
-            flux_log_error (p->h, "flux_buffer_write_watcher_create");
-            goto error;
-        }
-    }
-
-    if ((channel_flags & CHANNEL_READ) && out_cb) {
-        int wflag;
-
-        if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
-            flux_log_error (p->h, "cmd_option_line_buffer");
+        if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fds) < 0) {
+            flux_log_error (p->h, "socketpair");
             goto error;
         }
 
-        if (wflag)
-            c->line_buffered = true;
+        c->parent_fd = fds[0];
+        c->child_fd = fds[1];
 
-        c->buffer_read_w = flux_buffer_read_watcher_create (p->reactor,
-                                                            c->parent_fd,
-                                                            buffer_size,
-                                                            out_cb,
-                                                            wflag,
-                                                            c);
-        if (!c->buffer_read_w) {
-            flux_log_error (p->h, "flux_buffer_read_watcher_create");
+        /* set fds[] to -1, on error is now subprocess_free()'s
+         * responsibility
+         */
+        fds[0] = -1;
+        fds[1] = -1;
+
+        if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
+            flux_log_error (p->h, "fd_set_nonblocking");
             goto error;
         }
 
-        p->channels_eof_expected++;
+        if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
+            flux_log_error (p->h, "cmd_option_bufsize");
+            goto error;
+        }
+
+        if ((channel_flags & CHANNEL_WRITE) && in_cb) {
+            c->buffer_write_w = flux_buffer_write_watcher_create (p->reactor,
+                                                                  c->parent_fd,
+                                                                  buffer_size,
+                                                                  in_cb,
+                                                                  0,
+                                                                  c);
+            if (!c->buffer_write_w) {
+                flux_log_error (p->h, "flux_buffer_write_watcher_create");
+                goto error;
+            }
+        }
+
+        if ((channel_flags & CHANNEL_READ) && out_cb) {
+            int wflag;
+
+            if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
+                flux_log_error (p->h, "cmd_option_line_buffer");
+                goto error;
+            }
+
+            if (wflag)
+                c->line_buffered = true;
+
+            c->buffer_read_w = flux_buffer_read_watcher_create (p->reactor,
+                                                                c->parent_fd,
+                                                                buffer_size,
+                                                                out_cb,
+                                                                wflag,
+                                                                c);
+            if (!c->buffer_read_w) {
+                flux_log_error (p->h, "flux_buffer_read_watcher_create");
+                goto error;
+            }
+
+            p->channels_eof_expected++;
+        }
     }
 
     if (channel_flags & CHANNEL_FD) {
@@ -452,26 +456,36 @@ static int local_child (flux_subprocess_t *p)
 
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
         if ((c = zhash_lookup (p->channels, "stdin"))) {
-            if (dup2 (c->child_fd, STDIN_FILENO) < 0) {
-                flux_log_error (p->h, "dup2");
-                _exit (1);
+            if (c->flags & CHANNEL_WRITE) {
+                if (dup2 (c->child_fd, STDIN_FILENO) < 0) {
+                    flux_log_error (p->h, "dup2");
+                    _exit (1);
+                }
             }
         }
 
         if ((c = zhash_lookup (p->channels, "stdout"))) {
-            if (dup2 (c->child_fd, STDOUT_FILENO) < 0) {
-                flux_log_error (p->h, "dup2");
-                _exit (1);
+            if (c->flags & CHANNEL_READ) {
+                if (dup2 (c->child_fd, STDOUT_FILENO) < 0) {
+                    flux_log_error (p->h, "dup2");
+                    _exit (1);
+                }
             }
+            else
+                close (STDOUT_FILENO);
         }
         else
             close (STDOUT_FILENO);
 
         if ((c = zhash_lookup (p->channels, "stderr"))) {
-            if (dup2 (c->child_fd, STDERR_FILENO) < 0) {
-                flux_log_error (p->h, "dup2");
-                _exit (1);
+            if (c->flags & CHANNEL_READ) {
+                if (dup2 (c->child_fd, STDERR_FILENO) < 0) {
+                    flux_log_error (p->h, "dup2");
+                    _exit (1);
+                }
             }
+            else
+                close (STDERR_FILENO);
         }
         else
             close (STDERR_FILENO);
@@ -670,15 +684,18 @@ static int start_local_watchers (flux_subprocess_t *p)
     c = zhash_first (p->channels);
     while (c) {
         int ret;
-        flux_watcher_start (c->buffer_write_w);
-        if ((ret = cmd_option_stream_stop (p, c->name)) < 0)
-            return -1;
-        if (ret) {
-            flux_watcher_start (c->buffer_read_stopped_w);
-        }
-        else {
-            flux_watcher_start (c->buffer_read_w);
-            c->buffer_read_w_started = true;
+        if (c->flags & CHANNEL_WRITE)
+            flux_watcher_start (c->buffer_write_w);
+        if (c->flags & CHANNEL_READ) {
+            if ((ret = cmd_option_stream_stop (p, c->name)) < 0)
+                return -1;
+            if (ret) {
+                flux_watcher_start (c->buffer_read_stopped_w);
+            }
+            else {
+                flux_watcher_start (c->buffer_read_w);
+                c->buffer_read_w_started = true;
+            }
         }
         c = zhash_next (p->channels);
     }
