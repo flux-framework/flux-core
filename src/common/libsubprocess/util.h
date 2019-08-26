@@ -26,4 +26,7 @@ int cmd_option_stream_stop (flux_subprocess_t *p, const char *name);
 /* sets fdp to -1 if user did not set INPUT_FD */
 int cmd_option_input_fd (flux_subprocess_t *p, const char *name, int *fdp);
 
+/* sets fdp to -1 if user did not set OUTPUT_FD */
+int cmd_option_output_fd (flux_subprocess_t *p, const char *name, int *fdp);
+
 #endif /* !_SUBPROCESS_UTIL_H */

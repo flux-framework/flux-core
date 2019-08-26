@@ -158,7 +158,8 @@ static int channel_local_setup (flux_subprocess_t *p,
                                 flux_watcher_f out_cb,
                                 const char *name,
                                 int channel_flags,
-                                int input_fd)
+                                int input_fd,
+                                int output_fd)
 {
     struct subprocess_channel *c = NULL;
     int fds[2] = { -1, -1 };
@@ -242,6 +243,10 @@ static int channel_local_setup (flux_subprocess_t *p,
             assert (input_fd >= 0);
             c->input_fd = input_fd;
         }
+        if (channel_flags & CHANNEL_OUTPUT_FD) {
+            assert (output_fd >= 0);
+            c->output_fd = output_fd;
+        }
     }
 
     if (channel_flags & CHANNEL_FD) {
@@ -313,28 +318,51 @@ static int local_setup_stdio (flux_subprocess_t *p)
                              NULL,
                              "stdin",
                              flags,
-                             fd) < 0)
+                             fd,
+                             -1) < 0)
         return -1;
 
-    if (p->ops.on_stdout) {
+    if (cmd_option_output_fd (p, "stdout", &fd) < 0)
+        return -1;
+
+    if (fd >= 0)
+        flags = CHANNEL_OUTPUT_FD;
+    else if (p->ops.on_stdout)
+        flags = CHANNEL_READ;
+    else
+        flags = 0;
+
+    if (flags) {
         if (channel_local_setup (p,
                                  p->ops.on_stdout,
                                  NULL,
                                  local_stdout_cb,
                                  "stdout",
-                                 CHANNEL_READ,
-                                 -1) < 0)
+                                 flags,
+                                 -1,
+                                 fd) < 0)
             return -1;
     }
 
-    if (p->ops.on_stderr) {
+    if (cmd_option_output_fd (p, "stderr", &fd) < 0)
+        return -1;
+
+    if (fd >= 0)
+        flags = CHANNEL_OUTPUT_FD;
+    else if (p->ops.on_stderr)
+        flags = CHANNEL_READ;
+    else
+        flags = 0;
+
+    if (flags) {
         if (channel_local_setup (p,
                                  p->ops.on_stderr,
                                  NULL,
                                  local_stderr_cb,
                                  "stderr",
-                                 CHANNEL_READ,
-                                 -1) < 0)
+                                 flags,
+                                 -1,
+                                 fd) < 0)
             return -1;
     }
 
@@ -367,6 +395,7 @@ static int local_setup_channels (flux_subprocess_t *p)
                                  p->ops.on_channel_out ? local_out_cb : NULL,
                                  name,
                                  channel_flags,
+                                 -1,
                                  -1) < 0)
             return -1;
         name = zlist_next (channels);
@@ -500,27 +529,39 @@ static int local_child (flux_subprocess_t *p)
         }
 
         if ((c = zhash_lookup (p->channels, "stdout"))) {
+            assert ((c->flags & CHANNEL_READ)
+                    || (c->flags & CHANNEL_OUTPUT_FD));
             if (c->flags & CHANNEL_READ) {
                 if (dup2 (c->child_fd, STDOUT_FILENO) < 0) {
                     flux_log_error (p->h, "dup2");
                     _exit (1);
                 }
             }
-            else
-                close (STDOUT_FILENO);
+            else if (c->flags & CHANNEL_OUTPUT_FD) {
+                if (dup2 (c->output_fd, STDOUT_FILENO) < 0) {
+                    flux_log_error (p->h, "dup2");
+                    _exit (1);
+                }
+            }
         }
         else
             close (STDOUT_FILENO);
 
         if ((c = zhash_lookup (p->channels, "stderr"))) {
+            assert ((c->flags & CHANNEL_READ)
+                    || (c->flags & CHANNEL_OUTPUT_FD));
             if (c->flags & CHANNEL_READ) {
                 if (dup2 (c->child_fd, STDERR_FILENO) < 0) {
                     flux_log_error (p->h, "dup2");
                     _exit (1);
                 }
             }
-            else
-                close (STDERR_FILENO);
+            else if (c->flags & CHANNEL_OUTPUT_FD) {
+                if (dup2 (c->output_fd, STDERR_FILENO) < 0) {
+                    flux_log_error (p->h, "dup2");
+                    _exit (1);
+                }
+            }
         }
         else
             close (STDERR_FILENO);
