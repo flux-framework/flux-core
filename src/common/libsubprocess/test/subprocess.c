@@ -200,6 +200,17 @@ void test_basic_errors (flux_reactor_t *r)
         "flux_rexec fails with cmd with no cwd");
     flux_cmd_destroy (cmd);
 
+    ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
+        "flux_cmd_create with 0 args works");
+    ok (flux_cmd_setcwd (cmd, "foobar") == 0,
+        "flux_cmd_setcwd works");
+    ok (flux_cmd_setopt (cmd, "stdout_STREAM_STOP", "true") == 0,
+        "flux_cmd_setopt works");
+    ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
+        && errno == EINVAL,
+        "flux_rexec fails with cmd with STREAM_STOP option");
+    flux_cmd_destroy (cmd);
+
     ok (flux_subprocess_stream_start (NULL, NULL) < 0
         && errno == EINVAL,
         "flux_subprocess_stream_start fails with NULL pointer inputs");

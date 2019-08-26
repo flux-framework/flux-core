@@ -756,31 +756,26 @@ zlist_t *flux_cmd_channel_list (flux_cmd_t *cmd)
     return cmd->channels;
 }
 
-int flux_cmd_delete_opts (flux_cmd_t *cmd, const char **substrings)
+int flux_cmd_find_opts (const flux_cmd_t *cmd, const char **substrings)
 {
-    zlist_t *keys = NULL;
-    const char *key;
+    void *iter;
+    int rv = 0;
 
-    if (!(keys = zhash_keys (cmd->opts))) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    key = zlist_first (keys);
-    while (key) {
+    iter = zhash_first (cmd->opts);
+    while (iter && !rv) {
+        const char *key = zhash_cursor (cmd->opts);
         const char **str = substrings;
         while ((*str)) {
             if (strstr (key, (*str))) {
-                zhash_delete (cmd->opts, key);
+                rv++;
                 break;
             }
             str++;
         }
-        key = zlist_next (keys);
+        iter = zhash_next (cmd->opts);
     }
 
-    zlist_destroy (&keys);
-    return 0;
+    return rv;
 }
 
 

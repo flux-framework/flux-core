@@ -154,10 +154,13 @@ void check_cmd_attributes (flux_cmd_t *cmd)
         "flux_cmd_getopt (cmd, 'OPTION') == VALUE");
 }
 
-void test_delete_opts (void)
+void test_find_opts (void)
 {
     flux_cmd_t *cmd;
-    const char *substrings[] = { "FOO", "BAZ", NULL };
+    const char *substrings1[] = { "FOO", NULL };
+    const char *substrings2[] = { "DUH", "BAZ", "UHH", NULL };
+    const char *substrings3[] = { "OOPS",  NULL };
+    const char *substrings4[] = { NULL };
 
     cmd = flux_cmd_create (0, NULL, NULL);
     ok (cmd != NULL,
@@ -174,30 +177,17 @@ void test_delete_opts (void)
     ok (flux_cmd_setopt (cmd, "b_BAZ", "val") == 0,
         "flux_cmd_setopt works");
 
-    ok (flux_cmd_getopt (cmd, "a_FOO") != NULL,
-        "flux_cmd_getopt finds key");
-    ok (flux_cmd_getopt (cmd, "a_BAR") != NULL,
-        "flux_cmd_getopt finds key");
-    ok (flux_cmd_getopt (cmd, "b_BAR") != NULL,
-        "flux_cmd_getopt finds key");
-    ok (flux_cmd_getopt (cmd, "a_BAZ") != NULL,
-        "flux_cmd_getopt finds key");
-    ok (flux_cmd_getopt (cmd, "b_BAZ") != NULL,
-        "flux_cmd_getopt finds key");
+    ok (flux_cmd_find_opts (cmd, substrings1) == 1,
+        "flux_cmd_find_opts finds substrings");
 
-    ok (flux_cmd_delete_opts (cmd, substrings) == 0,
-        "flux_cmd_delete_opts works");
+    ok (flux_cmd_find_opts (cmd, substrings2) == 1,
+        "flux_cmd_find_opts finds substrings");
 
-    ok (flux_cmd_getopt (cmd, "a_FOO") == NULL,
-        "flux_cmd_getopt does not find key");
-    ok (flux_cmd_getopt (cmd, "a_BAR") != NULL,
-        "flux_cmd_getopt finds key");
-    ok (flux_cmd_getopt (cmd, "b_BAR") != NULL,
-        "flux_cmd_getopt finds key");
-    ok (flux_cmd_getopt (cmd, "a_BAZ") == NULL,
-        "flux_cmd_getopt does not find key");
-    ok (flux_cmd_getopt (cmd, "b_BAZ") == NULL,
-        "flux_cmd_getopt does not find key");
+    ok (flux_cmd_find_opts (cmd, substrings3) == 0,
+        "flux_cmd_find_opts doesn't find substrings");
+
+    ok (flux_cmd_find_opts (cmd, substrings4) == 0,
+        "flux_cmd_find_opts doesn't find substrings");
 }
 
 int main (int argc, char *argv[])
@@ -283,7 +273,7 @@ int main (int argc, char *argv[])
     }
     flux_cmd_destroy (cmd);
 
-    test_delete_opts ();
+    test_find_opts ();
 
     done_testing ();
     return 0;
