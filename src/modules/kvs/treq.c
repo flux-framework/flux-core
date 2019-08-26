@@ -22,6 +22,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "treq.h"
 
 struct treq_mgr {
@@ -307,20 +309,20 @@ int treq_add_request_ops (treq_t *tr, json_t *ops)
 
 int treq_add_request_copy (treq_t *tr, const flux_msg_t *request)
 {
-    flux_msg_t *cpy = flux_msg_copy (request, false);
-    if (!cpy)
-        return -1;
-    if (zlist_push (tr->requests, cpy) < 0) {
-        flux_msg_destroy (cpy);
+    if (zlist_push (tr->requests, (void *)flux_msg_incref (request)) < 0) {
+        flux_msg_decref (request);
         return -1;
     }
-    zlist_freefn (tr->requests, cpy, (zlist_free_fn *)flux_msg_destroy, false);
+    zlist_freefn (tr->requests,
+                  (void *)request,
+                  (zlist_free_fn *)flux_msg_decref,
+                  false);
     return 0;
 }
 
 int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data)
 {
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
 
     msg = zlist_first (tr->requests);
     while (msg) {

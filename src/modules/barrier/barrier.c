@@ -46,6 +46,7 @@
 #include <flux/core.h>
 #include <czmq.h>
 
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 
@@ -158,14 +159,11 @@ static int barrier_add_client (struct barrier *b,
                                char *sender,
                                const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = flux_msg_copy (msg, false);
-    if (!cpy)
-        return -1;
-    if (zhash_insert (b->clients, sender, cpy) < 0) {
-        flux_msg_destroy (cpy);
+    if (zhash_insert (b->clients, sender, (void *)flux_msg_incref (msg)) < 0) {
+        flux_msg_decref (msg);
         return -1;
     }
-    zhash_freefn (b->clients, sender, (zhash_free_fn *)flux_msg_destroy);
+    zhash_freefn (b->clients, sender, (zhash_free_fn *)flux_msg_decref);
     return 0;
 }
 
@@ -419,7 +417,7 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *name;
     int errnum;
     const char *key;
-    flux_msg_t *req;
+    const flux_msg_t *req;
     int owner;
 
     if (flux_event_unpack (msg, NULL, "{s:s s:i s:i !}",

@@ -552,6 +552,16 @@ void check_sendzsock (void)
     int type;
     const char *uri = "inproc://test";
 
+    /* zsys boiler plate:
+     * appears to be needed to avoid atexit assertions when lives_ok()
+     * macro (which calls fork()) is used.
+     */
+    zsys_init ();
+    zsys_set_logstream (stderr);
+    zsys_set_logident ("test_message.t");
+    zsys_handler_set (NULL);
+    zsys_set_linger (5); // msec
+
     ok ((zsock[0] = zsock_new_pair (NULL)) != NULL
                     && zsock_bind (zsock[0], "%s", uri) == 0
                     && (zsock[1] = zsock_new_pair (uri)) != NULL,
@@ -588,6 +598,10 @@ void check_sendzsock (void)
 
     zsock_destroy (&zsock[0]);
     zsock_destroy (&zsock[1]);
+
+    /* zsys boiler plate - see note above
+     */
+    zsys_shutdown();
 }
 
 void *myfree_arg = NULL;
@@ -808,6 +822,32 @@ void check_flags (void)
         "flux_msg_is_streaming msg=NULL returns true");
 }
 
+void check_refcount (void)
+{
+    flux_msg_t *msg;
+    const flux_msg_t *p;
+    int type;
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
+        BAIL_OUT ("failed to create test message");
+    p = flux_msg_incref (msg);
+    ok (p == msg,
+        "flux_msg_incref returns pointer to original");
+    flux_msg_destroy (msg);
+    ok (flux_msg_get_type (p, &type) == 0 && type == FLUX_MSGTYPE_KEEPALIVE,
+        "reference remains valid after destroy");
+    flux_msg_decref (p);
+
+    errno = 0;
+    p = flux_msg_incref (NULL);
+    ok (p == NULL && errno == EINVAL,
+        "flux_msg_incref msg=NULL fails with EINVAL");
+
+    lives_ok ({flux_msg_decref (NULL);},
+        "flux_msg_decref msg=NULL doesnt crash crash");
+    lives_ok ({flux_msg_destroy (NULL);},
+        "flux_msg_destroy msg=NULL doesnt crash crash");
+}
 
 int main (int argc, char *argv[])
 {
@@ -832,6 +872,8 @@ int main (int argc, char *argv[])
     check_sendzsock ();
 
     check_params ();
+
+    check_refcount();
 
     //check_print ();
 

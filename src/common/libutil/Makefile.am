@@ -88,7 +88,8 @@ libutil_la_SOURCES = \
 	fsd.c \
 	fsd.h \
 	zsecurity.c \
-	zsecurity.h
+	zsecurity.h \
+	errno_safe.h
 
 EXTRA_DIST = veb_mach.c
 

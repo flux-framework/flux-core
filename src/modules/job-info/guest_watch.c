@@ -61,7 +61,7 @@
 
 struct guest_watch_ctx {
     struct info_ctx *ctx;
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     uint32_t msg_rolemask;
     uint32_t msg_userid;
     flux_jobid_t id;
@@ -126,7 +126,7 @@ static void guest_watch_ctx_destroy (void *data)
 {
     if (data) {
         struct guest_watch_ctx *gw = data;
-        flux_msg_destroy (gw->msg);
+        flux_msg_decref (gw->msg);
         free (gw->path);
         flux_future_destroy (gw->get_main_eventlog_f);
         flux_future_destroy (gw->wait_guest_namespace_f);
@@ -155,10 +155,8 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
     }
     gw->state = GUEST_WATCH_STATE_INIT;
 
-    if (!(gw->msg = flux_msg_copy (msg, true))) {
-        flux_log_error (ctx->h, "%s: flux_msg_copy", __FUNCTION__);
-        goto error;
-    }
+    gw->msg = flux_msg_incref (msg);
+
     if (flux_msg_get_rolemask (msg, &gw->msg_rolemask) < 0) {
         flux_log_error (ctx->h, "%s: flux_msg_get_rolemask", __FUNCTION__);
         goto error;

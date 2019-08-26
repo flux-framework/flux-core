@@ -15,12 +15,13 @@
 #include <flux/core.h>
 #include <flux/idset.h>
 
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libschedutil/schedutil.h"
 #include "libjj.h"
 #include "rlist.h"
 
 struct jobreq {
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     flux_jobid_t id;
     struct jj_counts jj;
     int errnum;
@@ -36,8 +37,8 @@ struct simple_sched {
 static void jobreq_destroy (struct jobreq *job)
 {
     if (job) {
-        flux_msg_destroy (job->msg);
-        free (job);
+        flux_msg_decref (job->msg);
+        ERRNO_SAFE_FREE (job);
     }
 }
 
@@ -54,8 +55,7 @@ jobreq_create (const flux_msg_t *msg, const char *jobspec)
     if (schedutil_alloc_request_decode (msg, &job->id,
                             &pri, &uid, &t_submit) < 0)
         goto err;
-    if (!(job->msg = flux_msg_copy (msg, true)))
-        goto err;
+    job->msg = flux_msg_incref (msg);
     if (libjj_get_counts (jobspec, &job->jj) < 0)
         job->errnum = errno;
     return job;

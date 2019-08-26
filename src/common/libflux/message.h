@@ -102,6 +102,11 @@ void *flux_msg_aux_get (const flux_msg_t *msg, const char *name);
  */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
 
+/* Manipulate msg reference count..
+ */
+const flux_msg_t *flux_msg_incref (const flux_msg_t *msg);
+void flux_msg_decref (const flux_msg_t *msg);
+
 /* Encode a flux_msg_t to buffer (pre-sized by calling flux_msg_encode_size()).
  * Returns 0 on success, -1 on failure with errno set.
  */

@@ -40,12 +40,11 @@
 
 #include "message.h"
 
-#define FLUX_MSG_MAGIC 0x33321eee
 struct flux_msg {
-    int magic;
     zmsg_t *zmsg;
     json_t *json;
     struct aux_item *aux;
+    int refcount;
 };
 
 /* Begin manual codec
@@ -180,16 +179,23 @@ static void proto_init (uint8_t *data, int len, uint8_t flags)
 /* End manual codec
  */
 
+static flux_msg_t *flux_msg_create_common (void)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = calloc (1, sizeof (*msg))))
+        return NULL;
+    msg->refcount = 1;
+    return msg;
+}
+
 flux_msg_t *flux_msg_create (int type)
 {
     uint8_t proto[PROTO_SIZE];
-    flux_msg_t *msg = calloc (1, sizeof (*msg));
+    flux_msg_t *msg;
 
-    if (!msg) {
-        errno = ENOMEM;
-        goto error;
-    }
-    msg->magic = FLUX_MSG_MAGIC;
+    if (!(msg = flux_msg_create_common ()))
+        return NULL;
     proto_init (proto, PROTO_SIZE, 0);
     if (proto_set_type (proto, PROTO_SIZE, type) < 0) {
         errno = EINVAL;
@@ -209,16 +215,37 @@ error:
 
 void flux_msg_destroy (flux_msg_t *msg)
 {
-    if (msg) {
-        assert (msg->magic == FLUX_MSG_MAGIC);
+    if (msg && --msg->refcount == 0) {
         int saved_errno = errno;
         json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
-        msg->magic =~ FLUX_MSG_MAGIC;
         aux_destroy (&msg->aux);
         free (msg);
         errno = saved_errno;
     }
+}
+
+/* N.B. const attribute of msg argument is defeated internally for
+ * incref/decref to allow msg destruction to be juggled to whoever last
+ * decrements the reference count.  Other than its eventual destruction,
+ * the message content shall not change.
+ */
+void flux_msg_decref (const flux_msg_t *const_msg)
+{
+    flux_msg_t *msg = (flux_msg_t *)const_msg;
+    flux_msg_destroy (msg);
+}
+
+const flux_msg_t *flux_msg_incref (const flux_msg_t *const_msg)
+{
+    flux_msg_t *msg = (flux_msg_t *)const_msg;
+
+    if (!msg) {
+        errno = EINVAL;
+        return NULL;
+    }
+    msg->refcount++;
+    return msg;
 }
 
 /* N.B. const attribute of msg argument is defeated internally to
@@ -295,28 +322,26 @@ nospace:
 
 flux_msg_t *flux_msg_decode (const void *buf, size_t size)
 {
-    flux_msg_t *msg = calloc (1, sizeof (*msg));
+    flux_msg_t *msg;
     uint8_t const *p = buf;
     zframe_t *zf;
-    int saved_errno;
 
-    if (!msg)
-        goto nomem;
-    msg->magic = FLUX_MSG_MAGIC;
+    if (!(msg = flux_msg_create_common ()))
+        return NULL;
     if (!(msg->zmsg = zmsg_new ()))
         goto nomem;
     while (p - (uint8_t *)buf < size) {
         size_t n = *p++;
         if (n == 0xff) {
             if (size - (p - (uint8_t *)buf) < 4) {
-                saved_errno = EINVAL;
+                errno = EINVAL;
                 goto error;
             }
             n = ntohl (*(uint32_t *)p);
             p += 4;
         }
         if (size - (p - (uint8_t *)buf) < n) {
-            saved_errno = EINVAL;
+            errno = EINVAL;
             goto error;
         }
         if (!(zf = zframe_new (p, n)))
@@ -327,10 +352,9 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
     }
     return msg;
 nomem:
-    saved_errno = EINVAL;
+    errno = ENOMEM;
 error:
     flux_msg_destroy (msg);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -1263,22 +1287,17 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
     uint8_t flags;
     bool skip_payload = false;
 
-    if (msg->magic != FLUX_MSG_MAGIC) {
-        errno = EINVAL;
-        goto error;
-    }
     /* Set skip_payload = true if caller set 'payload' flag false
      * AND message contains a payload frame.
      */
     if (flux_msg_get_flags (msg, &flags) < 0)
-        goto error;
+        return NULL;
     if (!payload && (flags & FLUX_MSGFLAG_PAYLOAD)) {
         flags &= ~(FLUX_MSGFLAG_PAYLOAD);
         skip_payload = true;
     }
-    if (!(cpy = calloc (1, sizeof (*cpy))))
-        goto nomem;
-    cpy->magic = FLUX_MSG_MAGIC;
+    if (!(cpy = flux_msg_create_common ()))
+        return NULL;
     if (!(cpy->zmsg = zmsg_new ()))
         goto nomem;
 
@@ -1306,28 +1325,27 @@ error:
     return NULL;
 }
 
-struct map_struct {
+struct typemap {
     const char *name;
     const char *sname;
     int type;
 };
 
-static struct map_struct msgtype_map[] = {
+static struct typemap typemap[] = {
     { "request", ">", FLUX_MSGTYPE_REQUEST },
     { "response", "<", FLUX_MSGTYPE_RESPONSE},
     { "event", "e", FLUX_MSGTYPE_EVENT},
     { "keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
 };
-static const int msgtype_map_len = 
-                            sizeof (msgtype_map) / sizeof (msgtype_map[0]);
+static const int typemap_len = sizeof (typemap) / sizeof (typemap[0]);
 
 const char *flux_msg_typestr (int type)
 {
     int i;
 
-    for (i = 0; i < msgtype_map_len; i++)
-        if ((type & msgtype_map[i].type))
-            return msgtype_map[i].name;
+    for (i = 0; i < typemap_len; i++)
+        if ((type & typemap[i].type))
+            return typemap[i].name;
     return "unknown";
 }
 
@@ -1335,9 +1353,9 @@ static const char *msgtype_shortstr (int type)
 {
     int i;
 
-    for (i = 0; i < msgtype_map_len; i++)
-        if ((type & msgtype_map[i].type))
-            return msgtype_map[i].sname;
+    for (i = 0; i < typemap_len; i++)
+        if ((type & typemap[i].type))
+            return typemap[i].sname;
     return "?";
 }
 
@@ -1552,12 +1570,11 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
 
     if (!(zmsg = zmsg_recv (sock)))
         return NULL;
-    if (!(msg = calloc (1, sizeof (*msg)))) {
+    if (!(msg = flux_msg_create_common ())) {
         zmsg_destroy (&zmsg);
         errno = ENOMEM;
         return NULL;
     }
-    msg->magic = FLUX_MSG_MAGIC;
     msg->zmsg = zmsg;
     return msg;
 }

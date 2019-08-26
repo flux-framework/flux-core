@@ -26,6 +26,8 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "drain.h"
 #include "submit.h"
 
@@ -40,12 +42,12 @@ struct drain_ctx {
 static void drain_complete_cb (struct queue *queue, void *arg)
 {
     struct drain_ctx *ctx = arg;
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
 
     while ((msg = zlist_pop (ctx->requests))) {
         if (flux_respond (ctx->h, msg, NULL) < 0)
             flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
-        flux_msg_destroy (msg);
+        flux_msg_decref (msg);
     }
 }
 
@@ -53,14 +55,11 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct drain_ctx *ctx = arg;
-    flux_msg_t *cpy;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (!(cpy = flux_msg_copy (msg, false)))
-        goto error;
-    if (zlist_append (ctx->requests, cpy) < 0) {
-        flux_msg_destroy (cpy);
+    if (zlist_append (ctx->requests, (void *)flux_msg_incref (msg)) < 0) {
+        flux_msg_decref (msg);
         errno = ENOMEM;
         goto error;
     }
@@ -77,7 +76,7 @@ static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     struct drain_ctx *ctx = arg;
-    flux_msg_t *req;
+    const flux_msg_t *req;
 
     if (flux_request_decode (msg, NULL, NULL) < 0) {
         if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -89,7 +88,7 @@ static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
         if (flux_respond_error (ctx->h, req, EINVAL,
                                 "queue was re-enabled") < 0)
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        flux_msg_destroy (req);
+        flux_msg_decref (req);
     }
     if (flux_respond (ctx->h, msg, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
@@ -101,13 +100,13 @@ void drain_ctx_destroy (struct drain_ctx *ctx)
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
         if (ctx->requests) {
-            flux_msg_t *msg;
+            const flux_msg_t *msg;
             while ((msg = zlist_pop (ctx->requests))) {
                 if (flux_respond_error (ctx->h, msg, ENOSYS,
                                         "job-manager is unloading") < 0)
                     flux_log_error (ctx->h, "%s: flux_respond_error",
                                     __FUNCTION__);
-                flux_msg_destroy (msg);
+                flux_msg_decref (msg);
             }
             zlist_destroy (&ctx->requests);
         }

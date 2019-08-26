@@ -27,7 +27,7 @@ struct kvssync {
     flux_msg_handler_f cb;
     flux_t *h;
     flux_msg_handler_t *mh;
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     void *arg;
     int seq;
 };
@@ -48,8 +48,7 @@ static void kvssync_destroy (void *data)
 {
     struct kvssync *ks = data;
     if (ks) {
-        if (ks->msg)
-            flux_msg_destroy (ks->msg);
+        flux_msg_decref (ks->msg);
         free (ks);
     }
 }
@@ -70,11 +69,7 @@ int kvssync_add (struct kvsroot *root, flux_msg_handler_f cb, flux_t *h,
         goto error;
     }
 
-    if (!(ks->msg = flux_msg_copy (msg, true))) {
-        errno = ENOMEM;
-        goto error;
-    }
-
+    ks->msg = flux_msg_incref (msg);
     ks->cb = cb;
     ks->h = h;
     ks->mh = mh;
