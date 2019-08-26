@@ -122,7 +122,10 @@ cleanup:
     return rv;
 }
 
-int cmd_option_input_fd (flux_subprocess_t *p, const char *name, int *fdp)
+static int cmd_option_fd (flux_subprocess_t *p,
+                          const char *name,
+                          const char *substring,
+                          int *fdp)
 {
     char *var;
     const char *val;
@@ -130,7 +133,7 @@ int cmd_option_input_fd (flux_subprocess_t *p, const char *name, int *fdp)
 
     (*fdp) = -1;
 
-    if (asprintf (&var, "%s_INPUT_FD", name) < 0)
+    if (asprintf (&var, "%s_%s", name, substring) < 0)
         goto cleanup;
 
     if ((val = flux_cmd_getopt (p->cmd, var))) {
@@ -151,6 +154,16 @@ int cmd_option_input_fd (flux_subprocess_t *p, const char *name, int *fdp)
 cleanup:
     free (var);
     return rv;
+}
+
+int cmd_option_input_fd (flux_subprocess_t *p, const char *name, int *fdp)
+{
+    return cmd_option_fd (p, name, "INPUT_FD", fdp);
+}
+
+int cmd_option_output_fd (flux_subprocess_t *p, const char *name, int *fdp)
+{
+    return cmd_option_fd (p, name, "OUTPUT_FD", fdp);
 }
 
 /*
