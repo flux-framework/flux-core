@@ -532,11 +532,11 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
 
 void test_basic_stdin (flux_reactor_t *r)
 {
-    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", NULL };
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O",  NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
-    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+    ok ((cmd = flux_cmd_create (3, av, environ)) != NULL, "flux_cmd_create");
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
