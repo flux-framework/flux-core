@@ -16,11 +16,15 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <linux/limits.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/subprocess.h"
 
 extern char **environ;
+
+char *tmpdir;
+char stdin_input_file[PATH_MAX];
 
 int completion_cb_count;
 int completion_fail_cb_count;
@@ -47,6 +51,18 @@ int channel_in_and_out_cb_count;
 int multiple_lines_channel_cb_count;
 int channel_nul_terminate_cb_count;
 int timer_cb_count;
+
+void calc_tmpfile (char path[PATH_MAX], const char *suffix)
+{
+    int len;
+
+    len = snprintf (path, PATH_MAX, "%s/%s", tmpdir, suffix);
+    if (len >= PATH_MAX)
+        BAIL_OUT ("buffer overflow");
+
+    /* remove it, just in case it was left over from a prior job */
+    unlink (path);
+}
 
 static int fdcount (void)
 {
@@ -209,6 +225,17 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with STREAM_STOP option");
+    flux_cmd_destroy (cmd);
+
+    ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
+        "flux_cmd_create with 0 args works");
+    ok (flux_cmd_setcwd (cmd, "foobar") == 0,
+        "flux_cmd_setcwd works");
+    ok (flux_cmd_setopt (cmd, "stdin_INPUT_FD", "5") == 0,
+        "flux_cmd_setopt works");
+    ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
+        && errno == EINVAL,
+        "flux_rexec fails with cmd with INPUT_FD option");
     flux_cmd_destroy (cmd);
 
     ok (flux_subprocess_stream_start (NULL, NULL) < 0
@@ -901,6 +928,163 @@ void test_basic_stdin_closed (flux_reactor_t *r)
     ok (stdin_closed_stdout_cb_count == 1, "stdout output callback called 1 time");
     ok (stdin_closed_stderr_cb_count == 1, "stderr output callback called 1 time");
     flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+int set_stdin_input_fd (flux_cmd_t *cmd, const char *filename)
+{
+    char buf[64];
+    int fd;
+
+    if ((fd = open (filename, O_RDONLY)) < 0)
+        BAIL_OUT ("open input file %s failed: %s", filename, strerror (errno));
+
+    snprintf (buf, sizeof (buf), "%d", fd);
+
+    ok (flux_cmd_setopt (cmd, "stdin_INPUT_FD", buf) == 0,
+        "flux_cmd_setopt set stdin_INPUT_FD success");
+
+    return fd;
+}
+
+void test_stdin_input_fd_multiple_lines (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    int fd;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    fd = set_stdin_input_fd (cmd, stdin_input_file);
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = multiple_lines_output_cb,
+        .on_stderr = multiple_lines_output_cb
+    };
+    completion_cb_count = 0;
+    multiple_lines_stdout_output_cb_count = 0;
+    multiple_lines_stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (multiple_lines_stdout_output_cb_count == 4, "stdout output callback called 4 times");
+    ok (multiple_lines_stderr_output_cb_count == 4, "stderr output callback called 4 times");
+
+    ok (close (fd) == 0,
+        "close success, subprocess did not affect caller / parent fd");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_stdin_input_fd_dev_null (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    int fd;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    fd = set_stdin_input_fd (cmd, "/dev/null");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = stdin_closed_cb,
+        .on_stderr = stdin_closed_cb
+    };
+    completion_cb_count = 0;
+    stdin_closed_stdout_cb_count = 0;
+    stdin_closed_stderr_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdin_closed_stdout_cb_count == 1, "stdout output callback called 1 time");
+    ok (stdin_closed_stderr_cb_count == 1, "stderr output callback called 1 time");
+
+    ok (close (fd) == 0,
+        "close success, subprocess did not affect caller / parent fd");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_stdin_input_fd_function_errors (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+    int fd;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    fd = set_stdin_input_fd (cmd, "/dev/null");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = stdin_closed_cb,
+        .on_stderr = stdin_closed_cb
+    };
+    completion_cb_count = 0;
+    stdin_closed_stdout_cb_count = 0;
+    stdin_closed_stderr_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    ok (flux_subprocess_write (p, "stdin", "foo", 1) < 0
+        && errno == EINVAL,
+        "flux_subprocess_write fails correctly with EINVAL");
+
+    ok (flux_subprocess_close (p, "stdin") < 0
+        && errno == EINVAL,
+        "flux_subprocess_close fails correctly with EINVAL");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdin_closed_stdout_cb_count == 1, "stdout output callback called 1 time");
+    ok (stdin_closed_stderr_cb_count == 1, "stderr output callback called 1 time");
+
+    ok (close (fd) == 0,
+        "close success, subprocess did not affect caller / parent fd");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_stdin_input_fd_error (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "stdin_INPUT_FD", "ABCD") == 0,
+        "flux_cmd_setopt set stdin_INPUT_FD success");
+
+    p = flux_local_exec (r, 0, cmd, NULL, NULL);
+    ok (p == NULL
+        && errno == EINVAL,
+        "flux_local_exec failed with EINVAL");
+
     flux_cmd_destroy (cmd);
 }
 
@@ -2611,12 +2795,40 @@ int main (int argc, char *argv[])
 {
     flux_reactor_t *r;
     int start_fdcount, end_fdcount;
+    char *t = getenv ("TMPDIR");
+    char buf[PATH_MAX];
+    int fd, len;
 
     plan (NO_PLAN);
 
     // Create shared reactor for all tests
     ok ((r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)) != NULL,
         "flux_reactor_create");
+
+    // Create temporary directory for test input/output files
+
+    if (snprintf (buf, sizeof (buf), "%s/flux-libsubprocess-XXXXXX",
+                  t ? t : "/tmp") >= sizeof (buf))
+        BAIL_OUT ("tmpdir overflow");
+
+    if (!(tmpdir = mkdtemp (buf)))
+        BAIL_OUT ("mkdtemp");
+
+    // Store a test input file for tests below in the tmpdir.  Note
+    // that the data we are writing to this file is identical to the
+    // data in write_multiple_lines_to_stdin() and the data that will
+    // be checked in multiple_lines_output_cb()
+
+    calc_tmpfile (stdin_input_file, "test_input_file");
+
+    if ((fd = open (stdin_input_file, O_CREAT | O_WRONLY, 0600)) < 0)
+        BAIL_OUT ("open");
+
+    if ((len = write (fd, "foo\nbar\nbo\n", 11)) < 0)
+        BAIL_OUT ("write");
+
+    if (len != 11)
+        BAIL_OUT ("write invalid length: %d", len);
 
     start_fdcount = fdcount ();
 
@@ -2646,6 +2858,14 @@ int main (int argc, char *argv[])
     test_basic_multiple_lines (r);
     diag ("basic_stdin_closed");
     test_basic_stdin_closed (r);
+    diag ("stdin_input_fd_multiple_lines");
+    test_stdin_input_fd_multiple_lines (r);
+    diag ("stdin_input_fd_dev_null");
+    test_stdin_input_fd_dev_null (r);
+    diag ("stdin_input_fd_function_errors");
+    test_stdin_input_fd_function_errors (r);
+    diag ("stdin_input_fd_error");
+    test_stdin_input_fd_error (r);
     diag ("basic_read_line_until_eof");
     test_basic_read_line_until_eof (r);
     diag ("basic_read_line_until_eof_error");
@@ -2719,6 +2939,10 @@ int main (int argc, char *argv[])
         "no file descriptors leaked");
 
     flux_reactor_destroy (r);
+
+    close (fd);
+    unlink (stdin_input_file);
+    rmdir (tmpdir);
     done_testing ();
     return 0;
 }
