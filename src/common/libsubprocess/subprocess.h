@@ -294,6 +294,19 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    subprocesses.
  *
  *    - stdin_INPUT_FD - file descriptor for stdin
+ *
+ *  "OUTPUT_FD" option
+ *
+ *    By default, standard output is read from flux_subprocess_read()
+ *    (and family of functions) and the stream "stdout" or "stderr".
+ *    This option will inform the subprocess to redirect stdout /
+ *    stderr directly to a specified file descriptor.  Functions like
+ *    flux_subprocess_read() will return EINVAL when attempting to
+ *    read from stdout or stderr.  This option can only be used on
+ *    local subprocesses.
+ *
+ *    - stdout_OUTPUT_FD - file descriptor for stdout
+ *    - stderr_OUTPUT_FD - file descriptor for stderr
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
