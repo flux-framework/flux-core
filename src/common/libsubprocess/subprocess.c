@@ -194,6 +194,14 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
 
     p->local = local;
 
+    /* remove options that do not apply to remote subprocesses */
+    if (!p->local) {
+        const char *substrings[] = { "STREAM_STOP", NULL };
+
+        if (flux_cmd_delete_opts (p->cmd, substrings) < 0)
+            goto error;
+    }
+
     p->refcount = 1;
     return (p);
 

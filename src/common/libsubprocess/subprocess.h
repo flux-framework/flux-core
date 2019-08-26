@@ -276,7 +276,8 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    default and restarted later by flux_subprocess_stream_start().
  *    By setting this option to "true", output callbacks will be
  *    stopped by default.  These options can also be set to "false" to
- *    keep default behavior.
+ *    keep default behavior.  Note that these options only apply to
+ *    local subprocesses.
  *
  *    - name + "_STREAM_STOP" - configure start/stop on channel name
  *    - stdout_STREAM_STOP - configure start/stop for stdout
