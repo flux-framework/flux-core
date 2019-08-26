@@ -142,10 +142,16 @@ void test_basic_fail (flux_reactor_t *r)
 
 void test_basic_errors (flux_reactor_t *r)
 {
-    flux_t *h_hack = (flux_t *)0x12345678;
+    flux_t *h = NULL;
     char *avgood[] = { "/bin/true", NULL };
     char *avbad[] = { NULL };
     flux_cmd_t *cmd;
+
+    (void)setenv ("FLUX_CONNECTOR_PATH",
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
+
+    ok ((h = flux_open ("loop://", 0)) != NULL,
+        "flux_open on loop works");
 
     ok (!flux_subprocess_server_start (NULL, NULL, NULL, 0)
         && errno == EINVAL,
@@ -169,27 +175,27 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_rexec (NULL, 0, 0, NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with NULL pointer inputs");
-    ok (flux_rexec (h_hack, 0, 1, NULL, NULL) == NULL
+    ok (flux_rexec (h, 0, 1, NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with invalid flag");
 
     ok ((cmd = flux_cmd_create (0, avbad, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h_hack, 0, 0, cmd, NULL) == NULL
+    ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with zero args");
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h_hack, -10, 0, cmd, NULL) == NULL
+    ok (flux_rexec (h, -10, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with invalid rank");
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h_hack, 0, 0, cmd, NULL) == NULL
+    ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with no cwd");
     flux_cmd_destroy (cmd);
@@ -258,6 +264,8 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_subprocess_aux_get (NULL, "foo") == NULL
         && errno == EINVAL,
         "flux_subprocess_aux_get fails with NULL pointer inputs");
+
+    flux_close (h);
 }
 
 void test_errors (flux_reactor_t *r)
