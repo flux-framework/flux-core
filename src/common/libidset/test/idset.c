@@ -535,6 +535,34 @@ void issue_1974(void)
     idset_destroy (idset);
 }
 
+/* At size 32, veb_pred() returns T.M when checking T.M-1.
+ * We added a workaround, and a TODO test in libutil/test/veb.c for now.
+ * This checks size 31, 32, 33.
+ */
+void issue_2336 (void)
+{
+    struct idset *idset;
+    unsigned int t, u, M;
+    int failure = 0;
+
+    for (M = 31; M <= 33; M++) {
+        if (!(idset = idset_create (M, 0)))
+            BAIL_OUT ("idset_create size=32 failed");
+        for (t = 0; t < M; t++) {
+            if (idset_set (idset, t) < 0)
+                BAIL_OUT ("idset_set %u failed", t);
+            u = idset_last (idset);
+            if (u != t) {
+                diag ("idset_last %u returned %u", t, u);
+                failure++;
+            }
+        }
+        ok (failure == 0,
+            "2336: idset_last works for all bits in size=%u idset", M);
+        idset_destroy (idset);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -552,6 +580,7 @@ int main (int argc, char *argv[])
     test_copy ();
     test_autogrow ();
     issue_1974 ();
+    issue_2336 ();
 
     done_testing ();
 }

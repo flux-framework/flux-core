@@ -486,6 +486,21 @@ void test_empty_init (void)
     }
 }
 
+void issue_2336 (void)
+{
+    uint u;
+    Veb T = vebnew (32, 0);
+    if (!T.D)
+        BAIL_OUT ("out of memory");
+    diag ("M=32 vebsize=%u", vebsize (32));
+    vebput (T, 31);
+    u = vebpred (T, 31);
+    diag ("vebpred=%u", u);
+    ok (u == 31,
+        "M=32: vebpred 31 returned 31");
+    free (T.D);
+}
+
 int main(int argc, char** argv)
 {
     plan (NO_PLAN);
@@ -516,6 +531,9 @@ int main(int argc, char** argv)
      */
     test_empty_init ();
     test_full_init ();
+    todo ("currently working around this");
+    issue_2336 ();
+    end_todo;
 
     done_testing();
 }
