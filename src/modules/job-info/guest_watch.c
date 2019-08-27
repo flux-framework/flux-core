@@ -626,7 +626,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
 
     if (gw->cancel) {
         errno = ENODATA;
-        goto error_cancel;
+        goto error;
     }
 
     if (flux_respond (ctx->h, gw->msg, s) < 0) {
