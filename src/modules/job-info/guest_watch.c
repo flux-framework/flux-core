@@ -611,6 +611,14 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
                 if (main_namespace_watch (gw) < 0)
                     goto error;
             }
+            else if (gw->cancel) {
+                /* Racy scenario - user attempted a cancel right as
+                 * ENOTSUP being sent.  Caller won't get a ENODATA
+                 * response b/c the original watcher is now dead.
+                 */
+                errno = ENODATA;
+                goto error;
+            }
             return;
         }
         else {
@@ -626,7 +634,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
 
     if (gw->cancel) {
         errno = ENODATA;
-        goto error_cancel;
+        goto error;
     }
 
     if (flux_respond (ctx->h, gw->msg, s) < 0) {
