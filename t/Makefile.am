@@ -180,6 +180,7 @@ dist_check_SCRIPTS = \
 check_PROGRAMS = \
 	shmem/backtoback.t \
 	loop/logstderr \
+	loop/issue2337 \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
@@ -257,6 +258,11 @@ shmem_backtoback_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)
 loop_logstderr_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+loop_issue2337_SOURCES = loop/issue2337.c
+loop_issue2337_CPPFLAGS = $(test_cppflags)
+loop_issue2337_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 mpi_hello_SOURCES = mpi/hello.c

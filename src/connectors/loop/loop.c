@@ -27,9 +27,6 @@ typedef struct {
     int magic;
     flux_t *h;
 
-    int pollfd;
-    int pollevents;
-
     uint32_t userid;
     uint32_t rolemask;
 
@@ -110,8 +107,6 @@ static void op_fini (void *impl)
     loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    if (c->pollfd >= 0)
-        close (c->pollfd);
     msglist_destroy (c->queue);
     c->magic = ~CTX_MAGIC;
     free (c);
