@@ -2,6 +2,7 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <assert.h>
 #include "veb.h"
 #include "veb_mach.c"
 
@@ -36,6 +37,9 @@ bytes(uint x)
 static uint
 zeros(uint k)
 {
+	assert (k <= WORD);
+	if (k==WORD) /* left shift >= width of operand is undefined */
+		return 0;
 	return ~0<<k;
 }
 
@@ -48,6 +52,7 @@ ones(uint k)
 static uint
 ipow(uint k)
 {
+	assert (k < WORD);
 	return 1<<k;
 }
 
@@ -60,6 +65,7 @@ lowbits(uint x, uint k)
 static uint
 highbits(uint x, uint k)
 {
+	assert (k < WORD);
 	return x>>k;
 }
 
@@ -69,6 +75,7 @@ decode(uchar D[], uint b)
 	uint x = 0;
 	int i;
 
+	assert (8*(b-1) < WORD);
 	for (i = 0; i < b; ++i)
 		x |= D[i]<<8*i;
 	return x;
@@ -78,6 +85,7 @@ static void
 encode(uchar D[], uint b, uint x)
 {
 	int i;
+	assert (8*(b-1) < WORD);
 	for (i = 0; i < b; ++i)
 		D[i] = (x>>8*i)&0xff;
 }

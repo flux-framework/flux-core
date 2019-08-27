@@ -250,18 +250,6 @@ unsigned int idset_last (const struct idset *idset)
 
     if (idset) {
         last = vebpred (idset->T, idset->T.M - 1);
-
-        /* Work around issue 2336.
-         * At size=32, vebpred (T.M - 1) always fails.
-         * Check the T.M - 1 slot with vebsucc, then try vebpred (T.M - 2).
-         * In case there's another "magic size", use this workaround at any
-         * size > 1 since it has a low cost.
-         */
-        if (last == idset->T.M)
-            last = vebsucc (idset->T, idset->T.M - 1);
-        if (last == idset->T.M && idset->T.M > 1)
-            last = vebpred (idset->T, idset->T.M - 2);
-
         if (last == idset->T.M)
             last = IDSET_INVALID_ID;
     }

@@ -531,9 +531,7 @@ int main(int argc, char** argv)
      */
     test_empty_init ();
     test_full_init ();
-    todo ("currently working around this");
     issue_2336 ();
-    end_todo;
 
     done_testing();
 }
