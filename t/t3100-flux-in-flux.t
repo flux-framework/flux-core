@@ -11,7 +11,7 @@ test_under_flux ${SIZE}
 echo "# $0: flux session size will be ${SIZE}"
 
 test_expect_success "flux can run flux instance as a job" '
-	run_timeout 5 flux srun -n1 -N1 \
+	run_timeout 10 flux srun -n1 -N1 \
 		flux start flux getattr size >size.out &&
 	echo 1 >size.exp &&
 	test_cmp size.exp size.out
