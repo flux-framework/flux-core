@@ -205,6 +205,11 @@ static int shell_pmi_barrier_enter (void *arg)
     val = zhashx_first (pmi->kvs);
     while (val) {
         key = zhashx_cursor (pmi->kvs);
+        /* Special case:
+         * The following keys are not added to the KVS transaction
+         * because they were locally generated and need not be
+         * shared with the other shells.
+         */
         if (!strcmp (key, "PMI_process_mapping")) {
             val = zhashx_next (pmi->kvs);
             continue;
