@@ -81,6 +81,7 @@ struct shell_pmi {
     flux_shell_t *shell;
     struct pmi_simple_server *server;
     zhashx_t *kvs;
+    zhashx_t *locals;
     int cycle;      // count cycles of put / barrier / get
 };
 
@@ -93,6 +94,14 @@ static int shell_pmi_kvs_put (void *arg,
 
     zhashx_update (pmi->kvs, key, (char *)val);
     return 0;
+}
+
+static void pmi_kvs_put_local (struct shell_pmi *pmi,
+                               const char *key,
+                               const char *val)
+{
+    zhashx_update (pmi->kvs, key, (char *)val);
+    zhashx_update (pmi->locals, key, (void *) 0x1);
 }
 
 /* Handle kvs lookup response.
@@ -206,12 +215,11 @@ static int shell_pmi_barrier_enter (void *arg)
     while (val) {
         key = zhashx_cursor (pmi->kvs);
         /* Special case:
-         * The following keys are not added to the KVS transaction
+         * Keys in pmi->locals are not added to the KVS transaction
          * because they were locally generated and need not be
          * shared with the other shells.
          */
-        if (!strcmp (key, "PMI_process_mapping")
-            || !strcmp (key, "flux.instance-level")) {
+        if (zhashx_lookup (pmi->locals, key)) {
             val = zhashx_next (pmi->kvs);
             continue;
         }
@@ -331,7 +339,7 @@ int init_clique (struct shell_pmi *pmi)
         log_err ("pmi_process_mapping_encode");
         goto out;
     }
-    zhashx_update (pmi->kvs, "PMI_process_mapping", val);
+    pmi_kvs_put_local (pmi, "PMI_process_mapping", val);
 out:
     free (blocks);
     return 0;
@@ -364,7 +372,7 @@ static int set_flux_instance_level (struct shell_pmi *pmi)
         log_err ("set_flux_instance_level: snprintf");
         goto out;
     }
-    zhashx_update (pmi->kvs, "flux.instance-level", val);
+    pmi_kvs_put_local (pmi, "flux.instance-level", val);
     rc = 0;
 out:
     return rc;
@@ -376,6 +384,7 @@ void shell_pmi_destroy (struct shell_pmi *pmi)
         int saved_errno = errno;
         pmi_simple_server_destroy (pmi->server);
         zhashx_destroy (&pmi->kvs);
+        zhashx_destroy (&pmi->locals);
         free (pmi);
         errno = saved_errno;
     }
@@ -424,7 +433,8 @@ struct shell_pmi *shell_pmi_create (flux_shell_t *shell)
                                                   flags,
                                                   pmi)))
         goto error;
-    if (!(pmi->kvs = zhashx_new ())) {
+    if (!(pmi->kvs = zhashx_new ())
+        || !(pmi->locals = zhashx_new ())) {
         errno = ENOMEM;
         goto error;
     }
