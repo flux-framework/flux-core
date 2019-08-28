@@ -37,10 +37,14 @@ void setup_path (struct environment *env, const char *argv0);
 void setup_keydir (struct environment *env, int flags);
 static void print_environment (struct environment *env);
 static void register_builtin_subcommands (optparse_t *p);
+static void push_parent_environment (optparse_t *p, struct environment *env);
 
 static struct optparse_option opts[] = {
     { .name = "verbose",         .key = 'v', .has_arg = 0,
       .usage = "Be verbose about environment and command search",
+    },
+    { .name = "parent",         .key = 'p', .has_arg = 0,
+      .usage = "Set environment of parent instead of current instance",
     },
     OPTPARSE_TABLE_END
 };
@@ -197,7 +201,14 @@ int main (int argc, char *argv[])
     if ((flags & CONF_FLAG_INTREE))
         environment_push (env, "FLUX_CONF_INTREE", "1");
 
-    environment_apply(env);
+    environment_apply (env);
+
+    /* If --parent, push parent environment for each occurence
+     */
+    for (int n = optparse_getopt (p, "parent", NULL); n > 0; n--) {
+        push_parent_environment (p, env);
+        environment_apply (env);
+    }
     optparse_set_data (p, "env", env);
 
     if (vopt)
@@ -378,6 +389,63 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
     }
 }
 
+static flux_t *flux_open_internal (optparse_t *p, const char *uri)
+{
+    flux_t *h = NULL;
+    if ((h = optparse_get_data (p, "flux_t")))
+        flux_incref (h);
+    else if ((h = flux_open (NULL, 0)) == NULL)
+        log_err_exit ("flux_open");
+    return h;
+}
+
+static void flux_close_internal (optparse_t *p)
+{
+    flux_t *h = optparse_get_data (p, "flux_t");
+    if (h) {
+        flux_close (h);
+        optparse_set_data (p, "flux_t", NULL);
+    }
+}
+
+static void push_parent_environment (optparse_t *p, struct environment *env)
+{
+    const char *uri;
+    const char *ns;
+    const char *path;
+    flux_t *h = flux_open_internal (p, NULL);
+
+    if (h == NULL)
+        log_err_exit ("flux_open");
+
+    /*  If parent-uri doesn't exist then we are at the root instance,
+     *   just do nothing.
+     */
+    if (!(uri = flux_attr_get (h, "parent-uri")))
+        return;
+
+    environment_set (env, "FLUX_URI", uri, 0);
+    
+    /*  Before closing current instance handle, set FLUX_KVS_NAMESPACE
+     *   if parent-kvs-namespace attr is set.
+     */
+    if ((ns = flux_attr_get (h, "parent-kvs-namespace")))
+        environment_set (env, "FLUX_KVS_NAMESPACE", ns, 0);
+    else
+        environment_unset (env, "FLUX_KVS_NAMESPACE");
+
+    /*  Now close current handle and connect to parent URI, pushing
+     *   parent exec and module paths onto env
+     */
+    flux_close_internal (p);
+    if (!(h = flux_open_internal (p, uri)))
+        log_err_exit ("flux_open (parent)");
+    if ((path = flux_attr_get (h, "conf.exec_path")))
+        environment_push (env, "FLUX_EXEC_PATH", path);
+    if ((path = flux_attr_get (h, "conf.module_path")))
+        environment_push (env, "FLUX_MODULE_PATH", path);
+}
+
 static void print_environment (struct environment *env)
 {
     const char *val;
@@ -388,12 +456,7 @@ static void print_environment (struct environment *env)
 
 flux_t *builtin_get_flux_handle (optparse_t *p)
 {
-    flux_t *h = NULL;
-    if ((h = optparse_get_data (p, "flux_t")))
-        flux_incref (h);
-    else if ((h = flux_open (NULL, 0)) == NULL)
-        log_err_exit ("flux_open");
-    return h;
+    return flux_open_internal (p, NULL);
 }
 
 static void register_builtin_subcommands (optparse_t *p)
