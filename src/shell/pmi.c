@@ -210,7 +210,8 @@ static int shell_pmi_barrier_enter (void *arg)
          * because they were locally generated and need not be
          * shared with the other shells.
          */
-        if (!strcmp (key, "PMI_process_mapping")) {
+        if (!strcmp (key, "PMI_process_mapping")
+            || !strcmp (key, "flux.instance-level")) {
             val = zhashx_next (pmi->kvs);
             continue;
         }
@@ -340,6 +341,35 @@ error:
     return -1;
 }
 
+static int set_flux_instance_level (struct shell_pmi *pmi)
+{
+    char *p;
+    long l;
+    int n;
+    int rc = -1;
+    char val [SIMPLE_KVS_VAL_MAX];
+    const char *level = flux_attr_get (pmi->shell->h, "instance-level");
+
+    if (!level)
+        return 0;
+
+    errno = 0;
+    l = strtol (level, &p, 10);
+    if (errno != 0 || *p != '\0' || l < 0) {
+        log_msg ("set_flux_instance_level level=%s invalid", level);
+        goto out;
+    }
+    n = snprintf (val, sizeof (val), "%lu", l+1);
+    if (n >= sizeof (val)) {
+        log_err ("set_flux_instance_level: snprintf");
+        goto out;
+    }
+    zhashx_update (pmi->kvs, "flux.instance-level", val);
+    rc = 0;
+out:
+    return rc;
+}
+
 void shell_pmi_destroy (struct shell_pmi *pmi)
 {
     if (pmi) {
@@ -401,6 +431,8 @@ struct shell_pmi *shell_pmi_create (flux_shell_t *shell)
     zhashx_set_destructor (pmi->kvs, kvs_value_destructor);
     zhashx_set_duplicator (pmi->kvs, kvs_value_duplicator);
     if (init_clique (pmi) < 0)
+        goto error;
+    if (!shell->standalone && set_flux_instance_level (pmi) < 0)
         goto error;
     return pmi;
 error:
