@@ -48,4 +48,17 @@ test_expect_success "flux --parent --parent works in subinstance" '
 	EOF
 	test_cmp guest2.test.exp guest2.test
 '
+
+test_expect_success "flux sets instance-level attribute" '
+        level=$(flux srun flux start \
+                flux getattr instance-level) &&
+        level2=$(flux srun flux start \
+                 flux srun flux start \
+                 flux getattr instance-level) &&
+	level0=$(flux start flux getattr instance-level) &&
+        test "$level" = "1" &&
+        test "$level2" = "2" &&
+        test "$level0" = "0"
+ '
+
 test_done
