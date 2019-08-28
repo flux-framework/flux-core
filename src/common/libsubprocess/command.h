@@ -53,8 +53,9 @@ int flux_cmd_set_env (flux_cmd_t *cmd, char **env);
 zlist_t *flux_cmd_channel_list (flux_cmd_t *cmd);
 
 /*
- * Delete opts that contain a specific substring
+ * Find opts that contain a specific substring.  Returns 1 if
+ * substrings found, 0 if not.
  */
-int flux_cmd_delete_opts (flux_cmd_t *cmd, const char **substrings);
+int flux_cmd_find_opts (const flux_cmd_t *cmd, const char **substrings);
 
 #endif /* !_SUBPROCESS_CMD_H */

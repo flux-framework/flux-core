@@ -194,14 +194,6 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
 
     p->local = local;
 
-    /* remove options that do not apply to remote subprocesses */
-    if (!p->local) {
-        const char *substrings[] = { "STREAM_STOP", NULL };
-
-        if (flux_cmd_delete_opts (p->cmd, substrings) < 0)
-            goto error;
-    }
-
     p->refcount = 1;
     return (p);
 
@@ -671,6 +663,14 @@ flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
     return flux_exec_wrap (NULL, r, flags, cmd, ops, hooks);
 }
 
+static int check_local_only_cmd_options (const flux_cmd_t *cmd)
+{
+    /* check for options that do not apply to remote subprocesses */
+    const char *substrings[] = { "STREAM_STOP", NULL };
+
+    return flux_cmd_find_opts (cmd, substrings);
+}
+
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops)
@@ -702,6 +702,12 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
 
     /* user required to set cwd */
     if (!flux_cmd_getcwd (cmd)) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* make sure user didn't set local only cmd options */
+    if (check_local_only_cmd_options (cmd)) {
         errno = EINVAL;
         goto error;
     }
