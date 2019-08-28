@@ -144,6 +144,30 @@ done:
     return rc;
 }
 
+/*  If the broker is launched via flux-shell, then the shell may opt
+ *  to set a "flux.instance-level" parameter in the PMI kvs to tell
+ *  the booting instance at what "level" it will be running, i.e. the
+ *  number of parents. If the PMI key is missing, this is not an error,
+ *  instead the level of this instance is considered to be zero.
+ */
+static int set_instance_level_attr (struct pmi_handle *pmi,
+                                    const char *kvsname,
+                                    attr_t *attrs)
+{
+    int result;
+    char val[32];
+    const char *level = "0";
+
+    result = broker_pmi_kvs_get (pmi,
+                                 kvsname,
+                                 "flux.instance-level",
+                                 val,
+                                 sizeof (val));
+    if (result == PMI_SUCCESS)
+        level = val;
+    return attr_add (attrs, "instance-level", level, FLUX_ATTRFLAG_IMMUTABLE);
+}
+
 int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
 {
     int parent_rank;
@@ -170,7 +194,10 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
         log_msg ("broker_pmi_get_params: %s", pmi_strerror (result));
         goto error;
     }
-
+    if (set_instance_level_attr (pmi, pmi_params.kvsname, attrs) < 0) {
+        log_err ("set_instance_level_attr");
+        goto error;
+    }
     if (overlay_init (overlay,
                       (uint32_t)pmi_params.size,
                       (uint32_t)pmi_params.rank,
