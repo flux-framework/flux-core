@@ -11,9 +11,9 @@
 #ifndef LIBUTIL_ERRNO_SAFE_H
 #define LIBUTIL_ERRNO_SAFE_H 1
 
-#define ERRNO_SAFE_FREE(item) do { \
+#define ERRNO_SAFE_WRAP(fun, ...) do { \
 	int saved_errno = errno; \
-	free (item); \
+	(fun)(__VA_ARGS__); \
 	errno = saved_errno; \
 } while (0)
 
