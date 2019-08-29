@@ -20,7 +20,9 @@ librouter_la_SOURCES = \
 	auth.c \
 	auth.h \
 	usock.c \
-	usock.h
+	usock.h \
+	disconnect.h \
+	disconnect.c
 
 TESTS = \
 	test_sendfd.t
