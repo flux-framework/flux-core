@@ -267,6 +267,25 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    - stdout_LINE_BUFFER - configure line buffering for stdout
  *    - stderr_LINE_BUFFER - configure line buffering for stderr
  *
+ *  "MIN_BYTES" option
+ *
+ *    By default, output callbacks such as 'on_stdout' and 'on_stderr'
+ *    are called when a single amount of data is available.  If the
+ *    data is line buffered, this may be a single line.  If not line
+ *    buffered, it could be just 1 byte.  By setting this option to a
+ *    specific byte count, the callback will only be called if atleast
+ *    this number of bytes is available.  If EOF has been reached, the
+ *    last callback may have less than min data.
+ *
+ *    Note that if line buffering is enabled, MIN_BYTES only ensures
+ *    that atleast MIN_BYTES is buffered and atleast 1 line is
+ *    available for reading.  It does not ensure that MIN_BYTES worth
+ *    of lines are available.
+ *
+ *    - name + "_MIN_BYTES" - configure min data on channel name
+ *    - stdout_MIN_BYTES - configure min data on stdout
+ *    - stderr_MIN_BYTES - configure min data on stderr
+ *
  *  "STREAM_STOP" option
  *
  *    By default, the output callbacks such as 'on_stdout' and

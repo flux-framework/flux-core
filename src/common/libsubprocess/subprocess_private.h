@@ -67,6 +67,7 @@ struct subprocess_channel {
 
     /* misc */
     bool line_buffered;         /* for buffer_read_w / read_buffer */
+    int min_bytes;
 };
 
 struct flux_subprocess {

@@ -97,6 +97,35 @@ cleanup:
     return rv;
 }
 
+int cmd_option_min_bytes (flux_subprocess_t *p, const char *name)
+{
+    char *var;
+    const char *val;
+    int rv = -1;
+
+    if (asprintf (&var, "%s_MIN_BYTES", name) < 0)
+        goto cleanup;
+
+    if ((val = flux_cmd_getopt (p->cmd, var))) {
+        char *endptr;
+        errno = 0;
+        rv = strtol (val, &endptr, 10);
+        if (errno
+            || endptr[0] != '\0'
+            || rv <= 0) {
+            rv = -1;
+            errno = EINVAL;
+            goto cleanup;
+        }
+    }
+    else
+        rv = 0;
+
+cleanup:
+    free (var);
+    return rv;
+}
+
 int cmd_option_stream_stop (flux_subprocess_t *p, const char *name)
 {
     char *var;

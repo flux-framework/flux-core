@@ -21,6 +21,8 @@ int cmd_option_bufsize (flux_subprocess_t *p, const char *name);
 
 int cmd_option_line_buffer (flux_subprocess_t *p, const char *name);
 
+int cmd_option_min_bytes (flux_subprocess_t *p, const char *name);
+
 int cmd_option_stream_stop (flux_subprocess_t *p, const char *name);
 
 /* sets fdp to -1 if user did not set INPUT_FD */

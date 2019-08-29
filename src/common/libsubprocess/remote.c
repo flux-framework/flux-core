@@ -293,12 +293,30 @@ static void remote_out_prep_cb (flux_reactor_t *r,
                                 void *arg)
 {
     struct subprocess_channel *c = arg;
+    bool start_idle = false;
 
     /* no need to handle failure states, on fatal error, these
      * reactors are closed */
-    if ((c->line_buffered && flux_buffer_has_line (c->read_buffer))
-        || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)
-        || (c->read_eof_received && !c->eof_sent_to_caller))
+    if (!c->min_bytes) {
+        if ((c->line_buffered && flux_buffer_has_line (c->read_buffer))
+            || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)
+            || (c->read_eof_received && !c->eof_sent_to_caller))
+            start_idle = true;
+    }
+    else {
+        if (c->read_eof_received && !c->eof_sent_to_caller)
+            start_idle = true;
+        else if (flux_buffer_bytes (c->read_buffer) >= c->min_bytes) {
+            if (c->line_buffered) {
+                if (flux_buffer_has_line (c->read_buffer))
+                    start_idle = true;
+            }
+            else
+                start_idle = true;
+        }
+    }
+
+    if (start_idle)
         flux_watcher_start (c->out_idle_w);
 }
 
@@ -308,15 +326,42 @@ static void remote_out_check_cb (flux_reactor_t *r,
                                  void *arg)
 {
     struct subprocess_channel *c = arg;
+    int bytes;
 
     flux_watcher_stop (c->out_idle_w);
 
-    if ((c->line_buffered
-         && (flux_buffer_has_line (c->read_buffer)
-             || (c->read_eof_received
-                 && flux_buffer_bytes (c->read_buffer) > 0)))
-        || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)) {
-        c->output_f (c->p, c->name);
+    bytes = flux_buffer_bytes (c->read_buffer);
+
+    /* Logic here can be a bit confusing.
+     *
+     * if there is a min bytes requirement
+     * - if eof received and bytes still in buffer, call callback
+     * - if enough bytes, and not line buffered, call callback
+     * - if enough bytes, and line buffered & a line is there, call callback
+     *
+     * if there is no min bytes requirement
+     * - if line buffered and a line is there, call callback
+     * - if line buffered, read eof, and there is data, call callback
+     * - if not ine buffered and there a bytes, call callback
+     */
+
+    if (c->min_bytes) {
+        if ((c->read_eof_received
+             && bytes > 0)
+            || (bytes >= c->min_bytes
+                && (!c->line_buffered
+                    || flux_buffer_has_line (c->read_buffer)))) {
+            c->output_f (c->p, c->name);
+        }
+    }
+    else {
+        if ((c->line_buffered
+             && (flux_buffer_has_line (c->read_buffer)
+                 || (c->read_eof_received
+                     && bytes > 0)))
+            || (!c->line_buffered && bytes > 0)) {
+            c->output_f (c->p, c->name);
+        }
     }
 
     if (!flux_buffer_bytes (c->read_buffer)
@@ -406,6 +451,11 @@ static int remote_channel_setup (flux_subprocess_t *p,
 
         if (wflag)
             c->line_buffered = true;
+
+        if ((c->min_bytes = cmd_option_min_bytes (p, name)) < 0) {
+            flux_log_error (p->h, "cmd_option_min_bytes");
+            goto error;
+        }
 
         if (!(c->read_buffer = flux_buffer_create (buffer_size))) {
             flux_log_error (p->h, "flux_buffer_create");

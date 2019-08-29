@@ -224,10 +224,13 @@ static int channel_local_setup (flux_subprocess_t *p,
             if (wflag)
                 c->line_buffered = true;
 
+            if ((c->min_bytes = cmd_option_min_bytes (p, name)) < 0)
+                goto error;
+
             c->buffer_read_w = flux_buffer_read_watcher_create (p->reactor,
                                                                 c->parent_fd,
                                                                 buffer_size,
-                                                                0,
+                                                                c->min_bytes,
                                                                 out_cb,
                                                                 wflag,
                                                                 c);
