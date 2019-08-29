@@ -281,16 +281,19 @@ void shell_io_destroy (struct shell_io *io)
  * - no options
  * - no stdlog
  */
-static int shell_io_header_append (json_t *output)
+static int shell_io_header_append (flux_shell_t *shell, json_t *output)
 {
     json_t *o;
 
     o = eventlog_entry_pack (0, "header",
-                             "{s:i s:{s:s s:s} s:{}}",
+                             "{s:i s:{s:s s:s} s:{s:i s:i} s:{}}",
                              "version", 1,
                              "encoding",
                                "stdout", "base64",
                                "stderr", "base64",
+                             "count",
+                               "stdout", shell->info->jobspec->task_count,
+                               "stderr", shell->info->jobspec->task_count,
                              "options");
     if (!o || json_array_append_new (output, o) < 0) {
         json_decref (o);
@@ -319,7 +322,7 @@ struct shell_io *shell_io_create (flux_shell_t *shell)
             errno = ENOMEM;
             goto error;
         }
-        if (shell_io_header_append (io->output) < 0)
+        if (shell_io_header_append (shell, io->output) < 0)
             goto error;
     }
     return io;
