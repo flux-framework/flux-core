@@ -796,6 +796,21 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
     (*counter)++;
 }
 
+void write_multiple_lines_to_stdin (flux_subprocess_t *p)
+{
+    ok (flux_subprocess_write (p, "stdin", "foo\n", 4) == 4,
+        "flux_subprocess_write success");
+
+    ok (flux_subprocess_write (p, "stdin", "bar\n", 4) == 4,
+        "flux_subprocess_write success");
+
+    ok (flux_subprocess_write (p, "stdin", "bo\n", 3) == 3,
+        "flux_subprocess_write success");
+
+    ok (flux_subprocess_close (p, "stdin") == 0,
+        "flux_subprocess_close success");
+}
+
 void test_basic_multiple_lines (flux_reactor_t *r)
 {
     char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", "-n", NULL };
@@ -818,17 +833,7 @@ void test_basic_multiple_lines (flux_reactor_t *r)
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
 
-    ok (flux_subprocess_write (p, "stdin", "foo\n", 4) == 4,
-        "flux_subprocess_write success");
-
-    ok (flux_subprocess_write (p, "stdin", "bar\n", 4) == 4,
-        "flux_subprocess_write success");
-
-    ok (flux_subprocess_write (p, "stdin", "bo\n", 3) == 3,
-        "flux_subprocess_write success");
-
-    ok (flux_subprocess_close (p, "stdin") == 0,
-        "flux_subprocess_close success");
+    write_multiple_lines_to_stdin (p);
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
