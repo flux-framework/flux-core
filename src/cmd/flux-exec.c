@@ -419,7 +419,7 @@ int main (int argc, char *argv[])
         if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
             log_err_exit ("fcntl F_SETFL stdin");
         if (!(stdin_w = flux_buffer_read_watcher_create (r, STDIN_FILENO,
-                                                         1 << 20, stdin_cb,
+                                                         1 << 20, 0, stdin_cb,
                                                          0, NULL)))
             log_err_exit ("flux_buffer_read_watcher_create");
     }

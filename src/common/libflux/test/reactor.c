@@ -383,6 +383,7 @@ static void test_buffer (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
+                                         0,
                                          buffer_read,
                                          0,
                                          &count);
@@ -414,6 +415,7 @@ static void test_buffer (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
+                                         0,
                                          buffer_read_line,
                                          FLUX_WATCHER_LINE_BUFFER,
                                          &count);
@@ -520,6 +522,7 @@ static void test_buffer (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          12, /* 12 bytes = 2 "foobars"s */
+                                         0,
                                          buffer_read_fill,
                                          0,
                                          &count);
@@ -554,6 +557,7 @@ static void test_buffer (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          12, /* 12 bytes = 2 "foobar"s */
+                                         0,
                                          buffer_read_overflow,
                                          0,
                                          &count);
@@ -832,6 +836,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
+                                         0,
                                          buffer_read_fd_close,
                                          0,
                                          &bfc);
@@ -869,6 +874,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
+                                         0,
                                          buffer_read_line_fd_close,
                                          FLUX_WATCHER_LINE_BUFFER,
                                          &bfc);
@@ -906,6 +912,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     w = flux_buffer_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
+                                         0,
                                          buffer_read_line_fd_close_and_left_over_data,
                                          FLUX_WATCHER_LINE_BUFFER,
                                          &bfc);

@@ -99,7 +99,7 @@ int main (int argc, char *argv[])
 
     ww = flux_buffer_write_watcher_create (r, STDOUT_FILENO, 4096,
                                            write_cb, 0, NULL);
-    rw = flux_buffer_read_watcher_create (r, STDIN_FILENO, 4096,
+    rw = flux_buffer_read_watcher_create (r, STDIN_FILENO, 4096, 0,
                                           read_cb, 0, (void *) ww);
     if (!rw || !ww)
         die ("flux buffer watcher create failed\n");

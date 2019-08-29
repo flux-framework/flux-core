@@ -412,14 +412,15 @@ static struct flux_watcher_ops buffer_read_watcher = {
 };
 
 flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
-                                                 int size, flux_watcher_f cb,
+                                                 int size, int min_bytes,
+                                                 flux_watcher_f cb,
                                                  int flags, void *arg)
 {
     struct ev_buffer_read *ebr;
     flux_watcher_t *w = NULL;
     int fd_flags;
 
-    if (fd < 0) {
+    if (fd < 0 || min_bytes < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -442,6 +443,7 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
     if (ev_buffer_read_init (ebr,
                              fd,
                              size,
+                             min_bytes,
                              buffer_read_cb,
                              r->loop) < 0)
         goto cleanup;

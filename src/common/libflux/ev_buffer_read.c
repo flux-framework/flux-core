@@ -21,7 +21,19 @@ static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
 {
     int bytes = flux_buffer_bytes (ebr->fb);
 
-    if (bytes > 0) {
+    if (ebr->min_bytes) {
+        if (ebr->eof_read)
+            return true;
+        else if (bytes >= ebr->min_bytes) {
+            if (ebr->line) {
+                if (flux_buffer_has_line (ebr->fb))
+                    return true;
+            }
+            else
+                return true;
+        }
+    }
+    else if (bytes > 0) {
         if (ebr->eof_read)
             return true;
         else if (ebr->line) {
@@ -38,7 +50,6 @@ static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
             return true;
         }
     }
-
     return false;
 }
 
@@ -124,11 +135,13 @@ static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
 int ev_buffer_read_init (struct ev_buffer_read *ebr,
                          int fd,
                          int size,
+                         int min_bytes,
                          ev_buffer_read_f cb,
                          struct ev_loop *loop)
 {
     ebr->cb = cb;
     ebr->fd = fd;
+    ebr->min_bytes = min_bytes;
     ebr->loop = loop;
     ebr->start = false;
     ebr->eof_read = false;

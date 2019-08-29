@@ -26,6 +26,7 @@ struct ev_buffer_read {
     ev_idle          idle_w;
     ev_check         check_w;
     int              fd;
+    int              min_bytes;
     ev_buffer_read_f cb;
     flux_buffer_t    *fb;
     struct ev_loop   *loop;
@@ -39,6 +40,7 @@ struct ev_buffer_read {
 int ev_buffer_read_init (struct ev_buffer_read *ebr,
                          int fd,
                          int size,
+                         int min_bytes,
                          ev_buffer_read_f cb,
                          struct ev_loop *loop);
 void ev_buffer_read_cleanup (struct ev_buffer_read *ebr);

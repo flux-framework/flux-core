@@ -101,10 +101,16 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w);
 /* buffer
  */
 
-/* on eof, callback will be called with an empty buffer */
-/* if line buffered, second to last callback may not contain a full line */
+/* on eof, callback will be called with an empty buffer
+ *
+ * if min_bytes set, callback guaranteed to have atleast min_bytes,
+ * except for second to last callback before EOF
+ *
+ * if line buffered, second to last callback may not contain a full line
+ */
 flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
-                                                 int size, flux_watcher_f cb,
+                                                 int size, int min_bytes,
+                                                 flux_watcher_f cb,
                                                  int flags, void *arg);
 
 flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w);
