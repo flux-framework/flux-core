@@ -942,6 +942,425 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     close (fd[1]);
 }
 
+static void timer_buffer_min_bytes (flux_reactor_t *r, flux_watcher_t *w,
+                                    int revents, void *arg)
+{
+    int *count = arg;
+    (*count)++;
+    flux_watcher_stop (w);
+    flux_reactor_stop (r);
+    return;
+}
+
+static void buffer_read_min_bytes (flux_reactor_t *r, flux_watcher_t *w,
+                                   int revents, void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLIN) {
+        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        const void *ptr;
+        int len;
+
+        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            "buffer min bytes: read from buffer success");
+
+        ok (len == 10,
+            "buffer min bytes: read returned correct length");
+
+        ok (!memcmp (ptr, "0123456789", 10),
+            "buffer min bytes: read returned correct data");
+    }
+    else {
+        ok (false,
+            "buffer min bytes: read callback failed to return FLUX_POLLIN: %d",
+            revents);
+    }
+
+    (*count)++;
+    flux_watcher_stop (w);
+    return;
+}
+
+static void buffer_read_more_than_min_bytes (flux_reactor_t *r,
+                                             flux_watcher_t *w,
+                                             int revents,
+                                             void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLIN) {
+        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        const void *ptr;
+        int len;
+
+        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            "buffer min bytes: read from buffer success");
+
+        ok (len == 16,
+            "buffer min bytes: read returned correct length");
+
+        ok (!memcmp (ptr, "0123456789ABCDEF", 16),
+            "buffer min bytes: read returned correct data");
+    }
+    else {
+        ok (false,
+            "buffer min bytes: read callback failed to return FLUX_POLLIN: %d",
+            revents);
+    }
+
+    (*count)++;
+    flux_watcher_stop (w);
+    return;
+}
+
+static void buffer_read_line_min_bytes (flux_reactor_t *r, flux_watcher_t *w,
+                                        int revents, void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLIN) {
+        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        const void *ptr;
+        int len;
+
+        /* don't call "read_line", we're just gonna grab all the data
+         * for testing */
+        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            "buffer min bytes: read line from buffer success");
+
+        ok (len == 8,
+            "buffer min bytes: read line returned correct length");
+
+        ok (!memcmp (ptr, "foo\nbar\n", 8),
+            "buffer min bytes: read line returned correct data");
+    }
+    else {
+        ok (false,
+            "buffer min bytes: read line callback failed to return FLUX_POLLIN: %d", revents);
+    }
+
+    (*count)++;
+    flux_watcher_stop (w);
+    return;
+}
+
+static void buffer_read_line_min_bytes_not_a_line (flux_reactor_t *r,
+                                                   flux_watcher_t *w,
+                                                   int revents,
+                                                   void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLIN) {
+        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        const void *ptr;
+        int len;
+
+        ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+            "buffer min bytes: read line from buffer success");
+
+        ok (len == 11,
+            "buffer min bytes: read line returned correct length");
+
+        ok (!memcmp (ptr, "0123456789\n", 11),
+            "buffer min bytes: read line returned correct data");
+    }
+    else {
+        ok (false,
+            "buffer min bytes: read line callback failed to return FLUX_POLLIN: %d", revents);
+    }
+
+    (*count)++;
+    flux_watcher_stop (w);
+    return;
+}
+
+static void buffer_read_min_bytes_eof (flux_reactor_t *r, flux_watcher_t *w,
+                                       int revents, void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLIN) {
+        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        const void *ptr;
+        int len;
+
+        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            "buffer min bytes: read from buffer success");
+
+        ok (len == 9,
+            "buffer min bytes: read returned correct length");
+
+        ok (!memcmp (ptr, "012345678", 9),
+            "buffer min bytes: read returned correct data");
+    }
+    else {
+        ok (false,
+            "buffer min bytes: read callback failed to return FLUX_POLLIN: %d",
+            revents);
+    }
+
+    (*count)++;
+    flux_watcher_stop (w);
+    return;
+}
+
+static void test_buffer_min_bytes (flux_reactor_t *reactor)
+{
+    int fd[2];
+    flux_watcher_t *tw;
+    flux_watcher_t *w;
+    flux_buffer_t *fb;
+    int read_count;
+    int timer_count;
+    int ret;
+
+    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+        "buffer: successfully created socketpair");
+
+    tw = flux_timer_watcher_create (reactor, 0.2, 0.,
+                                    timer_buffer_min_bytes, &timer_count);
+    ok (tw != NULL,
+        "flux_timer_watcher_create success");
+
+    /* The general strategy to test if min_bytes is working is to run
+     * a timer watcher when we know the min_bytes threshold has not
+     * been reached.  The timer will timeout and stop the reactor.
+     */
+
+    /* read buffer test */
+
+    read_count = 0;
+    timer_count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         10,
+                                         buffer_read_min_bytes,
+                                         0,
+                                         &read_count);
+    ok (w != NULL,
+        "buffer min bytes: read created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer min bytes: buffer retrieved");
+
+    ok (write (fd[1], "012345678", 9) == 9,
+        "buffer min bytes: write to socketpair success");
+
+    flux_watcher_start (w);
+    flux_watcher_start (tw);
+
+    ret = flux_reactor_run (reactor, 0);
+    ok (ret > 0,
+        "buffer min bytes: reactor still has watchers running");
+
+    ok (read_count == 0,
+        "buffer min bytes: read callback not called");
+    ok (timer_count == 1,
+        "buffer min bytes: timer callback called");
+
+    ok (write (fd[1], "9", 1) == 1,
+        "buffer min bytes: write to socketpair success");
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer min bytes: reactor ran to completion");
+
+    ok (read_count == 1,
+        "buffer min bytes: read callback called");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    /* read buffer test - more than min bytes written */
+
+    read_count = 0;
+    timer_count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         10,
+                                         buffer_read_more_than_min_bytes,
+                                         0,
+                                         &read_count);
+    ok (w != NULL,
+        "buffer min bytes: read created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer min bytes: buffer retrieved");
+
+    ok (write (fd[1], "012345678", 9) == 9,
+        "buffer min bytes: write to socketpair success");
+
+    flux_watcher_start (w);
+    flux_watcher_start (tw);
+
+    ret = flux_reactor_run (reactor, 0);
+    ok (ret > 0,
+        "buffer min bytes: reactor still has watchers running");
+
+    ok (read_count == 0,
+        "buffer min bytes: read callback not called");
+    ok (timer_count == 1,
+        "buffer min bytes: timer callback called");
+
+    ok (write (fd[1], "9ABCDEF", 7) == 7,
+        "buffer min bytes: write to socketpair success");
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer min bytes: reactor ran to completion");
+
+    ok (read_count == 1,
+        "buffer min bytes: read callback called");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    /* read line buffer test */
+
+    read_count = 0;
+    timer_count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         8,
+                                         buffer_read_line_min_bytes,
+                                         FLUX_WATCHER_LINE_BUFFER,
+                                         &read_count);
+    ok (w != NULL,
+        "buffer min bytes: read line created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer min bytes: buffer retrieved");
+
+    ok (write (fd[1], "foo\n", 4) == 4,
+        "buffer min bytes: write to socketpair success");
+
+    flux_watcher_start (w);
+    flux_watcher_start (tw);
+
+    ret = flux_reactor_run (reactor, 0);
+    ok (ret > 0,
+        "buffer min bytes: reactor still has watchers running");
+
+    ok (read_count == 0,
+        "buffer min bytes: read callback not called");
+    ok (timer_count == 1,
+        "buffer min bytes: timer callback called");
+
+    ok (write (fd[1], "bar\n", 4) == 4,
+        "buffer min bytes: write to socketpair success");
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer min bytes: reactor ran to completion");
+
+    ok (read_count == 1,
+        "buffer min bytes: read callback called");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    /* read line buffer test - min reached, but not a line */
+
+    read_count = 0;
+    timer_count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         8,
+                                         buffer_read_line_min_bytes_not_a_line,
+                                         FLUX_WATCHER_LINE_BUFFER,
+                                         &read_count);
+    ok (w != NULL,
+        "buffer min bytes: read line created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer min bytes: buffer retrieved");
+
+    ok (write (fd[1], "0123456789", 10) == 10,
+        "buffer min bytes: write to socketpair success");
+
+    flux_watcher_start (w);
+    flux_watcher_start (tw);
+
+    ret = flux_reactor_run (reactor, 0);
+    ok (ret > 0,
+        "buffer min bytes: reactor still has watchers running");
+
+    ok (read_count == 0,
+        "buffer min bytes: read callback not called");
+    ok (timer_count == 1,
+        "buffer min bytes: timer callback called");
+
+    ok (write (fd[1], "\n", 1) == 1,
+        "buffer min bytes: write to socketpair success");
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer min bytes: reactor ran to completion");
+
+    ok (read_count == 1,
+        "buffer min bytes: read callback called");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    /* read buffer test - get less than min bytes on EOF */
+
+    read_count = 0;
+    timer_count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         10,
+                                         buffer_read_min_bytes_eof,
+                                         0,
+                                         &read_count);
+    ok (w != NULL,
+        "buffer min bytes: read created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer min bytes: buffer retrieved");
+
+    ok (write (fd[1], "012345678", 9) == 9,
+        "buffer min bytes: write to socketpair success");
+
+    flux_watcher_start (w);
+    flux_watcher_start (tw);
+
+    ret = flux_reactor_run (reactor, 0);
+    ok (ret > 0,
+        "buffer min bytes: reactor still has watchers running");
+
+    ok (read_count == 0,
+        "buffer min bytes: read callback not called");
+    ok (timer_count == 1,
+        "buffer min bytes: timer callback called");
+
+    close (fd[1]);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer min bytes: reactor ran to completion");
+
+    ok (read_count == 1,
+        "buffer min bytes: read callback called");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    close (fd[0]);
+}
+
 static int repeat_countdown = 10;
 static void repeat (flux_reactor_t *r, flux_watcher_t *w,
                     int revents, void *arg)
@@ -1468,6 +1887,7 @@ int main (int argc, char *argv[])
     test_fd (reactor);
     test_buffer (reactor);
     test_buffer_corner_case (reactor);
+    test_buffer_min_bytes (reactor);
     test_zmq (reactor);
     test_idle (reactor);
     test_prepcheck (reactor);
