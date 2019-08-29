@@ -16,7 +16,9 @@ noinst_LTLIBRARIES = \
 
 librouter_la_SOURCES = \
 	sendfd.h \
-	sendfd.c
+	sendfd.c \
+	auth.c \
+	auth.h
 
 TESTS = \
 	test_sendfd.t
