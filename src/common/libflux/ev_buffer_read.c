@@ -19,26 +19,24 @@
 
 static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
 {
-    if (ebr->line) {
-        if (flux_buffer_has_line (ebr->fb))
-            return true;
-        /* if eof read, no lines, but left over data non-line data,
-         * this data should be flushed to the user */
-        else if (ebr->eof_read
-                 && flux_buffer_bytes (ebr->fb))
-            return true;
-    }
-    else {
-        if (flux_buffer_bytes (ebr->fb) > 0)
-            return true;
-    }
+    int bytes = flux_buffer_bytes (ebr->fb);
 
-    if (ebr->eof_read
-        && !ebr->eof_sent
-        && !flux_buffer_bytes (ebr->fb)) {
-        if (is_eof)
-            (*is_eof) = true;
-        return true;
+    if (bytes > 0) {
+        if (ebr->eof_read)
+            return true;
+        else if (ebr->line) {
+            if (flux_buffer_has_line (ebr->fb))
+                return true;
+        }
+        else
+            return true;
+    }
+    else if (!bytes) {
+        if (ebr->eof_read && !ebr->eof_sent) {
+            if (is_eof)
+                (*is_eof) = true;
+            return true;
+        }
     }
 
     return false;
