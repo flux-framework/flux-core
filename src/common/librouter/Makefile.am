@@ -33,6 +33,7 @@ librouter_la_SOURCES = \
 TESTS = \
 	test_sendfd.t \
         test_disconnect.t
+	test_auth.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -58,3 +59,7 @@ test_sendfd_t_LDADD = $(test_ldadd)
 test_disconnect_t_SOURCES = test/disconnect.c
 test_disconnect_t_CPPFLAGS = $(test_cppflags)
 test_disconnect_t_LDADD = $(test_ldadd)
+
+test_auth_t_SOURCES = test/auth.c
+test_auth_t_CPPFLAGS = $(test_cppflags)
+test_auth_t_LDADD = $(test_ldadd)
