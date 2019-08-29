@@ -31,7 +31,8 @@ librouter_la_SOURCES = \
 	router.c
 
 TESTS = \
-	test_sendfd.t
+	test_sendfd.t \
+        test_disconnect.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -53,3 +54,7 @@ test_cppflags = \
 test_sendfd_t_SOURCES = test/sendfd.c
 test_sendfd_t_CPPFLAGS = $(test_cppflags)
 test_sendfd_t_LDADD = $(test_ldadd)
+
+test_disconnect_t_SOURCES = test/disconnect.c
+test_disconnect_t_CPPFLAGS = $(test_cppflags)
+test_disconnect_t_LDADD = $(test_ldadd)
