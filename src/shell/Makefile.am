@@ -8,11 +8,14 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS)
+	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS) \
+	$(LUA_INCLUDE)
 
 noinst_LTLIBRARIES = libshell.la
 
 libshell_la_SOURCES = \
+	plugstack.c \
+	plugstack.h \
 	jobspec.c \
 	jobspec.h \
 	rcalc.c \
@@ -23,31 +26,33 @@ fluxlibexec_PROGRAMS = flux-shell
 flux_shell_SOURCES = \
 	shell.c \
 	shell.h \
+	internal.h \
+	builtins.c \
+	builtins.h \
 	info.c \
 	info.h \
 	task.c \
 	task.h \
 	pmi.c \
-	pmi.h \
-	io.c \
-	io.h \
+	output.c \
 	svc.c \
 	svc.h \
 	kill.c \
-	kill.h \
-	signals.c \
-	signals.h
+	signals.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-optparse.la
+	$(top_builddir)/src/common/libflux-optparse.la \
+	$(LUA_LIB)
 
 flux_shell_LDFLAGS =
 
-TESTS = test_jobspec.t
+TESTS = \
+	test_jobspec.t \
+	test_plugstack.t
 
 test_ldadd = \
 	$(builddir)/libshell.la \
@@ -70,3 +75,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_jobspec_t_SOURCES = test/jobspec.c
 test_jobspec_t_CPPFLAGS = $(test_cppflags)
 test_jobspec_t_LDADD = $(test_ldadd)
+
+test_plugstack_t_SOURCES = test/plugstack.c
+test_plugstack_t_CPPFLAGS = $(test_cppflags)
+test_plugstack_t_LDADD = $(test_ldadd)

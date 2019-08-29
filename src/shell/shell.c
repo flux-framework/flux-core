@@ -26,14 +26,11 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
 
-#include "shell.h"
+#include "internal.h"
+#include "builtins.h"
 #include "info.h"
 #include "svc.h"
-#include "io.h"
-#include "pmi.h"
 #include "task.h"
-#include "kill.h"
-#include "signals.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -80,6 +77,11 @@ static void task_completion_cb (struct shell_task *task, void *arg)
 
     if (shell->verbose)
         log_msg ("task %d complete status=%d", task->rank, task->rc);
+
+    shell->current_task = task;
+    if (plugstack_call (shell->plugstack, "flux_shell_task_exit", 1, shell) < 0)
+        log_err ("flux_shell_task_exit plugin(s) failed");
+    shell->current_task = NULL;
 
     if (flux_shell_remove_completion_ref (shell, "task%d", task->rank) < 0)
         log_err ("failed to remove task%d completion reference", task->rank);
@@ -143,6 +145,18 @@ static void shell_connect_flux (flux_shell_t *shell)
     }
 }
 
+int flux_shell_aux_set (flux_shell_t *shell,
+                        const char *key,
+                        void *val,
+                        flux_free_f free_fn)
+{
+    return aux_set (&shell->aux, key, val, free_fn);
+}
+
+void * flux_shell_aux_get (flux_shell_t *shell, const char *key)
+{
+    return aux_get (shell->aux, key);
+}
 
 int flux_shell_add_event_handler (flux_shell_t *shell,
                                   const char *subtopic,
@@ -178,6 +192,33 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
     return 0;
 }
 
+int flux_shell_service_register (flux_shell_t *shell,
+                                 const char *method,
+                                 flux_msg_handler_f cb,
+                                 void *arg)
+{
+    return shell_svc_register (shell->svc, method, cb, arg);
+}
+
+flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
+                                    const char *method,
+                                    int shell_rank,
+                                    int flags,
+                                    const char *fmt, ...)
+{
+    flux_future_t *f;
+    va_list ap;
+    va_start (ap, fmt);
+    f = shell_svc_vpack (shell->svc, method, shell_rank, flags, fmt, ap);
+    va_end (ap);
+    return f;
+}
+
+flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
+{
+    return shell->current_task;
+}
+
 static void shell_events_subscribe (flux_shell_t *shell)
 {
     if (shell->h) {
@@ -207,8 +248,8 @@ static void shell_finalize (flux_shell_t *shell)
         }
         zlist_destroy (&shell->tasks);
     }
-    shell_io_destroy (shell->io);
-    shell_pmi_destroy (shell->pmi);
+    aux_destroy (&shell->aux);
+    plugstack_destroy (shell->plugstack);
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
@@ -228,12 +269,18 @@ static void item_free (void **item)
     }
 }
 
-static void shell_init (flux_shell_t *shell)
+static void flux_shell_init (flux_shell_t *shell)
 {
     memset (shell, 0, sizeof (struct flux_shell));
     if (!(shell->completion_refs = zhashx_new ()))
         log_err_exit ("zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
+
+    if (!(shell->plugstack = plugstack_create ()))
+        log_err_exit ("plugstack_create");
+
+    if (shell_load_builtins (shell) < 0)
+        log_err_exit ("shell_load_builtins");
 }
 
 void flux_shell_killall (flux_shell_t *shell, int signum)
@@ -326,13 +373,31 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     return 0;
 }
 
-static int shell_pre_exec (flux_shell_t *shell)
+static int shell_init (flux_shell_t *shell)
 {
-    if (kill_event_init (shell) < 0)
-        return -1;
-    if (signals_init (shell) < 0)
-        return -1;
-    return 0;
+    return plugstack_call (shell->plugstack, "flux_shell_init", 1, shell);
+}
+
+static int shell_task_init (flux_shell_t *shell)
+{
+    return plugstack_call (shell->plugstack, "flux_shell_task_init", 1, shell);
+}
+
+static void shell_task_exec (flux_shell_task_t *task, void *arg)
+{
+    flux_shell_t *shell = arg;
+    if (plugstack_call (shell->plugstack, "flux_shell_task_exec", 1, shell) < 0)
+        log_err ("flux_shell_task_exec plugin(s) failed");
+}
+
+static int shell_task_forked (flux_shell_t *shell)
+{
+    return plugstack_call (shell->plugstack, "flux_shell_task_fork", 1, shell);
+}
+
+static int shell_exit (flux_shell_t *shell)
+{
+    return plugstack_call (shell->plugstack, "flux_shell_exit", 1, shell);
 }
 
 int main (int argc, char *argv[])
@@ -342,7 +407,7 @@ int main (int argc, char *argv[])
 
     log_init (shell_name);
 
-    shell_init (&shell);
+    flux_shell_init (&shell);
 
     shell_parse_cmdline (&shell, argc, argv);
 
@@ -370,22 +435,9 @@ int main (int argc, char *argv[])
     if (!(shell.svc = shell_svc_create (&shell)))
         log_err_exit ("shell_svc_create");
 
-    /* Create PMI engine
-     * Uses 'h' for KVS access only if info->shell_size > 1.
-     * Tasks send PMI wire proto to pmi.c via shell_pmi_task_ready() callback
-     * registered below.
+    /* Call shell initialization routines and "shell_init" plugins.
      */
-    if (!(shell.pmi = shell_pmi_create (&shell)))
-        log_err_exit ("shell_pmi_create");
-
-    /* Create handler for stdio.
-     */
-    if (!(shell.io = shell_io_create (&shell)))
-        log_err_exit ("shell_io_create");
-
-    /* Call shell pre-task execution initialization.
-     */
-    if (shell_pre_exec (&shell) < 0)
+    if (shell_init (&shell) < 0)
         log_err_exit ("shell_prepare");
 
     /* Barrier to ensure initialization has completed across all shells.
@@ -402,10 +454,16 @@ int main (int argc, char *argv[])
 
         if (!(task = shell_task_create (shell.info, i)))
             log_err_exit ("shell_task_create index=%d", i);
-        if (shell_task_pmi_enable (task, shell_pmi_task_ready, shell.pmi) < 0)
-            log_err_exit ("shell_task_pmi_enable");
-        if (shell_task_io_enable (task, shell_io_task_ready, shell.io) < 0)
-            log_err_exit ("shell_task_io_enable");
+
+        task->pre_exec_cb = shell_task_exec;
+        task->pre_exec_arg = &shell;
+        shell.current_task = task;
+
+        /*  Call all plugin task_init callbacks:
+         */
+        if (shell_task_init (&shell) < 0)
+            log_err_exit ("shell_task_init");
+
         if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0)
             log_err_exit ("shell_task_start index=%d", i);
 
@@ -415,13 +473,23 @@ int main (int argc, char *argv[])
         if (flux_shell_add_completion_ref (&shell, "task%d", task->rank) < 0)
             log_msg_exit ("flux_shell_add_completion_ref");
 
+        /*  Call all plugin task_fork callbacks:
+         */
+        if (shell_task_forked (&shell) < 0)
+            log_err_exit ("shell_task_forked");
     }
+    /*  Reset current task since we've left task-specific context:
+     */
+    shell.current_task = NULL;
 
     /* Main reactor loop
      * Exits when all completion references released
      */
     if (flux_reactor_run (shell.r, 0) < 0)
         log_err ("flux_reactor_run");
+
+    if (shell_exit (&shell) < 0)
+        log_err ("shell_exit callback(s) failed");
 
     shell_finalize (&shell);
 

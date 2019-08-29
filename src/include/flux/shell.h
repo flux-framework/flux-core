@@ -8,17 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef SHELL_SIGNAL_H
-#define SHELL_SIGNAL_H
-
-#include "shell.h"
-
-/*  Initialize shell signal handlers
+/* Allow in-tree programs to #include <flux/shell.h> like out-of-tree would.
  */
-int signals_init (flux_shell_t *shell);
 
-#endif /* !SHELL_SIGNAL_H */
-
-/*
- * vi:tabstop=4 shiftwidth=4 expandtab
- */
+#include "src/shell/shell.h"

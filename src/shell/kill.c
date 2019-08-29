@@ -19,13 +19,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <flux/core.h>
+#include <flux/shell.h>
 
 #include "src/common/libutil/log.h"
 
-#include "kill.h"
-#include "task.h"
-#include "info.h"
-#include "shell.h"
+#include "builtins.h"
 
 static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
@@ -39,15 +37,17 @@ static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_shell_killall (shell, signum);
 }
 
-int kill_event_init (flux_shell_t *shell)
+static int kill_event_init (flux_shell_t *shell)
 {
-    /* Nothing to do in standalone mode */
-    if (shell->standalone)
-        return 0;
     if (flux_shell_add_event_handler (shell, "kill", kill_cb, shell) < 0)
         return -1;
     return 0;
 }
+
+struct shell_builtin builtin_kill = {
+    .name = "kill_event_handler",
+    .init = kill_event_init,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

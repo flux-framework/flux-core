@@ -8,40 +8,29 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _SHELL_H
-#define _SHELL_H
+#ifndef FLUX_SHELL_H
+#define FLUX_SHELL_H
 
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 
-/* Later this typedef may be exported publicly. e.g. to shell plugins,
- * but for now keep it internal to avoid the need for another header.
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_shell flux_shell_t;
+typedef struct shell_task flux_shell_task_t;
 
-struct flux_shell {
-    flux_jobid_t jobid;
-    int broker_rank;
+typedef void (flux_shell_task_io_f) (flux_shell_task_t *task,
+                                     const char *stream,
+                                     void *arg);
 
-    optparse_t *p;
-    flux_t *h;
-    flux_reactor_t *r;
+int flux_shell_aux_set (flux_shell_t *shell,
+                        const char *name,
+                        void *aux,
+                        flux_free_f free_fn);
 
-    struct shell_info *info;
-    struct shell_svc *svc;
-    struct shell_io *io;
-    struct shell_pmi *pmi;
-    zlist_t *tasks;
-
-    zhashx_t *completion_refs;
-
-    int rc;
-
-    bool verbose;
-    bool standalone;
-};
-
+void * flux_shell_aux_get (flux_shell_t *shell, const char *name);
 
 /*
  *  Take a "completion reference" on the shell object `shell`.
@@ -77,8 +66,57 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
                                   flux_msg_handler_f cb,
                                   void *arg);
 
-#endif /* !_SHELL_H */
+/*  Register service handler for `method` with the shell
+ */
+int flux_shell_service_register (flux_shell_t *shell,
+                                 const char *method,
+                                 flux_msg_handler_f cb,
+                                 void *arg);
+
+/*  Send an rpc to shell `method` by shell rank
+ */
+flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
+                                    const char *method,
+                                    int shell_rank,
+                                    int flags,
+                                    const char *fmt, ...);
+
+/*  flux_shell_task_t API:
+ */
+
+/*  Return the current task for task_init, task_exec, and task_exit callbacks:
+ *
+ *  Returns NULL in any other context.
+ */
+flux_shell_task_t * flux_shell_current_task (flux_shell_t *shell);
 
 /*
- * vi:tabstop=4 shiftwidth=4 expandtab
+ *  Return the cmd structure for a shell task.
  */
+flux_cmd_t *flux_shell_task_cmd (flux_shell_task_t *task);
+
+/*
+ *  Return the subprocess for a shell task in task_fork, task_exit callbacks:
+ */
+flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task);
+
+/*  Call `cb` when channel `name` is ready for reading.
+ *
+ *  Callback can then call flux_shell_task_get_subprocess() and use
+ *   flux_subprocess_read() or getline() on the result to get
+ *   available data.
+ *
+ *  Only one subscriber per stream is allowed. If subscribe is called
+ *   on a stream with an existing subscriber then -1 is returned with
+ *   errno set to EEXIST.
+ */
+int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
+                                       const char *channel,
+                                       flux_shell_task_io_f cb,
+                                       void *arg);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* !FLUX_SHELL_H */

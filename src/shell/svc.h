@@ -11,11 +11,13 @@
 #ifndef SHELL_SVC_H
 #define SHELL_SVC_H
 
+#include <stdarg.h>
+
 #include <flux/core.h>
+#include <flux/shell.h>
 
 #include "info.h"
 #include "task.h"
-#include "shell.h"
 
 struct shell_svc;
 
@@ -30,6 +32,15 @@ flux_future_t *shell_svc_pack (struct shell_svc *svc,
                                int flags,
                                const char *fmt, ...);
 
+
+/* Same as above, but called with a va_list instead of varargs
+ */
+flux_future_t *shell_svc_vpack (struct shell_svc *svc,
+                                const char *method,
+                                int shell_rank,
+                                int flags,
+                                const  char *fmt,
+                                va_list ap);
 
 /* Register a message handler for 'method'.
  * The message handler is destroyed when shell->h is destroyed.
