@@ -18,6 +18,7 @@
 
 int out = 0;
 int err = 0;
+int newline = 0;
 int count = 4;
 
 int
@@ -26,7 +27,7 @@ main (int argc, char *argv[])
     int maxcount;
 
     while (1) {
-        int c = getopt (argc, argv, "OEc:");
+        int c = getopt (argc, argv, "OEnc:");
         if (c < 0)
             break;
 
@@ -36,6 +37,9 @@ main (int argc, char *argv[])
             break;
         case 'E':
             err++;
+            break;
+        case 'n':
+            newline++;
             break;
         case 'c':
             count = atoi (optarg);
@@ -76,18 +80,22 @@ main (int argc, char *argv[])
                 exit (1);
             }
             if (out && pfds[0].revents & POLLOUT) {
-                if (outcount == count)
-                    fprintf (stdout, "\n");
+                if (outcount == count) {
+                    if (!newline)
+                        fprintf (stdout, "\n");
+                }
                 else
-                    fprintf (stdout, "%s", argv[optind]);
+                    fprintf (stdout, "%s%s", argv[optind], newline ? "\n" : "");
                 fflush (stdout);
                 outcount++;
             }
             if (err && pfds[1].revents & POLLOUT) {
-                if (errcount == count)
-                    fprintf (stderr, "\n");
+                if (errcount == count) {
+                    if (!newline)
+                        fprintf (stderr, "\n");
+                }
                 else
-                    fprintf (stderr, "%s", argv[optind]);
+                    fprintf (stderr, "%s%s", argv[optind], newline ? "\n" : "");
                 fflush (stderr);
                 errcount++;
             }
