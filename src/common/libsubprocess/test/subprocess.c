@@ -2879,6 +2879,118 @@ void test_line_buffer_error (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+/* min bytes tests are technically racy.  If the stdout occurs slowsly
+ * enough, a single on_stdout callback could occur.  But hopefully
+ * that's not going to occur given large data sizes.
+ */
+
+void min_bytes_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    int *counter;
+
+    if (!strcasecmp (stream, "stdout"))
+        counter = &stdout_output_cb_count;
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    (void)flux_subprocess_read (p, stream, -1, NULL);
+    (*counter)++;
+}
+
+void test_min_bytes_default (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-n", "-c", "4000", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (6, av, environ)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = min_bytes_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* we care that > 2 calls occur, b/c we don't have min bytes set */
+    ok (stdout_output_cb_count > 2, "stdout output callback called > 2 times: %d",
+        stdout_output_cb_count);
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_min_bytes_enable (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_multi_echo", "-O", "-n", "-c", "4000", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (6, av, environ)) != NULL, "flux_cmd_create");
+
+    /* 4000 * 3 = 12000 */
+    ok (flux_cmd_setopt (cmd, "stdout_MIN_BYTES", "12000") == 0,
+        "flux_cmd_setopt set stdout_MIN_BYTES success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = min_bytes_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    /* we want 2 calls, one callback with all data & EOF */
+    ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_min_bytes_error (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/true", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    ok (flux_cmd_setopt (cmd, "stdout_MIN_BYTES", "ABCD") == 0,
+        "flux_cmd_setopt set stdout_MIN_BYTES success");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_channel_out = flux_standard_output,
+        .on_stdout = flux_standard_output,
+        .on_stderr = flux_standard_output
+    };
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p == NULL
+        && errno == EINVAL,
+        "flux_local_exec fails with EINVAL due to bad MIN_BYTES input");
+
+    flux_cmd_destroy (cmd);
+}
+
 void test_stream_start_stop_basic (flux_reactor_t *r)
 {
     char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "-E", "hi", NULL };
@@ -3492,6 +3604,12 @@ int main (int argc, char *argv[])
     test_line_buffer_disable (r);
     diag ("line_buffer_error");
     test_line_buffer_error (r);
+    diag ("min_bytes_default");
+    test_min_bytes_default (r);
+    diag ("min_bytes_enable");
+    test_min_bytes_enable (r);
+    diag ("min_bytes_error");
+    test_min_bytes_error (r);
     diag ("stream_start_stop_basic");
     test_stream_start_stop_basic (r);
     diag ("stream_start_stop_initial_stop");
