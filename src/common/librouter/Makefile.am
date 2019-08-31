@@ -26,7 +26,9 @@ librouter_la_SOURCES = \
 	subhash.h \
 	subhash.c \
 	servhash.h \
-	servhash.c
+	servhash.c \
+	router.h \
+	router.c
 
 TESTS = \
 	test_sendfd.t
