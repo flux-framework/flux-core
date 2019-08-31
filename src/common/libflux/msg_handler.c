@@ -224,7 +224,8 @@ static bool dispatch_message (struct dispatch *d,
     /* rpc w/matchtag */
     if (type == FLUX_MSGTYPE_RESPONSE) {
         uint32_t matchtag;
-        if (flux_msg_get_matchtag (msg, &matchtag) == 0
+        if (flux_msg_get_route_count (msg) == 0
+                && flux_msg_get_matchtag (msg, &matchtag) == 0
                 && matchtag != FLUX_MATCHTAG_NONE
                 && (mh = zhashx_lookup (d->handlers_rpc, &matchtag))
                 && mh->running
@@ -261,6 +262,8 @@ static void handle_late_response (struct dispatch *d, const flux_msg_t *msg)
 
     if (flux_msg_get_matchtag (msg, &matchtag) < 0)
         return;
+    if (flux_msg_get_route_count (msg) != 0)
+        return; // foreign matchtag domain (or error getting count)
     if (matchtag == FLUX_MATCHTAG_NONE)
         return; // no matchtag was allocated
     if (flux_matchtag_group (matchtag))
