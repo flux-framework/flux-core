@@ -22,7 +22,11 @@ librouter_la_SOURCES = \
 	usock.c \
 	usock.h \
 	disconnect.h \
-	disconnect.c
+	disconnect.c \
+	subhash.h \
+	subhash.c \
+	servhash.h \
+	servhash.c
 
 TESTS = \
 	test_sendfd.t
