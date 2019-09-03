@@ -31,6 +31,8 @@ static struct optparse_option cmdopts[] = {
       .usage = "Specify rank for test" },
     { .name = "linebuffer", .key = 'l', .has_arg = 1, .arginfo = "bool",
       .usage = "Specify true/false for line buffering" },
+    { .name = "minbytes", .key = 'm', .has_arg = 1, .arginfo = "num",
+      .usage = "Specify minimum bytes for buffering" },
     OPTPARSE_TABLE_END
 };
 
@@ -126,6 +128,19 @@ int main (int argc, char *argv[])
             && strcasecmp (optargp, "false"))
             log_err_exit ("invalid linebuffer value");
         if (flux_cmd_setopt (cmd, "stdout_LINE_BUFFER", optargp) < 0)
+            log_err_exit ("flux_cmd_setopt");
+    }
+
+    if (optparse_getopt (opts, "minbytes", &optargp) > 0) {
+        char *endptr;
+        int minbytes;
+        errno = 0;
+        minbytes = strtol (optargp, &endptr, 10);
+        if (errno
+            || endptr[0] != '\0'
+            || minbytes <= 0)
+            log_err_exit ("invalid minbytes value");
+        if (flux_cmd_setopt (cmd, "stdout_MIN_BYTES", optargp) < 0)
             log_err_exit ("flux_cmd_setopt");
     }
 
