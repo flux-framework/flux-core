@@ -219,6 +219,21 @@ test_expect_success 'rexec line buffering can be disabled' '
         test "$count" -gt 2
 '
 
+# min bytes tests are technically racy, but with a lot of output,
+# probability is extremely low all data is buffered in one shot.
+
+test_expect_success 'rexec min bytes disabled does no buffering' '
+        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 ${TEST_SUBPROCESS_DIR}/test_multi_echo -O -n -c 5000 hi > minbytes1.out &&
+        count=$(grep "final stdout callback count:" minbytes1.out | awk "{print \$5}") &&
+        test "$count" -gt 3
+'
+
+# 5000 "hi\n" = 15000 bytes, should get 4 callbacks (3 for each 5000 bytes, + 1 for EOF)
+test_expect_success 'rexec min bytes works' '
+        ${FLUX_BUILD_DIR}/t/rexec/rexec_count_stdout -r 1 -m 5000 ${TEST_SUBPROCESS_DIR}/test_multi_echo -O -n -c 5000 hi > minbytes2.out &&
+        grep "final stdout callback count: 4" minbytes2.out
+'
+
 # the last line of output is "bar" without a newline.  "EOF" is output
 # from "rexec_getline", so if everything is working correctly, we
 # should see the concatenation "barEOF" at the end of the output.
