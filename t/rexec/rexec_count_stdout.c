@@ -34,8 +34,6 @@ static struct optparse_option cmdopts[] = {
     OPTPARSE_TABLE_END
 };
 
-optparse_t *opts;
-
 int stdout_count = 0;
 int exit_code = 0;
 
@@ -53,24 +51,26 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     const char *ptr;
     int lenp;
 
-    /* Do not use flux_subprocess_getline(), testing is against
+    /* Do not use flux_subprocess_getline(), testing may be against
      * streams that are line buffered and not line buffered */
 
-    if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
-        log_err ("flux_subprocess_read_line");
-        return;
+    ptr = flux_subprocess_read_line (p, stream, &lenp);
+    while (ptr && lenp > 0) {
+        fwrite (ptr, lenp, 1, fstream);
+        ptr = flux_subprocess_read_line (p, stream, &lenp);
     }
 
     /* we're at the end of the stream, read any lingering data */
-    if (!lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
+    if (ptr && !lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
             log_err ("flux_subprocess_read");
             return;
         }
+
+        if (lenp)
+            fwrite (ptr, lenp, 1, fstream);
     }
 
-    if (lenp)
-        fwrite (ptr, lenp, 1, fstream);
 
     if (!strcasecmp (stream, "stdout"))
         stdout_count++;
@@ -90,6 +90,7 @@ int main (int argc, char *argv[])
         .on_stdout = output_cb,
         .on_stderr = output_cb,
     };
+    optparse_t *opts;
     const char *optargp;
     int optindex;
     int rank = 0;
