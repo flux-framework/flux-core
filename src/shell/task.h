@@ -54,12 +54,6 @@ int shell_task_start (struct shell_task *task,
                       shell_task_completion_f cb,
                       void *arg);
 
-/* Call before task_start() to enable stdio capture.
- */
-int shell_task_io_enable (struct shell_task *task,
-                          shell_task_io_ready_f cb,
-                          void *arg);
-
 /* Send signal `signum` to shell task */
 int shell_task_kill (struct shell_task *task, int signum);
 
