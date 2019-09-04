@@ -99,9 +99,9 @@ static void shell_output_control (struct shell_output *out, bool stop)
  * io->output is a JSON array of eventlog entries.
  */
 static void shell_output_write_cb (flux_t *h,
-                               flux_msg_handler_t *mh,
-                               const flux_msg_t *msg,
-                               void *arg)
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct shell_output *out = arg;
     bool eof = false;
@@ -150,11 +150,11 @@ static void shell_output_write_completion (flux_future_t *f, void *arg)
 }
 
 static int shell_output_write (struct shell_output *out,
-                           int rank,
-                           const char *stream,
-                           const char *data,
-                           int len,
-                           bool eof)
+                               int rank,
+                               const char *stream,
+                               const char *data,
+                               int len,
+                               bool eof)
 {
     flux_future_t *f = NULL;
     json_t *o = NULL;
