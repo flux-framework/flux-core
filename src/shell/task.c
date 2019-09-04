@@ -26,11 +26,6 @@
  * Current working directory
  *    Ignore - shell should already be in it.
  *
- * Standard I/O
- *    Call shell_task_io_enable() to set up callbacks for stdio, stderr.
- *    The provided callback notifies shell when a line can be read from
- *    the channel.  Use flux_subprocess_read_line (task->proc, ...) to read it.
- *
  * Upon task completion, set task->rc and call shell_task_completion_f
  * supplied to shell task start.
  *
