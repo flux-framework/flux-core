@@ -32,12 +32,15 @@
 
 #include <unistd.h>
 
+#include "src/common/libutil/intree.h"
+
 #include "job-exec.h"
 #include "bulk-exec.h"
 #include "rset.h"
 
 extern char **environ;
 static const char *default_cwd = "/tmp";
+static const char *default_job_shell = NULL;
 
 /* Configuration for "bulk" execution implementation. Used only for testing
  *  for now.
@@ -81,13 +84,25 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
     return path;
 }
 
+static int conf_flags (void)
+{
+    if (executable_is_intree () == 1)
+        return CONF_FLAG_INTREE;
+    return 0;
+}
+
+static const char *default_job_shell_path (void)
+{
+    if (!default_job_shell)
+        default_job_shell = flux_conf_get ("shell_path", conf_flags());
+    return default_job_shell;
+}
+
 static const char *job_shell_path (struct jobinfo *job)
 {
-    int conf_flags = getenv ("FLUX_CONF_INTREE") ? CONF_FLAG_INTREE : 0;
-    const char *default_job_shell = flux_conf_get ("shell_path", conf_flags);
     const char *path = jobspec_get_job_shell (job->jobspec);
     if (!path && !(path = flux_attr_get (job->h, "job-exec.job-shell")))
-        path = default_job_shell;
+        path = default_job_shell_path ();
     return path;
 }
 
