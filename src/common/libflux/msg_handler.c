@@ -30,7 +30,8 @@ struct dispatch {
     flux_t *h;
     zlist_t *handlers;
     zlist_t *handlers_new;
-    zhashx_t *handlers_rpc; // hashed by matchtag
+    zhashx_t *handlers_rpc; // matchtag => response handler
+    zhashx_t *handlers_method; // topic => request handler (non-glob only)
     flux_watcher_t *w;
     int running_count;
     int usecount;
@@ -59,6 +60,18 @@ static void free_msg_handler (flux_msg_handler_t *mh);
 
 static size_t matchtag_hasher (const void *key);
 static int matchtag_cmp (const void *key1, const void *key2);
+
+/* Return true if topic string 's' could match multiple request topics,
+ * e.g. contains a glob character, or is NULL or "" which match anything.
+ */
+static bool isa_multmatch (const char *s)
+{
+    if (!s || strlen (s) == 0)
+        return true;
+    if (strchr (s, '*') || strchr (s, '?') || strchr (s, '['))
+        return true;
+    return false;
+}
 
 static void dispatch_requeue (struct dispatch *d)
 {
@@ -90,6 +103,7 @@ static void dispatch_usecount_decr (struct dispatch *d)
         }
         flux_watcher_destroy (d->w);
         zhashx_destroy (&d->handlers_rpc);
+        zhashx_destroy (&d->handlers_method);
         free (d);
         errno = saved_errno;
     }
@@ -130,6 +144,13 @@ static struct dispatch *dispatch_get (flux_t *h)
         zhashx_set_key_comparator (d->handlers_rpc, matchtag_cmp);
         zhashx_set_key_destructor (d->handlers_rpc, NULL);
         zhashx_set_key_duplicator (d->handlers_rpc, NULL);
+        /* N.B. d->handlers_method key points to mh->match.topic_glob in entry,
+         * so disable the key duplicator and destructor to avoid extra malloc.
+         */
+        if (!(d->handlers_method = zhashx_new ()))
+            goto nomem;
+        zhashx_set_key_destructor (d->handlers_method, NULL);
+        zhashx_set_key_duplicator (d->handlers_method, NULL);
 #if HAVE_CALIPER
         d->prof_msg_type = cali_create_attribute ("flux.message.type",
                                                   CALI_TYPE_STRING,
@@ -215,13 +236,21 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
     mh->fn (mh->d->h, mh, msg, mh->arg);
 }
 
+/* Messages are matched in the following order:
+ * 1) RPC responses - lookup in handlers_rpc hash by matchtag.
+ * 2) RPC requests - lookup in handlers_method hash by topic string
+ * 3) Requests and responses not matched above - sent to first match in
+ *    list of handlers, where most recently registered handlers match first.
+ * 4) Events - sent to all matches in list of handlers
+ */
 static bool dispatch_message (struct dispatch *d,
-                              const flux_msg_t *msg, int type)
+                              const flux_msg_t *msg,
+                              int type)
 {
     flux_msg_handler_t *mh;
     bool match = false;
 
-    /* rpc w/matchtag */
+    /* rpc response w/matchtag */
     if (type == FLUX_MSGTYPE_RESPONSE) {
         uint32_t matchtag;
         if (flux_msg_get_route_count (msg) == 0
@@ -230,6 +259,16 @@ static bool dispatch_message (struct dispatch *d,
                 && (mh = zhashx_lookup (d->handlers_rpc, &matchtag))
                 && mh->running
                 && flux_msg_cmp (msg, mh->match)) {
+            call_handler (mh, msg);
+            match = true;
+        }
+    }
+    /* rpc request */
+    else if (type == FLUX_MSGTYPE_REQUEST) {
+        const char *topic;
+        if (flux_msg_get_topic (msg, &topic) == 0
+                && (mh = zhashx_lookup (d->handlers_method, topic))
+                && mh->running) {
             call_handler (mh, msg);
             match = true;
         }
@@ -454,7 +493,12 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
         if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
             zhashx_delete (mh->d->handlers_rpc, &mh->match.matchtag);
-        } else {
+        }
+        else if (mh->match.typemask == FLUX_MSGTYPE_REQUEST
+                            && !isa_multmatch (mh->match.topic_glob)) {
+            zhashx_delete (mh->d->handlers_method, mh->match.topic_glob);
+        }
+        else {
             zlist_remove (mh->d->handlers_new, mh);
             zlist_remove (mh->d->handlers, mh);
         }
@@ -487,13 +531,35 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
     mh->fn = cb;
     mh->arg = arg;
     mh->d = d;
+    /* Response (valid matchtag):
+     * Fail if entry in the handlers_rpc hash exists, since that probably
+     * indicates a matchtag reuse problem!
+     */
     if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
         if (zhashx_insert (d->handlers_rpc, &mh->match.matchtag, mh) < 0) {
             errno = EEXIST;
             goto error;
         }
-    } else {
+    }
+    /* Request (non-glob):
+     * Replace existing entry in the handlers_method hash, if any.
+     * This allows builtin module methods to be overridden.
+     */
+    else if (mh->match.typemask == FLUX_MSGTYPE_REQUEST
+                            && !isa_multmatch (mh->match.topic_glob)) {
+        zhashx_update (d->handlers_method, mh->match.topic_glob, mh);
+    }
+    /* Request (glob), response (FLUX_MATCHTAG_NONE), events:
+     * Message handler is pushed to the front of the handlers list,
+     * and matches before older ones for requests and responses.
+     * (Requests and responses in hashes above match first though).
+     * Event messages are broadcast to all matching handlers.
+     */
+    else {
+        /* N.B. append(handlers_new); later, pop(handlers_new), push(handlers).
+         * Net effect: push(handlers).
+         */
         if (zlist_append (d->handlers_new, mh) < 0) {
             errno = ENOMEM;
             goto error;
