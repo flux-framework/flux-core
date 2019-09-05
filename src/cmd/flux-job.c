@@ -747,6 +747,7 @@ struct attach_ctx {
     optparse_t *p;
     bool started;
     bool missing_output_ok;
+    bool output_header_parsed;
     int stdout_count;
     int stderr_count;
     int stdout_eof_count;
@@ -898,6 +899,7 @@ void print_output_continuation (flux_future_t *f, void *arg)
                          "stdout", &ctx->stdout_count,
                          "stderr", &ctx->stderr_count) < 0)
             log_msg_exit ("error parsing stream counts");
+        ctx->output_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
         FILE *fp;
@@ -907,6 +909,8 @@ void print_output_continuation (flux_future_t *f, void *arg)
         char *data;
         int len;
         bool eof;
+        if (!ctx->output_header_parsed)
+            log_msg_exit ("stream data read before header");
         if (iodecode (context, &stream, &rank, &data, &len, &eof) < 0)
             log_msg_exit ("malformed event context");
         if (!strcmp (stream, "stdout")) {
