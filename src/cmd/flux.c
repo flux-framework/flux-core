@@ -15,9 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <libgen.h>
 #include <stdbool.h>
-#include <sys/param.h>
 #include <glob.h>
 #include <assert.h>
 #include <flux/core.h>
@@ -27,6 +25,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/environment.h"
+#include "src/common/libutil/intree.h"
 
 #include "cmdhelp.h"
 #include "builtin.h"
@@ -230,63 +229,12 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-/*  Strip trailing ".libs", otherwise do nothing
- */
-char *strip_trailing_dot_libs (char *dir)
-{
-    char *p = dir + strlen (dir) - 1;
-    if (   (*(p--) == 's')
-        && (*(p--) == 'b')
-        && (*(p--) == 'i')
-        && (*(p--) == 'l')
-        && (*(p--) == '.')
-        && (*p == '/') )
-        *p = '\0';
-    return (dir);
-}
-
-/*  Return directory containing this executable.  Caller must free.
- *   (using non-portable /proc/self/exe support for now)
- *   NOTE: build tree .libs directory stripped from path if found.
- */
-char *dir_self (void)
-{
-    static char  flux_exe_path [MAXPATHLEN];
-    static char *flux_exe_dir;
-    static bool exe_path_valid = false;
-    if (!exe_path_valid) {
-        memset (flux_exe_path, 0, MAXPATHLEN);
-        if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
-            log_err_exit ("readlink (/proc/self/exe)");
-        flux_exe_dir = strip_trailing_dot_libs (dirname (flux_exe_path));
-        exe_path_valid = true;
-    }
-    return xstrdup (flux_exe_dir);
-}
-
 bool flux_is_installed (void)
 {
-    const char *conf_bindir = flux_conf_get ("bindir", CONF_FLAG_INTREE);
-    char *selfdir = dir_self ();
-    char *bindir = NULL;
-    bool ret = true;
-    /*
-     *  Calling realpath(3) with NULL second arg is safe since POSIX.1-2008.
-     *   (Equivalent to glibc's canonicalize_path_name(3))
-     *
-     *  If realpath(3) returns ENOENT, then BINDIR doesn't exist and flux
-     *   clearly can't be from the installed path:
-     */
-
-    if (!(bindir = realpath (conf_bindir, NULL))
-       && (errno != ENOENT)
-       && (errno != EACCES))
-        log_err_exit ("realpath (%s)", conf_bindir);
-    else if (bindir && !strcmp (selfdir, bindir))
-        ret = false;
-    free (selfdir);
-    free (bindir);
-    return ret;
+    int rc = executable_is_intree ();
+    if (rc < 0)
+        log_err_exit ("Failed to to determine if flux is installed");
+    return (rc == 0);
 }
 
 /*
@@ -298,16 +246,18 @@ bool flux_is_installed (void)
  */
 void setup_path (struct environment *env, const char *argv0)
 {
-    char *selfdir;
+    const char *selfdir = NULL;
     assert (argv0);
 
     /*  If argv[0] was explicitly "flux" then assume PATH is already set */
     if (strcmp (argv0, "flux") == 0)
         return;
-    environment_from_env (env, "PATH", "/bin:/usr/bin", ':');
-    selfdir = dir_self ();
-    environment_push (env, "PATH", selfdir);
-    free (selfdir);
+    if ((selfdir = executable_selfdir ())) {
+        environment_from_env (env, "PATH", "/bin:/usr/bin", ':');
+        environment_push (env, "PATH", executable_selfdir ());
+    }
+    else
+        log_msg_exit ("Unable to determine flux executable dir");
 }
 
 void setup_keydir (struct environment *env, int flags)
