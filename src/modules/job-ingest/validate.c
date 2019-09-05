@@ -35,6 +35,8 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/intree.h"
+
 #include "validate.h"
 #include "worker.h"
 
@@ -83,7 +85,7 @@ struct validate *validate_create (flux_t *h)
         return NULL;
     v->h = h;
 
-    if (getenv ("FLUX_CONF_INTREE"))
+    if (executable_is_intree ())
         conf_flags |= CONF_FLAG_INTREE;
     argv[0] = (char *)flux_conf_get ("jobspec_validate_path", conf_flags);
     argv[1] = "--schema";
