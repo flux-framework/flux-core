@@ -11,7 +11,8 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux
+	-I$(top_builddir)/src/common/libflux \
+	-DABS_TOP_BUILDDIR=\"$(abs_top_builddir)\"
 
 noinst_LTLIBRARIES = libutil.la
 
