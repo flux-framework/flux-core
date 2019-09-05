@@ -13,10 +13,11 @@
  * Intercept task stdout, stderr and dispose of it according to
  * selected I/O mode.
  *
- * The leader shell implements an "shell-<id>.output" service that
- * all ranks send task output to.  Output objects accumulate in a json
- * array on the leader.  Upon task exit, the array is written to the
- * "output" key in the job's guest KVS namespace.
+ * The leader shell implements an "shell-<id>.output" service that all
+ * ranks send task output to.  Output objects are written to the
+ * "output" key in the job's guest KVS namespace, or directly to
+ * stdout/stderr depending on settings.  A list of pending commits
+ * keeps track of writes to the KVS.
  *
  * Notes:
  * - leader takes a completion reference which it gives up once each
@@ -54,7 +55,7 @@ struct shell_output {
     int refcount;
     int eof_pending;
     zlist_t *pending_writes;
-    json_t *output;
+    zlist_t *pending_commits;
     bool stopped;
 };
 
@@ -94,9 +95,87 @@ static void shell_output_control (struct shell_output *out, bool stop)
     }
 }
 
+static int shell_output_data (struct shell_output *out, json_t *iodata)
+{
+    FILE *f;
+    const char *stream = NULL;
+    int rank;
+    char *data = NULL;
+    int len = 0;
+
+    if (iodecode (iodata, &stream, &rank, &data, &len, NULL) < 0) {
+        log_err ("iodecode");
+        return -1;
+    }
+    f = !strcmp (stream, "stdout") ? stdout : stderr;
+    if (len > 0) {
+        fprintf (f, "%d: ", rank);
+        fwrite (data, len, 1, f);
+    }
+    free (data);
+    return 0;
+}
+
+static void shell_output_commit_completion (flux_future_t *f, void *arg)
+{
+    struct shell_output *out = arg;
+
+    if (flux_future_get (f, NULL) < 0)
+        log_err ("shell_output_commit");
+    zlist_remove (out->pending_commits, f);
+    flux_future_destroy (f);
+}
+
+static int shell_output_commit (struct shell_output *out, json_t *entry)
+{
+    flux_kvs_txn_t *txn;
+    flux_future_t *f = NULL;
+    char *entry_str;
+    int saved_errno;
+    int rc = -1;
+
+    if (!(entry_str = eventlog_entry_encode (entry)))
+        return -1;
+    if (!(txn = flux_kvs_txn_create ()))
+        goto error;
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", entry_str) < 0)
+        goto error;
+    if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
+        goto error;
+    if (flux_future_then (f, -1, shell_output_commit_completion, out) < 0)
+        goto error;
+    if (zlist_append (out->pending_commits, f) < 0)
+        log_msg ("zlist_append failed");
+    rc = 0;
+error:
+    saved_errno = errno;
+    flux_kvs_txn_destroy (txn);
+    free (entry_str);
+    errno = saved_errno;
+    return rc;
+}
+
+static int shell_output_commit_data (struct shell_output *out, json_t *context)
+{
+    json_t *entry;
+    int saved_errno, rc = -1;
+
+    if (!(entry = eventlog_entry_pack (0., "data", "O", context)))
+        goto error;
+
+    if (shell_output_commit (out, entry) < 0)
+        goto error;
+
+    rc = 0;
+error:
+    saved_errno = errno;
+    json_decref (entry);
+    errno = saved_errno;
+    return rc;
+}
+
 /* Convert 'iodecode' object to an valid RFC 24 data event.
  * N.B. the iodecode object is a valid "context" for the event.
- * io->output is a JSON array of eventlog entries.
  */
 static void shell_output_write_cb (flux_t *h,
                                    flux_msg_handler_t *mh,
@@ -106,7 +185,6 @@ static void shell_output_write_cb (flux_t *h,
     struct shell_output *out = arg;
     bool eof = false;
     json_t *o;
-    json_t *entry;
 
     if (flux_request_unpack (msg, NULL, "o", &o) < 0)
         goto error;
@@ -114,12 +192,13 @@ static void shell_output_write_cb (flux_t *h,
         goto error;
     if (shell_svc_allowed (out->shell->svc, msg) < 0)
         goto error;
-    if (!(entry = eventlog_entry_pack (0., "data", "O", o))) // increfs 'o'
-        goto error;
-    if (json_array_append_new (out->output, entry) < 0) {
-        json_decref (entry);
-        errno = ENOMEM;
-        goto error;
+    if (out->shell->standalone) {
+        if (shell_output_data (out, o) < 0)
+            log_err ("shell_output_data");
+    }
+    else {
+        if (shell_output_commit_data (out, o) < 0)
+            log_err ("shell_output_commit_data");
     }
     if (eof) {
         if (--out->eof_pending == 0) {
@@ -182,70 +261,6 @@ error:
     return -1;
 }
 
-static int shell_output_flush (struct shell_output *out)
-{
-    json_t *entry;
-    size_t index;
-    FILE *f;
-
-    json_array_foreach (out->output, index, entry) {
-        json_t *context;
-        const char *name;
-        const char *stream = NULL;
-        int rank;
-        char *data = NULL;
-        int len = 0;
-        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            log_err ("eventlog_entry_parse");
-            return -1;
-        }
-        if (!strcmp (name, "header")) {
-            // TODO: acquire per-stream encoding type
-        }
-        else if (!strcmp (name, "data")) {
-            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
-                log_err ("iodecode");
-                return -1;
-            }
-            f = !strcmp (stream, "stdout") ? stdout : stderr;
-            if (len > 0) {
-                fprintf (f, "%d: ", rank);
-                fwrite (data, len, 1, f);
-            }
-            free (data);
-        }
-    }
-    return 0;
-}
-
-static int shell_output_commit (struct shell_output *out)
-{
-    flux_kvs_txn_t *txn;
-    flux_future_t *f = NULL;
-    char *chunk;
-    int saved_errno;
-    int rc = -1;
-
-    if (!(chunk = eventlog_encode (out->output)))
-        return -1;
-    if (!(txn = flux_kvs_txn_create ()))
-        goto out;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", chunk) < 0)
-        goto out;
-    if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
-        goto out;
-    if (flux_future_get (f, NULL) < 0)
-        goto out;
-    rc = 0;
-out:
-    saved_errno = errno;
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-    free (chunk);
-    errno = saved_errno;
-    return rc;
-}
-
 void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
@@ -260,30 +275,30 @@ void shell_output_destroy (struct shell_output *out)
             }
             zlist_destroy (&out->pending_writes);
         }
-        if (out->output) { // leader only
-            if (out->shell->standalone) {
-                if (shell_output_flush (out) < 0)
-                    log_err ("shell_output_flush");
-            }
-            else {
-                if (shell_output_commit (out) < 0)
+        if (out->pending_commits) { // leader only
+            flux_future_t *f;
+
+            while ((f = zlist_pop (out->pending_commits))) {
+                if (flux_future_get (f, NULL) < 0)
                     log_err ("shell_output_commit");
+                flux_future_destroy (f);
             }
+            zlist_destroy (&out->pending_commits);
         }
-        json_decref (out->output);
         free (out);
         errno = saved_errno;
     }
 }
 
-/* Append RFC 24 header event to 'output' JSON array.  Assume:
+/* Output RFC 24 header event to 'output' in guest KVS.  Assume:
  * - fixed base64 encoding for stdout, stderr
  * - no options
  * - no stdlog
  */
-static int shell_output_header_append (flux_shell_t *shell, json_t *output)
+static int shell_output_header (struct shell_output *out)
 {
     json_t *o;
+    int saved_errno, rc = -1;
 
     o = eventlog_entry_pack (0, "header",
                              "{s:i s:{s:s s:s} s:{s:i s:i} s:{}}",
@@ -292,15 +307,21 @@ static int shell_output_header_append (flux_shell_t *shell, json_t *output)
                                "stdout", "base64",
                                "stderr", "base64",
                              "count",
-                               "stdout", shell->info->jobspec->task_count,
-                               "stderr", shell->info->jobspec->task_count,
+                               "stdout", out->shell->info->jobspec->task_count,
+                               "stderr", out->shell->info->jobspec->task_count,
                              "options");
-    if (!o || json_array_append_new (output, o) < 0) {
-        json_decref (o);
+    if (!o) {
         errno = ENOMEM;
-        return -1;
+        goto error;
     }
-    return 0;
+    if (shell_output_commit (out, o) < 0)
+        goto error;
+    rc = 0;
+error:
+    saved_errno = errno;
+    json_decref (o);
+    errno = saved_errno;
+    return rc;
 }
 
 struct shell_output *shell_output_create (flux_shell_t *shell)
@@ -313,6 +334,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (!(out->pending_writes = zlist_new ()))
         goto error;
     if (shell->info->shell_rank == 0) {
+        if (!(out->pending_commits = zlist_new ()))
+            goto error;
         if (flux_shell_service_register (shell,
                                          "write",
                                          shell_output_write_cb,
@@ -321,11 +344,7 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         out->eof_pending = 2 * shell->info->jobspec->task_count;
         if (flux_shell_add_completion_ref (shell, "io-leader") < 0)
             goto error;
-        if (!(out->output = json_array ())) {
-            errno = ENOMEM;
-            goto error;
-        }
-        if (shell_output_header_append (shell, out->output) < 0)
+        if (shell_output_header (out) < 0)
             goto error;
     }
     return out;
