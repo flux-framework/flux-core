@@ -357,7 +357,7 @@ test_expect_success 'job-info: generate jobspec to consume all resources' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '
         jobidall=$(submit_job_live test-all.json)
         jobid=$(submit_job_wait)
-        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path6.out &
+        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path4.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watchers_nonzero "guest_watchers" &&
@@ -367,7 +367,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
         wait_watcherscount_nonzero $guestns &&
         flux job cancel ${jobid} &&
         wait $waitpid &&
-        grep done wait_event_path6.out
+        grep done wait_event_path4.out
 '
 
 test_expect_success 'flux job wait-event -p hangs on no event (wait job)' '
