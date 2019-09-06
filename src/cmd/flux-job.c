@@ -930,8 +930,10 @@ void print_output_continuation (flux_future_t *f, void *arg)
     json_decref (o);
 
     if (ctx->stdout_eof_count >= ctx->stdout_count
-        && ctx->stderr_eof_count >= ctx->stderr_count)
-        goto done;
+        && ctx->stderr_eof_count >= ctx->stderr_count) {
+        if (flux_job_event_watch_cancel (f) < 0)
+            log_err_exit ("flux_job_event_watch_cancel");
+    }
 
     flux_future_reset (f);
     return;
