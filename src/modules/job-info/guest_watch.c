@@ -405,6 +405,7 @@ done:
 static int wait_guest_namespace (struct guest_watch_ctx *gw)
 {
     const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
     int save_errno, rv = -1;
 
@@ -418,7 +419,7 @@ static int wait_guest_namespace (struct guest_watch_ctx *gw)
     if (!(gw->wait_guest_namespace_f = flux_rpc_message (gw->ctx->h,
                                                          msg,
                                                          FLUX_NODEID_ANY,
-                                                         FLUX_RPC_STREAMING))) {
+                                                         rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
@@ -547,13 +548,14 @@ error:
 
 static int guest_namespace_watch (struct guest_watch_ctx *gw)
 {
+    const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
-    int flags = FLUX_RPC_STREAMING;
     int save_errno;
     int rv = -1;
 
     if (!(msg = guest_msg_pack (gw,
-                                "job-info.eventlog-watch",
+                                topic,
                                 "{s:I s:b s:s}",
                                 "id", gw->id,
                                 "guest", true,
@@ -563,7 +565,7 @@ static int guest_namespace_watch (struct guest_watch_ctx *gw)
     if (!(gw->guest_namespace_watch_f = flux_rpc_message (gw->ctx->h,
                                                           msg,
                                                           FLUX_NODEID_ANY,
-                                                          flags))) {
+                                                          rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
@@ -666,8 +668,9 @@ error:
 
 static int main_namespace_watch (struct guest_watch_ctx *gw)
 {
+    const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
-    int flags = FLUX_RPC_STREAMING;
     int save_errno;
     int rv = -1;
     char path[64];
@@ -681,7 +684,7 @@ static int main_namespace_watch (struct guest_watch_ctx *gw)
     }
 
     if (!(msg = guest_msg_pack (gw,
-                                "job-info.eventlog-watch",
+                                topic,
                                 "{s:I s:b s:s}",
                                 "id", gw->id,
                                 "guest", false,
@@ -691,7 +694,7 @@ static int main_namespace_watch (struct guest_watch_ctx *gw)
     if (!(gw->main_namespace_watch_f = flux_rpc_message (gw->ctx->h,
                                                          msg,
                                                          FLUX_NODEID_ANY,
-                                                         flags))) {
+                                                         rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
