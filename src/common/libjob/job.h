@@ -123,7 +123,7 @@ int flux_job_kvs_namespace (char *buf,
  * - path specifies optional alternate eventlog path
  */
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
-                                     const char *path);
+                                     const char *path, int flags);
 int flux_job_event_watch_get (flux_future_t *f, const char **event);
 int flux_job_event_watch_cancel (flux_future_t *f);
 

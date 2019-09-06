@@ -289,7 +289,7 @@ int flux_job_kvs_namespace (char *buf, int bufsz, flux_jobid_t id)
 }
 
 flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
-                                     const char *path)
+                                     const char *path, int flags)
 {
     flux_future_t *f;
     const char *topic = "job-info.eventlog-watch";
@@ -306,9 +306,10 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
         guest = true;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
-                             "{s:I s:s}",
+                             "{s:I s:s s:i}",
                              "id", id,
-                             "path", path)))
+                             "path", path,
+                             "flags", flags)))
         return NULL;
     if (guest) {
         /* value not relevant, set to anything */

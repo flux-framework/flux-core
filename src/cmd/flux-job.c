@@ -943,7 +943,7 @@ void print_output (struct attach_ctx *ctx)
 {
     flux_future_t *f;
 
-    if (!(f = flux_job_event_watch (ctx->h, ctx->id, "guest.output")))
+    if (!(f = flux_job_event_watch (ctx->h, ctx->id, "guest.output", 0)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, -1., print_output_continuation, ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -973,7 +973,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
 
-    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id, "eventlog")))
+    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id, "eventlog", 0)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (ctx.f, -1, attach_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -1438,7 +1438,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
         *ctx.context_value++ = '\0';
     }
 
-    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path)))
+    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, 0)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, ctx.timeout, wait_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
