@@ -742,136 +742,30 @@ struct attach_ctx {
     flux_t *h;
     int exit_code;
     flux_jobid_t id;
-    flux_future_t *f;
+    flux_future_t *eventlog_f;
+    flux_future_t *output_f;
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
     struct timespec t_sigint;
     bool show_events;
     optparse_t *p;
-    bool started;
-    bool missing_output_ok;
     bool output_header_parsed;
     int stdout_count;
     int stderr_count;
     int stdout_eof_count;
     int stderr_eof_count;
+    int eventlog_watch_count;
+    int eventlog_watch_completed;
 };
 
-void attach_cancel_continuation (flux_future_t *f, void *arg)
+void attach_eventlog_watch_completed_check (struct attach_ctx *ctx)
 {
-    if (flux_future_get (f, NULL) < 0)
-        log_msg ("cancel: %s", future_strerror (f, errno));
-    flux_future_destroy (f);
-}
-
-void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
-{
-    struct attach_ctx *ctx = arg;
-    flux_future_t *f;
-    int signum = flux_signal_watcher_get_signum (w);
-
-    if (signum == SIGINT) {
-        if (monotime_since (ctx->t_sigint) > 2000) {
-            monotime (&ctx->t_sigint);
-            flux_watcher_start (ctx->sigtstp_w);
-            log_msg ("one more ctrl-C within 2s to cancel or ctrl-Z to detach");
-        }
-        else {
-            if (!(f = flux_job_cancel (ctx->h, ctx->id,
-                                       "interrupted by ctrl-C")))
-                log_err_exit ("flux_job_cancel");
-            if (flux_future_then (f, -1, attach_cancel_continuation, NULL) < 0)
-                log_err_exit ("flux_future_then");
-        }
+    /* eventlog and output watch are the two eventlog watches we need
+     * to complete before shutting off reactor */
+    if (ctx->eventlog_watch_completed >= ctx->eventlog_watch_count) {
+        flux_watcher_stop (ctx->sigint_w);
+        flux_watcher_stop (ctx->sigtstp_w);
     }
-    else if (signum == SIGTSTP) {
-        if (monotime_since (ctx->t_sigint) <= 2000) {
-            if (flux_job_event_watch_cancel (ctx->f) < 0)
-                log_err_exit ("flux_job_event_watch_cancel");
-            log_msg ("detaching...");
-        }
-        else {
-            flux_watcher_stop (ctx->sigtstp_w);
-            log_msg ("one more ctrl-Z to suspend");
-        }
-    }
-}
-
-void attach_event_continuation (flux_future_t *f, void *arg)
-{
-    struct attach_ctx *ctx = arg;
-    const char *entry;
-    json_t *o;
-    const char *name;
-    json_t *context;
-    int status;
-
-    if (flux_job_event_watch_get (f, &entry) < 0) {
-        if (errno == ENODATA)
-            goto done;
-        log_msg_exit ("flux_job_event_watch_get: %s",
-                      future_strerror (f, errno));
-    }
-    if (!(o = eventlog_entry_decode (entry)))
-        log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
-    if (!strcmp (name, "exception")) {
-        const char *type;
-        int severity;
-        const char *note = NULL;
-
-        if (json_unpack (context, "{s:s s:i s?:s}",
-                         "type", &type,
-                         "severity", &severity,
-                         "note", &note) < 0)
-            log_err_exit ("error decoding exception context");
-        fprintf (stderr, "job-event: exception type=%s severity=%d %s\n",
-                 type,
-                 severity,
-                 note ? note : "");
-    }
-    else if (!strcmp (name, "start")) {
-        ctx->started = true;
-    }
-    else {
-        if (!strcmp (name, "finish")) {
-            if (json_unpack (context, "{s:i}", "status", &status) < 0)
-                log_err_exit ("error decoding finish context");
-            if (WIFSIGNALED (status)) {
-                ctx->exit_code = WTERMSIG (status) + 128;
-                log_msg ("task(s) %s", strsignal (WTERMSIG (status)));
-            }
-            else if (WIFEXITED (status)) {
-                ctx->exit_code = WEXITSTATUS (status);
-                if (ctx->exit_code != 0)
-                    log_msg ("task(s) exited with exit code %d",
-                             ctx->exit_code);
-            }
-        }
-        else if (!strcmp (name, "clean")) {
-            if (flux_job_event_watch_cancel (f) < 0)
-                log_err_exit ("flux_job_event_watch_cancel");
-        }
-    }
-    if (ctx->show_events && strcmp (name, "exception") != 0) {
-        char *s = NULL;
-        if (context && !(s = json_dumps (context, JSON_COMPACT)))
-            log_err_exit ("error re-encoding context");
-        fprintf (stderr, "job-event: %s%s%s\n",
-                 name,
-                 s ? " " : "",
-                 s ? s : "");
-        free (s);
-    }
-    json_decref (o);
-    flux_future_reset (f);
-    return;
-done:
-    flux_future_destroy (f);
-    flux_watcher_stop (ctx->sigint_w);
-    flux_watcher_stop (ctx->sigtstp_w);
 }
 
 void print_output_continuation (flux_future_t *f, void *arg)
@@ -883,8 +777,7 @@ void print_output_continuation (flux_future_t *f, void *arg)
     json_t *context;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
-        if (errno == ENODATA
-            || (errno == ENOENT && ctx->missing_output_ok))
+        if (errno == ENODATA)
             goto done;
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
@@ -946,18 +839,143 @@ void print_output_continuation (flux_future_t *f, void *arg)
     return;
 done:
     flux_future_destroy (f);
+    ctx->eventlog_watch_completed++;
+    attach_eventlog_watch_completed_check (ctx);
 }
 
-void print_output (struct attach_ctx *ctx)
+void attach_cancel_continuation (flux_future_t *f, void *arg)
 {
-    flux_future_t *f;
+    if (flux_future_get (f, NULL) < 0)
+        log_msg ("cancel: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+}
 
-    if (!(f = flux_job_event_watch (ctx->h, ctx->id, "guest.output", 0)))
-        log_err_exit ("flux_job_event_watch");
-    if (flux_future_then (f, -1., print_output_continuation, ctx) < 0)
-        log_err_exit ("flux_future_then");
-    if (flux_reactor_run (flux_get_reactor (ctx->h), 0) < 0)
-        log_err_exit ("flux_reactor_run");
+void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    flux_future_t *f;
+    int signum = flux_signal_watcher_get_signum (w);
+
+    if (signum == SIGINT) {
+        if (monotime_since (ctx->t_sigint) > 2000) {
+            monotime (&ctx->t_sigint);
+            flux_watcher_start (ctx->sigtstp_w);
+            log_msg ("one more ctrl-C within 2s to cancel or ctrl-Z to detach");
+        }
+        else {
+            if (!(f = flux_job_cancel (ctx->h, ctx->id,
+                                       "interrupted by ctrl-C")))
+                log_err_exit ("flux_job_cancel");
+            if (flux_future_then (f, -1, attach_cancel_continuation, NULL) < 0)
+                log_err_exit ("flux_future_then");
+        }
+    }
+    else if (signum == SIGTSTP) {
+        if (monotime_since (ctx->t_sigint) <= 2000) {
+            if (flux_job_event_watch_cancel (ctx->eventlog_f) < 0)
+                log_err_exit ("flux_job_event_watch_cancel");
+            if (flux_job_event_watch_cancel (ctx->output_f) < 0)
+                log_err_exit ("flux_job_event_watch_cancel");
+            log_msg ("detaching...");
+        }
+        else {
+            flux_watcher_stop (ctx->sigtstp_w);
+            log_msg ("one more ctrl-Z to suspend");
+        }
+    }
+}
+
+void attach_event_continuation (flux_future_t *f, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    const char *entry;
+    json_t *o;
+    const char *name;
+    json_t *context;
+    int status;
+
+    if (flux_job_event_watch_get (f, &entry) < 0) {
+        if (errno == ENODATA)
+            goto done;
+        log_msg_exit ("flux_job_event_watch_get: %s",
+                      future_strerror (f, errno));
+    }
+    if (!(o = eventlog_entry_decode (entry)))
+        log_err_exit ("eventlog_entry_decode");
+    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+        log_err_exit ("eventlog_entry_parse");
+    if (!strcmp (name, "start")) {
+        int guest_output_flags = FLUX_JOB_INFO_GUEST_EVENTLOG_WAITCREATE;
+
+        /* There is a small racy scenario in which "guest.output" may not
+         * be created by the time we try to read it.  So set
+         * GUEST_EVENTLOG_WAITCREATE flag.
+         */
+        if (!(ctx->output_f = flux_job_event_watch (ctx->h,
+                                                    ctx->id,
+                                                    "guest.output",
+                                                    guest_output_flags)))
+            log_err_exit ("flux_job_event_watch");
+        if (flux_future_then (ctx->output_f,
+                              -1.,
+                              print_output_continuation,
+                              ctx) < 0)
+            log_err_exit ("flux_future_then");
+        ctx->eventlog_watch_count++;
+    }
+    else if (!strcmp (name, "exception")) {
+        const char *type;
+        int severity;
+        const char *note = NULL;
+
+        if (json_unpack (context, "{s:s s:i s?:s}",
+                         "type", &type,
+                         "severity", &severity,
+                         "note", &note) < 0)
+            log_err_exit ("error decoding exception context");
+        fprintf (stderr, "job-event: exception type=%s severity=%d %s\n",
+                 type,
+                 severity,
+                 note ? note : "");
+    }
+    else {
+        if (!strcmp (name, "finish")) {
+            if (json_unpack (context, "{s:i}", "status", &status) < 0)
+                log_err_exit ("error decoding finish context");
+            if (WIFSIGNALED (status)) {
+                ctx->exit_code = WTERMSIG (status) + 128;
+                log_msg ("task(s) %s", strsignal (WTERMSIG (status)));
+            }
+            else if (WIFEXITED (status)) {
+                ctx->exit_code = WEXITSTATUS (status);
+                if (ctx->exit_code != 0)
+                    log_msg ("task(s) exited with exit code %d",
+                             ctx->exit_code);
+            }
+        }
+        else if (!strcmp (name, "clean")) {
+            if (flux_job_event_watch_cancel (f) < 0)
+                log_err_exit ("flux_job_event_watch_cancel");
+        }
+    }
+    if (ctx->show_events && strcmp (name, "exception") != 0) {
+        char *s = NULL;
+        if (context && !(s = json_dumps (context, JSON_COMPACT)))
+            log_err_exit ("error re-encoding context");
+        fprintf (stderr, "job-event: %s%s%s\n",
+                 name,
+                 s ? " " : "",
+                 s ? s : "");
+        free (s);
+    }
+    json_decref (o);
+    flux_future_reset (f);
+    return;
+done:
+    flux_future_destroy (f);
+    ctx->eventlog_watch_completed++;
+    attach_eventlog_watch_completed_check (ctx);
 }
 
 int cmd_attach (optparse_t *p, int argc, char **argv)
@@ -982,10 +1000,18 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
 
-    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id, "eventlog", 0)))
+    if (!(ctx.eventlog_f = flux_job_event_watch (ctx.h,
+                                                 ctx.id,
+                                                 "eventlog",
+                                                 0)))
         log_err_exit ("flux_job_event_watch");
-    if (flux_future_then (ctx.f, -1, attach_event_continuation, &ctx) < 0)
+    if (flux_future_then (ctx.eventlog_f,
+                          -1,
+                          attach_event_continuation,
+                          &ctx) < 0)
         log_err_exit ("flux_future_then");
+
+    ctx.eventlog_watch_count++;
 
     ctx.sigint_w = flux_signal_watcher_create (r,
                                                SIGINT,
@@ -1001,12 +1027,6 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
-
-    /* if job never ran, no output */
-    if (ctx.started) {
-        ctx.missing_output_ok = ctx.exit_code == 0 ? false : true;
-        print_output (&ctx);
-    }
 
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
