@@ -66,6 +66,7 @@ struct guest_watch_ctx {
     uint32_t msg_userid;
     flux_jobid_t id;
     char *path;
+    int flags;
     bool cancel;
 
     /* transition possibilities
@@ -139,7 +140,8 @@ static void guest_watch_ctx_destroy (void *data)
 static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
                                                        const flux_msg_t *msg,
                                                        flux_jobid_t id,
-                                                       const char *path)
+                                                       const char *path,
+                                                       int flags)
 {
     struct guest_watch_ctx *gw = calloc (1, sizeof (*gw));
     int saved_errno;
@@ -153,6 +155,7 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
         errno = ENOMEM;
         goto error;
     }
+    gw->flags = flags;
     gw->state = GUEST_WATCH_STATE_INIT;
 
     gw->msg = flux_msg_incref (msg);
@@ -411,9 +414,10 @@ static int wait_guest_namespace (struct guest_watch_ctx *gw)
 
     if (!(msg = guest_msg_pack (gw,
                                 topic,
-                                "{s:I s:s}",
+                                "{s:I s:s s:i}",
                                 "id", gw->id,
-                                "path", "eventlog")))
+                                "path", "eventlog",
+                                "flags", 0)))
         goto error;
 
     if (!(gw->wait_guest_namespace_f = flux_rpc_message (gw->ctx->h,
@@ -556,10 +560,11 @@ static int guest_namespace_watch (struct guest_watch_ctx *gw)
 
     if (!(msg = guest_msg_pack (gw,
                                 topic,
-                                "{s:I s:b s:s}",
+                                "{s:I s:b s:s s:i}",
                                 "id", gw->id,
                                 "guest", true,
-                                "path", gw->path)))
+                                "path", gw->path,
+                                "flags", 0)))
         goto error;
 
     if (!(gw->guest_namespace_watch_f = flux_rpc_message (gw->ctx->h,
@@ -683,10 +688,11 @@ static int main_namespace_watch (struct guest_watch_ctx *gw)
 
     if (!(msg = guest_msg_pack (gw,
                                 topic,
-                                "{s:I s:b s:s}",
+                                "{s:I s:b s:s s:i}",
                                 "id", gw->id,
                                 "guest", false,
-                                "path", path)))
+                                "path", path,
+                                "flags", 0)))
         goto error;
 
     if (!(gw->main_namespace_watch_f = flux_rpc_message (gw->ctx->h,
@@ -760,11 +766,13 @@ void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
     struct guest_watch_ctx *gw = NULL;
     flux_jobid_t id;
     const char *path = NULL;
+    int flags;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
                              "id", &id,
-                             "path", &path) < 0) {
+                             "path", &path,
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -775,7 +783,7 @@ void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(gw = guest_watch_ctx_create (ctx, msg, id, path)))
+    if (!(gw = guest_watch_ctx_create (ctx, msg, id, path, flags)))
         goto error;
 
     if (get_main_eventlog (gw) < 0)

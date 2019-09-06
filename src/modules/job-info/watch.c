@@ -31,6 +31,7 @@ struct watch_ctx {
     flux_jobid_t id;
     bool guest;
     char *path;
+    int flags;
     flux_future_t *check_f;
     flux_future_t *watch_f;
     bool allow;
@@ -56,7 +57,8 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
                                            const flux_msg_t *msg,
                                            flux_jobid_t id,
                                            bool guest,
-                                           const char *path)
+                                           const char *path,
+                                           int flags)
 {
     struct watch_ctx *w = calloc (1, sizeof (*w));
     int saved_errno;
@@ -71,6 +73,7 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
         errno = ENOMEM;
         goto error;
     }
+    w->flags = flags;
 
     w->msg = flux_msg_incref (msg);
 
@@ -267,11 +270,13 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     int guest = 0;
     const char *path = NULL;
+    int flags;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
                              "id", &id,
-                             "path", &path) < 0) {
+                             "path", &path,
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -282,7 +287,7 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     (void)flux_request_unpack (msg, NULL, "{s:b}", "guest", &guest);
 
-    if (!(w = watch_ctx_create (ctx, msg, id, guest, path)))
+    if (!(w = watch_ctx_create (ctx, msg, id, guest, path, flags)))
         goto error;
 
     /* if user requested an alternate path and that alternate path is
