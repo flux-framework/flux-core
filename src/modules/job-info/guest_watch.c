@@ -554,9 +554,13 @@ static int guest_namespace_watch (struct guest_watch_ctx *gw)
 {
     const char *topic = "job-info.eventlog-watch";
     int rpc_flags = FLUX_RPC_STREAMING;
+    int watch_flags = 0;
     flux_msg_t *msg = NULL;
     int save_errno;
     int rv = -1;
+
+    if (gw->flags & FLUX_JOB_INFO_GUEST_EVENTLOG_WAITCREATE)
+        watch_flags = FLUX_JOB_INFO_GUEST_EVENTLOG_WAITCREATE;
 
     if (!(msg = guest_msg_pack (gw,
                                 topic,
@@ -564,7 +568,7 @@ static int guest_namespace_watch (struct guest_watch_ctx *gw)
                                 "id", gw->id,
                                 "guest", true,
                                 "path", gw->path,
-                                "flags", 0)))
+                                "flags", watch_flags)))
         goto error;
 
     if (!(gw->guest_namespace_watch_f = flux_rpc_message (gw->ctx->h,

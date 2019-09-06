@@ -123,6 +123,8 @@ static int watch_key (struct watch_ctx *w)
                             __FUNCTION__);
             return -1;
         }
+        if (w->flags & FLUX_JOB_INFO_GUEST_EVENTLOG_WAITCREATE)
+            flags |= FLUX_KVS_WAITCREATE;
         nsptr = ns;
         pathptr = w->path;
     }

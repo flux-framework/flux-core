@@ -294,9 +294,10 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
     flux_future_t *f;
     const char *topic = "job-info.eventlog-watch";
     int rpc_flags = FLUX_RPC_STREAMING;
+    int ok_flags = FLUX_JOB_INFO_GUEST_EVENTLOG_WAITCREATE;
     bool guest = false;
 
-    if (!h || !path) {
+    if (!h || !path || (flags & ~ok_flags)) {
         errno = EINVAL;
         return NULL;
     }

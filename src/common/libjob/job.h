@@ -24,6 +24,14 @@ enum job_submit_flags {
     FLUX_JOB_DEBUG = 2,
 };
 
+/* GUEST_EVENTLOG_WAITCREATE - Only in a guest KVS namespace, if an
+ * eventlog has not yet been created, wait for it to be created
+ * instead of returning ENOENT.
+ */
+enum job_info_flags {
+    FLUX_JOB_INFO_GUEST_EVENTLOG_WAITCREATE = 1,
+};
+
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,
