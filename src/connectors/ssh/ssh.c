@@ -285,8 +285,7 @@ static int parse_ssh_rcmd (ssh_ctx_t *c, const char *path)
     if (!flux_cmd)
         flux_cmd = "flux";
     if (argz_add (&proxy_argz, &proxy_argz_len, flux_cmd) != 0
-     || argz_add (&proxy_argz, &proxy_argz_len, "proxy") != 0
-     || argz_add (&proxy_argz, &proxy_argz_len, "--stdio") != 0) {
+     || argz_add (&proxy_argz, &proxy_argz_len, "relay") != 0) {
         errno = ENOMEM;
         goto done;
     }
@@ -367,7 +366,7 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     if (parse_ssh_user_at_host (c, path) < 0) /* [user@]host */
         goto error;
-    if (parse_ssh_rcmd (c, path) < 0) /* flux-proxy --stdio JOB [args...] */
+    if (parse_ssh_rcmd (c, path) < 0) /* flux-relay path [args...] */
         goto error;
     c->ssh_argc = argz_count (c->ssh_argz, c->ssh_argz_len) + 1;
     if (!(c->ssh_argv = malloc (sizeof (char *) * c->ssh_argc))) {
