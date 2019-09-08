@@ -1493,7 +1493,7 @@ flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf)
             if (rc < 0)
                 goto done;
             if (rc == 0) {
-                errno = EPROTO;
+                errno = ECONNRESET;
                 goto done;
             }
             io->done += rc;
@@ -1517,7 +1517,7 @@ flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf)
             if (rc < 0)
                 goto done;
             if (rc == 0) {
-                errno = EPROTO;
+                errno = ECONNRESET;
                 goto done;
             }
             io->done += rc;
