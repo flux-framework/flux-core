@@ -12,7 +12,7 @@ flux-proxy - create proxy environment for Flux instance
 
 SYNOPSIS
 --------
-*flux* *proxy* [OPTIONS] URI [command [args...]]
+*flux* *proxy* URI [command [args...]]
 
 
 DESCRIPTION
@@ -28,21 +28,6 @@ The purpose of *flux proxy* is to allow a connection to be reused,
 for example where connection establishment has high latency or
 requires authentication.
 
-
-OPTIONS
--------
-*-s, --stdio*::
-Instead of creating a local:// proxy socket, assume
-that a single client is already connected to stdin and
-stdout.  This mode is used by the ssh:// connector.
-
-*-e, --setenv*='NAME=VALUE'::
-Set NAME to VALUE in the environment before interpreting the
-_job_ argument or connecting to the Flux instance.  This
-is mainly useful when connecting into a remote environment
-with the ssh:// connector.
-
-
 EXAMPLES
 --------
 
@@ -55,35 +40,6 @@ shell:
 Connect to the same job remotely on host foo.com:
 
   $ flux proxy ssh://foo.com/tmp/flux-123456-abcdef/0
-
-
-USE BY SSH CONNECTOR
---------------------
-
-The ssh:// connector spawns *flux proxy --stdio* as the remote
-command.  The ssh URI may contain the following components:
-
-  ssh://[user@]hostname[:port][/path][?setenv=NAME=VALUE]
-
-These components translate to *ssh* and *flux proxy*
-arguments as follows:
-
-  ssh [-p port] [user@]hostname flux proxy --stdio \
-         [--setenv=NAME=VAL] [/path]
-
-The ssh connector understand the following environment variables:
-
-*FLUX_SSH*::
-Override the default ssh program.  The ssh program is
-executed with only the following arguments:
-
-  ssh [-p port] [user@]hostname COMMAND ...
-
-The default ssh program is "/usr/bin/rsh".
-
-*FLUX_SSH_RCMD*::
-Set the name of the remote *flux* program.  If this is not set,
-the same path that *flux* is found locally will be used remotely.
 
 
 AUTHOR
