@@ -603,10 +603,8 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
              *
              * Note that it is possible the guest eventlog is simply
              * empty / had no events in it.  There's no way to know
-             * for certain if it is this case or a race.  There is no
-             * behavior change for continuing to watch the eventlog in
-             * the main KVS namespace, so we do it and suffer the
-             * minor latency associated with it.
+             * for certain if it is this case or a race.  This is an
+             * unfortunate behavior difference.  Issue #2356.
              */
             gw->guest_namespace_removed = true;
             if (!gw->guest_namespace_events) {
