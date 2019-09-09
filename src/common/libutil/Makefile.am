@@ -11,7 +11,8 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux
+	-I$(top_builddir)/src/common/libflux \
+	-DABS_TOP_BUILDDIR=\"$(abs_top_builddir)\"
 
 noinst_LTLIBRARIES = libutil.la
 
@@ -89,7 +90,9 @@ libutil_la_SOURCES = \
 	fsd.h \
 	zsecurity.c \
 	zsecurity.h \
-	errno_safe.h
+	errno_safe.h \
+	intree.c \
+	intree.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -116,7 +119,8 @@ TESTS = test_ev.t \
 	test_aux.t \
 	test_fdutils.t \
 	test_fsd.t \
-	test_zsecurity.t
+	test_zsecurity.t \
+	test_intree.t
 
 
 test_ldadd = \
@@ -237,3 +241,7 @@ test_fsd_t_LDADD = $(test_ldadd)
 test_zsecurity_t_SOURCES = test/zsecurity.c
 test_zsecurity_t_CPPFLAGS = $(test_cppflags)
 test_zsecurity_t_LDADD = $(test_ldadd)
+
+test_intree_t_SOURCES = test/intree.c
+test_intree_t_CPPFLAGS = $(test_cppflags)
+test_intree_t_LDADD = $(test_ldadd)
