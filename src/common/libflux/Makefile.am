@@ -77,7 +77,8 @@ fluxcoreinclude_HEADERS = \
 	future.h \
 	barrier.h \
 	buffer.h \
-	service.h
+	service.h \
+	plugin.h
 
 nodist_fluxcoreinclude_HEADERS = \
 	version.h
@@ -117,7 +118,8 @@ libflux_la_SOURCES = \
 	buffer_private.h \
 	buffer.c \
 	service.c \
-	version.c
+	version.c \
+	plugin.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
