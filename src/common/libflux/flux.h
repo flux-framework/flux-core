@@ -35,6 +35,7 @@
 #include "buffer.h"
 #include "service.h"
 #include "version.h"
+#include "plugin.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 
