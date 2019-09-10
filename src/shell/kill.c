@@ -37,8 +37,13 @@ static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_shell_killall (shell, signum);
 }
 
-static int kill_event_init (flux_shell_t *shell)
+static int kill_event_init (flux_plugin_t *p,
+                            const char *topic,
+                            flux_plugin_arg_t *args)
 {
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    if (!shell)
+        return -1;
     if (flux_shell_add_event_handler (shell, "kill", kill_cb, shell) < 0)
         return -1;
     return 0;

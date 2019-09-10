@@ -11,31 +11,17 @@
 #ifndef _SHELL_PLUGSTACK_H
 #define _SHELL_PLUGSTACK_H
 
-#include <jansson.h>
-
-struct plugstack;
-struct splugin;
+#include <flux/core.h>
 
 struct plugstack * plugstack_create (void);
 
 void plugstack_destroy (struct plugstack *st);
 
-struct splugin *splugin_create (void);
+int plugstack_push (struct plugstack *st, flux_plugin_t *p);
 
-void splugin_destroy (struct splugin *sp);
-
-json_t *splugin_conf (struct splugin *sp);
-
-int splugin_set_name (struct splugin *sp, const char *name);
-
-int splugin_set_sym (struct splugin *sp, const char *symbol, void *sym);
-
-void *splugin_get_sym (struct splugin *sp, const char *name);
-
-int plugstack_push (struct plugstack *st, struct splugin *sp);
-
-int plugstack_call (struct plugstack *st, const char *name, int nargs, ...);
-
+int plugstack_call (struct plugstack *st,
+                    const char *name,
+                    flux_plugin_arg_t *args);
 
 #endif /* !_SHELL_PLUGSTACK_H */
 

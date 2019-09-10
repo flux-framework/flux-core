@@ -11,17 +11,18 @@
 #ifndef _SHELL_BUILTINS_H
 #define _SHELL_BUILTINS_H
 
+#include <flux/core.h>
 #include <flux/shell.h>
 
 struct shell_builtin {
     const char *name;
-    int (*validate)  (flux_shell_t *shell);
-    int (*init)      (flux_shell_t *shell);
-    int (*task_init) (flux_shell_t *shell);
-    int (*task_exec) (flux_shell_t *shell);
-    int (*task_fork) (flux_shell_t *shell);
-    int (*task_exit) (flux_shell_t *shell);
-    int (*exit)      (flux_shell_t *shell);
+    flux_plugin_f validate;
+    flux_plugin_f init;
+    flux_plugin_f task_init;
+    flux_plugin_f task_exec;
+    flux_plugin_f task_fork;
+    flux_plugin_f task_exit;
+    flux_plugin_f exit;
 };
 
 /*  Load all statically compiled shell "builtin" plugins

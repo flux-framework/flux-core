@@ -472,26 +472,35 @@ error:
     return NULL;
 }
 
-static int shell_pmi_init (flux_shell_t *shell)
+static int shell_pmi_init (flux_plugin_t *p,
+                           const char *topic,
+                           flux_plugin_arg_t *arg)
 {
-    struct shell_pmi *pmi = pmi_create (shell);
-    if (!pmi)
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    struct shell_pmi *pmi;
+    if (!shell || !(pmi = pmi_create (shell)))
         return -1;
-    if (flux_shell_aux_set (shell,
-                            "shell::builtin.pmi",
-                            pmi,
-                            (flux_free_f) pmi_destroy) < 0) {
+    if (flux_plugin_aux_set (p, "pmi", pmi, (flux_free_f) pmi_destroy) < 0) {
         pmi_destroy (pmi);
         return -1;
     }
     return 0;
 }
 
-static int shell_pmi_task_init (flux_shell_t *shell)
+static int shell_pmi_task_init (flux_plugin_t *p,
+                                const char *topic,
+                                flux_plugin_arg_t *args)
 {
-    struct shell_pmi *pmi = flux_shell_aux_get (shell, "shell::builtin.pmi");
-    flux_shell_task_t *task = flux_shell_current_task (shell);
-    flux_cmd_t *cmd = flux_shell_task_cmd (task);
+    flux_shell_t *shell;
+    struct shell_pmi *pmi;
+    flux_shell_task_t *task;
+    flux_cmd_t *cmd;
+
+    if (!(shell = flux_plugin_get_shell (p))
+        || !(pmi = flux_plugin_aux_get (p, "pmi"))
+        || !(task = flux_shell_current_task (shell))
+        || !(cmd = flux_shell_task_cmd (task)))
+        return -1;
 
     if (flux_cmd_add_channel (cmd, "PMI_FD") < 0)
         return -1;

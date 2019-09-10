@@ -25,6 +25,9 @@ typedef void (flux_shell_task_io_f) (flux_shell_task_t *task,
                                      const char *stream,
                                      void *arg);
 
+
+flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p);
+
 int flux_shell_aux_set (flux_shell_t *shell,
                         const char *name,
                         void *aux,
