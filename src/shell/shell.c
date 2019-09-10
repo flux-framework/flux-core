@@ -79,8 +79,8 @@ static void task_completion_cb (struct shell_task *task, void *arg)
         log_msg ("task %d complete status=%d", task->rank, task->rc);
 
     shell->current_task = task;
-    if (plugstack_call (shell->plugstack, "flux_shell_task_exit", NULL) < 0)
-        log_err ("flux_shell_task_exit plugin(s) failed");
+    if (plugstack_call (shell->plugstack, "task.exit", NULL) < 0)
+        log_err ("task.exit plugin(s) failed");
     shell->current_task = NULL;
 
     if (flux_shell_remove_completion_ref (shell, "task%d", task->rank) < 0)
@@ -380,29 +380,29 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
 static int shell_init (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_init", NULL);
+    return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 
 static int shell_task_init (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_task_init", NULL);
+    return plugstack_call (shell->plugstack, "task.init", NULL);
 }
 
 static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
     flux_shell_t *shell = arg;
-    if (plugstack_call (shell->plugstack, "flux_shell_task_exec", NULL) < 0)
-        log_err ("flux_shell_task_exec plugin(s) failed");
+    if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
+        log_err ("task.exec plugin(s) failed");
 }
 
 static int shell_task_forked (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_task_fork", NULL);
+    return plugstack_call (shell->plugstack, "task.fork", NULL);
 }
 
 static int shell_exit (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_exit", NULL);
+    return plugstack_call (shell->plugstack, "shell.exit", NULL);
 }
 
 int main (int argc, char *argv[])
