@@ -60,7 +60,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
                    const char *broker_path);
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
                  const char *broker_path);
-char *create_scratch_dir (const char *session_id);
+char *create_scratch_dir (void);
 struct client *client_create (const char *broker_path, const char *scratch_dir,
                               int rank, const char *cmd_argz, size_t cmd_argz_len);
 void client_destroy (struct client *cli);
@@ -373,11 +373,11 @@ void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *
             log_err_exit ("argz_add");
 }
 
-char *create_scratch_dir (const char *session_id)
+char *create_scratch_dir (void)
 {
     char *tmpdir = getenv ("TMPDIR");
-    char *scratchdir = xasprintf ("%s/flux-%s-XXXXXX",
-                                  tmpdir ? tmpdir : "/tmp", session_id);
+    char *scratchdir = xasprintf ("%s/flux-%d-XXXXXX",
+                                  tmpdir ? tmpdir : "/tmp", (int)getpid());
 
     if (!mkdtemp (scratchdir))
         log_err_exit ("mkdtemp %s", scratchdir);
@@ -537,7 +537,7 @@ void client_dumpargs (struct client *cli)
     free (az);
 }
 
-void pmi_server_initialize (int flags, const char *session_id)
+void pmi_server_initialize (int flags)
 {
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
@@ -546,7 +546,7 @@ void pmi_server_initialize (int flags, const char *session_id)
         .response_send = pmi_response_send,
         .debug_trace = pmi_debug_trace,
     };
-    int appnum = strtol (session_id, NULL, 10);
+    int appnum = 0;
     if (!(ctx.pmi.kvs = zhash_new()))
         oom ();
     ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.size,
@@ -603,7 +603,6 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     struct client *cli;
     int rank;
     int flags = 0;
-    char *session_id;
     char *scratch_dir;
 
     if (isatty (STDIN_FILENO)) {
@@ -622,17 +621,16 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
-    session_id = xasprintf ("%d", getpid ());
 
     if (optparse_hasopt (ctx.opts, "scratchdir"))
         scratch_dir = xstrdup (optparse_get_str (ctx.opts, "scratchdir", NULL));
     else
-        scratch_dir = create_scratch_dir (session_id);
+        scratch_dir = create_scratch_dir ();
 
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;
 
-    pmi_server_initialize (flags, session_id);
+    pmi_server_initialize (flags);
 
     for (rank = 0; rank < ctx.size; rank++) {
         if (!(cli = client_create (broker_path, scratch_dir, rank,
@@ -655,7 +653,6 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 
     pmi_server_finalize ();
 
-    free (session_id);
     free (scratch_dir);
 
     zlist_destroy (&ctx.clients);
