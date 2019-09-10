@@ -59,6 +59,15 @@ test_expect_success "flux sets instance-level attribute" '
         test "$level" = "1" &&
         test "$level2" = "2" &&
         test "$level0" = "0"
- '
+'
+
+test_expect_success "flux sets jobid attribute" '
+	id=$(flux jobspec srun -n1 \
+		flux start flux getattr jobid \
+		| flux job submit) &&
+	echo "$id" >jobid.exp &&
+	flux job attach $id >jobid.out &&
+	test_cmp jobid.exp jobid.out
+'
 
 test_done
