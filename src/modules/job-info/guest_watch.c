@@ -482,10 +482,16 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == ENODATA) {
-            /* either user canceled this watch, or we did.  If we did,
-             * its because the guest namespace is now created and now
-             * we're going to watch it */
+            /* guest_started indicates if user canceled this watch or
+             * we did.  If we did, its because the guest namespace is
+             * now created and now we're going to watch it */
             if (gw->guest_started) {
+                /* check for racy cancel - user canceled while this
+                 * error was in transit */
+                if (gw->cancel) {
+                    errno = ENODATA;
+                    goto error;
+                }
                 if (guest_namespace_watch (gw) < 0)
                     goto error;
                 return;
@@ -612,17 +618,15 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
              * unfortunate behavior difference.  Issue #2356.
              */
             gw->guest_namespace_removed = true;
+            /* check for racy cancel - user canceled while this
+             * error was in transit */
+            if (gw->cancel) {
+                errno = ENODATA;
+                goto error;
+            }
             if (!gw->guest_namespace_events) {
                 if (main_namespace_watch (gw) < 0)
                     goto error;
-            }
-            else if (gw->cancel) {
-                /* Racy scenario - user attempted a cancel right as
-                 * ENOTSUP being sent.  Caller won't get a ENODATA
-                 * response b/c the original watcher is now dead.
-                 */
-                errno = ENODATA;
-                goto error;
             }
             return;
         }
