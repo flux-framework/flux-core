@@ -50,8 +50,14 @@ static int trap_signal (flux_shell_t *shell, int signum)
     return 0;
 }
 
-static int signals_init (flux_shell_t *shell)
+static int signals_init (flux_plugin_t *p,
+                         const char *topic,
+                         flux_plugin_arg_t *args,
+                         void *data)
 {
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    if (!shell)
+        return -1;
     /* forward local SIGINT, SIGTERM to tasks */
     if (trap_signal (shell, SIGINT) < 0 || trap_signal (shell, SIGTERM) < 0)
         log_err ("failed to set up signal watchers");

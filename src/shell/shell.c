@@ -79,7 +79,7 @@ static void task_completion_cb (struct shell_task *task, void *arg)
         log_msg ("task %d complete status=%d", task->rank, task->rc);
 
     shell->current_task = task;
-    if (plugstack_call (shell->plugstack, "flux_shell_task_exit", 1, shell) < 0)
+    if (plugstack_call (shell->plugstack, "flux_shell_task_exit", NULL) < 0)
         log_err ("flux_shell_task_exit plugin(s) failed");
     shell->current_task = NULL;
 
@@ -143,6 +143,11 @@ static void shell_connect_flux (flux_shell_t *shell)
             log_err ("error fetching broker rank");
         shell->broker_rank = rank;
     }
+}
+
+flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p)
+{
+    return flux_plugin_aux_get (p, "flux::shell");
 }
 
 int flux_shell_aux_set (flux_shell_t *shell,
@@ -375,29 +380,29 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
 static int shell_init (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_init", 1, shell);
+    return plugstack_call (shell->plugstack, "flux_shell_init", NULL);
 }
 
 static int shell_task_init (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_task_init", 1, shell);
+    return plugstack_call (shell->plugstack, "flux_shell_task_init", NULL);
 }
 
 static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
     flux_shell_t *shell = arg;
-    if (plugstack_call (shell->plugstack, "flux_shell_task_exec", 1, shell) < 0)
+    if (plugstack_call (shell->plugstack, "flux_shell_task_exec", NULL) < 0)
         log_err ("flux_shell_task_exec plugin(s) failed");
 }
 
 static int shell_task_forked (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_task_fork", 1, shell);
+    return plugstack_call (shell->plugstack, "flux_shell_task_fork", NULL);
 }
 
 static int shell_exit (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_exit", 1, shell);
+    return plugstack_call (shell->plugstack, "flux_shell_exit", NULL);
 }
 
 int main (int argc, char *argv[])
