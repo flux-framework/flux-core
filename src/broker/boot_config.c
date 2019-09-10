@@ -203,6 +203,10 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
         log_err ("setattr tbon.endpoint");
         goto done;
     }
+    if (attr_add (attrs, "instance-level", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("setattr instance-level");
+        goto done;
+    }
 
     rc = 0;
 done:

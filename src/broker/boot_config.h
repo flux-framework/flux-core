@@ -38,6 +38,7 @@
 /* Broker attributes read/written directly by this method:
  *   boot.config_file (r)
  *   tbon.endpoint (w)
+ *   instance-level (w)
  */
 
 int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k);
