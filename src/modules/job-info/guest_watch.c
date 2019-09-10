@@ -474,10 +474,16 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == ENODATA) {
-            /* either user canceled this watch, or we did.  If we did,
-             * its because the guest namespace is now created and now
-             * we're going to watch it */
+            /* guest_started indicates if user canceled this watch or
+             * we did.  If we did, its because the guest namespace is
+             * now created and now we're going to watch it */
             if (gw->guest_started) {
+                /* check for racy cancel - user canceled while this
+                 * error was in transit */
+                if (gw->cancel) {
+                    errno = ENODATA;
+                    goto error;
+                }
                 if (guest_namespace_watch (gw) < 0)
                     goto error;
                 return;
@@ -594,11 +600,9 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
             /* Guest namespace has been removed, we have to wait for
              * the user to cancel. */
             gw->guest_namespace_removed = true;
+            /* check for racy cancel - user canceled while this
+             * error was in transit */
             if (gw->cancel) {
-                /* Racy scenario - user attempted a cancel right as
-                 * namespace destroyed.  Caller won't get a ENODATA
-                 * response b/c the original watcher is now dead.
-                 */
                 errno = ENODATA;
                 goto error;
             }
@@ -609,6 +613,12 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
              * into the main namespace before we began watching in the
              * guest namespace.
              */
+            /* check for racy cancel - user canceled while this
+             * error was in transit */
+            if (gw->cancel) {
+                errno = ENODATA;
+                goto error;
+            }
             if (main_namespace_watch (gw) < 0)
                 goto error;
             return;
