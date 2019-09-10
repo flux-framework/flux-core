@@ -106,9 +106,6 @@ struct guest_watch_ctx {
     bool guest_started;
     bool guest_released;
 
-    /* indicates if events have been read from the guest namespace
-     * eventlog */
-    bool guest_namespace_events;
     /* indicates if the guest namespace has been removed */
     bool guest_namespace_removed;
 };
@@ -593,32 +590,27 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
     const char *s;
 
     if (flux_rpc_get (f, &s) < 0) {
-        if (errno == ENOTSUP) {
-            /* Guest namespace has been removed.  If we have read no
-             * events in the guest eventlog, assume job was moved into
-             * the main namespace before we began watching in the
-             * guest namespace.
-             *
-             * Note that it is possible the guest eventlog is simply
-             * empty / had no events in it.  There's no way to know
-             * for certain if it is this case or a race.  There is no
-             * behavior change for continuing to watch the eventlog in
-             * the main KVS namespace, so we do it and suffer the
-             * minor latency associated with it.
-             */
+        if (errno == ESTALE) {
+            /* Guest namespace has been removed, we have to wait for
+             * the user to cancel. */
             gw->guest_namespace_removed = true;
-            if (!gw->guest_namespace_events) {
-                if (main_namespace_watch (gw) < 0)
-                    goto error;
-            }
-            else if (gw->cancel) {
+            if (gw->cancel) {
                 /* Racy scenario - user attempted a cancel right as
-                 * ENOTSUP being sent.  Caller won't get a ENODATA
+                 * namespace destroyed.  Caller won't get a ENODATA
                  * response b/c the original watcher is now dead.
                  */
                 errno = ENODATA;
                 goto error;
             }
+            return;
+        }
+        else if (errno == ENOTSUP) {
+            /* Guest namespace doesn't exist.  Assume job was moved
+             * into the main namespace before we began watching in the
+             * guest namespace.
+             */
+            if (main_namespace_watch (gw) < 0)
+                goto error;
             return;
         }
         else {
@@ -642,7 +634,6 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
         goto error_cancel;
     }
 
-    gw->guest_namespace_events = true;
     flux_future_reset (f);
     return;
 
