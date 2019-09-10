@@ -519,39 +519,6 @@ void check_encode (void)
     flux_msg_destroy (msg2);
 }
 
-/* Send a small message over a blocking pipe.
- * We assume that there's enough buffer to do this in one go.
- */
-void check_sendfd (void)
-{
-    int pfd[2];
-    flux_msg_t *msg, *msg2;
-    const char *topic;
-    int type;
-
-    ok (pipe2 (pfd, O_CLOEXEC) == 0,
-        "got blocking pipe");
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
-        "flux_msg_create works");
-    ok (flux_msg_set_topic (msg, "foo.bar") == 0,
-        "flux_msg_set_topic works");
-    ok (flux_msg_sendfd (pfd[1], msg, NULL) == 0,
-        "flux_msg_sendfd works");
-    ok ((msg2 = flux_msg_recvfd (pfd[0], NULL)) != NULL,
-        "flux_msg_recvfd works");
-    ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
-        "decoded expected message type");
-    ok (flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar"),
-        "decoded expected topic string");
-    ok (flux_msg_has_payload (msg2) == false,
-        "decoded expected (lack of) payload");
-
-    flux_msg_destroy (msg);
-    flux_msg_destroy (msg2);
-    close (pfd[1]);
-    close (pfd[0]);
-}
-
 void check_sendzsock (void)
 {
     zsock_t *zsock[2] = { NULL, NULL };
@@ -876,7 +843,6 @@ int main (int argc, char *argv[])
     check_cmp ();
 
     check_encode ();
-    check_sendfd ();
     check_sendzsock ();
 
     check_params ();

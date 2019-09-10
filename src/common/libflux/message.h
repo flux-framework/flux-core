@@ -77,13 +77,6 @@ struct flux_match {
     .topic_glob = NULL, \
 }
 
-struct flux_msg_iobuf {
-    uint8_t *buf;
-    size_t size;
-    size_t done;
-    uint8_t buf_fixed[4096];
-};
-
 /* Create a new Flux message.
  * Returns new message or null on failure, with errno set (e.g. ENOMEM, EINVAL)
  * Caller must destroy message with flux_msg_destroy() or equivalent.
@@ -123,19 +116,6 @@ int flux_msg_frames (const flux_msg_t *msg);
  */
 flux_msg_t *flux_msg_decode (const void *buf, size_t size);
 
-/* Send message to file descriptor.
- * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
- * Returns 0 on success, -1 on failure with errno set.
- */
-int flux_msg_sendfd (int fd, const flux_msg_t *msg,
-                     struct flux_msg_iobuf *iobuf);
-
-/* Receive message from file descriptor.
- * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
- * Returns message on success, NULL on failure with errno set.
- */
-flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf);
-
 /* Send message to zeromq socket.
  * Returns 0 on success, -1 on failure with errno set.
  */
@@ -145,15 +125,6 @@ int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
  * Returns message on success, NULL on failure with errno set.
  */
 flux_msg_t *flux_msg_recvzsock (void *dest);
-
-/* Initialize iobuf members.
- */
-void flux_msg_iobuf_init (struct flux_msg_iobuf *iobuf);
-
-/* Free any internal memory allocated to iobuf.
- * Only necessary if destroying with partial I/O in progress.
- */
-void flux_msg_iobuf_clean (struct flux_msg_iobuf *iobuf);
 
 /* Get/set message type
  * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
