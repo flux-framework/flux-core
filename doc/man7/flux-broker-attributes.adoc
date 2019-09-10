@@ -26,9 +26,6 @@ The rank of the local broker.
 size::
 The number of ranks in the comms session.
 
-session-id::
-The identity of the comms session.
-
 rundir::
 A global, shared temporary directory available for scratch storage
 within the session. By default, a temporary directory is created
