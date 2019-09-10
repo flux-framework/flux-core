@@ -400,6 +400,15 @@ static int handle_normal_response (flux_t *h,
     return 0;
 }
 
+static void check_namespace_deletion (void)
+{
+    /* Issue #2355 - in order to differentiate between a
+     * namespace that has never existed vs a namespace that
+     * has been deleted, we convert ENOTSUP to ESTALE */
+    if (errno == ENOTSUP)
+        errno = ESTALE;
+ }
+
 /* New value of key is available in future 'f' container.
  * Send response to watcher using raw payload from lookup response.
  * Return 0 on success, -1 on error (caller should destroy watcher).
@@ -453,6 +462,7 @@ static void handle_lookup_response (flux_future_t *f,
              * kvs.namespace-removed event, monitoring in a namespace
              * is torn down.  See fatal_errnum var.
              */
+            check_namespace_deletion ();
             goto error;
         }
 
@@ -471,8 +481,10 @@ static void handle_lookup_response (flux_future_t *f,
 
         if (flux_rpc_get_unpack (f, "{ s:o s:i }",
                                  "val", &val,
-                                 "rootseq", &root_seq) < 0)
+                                 "rootseq", &root_seq) < 0) {
+            check_namespace_deletion ();
             goto error;
+        }
 
         /* if we got some setroots before the initial rpc returned,
          * toss them */
@@ -641,7 +653,13 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
         goto error_respond;
     }
     if (nsm->fatal_errnum != 0) {
-        errno = nsm->fatal_errnum;
+        /* In order to differentiate between a namespace that has
+         * never existed vs a namespace that has been deleted, we will
+         * convert ENOTSUP to ESTALE in the latter case. */
+        if (nsm->fatal_errnum == ENOTSUP && nsm->commit)
+            errno = ESTALE;
+        else
+            errno = nsm->fatal_errnum;
         goto error_respond;
     }
     if (nsm->errnum != 0) {
