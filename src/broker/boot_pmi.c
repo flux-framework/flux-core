@@ -204,14 +204,6 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
                       tbon_k)< 0)
         goto error;
 
-    /* Set session-id attribute from PMI appnum if not already set.
-     */
-    if (attr_get (attrs, "session-id", NULL, NULL) < 0) {
-        if (attr_add_int (attrs, "session-id", pmi_params.appnum,
-                          FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto error;
-    }
-
     if (update_endpoint_attr (attrs, "tbon.endpoint", &tbonendpoint,
                                                         "tcp://%h:*") < 0)
         goto error;

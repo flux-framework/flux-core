@@ -51,17 +51,6 @@ test_expect_success 'flux broker with boot.config_file=bad-rank fails' '
 		-Sboot.config_file=${TCONFDIR}/bad-rank.conf /bin/true
 '
 
-#
-# trigger config_file boot failure due to incompat attr setting
-#
-
-test_expect_success 'flux broker with incompat attrs fails' '
-	test_must_fail flux broker -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/shared.conf \
-		-Ssession-id=xyz \
-		/bin/true
-'
-
 # N.B. set short shutdown grace to speed up test, as in t0001-basic
 
 #
@@ -77,7 +66,6 @@ test_expect_success 'start size=1 with shared config file, expected attrs set' '
 		-Sboot.config_file=${TCONFDIR}/shared.conf \
 		--shutdown-grace=0.1 \
 		flux lsattr -v >1s.out &&
-	grep -q "session-id[ ]*test$" 1s.out &&
 	grep -q "tbon.endpoint[ ]*tcp://127.0.0.1:8500$" 1s.out
 '
 
