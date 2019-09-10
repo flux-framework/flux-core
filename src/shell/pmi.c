@@ -435,7 +435,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         return NULL;
     pmi->shell = shell;
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
-                                                  shell->jobid,
+                                                  0, // appnum
                                                   info->jobspec->task_count,
                                                   info->rankinfo.ntasks,
                                                   "pmi",
