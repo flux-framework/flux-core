@@ -18,6 +18,7 @@
 #include <dlfcn.h>
 #include <czmq.h>
 #include <stdarg.h>
+#include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 
@@ -98,6 +99,155 @@ int plugstack_call (struct plugstack *st,
         p = zlistx_next (st->plugins);
     }
     return 0;
+}
+
+static int load_plugin (struct plugstack *st,
+                        const char *path,
+                        const char *conf)
+{
+    flux_plugin_t *p = flux_plugin_create ();
+    if (!p)
+        return -1;
+    if (conf && flux_plugin_set_conf (p, conf) < 0) {
+        log_msg ("set_conf: %s: %s", path, flux_plugin_strerror (p));
+        goto error;
+    }
+    if (flux_plugin_load_dso (p, path) < 0) {
+        log_msg ("%s", flux_plugin_strerror (p));
+        goto error;
+    }
+    if (plugstack_push (st, p) < 0) {
+        log_err ("plugstack_push (%s)", path);
+        goto error;
+    }
+    return 0;
+error:
+    flux_plugin_destroy (p);
+    return -1;
+}
+
+static int load_from_glob (struct plugstack *st, glob_t *gl, const char *conf)
+{
+    int n = 0;
+    size_t i;
+    for (i = 0; i < gl->gl_pathc; i++) {
+        if (load_plugin (st, gl->gl_pathv[i], conf) < 0)
+            return -1;
+        n++;
+    }
+    return n;
+}
+
+int plugstack_load (struct plugstack *st,
+                    const char *pattern,
+                    const char *conf)
+{
+    glob_t gl;
+    int rc = -1;
+
+    if (!st || !pattern) {
+        errno = EINVAL;
+        return -1;
+    }
+    rc = glob (pattern, GLOB_TILDE_CHECK, NULL, &gl);
+    switch (rc) {
+        case 0:
+            rc = load_from_glob (st, &gl, conf);
+            break;
+        case GLOB_NOMATCH:
+            rc = 0;
+            break;
+        case GLOB_NOSPACE:
+            log_msg ("glob: Out of memory");
+            break;
+        case GLOB_ABORTED:
+            //log_err ("glob: failed to read %s", pattern);
+            break;
+        default:
+            log_msg ("glob: unknown rc = %d", rc);
+    }
+    globfree (&gl);
+    return rc;
+}
+
+/*  Return 1 if either searchpath is NULL, or pattern starts with '/' or '~'.
+ *  Also, pattern starting with './' to explicitly bypass searchpath.
+ */
+static int no_searchpath (const char *searchpath, const char *pattern)
+{
+    return (!searchpath
+            || pattern[0] == '/'
+            || pattern[0] == '~'
+            || (pattern[0] == '.' && pattern[1] == '/'));
+}
+
+static void item_free (void **item)
+{
+    if (*item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+
+static zlistx_t * list_o_patterns (const char *searchpath, const char *pattern)
+{
+    char *copy;
+    char *str;
+    char *dir;
+    char *path;
+    char *sp = NULL;
+    zlistx_t *l = zlistx_new ();
+
+    if (!l || !(copy = strdup (searchpath)))
+        return NULL;
+    str = copy;
+
+    zlistx_set_destructor (l, item_free);
+
+    while ((dir = strtok_r (str, ":", &sp))) {
+        if (asprintf (&path, "%s/%s", dir, pattern) < 0)
+            goto error;
+        zlistx_add_end (l, path);
+        str = NULL;
+    }
+    free (copy);
+    return l;
+error:
+    free (copy);
+    zlistx_destroy (&l);
+    return NULL;
+}
+
+int plugstack_loadall (struct plugstack *st,
+                       const char *searchpath,
+                       const char *pattern,
+                       const char *conf)
+{
+    zlistx_t *l;
+    char *path;
+    int rc = 0;
+
+    if (no_searchpath (searchpath, pattern))
+        return plugstack_load (st, pattern, conf);
+
+    if (!(l = list_o_patterns (searchpath, pattern)))
+        return -1;
+    /*
+     *  NB: traverse searchpath list in *reverse* order. this is because
+     *   of the way plugstack works, the _last_ loaded plugin takes
+     *   precedence. So to preserve the idiom of "searchpath" we iterate
+     *   the search in reverse order.
+     */
+    path = zlistx_last (l);
+    while (path) {
+        int n;
+        if ((n = plugstack_load (st, path, conf)) < 0)
+            return -1;
+        rc += n;
+        path = zlistx_prev (l);
+    }
+    zlistx_destroy (&l);
+    return rc;
 }
 
 /* vi: ts=4 sw=4 expandtab
