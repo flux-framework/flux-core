@@ -734,65 +734,6 @@ error_close:
     return -1;
 }
 
-static char *findlocal (const char *globstr)
-{
-    glob_t globbuf;
-    char *uri = NULL;
-
-    if (glob (globstr, GLOB_ONLYDIR, NULL, &globbuf) != 0)
-        goto done;
-    if (globbuf.gl_pathc < 1) {
-        errno = ENOENT;
-        goto done;
-    }
-    if (asprintf (&uri, "local://%s", globbuf.gl_pathv[0]) < 0) {
-        errno = ENOMEM;
-        goto done;
-    }
-done:
-    return uri;
-}
-
-/* Given a JOB identifier that is not a URI, try to turn it into a URI.
- * Returns uri on success (caller must free), or NULL on failure errno set.
- */
-static char *findjob (const char *job)
-{
-    char *tmpdir = getenv ("TMPDIR");
-    char *uri = NULL;
-    char globstr[PATH_MAX + 1];
-
-    if (!tmpdir)
-        tmpdir = "/tmp";
-    /* Try to interpret 'job' as the path from local://
-     * as we might get from ssh://host/path/to/sockdir
-     */
-    if (access (job, F_OK) == 0) {
-        if (asprintf (&uri, "local://%s", job) < 0) {
-            errno = ENOMEM;
-            goto done;
-        }
-        goto done;
-    }
-    /* Try to interpret 'job' as the flux session-id.
-     */
-    snprintf (globstr, sizeof (globstr), "%s/flux-%s-*/0", tmpdir, job);
-    if ((uri = findlocal (globstr)))
-        goto done;
-    /* Try to interpret 'job' as "/session-id",
-     * as we might get from ssh://host/jobid
-     */
-    if (strlen (job) > 1 && job[0] == '/' && isdigit (job[1])) {
-        snprintf (globstr, sizeof (globstr), "%s/flux-%s-*/0", tmpdir, job + 1);
-        if ((uri = findlocal (globstr)))
-            goto done;
-    }
-    /* Not found, return NULL */
-    errno = ENOENT;
-done:
-    return uri;
-}
-
 static void completion_cb (flux_subprocess_t *p)
 {
     proxy_ctx_t *ctx = flux_subprocess_aux_get (p, "ctx");
@@ -901,7 +842,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];
-    const char *job;
+    const char *path;
     const char *optarg;
     int optindex;
     flux_msg_handler_t **handlers = NULL;
@@ -910,8 +851,8 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     optindex = optparse_option_index (p);
     if (optindex == ac)
-        optparse_fatal_usage (p, 1, "JOB argument is required\n");
-    job = av[optindex++];
+        optparse_fatal_usage (p, 1, "URI argument is required\n");
+    path = av[optindex++];
 
     if (optparse_hasopt (p, "stdio") && optindex != ac)
         optparse_fatal_usage (p, 1, "there can be no COMMAND with --stdio\n");
@@ -927,13 +868,16 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         free (name);
     }
 
-    if (strstr (job, "://")) {
-        if (!(h = flux_open (job, 0)))
-            log_err_exit ("%s", job);
+    /* Users call flux-proxy with a URI argument, while the ssh connector
+     * calls it with just the path part.
+     */
+    if (strstr (path, "://")) {
+        if (!(h = flux_open (path, 0)))
+            log_err_exit ("%s", path);
     } else {
-        char *uri = findjob (job);
-        if (!uri)
-            log_err_exit ("%s", job);
+        char *uri;
+        if (asprintf (&uri, "local://%s", path) < 0)
+            log_err_exit ("asprintf");
         if (!(h = flux_open (uri, 0)))
             log_err_exit ("%s", uri);
          free (uri);
@@ -1019,7 +963,7 @@ int subcommand_proxy_register (optparse_t *p)
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p, "proxy", cmd_proxy,
-        "[OPTIONS] JOB [COMMAND...]",
+        "[OPTIONS] URI [COMMAND...]",
         "Route messages to/from Flux instance",
         0,
         proxy_opts);

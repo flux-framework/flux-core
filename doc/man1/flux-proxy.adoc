@@ -12,12 +12,12 @@ flux-proxy - create proxy environment for Flux instance
 
 SYNOPSIS
 --------
-*flux* *proxy* [OPTIONS] job [command [args...]]
+*flux* *proxy* [OPTIONS] URI [command [args...]]
 
 
 DESCRIPTION
 -----------
-*flux proxy* connects to the Flux instance identified by _job_,
+*flux proxy* connects to the Flux instance identified by _URI_,
 then spawns a shell with FLUX_URI pointing to a local:// socket
 managed by the proxy program.  As long as the shell is running,
 the proxy program routes messages between the instance and the
@@ -27,13 +27,6 @@ terminates and removes the socket.
 The purpose of *flux proxy* is to allow a connection to be reused,
 for example where connection establishment has high latency or
 requires authentication.
-
-JOB IDENTIFIER
---------------
-*flux proxy* requires a _job_ identifier argument.  If the
-argument is not a URI, then it is interpreted heuristically
-as a numeric Flux session-id, a session-id with a single 
-'/' character prefix, or the path component of a local:// URI.
 
 
 OPTIONS
@@ -59,22 +52,10 @@ shell:
 
   $ flux proxy local:///tmp/flux-123456-abcdef/0
 
-Connect to the same job by jobid:
-
-  $ flux proxy 123456
-
 Connect to the same job remotely on host foo.com:
 
   $ flux proxy ssh://foo.com/tmp/flux-123456-abcdef/0
 
-Connect to the same by jobid:
-
-  $ flux proxy ssh://foo.com/123456
-
-Same and also set TMPDIR in the remote `flux proxy --stdio`
-environment:
-
-  $ flux proxy ssh://foo.com/123456?setenv=TMPDIR=/var/tmp/fred
 
 USE BY SSH CONNECTOR
 --------------------

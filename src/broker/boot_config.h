@@ -17,8 +17,6 @@
  *
  * Example config file (TOML):
  *
- *   session-id = "hype"
- *
  *   # tbon-endpoints array is ordered by rank (zeromq URI format)
  *   tbon-endpoints = [
  *       "tcp://192.168.1.100:8020",  # rank 0
@@ -39,8 +37,8 @@
 
 /* Broker attributes read/written directly by this method:
  *   boot.config_file (r)
- *   session-id (w)
  *   tbon.endpoint (w)
+ *   instance-level (w)
  */
 
 int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k);

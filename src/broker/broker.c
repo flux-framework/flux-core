@@ -465,7 +465,6 @@ int main (int argc, char *argv[])
     uint32_t size = overlay_get_size (ctx.overlay);
 
     assert (size > 0);
-    assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
 
     /* Must be called after overlay setup */
     if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
@@ -473,16 +472,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (ctx.verbose) {
-        const char *sid = "unknown";
-        (void)attr_get (ctx.attrs, "session-id", &sid, NULL);
-        log_msg ("boot: rank=%d size=%d session-id=%s", rank, size, sid);
-    }
-
-    if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("attr_set_flags session-id");
-        goto cleanup;
-    }
+    if (ctx.verbose)
+        log_msg ("boot: rank=%d size=%d", rank, size);
 
     // Setup profiling
     setup_profiling (argv[0], rank);
@@ -1056,13 +1047,13 @@ cleanup:
 /* If 'persist-directory' set, validate it, make it immutable, done.
  * If 'persist-filesystem' set, validate it, make it immutable, then:
  * Avoid name collisions with other flux tmpdirs used in testing
- * e.g. "flux-<sid>-XXXXXX"
+ * e.g. "flux-<pid>-XXXXXX"
  */
 static int create_persistdir (attr_t *attrs, uint32_t rank)
 {
     struct stat sb;
     const char *attr = "persist-directory";
-    const char *sid, *persist_dir, *persist_fs;
+    const char *persist_dir, *persist_fs;
     char *dir, *tmpl = NULL;
     int rc = -1;
 
@@ -1085,10 +1076,6 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
         if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     } else {
-        if (attr_get (attrs, "session-id", &sid, NULL) < 0) {
-            errno = EINVAL;
-            goto done;
-        }
         if (attr_get (attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
             goto done_success;
         }
@@ -1105,7 +1092,10 @@ static int create_persistdir (attr_t *attrs, uint32_t rank)
         if (attr_set_flags (attrs, "persist-filesystem",
                                                 FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
-        if (asprintf (&tmpl, "%s/fluxP-%s-XXXXXX", persist_fs, sid) < 0)
+        if (asprintf (&tmpl,
+                      "%s/fluxP-%d-XXXXXX",
+                      persist_fs,
+                      (int)getpid()) < 0)
             goto done;
         if (!(dir = mkdtemp (tmpl)))
             goto done;

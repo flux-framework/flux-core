@@ -29,7 +29,6 @@
  */
 static const char *badat[] = {
     "tbon.endpoint",
-    "session-id",
     NULL,
 };
 
@@ -37,7 +36,6 @@ static const char *badat[] = {
  */
 static const struct cf_option opts[] = {
     { "tbon-endpoints", CF_ARRAY, true },
-    { "session-id", CF_STRING, true },
     { "rank", CF_INT64, false },
     { "size", CF_INT64, false },
     CF_OPTIONS_TABLE_END,
@@ -200,14 +198,13 @@ int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
 
     /* Update attributes.
      */
-    if (attr_add (attrs, "session-id", cf_string (cf_get_in (cf, "session-id")),
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("setattr session-id");
-        goto done;
-    }
     if (attr_add (attrs, "tbon.endpoint", get_cf_endpoint (cf, rank),
                   FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("setattr tbon.endpoint");
+        goto done;
+    }
+    if (attr_add (attrs, "instance-level", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("setattr instance-level");
         goto done;
     }
 

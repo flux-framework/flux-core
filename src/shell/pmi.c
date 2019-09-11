@@ -357,6 +357,15 @@ error:
     return -1;
 }
 
+static int set_flux_jobid (struct shell_pmi *pmi, flux_jobid_t id)
+{
+    char val [SIMPLE_KVS_VAL_MAX];
+
+    (void)snprintf (val, sizeof (val), "%ju", (uintmax_t)id);
+    pmi_kvs_put_local (pmi, "flux.jobid", val);
+    return 0;
+}
+
 static int set_flux_instance_level (struct shell_pmi *pmi)
 {
     char *p;
@@ -435,7 +444,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         return NULL;
     pmi->shell = shell;
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
-                                                  shell->jobid,
+                                                  0, // appnum
                                                   info->jobspec->task_count,
                                                   info->rankinfo.ntasks,
                                                   "pmi",
@@ -451,8 +460,12 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     zhashx_set_duplicator (pmi->kvs, kvs_value_duplicator);
     if (init_clique (pmi) < 0)
         goto error;
-    if (!shell->standalone && set_flux_instance_level (pmi) < 0)
-        goto error;
+    if (!shell->standalone) {
+        if (set_flux_instance_level (pmi) < 0)
+            goto error;
+        if (set_flux_jobid (pmi, shell->jobid) < 0)
+            goto error;
+    }
     return pmi;
 error:
     pmi_destroy (pmi);
