@@ -43,6 +43,56 @@ void test_invalid_args (struct plugstack *st, flux_plugin_t *p)
         "plugstack_push (NULL, p) returns EINVAL");
     ok (plugstack_push (st, NULL) < 0 && errno == EINVAL,
         "plugstack_push (st, NULL) returns EINVAL");
+
+    ok (plugstack_loadall (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "plugstack_loadall (NULL, NULL, NULL, NULL) returns EINVAL");
+    ok (plugstack_loadall (st, NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "plugstack_loadall (st, NULL, NULL, NULL) returns EINVAL");
+}
+
+void test_load (void)
+{
+    const char *searchpath = "./test/a/.libs:./test/b/.libs:./test/c/.libs";
+    const char *result = NULL;
+    struct plugstack  *st = NULL;
+    flux_plugin_arg_t *args = NULL;
+
+    if (!(st = plugstack_create ()))
+        BAIL_OUT ("plugstack_create");
+    if (!(args = flux_plugin_arg_create ()))
+        BAIL_OUT ("flux_plugin_arg_create");
+
+    ok (plugstack_loadall (st, NULL, "./*.noexist", NULL) == 0,
+        "plugstack_loadall (st, NULL, \"noexist\", NULL) returns 0");
+    ok (plugstack_loadall (st, NULL, "/tmp", NULL) < 0,
+        "plugstack_loadall (st, NULL, \"/tmp\", NULL) returns -1");
+
+    ok (plugstack_loadall (st, NULL, "./test/a/.libs/*.so", NULL) == 1,
+        "plugstack_loadall works without searchpath");
+
+    ok (plugstack_loadall (st, searchpath, "./test/c/.libs/*.so", NULL) == 1,
+        "plugstack_loadall loads single plugin with explicit pattern");
+    ok (plugstack_call (st, "test.run", args) == 0,
+        "plugstack_call test.run");
+    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}", "result", &result) == 0,
+        "plugin set result in output args");
+    is (result, "C",
+        "plugstack correctly called callback in 'c'");
+
+
+    ok (plugstack_loadall (st, searchpath, "*.so", NULL) == 3,
+        "plugstack loadall works with searchpath");
+    ok (plugstack_call (st, "test.run", args) == 0,
+        "plugstack_call test.run");
+    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}", "result", &result) == 0,
+        "plugin set result in output args");
+    is (result, "A",
+        "plugstack correctly called callback in 'a'");
+
+    plugstack_destroy (st);
+    flux_plugin_arg_destroy (args);
 }
 
 int main (int argc, char **argv)
@@ -121,6 +171,7 @@ int main (int argc, char **argv)
     plugstack_destroy (st);
     flux_plugin_arg_destroy (args);
 
+    test_load ();
     done_testing ();
     return 0;
 }
