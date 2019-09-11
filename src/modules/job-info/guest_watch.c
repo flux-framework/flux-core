@@ -66,6 +66,7 @@ struct guest_watch_ctx {
     uint32_t msg_userid;
     flux_jobid_t id;
     char *path;
+    int flags;
     bool cancel;
 
     /* transition possibilities
@@ -139,7 +140,8 @@ static void guest_watch_ctx_destroy (void *data)
 static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
                                                        const flux_msg_t *msg,
                                                        flux_jobid_t id,
-                                                       const char *path)
+                                                       const char *path,
+                                                       int flags)
 {
     struct guest_watch_ctx *gw = calloc (1, sizeof (*gw));
     int saved_errno;
@@ -153,6 +155,7 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
         errno = ENOMEM;
         goto error;
     }
+    gw->flags = flags;
     gw->state = GUEST_WATCH_STATE_INIT;
 
     gw->msg = flux_msg_incref (msg);
@@ -405,20 +408,22 @@ done:
 static int wait_guest_namespace (struct guest_watch_ctx *gw)
 {
     const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
     int save_errno, rv = -1;
 
     if (!(msg = guest_msg_pack (gw,
                                 topic,
-                                "{s:I s:s}",
+                                "{s:I s:s s:i}",
                                 "id", gw->id,
-                                "path", "eventlog")))
+                                "path", "eventlog",
+                                "flags", 0)))
         goto error;
 
     if (!(gw->wait_guest_namespace_f = flux_rpc_message (gw->ctx->h,
                                                          msg,
                                                          FLUX_NODEID_ANY,
-                                                         FLUX_RPC_STREAMING))) {
+                                                         rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
@@ -477,10 +482,16 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == ENODATA) {
-            /* either user canceled this watch, or we did.  If we did,
-             * its because the guest namespace is now created and now
-             * we're going to watch it */
+            /* guest_started indicates if user canceled this watch or
+             * we did.  If we did, its because the guest namespace is
+             * now created and now we're going to watch it */
             if (gw->guest_started) {
+                /* check for racy cancel - user canceled while this
+                 * error was in transit */
+                if (gw->cancel) {
+                    errno = ENODATA;
+                    goto error;
+                }
                 if (guest_namespace_watch (gw) < 0)
                     goto error;
                 return;
@@ -547,23 +558,25 @@ error:
 
 static int guest_namespace_watch (struct guest_watch_ctx *gw)
 {
+    const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
-    int flags = FLUX_RPC_STREAMING;
     int save_errno;
     int rv = -1;
 
     if (!(msg = guest_msg_pack (gw,
-                                "job-info.eventlog-watch",
-                                "{s:I s:b s:s}",
+                                topic,
+                                "{s:I s:b s:s s:i}",
                                 "id", gw->id,
                                 "guest", true,
-                                "path", gw->path)))
+                                "path", gw->path,
+                                "flags", 0)))
         goto error;
 
     if (!(gw->guest_namespace_watch_f = flux_rpc_message (gw->ctx->h,
                                                           msg,
                                                           FLUX_NODEID_ANY,
-                                                          flags))) {
+                                                          rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
@@ -601,23 +614,19 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
              *
              * Note that it is possible the guest eventlog is simply
              * empty / had no events in it.  There's no way to know
-             * for certain if it is this case or a race.  There is no
-             * behavior change for continuing to watch the eventlog in
-             * the main KVS namespace, so we do it and suffer the
-             * minor latency associated with it.
+             * for certain if it is this case or a race.  This is an
+             * unfortunate behavior difference.  Issue #2356.
              */
             gw->guest_namespace_removed = true;
+            /* check for racy cancel - user canceled while this
+             * error was in transit */
+            if (gw->cancel) {
+                errno = ENODATA;
+                goto error;
+            }
             if (!gw->guest_namespace_events) {
                 if (main_namespace_watch (gw) < 0)
                     goto error;
-            }
-            else if (gw->cancel) {
-                /* Racy scenario - user attempted a cancel right as
-                 * ENOTSUP being sent.  Caller won't get a ENODATA
-                 * response b/c the original watcher is now dead.
-                 */
-                errno = ENODATA;
-                goto error;
             }
             return;
         }
@@ -666,8 +675,9 @@ error:
 
 static int main_namespace_watch (struct guest_watch_ctx *gw)
 {
+    const char *topic = "job-info.eventlog-watch";
+    int rpc_flags = FLUX_RPC_STREAMING;
     flux_msg_t *msg = NULL;
-    int flags = FLUX_RPC_STREAMING;
     int save_errno;
     int rv = -1;
     char path[64];
@@ -681,17 +691,18 @@ static int main_namespace_watch (struct guest_watch_ctx *gw)
     }
 
     if (!(msg = guest_msg_pack (gw,
-                                "job-info.eventlog-watch",
-                                "{s:I s:b s:s}",
+                                topic,
+                                "{s:I s:b s:s s:i}",
                                 "id", gw->id,
                                 "guest", false,
-                                "path", path)))
+                                "path", path,
+                                "flags", 0)))
         goto error;
 
     if (!(gw->main_namespace_watch_f = flux_rpc_message (gw->ctx->h,
                                                          msg,
                                                          FLUX_NODEID_ANY,
-                                                         flags))) {
+                                                         rpc_flags))) {
         flux_log_error (gw->ctx->h, "%s: flux_rpc_message", __FUNCTION__);
         goto error;
     }
@@ -759,11 +770,13 @@ void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
     struct guest_watch_ctx *gw = NULL;
     flux_jobid_t id;
     const char *path = NULL;
+    int flags;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:s}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
                              "id", &id,
-                             "path", &path) < 0) {
+                             "path", &path,
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -774,7 +787,7 @@ void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(gw = guest_watch_ctx_create (ctx, msg, id, path)))
+    if (!(gw = guest_watch_ctx_create (ctx, msg, id, path, flags)))
         goto error;
 
     if (get_main_eventlog (gw) < 0)

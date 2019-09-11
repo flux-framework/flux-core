@@ -747,6 +747,7 @@ struct attach_ctx {
     optparse_t *p;
     bool started;
     bool missing_output_ok;
+    bool output_header_parsed;
     int stdout_count;
     int stderr_count;
     int stdout_eof_count;
@@ -898,6 +899,7 @@ void print_output_continuation (flux_future_t *f, void *arg)
                          "stdout", &ctx->stdout_count,
                          "stderr", &ctx->stderr_count) < 0)
             log_msg_exit ("error parsing stream counts");
+        ctx->output_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
         FILE *fp;
@@ -907,6 +909,8 @@ void print_output_continuation (flux_future_t *f, void *arg)
         char *data;
         int len;
         bool eof;
+        if (!ctx->output_header_parsed)
+            log_msg_exit ("stream data read before header");
         if (iodecode (context, &stream, &rank, &data, &len, &eof) < 0)
             log_msg_exit ("malformed event context");
         if (!strcmp (stream, "stdout")) {
@@ -930,8 +934,10 @@ void print_output_continuation (flux_future_t *f, void *arg)
     json_decref (o);
 
     if (ctx->stdout_eof_count >= ctx->stdout_count
-        && ctx->stderr_eof_count >= ctx->stderr_count)
-        goto done;
+        && ctx->stderr_eof_count >= ctx->stderr_count) {
+        if (flux_job_event_watch_cancel (f) < 0)
+            log_err_exit ("flux_job_event_watch_cancel");
+    }
 
     flux_future_reset (f);
     return;
@@ -943,7 +949,7 @@ void print_output (struct attach_ctx *ctx)
 {
     flux_future_t *f;
 
-    if (!(f = flux_job_event_watch (ctx->h, ctx->id, "guest.output")))
+    if (!(f = flux_job_event_watch (ctx->h, ctx->id, "guest.output", 0)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, -1., print_output_continuation, ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -973,7 +979,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
 
-    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id, "eventlog")))
+    if (!(ctx.f = flux_job_event_watch (ctx.h, ctx.id, "eventlog", 0)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (ctx.f, -1, attach_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -1438,7 +1444,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
         *ctx.context_value++ = '\0';
     }
 
-    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path)))
+    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, 0)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, ctx.timeout, wait_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
