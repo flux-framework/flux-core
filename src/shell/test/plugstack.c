@@ -54,12 +54,17 @@ void test_invalid_args (struct plugstack *st, flux_plugin_t *p)
     errno = 0;
     ok (plugstack_get_searchpath (NULL) == NULL && errno == EINVAL,
         "plugstack_get_searchpath (NULL) sets errno to EINVAL");
+    ok (plugstack_plugin_aux_set (NULL, "foo", NULL) < 0 && errno == EINVAL,
+        "plugstack_plugin_aux_set (NULL, ...) returns EINVAL");
+    ok (plugstack_plugin_aux_set (st, NULL, NULL) < 0 && errno == EINVAL,
+        "plugstack_plugin_aux_set (NULL, ...) returns EINVAL");
 }
 
 void test_load (void)
 {
     const char *searchpath = "./test/a/.libs:./test/b/.libs:./test/c/.libs";
     const char *result = NULL;
+    const char *aux = NULL;
     struct plugstack  *st = NULL;
     flux_plugin_arg_t *args = NULL;
 
@@ -92,20 +97,29 @@ void test_load (void)
     ok (plugstack_call (st, "test.run", args) == 0,
         "plugstack_call test.run");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
-                                "{s:s}", "result", &result) == 0,
+                                "{s:s s:n}",
+                                 "result", &result,
+                                 "aux") == 0,
         "plugin set result in output args");
     is (result, "C",
         "plugstack correctly called callback in 'c'");
+
+    ok (plugstack_plugin_aux_set (st, "test", "test") == 0,
+        "plugstack_plugin_aux_set works");
 
     ok (plugstack_load (st, "*.so", NULL) == 3,
         "plugstack load works with searchpath");
     ok (plugstack_call (st, "test.run", args) == 0,
         "plugstack_call test.run");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
-                                "{s:s}", "result", &result) == 0,
+                                "{s:s s:s}",
+                                 "result", &result,
+                                 "aux", &aux) == 0,
         "plugin set result in output args");
     is (result, "A",
         "plugstack correctly called callback in 'a'");
+    is (aux, "test",
+        "plugstack supplied aux == 'test' to plugin");
 
     plugstack_destroy (st);
     flux_plugin_arg_destroy (args);

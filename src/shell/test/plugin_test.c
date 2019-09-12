@@ -29,10 +29,12 @@ static int callback (flux_plugin_t *p,
                      const char *topic,
                      flux_plugin_arg_t *args)
 {
+    char *test = flux_plugin_aux_get (p, "test");
     return flux_plugin_arg_pack (args,
                                  FLUX_PLUGIN_ARG_OUT,
-                                "{s:s}",
-                                "result", TEST_PLUGIN_RESULT);
+                                "{s:s s:s?}",
+                                "result", TEST_PLUGIN_RESULT,
+                                "aux", test);
 }
 
 int flux_plugin_init (flux_plugin_t *p)
