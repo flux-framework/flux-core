@@ -474,7 +474,15 @@ void check_cmp (void)
 
     match.topic_glob = "hello.*";
     ok (flux_msg_cmp (msg, match),
-        "flux_msg_cmp with globbed topic works");
+        "flux_msg_cmp with globbed '*' topic works");
+
+    match.topic_glob = "hello.fo?";
+    ok (flux_msg_cmp (msg, match),
+        "flux_msg_cmp with globbed '?' topic works");
+
+    match.topic_glob = "hello.fo[op]";
+    ok (flux_msg_cmp (msg, match),
+        "flux_msg_cmp with globbed '[' topic works");
     flux_msg_destroy (msg);
 }
 
