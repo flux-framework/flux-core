@@ -19,6 +19,16 @@ void plugstack_destroy (struct plugstack *st);
 
 int plugstack_push (struct plugstack *st, flux_plugin_t *p);
 
+/*  Set a colon-delimited set of PATHs to use when searching for
+ *   a filename to load with plugstack_load().
+ *  Replaces any previously set path.
+ */
+int plugstack_set_searchpath (struct plugstack *st, const char *searchpath);
+
+/*  Get current plugstack searchpath
+ */
+const char *plugstack_get_searchpath (struct plugstack *st);
+
 /*  Load all plugins matching glob pattern in all directories in
  *   searchpatch inst the plugin stack 'st', providing optional
  *   load configuration conf (a JSON encoded string).

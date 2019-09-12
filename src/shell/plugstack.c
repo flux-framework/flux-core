@@ -25,6 +25,7 @@
 #include "plugstack.h"
 
 struct plugstack {
+    char *searchpath;   /* If set, search path for plugstack_load()        */
     zlistx_t *plugins;  /* Ordered list of loaded plugins                  */
     zhashx_t *names;    /* Hash for lookup of plugins by name              */
 };
@@ -36,6 +37,28 @@ void plugstack_unload_name (struct plugstack *st, const char *name)
         zlistx_delete (st->plugins, item);
         zhashx_delete (st->names, name);
     }
+}
+
+int plugstack_set_searchpath (struct plugstack *st, const char *path)
+{
+    if (!st) {
+        errno = EINVAL;
+        return -1;
+    }
+    free (st->searchpath);
+    st->searchpath = NULL;
+    if (path && !(st->searchpath = strdup (path)))
+        return -1;
+    return 0;
+}
+
+const char *plugstack_get_searchpath (struct plugstack *st)
+{
+    if (!st) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return st->searchpath;
 }
 
 int plugstack_push (struct plugstack *st, flux_plugin_t *p)
@@ -64,6 +87,7 @@ void plugstack_destroy (struct plugstack *st)
         int saved_errno = errno;
         zlistx_destroy (&st->plugins);
         zhashx_destroy (&st->names);
+        free (st->searchpath);
         free (st);
         errno = saved_errno;
     }
@@ -138,17 +162,13 @@ static int load_from_glob (struct plugstack *st, glob_t *gl, const char *conf)
     return n;
 }
 
-int plugstack_load (struct plugstack *st,
-                    const char *pattern,
-                    const char *conf)
+static int plugstack_glob (struct plugstack *st,
+                           const char *pattern,
+                           const char *conf)
 {
     glob_t gl;
     int rc = -1;
 
-    if (!st || !pattern) {
-        errno = EINVAL;
-        return -1;
-    }
     rc = glob (pattern, GLOB_TILDE_CHECK, NULL, &gl);
     switch (rc) {
         case 0:
@@ -218,19 +238,23 @@ error:
     return NULL;
 }
 
-int plugstack_loadall (struct plugstack *st,
-                       const char *searchpath,
-                       const char *pattern,
-                       const char *conf)
+int plugstack_load (struct plugstack *st,
+                    const char *pattern,
+                    const char *conf)
 {
     zlistx_t *l;
     char *path;
     int rc = 0;
 
-    if (no_searchpath (searchpath, pattern))
-        return plugstack_load (st, pattern, conf);
+    if (!st || !pattern) {
+        errno = EINVAL;
+        return -1;
+    }
 
-    if (!(l = list_o_patterns (searchpath, pattern)))
+    if (no_searchpath (st->searchpath, pattern))
+        return plugstack_glob (st, pattern, conf);
+
+    if (!(l = list_o_patterns (st->searchpath, pattern)))
         return -1;
     /*
      *  NB: traverse searchpath list in *reverse* order. this is because
@@ -241,7 +265,7 @@ int plugstack_loadall (struct plugstack *st,
     path = zlistx_last (l);
     while (path) {
         int n;
-        if ((n = plugstack_load (st, path, conf)) < 0)
+        if ((n = plugstack_glob (st, path, conf)) < 0)
             return -1;
         rc += n;
         path = zlistx_prev (l);
