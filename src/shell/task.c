@@ -96,6 +96,7 @@ struct shell_task *shell_task_create (struct shell_info *info,
     if (!(task = shell_task_new ()))
         return NULL;
 
+    task->index = index;
     task->rank = info->rankinfo.global_basis + index;
     task->size = info->jobspec->task_count;
     if (!(task->cmd = flux_cmd_create (0,

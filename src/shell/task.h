@@ -26,6 +26,7 @@ typedef void (*shell_task_io_ready_f)(struct shell_task *task,
 
 
 struct shell_task {
+    int index;
     int rank;
     int size;
     flux_subprocess_t *proc;
