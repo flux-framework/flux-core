@@ -25,8 +25,11 @@ typedef void (*flux_shell_task_io_f) (flux_shell_task_t *task,
                                       const char *stream,
                                       void *arg);
 
+/*  Get flux_shell_t object from flux plugin handle
+ */
+flux_shell_t * flux_plugin_get_shell (flux_plugin_t *p);
 
-flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p);
+/* flux_shell_t interface */
 
 int flux_shell_aux_set (flux_shell_t *shell,
                         const char *name,
@@ -34,6 +37,50 @@ int flux_shell_aux_set (flux_shell_t *shell,
                         flux_free_f free_fn);
 
 void * flux_shell_aux_get (flux_shell_t *shell, const char *name);
+
+/*  Get value of an environment variable from the global job environment
+ */
+const char * flux_shell_getenv (flux_shell_t *shell, const char *name);
+
+/*  Get environ job environment as a JSON string. Caller must free.
+ */
+int flux_shell_get_environ (flux_shell_t *shell, char **json_str);
+
+/*  Set an environment variable in the global job environment
+ */
+int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
+                        const char *name, const char *fmt, ...)
+                        __attribute__ ((format (printf, 4, 5)));
+
+/*  Unset an environment variable in the global job environment
+ */
+int flux_shell_unsetenv (flux_shell_t *shell, const char *name);
+
+
+/*  Return shell info as a JSON string.
+ *  {
+ *   "jobid":I,
+ *   "rank":i,
+ *   "size":i,
+ *   "ntasks";i,
+ *   "options": { "verbose":b, "standalone":b },
+ *   "jobspec":o,
+ *   "R":o
+ *  }
+ */
+int flux_shell_get_info (flux_shell_t *shell, char **json_str);
+
+
+/*  Return rank and task info for given shell rank as JSON string.
+ *  {
+ *   "broker_rank":i,
+ *   "ntasks":i
+ *   "resources": { "cores":s, ... }
+ *  }
+ */
+int flux_shell_get_rank_info (flux_shell_t *shell,
+                              int shell_rank,
+                              char **json_str);
 
 /*
  *  Take a "completion reference" on the shell object `shell`.
@@ -44,7 +91,8 @@ void * flux_shell_aux_get (flux_shell_t *shell, const char *name);
  *  Returns the reference count for the particular name, or -1 on error.
  */
 int flux_shell_add_completion_ref (flux_shell_t *shell,
-                                   const char *fmt, ...);
+                                   const char *fmt, ...)
+                                   __attribute__ ((format (printf, 2, 3)));
 
 /*
  *  Remove a named "completion reference" for the shell object `shell`.
@@ -54,7 +102,8 @@ int flux_shell_add_completion_ref (flux_shell_t *shell,
  *  Returns 0 on success, -1 on failure.
  */
 int flux_shell_remove_completion_ref (flux_shell_t *shell,
-                                      const char *fmt, ...);
+                                      const char *fmt, ...)
+                                      __attribute__ ((format (printf, 2, 3)));
 
 /*  Send signal `sig` to all currently running tasks in shell.
  */
@@ -84,6 +133,12 @@ flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
                                     int flags,
                                     const char *fmt, ...);
 
+/*  Call into shell plugin stack
+ */
+int flux_shell_plugstack_call (flux_shell_t *shell,
+                               const char *topic,
+                               flux_plugin_arg_t *args);
+
 /*  flux_shell_task_t API:
  */
 
@@ -92,6 +147,21 @@ flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
  *  Returns NULL in any other context.
  */
 flux_shell_task_t * flux_shell_current_task (flux_shell_t *shell);
+
+/*  Return task general information as JSON string:
+ *  {
+ *    "localid":i,
+ *    "rank":i,
+ *    "state":s,
+ *    "pid":I,
+ *    "wait_status":i,
+ *    "exitcode":i,
+ *    "signaled":i
+ *  }
+ *  Where 'pid' is only valid when task is running, and 'wait_status',
+ *  'exitcode' and 'signaled' are only valid when task has exited.
+ */
+int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str);
 
 /*
  *  Return the cmd structure for a shell task.
