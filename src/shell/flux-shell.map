@@ -1,0 +1,4 @@
+{ global:
+    flux_shell_*;
+  local: *;
+};
