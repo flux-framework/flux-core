@@ -166,16 +166,18 @@ test_expect_success 'flux job wait-event works' '
         grep submit wait_event1.out
 '
 
-test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later' '
-        jobid=$(submit_job)
-        flux job wait-event $jobid foobar > wait_event2.out &
-        waitpid=$! &&
-        wait_watchers_nonzero "watchers" &&
-        wait_watcherscount_nonzero primary &&
+test_expect_success NO_CHAIN_LINT 'flux job wait-event errors on non-event' '
+        jobid=$(submit_job) &&
+        ! flux job wait-event $jobid foobar 2> wait_event2.err &&
+        grep "never received" wait_event2.err
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event does not see event after clean' '
+        jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        wait $waitpid &&
-        grep foobar wait_event2.out
+        ! flux job wait-event -v $jobid foobar 2> wait_event3.err &&
+        grep "never received" wait_event3.err
 '
 
 test_expect_success 'flux job wait-event fails on bad id' '
@@ -184,34 +186,31 @@ test_expect_success 'flux job wait-event fails on bad id' '
 
 test_expect_success 'flux job wait-event --quiet works' '
         jobid=$(submit_job) &&
-        flux job wait-event --quiet $jobid submit > wait_event3.out &&
-        ! test -s wait_event3.out
+        flux job wait-event --quiet $jobid submit > wait_event4.out &&
+        ! test -s wait_event4.out
 '
 
 test_expect_success 'flux job wait-event --verbose works' '
         jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs $jobid) &&
-	flux kvs eventlog append ${kvsdir}.eventlog foobaz &&
-	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        flux job wait-event --verbose $jobid foobar > wait_event4.out &&
-        grep submit wait_event4.out &&
-        grep foobaz wait_event4.out &&
-        grep foobar wait_event4.out
+        flux job wait-event --verbose $jobid clean > wait_event5.out &&
+        grep submit wait_event5.out &&
+        grep start wait_event5.out &&
+        grep clean wait_event5.out
 '
 
 test_expect_success 'flux job wait-event --verbose doesnt show events after wait event' '
         jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs $jobid) &&
-	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        flux job wait-event --verbose $jobid submit > wait_event5.out &&
-        grep submit wait_event5.out &&
-        ! grep foobar wait_event5.out
+        flux job wait-event --verbose $jobid submit > wait_event6.out &&
+        grep submit wait_event6.out &&
+        ! grep start wait_event6.out &&
+        ! grep clean wait_event6.out
 '
 
 test_expect_success 'flux job wait-event --timeout works' '
-        jobid=$(submit_job) &&
-        ! flux job wait-event --timeout=0.2 $jobid foobar 2> wait_event6.err &&
-        grep "wait-event timeout" wait_event6.err
+        jobid=$(submit_job_live sleeplong.json) &&
+        ! flux job wait-event --timeout=0.2 $jobid clean 2> wait_event7.err &&
+        flux job cancel $jobid &&
+        grep "wait-event timeout" wait_event7.err
 '
 
 test_expect_success 'flux job wait-event hangs on no event' '
@@ -299,7 +298,7 @@ test_expect_success 'flux job wait-event w/ bad match-context fails (invalid inp
         ! flux job wait-event --match-context=foo $jobid exception
 '
 
-test_expect_success 'flux job wait-event -p works' '
+test_expect_success 'flux job wait-event -p works (eventlog)' '
         jobid=$(submit_job) &&
         flux job wait-event -p "eventlog" $jobid submit > wait_event_path1.out &&
         grep submit wait_event_path1.out
@@ -309,6 +308,14 @@ test_expect_success 'flux job wait-event -p works (guest.exec.eventlog)' '
         jobid=$(submit_job) &&
         flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path2.out &&
         grep done wait_event_path2.out
+'
+
+test_expect_success 'flux job wait-event -p works (non-guest eventlog)' '
+        jobid=$(submit_job) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs eventlog append ${kvsdir}.foobar.eventlog foobar &&
+        flux job wait-event -p "foobar.eventlog" $jobid foobar > wait_event_path3.out &&
+        grep foobar wait_event_path3.out
 '
 
 test_expect_success 'flux job wait-event -p fails on invalid path' '
@@ -321,14 +328,16 @@ test_expect_success 'flux job wait-event -p fails on path "guest."' '
         ! flux job wait-event -p "guest." $jobid submit
 '
 
-test_expect_success 'flux job wait-event -p hangs on no event' '
+test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
         jobid=$(submit_job) &&
-        ! run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs eventlog append ${kvsdir}.foobar.eventlog foo &&
+        ! run_timeout 0.2 flux job wait-event -p "foobar.eventlog" $jobid bar
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (live job)' '
         jobid=$(submit_job_live sleeplong.json)
-        flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path3.out &
+        flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path4.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watchers_nonzero "guest_watchers" &&
@@ -336,7 +345,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
         wait_watcherscount_nonzero $guestns &&
         flux job cancel $jobid &&
         wait $waitpid &&
-        grep done wait_event_path3.out
+        grep done wait_event_path4.out
 '
 
 test_expect_success 'flux job wait-event -p hangs on no event (live job)' '
@@ -357,7 +366,7 @@ test_expect_success 'job-info: generate jobspec to consume all resources' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '
         jobidall=$(submit_job_live sleeplong-all-rsrc.json)
         jobid=$(submit_job_wait)
-        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path4.out &
+        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path5.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watchers_nonzero "guest_watchers" &&
@@ -367,7 +376,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
         wait_watcherscount_nonzero $guestns &&
         flux job cancel ${jobid} &&
         wait $waitpid &&
-        grep done wait_event_path4.out
+        grep done wait_event_path5.out
 '
 
 test_expect_success 'flux job wait-event -p hangs on no event (wait job)' '
