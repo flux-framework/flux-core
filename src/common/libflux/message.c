@@ -680,6 +680,15 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
     return true;
 }
 
+static bool isa_matchany (const char *s)
+{
+    if (!s || strlen(s) == 0)
+        return true;
+    if (!strcmp (s, "*"))
+        return true;
+    return false;
+}
+
 static bool isa_glob (const char *s)
 {
     if (strchr (s, '*') || strchr (s, '?') || strchr (s, '['))
@@ -700,8 +709,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
         if (!flux_msg_cmp_matchtag (msg, match.matchtag))
             return false;
     }
-    if (match.topic_glob && strlen (match.topic_glob) > 0
-                         && strcmp (match.topic_glob, "*") != 0) {
+    if (!isa_matchany (match.topic_glob)) {
         const char *topic = NULL;
         if (flux_msg_get_topic (msg, &topic) < 0)
             return false;
