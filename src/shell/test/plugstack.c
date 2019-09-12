@@ -44,10 +44,16 @@ void test_invalid_args (struct plugstack *st, flux_plugin_t *p)
     ok (plugstack_push (st, NULL) < 0 && errno == EINVAL,
         "plugstack_push (st, NULL) returns EINVAL");
 
-    ok (plugstack_loadall (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
-        "plugstack_loadall (NULL, NULL, NULL, NULL) returns EINVAL");
-    ok (plugstack_loadall (st, NULL, NULL, NULL) < 0 && errno == EINVAL,
-        "plugstack_loadall (st, NULL, NULL, NULL) returns EINVAL");
+    ok (plugstack_load (NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "plugstack_load (NULL, NULL, NULL, NULL) returns EINVAL");
+    ok (plugstack_load (st, NULL, NULL) < 0 && errno == EINVAL,
+        "plugstack_load (st, NULL, NULL, NULL) returns EINVAL");
+
+    ok (plugstack_set_searchpath (NULL, NULL) < 0 && errno == EINVAL,
+        "plugstack_set_searchpath (NULL, NULL) returns EINVAL");
+    errno = 0;
+    ok (plugstack_get_searchpath (NULL) == NULL && errno == EINVAL,
+        "plugstack_get_searchpath (NULL) sets errno to EINVAL");
 }
 
 void test_load (void)
@@ -62,16 +68,27 @@ void test_load (void)
     if (!(args = flux_plugin_arg_create ()))
         BAIL_OUT ("flux_plugin_arg_create");
 
-    ok (plugstack_loadall (st, NULL, "./*.noexist", NULL) == 0,
-        "plugstack_loadall (st, NULL, \"noexist\", NULL) returns 0");
-    ok (plugstack_loadall (st, NULL, "/tmp", NULL) < 0,
-        "plugstack_loadall (st, NULL, \"/tmp\", NULL) returns -1");
+    ok (plugstack_get_searchpath (st) == NULL,
+        "plugstack searchpath is initially unset");
 
-    ok (plugstack_loadall (st, NULL, "./test/a/.libs/*.so", NULL) == 1,
-        "plugstack_loadall works without searchpath");
+    ok (plugstack_load (st, "./*.noexist", NULL) == 0,
+        "plugstack_load (st, \"noexist\", NULL) returns 0");
+    ok (plugstack_load (st, "/tmp", NULL) < 0,
+        "plugstack_load (st, \"/tmp\", NULL) returns -1");
 
-    ok (plugstack_loadall (st, searchpath, "./test/c/.libs/*.so", NULL) == 1,
-        "plugstack_loadall loads single plugin with explicit pattern");
+    ok (plugstack_load (st, "./test/a/.libs/*.so", NULL) == 1,
+        "plugstack_load works without searchpath");
+    ok (plugstack_load (st, "./test/a/.libs/*.so", NULL) == 1,
+        "plugstack_load works without searchpath");
+    ok (plugstack_load (st, "./test/a/.libs/*.so", "a") < 0,
+        "plugstack_load with invalid JSON conf fails");
+
+    ok (plugstack_set_searchpath (st, searchpath) == 0,
+        "plugstack_set_searchpath worked");
+    is (plugstack_get_searchpath (st), searchpath,
+        "plugstack_get_searchpath now returns search path");
+    ok (plugstack_load (st, "./test/c/.libs/*.so", NULL) == 1,
+        "plugstack_load still loads single plugin with explicit pattern");
     ok (plugstack_call (st, "test.run", args) == 0,
         "plugstack_call test.run");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
@@ -80,9 +97,8 @@ void test_load (void)
     is (result, "C",
         "plugstack correctly called callback in 'c'");
 
-
-    ok (plugstack_loadall (st, searchpath, "*.so", NULL) == 3,
-        "plugstack loadall works with searchpath");
+    ok (plugstack_load (st, "*.so", NULL) == 3,
+        "plugstack load works with searchpath");
     ok (plugstack_call (st, "test.run", args) == 0,
         "plugstack_call test.run");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
