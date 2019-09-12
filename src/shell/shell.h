@@ -25,8 +25,11 @@ typedef void (flux_shell_task_io_f) (flux_shell_task_t *task,
                                      const char *stream,
                                      void *arg);
 
+/*  Get flux_shell_t object from flux plugin handle
+ */
+flux_shell_t * flux_plugin_get_shell (flux_plugin_t *p);
 
-flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p);
+/* flux_shell_t interface */
 
 int flux_shell_aux_set (flux_shell_t *shell,
                         const char *name,
@@ -34,6 +37,46 @@ int flux_shell_aux_set (flux_shell_t *shell,
                         flux_free_f free_fn);
 
 void * flux_shell_aux_get (flux_shell_t *shell, const char *name);
+
+/*  Get value of an environment variable from the global job environment
+ */
+const char * flux_shell_getenv (flux_shell_t *shell, const char *name);
+
+/*  Set an environment variable in the global job environment
+ */
+int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
+                        const char *name, const char *fmt, ...);
+
+
+/*  Unset an environment variable in the global job environment
+ */
+int flux_shell_unsetenv (flux_shell_t *shell, const char *name);
+
+
+/*  Return shell info as a JSON string.
+ *  {
+ *   "jobid":I,
+ *   "rank":i,
+ *   "size":i,
+ *   "ntasks";i,
+ *   "options": { "verbose":b, "standalone":b },
+ *   "jobspec":o,
+ *   "R":o
+ *  }
+ */
+int flux_shell_get_info (flux_shell_t *shell, char **json_str);
+
+
+/*  Return rank and task info for given shell rank as JSON string.
+ *  {
+ *   "broker_rank":i,
+ *   "ntasks":i
+ *   "resources": { "cores":s, ... }
+ *  }
+ */
+int flux_shell_get_rank_info (flux_shell_t *shell,
+                              int shell_rank,
+                              char **json_str);
 
 /*
  *  Take a "completion reference" on the shell object `shell`.
@@ -92,6 +135,14 @@ flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
  *  Returns NULL in any other context.
  */
 flux_shell_task_t * flux_shell_current_task (flux_shell_t *shell);
+
+/*  Return task general information as JSON string:
+ *  {
+ *    "localid":i,
+ *    "rank":i
+ *  }
+ */
+int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str);
 
 /*
  *  Return the cmd structure for a shell task.

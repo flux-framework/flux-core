@@ -164,6 +164,99 @@ void * flux_shell_aux_get (flux_shell_t *shell, const char *key)
     return aux_get (shell->aux, key);
 }
 
+const char * flux_shell_getenv (flux_shell_t *shell, const char *name)
+{
+    json_t *val = json_object_get (shell->info->jobspec->environment, name);
+    if (val)
+        return json_string_value (val);
+    return NULL;
+}
+
+int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
+                        const char *name, const char *fmt, ...)
+{
+    json_t *env = shell->info->jobspec->environment;
+    va_list ap;
+    char *val;
+    int rc = -1;
+
+    if (!overwrite && json_object_get (env, name)) {
+        errno = EEXIST;
+        return -1;
+    }
+
+    va_start (ap, fmt);
+    rc = vasprintf (&val, fmt, ap);
+    va_end (ap);
+    if (rc >= 0) {
+        json_t *o = json_string (val);
+        if (o)
+            rc = json_object_set_new (env, name, o);
+        free (val);
+    }
+    return rc;
+}
+
+int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
+{
+    return json_object_del (shell->info->jobspec->environment, name);
+}
+
+int flux_shell_get_info (flux_shell_t *shell, char **json_str)
+{
+    json_error_t err;
+    json_t *o;
+    if (!shell || !json_str) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:b s:b }}",
+                           "jobid", shell->info->jobid,
+                           "rank",  shell->info->shell_rank,
+                           "size",  shell->info->shell_size,
+                           "ntasks", shell->info->rankinfo.ntasks,
+                           "jobspec", shell->info->jobspec->jobspec,
+                           "options",
+                              "verbose", shell->verbose,
+                              "standalone", shell->standalone)))
+        return -1;
+    *json_str = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (*json_str ? 0 : -1);
+}
+
+int flux_shell_get_rank_info (flux_shell_t *shell,
+                              int shell_rank,
+                              char **json_str)
+{
+    struct rcalc_rankinfo ri;
+    json_t *o = NULL;
+
+    if (!shell || !json_str || shell_rank < -1) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (shell_rank == -1)
+        shell_rank = shell->info->shell_rank;
+
+    if (rcalc_get_nth (shell->info->rcalc, shell_rank, &ri) < 0)
+        return -1;
+
+    o = json_pack ("{ s:i s:i s:{s:s}}",
+                   "broker_rank", ri.rank,
+                   "ntasks", ri.ntasks,
+                   "resources",
+                     "cores", shell->info->rankinfo.cores);
+    if (!o)
+        return -1;
+    *json_str = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (*json_str ? 0 : -1);
+}
+
+
+
 int flux_shell_add_event_handler (flux_shell_t *shell,
                                   const char *subtopic,
                                   flux_msg_handler_f cb,
@@ -298,6 +391,9 @@ static void shell_initialize (flux_shell_t *shell)
 
     if (plugstack_set_searchpath (shell->plugstack, pluginpath) < 0)
         log_err_exit ("plugstack_set_searchpath");
+
+    if (plugstack_plugin_aux_set (shell->plugstack, "flux::shell", shell) < 0)
+        log_err_exit ("plugstack_plugin_aux_set");
 
     if (shell_load_builtins (shell) < 0)
         log_err_exit ("shell_load_builtins");

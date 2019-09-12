@@ -255,6 +255,23 @@ int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
     return 0;
 }
 
+int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str)
+{
+    json_error_t err;
+    json_t *o = NULL;
+    if (!task || !json_str) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = json_pack_ex (&err, 0, "{ s:i s:i }",
+                                     "localid", task->index,
+                                     "rank", task->rank)))
+        return -1;
+    *json_str = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (*json_str ? 0 : -1);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
