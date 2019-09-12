@@ -48,7 +48,12 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(LUA_LIB)
 
-flux_shell_LDFLAGS =
+flux_shell_LDFLAGS = \
+	-export-dynamic \
+	-Wl,--version-script=$(srcdir)/flux-shell.map
+
+EXTRA_DIST = \
+	flux-shell.map
 
 TESTS = \
 	test_jobspec.t \
