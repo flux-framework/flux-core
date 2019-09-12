@@ -274,7 +274,7 @@ static void item_free (void **item)
     }
 }
 
-static void flux_shell_init (flux_shell_t *shell)
+static void shell_initialize (flux_shell_t *shell)
 {
     memset (shell, 0, sizeof (struct flux_shell));
     if (!(shell->completion_refs = zhashx_new ()))
@@ -286,6 +286,7 @@ static void flux_shell_init (flux_shell_t *shell)
 
     if (shell_load_builtins (shell) < 0)
         log_err_exit ("shell_load_builtins");
+
 }
 
 void flux_shell_killall (flux_shell_t *shell, int signum)
@@ -412,7 +413,7 @@ int main (int argc, char *argv[])
 
     log_init (shell_name);
 
-    flux_shell_init (&shell);
+    shell_initialize (&shell);
 
     shell_parse_cmdline (&shell, argc, argv);
 
