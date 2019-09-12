@@ -17,6 +17,13 @@ struct plugstack * plugstack_create (void);
 
 void plugstack_destroy (struct plugstack *st);
 
+/*  Set aux items to be propagated to any plugins loaded by
+ *   plugstack_load().
+ */
+int plugstack_plugin_aux_set (struct plugstack *st,
+                              const char *name,
+                              void *val);
+
 int plugstack_push (struct plugstack *st, flux_plugin_t *p);
 
 /*  Set a colon-delimited set of PATHs to use when searching for

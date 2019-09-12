@@ -21,11 +21,13 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/iterators.h"
 
 #include "plugstack.h"
 
 struct plugstack {
     char *searchpath;   /* If set, search path for plugstack_load()        */
+    zhashx_t *aux;      /* aux items to propagate to loaded plugins        */
     zlistx_t *plugins;  /* Ordered list of loaded plugins                  */
     zhashx_t *names;    /* Hash for lookup of plugins by name              */
 };
@@ -61,6 +63,18 @@ const char *plugstack_get_searchpath (struct plugstack *st)
     return st->searchpath;
 }
 
+int plugstack_plugin_aux_set (struct plugstack *st,
+                              const char *name,
+                              void *data)
+{
+    if (!st || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+    zhashx_update (st->aux, name, data);
+    return 0;
+}
+
 int plugstack_push (struct plugstack *st, flux_plugin_t *p)
 {
     const char *name;
@@ -87,6 +101,7 @@ void plugstack_destroy (struct plugstack *st)
         int saved_errno = errno;
         zlistx_destroy (&st->plugins);
         zhashx_destroy (&st->names);
+        zhashx_destroy (&st->aux);
         free (st->searchpath);
         free (st);
         errno = saved_errno;
@@ -104,7 +119,8 @@ struct plugstack * plugstack_create (void)
     struct plugstack *st = calloc (1, sizeof (*st));
     if (!st
         || !(st->plugins = zlistx_new ())
-        || !(st->names = zhashx_new ())) {
+        || !(st->names = zhashx_new ())
+        || !(st->aux = zhashx_new ())) {
         plugstack_destroy (st);
         return NULL;
     }
@@ -125,6 +141,17 @@ int plugstack_call (struct plugstack *st,
     return 0;
 }
 
+static int plugin_aux_from_zhashx (flux_plugin_t *p, zhashx_t *aux)
+{
+    const char *key;
+    void *val;
+    FOREACH_ZHASHX (aux, key, val) {
+        if (flux_plugin_aux_set (p, key, val, NULL) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static int load_plugin (struct plugstack *st,
                         const char *path,
                         const char *conf)
@@ -135,6 +162,9 @@ static int load_plugin (struct plugstack *st,
     if (conf && flux_plugin_set_conf (p, conf) < 0) {
         log_msg ("set_conf: %s: %s", path, flux_plugin_strerror (p));
         goto error;
+    }
+    if (plugin_aux_from_zhashx (p, st->aux) < 0) {
+        log_msg ("%s: failed to set aux items", path);
     }
     if (flux_plugin_load_dso (p, path) < 0) {
         log_msg ("%s", flux_plugin_strerror (p));
