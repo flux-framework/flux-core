@@ -64,8 +64,8 @@ static const int shell_output_hwm = 1000;
 /* Pause/resume output on 'stream' of 'task'.
  */
 static void shell_output_control_task (struct shell_task *task,
-                                   const char *stream,
-                                   bool stop)
+                                       const char *stream,
+                                       bool stop)
 {
     if (stop) {
         if (flux_subprocess_stream_stop (task->proc, stream) < 0)
