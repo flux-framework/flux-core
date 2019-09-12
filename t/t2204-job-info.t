@@ -168,14 +168,14 @@ test_expect_success 'flux job wait-event works' '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event works, event is later' '
         jobid=$(submit_job)
-        flux job wait-event $jobid foobar > wait_event3.out &
+        flux job wait-event $jobid foobar > wait_event2.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watcherscount_nonzero primary &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
         wait $waitpid &&
-        grep foobar wait_event3.out
+        grep foobar wait_event2.out
 '
 
 test_expect_success 'flux job wait-event fails on bad id' '
@@ -184,8 +184,8 @@ test_expect_success 'flux job wait-event fails on bad id' '
 
 test_expect_success 'flux job wait-event --quiet works' '
         jobid=$(submit_job) &&
-        flux job wait-event --quiet $jobid submit > wait_event7.out &&
-        ! test -s wait_event7.out
+        flux job wait-event --quiet $jobid submit > wait_event3.out &&
+        ! test -s wait_event3.out
 '
 
 test_expect_success 'flux job wait-event --verbose works' '
@@ -193,25 +193,25 @@ test_expect_success 'flux job wait-event --verbose works' '
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobaz &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        flux job wait-event --verbose $jobid foobar > wait_event8.out &&
-        grep submit wait_event8.out &&
-        grep foobaz wait_event8.out &&
-        grep foobar wait_event8.out
+        flux job wait-event --verbose $jobid foobar > wait_event4.out &&
+        grep submit wait_event4.out &&
+        grep foobaz wait_event4.out &&
+        grep foobar wait_event4.out
 '
 
 test_expect_success 'flux job wait-event --verbose doesnt show events after wait event' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        flux job wait-event --verbose $jobid submit > wait_event9.out &&
-        grep submit wait_event9.out &&
-        ! grep foobar wait_event9.out
+        flux job wait-event --verbose $jobid submit > wait_event5.out &&
+        grep submit wait_event5.out &&
+        ! grep foobar wait_event5.out
 '
 
 test_expect_success 'flux job wait-event --timeout works' '
         jobid=$(submit_job) &&
-        ! flux job wait-event --timeout=0.2 $jobid foobar 2> wait_event8.err &&
-        grep "wait-event timeout" wait_event8.err
+        ! flux job wait-event --timeout=0.2 $jobid foobar 2> wait_event6.err &&
+        grep "wait-event timeout" wait_event6.err
 '
 
 test_expect_success 'flux job wait-event hangs on no event' '
@@ -222,7 +222,7 @@ test_expect_success 'flux job wait-event hangs on no event' '
 test_expect_success 'flux job wait-event --format=json works' '
         jobid=$(submit_job) &&
 	flux job wait-event --format=json $jobid submit > wait_event_format1.out &&
-        grep -q "\"name\":\"submit\"" eventlog_format1.out &&
+        grep -q "\"name\":\"submit\"" wait_event_format1.out &&
         grep -q "\"userid\":$(id -u)" wait_event_format1.out
 '
 
