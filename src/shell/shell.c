@@ -25,6 +25,7 @@
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/intree.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -426,8 +427,19 @@ static void item_free (void **item)
     }
 }
 
+static int conf_flags_get (void)
+{
+    if (executable_is_intree () == 1)
+        return CONF_FLAG_INTREE;
+    else
+        return 0;
+}
+
 static void shell_initialize (flux_shell_t *shell)
 {
+    int flags = conf_flags_get ();
+    const char *pluginpath = flux_conf_get ("shell_pluginpath", flags);
+
     memset (shell, 0, sizeof (struct flux_shell));
     if (!(shell->completion_refs = zhashx_new ()))
         log_err_exit ("zhashx_new");
@@ -436,9 +448,11 @@ static void shell_initialize (flux_shell_t *shell)
     if (!(shell->plugstack = plugstack_create ()))
         log_err_exit ("plugstack_create");
 
+    if (plugstack_set_searchpath (shell->plugstack, pluginpath) < 0)
+        log_err_exit ("plugstack_set_searchpath");
+
     if (shell_load_builtins (shell) < 0)
         log_err_exit ("shell_load_builtins");
-
 }
 
 void flux_shell_killall (flux_shell_t *shell, int signum)
