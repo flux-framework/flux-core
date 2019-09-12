@@ -35,6 +35,8 @@ static struct config default_config[] = {
     { "pmi_library_path",
                         INSTALLED_PMI_LIBRARY_PATH, INTREE_PMI_LIBRARY_PATH },
     { "shell_path",     INSTALLED_SHELL_PATH,       INTREE_SHELL_PATH },
+    { "shell_pluginpath",
+                        INSTALLED_SHELL_PLUGINPATH, INTREE_SHELL_PLUGINPATH },
     { "keydir",         NULL,                       INTREE_KEYDIR },
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
     { "rundir",         INSTALLED_RUNDIR,           NULL },
