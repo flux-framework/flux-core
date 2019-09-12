@@ -61,6 +61,7 @@ struct shell_output {
     json_t *output;
     zlist_t *pending_commits;
     bool stopped;
+    bool output_ready_sent;
 };
 
 static const int shell_output_lwm = 100;
@@ -149,6 +150,36 @@ static void shell_output_commit_completion (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
+/* log entry to exec.eventlog that we've created the output directory */
+static int shell_output_ready (struct shell_output *out, flux_kvs_txn_t *txn)
+{
+    json_t *entry = NULL;
+    char *entrystr = NULL;
+    const char *key = "exec.eventlog";
+    int saved_errno, rc = -1;
+
+    if (!(entry = eventlog_entry_create (0., "output-ready", NULL))) {
+        log_err ("eventlog_entry_create");
+        goto error;
+    }
+    if (!(entrystr = eventlog_entry_encode (entry))) {
+        log_err ("eventlog_entry_encode");
+        goto error;
+    }
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0) {
+        log_err ("flux_kvs_txn_put");
+        goto error;
+    }
+    rc = 0;
+error:
+    /* on error, future destroyed via shell_output destroy */
+    saved_errno = errno;
+    json_decref (entry);
+    free (entrystr);
+    errno = saved_errno;
+    return rc;
+}
+
 static int shell_output_commit (struct shell_output *out)
 {
     flux_kvs_txn_t *txn = NULL;
@@ -163,8 +194,16 @@ static int shell_output_commit (struct shell_output *out)
         goto error;
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", chunk) < 0)
         goto error;
+    /* if the output-ready eventlog entry has not been sent, send now.
+     * This is usually sent when the output header is sent. */
+    if (!out->output_ready_sent) {
+        if (shell_output_ready (out, txn) < 0)
+            goto error;
+    }
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
+    if (!out->output_ready_sent)
+        out->output_ready_sent = true;
     if (flux_future_then (f, -1, shell_output_commit_completion, out) < 0)
         goto error;
     if (json_array_clear (out->output) < 0) {
@@ -358,6 +397,7 @@ static int shell_output_header (struct shell_output *out)
             log_err ("shell_output_flush");
     }
     else {
+        /* will also emit output-ready event */
         if (shell_output_commit (out) < 0)
             log_err ("shell_output_commit");
     }
