@@ -16,6 +16,12 @@
 #include "src/common/libtap/tap.h"
 #include "util.h"
 
+int cb2_called;
+void cb2 (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+{
+    cb2_called++;
+}
+
 int cb_called;
 flux_t *cb_h;
 flux_msg_handler_t *cb_mh;
@@ -124,6 +130,52 @@ void test_fastpath (flux_t *h)
     flux_msg_destroy (msg);
     flux_msg_handler_destroy (mh);
     diag ("freed matchtag, destroyed message and message handler");
+}
+
+/* Verify that a non-glob request handler overrides earlier-registered one.
+ * "Built-in" methods like "ping" should be overrideable in comms modules.
+ */
+void test_method_override (flux_t *h)
+{
+    flux_future_t *f;
+    struct flux_match match = FLUX_MATCH_REQUEST;
+    flux_msg_handler_t *mh, *mh2;
+    int rc;
+
+    /* early foo.bar request handler */
+    match.topic_glob = "foo.bar";
+    mh = flux_msg_handler_create (h, match, cb, NULL);
+    flux_msg_handler_start (mh);
+    ok (mh != NULL,
+        "foo.bar first request handler created and started");
+
+    /* override foo.bar request handler */
+    match.topic_glob = "foo.bar";
+    mh2 = flux_msg_handler_create (h, match, cb2, NULL);
+    flux_msg_handler_start (mh2);
+    ok (mh2 != NULL,
+        "foo.bar second request handler created and started");
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message - who got it?
+     * N.B. The test doesn't generate a response so just destroy f
+     * after message is sent.
+     */
+    f = flux_rpc (h, "foo.bar", NULL, FLUX_NODEID_ANY, 0);
+    ok (f != NULL,
+        "sent foo.bar RPC");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    diag ("%d %d", cb_called, cb2_called);
+    ok (cb_called == 0 && cb2_called == 1,
+        "first handler not called, second handler called");
+
+    flux_future_destroy (f);
+    flux_msg_handler_destroy (mh2);
+    flux_msg_handler_destroy (mh);
 }
 
 void test_cloned_dispatch (flux_t *orig)
@@ -269,6 +321,7 @@ int main (int argc, char *argv[])
     test_simple_msg_handler (h);
     test_fastpath (h);
     test_cloned_dispatch (h);
+    test_method_override (h);
 
     flux_close (h);
     done_testing();
