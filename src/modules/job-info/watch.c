@@ -201,6 +201,42 @@ static bool eventlog_parse_next (const char **pp, const char **tok,
     return true;
 }
 
+static int check_eventlog_end (struct watch_ctx *w,
+                               const char *tok,
+                               size_t toklen)
+{
+    char *str = NULL;
+    json_t *o = NULL;
+    const char *name = NULL;
+    int saved_errno, rc = -1;
+
+    if (!(str = strndup (tok, toklen))) {
+        flux_log_error (w->ctx->h, "%s: strndup", __FUNCTION__);
+        goto error;
+    }
+
+    if (!(o = eventlog_entry_decode (str))) {
+        flux_log_error (w->ctx->h, "%s: eventlog_entry_decode", __FUNCTION__);
+        goto error;
+    }
+
+    if (eventlog_entry_parse (o, NULL, &name, NULL) < 0) {
+        flux_log_error (w->ctx->h, "%s: eventlog_entry_parse", __FUNCTION__);
+        goto error;
+    }
+
+    if (!strcmp (name, "clean"))
+        rc = 1;
+    else
+        rc = 0;
+error:
+    saved_errno = errno;
+    free (str);
+    json_decref (o);
+    errno = saved_errno;
+    return rc;
+}
+
 static void watch_continuation (flux_future_t *f, void *arg)
 {
     struct watch_ctx *w = arg;
@@ -235,6 +271,26 @@ static void watch_continuation (flux_future_t *f, void *arg)
             flux_log_error (ctx->h, "%s: flux_respond_pack",
                             __FUNCTION__);
             goto error_cancel;
+        }
+
+        /* When watching the main job eventlog, we return ENODATA back
+         * to the user when the eventlog has reached the end.
+         *
+         * An alternate main KVS namespace eventlog does not have a
+         * known ruleset, so it will hang.
+         */
+        if (!w->guest && !strcmp (w->path, "eventlog")) {
+            if (check_eventlog_end (w, tok, toklen) > 0) {
+                if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
+                    flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
+                                    __FUNCTION__);
+                    goto error;
+                }
+                /* If by small chance there is an event after "clean"
+                 * (e.g. user appended), we won't send it */
+                errno = ENODATA;
+                goto error;
+            }
         }
     }
 
