@@ -682,7 +682,7 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
 
 static bool isa_glob (const char *s)
 {
-    if (strchr (s, '*') || strchr (s, '?'))
+    if (strchr (s, '*') || strchr (s, '?') || strchr (s, '['))
         return true;
     return false;
 }
