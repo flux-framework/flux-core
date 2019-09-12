@@ -491,6 +491,14 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
 static int shell_init (flux_shell_t *shell)
 {
+    int n;
+    if ((n = plugstack_load (shell->plugstack, "*.so", NULL)) < 0)
+        log_err_exit ("plugstack_load");
+    if (shell->verbose) {
+        log_msg ("loaded %d plugin%s from %s\n",
+                 n, n != 1 ? "s" :"",
+                 plugstack_get_searchpath (shell->plugstack));
+    }
     return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 
