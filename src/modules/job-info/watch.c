@@ -127,8 +127,7 @@ static int watch_key (struct watch_ctx *w)
         pathptr = w->path;
     }
     else {
-        if (flux_job_kvs_key (fullpath, sizeof (fullpath), w->id,
-                              w->path ? w->path : "eventlog") < 0) {
+        if (flux_job_kvs_key (fullpath, sizeof (fullpath), w->id, w->path) < 0) {
             flux_log_error (w->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
             return -1;
         }
