@@ -59,7 +59,6 @@ struct shell_output {
     int eof_pending;
     zlist_t *pending_writes;
     json_t *output;
-    zlist_t *pending_commits;
     bool stopped;
     bool output_ready_sent;
 };
@@ -146,8 +145,10 @@ static void shell_output_commit_completion (flux_future_t *f, void *arg)
      * future. Issue #2378 */
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("shell_output_commit");
-    zlist_remove (out->pending_commits, f);
     flux_future_destroy (f);
+
+    if (flux_shell_remove_completion_ref (out->shell, "output.commit") < 0)
+        log_err ("flux_shell_remove_completion_ref");
 }
 
 /* log entry to exec.eventlog that we've created the output directory */
@@ -206,15 +207,17 @@ static int shell_output_commit (struct shell_output *out)
         out->output_ready_sent = true;
     if (flux_future_then (f, -1, shell_output_commit_completion, out) < 0)
         goto error;
+    if (flux_shell_add_completion_ref (out->shell, "output.commit") < 0) {
+        log_err ("flux_shell_remove_completion_ref");
+        goto error;
+    }
+    /* f memory responsibility of shell_output_commit_completion()
+     * callback */
+    f = NULL;
     if (json_array_clear (out->output) < 0) {
         log_msg ("json_array_clear failed");
         goto error;
     }
-    if (zlist_append (out->pending_commits, f) < 0)
-        log_msg ("zlist_append failed");
-    /* f memory responsibility of shell_output_commit_completion()
-     * callback */
-    f = NULL;
     rc = 0;
 error:
     saved_errno = errno;
@@ -264,7 +267,7 @@ static void shell_output_write_cb (flux_t *h,
     if (eof) {
         if (--out->eof_pending == 0) {
             flux_msg_handler_stop (mh);
-            if (flux_shell_remove_completion_ref (out->shell, "io-leader") < 0)
+            if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
                 log_err ("flux_shell_remove_completion_ref");
         }
     }
@@ -347,16 +350,6 @@ void shell_output_destroy (struct shell_output *out)
             }
         }
         json_decref (out->output);
-        if (out->pending_commits) { // leader only
-            flux_future_t *f;
-
-            while ((f = zlist_pop (out->pending_commits))) {
-                if (flux_future_get (f, NULL) < 0)
-                    log_err ("shell_output_commit");
-                flux_future_destroy (f);
-            }
-            zlist_destroy (&out->pending_commits);
-        }
         free (out);
         errno = saved_errno;
     }
@@ -422,14 +415,12 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                                          out) < 0)
             goto error;
         out->eof_pending = 2 * shell->info->jobspec->task_count;
-        if (flux_shell_add_completion_ref (shell, "io-leader") < 0)
+        if (flux_shell_add_completion_ref (shell, "output.write") < 0)
             goto error;
         if (!(out->output = json_array ())) {
             errno = ENOMEM;
             goto error;
         }
-        if (!(out->pending_commits = zlist_new ()))
-            goto error;
         if (shell_output_header (out) < 0)
             goto error;
     }
