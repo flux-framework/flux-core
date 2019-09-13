@@ -348,7 +348,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
         grep done wait_event_path4.out
 '
 
-test_expect_success 'flux job wait-event -p hangs on no event (live job)' '
+test_expect_success 'flux job wait-event -p times out on no event (live job)' '
         jobid=$(submit_job_live sleeplong.json) &&
         ! run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobid
@@ -379,7 +379,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
         grep done wait_event_path5.out
 '
 
-test_expect_success 'flux job wait-event -p hangs on no event (wait job)' '
+test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
         jobidall=$(submit_job_live sleeplong-all-rsrc.json) &&
         jobid=$(submit_job_wait) &&
         ! run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
