@@ -46,13 +46,18 @@
  *
  * 3) If the guest namespace is still active (event "start" in the
  *    main eventlog, but not "release"), we need to watch the eventlog
- *    directly from the guest namespce instead of the main KVS
- *    namespace (guest_namespace_watch()).
+ *    directly from the guest namespace instead of the primary KVS
+ *    namespace (guest_namespace_watch()).  After the guest namespace
+ *    is removed, we fallthrough to the primary KVS namespace.  This
+ *    fallthrough to the primary KVS namespace corrects two potential
+ *    races.
  *
- * 3A) There is a race where the guest namespace has been removed
- *     after part #1 above, but before we start reading it via a call
- *     in #3.  Detect this case and convert to watching the main
- *     namespace (#2).
+ *    - There is a very small racy scenario where data could be lost
+ *    during a kvs-watch and namespace removal.  See issue #2386 for
+ *    details.
+ *
+ *     - The guest namespace has been removed after part #1 above, but
+ *     before we start reading it via a call in #3.
  *
  * 4) If the namespace has not yet been created (event "start" has not
  *    ocurred), must wait for the guest namespace to be created
@@ -108,9 +113,8 @@ struct guest_watch_ctx {
     bool guest_started;
     bool guest_released;
 
-    /* indicates if events have been read from the guest namespace
-     * eventlog */
-    bool guest_namespace_events;
+    /* data from guest namespace */
+    int offset;
 };
 
 static int get_main_eventlog (struct guest_watch_ctx *gw);
@@ -607,29 +611,33 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
     struct info_ctx *ctx = gw->ctx;
-    const char *s;
+    const char *event;
 
-    if (flux_rpc_get (f, &s) < 0) {
+    if (flux_job_event_watch_get (f, &event) < 0) {
         if (errno == ENOTSUP) {
-            /* Guest namespace has been removed.  If we have read
-             * events in the guest eventlog, we can assume the guest
-             * eventlog is done, we'll return ENODATA to the caller.
+            /* Guest namespace has been removed and eventlog has been
+             * moved to primary KVS namespace.  Fallthrough to primary
+             * KVS namespace.
              *
-             * If we have read no events, assume the job was moved
-             * into the main namespace before we began watching the
-             * guest namespace.  We need to lookup the eventlog in the
-             * main namespace instead.
+             * The fallthrough to the primary KVS namespace fixes two
+             * racy scenarios:
+             *
+             * - the namespace has been removed prior to our original
+             *   request to read from it.
+             * - racy scenario where data from a kvs-watch is missed
+             *   b/c of the namespace removal (see issue #2386 for
+             *   details).  The tracking of data read/sent via the
+             *   offset variable will determine if we have more data
+             *   to send from the primary KVS namespace.
              */
-            /* check for racy cancel too - user canceled while this
+            /* check for racy cancel - user canceled while this
              * error was in transit */
-            if (gw->guest_namespace_events || gw->cancel) {
+            if (gw->cancel) {
                 errno = ENODATA;
                 goto error;
             }
-            else {
-                if (main_namespace_lookup (gw) < 0)
-                    goto error;
-            }
+            if (main_namespace_lookup (gw) < 0)
+                goto error;
             return;
         }
         else {
@@ -648,12 +656,13 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (flux_respond (ctx->h, gw->msg, s) < 0) {
-        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_pack (ctx->h, gw->msg, "{s:s}", "event", event) < 0) {
+        flux_log_error (ctx->h, "%s: flux_respond_pack",
+                        __FUNCTION__);
         goto error_cancel;
     }
 
-    gw->guest_namespace_events = true;
+    gw->offset += strlen (event);
     flux_future_reset (f);
     return;
 
@@ -777,7 +786,7 @@ static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
         goto cleanup;
     }
 
-    input = s;
+    input = s + gw->offset;
     while (eventlog_parse_next (&input, &tok, &toklen)) {
         if (flux_respond_pack (ctx->h, gw->msg,
                                "{s:s#}",
