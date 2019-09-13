@@ -85,19 +85,10 @@ error:
     return NULL;
 }
 
-static bool test_debug_flag (flux_t *h, int mask)
-{
-    int *debug_flags = flux_aux_get (h, "flux::debug_flags");
-
-    if (debug_flags && (*debug_flags & mask))
-        return true;
-    return false;
-}
-
 void try_alloc (struct sched_ctx *sc)
 {
     if (sc->job) {
-        if (test_debug_flag (sc->h, DEBUG_FAIL_ALLOC)) {
+        if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
             if (schedutil_alloc_respond_denied (sc->h, sc->job->msg,
                                                 "DEBUG_FAIL_ALLOC") < 0)
                 flux_log_error (sc->h, "schedutil_alloc_respond_denied");

@@ -180,17 +180,13 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
         flux_log_error (h, "%s: ucred is wrong size", __FUNCTION__);
         goto error;
     }
-    int *debug_flags = flux_aux_get (h, "flux::debug_flags");
-    if (debug_flags && (*debug_flags & DEBUG_AUTHFAIL_ONESHOT)) {
+    if (flux_module_debug_test (h, DEBUG_AUTHFAIL_ONESHOT, true)) {
         flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied by debug flag",
                   ucred.uid, (int)ucred.pid);
-        *debug_flags &= ~DEBUG_AUTHFAIL_ONESHOT;
         errno = EPERM;
         goto error;
     }
-    if (debug_flags && (*debug_flags & DEBUG_USERDB_ONESHOT)) {
-        *debug_flags &= ~DEBUG_USERDB_ONESHOT;
-    } else {
+    if (!flux_module_debug_test (h, DEBUG_USERDB_ONESHOT, true)) {
         if (ucred.uid == instance_owner) {
             lookup_rolemask = FLUX_ROLE_OWNER;
             goto success_nolog;
@@ -211,11 +207,10 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
     flux_log (h, LOG_INFO, "%s: uid=%d pid=%d allowed rolemask=0x%x",
               __FUNCTION__, ucred.uid, ucred.pid, lookup_rolemask);
 success_nolog:
-    if (debug_flags && (*debug_flags & DEBUG_OWNERDROP_ONESHOT)
+    if (flux_module_debug_test (h, DEBUG_OWNERDROP_ONESHOT, true)
                     && (lookup_rolemask & FLUX_ROLE_OWNER)) {
         *rolemask = FLUX_ROLE_USER;
         *userid = FLUX_USERID_UNKNOWN;
-        *debug_flags &= ~DEBUG_OWNERDROP_ONESHOT;
     } else {
         *userid = ucred.uid;
         *rolemask = lookup_rolemask;

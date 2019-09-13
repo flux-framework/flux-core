@@ -114,6 +114,17 @@ char *flux_modfind (const char *searchpath, const char *modname,
     return result;
 }
 
+bool flux_module_debug_test (flux_t *h, int flag, bool clear)
+{
+    int *flagsp = flux_aux_get (h, "flux::debug_flags");
+
+    if (!flagsp || !(*flagsp & flag))
+        return false;
+    if (clear)
+        *flagsp &= ~flag;
+    return true;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

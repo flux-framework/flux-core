@@ -16,6 +16,7 @@
  */
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "handle.h"
 
@@ -53,6 +54,13 @@ char *flux_modname (const char *filename, flux_moderr_f *cb, void *arg);
  */
 char *flux_modfind (const char *searchpath, const char *modname,
                     flux_moderr_f *cb, void *arg);
+
+/* Test and optionally clear module debug bit from within a module, as
+ * described in RFC 5.  Return true if 'flag' bit is set.  If clear=true,
+ * clear the bit after testing.  The flux-module(1) debug subcommand
+ * manipulates these bits externally to set up test conditions.
+ */
+bool flux_module_debug_test (flux_t *h, int flag, bool clear);
 
 #ifdef __cplusplus
 }
