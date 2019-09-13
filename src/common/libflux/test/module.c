@@ -8,13 +8,17 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <sys/param.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
-#include "src/common/libflux/module.h"
+#include <flux/core.h>
+
 #include "src/common/libtap/tap.h"
 
 /* N.B. FAKE1 and FAKE2 are defined with -D on the CC command line.
@@ -145,6 +149,39 @@ void test_modfind (void)
     test_modfind_fini ();
 }
 
+void test_debug (void)
+{
+    flux_t *h;
+    struct flux_handle_ops ops;
+    int flags;
+
+    /* Create dummy handle with no capability - only aux hash */
+    memset (&ops, 0, sizeof (ops));
+    if (!(h = flux_handle_create (NULL, &ops, 0)))
+        BAIL_OUT ("flux_handle_create failed");
+
+    ok (flux_module_debug_test (h, 1, false) == false,
+        "flux_module_debug_test returns false with unpopulated aux");
+
+    if (flux_aux_set (h, "flux::debug_flags", &flags, NULL) < 0)
+        BAIL_OUT ("flux_aux_set failed");
+
+    flags = 0x0f;
+    ok (flux_module_debug_test (h, 0x10, false) == false,
+        "flux_module_debug_test returns false on false flag (clear=false)");
+    ok (flux_module_debug_test (h, 0x01, false) == true,
+        "flux_module_debug_test returns true on true flag (clear=false)");
+    ok (flags == 0x0f,
+        "flags are unaltered after testing with clear=false");
+
+    ok (flux_module_debug_test (h, 0x01, true) == true,
+        "flux_module_debug_test returns true on true flag (clear=true)");
+    ok (flags == 0x0e,
+        "flag was cleared after testing with clear=true");
+
+    flux_handle_destroy (h);
+}
+
 int main (int argc, char *argv[])
 {
 
@@ -152,6 +189,7 @@ int main (int argc, char *argv[])
 
     test_modname ();
     test_modfind ();
+    test_debug ();
 
     done_testing();
     return (0);
