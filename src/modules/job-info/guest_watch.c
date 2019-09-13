@@ -258,10 +258,10 @@ static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
         matchtag = (int)flux_rpc_get_matchtag (f);
 
         if (!(f2 = flux_rpc_pack (gw->ctx->h,
-                                 "job-info.eventlog-watch-cancel",
-                                 FLUX_NODEID_ANY,
-                                 FLUX_RPC_NORESPONSE,
-                                 "{s:i}",
+                                  "job-info.eventlog-watch-cancel",
+                                  FLUX_NODEID_ANY,
+                                  FLUX_RPC_NORESPONSE,
+                                  "{s:i}",
                                   "matchtag", matchtag))) {
             flux_log_error (gw->ctx->h, "%s: flux_rpc_pack", __FUNCTION__);
             return -1;
