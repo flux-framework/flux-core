@@ -46,7 +46,7 @@ static void rexec_destroy (struct rexec *rex)
 {
     if (rex) {
         flux_msg_decref (rex->msg);
-        ERRNO_SAFE_FREE (rex);
+        ERRNO_SAFE_WRAP (free, rex);
     }
 }
 

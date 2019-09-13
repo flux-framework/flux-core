@@ -505,7 +505,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
         goto disconnect;
     if (!(revents & FLUX_POLLIN))
         return;
-    /* EPROTO, ECONNRESET are normal disconnect errors
+    /* ECONNRESET is a normal disconnect error
      * EWOULDBLOCK, EAGAIN stores state in c->inbuf for continuation
      */
     //flux_log (h, LOG_DEBUG, "recv: client ready");
@@ -514,7 +514,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
             //flux_log (h, LOG_DEBUG, "recv: client not ready");
             return;
         }
-        if (errno != ECONNRESET && errno != EPROTO)
+        if (errno != ECONNRESET)
             flux_log_error (h, "flux_msg_recvfd");
         goto disconnect;
     }

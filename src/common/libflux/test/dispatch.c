@@ -16,6 +16,12 @@
 #include "src/common/libtap/tap.h"
 #include "util.h"
 
+int cb2_called;
+void cb2 (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+{
+    cb2_called++;
+}
+
 int cb_called;
 flux_t *cb_h;
 flux_msg_handler_t *cb_mh;
@@ -124,6 +130,208 @@ void test_fastpath (flux_t *h)
     flux_msg_destroy (msg);
     flux_msg_handler_destroy (mh);
     diag ("freed matchtag, destroyed message and message handler");
+}
+
+/* Verify that a non-glob request handler overrides earlier-registered one.
+ * "Built-in" methods like "ping" should be overrideable in comms modules.
+ */
+void test_method_override (flux_t *h)
+{
+    flux_future_t *f;
+    struct flux_match match = FLUX_MATCH_REQUEST;
+    flux_msg_handler_t *mh, *mh2;
+    int rc;
+
+    /* early foo.bar request handler */
+    match.topic_glob = "foo.bar";
+    mh = flux_msg_handler_create (h, match, cb, NULL);
+    flux_msg_handler_start (mh);
+    ok (mh != NULL,
+        "foo.bar first request handler created and started");
+
+    /* override foo.bar request handler */
+    match.topic_glob = "foo.bar";
+    mh2 = flux_msg_handler_create (h, match, cb2, NULL);
+    flux_msg_handler_start (mh2);
+    ok (mh2 != NULL,
+        "foo.bar second request handler created and started");
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message - who got it?
+     * N.B. The test doesn't generate a response so just destroy f
+     * after message is sent.
+     */
+    f = flux_rpc (h, "foo.bar", NULL, FLUX_NODEID_ANY, 0);
+    ok (f != NULL,
+        "sent foo.bar RPC");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    diag ("%d %d", cb_called, cb2_called);
+    ok (cb_called == 0 && cb2_called == 1,
+        "first handler not called, second handler called");
+
+    flux_future_destroy (f);
+    flux_msg_handler_destroy (mh2);
+    flux_msg_handler_destroy (mh);
+}
+
+/* Verify that a request handler for a specific method is matched before
+ * one for a glob.  A "router" should be able to register a catch-all
+ * request handler that doesn't override its own service methods.
+ */
+void test_request_catchall (flux_t *h)
+{
+    flux_future_t *f;
+    struct flux_match match = FLUX_MATCH_REQUEST;
+    flux_msg_handler_t *mh, *mh2;
+    int rc;
+
+    /* register foo.bar request handler */
+    match.topic_glob = "foo.bar";
+    mh = flux_msg_handler_create (h, match, cb, NULL);
+    flux_msg_handler_start (mh);
+    ok (mh != NULL,
+        "foo.bar method handler created and started");
+
+    /* register catchall request handler */
+    match.topic_glob = NULL; // NULL is the same as "*"
+    mh2 = flux_msg_handler_create (h, match, cb2, NULL);
+    flux_msg_handler_start (mh2);
+    ok (mh2 != NULL,
+        "catchall request handler created and started");
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message to method - who got it?
+     */
+    f = flux_rpc (h, "foo.bar", NULL, FLUX_NODEID_ANY, 0);
+    ok (f != NULL,
+        "sent foo.bar RPC");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    ok (cb_called == 1 && cb2_called == 0,
+        "method handler called, catchall not called");
+
+    flux_future_destroy (f);
+    flux_msg_handler_destroy (mh2);
+    flux_msg_handler_destroy (mh);
+}
+
+/* Verify that an RPC response is matched before one for a glob.
+ * A "router" should be able to register a catch-all response handler
+ * that doesn't override its own service methods.
+ */
+void test_response_catchall (flux_t *h)
+{
+    flux_msg_t *msg;
+    struct flux_match match = FLUX_MATCH_RESPONSE;
+    uint32_t mtag;
+    flux_msg_handler_t *mh, *mh2;
+    int rc;
+
+    /* craft response message with valid matchtag */
+    if ((mtag = flux_matchtag_alloc (h, 0)) == FLUX_MATCHTAG_NONE)
+        BAIL_OUT ("flux_matchtag_alloc failed");
+    msg = flux_response_encode ("foo.bar", NULL);
+    ok (msg != NULL,
+        "foo.bar RPC response created");
+    if (flux_msg_set_matchtag (msg, mtag) < 0)
+        BAIL_OUT ("flux_msg_set_matchtag failed");
+
+    /* register RPC response handler */
+    match.matchtag = mtag;
+    if (!(mh = flux_msg_handler_create (h, match, cb, NULL)))
+        BAIL_OUT ("flux_msg_handler_create");
+    flux_msg_handler_start (mh);
+    ok (mh != NULL,
+        "foo.bar RPC response handler created and started");
+
+    /* register catchall response handler */
+    match.matchtag = FLUX_MATCHTAG_NONE;
+    mh2 = flux_msg_handler_create (h, match, cb2, NULL);
+    flux_msg_handler_start (mh2);
+    ok (mh2 != NULL,
+        "catchall response handler created and started");
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message to method - who got it?
+     */
+    ok (flux_send (h, msg, 0) == 0,
+        "sent foo.bar response message on loop connector");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    ok (cb_called == 1 && cb2_called == 0,
+        "RPC response handler called, catchall not called");
+
+    flux_matchtag_free (h, mtag);
+    flux_msg_destroy (msg);
+    flux_msg_handler_destroy (mh2);
+    flux_msg_handler_destroy (mh);
+}
+
+/* A response with a non-empty route stack should not match
+ * a RPC response handler, since its matchtag is likely from
+ * another handle's tagpool.
+ */
+void test_response_with_routes (flux_t *h)
+{
+    flux_msg_t *msg;
+    struct flux_match match = FLUX_MATCH_RESPONSE;
+    uint32_t mtag;
+    flux_msg_handler_t *mh, *mh2;
+    int rc;
+
+    /* craft response message with valid matchtag + routes*/
+    if ((mtag = flux_matchtag_alloc (h, 0)) == FLUX_MATCHTAG_NONE)
+        BAIL_OUT ("flux_matchtag_alloc failed");
+    msg = flux_response_encode ("foo.bar", NULL);
+    ok (msg != NULL,
+        "foo.bar RPC response created");
+    if (flux_msg_set_matchtag (msg, mtag) < 0)
+        BAIL_OUT ("flux_msg_set_matchtag failed");
+    if (flux_msg_enable_route (msg) < 0 || flux_msg_push_route (msg, "9") < 0)
+        BAIL_OUT ("flux_msg_enable/push_route failed");
+
+    /* register RPC response handler */
+    match.matchtag = mtag;
+    if (!(mh = flux_msg_handler_create (h, match, cb, NULL)))
+        BAIL_OUT ("flux_msg_handler_create");
+    flux_msg_handler_start (mh);
+    ok (mh != NULL,
+        "foo.bar RPC response handler created and started");
+
+    /* register catchall response handler */
+    match.matchtag = FLUX_MATCHTAG_NONE;
+    mh2 = flux_msg_handler_create (h, match, cb2, NULL);
+    flux_msg_handler_start (mh2);
+    ok (mh2 != NULL,
+        "catchall response handler created and started");
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message to method - who got it?
+     */
+    ok (flux_send (h, msg, 0) == 0,
+        "sent foo.bar response message on loop connector");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    ok (cb_called == 0 && cb2_called == 1,
+        "RPC response handler not called due to route stack; catchall called");
+
+    flux_matchtag_free (h, mtag);
+    flux_msg_destroy (msg);
+    flux_msg_handler_destroy (mh2);
+    flux_msg_handler_destroy (mh);
 }
 
 void test_cloned_dispatch (flux_t *orig)
@@ -269,6 +477,10 @@ int main (int argc, char *argv[])
     test_simple_msg_handler (h);
     test_fastpath (h);
     test_cloned_dispatch (h);
+    test_method_override (h);
+    test_request_catchall (h);
+    test_response_catchall (h);
+    test_response_with_routes (h);
 
     flux_close (h);
     done_testing();

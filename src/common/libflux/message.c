@@ -680,9 +680,18 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
     return true;
 }
 
+static bool isa_matchany (const char *s)
+{
+    if (!s || strlen(s) == 0)
+        return true;
+    if (!strcmp (s, "*"))
+        return true;
+    return false;
+}
+
 static bool isa_glob (const char *s)
 {
-    if (strchr (s, '*') || strchr (s, '?'))
+    if (strchr (s, '*') || strchr (s, '?') || strchr (s, '['))
         return true;
     return false;
 }
@@ -700,8 +709,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
         if (!flux_msg_cmp_matchtag (msg, match.matchtag))
             return false;
     }
-    if (match.topic_glob && strlen (match.topic_glob) > 0
-                         && strcmp (match.topic_glob, "*") != 0) {
+    if (!isa_matchany (match.topic_glob)) {
         const char *topic = NULL;
         if (flux_msg_get_topic (msg, &topic) < 0)
             return false;
@@ -1493,7 +1501,7 @@ flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf)
             if (rc < 0)
                 goto done;
             if (rc == 0) {
-                errno = EPROTO;
+                errno = ECONNRESET;
                 goto done;
             }
             io->done += rc;
@@ -1517,7 +1525,7 @@ flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf)
             if (rc < 0)
                 goto done;
             if (rc == 0) {
-                errno = EPROTO;
+                errno = ECONNRESET;
                 goto done;
             }
             io->done += rc;

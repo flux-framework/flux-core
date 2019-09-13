@@ -38,7 +38,7 @@ static void jobreq_destroy (struct jobreq *job)
 {
     if (job) {
         flux_msg_decref (job->msg);
-        ERRNO_SAFE_FREE (job);
+        ERRNO_SAFE_WRAP (free, job);
     }
 }
 
