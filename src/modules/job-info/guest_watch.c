@@ -467,6 +467,9 @@ static int check_guest_namespace_created (struct guest_watch_ctx *gw,
     if (!strcmp (name, "start"))
         gw->guest_started = true;
 
+    /* Do not need to check for "clean", if "start" never occurs, will
+     * eventually get ENODATA */
+
     rv = 0;
 error:
     save_errno = errno;
@@ -483,9 +486,12 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == ENODATA) {
-            /* guest_started indicates if user canceled this watch or
-             * we did.  If we did, its because the guest namespace is
-             * now created and now we're going to watch it */
+            /* guest_started indicates we canceled this watch,the
+             * guest namespace is now created, and we're now going to
+             * watch it.  If the guest namespace has not started,
+             * either the user canceled or the job never started and
+             * we got ENODATA from the eventlog watcher reaching the
+             * end of the eventlog. */
             if (gw->guest_started) {
                 /* check for racy cancel - user canceled while this
                  * error was in transit */
