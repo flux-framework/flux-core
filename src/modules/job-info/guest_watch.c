@@ -39,9 +39,10 @@
  *    job is along (get_main_eventlog()).
  *
  * 2) If the guest namespace is already copied into the main namespace
- *    (event "release" and "final=true"), we watch the main eventlog
- *    (main_namespace_watch()).  This is "easy" case and is not so
- *    different from a typical call to 'job-info.eventlog-watch'.
+ *    (event "release" and "final=true"), we watch the eventlog in the
+ *    main namespace (main_namespace_watch()).  This is "easy" case
+ *    and is not so different from a typical call to
+ *    'job-info.eventlog-watch'.
  *
  * 3) If the guest namespace is still active (event "start" in the
  *    main eventlog, but not "release"), we need to watch the eventlog
