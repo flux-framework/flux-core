@@ -387,6 +387,23 @@ test_expect_success 'flux job wait-event -p hangs on no event (wait job)' '
         flux job cancel $jobid
 '
 
+# In order to test watching a guest event log that will never exist,
+# we will start a job that will take up all resources.  Then start
+# another job, which we will watch and know it hasn't started running
+# yet. Then we cancel the second job before we know it has started.
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (never start job)' '
+        jobidall=$(submit_job_live sleeplong-all-rsrc.json)
+        jobid=$(submit_job_wait)
+        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path6.out &
+        waitpid=$! &&
+        wait_watchers_nonzero "watchers" &&
+        wait_watchers_nonzero "guest_watchers" &&
+        flux job cancel ${jobid} &&
+        ! wait $waitpid &&
+        flux job cancel ${jobidall}
+'
+
 #
 # job info tests
 #
