@@ -111,8 +111,6 @@ struct guest_watch_ctx {
     /* indicates if events have been read from the guest namespace
      * eventlog */
     bool guest_namespace_events;
-    /* indicates if the guest namespace has been removed */
-    bool guest_namespace_removed;
 };
 
 static int get_main_eventlog (struct guest_watch_ctx *gw);
@@ -232,21 +230,8 @@ static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
         if (!f) {
             if (gw->state == GUEST_WATCH_STATE_WAIT_GUEST_NAMESPACE)
                 f = gw->wait_guest_namespace_f;
-            else if (gw->state == GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH) {
-                /* if guest namespace removed, nothing to cancel.  So
-                 * send back ENODATA to caller. */
-                if (gw->guest_namespace_removed) {
-                    gw->cancel = true;
-                    if (flux_respond_error (gw->ctx->h,
-                                            gw->msg,
-                                            ENODATA,
-                                            NULL) < 0)
-                        flux_log_error (gw->ctx->h, "%s: flux_respond_error",
-                                        __FUNCTION__);
-                    return 0;
-                }
+            else if (gw->state == GUEST_WATCH_STATE_GUEST_NAMESPACE_WATCH)
                 f = gw->guest_namespace_watch_f;
-            }
             else if (gw->state == GUEST_WATCH_STATE_MAIN_NAMESPACE_LOOKUP) {
                 /* Since this is a lookup, we don't need to perform an actual
                  * cancel to "job-info.eventlog-watch-cancel".  Just return
@@ -626,24 +611,22 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get (f, &s) < 0) {
         if (errno == ENOTSUP) {
-            /* Guest namespace has been removed.  If we have read no
-             * events in the guest eventlog, assume job was moved into
-             * the main namespace before we began watching in the
-             * guest namespace.
+            /* Guest namespace has been removed.  If we have read
+             * events in the guest eventlog, we can assume the guest
+             * eventlog is done, we'll return ENODATA to the caller.
              *
-             * Note that it is possible the guest eventlog is simply
-             * empty / had no events in it.  There's no way to know
-             * for certain if it is this case or a race.  This is an
-             * unfortunate behavior difference.  Issue #2356.
+             * If we have read no events, assume the job was moved
+             * into the main namespace before we began watching the
+             * guest namespace.  We need to lookup the eventlog in the
+             * main namespace instead.
              */
-            gw->guest_namespace_removed = true;
-            /* check for racy cancel - user canceled while this
+            /* check for racy cancel too - user canceled while this
              * error was in transit */
-            if (gw->cancel) {
+            if (gw->guest_namespace_events || gw->cancel) {
                 errno = ENODATA;
                 goto error;
             }
-            if (!gw->guest_namespace_events) {
+            else {
                 if (main_namespace_lookup (gw) < 0)
                     goto error;
             }
