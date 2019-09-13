@@ -33,8 +33,8 @@ matchtag group is nonzero, match on the group bits only (as defined by
 FLUX_MATCHTAG_GROUP_MASK).  If the matchtag group is zero, match on
 non-group bits only.
 
-If _match.topic_glob_ is not NULL, then the message topic string must
-match _match.topic_glob_ according to the rules of shell wildcards.
+If _match.topic_glob_ is not NULL or an empty string, then the message topic
+string must match _match.topic_glob_ according to the rules of shell wildcards.
 
 
 RETURN VALUE
