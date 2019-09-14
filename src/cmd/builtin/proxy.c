@@ -33,6 +33,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/librouter/sendfd.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -63,8 +64,8 @@ typedef struct {
     int wfd;
     flux_watcher_t *inw;
     flux_watcher_t *outw;
-    struct flux_msg_iobuf inbuf;
-    struct flux_msg_iobuf outbuf;
+    struct iobuf inbuf;
+    struct iobuf outbuf;
     zlist_t *outqueue;  /* queue of outbound flux_msg_t */
     proxy_ctx_t *ctx;
     zhash_t *disconnect_notify;
@@ -137,8 +138,8 @@ static client_t * client_create (proxy_ctx_t *ctx, int rfd, int wfd)
         goto error;
     }
     flux_watcher_start (c->inw);
-    flux_msg_iobuf_init (&c->inbuf);
-    flux_msg_iobuf_init (&c->outbuf);
+    iobuf_init (&c->inbuf);
+    iobuf_init (&c->outbuf);
     if (fd_set_nonblocking (c->rfd) < 0) {
         flux_log_error (h, "fd_set_nonblocking");
         goto error;
@@ -159,7 +160,7 @@ static int client_send_try (client_t *c)
     flux_msg_t *msg = zlist_head (c->outqueue);
 
     if (msg) {
-        if (flux_msg_sendfd (c->wfd, msg, &c->outbuf) < 0) {
+        if (sendfd (c->wfd, msg, &c->outbuf) < 0) {
             if (errno != EWOULDBLOCK && errno != EAGAIN)
                 return -1;
             //flux_log (c->ctx->h, LOG_DEBUG, "send: client not ready");
@@ -424,11 +425,11 @@ static void client_destroy (client_t *c)
     }
     flux_watcher_stop (c->outw);
     flux_watcher_destroy (c->outw);
-    flux_msg_iobuf_clean (&c->outbuf);
+    iobuf_clean (&c->outbuf);
 
     flux_watcher_stop (c->inw);
     flux_watcher_destroy (c->inw);
-    flux_msg_iobuf_clean (&c->inbuf);
+    iobuf_clean (&c->inbuf);
 
     if (c->rfd != -1)
         close (c->rfd);
@@ -509,13 +510,13 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
      * EWOULDBLOCK, EAGAIN stores state in c->inbuf for continuation
      */
     //flux_log (h, LOG_DEBUG, "recv: client ready");
-    if (!(msg = flux_msg_recvfd (c->rfd, &c->inbuf))) {
+    if (!(msg = recvfd (c->rfd, &c->inbuf))) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
             //flux_log (h, LOG_DEBUG, "recv: client not ready");
             return;
         }
         if (errno != ECONNRESET)
-            flux_log_error (h, "flux_msg_recvfd");
+            flux_log_error (h, "recvfd");
         goto disconnect;
     }
     if (flux_msg_get_type (msg, &type) < 0) {
