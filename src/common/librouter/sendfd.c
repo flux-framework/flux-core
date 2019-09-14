@@ -83,10 +83,8 @@ int sendfd (int fd, const flux_msg_t *msg, struct iobuf *iobuf)
         io->size = flux_msg_encode_size (msg) + 8;
         if (io->size <= sizeof (io->buf_fixed))
             io->buf = io->buf_fixed;
-        else if (!(io->buf = malloc (io->size))) {
-            errno = ENOMEM;
+        else if (!(io->buf = malloc (io->size)))
             goto done;
-        }
         *(uint32_t *)&io->buf[0] = IOBUF_MAGIC;
         *(uint32_t *)&io->buf[4] = htonl (io->size - 8);
         if (flux_msg_encode (msg, &io->buf[8], io->size - 8) < 0)
@@ -146,10 +144,8 @@ flux_msg_t *recvfd (int fd, struct iobuf *iobuf)
                 }
                 io->size = ntohl (*(uint32_t *)&io->buf[4]) + 8;
                 if (io->size > sizeof (io->buf_fixed)) {
-                    if (!(io->buf = malloc (io->size))) {
-                        errno = EPROTO;
+                    if (!(io->buf = malloc (io->size)))
                         goto done;
-                    }
                     memcpy (io->buf, io->buf_fixed, 8);
                 }
             }
