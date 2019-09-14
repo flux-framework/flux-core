@@ -26,14 +26,15 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/macros.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/librouter/sendfd.h"
 
 #define CTX_MAGIC   0xf434aaab
 typedef struct {
     int magic;
     int fd;
     int fd_nonblock;
-    struct flux_msg_iobuf outbuf;
-    struct flux_msg_iobuf inbuf;
+    struct iobuf outbuf;
+    struct iobuf inbuf;
     uint32_t testing_userid;
     uint32_t testing_rolemask;
     flux_t *h;
@@ -88,7 +89,7 @@ static int send_normal (local_ctx_t *c, const flux_msg_t *msg, int flags)
 {
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return -1;
-    if (flux_msg_sendfd (c->fd, msg, &c->outbuf) < 0)
+    if (sendfd (c->fd, msg, &c->outbuf) < 0)
         return -1;
     return 0;
 }
@@ -129,7 +130,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return NULL;
-    return flux_msg_recvfd (c->fd, &c->inbuf);
+    return recvfd (c->fd, &c->inbuf);
 }
 
 static int op_event (void *impl, const char *topic, const char *msg_topic)
@@ -197,8 +198,8 @@ static void op_fini (void *impl)
     local_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    flux_msg_iobuf_clean (&c->outbuf);
-    flux_msg_iobuf_clean (&c->inbuf);
+    iobuf_clean (&c->outbuf);
+    iobuf_clean (&c->inbuf);
     if (c->fd >= 0)
         (void)close (c->fd);
     c->magic = ~CTX_MAGIC;
@@ -284,8 +285,8 @@ flux_t *connector_init (const char *path, int flags)
         errno = e;
         goto error;
     }
-    flux_msg_iobuf_init (&c->outbuf);
-    flux_msg_iobuf_init (&c->inbuf);
+    iobuf_init (&c->outbuf);
+    iobuf_init (&c->inbuf);
     if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
         goto error;
     return c->h;
