@@ -27,14 +27,15 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/popen2.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/librouter/sendfd.h"
 
 #define CTX_MAGIC   0xe534babb
 typedef struct {
     int magic;
     int fd;
     int fd_nonblock;
-    struct flux_msg_iobuf outbuf;
-    struct flux_msg_iobuf inbuf;
+    struct iobuf outbuf;
+    struct iobuf inbuf;
     const char *ssh_cmd;
     char *ssh_argz;
     size_t ssh_argz_len;
@@ -96,7 +97,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return -1;
-    if (flux_msg_sendfd (c->fd, msg, &c->outbuf) < 0)
+    if (sendfd (c->fd, msg, &c->outbuf) < 0)
         return -1;
     return 0;
 }
@@ -108,7 +109,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return NULL;
-    return flux_msg_recvfd (c->fd, &c->inbuf);
+    return recvfd (c->fd, &c->inbuf);
 }
 
 static int op_event_subscribe (void *impl, const char *topic)
@@ -152,8 +153,8 @@ static void op_fini (void *impl)
     ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    flux_msg_iobuf_clean (&c->outbuf);
-    flux_msg_iobuf_clean (&c->inbuf);
+    iobuf_clean (&c->outbuf);
+    iobuf_clean (&c->inbuf);
     if (c->fd >= 0)
         (void)close (c->fd);
     if (c->ssh_argz)
@@ -386,8 +387,8 @@ flux_t *connector_init (const char *path, int flags)
     }
     c->fd = popen2_get_fd (c->p);
     c->fd_nonblock = -1;
-    flux_msg_iobuf_init (&c->outbuf);
-    flux_msg_iobuf_init (&c->inbuf);
+    iobuf_init (&c->outbuf);
+    iobuf_init (&c->inbuf);
     if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
         goto error;
     if (test_broker_connection (c) < 0)
