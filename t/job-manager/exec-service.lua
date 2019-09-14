@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 -------------------------------------------------------------
 -- Copyright 2019 Lawrence Livermore National Security, LLC
 -- (c.f. AUTHORS, NOTICE.LLNS, COPYING)

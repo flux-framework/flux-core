@@ -13,6 +13,8 @@
 #endif
 #include <flux/core.h>
 
+#include "schedutil_private.h"
+#include "init.h"
 #include "free.h"
 
 
@@ -21,13 +23,13 @@ int schedutil_free_request_decode (const flux_msg_t *msg, flux_jobid_t *id)
     return flux_request_unpack (msg, NULL, "{s:I}", "id", id);
 }
 
-int schedutil_free_respond (flux_t *h, const flux_msg_t *msg)
+int schedutil_free_respond (schedutil_t *util, const flux_msg_t *msg)
 {
     flux_jobid_t id;
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         return -1;
-    return flux_respond_pack (h, msg, "{s:I}", "id", id);
+    return flux_respond_pack (util->h, msg, "{s:I}", "id", id);
 }
 
 /*

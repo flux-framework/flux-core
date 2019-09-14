@@ -31,7 +31,7 @@ struct simple_sched {
     char *mode;             /* allocation mode */
     struct rlist *rlist;    /* list of resources */
     struct jobreq *job;     /* currently processed job */
-    struct ops_context *ops;
+    schedutil_t *util_ctx;
 };
 
 static void jobreq_destroy (struct jobreq *job)
@@ -66,7 +66,7 @@ err:
 
 static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
 {
-    schedutil_ops_unregister (ss->ops);
+    schedutil_destroy (ss->util_ctx);
     if (ss->job) {
         flux_respond_error (h, ss->job->msg, ENOSYS, "simple sched exiting");
         jobreq_destroy (ss->job);
@@ -112,7 +112,9 @@ static void try_alloc (flux_t *h, struct simple_sched *ss)
             return;
         if (errno == EOVERFLOW)
             note = "unsatisfiable request";
-        if (schedutil_alloc_respond_denied (h, ss->job->msg, note) < 0)
+        if (schedutil_alloc_respond_denied (ss->util_ctx,
+                                            ss->job->msg,
+                                            note) < 0)
             flux_log_error (h, "schedutil_alloc_respond_denied");
         goto out;
     }
@@ -120,7 +122,7 @@ static void try_alloc (flux_t *h, struct simple_sched *ss)
     if (!(R = Rstring_create (alloc)))
         flux_log_error (h, "Rstring_create");
 
-    if (R && schedutil_alloc_respond_R (h, ss->job->msg, R, s) < 0)
+    if (R && schedutil_alloc_respond_R (ss->util_ctx, ss->job->msg, R, s) < 0)
         flux_log_error (h, "schedutil_alloc_respond_R");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) ss->job->id, s);
@@ -142,7 +144,7 @@ void exception_cb (flux_t *h, flux_jobid_t id,
         return;
     flux_log (h, LOG_DEBUG, "alloc aborted: id=%ju", (uintmax_t) id);
     snprintf (note, sizeof (note) - 1, "alloc aborted due to exception");
-    if (schedutil_alloc_respond_denied (h, ss->job->msg, note) < 0)
+    if (schedutil_alloc_respond_denied (ss->util_ctx, ss->job->msg, note) < 0)
         flux_log_error (h, "alloc_respond_denied");
     jobreq_destroy (ss->job);
     ss->job = NULL;
@@ -176,7 +178,7 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
             flux_log_error (h, "free_cb: flux_respond_error");
         return;
     }
-    if (schedutil_free_respond (h, msg) < 0)
+    if (schedutil_free_respond (ss->util_ctx, msg) < 0)
         flux_log_error (h, "free_cb: schedutil_free_respond");
 
     /* See if we can fulfill alloc for a pending job */
@@ -197,7 +199,9 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
         goto err;
     }
     if (ss->job->errnum != 0) {
-        if (schedutil_alloc_respond_denied (h, msg, ss->job->jj.error) < 0)
+        if (schedutil_alloc_respond_denied (ss->util_ctx,
+                                            msg,
+                                            ss->job->jj.error) < 0)
             flux_log_error (h, "alloc_respond_denied");
         jobreq_destroy (ss->job);
         ss->job = NULL;
@@ -286,11 +290,11 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     }
     /*  Complete synchronous hello protocol:
      */
-    if (schedutil_hello (h, hello_cb, ss) < 0) {
+    if (schedutil_hello (ss->util_ctx, hello_cb, ss) < 0) {
         flux_log_error (h, "schedutil_hello");
         goto out;
     }
-    if (schedutil_ready (h, "single", NULL) < 0) {
+    if (schedutil_ready (ss->util_ctx, "single", NULL) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto out;
     }
@@ -351,9 +355,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (h, ss, argc, argv) < 0)
         return -1;
 
-    ss->ops = schedutil_ops_register (h, alloc_cb, free_cb, exception_cb, ss);
-    if (!(ss->ops)) {
-        flux_log_error (h, "schedutil_ops_register");
+    ss->util_ctx = schedutil_create (h, alloc_cb, free_cb, exception_cb, ss);
+    if (ss->util_ctx == NULL) {
+        flux_log_error (h, "schedutil_create");
         goto done;
     }
     if (simple_sched_init (h, ss) < 0)

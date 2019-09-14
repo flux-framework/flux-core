@@ -14,18 +14,20 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "schedutil_private.h"
+#include "init.h"
 #include "ready.h"
 
-int schedutil_ready (flux_t *h, const char *mode, int *queue_depth)
+int schedutil_ready (schedutil_t *util, const char *mode, int *queue_depth)
 {
     flux_future_t *f;
     int count;
 
-    if (!h || !mode) {
+    if (!util || !mode) {
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.sched-ready",
+    if (!(f = flux_rpc_pack (util->h, "job-manager.sched-ready",
                              FLUX_NODEID_ANY, 0,
                              "{s:s}", "mode", mode)))
         return -1;
