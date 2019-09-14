@@ -75,7 +75,7 @@ int sendfd (int fd, const flux_msg_t *msg, struct iobuf *iobuf)
 
     if (fd < 0 || !msg) {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
     if (!iobuf)
         iobuf_init (&local);
@@ -121,7 +121,7 @@ flux_msg_t *recvfd (int fd, struct iobuf *iobuf)
 
     if (fd < 0) {
         errno = EINVAL;
-        goto done;
+        return NULL;
     }
     if (!iobuf)
         iobuf_init (&local);
