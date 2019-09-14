@@ -90,6 +90,22 @@ void test_large (void)
     close (pfd[0]);
 }
 
+/* Close the sending end of a blocking pipe and ensure the
+ * receiving end gets ECONNRESET.
+ */
+void test_eof (void)
+{
+    int pfd[2];
+
+    if (pipe2 (pfd, O_CLOEXEC) < 0)
+        BAIL_OUT ("pipe2 failed");
+    close (pfd[1]);
+    errno = 0;
+    ok (recvfd (pfd[0], NULL) == NULL && errno == ECONNRESET,
+        "recvfd fails with ECONNRESET when sender closes pipe");
+    close (pfd[0]);
+}
+
 struct io {
     zlist_t *queue;
     struct iobuf iobuf;
@@ -303,6 +319,7 @@ int main (int argc, char *argv[])
 
     test_basic ();
     test_large ();
+    test_eof ();
     test_nonblock (1024, 1024);
     test_nonblock (4096, 256);
     test_nonblock (16384, 64);
