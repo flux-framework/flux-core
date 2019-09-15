@@ -32,6 +32,7 @@
 #include "info.h"
 #include "svc.h"
 #include "task.h"
+#include "rc.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -47,6 +48,8 @@ static struct optparse_option shell_opts[] =  {
       .usage = "Log actions to stderr", },
     { .name = "standalone", .key = 's', .has_arg = 0,
       .usage = "Run local program without Flux instance", },
+    { .name = "initrc", .has_arg = 1, .arginfo = "FILE",
+      .usage = "Load shell initrc from FILE instead of the system default" },
     OPTPARSE_TABLE_END
 };
 
@@ -435,10 +438,14 @@ static int conf_flags_get (void)
         return 0;
 }
 
+static const char *shell_conf_get (const char *name)
+{
+    return flux_conf_get (name, conf_flags_get ());
+}
+
 static void shell_initialize (flux_shell_t *shell)
 {
-    int flags = conf_flags_get ();
-    const char *pluginpath = flux_conf_get ("shell_pluginpath", flags);
+    const char *pluginpath = shell_conf_get ("shell_pluginpath");
 
     memset (shell, 0, sizeof (struct flux_shell));
     if (!(shell->completion_refs = zhashx_new ()))
@@ -562,6 +569,31 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
 static int shell_init (flux_shell_t *shell)
 {
+    bool required = false;
+    const char *rcfile = shell_conf_get ("shell_initrc");
+
+    /*  If initrc was passed on command line, it is an error if
+     *   the file is not found. O/w treat missing initrc as empty file
+     */
+    if (optparse_getopt (shell->p, "initrc", &rcfile) > 0)
+        required = true;
+    else
+        rcfile = shell_conf_get ("shell_initrc");
+
+    /*  Only try loading initrc if the file is readable or required:
+     */
+    if (access (rcfile, R_OK) == 0 || required) {
+        if (shell->verbose)
+            log_msg ("Loading %s", rcfile);
+
+        if (shell_rc (shell, rcfile) < 0) {
+            if (errno)
+                log_err_exit ("loading rc file %s", rcfile);
+            else
+                log_msg_exit ("failed to load rc file %s", rcfile);
+        }
+    }
+
     return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 
@@ -680,6 +712,9 @@ int main (int argc, char *argv[])
         log_err ("shell_exit callback(s) failed");
 
     shell_finalize (&shell);
+
+    if (shell_rc_close ())
+        log_err ("shell_rc_close");
 
     if (shell.verbose)
         log_msg ("exit %d", shell.rc);
