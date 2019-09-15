@@ -12,7 +12,6 @@ MAN3_FILES_PRIMARY = \
 	flux_event_publish.3 \
 	flux_pollevents.3 \
 	flux_msg_encode.3 \
-	flux_msg_sendfd.3 \
 	flux_rpc.3 \
 	flux_mrpc.3 \
 	flux_get_rank.3 \
@@ -70,7 +69,6 @@ MAN3_FILES_SECONDARY = \
 	flux_event_publish_get_seq.3 \
 	flux_pollfd.3 \
 	flux_msg_decode.3 \
-	flux_msg_recvfd.3 \
 	flux_get_size.3 \
 	flux_attr_set.3 \
 	flux_set_reactor.3 \
@@ -213,7 +211,6 @@ flux_event_publish_raw.3: flux_event_publish.3
 flux_event_publish_get_seq.3: flux_event_publish.3
 flux_pollfd.3: flux_pollevents.3
 flux_msg_decode.3: flux_msg_encode.3
-flux_msg_recvfd.3: flux_msg_sendfd.3
 flux_get_size.3: flux_get_rank.3
 flux_attr_set.3: flux_attr_get.3
 flux_set_reactor.3: flux_get_reactor.3

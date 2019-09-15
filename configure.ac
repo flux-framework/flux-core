@@ -421,6 +421,7 @@ AC_CONFIG_FILES( \
   src/common/libschedutil/Makefile \
   src/common/libeventlog/Makefile \
   src/common/libioencode/Makefile \
+  src/common/librouter/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
