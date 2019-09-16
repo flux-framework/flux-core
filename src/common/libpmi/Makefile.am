@@ -27,6 +27,7 @@ libpmi_client_la_SOURCES = \
 	simple_client.c \
 	simple_client.h \
 	pmi.c \
+	pmi2.c \
 	dgetline.c \
 	dgetline.h \
 	$(libpmi_common_sources)
@@ -37,7 +38,8 @@ libpmi_server_la_SOURCES = \
 	$(libpmi_common_sources)
 
 fluxinclude_HEADERS = \
-	pmi.h
+	pmi.h \
+	pmi2.h
 
 TESTS = test_keyval.t \
 	test_simple.t \
