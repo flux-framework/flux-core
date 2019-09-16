@@ -19,10 +19,10 @@
  * You should either respond to the request immediately (see alloc.h),
  * or cache this information for later response.
  */
-typedef void (op_alloc_f)(flux_t *h,
-                          const flux_msg_t *msg,
-                          const char *jobspec,
-                          void *arg);
+typedef void (schedutil_alloc_cb_f)(flux_t *h,
+                                    const flux_msg_t *msg,
+                                    const char *jobspec,
+                                    void *arg);
 
 /* Callback for a free request.  R is looked up as a convenience.
  * Decode msg with schedutil_free_request_decode().
@@ -30,10 +30,10 @@ typedef void (op_alloc_f)(flux_t *h,
  * You should either respond to the request immediately (see free.h),
  * or cache this information for later response.
  */
-typedef void (op_free_f)(flux_t *h,
-                         const flux_msg_t *msg,
-                         const char *R,
-                         void *arg);
+typedef void (schedutil_free_cb_f)(flux_t *h,
+                                   const flux_msg_t *msg,
+                                   const char *R,
+                                   void *arg);
 
 /* An exception occurred for job 'id'.
  * If the severity is zero, and there is an allocation pending for 'id',
@@ -41,11 +41,11 @@ typedef void (op_free_f)(flux_t *h,
  * setting the note field to something like "alloc aborted due to
  * exception type=%s"
  */
-typedef void (op_exception_f)(flux_t *h,
-                              flux_jobid_t id,
-                              const char *type,
-                              int severity,
-                              void *arg);
+typedef void (schedutil_exception_cb_f)(flux_t *h,
+                                        flux_jobid_t id,
+                                        const char *type,
+                                        int severity,
+                                        void *arg);
 
 #endif /* !_FLUX_SCHEDUTIL_OPS_H */
 

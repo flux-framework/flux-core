@@ -23,7 +23,8 @@ static int schedutil_hello_job (flux_t *h,
                                 int priority,
                                 uint32_t userid,
                                 double t_submit,
-                                hello_f *cb, void *arg)
+                                schedutil_hello_cb_f *cb,
+                                void *arg)
 {
     char key[64];
     flux_future_t *f;
@@ -53,7 +54,7 @@ error:
     return -1;
 }
 
-int schedutil_hello (schedutil_t *util, hello_f *cb, void *arg)
+int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg)
 {
     flux_future_t *f;
     json_t *jobs;
