@@ -13,12 +13,12 @@
  * Intercept task stdout, stderr and dispose of it according to
  * selected I/O mode.
  *
- * The leader shell implements an "shell-<id>.output" service that all
+ * If output goes to terminal or stdout/stderr is written to the KVS,
+ * the leader shell implements an "shell-<id>.output" service that all
  * ranks send task output to.  Output objects accumulate in a json
- * array on the leader.  If standalone is set, output is written
- * directly to stdout/stderr.  If not standalone, output objects are
- * written to the "output" key in the job's guest KVS namespace per
- * RFC24.
+ * array on the leader.  Depending on settings, output is written
+ * directly to stdout/stderr or output objects are written to the
+ * "output" key in the job's guest KVS namespace per RFC24.
  *
  * Notes:
  * - leader takes a completion reference which it gives up once each
@@ -53,6 +53,11 @@
 #include "internal.h"
 #include "builtins.h"
 
+enum {
+    FLUX_OUTPUT_TYPE_TERM = 1,
+    FLUX_OUTPUT_TYPE_KVS = 2,
+};
+
 struct shell_output {
     flux_shell_t *shell;
     int refcount;
@@ -60,6 +65,8 @@ struct shell_output {
     zlist_t *pending_writes;
     json_t *output;
     bool stopped;
+    int stdout_type;
+    int stderr_type;
 };
 
 static const int shell_output_lwm = 100;
@@ -108,7 +115,6 @@ static int shell_output_term (struct shell_output *out)
 {
     json_t *entry;
     size_t index;
-    FILE *f;
 
     json_array_foreach (out->output, index, entry) {
         json_t *context;
@@ -118,6 +124,8 @@ static int shell_output_term (struct shell_output *out)
             return -1;
         }
         if (!strcmp (name, "data")) {
+            int output_type;
+            FILE *f;
             const char *stream = NULL;
             int rank;
             char *data = NULL;
@@ -126,16 +134,21 @@ static int shell_output_term (struct shell_output *out)
                 log_err ("iodecode");
                 return -1;
             }
-            f = !strcmp (stream, "stdout") ? stdout : stderr;
-            if (len > 0) {
+            if (!strcmp (stream, "stdout")) {
+                output_type = out->stdout_type;
+                f = stdout;
+            }
+            else {
+                output_type = out->stderr_type;
+                f = stderr;
+            }
+            if ((output_type == FLUX_OUTPUT_TYPE_TERM) && len > 0) {
                 fprintf (f, "%d: ", rank);
                 fwrite (data, len, 1, f);
             }
             free (data);
         }
     }
-    if (json_array_clear (out->output) < 0)
-        log_msg ("json_array_clear failed");
     return 0;
 }
 
@@ -236,18 +249,50 @@ static void shell_output_kvs_completion (flux_future_t *f, void *arg)
 
 static int shell_output_kvs (struct shell_output *out)
 {
+    json_t *entry;
+    size_t index;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
-    char *chunk = NULL;
     int saved_errno;
     int rc = -1;
 
-    if (!(chunk = eventlog_encode (out->output)))
-        goto error;
     if (!(txn = flux_kvs_txn_create ()))
         goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", chunk) < 0)
-        goto error;
+    json_array_foreach (out->output, index, entry) {
+        json_t *context;
+        const char *name;
+        const char *stream = NULL;
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
+            log_err ("eventlog_entry_parse");
+            return -1;
+        }
+        if (!strcmp (name, "data")) {
+            int output_type;
+            if (iodecode (context, &stream, NULL, NULL, NULL, NULL) < 0) {
+                log_err ("iodecode");
+                return -1;
+            }
+            if (!strcmp (stream, "stdout"))
+                output_type = out->stdout_type;
+            else
+                output_type = out->stderr_type;
+            if (output_type == FLUX_OUTPUT_TYPE_KVS) {
+                char *entrystr = eventlog_entry_encode (entry);
+                if (!entrystr) {
+                    log_err ("eventlog_entry_encode");
+                    goto error;
+                }
+                if (flux_kvs_txn_put (txn,
+                                      FLUX_KVS_APPEND,
+                                      "output",
+                                      entrystr) < 0) {
+                    free (entrystr);
+                    goto error;
+                }
+                free (entrystr);
+            }
+        }
+    }
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
     if (flux_future_then (f, -1, shell_output_kvs_completion, out) < 0)
@@ -259,15 +304,10 @@ static int shell_output_kvs (struct shell_output *out)
     /* f memory responsibility of shell_output_kvs_completion()
      * callback */
     f = NULL;
-    if (json_array_clear (out->output) < 0) {
-        log_msg ("json_array_clear failed");
-        goto error;
-    }
     rc = 0;
 error:
     saved_errno = errno;
     flux_kvs_txn_destroy (txn);
-    free (chunk);
     flux_future_destroy (f);
     errno = saved_errno;
     return rc;
@@ -301,13 +341,19 @@ static void shell_output_write_cb (flux_t *h,
     }
     /* Error failing to commit is a fatal error.  Should be cleaner in
      * future. Issue #2378 */
-    if (out->shell->standalone) {
+    if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM
+         || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM))) {
         if (shell_output_term (out) < 0)
             log_err_exit ("shell_output_term");
     }
-    else {
+    if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
+         || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
         if (shell_output_kvs (out) < 0)
             log_err_exit ("shell_output_kvs");
+    }
+    if (json_array_clear (out->output) < 0) {
+        log_msg ("json_array_clear failed");
+        goto error;
     }
     if (eof) {
         if (--out->eof_pending == 0) {
@@ -385,11 +431,13 @@ void shell_output_destroy (struct shell_output *out)
             zlist_destroy (&out->pending_writes);
         }
         if (out->output && json_array_size (out->output) > 0) { // leader only
-            if (out->shell->standalone) {
+            if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM)
+                || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM)) {
                 if (shell_output_term (out) < 0)
                     log_err ("shell_output_term");
             }
-            else {
+            if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS)
+                || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS)) {
                 if (shell_output_kvs (out) < 0)
                     log_err ("shell_output_kvs");
             }
@@ -398,6 +446,15 @@ void shell_output_destroy (struct shell_output *out)
         free (out);
         errno = saved_errno;
     }
+}
+
+/* check if this output type requires the service to be started */
+static bool output_type_requires_service (int type)
+{
+    if ((type == FLUX_OUTPUT_TYPE_TERM)
+        || (type == FLUX_OUTPUT_TYPE_KVS))
+        return true;
+    return false;
 }
 
 /* Write RFC 24 header event to KVS.  Assume:
@@ -424,12 +481,15 @@ static int shell_output_header (struct shell_output *out)
         errno = ENOMEM;
         goto error;
     }
-    if (out->shell->standalone) {
+    if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM)
+        || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM)) {
         if (shell_output_term_init (out, o) < 0)
             log_err ("shell_output_term_init");
     }
-    else {
-        /* will also emit output-ready event */
+    /* will also emit output-ready event.  Call this as long as we're
+     * not standalone.
+     */
+    if (!out->shell->standalone) {
         if (shell_output_kvs_init (out, o) < 0)
             log_err ("shell_output_kvs_init");
     }
@@ -446,20 +506,34 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (!(out = calloc (1, sizeof (*out))))
         return NULL;
     out->shell = shell;
+    if (out->shell->standalone) {
+        out->stdout_type = FLUX_OUTPUT_TYPE_TERM;
+        out->stderr_type = FLUX_OUTPUT_TYPE_TERM;
+    }
+    else {
+        out->stdout_type = FLUX_OUTPUT_TYPE_KVS;
+        out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
+    }
     if (!(out->pending_writes = zlist_new ()))
         goto error;
     if (shell->info->shell_rank == 0) {
-        if (flux_shell_service_register (shell,
-                                         "write",
-                                         shell_output_write_cb,
-                                         out) < 0)
-            goto error;
-        out->eof_pending = 2 * shell->info->jobspec->task_count;
-        if (flux_shell_add_completion_ref (shell, "output.write") < 0)
-            goto error;
-        if (!(out->output = json_array ())) {
-            errno = ENOMEM;
-            goto error;
+        if (output_type_requires_service (out->stdout_type)
+            || output_type_requires_service (out->stderr_type)) {
+            if (flux_shell_service_register (shell,
+                                             "write",
+                                             shell_output_write_cb,
+                                             out) < 0)
+                goto error;
+            if (output_type_requires_service (out->stdout_type))
+                out->eof_pending += shell->info->jobspec->task_count;
+            if (output_type_requires_service (out->stderr_type))
+                out->eof_pending += shell->info->jobspec->task_count;
+            if (flux_shell_add_completion_ref (shell, "output.write") < 0)
+                goto error;
+            if (!(out->output = json_array ())) {
+                errno = ENOMEM;
+                goto error;
+            }
         }
         if (shell_output_header (out) < 0)
             goto error;
@@ -504,11 +578,17 @@ static int shell_output_task_init (flux_plugin_t *p,
     if (!shell || !out || !(task = flux_shell_current_task (shell)))
         return -1;
 
-    if (flux_shell_task_channel_subscribe (task, "stderr",
-                                           task_output_cb, out) < 0
-        || flux_shell_task_channel_subscribe (task, "stdout",
-                                              task_output_cb, out) < 0)
-        return -1;
+    if (output_type_requires_service (out->stdout_type)) {
+        if (flux_shell_task_channel_subscribe (task, "stdout",
+                                               task_output_cb, out) < 0)
+            return -1;
+    }
+    if (output_type_requires_service (out->stderr_type)) {
+        if (flux_shell_task_channel_subscribe (task, "stderr",
+                                               task_output_cb, out) < 0)
+            return -1;
+    }
+
     return 0;
 }
 
