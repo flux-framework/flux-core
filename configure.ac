@@ -79,6 +79,12 @@ LIBFLUX_OPTPARSE_AGE=0
 LIBFLUX_OPTPARSE_VERSION_INFO=$LIBFLUX_OPTPARSE_CURRENT:$LIBFLUX_OPTPARSE_REVISION:$LIBFLUX_OPTPARSE_AGE
 AC_SUBST([LIBFLUX_OPTPARSE_VERSION_INFO])
 
+LIBFLUX_SCHEDUTIL_CURRENT=1
+LIBFLUX_SCHEDUTIL_REVISION=0
+LIBFLUX_SCHEDUTIL_AGE=0
+LIBFLUX_SCHEDUTIL_VERSION_INFO=$LIBFLUX_SCHEDUTIL_CURRENT:$LIBFLUX_SCHEDUTIL_REVISION:$LIBFLUX_SCHEDUTIL_AGE
+AC_SUBST([LIBFLUX_SCHEDUTIL_VERSION_INFO])
+
 ##
 # Checks for programs
 ##
@@ -380,6 +386,9 @@ AC_SUBST(fluxincludedir)
 AS_VAR_SET(fluxcoreincludedir, $includedir/flux/core)
 AC_SUBST(fluxcoreincludedir)
 
+AS_VAR_SET(fluxschedutilincludedir, $includedir/flux/schedutil)
+AC_SUBST(fluxschedutilincludedir)
+
 adl_RECURSIVE_EVAL([$bindir], fluxbindir)
 AS_VAR_SET(fluxbindir, $fluxbindir)
 AC_SUBST(fluxbindir)
@@ -457,6 +466,7 @@ AC_CONFIG_FILES( \
   etc/flux-pmi.pc \
   etc/flux-optparse.pc \
   etc/flux-idset.pc \
+  etc/flux-schedutil.pc \
   etc/flux.service \
   doc/Makefile \
   doc/man1/Makefile \
