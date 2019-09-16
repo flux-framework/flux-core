@@ -32,8 +32,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <dlfcn.h>
-#include <stdarg.h>
 
 #include "pmi.h"
 #include "pmi_strerror.h"
