@@ -768,7 +768,7 @@ int main (int argc, char *argv[])
     for (i = 0; i < shell.info->rankinfo.ntasks; i++) {
         struct shell_task *task;
 
-        if (!(task = shell_task_create (shell.info, i)))
+        if (!(task = shell_task_create (&shell, i)))
             log_err_exit ("shell_task_create index=%d", i);
 
         task->pre_exec_cb = shell_task_exec;

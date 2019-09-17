@@ -42,6 +42,7 @@
 #include <flux/shell.h>
 
 #include "task.h"
+#include "internal.h"
 #include "info.h"
 
 struct channel_watcher {
@@ -85,9 +86,9 @@ error:
     return NULL;
 }
 
-struct shell_task *shell_task_create (struct shell_info *info,
-                                      int index)
+struct shell_task *shell_task_create (flux_shell_t *shell, int index)
 {
+    struct shell_info *info = shell->info;
     struct shell_task *task;
     const char *key;
     json_t *entry;
