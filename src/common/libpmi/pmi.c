@@ -285,7 +285,7 @@ int PMI_KVS_Commit (const char kvsname[])
 
 int PMI_Barrier (void)
 {
-    int result = PMI_ERR_INIT;
+    int result;
 
     result = pmi_simple_client_barrier (pmi_global_ctx);
     DRETURN (result);
