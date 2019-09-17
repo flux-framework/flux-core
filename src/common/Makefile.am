@@ -42,7 +42,7 @@ lib_LTLIBRARIES = libflux-core.la \
 	libflux-idset.la \
 	libflux-schedutil.la
 
-fluxlib_LTLIBRARIES = libpmi.la
+fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
@@ -101,9 +101,21 @@ libpmi_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
+libpmi2_la_SOURCES =
+libpmi2_la_LIBADD = \
+	$(builddir)/libpmi/libpmi_client.la \
+	$(builddir)/libutil/aux.lo
+libpmi2_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libpmi2.map \
+	-version-info 0:0:0 \
+	-Wl,--defsym=flux_pmi_library=1 \
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
+
 EXTRA_DIST = \
 	libflux-core.map \
 	libflux-optparse.map \
 	libflux-idset.map \
 	libflux-schedutil.map \
-	libpmi.map
+	libpmi.map \
+	libpmi2.map

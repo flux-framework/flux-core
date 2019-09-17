@@ -1,0 +1,6 @@
+{ global:
+    PMI2_*;
+    flux_pmi_library;
+    local: *;
+};
+
