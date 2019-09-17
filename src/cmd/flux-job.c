@@ -751,6 +751,12 @@ struct attach_ctx {
     optparse_t *p;
     bool output_header_parsed;
     double timestamp_zero;
+    bool output_stdout_parsed;
+    bool output_stderr_parsed;
+    bool output_stdout_kvs;
+    bool output_stderr_kvs;
+    int eventlog_watch_count;
+    int eventlog_watch_completed;
 };
 
 /* Print eventlog entry to 'fp'.
@@ -895,6 +901,30 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+/* see what type of output this is
+ */
+bool attach_check_output_context (struct attach_ctx *ctx, json_t *context)
+{
+    void *iter;
+    bool type_kvs = false;
+
+    iter = json_object_iter (context);
+    while (iter && !type_kvs) {
+        const char *key = json_object_iter_key (iter);
+        json_t *value = json_object_iter_value (iter);
+        if (!strcmp (key, "type")) {
+            if (json_is_string (value)) {
+                const char *str = json_string_value (value);
+                if (!strcmp (str, "kvs"))
+                    type_kvs = true;
+                break;
+            }
+        }
+        iter = json_object_iter_next (context, iter);
+    }
+    return type_kvs;
+}
+
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -922,7 +952,17 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "output-kvs-ready")) {
+    if (!strcmp (name, "output-stdout")) {
+        ctx->output_stdout_parsed = true;
+        ctx->output_stdout_kvs = attach_check_output_context (ctx, context);
+    }
+    else if (!strcmp (name, "output-stderr")) {
+        ctx->output_stderr_parsed = true;
+        ctx->output_stderr_kvs = attach_check_output_context (ctx, context);
+    }
+    else if (!strcmp (name, "output-kvs-ready")) {
+        /* Note that this event will only be output if atleast one of
+         * stdout/stderr will output to the kvs */
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
                                                     "guest.output",
@@ -942,6 +982,15 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
                               timestamp - ctx->timestamp_zero,
                               name,
                               context);
+    }
+
+    if (ctx->output_stdout_parsed && ctx->output_stderr_parsed) {
+        /* If either stdout or stderr aren't logged to KVS, nothing to
+         * attach to for printing */
+        if (!ctx->output_stdout_kvs && !ctx->output_stderr_kvs) {
+            if (flux_job_event_watch_cancel (f) < 0)
+                log_err_exit ("flux_job_event_watch_cancel");
+        }
     }
 
     json_decref (o);
