@@ -56,6 +56,12 @@
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
     FLUX_OUTPUT_TYPE_KVS = 2,
+    FLUX_OUTPUT_TYPE_FILE = 3,
+};
+
+struct shell_output_file {
+    const char *path;
+    int fd;
 };
 
 struct shell_output {
@@ -67,6 +73,8 @@ struct shell_output {
     bool stopped;
     int stdout_type;
     int stderr_type;
+    struct shell_output_file stdout_file;
+    struct shell_output_file stderr_file;
 };
 
 static const int shell_output_lwm = 100;
@@ -196,7 +204,8 @@ error:
 static bool output_type_requires_service (int type)
 {
     if ((type == FLUX_OUTPUT_TYPE_TERM)
-        || (type == FLUX_OUTPUT_TYPE_KVS))
+        || (type == FLUX_OUTPUT_TYPE_KVS)
+        || (type == FLUX_OUTPUT_TYPE_FILE))
         return true;
     return false;
 }
@@ -208,6 +217,8 @@ static const char *output_type_str (int type)
         return "term";
     case FLUX_OUTPUT_TYPE_KVS:
         return "kvs";
+    case FLUX_OUTPUT_TYPE_FILE:
+        return "file";
     }
     log_err_exit ("output type invalid: %d", type);
 }
@@ -360,6 +371,62 @@ error:
     return rc;
 }
 
+static int shell_output_fd (int fd, void *buf, size_t len)
+{
+    size_t count = 0;
+    int n = 0;
+    while (count < len) {
+        if ((n = write (fd, buf + count, len - count)) < 0) {
+            if (errno != EINTR)
+                return -1;
+            continue;
+        }
+        count += n;
+    }
+    return n;
+}
+
+static int shell_output_file (struct shell_output *out)
+{
+    json_t *entry;
+    size_t index;
+
+    json_array_foreach (out->output, index, entry) {
+        json_t *context;
+        const char *name;
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
+            log_err ("eventlog_entry_parse");
+            return -1;
+        }
+        if (!strcmp (name, "data")) {
+            struct shell_output_file *sof;
+            int output_type;
+            const char *stream = NULL;
+            int rank;
+            char *data = NULL;
+            int len = 0;
+            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
+                log_err ("iodecode");
+                return -1;
+            }
+            if (!strcmp (stream, "stdout")) {
+                output_type = out->stdout_type;
+                sof = &out->stdout_file;
+            }
+            else {
+                output_type = out->stderr_type;
+                sof = &out->stderr_file;
+            }
+            if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
+                if (shell_output_fd (sof->fd, data, len) < 0)
+                    return -1;
+            }
+            free (data);
+        }
+    }
+    return 0;
+}
+
 /* Convert 'iodecode' object to an valid RFC 24 data event.
  * N.B. the iodecode object is a valid "context" for the event.
  */
@@ -397,6 +464,11 @@ static void shell_output_write_cb (flux_t *h,
          || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
         if (shell_output_kvs (out) < 0)
             log_err_exit ("shell_output_kvs");
+    }
+    if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
+         || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {
+        if (shell_output_file (out) < 0)
+            log_err ("shell_output_file");
     }
     if (json_array_clear (out->output) < 0) {
         log_msg ("json_array_clear failed");
@@ -463,6 +535,12 @@ error:
     return -1;
 }
 
+static void shell_output_file_cleanup (struct shell_output_file *sof)
+{
+    if (sof->fd != -1)
+        close (sof->fd);
+}
+
 void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
@@ -488,11 +566,78 @@ void shell_output_destroy (struct shell_output *out)
                 if (shell_output_kvs (out) < 0)
                     log_err ("shell_output_kvs");
             }
+            if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
+                 || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {
+                if (shell_output_file (out) < 0)
+                    log_err ("shell_output_file");
+            }
         }
         json_decref (out->output);
+        shell_output_file_cleanup (&out->stdout_file);
+        shell_output_file_cleanup (&out->stderr_file);
         free (out);
         errno = saved_errno;
     }
+}
+
+static void shell_output_file_init (struct shell_output_file *sof)
+{
+    sof->path = NULL;
+    sof->fd = -1;
+}
+
+static int shell_output_parse_type (struct shell_output *out,
+                                    const char *stream,
+                                    int *typep,
+                                    struct shell_output_file *sof)
+{
+    const char *typestr = NULL;
+    int ret;
+
+    if ((ret = flux_shell_getopt_unpack (out->shell, "output",
+                                         "{s?:{s?:s}}",
+                                         stream, "type", &typestr)) < 0)
+        return -1;
+
+    if (!ret || !typestr)
+        return 0;
+
+    if (!strcmp (typestr, "kvs"))
+        (*typep) = FLUX_OUTPUT_TYPE_KVS;
+    else if (!strcmp (typestr, "file")) {
+        (*typep) = FLUX_OUTPUT_TYPE_FILE;
+
+        if (flux_shell_getopt_unpack (out->shell, "output",
+                                      "{s:{s?:s}}",
+                                      stream, "path", &(sof->path)) < 0)
+            return -1;
+
+        if (sof->path == NULL) {
+            log_msg ("path for %s file output not specified", stream);
+            return -1;
+        }
+    }
+    else {
+        log_msg ("invalid output type specified '%s'", typestr);
+        return -1;
+    }
+    return 0;
+}
+
+static int shell_output_setup_file (struct shell_output *out,
+                                    struct shell_output_file *sof)
+{
+    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    int open_flags = O_CREAT | O_TRUNC | O_WRONLY;
+    int fd = -1;
+
+    if ((fd = open (sof->path, open_flags, mode)) < 0) {
+        log_err ("error opening output file '%s'", sof->path);
+        return -1;
+    }
+
+    sof->fd = fd;
+    return 0;
 }
 
 /* Append RFC 24 header event to 'output' JSON array and write out to
@@ -546,6 +691,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (!(out = calloc (1, sizeof (*out))))
         return NULL;
     out->shell = shell;
+    shell_output_file_init (&out->stdout_file);
+    shell_output_file_init (&out->stderr_file);
     if (out->shell->standalone) {
         out->stdout_type = FLUX_OUTPUT_TYPE_TERM;
         out->stderr_type = FLUX_OUTPUT_TYPE_TERM;
@@ -554,6 +701,20 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         out->stdout_type = FLUX_OUTPUT_TYPE_KVS;
         out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
     }
+
+    /* Check if user specified alternate shell output */
+    if (shell_output_parse_type (out,
+                                 "stdout",
+                                 &(out->stdout_type),
+                                 &(out->stdout_file)) < 0)
+        goto error;
+
+    if (shell_output_parse_type (out,
+                                 "stderr",
+                                 &(out->stderr_type),
+                                 &(out->stderr_file)) < 0)
+        goto error;
+
     if (!(out->pending_writes = zlist_new ()))
         goto error;
     if (shell->info->shell_rank == 0) {
@@ -577,6 +738,14 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         }
         if (shell_output_header (out) < 0)
             goto error;
+        if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE) {
+            if (shell_output_setup_file (out, &(out->stdout_file)) < 0)
+                goto error;
+        }
+        if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
+            if (shell_output_setup_file (out, &(out->stderr_file)) < 0)
+                goto error;
+        }
     }
     return out;
 error:
