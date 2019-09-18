@@ -20,6 +20,8 @@
 #include <sys/param.h>
 #include <assert.h>
 
+#include "src/common/libutil/aux.h"
+
 #include "simple_client.h"
 #include "simple_server.h"
 #include "clique.h"
@@ -354,11 +356,33 @@ int pmi_simple_client_get_clique_ranks (struct pmi_simple_client *pmi,
     return result;
 }
 
+void *pmi_simple_client_aux_get (struct pmi_simple_client *pmi,
+                                 const char *name)
+{
+    if (!pmi) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return aux_get (pmi->aux, name);
+}
+
+int pmi_simple_client_aux_set (struct pmi_simple_client *pmi,
+                               const char *name,
+                               void *aux,
+                               flux_free_f destroy)
+{
+    if (!pmi) {
+        errno = EINVAL;
+        return -1;
+    }
+    return aux_set (&pmi->aux, name, aux, destroy);
+}
 
 void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
 {
     if (pmi) {
         int saved_errno = errno;
+        aux_destroy (&pmi->aux);
         if (pmi->fd != -1)
             (void)close (pmi->fd);
         free (pmi->buf);

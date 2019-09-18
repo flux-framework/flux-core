@@ -64,8 +64,8 @@ libbroker_la_SOURCES = \
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libpmi/libpmi_client.la
+	$(top_builddir)/src/common/libpmi/libpmi_client.la \
+	$(top_builddir)/src/common/libflux-internal.la
 
 flux_broker_LDFLAGS =
 
@@ -81,8 +81,8 @@ TESTS = test_shutdown.t \
 test_ldadd = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la
 
 test_cppflags = \

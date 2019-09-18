@@ -11,6 +11,9 @@
 #ifndef _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 #define _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 
+#include "src/common/libutil/aux.h"
+#include "src/common/libflux/types.h"
+
 struct pmi_simple_client {
     // valid upon creation
     int rank;
@@ -28,6 +31,7 @@ struct pmi_simple_client {
     char *buf;
     int buflen;
     int fd;
+    struct aux_item *aux;
 };
 
 /* Create/destroy
@@ -49,6 +53,13 @@ int pmi_simple_client_finalize (struct pmi_simple_client *pmi);
 int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum);
 int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
                                          int *universe_size);
+
+void *pmi_simple_client_aux_get (struct pmi_simple_client *pmi,
+                                 const char *name);
+int pmi_simple_client_aux_set (struct pmi_simple_client *pmi,
+                               const char *name,
+                               void *aux,
+                               flux_free_f destroy);
 
 /* Synchronization
  */

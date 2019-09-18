@@ -92,7 +92,8 @@ libflux_schedutil_la_LDFLAGS = \
 
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
-	$(builddir)/libpmi/libpmi_client.la
+	$(builddir)/libpmi/libpmi_client.la \
+	$(builddir)/libutil/aux.lo
 libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
 	-version-info 0:0:0 \
