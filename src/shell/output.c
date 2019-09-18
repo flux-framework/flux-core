@@ -139,15 +139,24 @@ static int shell_output_term (struct shell_output *out)
     return 0;
 }
 
-/* log entry to exec.eventlog that we've created the output directory */
-static int shell_output_ready (struct shell_output *out, flux_kvs_txn_t *txn)
+/* log entry to exec.eventlog the type of output we're doing, and that
+ * we've created the output directory */
+static int eventlog_append (flux_kvs_txn_t *txn,
+                            const char *name,
+                            const char *fmt, ...)
 {
+    const char *key = "exec.eventlog";
     json_t *entry = NULL;
     char *entrystr = NULL;
-    const char *key = "exec.eventlog";
+    va_list ap;
     int saved_errno, rc = -1;
 
-    if (!(entry = eventlog_entry_create (0., "output-ready", NULL))) {
+    va_start (ap, fmt);
+
+    if (!(entry = eventlog_entry_pack (0.,
+                                       name,
+                                       "{s:s}",
+                                       "type", "kvs"))) {
         log_err ("eventlog_entry_create");
         goto error;
     }
@@ -163,10 +172,22 @@ static int shell_output_ready (struct shell_output *out, flux_kvs_txn_t *txn)
 error:
     /* on error, future destroyed via shell_output destroy */
     saved_errno = errno;
+    va_end (ap);
     json_decref (entry);
     free (entrystr);
     errno = saved_errno;
     return rc;
+}
+
+static int shell_output_eventlog (struct shell_output *out, flux_kvs_txn_t *txn)
+{
+    if (eventlog_append (txn, "output-stdout", "{s:s}", "type", "kvs") < 0)
+        return -1;
+    if (eventlog_append (txn, "output-stderr", "{s:s}", "type", "kvs") < 0)
+        return -1;
+    if (eventlog_append (txn, "output-kvs-ready", NULL) < 0)
+        return -1;
+    return 0;
 }
 
 static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
@@ -174,7 +195,7 @@ static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
     struct shell_output *out = arg;
 
     if (flux_future_get (f, NULL) < 0)
-        /* failng to commit output-ready or header is a fatal
+        /* failng to commit output-kvs-ready or header is a fatal
          * error.  Should be cleaner in future. Issue #2378 */
         log_err_exit ("shell_output_kvs_init");
     flux_future_destroy (f);
@@ -197,7 +218,7 @@ static int shell_output_kvs_init (struct shell_output *out, json_t *header)
         goto error;
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", headerstr) < 0)
         goto error;
-    if (shell_output_ready (out, txn) < 0)
+    if (shell_output_eventlog (out, txn) < 0)
         goto error;
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
@@ -430,7 +451,7 @@ static int shell_output_header (struct shell_output *out)
             log_err ("shell_output_term_init");
     }
     else {
-        /* will also emit output-ready event */
+        /* will also emit necessary entries to exec.eventlog */
         if (shell_output_kvs_init (out, o) < 0)
             log_err ("shell_output_kvs_init");
     }

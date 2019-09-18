@@ -922,7 +922,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "output-ready")) {
+    if (!strcmp (name, "output-kvs-ready")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
                                                     "guest.output",
