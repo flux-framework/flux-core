@@ -4,6 +4,12 @@ test_description='Test flux-shell in --standalone mode'
 
 . `dirname $0`/sharness.sh
 
+jq=$(which jq 2>/dev/null)
+if test -z "$jq" ; then
+    skip_all 'no jq found, skipping all tests'
+    test_done
+fi
+
 #  Run flux-shell under flux command to get correct paths
 FLUX_SHELL="flux ${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
@@ -11,6 +17,8 @@ PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 
 unset FLUX_URI
+
+TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 
 test_expect_success 'flux-shell: generate 1-task jobspec and matching R' '
 	flux jobspec srun -N1 -n1 echo Hi >j1 &&
@@ -163,6 +171,164 @@ test_expect_success 'flux-shell: shell forwards signals to tasks' '
 		${FLUX_SHELL} -v -s -r 0 -j j9 -R R8 69 \
 			>sigterm.out 2>sigterm.err &&
 	grep "forwarding signal 15" sigterm.err
+'
+
+test_expect_success 'flux-shell: generate 1-task echo jobspecs and matching R' '
+	flux jobspec srun -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j1echostdout &&
+	flux jobspec srun -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j1echostderr &&
+	flux jobspec srun -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j1echoboth &&
+	cat >R1echo <<-EOT
+	{"version": 1, "execution":{ "R_lite":[
+		{ "children": { "core": "0" }, "rank": "0" }
+        ]}}
+	EOT
+'
+
+test_expect_success 'flux-shell: generate 2-task echo jobspecs and matching R' '
+	flux jobspec srun -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j2echostdout &&
+	flux jobspec srun -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j2echostderr &&
+	flux jobspec srun -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j2echoboth &&
+	cat >R2echo <<-EOT
+	{"version": 1, "execution":{ "R_lite":[
+		{ "children": { "core": "0-1" }, "rank": "0" }
+        ]}}
+	EOT
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (stdout file)' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out100\"" \
+            > j1echostdout-100 &&
+        ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-100 -R R1echo 100 &&
+	grep stdout:foo out100
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (stderr file)' '
+        cat j1echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err101\"" \
+            > j1echostderr-101 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echostderr-101 -R R1echo 101 &&
+	grep stderr:bar err101
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (stdout file/stderr file)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out102\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err102\"" \
+            > j1echoboth-102 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-102 -R R1echo 102 &&
+	grep stdout:baz out102 &&
+	grep stderr:baz err102
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (stdout file/stderr term)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out103\"" \
+            > j1echoboth-103 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-103 -R R1echo 2> err103 103 &&
+	grep stdout:baz out103 &&
+	grep stderr:baz err103
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (stdout term/stderr file)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err104\"" \
+            > j1echoboth-104 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-104 -R R1echo > out104 104 &&
+	grep stdout:baz out104 &&
+	grep stderr:baz err104
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stdout file)' '
+        cat j2echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out105\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            > j2echostdout-105 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostdout-105 -R R2echo 105 &&
+	grep "0: stdout:foo" out105 &&
+	grep "1: stdout:foo" out105
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stderr file)' '
+        cat j2echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err106\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echostderr-106 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostderr-106 -R R2echo 106 &&
+	grep "0: stderr:bar" err106 &&
+	grep "1: stderr:bar" err106
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stdout file/stderr file)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out107\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err107\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echoboth-107 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-107 -R R2echo 107 &&
+	grep "0: stdout:baz" out107 &&
+	grep "1: stdout:baz" out107 &&
+	grep "0: stderr:baz" err107 &&
+	grep "1: stderr:baz" err107
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stdout file/stderr term)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out108\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            > j2echoboth-108 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-108 -R R2echo 2> err108 108 &&
+	grep "0: stdout:baz" out108 &&
+	grep "1: stdout:baz" out108 &&
+	grep "0: stderr:baz" err108 &&
+	grep "1: stderr:baz" err108
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stdout term/stderr file)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err109\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echoboth-109 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-109 -R R2echo > out109 109 &&
+	grep "0: stdout:baz" out109 &&
+	grep "1: stdout:baz" out109 &&
+	grep "0: stderr:baz" err109 &&
+	grep "1: stderr:baz" err109
+'
+
+test_expect_success 'flux-shell: error on bad output type' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"foobar\"" \
+            > j1echostdout-110 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-110 -R R1echo 110
+'
+
+test_expect_success 'flux-shell: error on no path with file output' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            > j1echostdout-111 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-111 -R R1echo 111
+'
+
+test_expect_success 'flux-shell: error invalid path to file output' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"/foo/bar/baz\"" \
+            > j1echostdout-112 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-112 -R R1echo 112
 '
 
 test_done
