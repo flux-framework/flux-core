@@ -132,13 +132,16 @@ int plugstack_call (struct plugstack *st,
                     const char *name,
                     flux_plugin_arg_t *args)
 {
+    int rc = 0;
     flux_plugin_t *p = zlistx_first (st->plugins);
     while (p) {
-        if (flux_plugin_call (p, name, args) < 0)
-            log_err ("%s: %s failed", flux_plugin_get_name (p), name);
+        if (flux_plugin_call (p, name, args) < 0) {
+            log_msg ("plugin '%s': %s failed", flux_plugin_get_name (p), name);
+            rc = -1;
+        }
         p = zlistx_next (st->plugins);
     }
-    return 0;
+    return rc;
 }
 
 static int plugin_aux_from_zhashx (flux_plugin_t *p, zhashx_t *aux)
