@@ -82,7 +82,6 @@
 #include "task.h"
 
 #define FQ_KVS_KEY_MAX (SIMPLE_KVS_KEY_MAX + 128)
-#define KVSNAME "pmi"
 
 struct shell_pmi {
     flux_shell_t *shell;
@@ -125,6 +124,7 @@ static void kvs_lookup_continuation (flux_future_t *f, void *arg)
 }
 
 /* Construct a PMI key in job's guest namespace.
+ * Put it in a subdir named "pmi".
  */
 static int shell_pmi_kvs_key (char *buf,
                               int bufsz,
@@ -133,7 +133,7 @@ static int shell_pmi_kvs_key (char *buf,
 {
     char tmp[FQ_KVS_KEY_MAX];
 
-    if (snprintf (tmp, sizeof (tmp), "%s.%s", KVSNAME, key) >= sizeof (tmp))
+    if (snprintf (tmp, sizeof (tmp), "pmi.%s", key) >= sizeof (tmp))
         return -1;
     return flux_job_kvs_guest_key (buf, bufsz, id, tmp);
 }
@@ -439,15 +439,17 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     struct shell_pmi *pmi;
     struct shell_info *info = shell->info;
     int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
+    char kvsname[32];
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
     pmi->shell = shell;
+    snprintf (kvsname, sizeof (kvsname), "%ju", (uintmax_t)shell->jobid);
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
                                                   0, // appnum
                                                   info->jobspec->task_count,
                                                   info->rankinfo.ntasks,
-                                                  "pmi",
+                                                  kvsname,
                                                   flags,
                                                   pmi)))
         goto error;
