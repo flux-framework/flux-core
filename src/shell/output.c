@@ -60,7 +60,6 @@ struct shell_output {
     zlist_t *pending_writes;
     json_t *output;
     bool stopped;
-    bool output_ready_sent;
 };
 
 static const int shell_output_lwm = 100;
@@ -99,6 +98,12 @@ static void shell_output_control (struct shell_output *out, bool stop)
     }
 }
 
+static int shell_output_flush_init (struct shell_output *out, json_t *header)
+{
+    // TODO: acquire per-stream encoding type
+    return 0;
+}
+
 static int shell_output_flush (struct shell_output *out)
 {
     json_t *entry;
@@ -112,10 +117,7 @@ static int shell_output_flush (struct shell_output *out)
             log_err ("eventlog_entry_parse");
             return -1;
         }
-        if (!strcmp (name, "header")) {
-            // TODO: acquire per-stream encoding type
-        }
-        else if (!strcmp (name, "data")) {
+        if (!strcmp (name, "data")) {
             const char *stream = NULL;
             int rank;
             char *data = NULL;
@@ -135,20 +137,6 @@ static int shell_output_flush (struct shell_output *out)
     if (json_array_clear (out->output) < 0)
         log_msg ("json_array_clear failed");
     return 0;
-}
-
-static void shell_output_commit_completion (flux_future_t *f, void *arg)
-{
-    struct shell_output *out = arg;
-
-    /* Error failing to commit is a fatal error.  Should be cleaner in
-     * future. Issue #2378 */
-    if (flux_future_get (f, NULL) < 0)
-        log_err_exit ("shell_output_commit");
-    flux_future_destroy (f);
-
-    if (flux_shell_remove_completion_ref (out->shell, "output.commit") < 0)
-        log_err ("flux_shell_remove_completion_ref");
 }
 
 /* log entry to exec.eventlog that we've created the output directory */
@@ -181,6 +169,71 @@ error:
     return rc;
 }
 
+static void shell_output_commit_init_completion (flux_future_t *f, void *arg)
+{
+    struct shell_output *out = arg;
+
+    if (flux_future_get (f, NULL) < 0)
+        /* failng to commit output-ready or header is a fatal
+         * error.  Should be cleaner in future. Issue #2378 */
+        log_err_exit ("shell_output_commit_init");
+    flux_future_destroy (f);
+
+    if (flux_shell_remove_completion_ref (out->shell, "output.commit-init") < 0)
+        log_err ("flux_shell_remove_completion_ref");
+}
+
+static int shell_output_commit_init (struct shell_output *out, json_t *header)
+{
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+    char *headerstr = NULL;
+    int saved_errno;
+    int rc = -1;
+
+    if (!(headerstr = eventlog_entry_encode (header)))
+        goto error;
+    if (!(txn = flux_kvs_txn_create ()))
+        goto error;
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", headerstr) < 0)
+        goto error;
+    if (shell_output_ready (out, txn) < 0)
+        goto error;
+    if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
+        goto error;
+    if (flux_future_then (f, -1, shell_output_commit_init_completion, out) < 0)
+        goto error;
+    if (flux_shell_add_completion_ref (out->shell, "output.commit-init") < 0) {
+        log_err ("flux_shell_remove_completion_ref");
+        goto error;
+    }
+    /* f memory responsibility of shell_output_commit_init_completion()
+     * callback */
+    f = NULL;
+    rc = 0;
+error:
+    saved_errno = errno;
+    flux_kvs_txn_destroy (txn);
+    free (headerstr);
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return rc;
+}
+
+static void shell_output_commit_completion (flux_future_t *f, void *arg)
+{
+    struct shell_output *out = arg;
+
+    /* Error failing to commit is a fatal error.  Should be cleaner in
+     * future. Issue #2378 */
+    if (flux_future_get (f, NULL) < 0)
+        log_err_exit ("shell_output_commit");
+    flux_future_destroy (f);
+
+    if (flux_shell_remove_completion_ref (out->shell, "output.commit") < 0)
+        log_err ("flux_shell_remove_completion_ref");
+}
+
 static int shell_output_commit (struct shell_output *out)
 {
     flux_kvs_txn_t *txn = NULL;
@@ -195,16 +248,8 @@ static int shell_output_commit (struct shell_output *out)
         goto error;
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", chunk) < 0)
         goto error;
-    /* if the output-ready eventlog entry has not been sent, send now.
-     * This is usually sent when the output header is sent. */
-    if (!out->output_ready_sent) {
-        if (shell_output_ready (out, txn) < 0)
-            goto error;
-    }
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
-    if (!out->output_ready_sent)
-        out->output_ready_sent = true;
     if (flux_future_then (f, -1, shell_output_commit_completion, out) < 0)
         goto error;
     if (flux_shell_add_completion_ref (out->shell, "output.commit") < 0) {
@@ -363,7 +408,7 @@ void shell_output_destroy (struct shell_output *out)
  */
 static int shell_output_header (struct shell_output *out)
 {
-    json_t *o;
+    json_t *o = NULL;
     int rc = -1;
 
     o = eventlog_entry_pack (0, "header",
@@ -380,22 +425,18 @@ static int shell_output_header (struct shell_output *out)
         errno = ENOMEM;
         goto error;
     }
-    if (json_array_append_new (out->output, o) < 0) {
-        json_decref (o);
-        errno = ENOMEM;
-        goto error;
-    }
     if (out->shell->standalone) {
-        if (shell_output_flush (out) < 0)
-            log_err ("shell_output_flush");
+        if (shell_output_flush_init (out, o) < 0)
+            log_err ("shell_output_flush_init");
     }
     else {
         /* will also emit output-ready event */
-        if (shell_output_commit (out) < 0)
-            log_err ("shell_output_commit");
+        if (shell_output_commit_init (out, o) < 0)
+            log_err ("shell_output_commit_init");
     }
     rc = 0;
 error:
+    json_decref (o);
     return rc;
 }
 
