@@ -150,7 +150,7 @@ done:
  *  number of parents. If the PMI key is missing, this is not an error,
  *  instead the level of this instance is considered to be zero.
  *  Additonally, if level > 0, the shell will have put the instance's
- *  jobid in the PMI kvs for us as well.
+ *  jobid in the PMI kvsname for us as well, so populate the 'jobid' attr.
  */
 static int set_instance_level_attr (struct pmi_handle *pmi,
                                     const char *kvsname,
@@ -170,16 +170,8 @@ static int set_instance_level_attr (struct pmi_handle *pmi,
         level = val;
     if (attr_add (attrs, "instance-level", level, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (result == PMI_SUCCESS) {
-        result = broker_pmi_kvs_get (pmi,
-                                     kvsname,
-                                     "flux.jobid",
-                                     val,
-                                     sizeof (val));
-        if (result != PMI_SUCCESS)
-            return -1;
-        jobid = val;
-    }
+    if (result == PMI_SUCCESS)
+        jobid = kvsname;
     if (attr_add (attrs, "jobid", jobid, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     return 0;
