@@ -57,7 +57,6 @@ int main (int argc, char **argv)
     ok (strlen (params.kvsname) > 0,
         "kvsname is not the empty string");
     diag ("kvsname=%s", params.kvsname);
-    diag ("appnum=%d", params.appnum);
 
     result = broker_pmi_kvs_put (pmi, params.kvsname, "foo", "bar");
     ok (result == PMI_SUCCESS,

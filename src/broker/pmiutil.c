@@ -32,7 +32,6 @@ struct pmi_dso {
     int (*finalize) (void);
     int (*get_size) (int *size);
     int (*get_rank) (int *rank);
-    int (*get_appnum) (int *appnum);
     int (*barrier) (void);
     int (*kvs_get_my_name) (char *kvsname, int length);
     int (*kvs_put) (const char *kvsname, const char *key, const char *value);
@@ -98,7 +97,6 @@ static struct pmi_dso *broker_pmi_dlopen (const char *pmi_library, int debug)
     dso->finalize = dlsym (dso->dso, "PMI_Finalize");
     dso->get_size = dlsym (dso->dso, "PMI_Get_size");
     dso->get_rank = dlsym (dso->dso, "PMI_Get_rank");
-    dso->get_appnum = dlsym (dso->dso, "PMI_Get_appnum");
     dso->barrier = dlsym (dso->dso, "PMI_Barrier");
     dso->kvs_get_my_name = dlsym (dso->dso, "PMI_KVS_Get_my_name");
     dso->kvs_put = dlsym (dso->dso, "PMI_KVS_Put");
@@ -106,7 +104,7 @@ static struct pmi_dso *broker_pmi_dlopen (const char *pmi_library, int debug)
     dso->kvs_get = dlsym (dso->dso, "PMI_KVS_Get");
 
     if (!dso->init || !dso->finalize || !dso->get_size || !dso->get_rank
-            || !dso->get_appnum || !dso->barrier || !dso->kvs_get_my_name
+            || !dso->barrier || !dso->kvs_get_my_name
             || !dso->kvs_put || !dso->kvs_commit || !dso->kvs_get) {
         log_msg ("dlsym: %s is missing required symbols", pmi_library);
         goto error;
@@ -169,9 +167,6 @@ int broker_pmi_get_params (struct pmi_handle *pmi,
     if (pmi->cli) {
         params->rank = pmi->cli->rank;
         params->size = pmi->cli->size;
-        result = pmi_simple_client_get_appnum (pmi->cli, &params->appnum);
-        if (result != PMI_SUCCESS)
-            goto error;
         result = pmi_simple_client_kvs_get_my_name (pmi->cli,
                                                     params->kvsname,
                                                     sizeof (params->kvsname));
@@ -185,9 +180,6 @@ int broker_pmi_get_params (struct pmi_handle *pmi,
         result = pmi->dso->get_size (&params->size);
         if (result != PMI_SUCCESS)
             goto error;
-        result = pmi->dso->get_appnum (&params->appnum);
-        if (result != PMI_SUCCESS)
-            goto error;
         result = pmi->dso->kvs_get_my_name (params->kvsname,
                                             sizeof (params->kvsname));
         if (result != PMI_SUCCESS)
@@ -196,7 +188,6 @@ int broker_pmi_get_params (struct pmi_handle *pmi,
     else {
         params->rank = 0;
         params->size = 1;
-        params->appnum = 0;
         snprintf (params->kvsname, sizeof (params->kvsname), "singleton");
     }
 
