@@ -21,7 +21,7 @@ AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS =
 
-fluxinclude_HEADERS = core.h
+fluxinclude_HEADERS = core.h schedutil.h
 noinst_LTLIBRARIES = libflux-internal.la
 libflux_internal_la_SOURCES =
 libflux_internal_la_LIBADD = \
@@ -37,7 +37,11 @@ libflux_internal_la_LIBADD = \
 	$(LIBDL) $(LIBRT) $(FLUX_SECURITY_LIBS) $(LIBSODIUM_LIBS)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
-lib_LTLIBRARIES = libflux-core.la libflux-optparse.la libflux-idset.la
+lib_LTLIBRARIES = libflux-core.la \
+	libflux-optparse.la \
+	libflux-idset.la \
+	libflux-schedutil.la
+
 fluxlib_LTLIBRARIES = libpmi.la
 
 libflux_core_la_SOURCES =
@@ -75,6 +79,17 @@ libflux_idset_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
+libflux_schedutil_la_SOURCES =
+libflux_schedutil_la_LIBADD = \
+	$(builddir)/libschedutil/libschedutil.la \
+	libflux-core.la \
+	$(JANSSON_LIBS)
+libflux_schedutil_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libflux-schedutil.map \
+	-version-info @LIBFLUX_SCHEDUTIL_VERSION_INFO@ \
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
+
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la
@@ -89,4 +104,5 @@ EXTRA_DIST = \
 	libflux-core.map \
 	libflux-optparse.map \
 	libflux-idset.map \
+	libflux-schedutil.map \
 	libpmi.map

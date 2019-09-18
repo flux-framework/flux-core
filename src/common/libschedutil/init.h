@@ -24,9 +24,9 @@ typedef struct schedutil_ctx schedutil_t;
  * Return NULL on error.
  */
 schedutil_t *schedutil_create (flux_t *h,
-                               op_alloc_f *alloc_cb,
-                               op_free_f *free_cb,
-                               op_exception_f *exception_cb,
+                               schedutil_alloc_cb_f *alloc_cb,
+                               schedutil_free_cb_f *free_cb,
+                               schedutil_exception_cb_f *exception_cb,
                                void *cb_arg);
 
 /* Destory the handle for the schedutil conveinence library.

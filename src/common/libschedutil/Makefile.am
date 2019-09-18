@@ -14,8 +14,14 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = \
 	libschedutil.la
 
+fluxschedutilinclude_HEADERS = init.h \
+	hello.h \
+	ready.h \
+	ops.h \
+	alloc.h \
+	free.h
+
 libschedutil_la_SOURCES = \
-	schedutil.h \
 	schedutil_private.h \
 	init.h \
 	init.c \

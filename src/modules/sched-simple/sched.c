@@ -14,9 +14,9 @@
 #include <czmq.h>
 #include <flux/core.h>
 #include <flux/idset.h>
+#include <flux/schedutil.h>
 
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libschedutil/schedutil.h"
 #include "libjj.h"
 #include "rlist.h"
 

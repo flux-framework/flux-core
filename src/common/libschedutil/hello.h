@@ -20,20 +20,20 @@
  * Failure of the callback aborts iteration and causes schedutil_hello()
  * to return -1 with errno passed through.
  */
-typedef int (hello_f)(flux_t *h,
-                      flux_jobid_t id,
-                      int priority,
-                      uint32_t userid,
-                      double t_submit,
-                      const char *R,
-                      void *arg);
+typedef int (schedutil_hello_cb_f)(flux_t *h,
+                                   flux_jobid_t id,
+                                   int priority,
+                                   uint32_t userid,
+                                   double t_submit,
+                                   const char *R,
+                                   void *arg);
 
 /* Send hello announcement to job-manager.
  * The job-manager responds with a list of jobs that have resources assigned.
  * This function looks up R for each job and passes R + metadata to 'cb'
  * with 'arg'.
  */
-int schedutil_hello (schedutil_t *util, hello_f *cb, void *arg);
+int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg);
 
 #endif /* !_FLUX_SCHEDUTIL_HELLO_H */
 

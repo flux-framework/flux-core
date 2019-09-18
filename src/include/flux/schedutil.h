@@ -8,23 +8,18 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* Allow in-tree programs to #include <flux/core.h> like out-of-tree would.
+ */
+
 #ifndef _FLUX_SCHEDUTIL_H
 #define _FLUX_SCHEDUTIL_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include "init.h"
-#include "hello.h"
-#include "ready.h"
-#include "alloc.h"
-#include "free.h"
-#include "ops.h"
-
-#ifdef __cplusplus
-}
-#endif
+#include "src/common/libschedutil/init.h"
+#include "src/common/libschedutil/hello.h"
+#include "src/common/libschedutil/ready.h"
+#include "src/common/libschedutil/alloc.h"
+#include "src/common/libschedutil/free.h"
+#include "src/common/libschedutil/ops.h"
 
 #endif /* !_FLUX_SCHEDUTIL_H */
 

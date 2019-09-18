@@ -23,10 +23,10 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <flux/schedutil.h>
 #include <jansson.h>
 #include <czmq.h>
 #include "src/common/liboptparse/optparse.h"
-#include "src/common/libschedutil/schedutil.h"
 
 // flux module debug --setbit 0x1 sched-dummy
 // flux module debug --clearbit 0x1 sched-dummy
