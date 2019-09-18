@@ -392,6 +392,7 @@ static int shell_task_init (flux_shell_t *shell)
 static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
     flux_shell_t *shell = arg;
+    shell->current_task->in_pre_exec = true;
     if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
         log_err ("task.exec plugin(s) failed");
 }

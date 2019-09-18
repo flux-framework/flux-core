@@ -41,6 +41,7 @@ struct shell_task {
 
     shell_task_pre_exec_f pre_exec_cb;
     void *pre_exec_arg;
+    bool in_pre_exec;
 
     shell_task_io_ready_f io_cb;
     void *io_cb_arg;
