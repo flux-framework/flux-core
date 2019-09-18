@@ -98,13 +98,13 @@ static void shell_output_control (struct shell_output *out, bool stop)
     }
 }
 
-static int shell_output_flush_init (struct shell_output *out, json_t *header)
+static int shell_output_term_init (struct shell_output *out, json_t *header)
 {
     // TODO: acquire per-stream encoding type
     return 0;
 }
 
-static int shell_output_flush (struct shell_output *out)
+static int shell_output_term (struct shell_output *out)
 {
     json_t *entry;
     size_t index;
@@ -169,21 +169,21 @@ error:
     return rc;
 }
 
-static void shell_output_commit_init_completion (flux_future_t *f, void *arg)
+static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
 {
     struct shell_output *out = arg;
 
     if (flux_future_get (f, NULL) < 0)
         /* failng to commit output-ready or header is a fatal
          * error.  Should be cleaner in future. Issue #2378 */
-        log_err_exit ("shell_output_commit_init");
+        log_err_exit ("shell_output_kvs_init");
     flux_future_destroy (f);
 
-    if (flux_shell_remove_completion_ref (out->shell, "output.commit-init") < 0)
+    if (flux_shell_remove_completion_ref (out->shell, "output.kvs-init") < 0)
         log_err ("flux_shell_remove_completion_ref");
 }
 
-static int shell_output_commit_init (struct shell_output *out, json_t *header)
+static int shell_output_kvs_init (struct shell_output *out, json_t *header)
 {
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
@@ -201,13 +201,13 @@ static int shell_output_commit_init (struct shell_output *out, json_t *header)
         goto error;
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
-    if (flux_future_then (f, -1, shell_output_commit_init_completion, out) < 0)
+    if (flux_future_then (f, -1, shell_output_kvs_init_completion, out) < 0)
         goto error;
-    if (flux_shell_add_completion_ref (out->shell, "output.commit-init") < 0) {
+    if (flux_shell_add_completion_ref (out->shell, "output.kvs-init") < 0) {
         log_err ("flux_shell_remove_completion_ref");
         goto error;
     }
-    /* f memory responsibility of shell_output_commit_init_completion()
+    /* f memory responsibility of shell_output_kvs_init_completion()
      * callback */
     f = NULL;
     rc = 0;
@@ -220,21 +220,21 @@ error:
     return rc;
 }
 
-static void shell_output_commit_completion (flux_future_t *f, void *arg)
+static void shell_output_kvs_completion (flux_future_t *f, void *arg)
 {
     struct shell_output *out = arg;
 
     /* Error failing to commit is a fatal error.  Should be cleaner in
      * future. Issue #2378 */
     if (flux_future_get (f, NULL) < 0)
-        log_err_exit ("shell_output_commit");
+        log_err_exit ("shell_output_kvs");
     flux_future_destroy (f);
 
-    if (flux_shell_remove_completion_ref (out->shell, "output.commit") < 0)
+    if (flux_shell_remove_completion_ref (out->shell, "output.kvs") < 0)
         log_err ("flux_shell_remove_completion_ref");
 }
 
-static int shell_output_commit (struct shell_output *out)
+static int shell_output_kvs (struct shell_output *out)
 {
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
@@ -250,13 +250,13 @@ static int shell_output_commit (struct shell_output *out)
         goto error;
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
-    if (flux_future_then (f, -1, shell_output_commit_completion, out) < 0)
+    if (flux_future_then (f, -1, shell_output_kvs_completion, out) < 0)
         goto error;
-    if (flux_shell_add_completion_ref (out->shell, "output.commit") < 0) {
+    if (flux_shell_add_completion_ref (out->shell, "output.kvs") < 0) {
         log_err ("flux_shell_remove_completion_ref");
         goto error;
     }
-    /* f memory responsibility of shell_output_commit_completion()
+    /* f memory responsibility of shell_output_kvs_completion()
      * callback */
     f = NULL;
     if (json_array_clear (out->output) < 0) {
@@ -302,12 +302,12 @@ static void shell_output_write_cb (flux_t *h,
     /* Error failing to commit is a fatal error.  Should be cleaner in
      * future. Issue #2378 */
     if (out->shell->standalone) {
-        if (shell_output_flush (out) < 0)
-            log_err_exit ("shell_output_flush");
+        if (shell_output_term (out) < 0)
+            log_err_exit ("shell_output_term");
     }
     else {
-        if (shell_output_commit (out) < 0)
-            log_err_exit ("shell_output_commit");
+        if (shell_output_kvs (out) < 0)
+            log_err_exit ("shell_output_kvs");
     }
     if (eof) {
         if (--out->eof_pending == 0) {
@@ -386,12 +386,12 @@ void shell_output_destroy (struct shell_output *out)
         }
         if (out->output && json_array_size (out->output) > 0) { // leader only
             if (out->shell->standalone) {
-                if (shell_output_flush (out) < 0)
-                    log_err ("shell_output_flush");
+                if (shell_output_term (out) < 0)
+                    log_err ("shell_output_term");
             }
             else {
-                if (shell_output_commit (out) < 0)
-                    log_err ("shell_output_commit");
+                if (shell_output_kvs (out) < 0)
+                    log_err ("shell_output_kvs");
             }
         }
         json_decref (out->output);
@@ -425,13 +425,13 @@ static int shell_output_header (struct shell_output *out)
         goto error;
     }
     if (out->shell->standalone) {
-        if (shell_output_flush_init (out, o) < 0)
-            log_err ("shell_output_flush_init");
+        if (shell_output_term_init (out, o) < 0)
+            log_err ("shell_output_term_init");
     }
     else {
         /* will also emit output-ready event */
-        if (shell_output_commit_init (out, o) < 0)
-            log_err ("shell_output_commit_init");
+        if (shell_output_kvs_init (out, o) < 0)
+            log_err ("shell_output_kvs_init");
     }
     rc = 0;
 error:
