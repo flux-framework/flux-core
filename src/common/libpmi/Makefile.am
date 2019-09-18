@@ -44,6 +44,7 @@ fluxinclude_HEADERS = \
 TESTS = test_keyval.t \
 	test_simple.t \
 	test_canonical.t \
+	test_canonical2.t \
 	test_clique.t
 
 test_ldadd = \
@@ -87,6 +88,14 @@ test_canonical_t_SOURCES = \
 	test/server_thread.h
 test_canonical_t_CPPFLAGS = $(test_cppflags)
 test_canonical_t_LDADD = $(test_ldadd)
+
+test_canonical2_t_SOURCES = \
+	test/canonical2.c \
+	test/server_thread.c \
+	test/server_thread.h
+test_canonical2_t_CPPFLAGS = $(test_cppflags)
+test_canonical2_t_LDADD = $(test_ldadd)
+
 
 test_clique_t_SOURCES = test/clique.c
 test_clique_t_CPPFLAGS = $(test_cppflags)
