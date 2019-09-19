@@ -97,4 +97,8 @@ test_expect_success 'flux srun -N128 hostname fails' '
 	test_must_fail flux srun -N128 hostname
 '
 
+test_expect_success 'flux srun bad executable fails' '
+	test_must_fail flux srun abadfile
+'
+
 test_done
