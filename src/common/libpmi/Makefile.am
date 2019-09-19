@@ -27,6 +27,7 @@ libpmi_client_la_SOURCES = \
 	simple_client.c \
 	simple_client.h \
 	pmi.c \
+	pmi2.c \
 	dgetline.c \
 	dgetline.h \
 	$(libpmi_common_sources)
@@ -37,11 +38,13 @@ libpmi_server_la_SOURCES = \
 	$(libpmi_common_sources)
 
 fluxinclude_HEADERS = \
-	pmi.h
+	pmi.h \
+	pmi2.h
 
 TESTS = test_keyval.t \
 	test_simple.t \
 	test_canonical.t \
+	test_canonical2.t \
 	test_clique.t
 
 test_ldadd = \
@@ -86,6 +89,14 @@ test_canonical_t_SOURCES = \
 test_canonical_t_CPPFLAGS = $(test_cppflags)
 test_canonical_t_LDADD = $(test_ldadd)
 
+test_canonical2_t_SOURCES = \
+	test/canonical2.c \
+	test/server_thread.c \
+	test/server_thread.h
+test_canonical2_t_CPPFLAGS = $(test_cppflags)
+test_canonical2_t_LDADD = $(test_ldadd)
+
+
 test_clique_t_SOURCES = test/clique.c
 test_clique_t_CPPFLAGS = $(test_cppflags)
 test_clique_t_LDADD = $(test_ldadd)
@@ -97,3 +108,6 @@ test_pmi_info_LDADD = $(test_ldadd)
 test_kvstest_SOURCES = test/kvstest.c
 test_kvstest_CPPFLAGS = $(test_cppflags)
 test_kvstest_LDADD = $(test_ldadd)
+
+EXTRA_DIST = \
+    ltrace.conf

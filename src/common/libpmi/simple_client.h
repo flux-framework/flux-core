@@ -11,11 +11,13 @@
 #ifndef _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 #define _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 
+#include "src/common/libutil/aux.h"
+#include "src/common/libflux/types.h"
+
 struct pmi_simple_client {
     // valid upon creation
     int rank;
     int size;
-    int debug;
     int spawned;
 
     // valid after client_init()
@@ -28,18 +30,18 @@ struct pmi_simple_client {
     char *buf;
     int buflen;
     int fd;
+    struct aux_item *aux;
 };
 
 /* Create/destroy
  * On error, create returns NULL and sets errno.
  * Required: pmi_fd, pmi_rank, and pmi_size from the environment.
- * Optional: pmi_debug and pmi_spawned from the environment (may be NULL).
+ * Optional: pmi_spawned from the environment (may be NULL).
  */
 void pmi_simple_client_destroy (struct pmi_simple_client *pmi);
 struct pmi_simple_client *pmi_simple_client_create_fd (const char *pmi_fd,
                                                        const char *pmi_rank,
                                                        const char *pmi_size,
-                                                       const char *pmi_debug,
                                                        const char *pmi_spawned);
 
 /* Core operations
@@ -49,6 +51,13 @@ int pmi_simple_client_finalize (struct pmi_simple_client *pmi);
 int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum);
 int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
                                          int *universe_size);
+
+void *pmi_simple_client_aux_get (struct pmi_simple_client *pmi,
+                                 const char *name);
+int pmi_simple_client_aux_set (struct pmi_simple_client *pmi,
+                               const char *name,
+                               void *aux,
+                               flux_free_f destroy);
 
 /* Synchronization
  */

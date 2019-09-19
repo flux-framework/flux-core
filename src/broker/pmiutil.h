@@ -11,7 +11,6 @@
 struct pmi_params {
     int rank;
     int size;
-    int appnum;
     char kvsname[64];
 };
 
