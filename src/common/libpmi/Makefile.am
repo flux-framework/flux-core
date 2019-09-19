@@ -108,3 +108,6 @@ test_pmi_info_LDADD = $(test_ldadd)
 test_kvstest_SOURCES = test/kvstest.c
 test_kvstest_CPPFLAGS = $(test_cppflags)
 test_kvstest_LDADD = $(test_ldadd)
+
+EXTRA_DIST = \
+    ltrace.conf
