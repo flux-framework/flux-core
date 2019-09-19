@@ -23,9 +23,8 @@
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libpmi/clique.h"
 
-#define OPTIONS "l:c"
+#define OPTIONS "c"
 static const struct option longopts[] = {
-    {"library",      required_argument,  0, 'l'},
     {"clique",       no_argument,        0, 'c'},
     {0, 0, 0, 0},
 };
@@ -37,22 +36,14 @@ int main(int argc, char *argv[])
     int universe_size;
     char *kvsname;
     int ch;
-    char *library = NULL;
     int copt = 0;
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'l':   /* --library */
-                library = optarg;
-                break;
             case 'c':   /* --clique */
                 copt++;
                 break;
         }
-    }
-    if (library) {
-        setenv ("PMI_LIBRARY", library, 1);
-        unsetenv ("PMI_FD");
     }
     e = PMI_Init (&spawned);
     if (e != PMI_SUCCESS)
