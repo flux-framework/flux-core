@@ -249,14 +249,11 @@ struct pmi_handle *broker_pmi_create (void)
     if (!pmi)
         return NULL;
     pmi_debug = getenv ("FLUX_PMI_DEBUG");
-    if (!pmi_debug)
-        pmi_debug = getenv ("PMI_DEBUG");
     if (pmi_debug)
         pmi->debug = strtol (pmi_debug, NULL, 10);
     pmi->cli = pmi_simple_client_create_fd (getenv ("PMI_FD"),
                                             getenv ("PMI_RANK"),
                                             getenv ("PMI_SIZE"),
-                                            pmi_debug,
                                             NULL);
     /* N.B. SLURM boldly installs its libpmi.so into the system libdir,
      * so it will be found here, even if not running in a SLURM job.

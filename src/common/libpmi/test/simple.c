@@ -128,8 +128,10 @@ int main (int argc, char *argv[])
     snprintf (pmi_rank, sizeof (pmi_rank), "%d", 0);
     snprintf (pmi_size, sizeof (pmi_size), "%d", 1);
 
-    ok ((cli = pmi_simple_client_create_fd (pmi_fd, pmi_rank, pmi_size,
-                                            NULL, NULL)) != NULL,
+    ok ((cli = pmi_simple_client_create_fd (pmi_fd,
+                                            pmi_rank,
+                                            pmi_size,
+                                            NULL)) != NULL,
         "pmi_simple_client_create OK");
     ok (cli->initialized == false,
         "cli->initialized == false");

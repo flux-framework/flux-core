@@ -18,7 +18,6 @@ struct pmi_simple_client {
     // valid upon creation
     int rank;
     int size;
-    int debug;
     int spawned;
 
     // valid after client_init()
@@ -37,13 +36,12 @@ struct pmi_simple_client {
 /* Create/destroy
  * On error, create returns NULL and sets errno.
  * Required: pmi_fd, pmi_rank, and pmi_size from the environment.
- * Optional: pmi_debug and pmi_spawned from the environment (may be NULL).
+ * Optional: pmi_spawned from the environment (may be NULL).
  */
 void pmi_simple_client_destroy (struct pmi_simple_client *pmi);
 struct pmi_simple_client *pmi_simple_client_create_fd (const char *pmi_fd,
                                                        const char *pmi_rank,
                                                        const char *pmi_size,
-                                                       const char *pmi_debug,
                                                        const char *pmi_spawned);
 
 /* Core operations

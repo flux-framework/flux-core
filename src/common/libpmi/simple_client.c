@@ -394,7 +394,6 @@ void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
 struct pmi_simple_client *pmi_simple_client_create_fd (const char *pmi_fd,
                                                        const char *pmi_rank,
                                                        const char *pmi_size,
-                                                       const char *pmi_debug,
                                                        const char *pmi_spawned)
 {
     struct pmi_simple_client *pmi;
@@ -414,12 +413,6 @@ struct pmi_simple_client *pmi_simple_client_create_fd (const char *pmi_fd,
     if (pmi_spawned) {
         errno = 0;
         pmi->spawned = strtol (pmi_spawned, NULL, 10);
-        if (errno != 0)
-            goto error;
-    }
-    if (pmi_debug) {
-        errno = 0;
-        pmi->debug = strtol (pmi_debug, NULL, 10);
         if (errno != 0)
             goto error;
     }
