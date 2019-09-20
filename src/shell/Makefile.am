@@ -11,6 +11,20 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS) \
 	$(LUA_INCLUDE)
 
+shellrcdir = \
+	$(fluxrcdir)/shell
+shellluadir = \
+	$(shellrcdir)/lua.d
+
+dist_shellrc_SCRIPTS = \
+	initrc.lua
+
+dist_shelllua_SCRIPTS = \
+	lua.d/mvapich.lua \
+	lua.d/intel_mpi.lua \
+	lua.d/openmpi.lua \
+	lua.d/spectrum.lua
+
 noinst_LTLIBRARIES = libshell.la
 
 libshell_la_SOURCES = \
