@@ -57,12 +57,19 @@ enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
     FLUX_OUTPUT_TYPE_KVS = 2,
     FLUX_OUTPUT_TYPE_FILE = 3,
+    FLUX_OUTPUT_TYPE_PER_TASK = 4,
 };
 
 struct shell_output_file {
     const char *path;
     int fd;
     int label;
+};
+
+struct shell_output_per_task {
+    const char *path;
+    int *fds;
+    int count;
 };
 
 struct shell_output {
@@ -76,6 +83,8 @@ struct shell_output {
     int stderr_type;
     struct shell_output_file stdout_file;
     struct shell_output_file stderr_file;
+    struct shell_output_per_task stdout_per_task;
+    struct shell_output_per_task stderr_per_task;
 };
 
 static const int shell_output_lwm = 100;
@@ -220,6 +229,8 @@ static const char *output_type_str (int type)
         return "kvs";
     case FLUX_OUTPUT_TYPE_FILE:
         return "file";
+    case FLUX_OUTPUT_TYPE_PER_TASK:
+        return "per-task";
     }
     log_err_exit ("output type invalid: %d", type);
 }
@@ -549,6 +560,16 @@ static void shell_output_file_cleanup (struct shell_output_file *sof)
         close (sof->fd);
 }
 
+static void shell_output_per_task_cleanup (struct shell_output_per_task *sopt)
+{
+    if (sopt->fds) {
+        int i;
+        for (i = 0; i < sopt->count; i++)
+            close (sopt->fds[i]);
+        free (sopt->fds);
+    }
+}
+
 void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
@@ -583,6 +604,8 @@ void shell_output_destroy (struct shell_output *out)
         json_decref (out->output);
         shell_output_file_cleanup (&out->stdout_file);
         shell_output_file_cleanup (&out->stderr_file);
+        shell_output_per_task_cleanup (&out->stdout_per_task);
+        shell_output_per_task_cleanup (&out->stderr_per_task);
         free (out);
         errno = saved_errno;
     }
@@ -595,10 +618,18 @@ static void shell_output_file_init (struct shell_output_file *sof)
     sof->label = false;
 }
 
+static void shell_output_per_task_init (struct shell_output_per_task *sopt)
+{
+    sopt->path = NULL;
+    sopt->fds = NULL;
+    sopt->count = 0;
+}
+
 static int shell_output_parse_type (struct shell_output *out,
                                     const char *stream,
                                     int *typep,
-                                    struct shell_output_file *sof)
+                                    struct shell_output_file *sof,
+                                    struct shell_output_per_task *sopt)
 {
     const char *typestr = NULL;
     int ret;
@@ -629,6 +660,23 @@ static int shell_output_parse_type (struct shell_output *out,
         if (flux_shell_getopt_unpack (out->shell, "output",
                                       "{s:{s?:b}}",
                                       stream, "label", &(sof->label)) < 0)
+            return -1;
+    }
+    else if (!strcmp (typestr, "per-task")) {
+        (*typep) = FLUX_OUTPUT_TYPE_PER_TASK;
+
+        if (flux_shell_getopt_unpack (out->shell, "output",
+                                      "{s:{s?:s}}",
+                                      stream, "path", &(sopt->path)) < 0)
+            return -1;
+
+        if (sopt->path == NULL) {
+            log_msg ("path for %s per-task output not specified", stream);
+            return -1;
+        }
+
+        sopt->fds = malloc (sizeof (int) * out->shell->info->rankinfo.ntasks);
+        if (!sopt->fds)
             return -1;
     }
     else {
@@ -707,6 +755,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     out->shell = shell;
     shell_output_file_init (&out->stdout_file);
     shell_output_file_init (&out->stderr_file);
+    shell_output_per_task_init (&out->stdout_per_task);
+    shell_output_per_task_init (&out->stderr_per_task);
     if (out->shell->standalone) {
         out->stdout_type = FLUX_OUTPUT_TYPE_TERM;
         out->stderr_type = FLUX_OUTPUT_TYPE_TERM;
@@ -720,13 +770,15 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (shell_output_parse_type (out,
                                  "stdout",
                                  &(out->stdout_type),
-                                 &(out->stdout_file)) < 0)
+                                 &(out->stdout_file),
+                                 &(out->stdout_per_task)) < 0)
         goto error;
 
     if (shell_output_parse_type (out,
                                  "stderr",
                                  &(out->stderr_type),
-                                 &(out->stderr_file)) < 0)
+                                 &(out->stderr_file),
+                                 &(out->stderr_per_task)) < 0)
         goto error;
 
     if (!(out->pending_writes = zlist_new ()))
@@ -789,6 +841,44 @@ static void task_output_cb (struct shell_task *task,
     }
 }
 
+static int shell_output_per_task_setup (struct shell_task *task,
+                                        const char *stream,
+                                        struct shell_output_per_task *sopt)
+{
+    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    int open_flags = O_CREAT | O_TRUNC | O_WRONLY;
+    char path_full[PATH_MAX];
+    char buf_opt[64];
+    char buf_fd[64];
+    int fd = -1;
+    int saved_errno;
+
+    /* For time being, always append task number to path */
+    snprintf (path_full, sizeof (path_full),
+              "%s-%d", sopt->path, task->rank);
+
+    if ((fd = open (path_full, open_flags, mode)) < 0) {
+        log_err ("error opening output file '%s'", path_full);
+        goto error;
+    }
+
+    snprintf (buf_opt, sizeof (buf_opt), "%s_OUTPUT_FD", stream);
+    snprintf (buf_fd, sizeof (buf_fd), "%d", fd);
+
+    if (flux_cmd_setopt (task->cmd, buf_opt, buf_fd) < 0) {
+        log_err ("error setting '%s'", buf_opt);
+        goto error;
+    }
+
+    sopt->fds[sopt->count++] = fd;
+    return 0;
+error:
+    saved_errno = errno;
+    close (fd);
+    errno = saved_errno;
+    return -1;
+}
+
 static int shell_output_task_init (flux_plugin_t *p,
                                    const char *topic,
                                    flux_plugin_arg_t *args,
@@ -809,6 +899,18 @@ static int shell_output_task_init (flux_plugin_t *p,
     if (output_type_requires_service (out->stderr_type)) {
         if (flux_shell_task_channel_subscribe (task, "stderr",
                                                task_output_cb, out) < 0)
+            return -1;
+    }
+    if (out->stdout_type == FLUX_OUTPUT_TYPE_PER_TASK) {
+        if (shell_output_per_task_setup (task,
+                                         "stdout",
+                                         &(out->stdout_per_task)) < 0)
+            return -1;
+    }
+    if (out->stderr_type == FLUX_OUTPUT_TYPE_PER_TASK) {
+        if (shell_output_per_task_setup (task,
+                                         "stderr",
+                                         &(out->stderr_per_task)) < 0)
             return -1;
     }
 
