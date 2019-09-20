@@ -229,11 +229,19 @@ int shell_task_kill (struct shell_task *task, int signum)
 
 flux_cmd_t *flux_shell_task_cmd (flux_shell_task_t *task)
 {
+    if (!task) {
+        errno = EINVAL;
+        return NULL;
+    }
     return task->cmd;
 }
 
 flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task)
 {
+    if (!task) {
+        errno = EINVAL;
+        return NULL;
+    }
     return task->proc;
 }
 
@@ -242,7 +250,12 @@ int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
                                        flux_shell_task_io_f cb,
                                        void *arg)
 {
-    struct channel_watcher *cw = calloc (1, sizeof (*cw));
+    struct channel_watcher *cw;
+    if (!task || !name || !cb) {
+        errno = EINVAL;
+        return -1;
+    }
+    cw = calloc (1, sizeof (*cw));
     if (!cw)
         return -1;
     cw->cb = cb;

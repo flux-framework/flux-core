@@ -155,11 +155,19 @@ int flux_shell_aux_set (flux_shell_t *shell,
                         void *val,
                         flux_free_f free_fn)
 {
+    if (!shell || (!key && !val)) {
+        errno = EINVAL;
+        return -1;
+    }
     return aux_set (&shell->aux, key, val, free_fn);
 }
 
 void * flux_shell_aux_get (flux_shell_t *shell, const char *key)
 {
+    if (!shell || !key) {
+        errno = EINVAL;
+        return NULL;
+    }
     return aux_get (shell->aux, key);
 }
 
@@ -172,7 +180,7 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
     char *topic;
     flux_msg_handler_t *mh = NULL;
 
-    if (!shell->h) {
+    if (!shell || !shell->h || !subtopic || !cb) {
         errno = EINVAL;
         return -1;
     }
@@ -202,6 +210,10 @@ int flux_shell_service_register (flux_shell_t *shell,
                                  flux_msg_handler_f cb,
                                  void *arg)
 {
+    if (!shell || !method || !cb) {
+        errno = EINVAL;
+        return -1;
+    }
     return shell_svc_register (shell->svc, method, cb, arg);
 }
 
@@ -213,6 +225,10 @@ flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
 {
     flux_future_t *f;
     va_list ap;
+    if (!shell || !method || shell_rank < 0 || !fmt) {
+        errno = EINVAL;
+        return NULL;
+    }
     va_start (ap, fmt);
     f = shell_svc_vpack (shell->svc, method, shell_rank, flags, fmt, ap);
     va_end (ap);
@@ -221,6 +237,10 @@ flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
 
 flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
 {
+    if (!shell) {
+        errno = EINVAL;
+        return NULL;
+    }
     return shell->current_task;
 }
 
@@ -292,6 +312,8 @@ static void shell_initialize (flux_shell_t *shell)
 void flux_shell_killall (flux_shell_t *shell, int signum)
 {
     struct shell_task *task;
+    if (!shell ||  signum <= 0 || !shell->tasks)
+        return;
     task = zlist_first (shell->tasks);
     while (task) {
         if (shell_task_kill (task, signum) < 0)
@@ -307,6 +329,11 @@ int flux_shell_add_completion_ref (flux_shell_t *shell,
     int *intp = NULL;
     char *ref = NULL;
     va_list ap;
+
+    if (!shell || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
 
     va_start (ap, fmt);
     if ((rc = vasprintf (&ref, fmt, ap)) < 0)
@@ -334,6 +361,11 @@ int flux_shell_remove_completion_ref (flux_shell_t *shell,
     int *intp;
     va_list ap;
     char *ref = NULL;
+
+    if (!shell || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
 
     va_start (ap, fmt);
     if ((rc = vasprintf (&ref, fmt, ap)) < 0)
