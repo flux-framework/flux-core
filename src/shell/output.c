@@ -72,6 +72,7 @@ struct shell_output_type_file {
     struct shell_output_fd *fdp;
     char *path;
     int label;
+    bool per_task;
 };
 
 struct shell_output {
@@ -646,11 +647,14 @@ void shell_output_destroy (struct shell_output *out)
 }
 
 /* check if this output type requires the service to be started */
-static bool output_type_requires_service (int type)
+static bool output_type_requires_service (int type,
+                                          struct shell_output_type_file *ofp)
 {
     if ((type == FLUX_OUTPUT_TYPE_TERM)
-        || (type == FLUX_OUTPUT_TYPE_KVS)
-        || (type == FLUX_OUTPUT_TYPE_FILE))
+        || (type == FLUX_OUTPUT_TYPE_KVS))
+        return true;
+    if (type == FLUX_OUTPUT_TYPE_FILE
+        && !ofp->per_task)
         return true;
     return false;
 }
@@ -731,10 +735,14 @@ shell_output_setup_type_file (struct shell_output *out,
                                   stream, "label", &(ofp->label)) < 0)
         return -1;
 
+    if (strstr (ofp->path, "{{taskid}}") != NULL)
+        ofp->per_task = true;
+
     if (ofp_copy) {
         if (!(ofp_copy->path = strdup (ofp->path)))
             return -1;
         ofp_copy->label = ofp->label;
+        ofp_copy->per_task = ofp->per_task;
     }
 
     return 0;
@@ -942,17 +950,30 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
 
     if (!(out->pending_writes = zlist_new ()))
         goto error;
+
+    if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE
+        || out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
+        if (!(out->fds = zhash_new ())) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+
     if (shell->info->shell_rank == 0) {
-        if (output_type_requires_service (out->stdout_type)
-            || output_type_requires_service (out->stderr_type)) {
+        if (output_type_requires_service (out->stdout_type,
+                                          &(out->stdout_file))
+            || output_type_requires_service (out->stderr_type,
+                                             &(out->stderr_file))) {
             if (flux_shell_service_register (shell,
                                              "write",
                                              shell_output_write_cb,
                                              out) < 0)
                 goto error;
-            if (output_type_requires_service (out->stdout_type))
+            if (output_type_requires_service (out->stdout_type,
+                                              &(out->stdout_file)))
                 out->eof_pending += shell->info->jobspec->task_count;
-            if (output_type_requires_service (out->stderr_type))
+            if (output_type_requires_service (out->stderr_type,
+                                              &(out->stderr_file)))
                 out->eof_pending += shell->info->jobspec->task_count;
             if (flux_shell_add_completion_ref (shell, "output.write") < 0)
                 goto error;
@@ -962,19 +983,14 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
             }
         }
         if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE
-            || out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
-            if (!(out->fds = zhash_new ())) {
-                errno = ENOMEM;
+            && !out->stdout_file.per_task) {
+            if (shell_output_type_file_setup (out, &(out->stdout_file)) < 0)
                 goto error;
-            }
-            if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE) {
-                if (shell_output_type_file_setup (out, &(out->stdout_file)) < 0)
-                    goto error;
-            }
-            if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
-                if (shell_output_type_file_setup (out, &(out->stderr_file)) < 0)
-                    goto error;
-            }
+        }
+        if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE
+            && !out->stderr_file.per_task) {
+            if (shell_output_type_file_setup (out, &(out->stderr_file)) < 0)
+                goto error;
         }
         if (shell_output_header (out) < 0)
             goto error;
@@ -1007,6 +1023,82 @@ static void task_output_cb (struct shell_task *task,
     }
 }
 
+static int shell_output_get_taskid_path (const char *path,
+                                         int rank,
+                                         char *pathbuf,
+                                         int pathbuflen)
+{
+    char *ptr;
+    char buf[32];
+    int len, buflen, total_len;
+
+    ptr = strstr (path, "{{taskid}}");
+    assert (ptr);
+
+    len = strlen (path);
+    buflen = snprintf (buf, sizeof (buf), "%d", rank);
+    /* -10 for {{taskid}}, +1 for NUL */
+    total_len = len - 10 + buflen + 1;
+    if (total_len > pathbuflen) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    memset (pathbuf, '\0', pathbuflen);
+    memcpy (pathbuf, path, ptr - path);
+    memcpy (pathbuf + (ptr - path), buf, buflen);
+    memcpy (pathbuf + (ptr - path) + buflen, ptr + 10, len - (ptr - path) - 10);
+    return 0;
+}
+
+static int
+shell_output_type_per_task_setup (struct shell_output *out,
+                                  struct shell_task *task,
+                                  const char *stream,
+                                  struct shell_output_type_file *ofp)
+{
+    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    int open_flags = O_CREAT | O_TRUNC | O_WRONLY;
+    struct shell_output_fd *fdp;
+    char path_full[PATH_MAX+1];
+    char buf_opt[64];
+    char buf_fd[64];
+
+    if (shell_output_get_taskid_path (ofp->path,
+                                      task->rank,
+                                      path_full,
+                                      PATH_MAX + 1) < 0)
+        return -1;
+
+    if (!(fdp = zhash_lookup (out->fds, path_full))) {
+        int fd = -1;
+        if ((fd = open (path_full, open_flags, mode)) < 0) {
+            log_err ("error opening output file '%s'", path_full);
+            return -1;
+        }
+        if (!(fdp = shell_output_fd_create (fd))) {
+            close (fd);
+            return -1;
+        }
+
+        if (zhash_insert (out->fds, path_full, fdp) < 0) {
+            shell_output_fd_destroy (fdp);
+            errno = ENOMEM;
+            return -1;
+        }
+        zhash_freefn (out->fds, path_full, shell_output_fd_destroy);
+    }
+
+    snprintf (buf_opt, sizeof (buf_opt), "%s_OUTPUT_FD", stream);
+    snprintf (buf_fd, sizeof (buf_fd), "%d", fdp->fd);
+
+    if (flux_cmd_setopt (task->cmd, buf_opt, buf_fd) < 0) {
+        log_err ("error setting '%s'", buf_opt);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int shell_output_task_init (flux_plugin_t *p,
                                    const char *topic,
                                    flux_plugin_arg_t *args,
@@ -1019,14 +1111,32 @@ static int shell_output_task_init (flux_plugin_t *p,
     if (!shell || !out || !(task = flux_shell_current_task (shell)))
         return -1;
 
-    if (output_type_requires_service (out->stdout_type)) {
+    if (output_type_requires_service (out->stdout_type,
+                                      &(out->stdout_file))) {
         if (flux_shell_task_channel_subscribe (task, "stdout",
                                                task_output_cb, out) < 0)
             return -1;
     }
-    if (output_type_requires_service (out->stderr_type)) {
+    if (output_type_requires_service (out->stderr_type,
+                                      &(out->stderr_file))) {
         if (flux_shell_task_channel_subscribe (task, "stderr",
                                                task_output_cb, out) < 0)
+            return -1;
+    }
+    if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE
+        && out->stdout_file.per_task) {
+        if (shell_output_type_per_task_setup (out,
+                                              task,
+                                              "stdout",
+                                              &(out->stdout_file)) < 0)
+            return -1;
+    }
+    if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE
+        && out->stderr_file.per_task) {
+        if (shell_output_type_per_task_setup (out,
+                                              task,
+                                              "stderr",
+                                              &(out->stderr_file)) < 0)
             return -1;
     }
 
