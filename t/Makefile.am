@@ -103,6 +103,7 @@ TESTSCRIPTS = \
 	t2602-job-shell.t \
 	t2603-job-shell-initrc.t \
 	t3000-mpi-basic.t \
+	t3001-mpi-personalities.t \
 	t3100-flux-in-flux.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
