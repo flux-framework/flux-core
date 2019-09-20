@@ -397,8 +397,11 @@ static void shell_finalize (flux_shell_t *shell)
     /* Process completed tasks:
      * - reduce exit codes to shell 'rc'
      * - destroy
+     *
+     * NB: shell->rc may already be initialized to non-zero if
+     * another shell component failed and wanted to ensure that
+     * shell exits with error.
      */
-    shell->rc = 0;
     if (shell->tasks) {
         struct shell_task *task;
 
@@ -708,8 +711,15 @@ int main (int argc, char *argv[])
     if (flux_reactor_run (shell.r, 0) < 0)
         log_err ("flux_reactor_run");
 
-    if (shell_exit (&shell) < 0)
-        log_err ("shell_exit callback(s) failed");
+    if (shell_exit (&shell) < 0) {
+        log_msg ("shell_exit callback(s) failed");
+        /* Preset shell.rc to failure so failure here is ensured
+         *  to cause shell to exit with non-zero exit code.
+         * XXX: this should be replaced with more general fatal
+         *  error function.
+         */
+        shell.rc = 1;
+    }
 
     shell_finalize (&shell);
 
