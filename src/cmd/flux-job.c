@@ -748,10 +748,6 @@ struct attach_ctx {
     bool started;
     bool missing_output_ok;
     bool output_header_parsed;
-    int stdout_count;
-    int stderr_count;
-    int stdout_eof_count;
-    int stderr_eof_count;
 };
 
 void attach_cancel_continuation (flux_future_t *f, void *arg)
@@ -847,10 +843,6 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                              ctx->exit_code);
             }
         }
-        else if (!strcmp (name, "clean")) {
-            if (flux_job_event_watch_cancel (f) < 0)
-                log_err_exit ("flux_job_event_watch_cancel");
-        }
     }
     if (ctx->show_events && strcmp (name, "exception") != 0) {
         char *s = NULL;
@@ -892,53 +884,32 @@ void print_output_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_entry_parse");
 
     if (!strcmp (name, "header")) {
-        json_t *o = json_object_get (context, "count");
-        if (!o)
-            log_msg_exit ("io header missing task_count");
-        if (json_unpack (o, "{s:i s:i}",
-                         "stdout", &ctx->stdout_count,
-                         "stderr", &ctx->stderr_count) < 0)
-            log_msg_exit ("error parsing stream counts");
+        /* Future: per-stream encoding */
         ctx->output_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
         FILE *fp;
-        int *eof_count_ptr;
         const char *stream;
         int rank;
         char *data;
         int len;
-        bool eof;
         if (!ctx->output_header_parsed)
             log_msg_exit ("stream data read before header");
-        if (iodecode (context, &stream, &rank, &data, &len, &eof) < 0)
+        if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
             log_msg_exit ("malformed event context");
-        if (!strcmp (stream, "stdout")) {
+        if (!strcmp (stream, "stdout"))
             fp = stdout;
-            eof_count_ptr = &ctx->stdout_eof_count;
-        }
-        else {
+        else
             fp = stderr;
-            eof_count_ptr = &ctx->stderr_eof_count;
-        }
         if (len > 0) {
             if (optparse_hasopt (ctx->p, "label"))
                 fprintf (fp, "%d: ", rank);
             fwrite (data, len, 1, fp);
         }
-        if (eof)
-            (*eof_count_ptr)++;
         free (data);
     }
 
     json_decref (o);
-
-    if (ctx->stdout_eof_count >= ctx->stdout_count
-        && ctx->stderr_eof_count >= ctx->stderr_count) {
-        if (flux_job_event_watch_cancel (f) < 0)
-            log_err_exit ("flux_job_event_watch_cancel");
-    }
-
     flux_future_reset (f);
     return;
 done:
