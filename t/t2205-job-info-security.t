@@ -10,9 +10,9 @@ test_under_flux 4 job
 # This method of editing the eventlog preserves newline separators.
 
 update_job_userid() {
-        userid=$1
+        local userid=$1
         if test -n "$userid"; then
-            kvsdir=$(flux job id --to=kvs $jobid)
+            local kvsdir=$(flux job id --to=kvs $jobid)
             flux kvs get --raw ${kvsdir}.eventlog \
                 | sed -e 's/\("userid":\)[0-9]*/\1'${userid}/ \
                 | flux kvs put --raw ${kvsdir}.eventlog=-
@@ -24,32 +24,32 @@ update_job_userid() {
 # cancel the job, and wait for clean event.  Optionally, edit the
 # userid
 submit_job() {
-        jobid=$(flux job submit test.json)
-        flux job wait-event $jobid start >/dev/null
-        flux job cancel $jobid
-        flux job wait-event $jobid clean >/dev/null
-        update_job_userid $1
+        local jobid=$(flux job submit sleeplong.json) &&
+        flux job wait-event $jobid start >/dev/null &&
+        flux job cancel $jobid &&
+        flux job wait-event $jobid clean >/dev/null &&
+        update_job_userid $1 &&
         echo $jobid
 }
 
 # Unlike above, do not cancel the job, the test will cancel the job
 submit_job_live() {
-        jobid=$(flux job submit test.json)
-        flux job wait-event $jobid start >/dev/null
-        update_job_userid $1
+        local jobid=$(flux job submit sleeplong.json) &&
+        flux job wait-event $jobid start >/dev/null &&
+        update_job_userid $1 &&
         echo $jobid
 }
 
 # Usage: bad_first_event
 # Wait for job eventlog to include 'depend' event, then mangle submit event name
 bad_first_event() {
-        jobid=$(flux job submit test.json)
-        flux job wait-event $jobid depend >/dev/null
-        kvsdir=$(flux job id --to=kvs $jobid)
+        local jobid=$(flux job submit sleeplong.json) &&
+        flux job wait-event $jobid depend >/dev/null &&
+        local kvsdir=$(flux job id --to=kvs $jobid) &&
         flux kvs get --raw ${kvsdir}.eventlog \
             | sed -e s/submit/foobar/ \
-            | flux kvs put --raw ${kvsdir}.eventlog=-
-        flux job cancel $jobid
+            | flux kvs put --raw ${kvsdir}.eventlog=- &&
+        flux job cancel $jobid &&
         echo $jobid
 }
 
@@ -64,7 +64,7 @@ unset_userid() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-        flux jobspec --format json srun -N1 sleep inf > test.json
+        flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
 '
 
 hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'

@@ -14,31 +14,31 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 # To ensure robustness of tests despite future job manager changes,
 # cancel the job, and wait for clean event.
 submit_job() {
-        jobid=$(flux job submit test.json)
-        flux job wait-event $jobid start >/dev/null
-        flux job cancel $jobid
-        flux job wait-event $jobid clean >/dev/null
+        local jobid=$(flux job submit sleeplong.json) &&
+        flux job wait-event $jobid start >/dev/null &&
+        flux job cancel $jobid &&
+        flux job wait-event $jobid clean >/dev/null &&
         echo $jobid
 }
 
 # Unlike above, do not cancel the job, the test will cancel the job
 submit_job_live() {
-        jobspec=$1
-        jobid=$(flux job submit $jobspec)
-        flux job wait-event $jobid start >/dev/null
+        local jobspec=$1
+        local jobid=$(flux job submit $jobspec) &&
+        flux job wait-event $jobid start >/dev/null &&
         echo $jobid
 }
 
 # Test will cancel the job, is assumed won't run immediately
 submit_job_wait() {
-        jobid=$(flux job submit test.json)
-        flux job wait-event $jobid depend >/dev/null
+        local jobid=$(flux job submit sleeplong.json) &&
+        flux job wait-event $jobid depend >/dev/null &&
         echo $jobid
 }
 
 wait_watchers_nonzero() {
-        str=$1
-        i=0
+        local str=$1
+        local i=0
         while (! flux module stats --parse $str job-info > /dev/null 2>&1 \
                || [ "$(flux module stats --parse $str job-info 2> /dev/null)" = "0" ]) \
               && [ $i -lt 50 ]
@@ -54,13 +54,13 @@ wait_watchers_nonzero() {
 }
 
 get_timestamp_field() {
-        field=$1
-        file=$2
+        local field=$1
+        local file=$2
         grep $field $file | awk '{print $1}'
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-        flux jobspec --format json srun -N1 sleep inf > test.json
+        flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
 '
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
@@ -327,7 +327,7 @@ test_expect_success 'flux job wait-event -p hangs on no event' '
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (live job)' '
-        jobid=$(submit_job_live test.json)
+        jobid=$(submit_job_live sleeplong.json)
         flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path3.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
@@ -340,7 +340,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 '
 
 test_expect_success 'flux job wait-event -p hangs on no event (live job)' '
-        jobid=$(submit_job_live test.json) &&
+        jobid=$(submit_job_live sleeplong.json) &&
         ! run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobid
 '
@@ -351,11 +351,11 @@ test_expect_success 'flux job wait-event -p hangs on no event (live job)' '
 # yet. Then we cancel the initial job to get the new one running.
 
 test_expect_success 'job-info: generate jobspec to consume all resources' '
-        flux jobspec --format json srun -n4 -c2 sleep inf > test-all.json
+        flux jobspec --format json srun -n4 -c2 sleep 300 > sleeplong-all-rsrc.json
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '
-        jobidall=$(submit_job_live test-all.json)
+        jobidall=$(submit_job_live sleeplong-all-rsrc.json)
         jobid=$(submit_job_wait)
         flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path4.out &
         waitpid=$! &&
@@ -371,7 +371,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 '
 
 test_expect_success 'flux job wait-event -p hangs on no event (wait job)' '
-        jobidall=$(submit_job_live test-all.json) &&
+        jobidall=$(submit_job_live sleeplong-all-rsrc.json) &&
         jobid=$(submit_job_wait) &&
         ! run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobidall &&
