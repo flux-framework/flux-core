@@ -448,6 +448,9 @@ static void shell_initialize (flux_shell_t *shell)
     if (!(shell->plugstack = plugstack_create ()))
         log_err_exit ("plugstack_create");
 
+    if (plugstack_plugin_aux_set (shell->plugstack, "flux::shell", shell) < 0)
+        log_err_exit ("plugstack_plugin_aux_set");
+
     if (plugstack_set_searchpath (shell->plugstack, pluginpath) < 0)
         log_err_exit ("plugstack_set_searchpath");
 
