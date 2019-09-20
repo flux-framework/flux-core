@@ -309,26 +309,179 @@ test_expect_success 'flux-shell: run 2-task echo job (stdout term/stderr file)' 
 	grep "1: stderr:baz" err109
 '
 
+test_expect_success 'flux-shell: run 1-task echo job (per-task stdout)' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out110\"" \
+            > j1echostdout-110 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echostdout-110 -R R1echo 110 &&
+	grep stdout:foo out110-0
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (per-task stderr)' '
+        cat j1echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err111\"" \
+            > j1echostderr-111 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echostderr-111 -R R1echo 111 &&
+	grep stderr:bar err111-0
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (per-task stdout & stderr)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out112\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err112\"" \
+            > j1echoboth-112 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-112 -R R1echo 112 &&
+	grep stdout:baz out112-0 &&
+	grep stderr:baz err112-0
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (per-task stdout/stderr term)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out113\"" \
+            > j1echoboth-113 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-113 -R R1echo 2> err113 113 &&
+	grep stdout:baz out113-0 &&
+	grep stderr:baz err113
+'
+
+test_expect_success 'flux-shell: run 1-task echo job (stdout term/per-task stderr)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err114\"" \
+            > j1echoboth-114 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-114 -R R1echo > out114 114 &&
+	grep stdout:baz out114 &&
+	grep stderr:baz err114-0
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (per-task stdout)' '
+        cat j2echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out115\"" \
+            > j2echostdout-115 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostdout-115 -R R2echo 115 &&
+	grep "stdout:foo" out115-0 &&
+	grep "stdout:foo" out115-1
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (per-task stderr)' '
+        cat j2echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err116\"" \
+            > j2echostderr-116 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostderr-116 -R R2echo 116 &&
+	grep "stderr:bar" err116-0 &&
+	grep "stderr:bar" err116-1
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (per-task stdout & stderr)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out117\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err117\"" \
+            > j2echoboth-117 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-117 -R R2echo 117 &&
+	grep "stdout:baz" out117-0 &&
+	grep "stdout:baz" out117-1 &&
+	grep "stderr:baz" err117-0 &&
+	grep "stderr:baz" err117-1
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (per-task stdout/stderr term)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out118\"" \
+            > j2echoboth-118 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-118 -R R2echo 2> err118 118 &&
+	grep "stdout:baz" out118-0 &&
+	grep "stdout:baz" out118-1 &&
+	grep "0: stderr:baz" err118 &&
+	grep "1: stderr:baz" err118
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stdout term/per-task stderr)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err119\"" \
+            > j2echoboth-119 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-119 -R R2echo > out119 119 &&
+	grep "0: stdout:baz" out119 &&
+	grep "1: stdout:baz" out119 &&
+	grep "stderr:baz" err119-0 &&
+	grep "stderr:baz" err119-1
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (per-task stdout/stderr file)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out120\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err120\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echoboth-120 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-120 -R R2echo 120 &&
+	grep "stdout:baz" out120-0 &&
+	grep "stdout:baz" out120-1 &&
+	grep "0: stderr:baz" err120 &&
+	grep "1: stderr:baz" err120
+'
+
+test_expect_success 'flux-shell: run 2-task echo job (stdout file/per-task stderr)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out121\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err121\"" \
+            > j2echoboth-121 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-121 -R R2echo 121 &&
+	grep "0: stdout:baz" out121 &&
+	grep "1: stdout:baz" out121 &&
+	grep "stderr:baz" err121-0 &&
+	grep "stderr:baz" err121-1
+'
+
 test_expect_success 'flux-shell: error on bad output type' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"foobar\"" \
-            > j1echostdout-110 &&
-        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-110 -R R1echo 110
+            > j1echostdout-122 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-122 -R R1echo 122
 '
 
 test_expect_success 'flux-shell: error on no path with file output' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
-            > j1echostdout-111 &&
-        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-111 -R R1echo 111
+            > j1echostdout-123 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-123 -R R1echo 123
+'
+
+test_expect_success 'flux-shell: error on no path with per-task output' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            > j1echostdout-124 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-124 -R R1echo 124
 '
 
 test_expect_success 'flux-shell: error invalid path to file output' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"/foo/bar/baz\"" \
-            > j1echostdout-112 &&
-        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-112 -R R1echo 112
+            > j1echostdout-125 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-125 -R R1echo 125
+'
+
+test_expect_success 'flux-shell: error invalid path to per-task output' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"per-task\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"/foo/bar/baz\"" \
+            > j1echostdout-126 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-126 -R R1echo 126
 '
 
 test_done
