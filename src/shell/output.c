@@ -108,10 +108,6 @@ static int shell_output_flush (struct shell_output *out)
     json_array_foreach (out->output, index, entry) {
         json_t *context;
         const char *name;
-        const char *stream = NULL;
-        int rank;
-        char *data = NULL;
-        int len = 0;
         if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
             log_err ("eventlog_entry_parse");
             return -1;
@@ -120,6 +116,10 @@ static int shell_output_flush (struct shell_output *out)
             // TODO: acquire per-stream encoding type
         }
         else if (!strcmp (name, "data")) {
+            const char *stream = NULL;
+            int rank;
+            char *data = NULL;
+            int len = 0;
             if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
                 log_err ("iodecode");
                 return -1;
