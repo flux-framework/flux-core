@@ -745,7 +745,6 @@ struct attach_ctx {
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
     struct timespec t_sigint;
-    bool show_events;
     optparse_t *p;
     bool output_header_parsed;
 };
@@ -920,8 +919,8 @@ done:
 /* Handle an event in the main job eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
- * If a fatal exception occurs, print it on stderr.
- * If --show-events was specified, print all exceptions on stderr.
+ * If a fatal exception event occurs, print it on stderr.
+ * If --show-events was specified, print all events on stderr.
  * If finish event occurs, capture ctx->exit code.
  */
 void attach_event_continuation (flux_future_t *f, void *arg)
@@ -974,7 +973,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             }
         }
     }
-    if (ctx->show_events && strcmp (name, "exception") != 0) {
+    if (optparse_hasopt (ctx->p, "show-events")
+                                    && strcmp (name, "exception") != 0) {
         char *s = NULL;
         if (context && !(s = json_dumps (context, JSON_COMPACT)))
             log_err_exit ("error re-encoding context");
@@ -1006,7 +1006,6 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
-    ctx.show_events = optparse_hasopt (p, "show-events");
     ctx.p = p;
 
     if (!(ctx.h = flux_open (NULL, 0)))
