@@ -5,7 +5,7 @@ flux_reactor_create(3)
 
 NAME
 ----
-flux_reactor_create, flux_reactor_destroy, flux_reactor_run, flux_reactor_stop, flux_reactor_stop_error - create/destroy/control event reactor object
+flux_reactor_create, flux_reactor_destroy, flux_reactor_run, flux_reactor_stop, flux_reactor_stop_error, flux_reactor_active_incref, flux_reactor_active_decref - create/destroy/control event reactor object
 
 
 SYNOPSIS
@@ -22,6 +22,9 @@ void flux_reactor_stop (flux_reactor_t *r);
 
 void flux_reactor_stop_error (flux_reactor_t *r);
 
+void flux_reactor_active_incref (flux_reactor_t *r);
+
+void flux_reactor_active_decref (flux_reactor_t *r);
 
 DESCRIPTION
 -----------
@@ -73,6 +76,16 @@ errno(3) before calling this function.
 `flux_reactor_destroy()` releases an internal reference taken at
 `flux_reactor_create()` time.  Freeing of the underlying resources will
 be deferred if there are any remaining watchers associated with the reactor.
+
+`flux_reactor_active_decref()` and `flux_reactor_active_incref()` manipulate
+the reactor's internal count of active watchers.  Each active watcher takes
+a reference count on the reactor, and the reactor returns when this count
+reaches zero.  It is useful sometimes to have a watcher that can remain
+active without preventing the reactor from exiting.  To achieve this,
+call `flux_reactor_active_decref()` after the watcher is started, and
+`flux_reactor_active_incref()` before the watcher is stopped.
+Remember that destroying an active reactor internally stops it,
+so be sure to stop/incref such a watcher first.
 
 RETURN VALUE
 ------------

@@ -1384,6 +1384,50 @@ static void test_stat (flux_reactor_t *reactor)
     free (ctx.path);
 }
 
+static void active_idle_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
+{
+    int *count = arg;
+    (*count)++;
+
+    if (*count >= 16)
+        flux_reactor_stop_error (r);
+}
+
+
+static void test_active_ref (flux_reactor_t *r)
+{
+    flux_watcher_t *w;
+    int count;
+
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run with no watchers returned immediately");
+
+    if (!(w = flux_idle_watcher_create (r, active_idle_cb, &count)))
+        BAIL_OUT ("flux_idle_watcher_create failed");
+    flux_watcher_start (w);
+
+    count = 0;
+    ok (flux_reactor_run (r, 0) < 0 && count == 16,
+        "flux_reactor_run with one watcher stopped after 16 iterations");
+
+    flux_reactor_active_decref (r);
+
+    count = 0;
+    ok (flux_reactor_run (r, 0) == 0 && count == 1,
+        "flux_reactor_run with one watcher+decref returned after 1 iteration");
+
+    flux_reactor_active_incref (r);
+
+    count = 0;
+    ok (flux_reactor_run (r, 0) < 0 && count == 16,
+        "flux_reactor_run with one watcher+incref stopped after 16 iterations");
+
+    flux_watcher_destroy (w);
+}
+
 static void reactor_destroy_early (void)
 {
     flux_reactor_t *r;
@@ -1423,6 +1467,7 @@ int main (int argc, char *argv[])
     test_signal (reactor);
     test_child (reactor);
     test_stat (reactor);
+    test_active_ref (reactor);
 
     flux_reactor_destroy (reactor);
 

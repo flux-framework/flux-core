@@ -457,3 +457,5 @@ UNIQ
 startup
 errmsg
 WAITCREATE
+incref
+decref
