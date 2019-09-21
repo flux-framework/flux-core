@@ -76,6 +76,8 @@ MAN3_FILES_SECONDARY = \
 	flux_reactor_run.3 \
 	flux_reactor_stop.3 \
 	flux_reactor_stop_error.3 \
+	flux_reactor_active_incref.3 \
+	flux_reactor_active_decref.3 \
 	flux_fd_watcher_get_fd.3 \
 	flux_watcher_stop.3 \
 	flux_watcher_destroy.3 \
@@ -218,6 +220,8 @@ flux_reactor_destroy.3: flux_reactor_create.3
 flux_reactor_run.3: flux_reactor_create.3
 flux_reactor_stop.3: flux_reactor_create.3
 flux_reactor_error.3: flux_reactor_create.3
+flux_reactor_active_incref.3: flux_reactor_create.3
+flux_reactor_active_decref.3: flux_reactor_create.3
 flux_fd_watcher_get_fd.3: flux_fd_watcher_create.3
 flux_watcher_stop.3: flux_watcher_start.3
 flux_watcher_destroy.3: flux_watcher_start.3
