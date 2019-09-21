@@ -176,6 +176,7 @@ dist_check_SCRIPTS = \
 	job-manager/drain-cancel.py \
 	job-manager/drain-undrain.py \
 	job-manager/bulk-state.py \
+	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	schedutil/req_and_unload.py
 

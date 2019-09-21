@@ -45,7 +45,7 @@
 #include "info.h"
 
 struct channel_watcher {
-    flux_shell_task_io_f *cb;
+    flux_shell_task_io_f cb;
     void *arg;
 };
 
