@@ -747,7 +747,33 @@ struct attach_ctx {
     struct timespec t_sigint;
     optparse_t *p;
     bool output_header_parsed;
+    double timestamp_zero;
 };
+
+/* Print eventlog entry to 'fp'.
+ * Prefix and context may be NULL.
+ */
+void print_eventlog_entry (FILE *fp,
+                           const char *prefix,
+                           double timestamp,
+                           const char *name,
+                           json_t *context)
+{
+    char *context_s = NULL;
+
+    if (context) {
+        if (!(context_s = json_dumps (context, JSON_COMPACT)))
+            log_err_exit ("%s: error re-encoding context", __func__);
+    }
+    fprintf (stderr, "%s%s%.3f %s%s%s\n",
+             prefix ? prefix : "",
+             prefix ? ": " : "",
+             timestamp,
+             name,
+             context_s ? " " : "",
+             context_s ? context_s : "");
+    free (context_s);
+}
 
 /* Handle an event in the guest.output eventlog.
  * This is a stream of responses, one response per event, terminated with
@@ -928,6 +954,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     struct attach_ctx *ctx = arg;
     const char *entry;
     json_t *o;
+    double timestamp;
     const char *name;
     json_t *context;
     int status;
@@ -940,8 +967,12 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     }
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
+
+    if (ctx->timestamp_zero == 0.)
+        ctx->timestamp_zero = timestamp;
+
     if (!strcmp (name, "exception")) {
         const char *type;
         int severity;
@@ -973,17 +1004,16 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             }
         }
     }
+
     if (optparse_hasopt (ctx->p, "show-events")
                                     && strcmp (name, "exception") != 0) {
-        char *s = NULL;
-        if (context && !(s = json_dumps (context, JSON_COMPACT)))
-            log_err_exit ("error re-encoding context");
-        fprintf (stderr, "job-event: %s%s%s\n",
-                 name,
-                 s ? " " : "",
-                 s ? s : "");
-        free (s);
+        print_eventlog_entry (stderr,
+                              "job-event",
+                              timestamp - ctx->timestamp_zero,
+                              name,
+                              context);
     }
+
     json_decref (o);
     flux_future_reset (f);
     return;
