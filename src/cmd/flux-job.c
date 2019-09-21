@@ -108,6 +108,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "show-events", .key = 'E', .has_arg = 0,
       .usage = "Show job events on stderr",
     },
+    { .name = "show-exec", .key = 'X', .has_arg = 0,
+      .usage = "Show exec events on stderr",
+    },
     { .name = "label", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
     },
@@ -897,13 +900,14 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
  * an ENODATA error response (or another error if something went wrong).
  * On the output-ready event, start watching the guest.output eventlog.
  * It is guaranteed to exist when guest.output is emitted.
- * At that point we cancel this request.
+ * If --show-exec was specified, print all events on stderr.
  */
 void attach_exec_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
     json_t *o;
+    double timestamp;
     const char *name;
     json_t *context;
 
@@ -915,8 +919,9 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     }
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
+
     if (!strcmp (name, "output-ready")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
@@ -929,9 +934,14 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
                               attach_output_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
+    }
 
-        if (flux_job_event_watch_cancel (f) < 0)
-            log_err_exit ("flux_job_event_watch_cancel");
+    if (optparse_hasopt (ctx->p, "show-exec")) {
+        print_eventlog_entry (stderr,
+                              "exec-event",
+                              timestamp - ctx->timestamp_zero,
+                              name,
+                              context);
     }
 
     json_decref (o);
@@ -947,6 +957,7 @@ done:
  * an ENODATA error response (or another error if something went wrong).
  * If a fatal exception event occurs, print it on stderr.
  * If --show-events was specified, print all events on stderr.
+ * If submit event occurs, begin watching guest.exec.eventlog.
  * If finish event occurs, capture ctx->exit code.
  */
 void attach_event_continuation (flux_future_t *f, void *arg)
@@ -987,6 +998,18 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                  type,
                  severity,
                  note ? note : "");
+    }
+    else if (!strcmp (name, "submit")) {
+        if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
+                                                           ctx->id,
+                                                         "guest.exec.eventlog",
+                                                           0)))
+            log_err_exit ("flux_job_event_watch");
+        if (flux_future_then (ctx->exec_eventlog_f,
+                              -1,
+                              attach_exec_event_continuation,
+                              ctx) < 0)
+            log_err_exit ("flux_future_then");
     }
     else {
         if (!strcmp (name, "finish")) {
@@ -1051,17 +1074,6 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (flux_future_then (ctx.eventlog_f,
                           -1,
                           attach_event_continuation,
-                          &ctx) < 0)
-        log_err_exit ("flux_future_then");
-
-    if (!(ctx.exec_eventlog_f = flux_job_event_watch (ctx.h,
-                                                      ctx.id,
-                                                      "guest.exec.eventlog",
-                                                      0)))
-        log_err_exit ("flux_job_event_watch");
-    if (flux_future_then (ctx.exec_eventlog_f,
-                          -1,
-                          attach_exec_event_continuation,
                           &ctx) < 0)
         log_err_exit ("flux_future_then");
 
