@@ -123,6 +123,7 @@ MAN3_FILES_SECONDARY = \
 	flux_future_get.3 \
 	flux_future_fulfill.3 \
 	flux_future_fulfill_error.3 \
+	flux_future_fulfill_with.3 \
 	flux_future_aux_set.3 \
 	flux_future_aux_get.3 \
 	flux_future_set_flux.3 \
@@ -266,6 +267,7 @@ flux_future_wait_for.3: flux_future_get.3
 flux_future_then.3: flux_future_get.3
 flux_future_fulfill.3: flux_future_create.3
 flux_future_fulfill_error.3: flux_future_create.3
+flux_future_fulfill_with.3: flux_future_create.3
 flux_future_aux_set.3: flux_future_create.3
 flux_future_aux_get.3: flux_future_create.3
 flux_future_set_flux.3: flux_future_create.3
