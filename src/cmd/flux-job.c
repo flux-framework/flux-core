@@ -750,7 +750,14 @@ struct attach_ctx {
     bool output_header_parsed;
 };
 
-void print_output_continuation (flux_future_t *f, void *arg)
+/* Handle an event in the guest.output eventlog.
+ * This is a stream of responses, one response per event, terminated with
+ * an ENODATA error response (or another error if something went wrong).
+ * The first eventlog entry is a header; remaining entries are data.
+ * Print each data entry to stdout/stderr, with task rank prefix if --label
+ * was specified.
+ */
+void attach_output_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
@@ -810,6 +817,10 @@ void attach_cancel_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
+/* Handle the user typing ctrl-C (SIGINT) and ctrl-Z (SIGTSTP).
+ * If the user types ctrl-C twice within 2s, cancel the job.
+ * If the user types ctrl-C then ctrl-Z within 2s, detach from the job.
+ */
 void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
 {
@@ -856,6 +867,13 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+/* Handle an event in the guest.exec eventlog.
+ * This is a stream of responses, one response per event, terminated with
+ * an ENODATA error response (or another error if something went wrong).
+ * On the output-ready event, start watching the guest.output eventlog.
+ * It is guaranteed to exist when guest.output is emitted.
+ * At that point we cancel this request.
+ */
 void attach_exec_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
@@ -883,7 +901,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
         if (flux_future_then (ctx->output_f,
                               -1.,
-                              print_output_continuation,
+                              attach_output_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
 
@@ -899,6 +917,13 @@ done:
     ctx->exec_eventlog_f = NULL;
 }
 
+/* Handle an event in the main job eventlog.
+ * This is a stream of responses, one response per event, terminated with
+ * an ENODATA error response (or another error if something went wrong).
+ * If a fatal exception occurs, print it on stderr.
+ * If --show-events was specified, print all exceptions on stderr.
+ * If finish event occurs, capture ctx->exit code.
+ */
 void attach_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
