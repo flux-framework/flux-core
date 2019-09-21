@@ -154,6 +154,18 @@ void flux_reactor_stop_error (flux_reactor_t *r)
     ev_break (r->loop, EVBREAK_ALL);
 }
 
+void flux_reactor_active_incref (flux_reactor_t *r)
+{
+    if (r)
+        ev_ref (r->loop);
+}
+
+void flux_reactor_active_decref (flux_reactor_t *r)
+{
+    if (r)
+        ev_unref (r->loop);
+}
+
 static int events_to_libev (int events)
 {
     int e = 0;
