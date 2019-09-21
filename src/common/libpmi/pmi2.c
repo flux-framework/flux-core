@@ -277,7 +277,7 @@ int PMI2_Info_GetJobAttr (const char name[],
 
         result = get_cached_kvsname (pmi_global_ctx, &kvsname);
         if (result != PMI2_SUCCESS)
-            return result;
+            goto error;
         result = pmi_simple_client_kvs_get (pmi_global_ctx,
                                             kvsname,
                                             name,
