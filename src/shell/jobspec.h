@@ -23,6 +23,7 @@ struct jobspec {
     json_t *command;
     const char *cwd;
     json_t *environment;
+    json_t *options;            // attributes.system.shell.options, if any
 };
 
 struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error);

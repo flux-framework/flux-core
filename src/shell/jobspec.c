@@ -85,14 +85,15 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
     if (!(job->jobspec = json_loads (jobspec, 0, error)))
         goto error;
     if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:o s:{s:{s?:s s?:o}}}",
+                        "{s:i s:o s:o s:{s:{s?:s s?:o s?:{s?:o}}}}",
                         "version", &version,
                         "resources", &resources,
                         "tasks", &tasks,
                         "attributes",
                             "system",
                                 "cwd", &job->cwd,
-                                "environment", &job->environment) < 0) {
+                                "environment", &job->environment,
+                                "shell", "options", &job->options) < 0) {
         goto error;
     }
     if (version != 1) {
