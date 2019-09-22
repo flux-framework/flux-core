@@ -36,7 +36,8 @@ TESTS = \
 	test_auth.t \
 	test_usock.t \
 	test_usock_echo.t \
-	test_subhash.t
+	test_subhash.t \
+	test_router.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -54,6 +55,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_ldadd = \
 	$(builddir)/libtestutil.la \
         $(top_builddir)/src/common/librouter/librouter.la \
+        $(top_builddir)/src/common/libtestutil/libtestutil.la \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la
@@ -85,3 +87,7 @@ test_usock_echo_t_LDADD = $(test_ldadd)
 test_subhash_t_SOURCES = test/subhash.c
 test_subhash_t_CPPFLAGS = $(test_cppflags)
 test_subhash_t_LDADD = $(test_ldadd)
+
+test_router_t_SOURCES = test/router.c
+test_router_t_CPPFLAGS = $(test_cppflags)
+test_router_t_LDADD = $(test_ldadd)
