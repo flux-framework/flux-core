@@ -35,7 +35,8 @@ TESTS = \
         test_disconnect.t \
 	test_auth.t \
 	test_usock.t \
-	test_usock_echo.t
+	test_usock_echo.t \
+	test_subhash.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -80,3 +81,7 @@ test_usock_t_LDADD = $(test_ldadd)
 test_usock_echo_t_SOURCES = test/usock_echo.c
 test_usock_echo_t_CPPFLAGS = $(test_cppflags)
 test_usock_echo_t_LDADD = $(test_ldadd)
+
+test_subhash_t_SOURCES = test/subhash.c
+test_subhash_t_CPPFLAGS = $(test_cppflags)
+test_subhash_t_LDADD = $(test_ldadd)
