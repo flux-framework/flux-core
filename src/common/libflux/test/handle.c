@@ -14,7 +14,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "util.h"
+#include "src/common/libtestutil/util.h"
 
 /* Fake handle flags for testing flux_flags_get/set/unset
  */

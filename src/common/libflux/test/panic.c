@@ -13,7 +13,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "util.h"
+#include "src/common/libtestutil/util.h"
 
 int main (int argc, char *argv[])
 {

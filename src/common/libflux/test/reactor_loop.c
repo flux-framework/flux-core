@@ -17,7 +17,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "util.h"
+#include "src/common/libtestutil/util.h"
 
 static int send_request (flux_t *h, const char *topic)
 {

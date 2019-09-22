@@ -157,7 +157,7 @@ TESTS = test_message.t \
 	test_plugin.t
 
 test_ldadd = \
-	$(builddir)/test/libtestutil.la \
+	$(top_builddir)/src/common/libtestutil/libtestutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
@@ -171,17 +171,10 @@ test_cppflags = \
         $(AM_CPPFLAGS)
 
 check_LTLIBRARIES = \
-	test/libtestutil.la \
 	test/module_fake1.la \
 	test/module_fake2.la \
 	test/plugin_foo.la
 
-
-test_libtestutil_la_SOURCES = \
-	test/util.h \
-	test/util.c \
-	test/util_rpc.h \
-	test/util_rpc.c
 
 check_PROGRAMS = $(TESTS)
 

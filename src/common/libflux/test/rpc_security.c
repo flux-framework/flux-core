@@ -14,7 +14,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "util.h"
+#include "src/common/libtestutil/util.h"
 
 struct creds {
     uint32_t userid;

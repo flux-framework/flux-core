@@ -1,4 +1,5 @@
 SUBDIRS = libtap \
+	  libtestutil \
 	  libev \
 	  libpmi \
 	  liblsd \
