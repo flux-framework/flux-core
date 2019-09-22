@@ -108,6 +108,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "show-events", .key = 'E', .has_arg = 0,
       .usage = "Show job events on stderr",
     },
+    { .name = "show-exec", .key = 'X', .has_arg = 0,
+      .usage = "Show exec events on stderr",
+    },
     { .name = "label", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
     },
@@ -745,12 +748,44 @@ struct attach_ctx {
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
     struct timespec t_sigint;
-    bool show_events;
     optparse_t *p;
     bool output_header_parsed;
+    double timestamp_zero;
 };
 
-void print_output_continuation (flux_future_t *f, void *arg)
+/* Print eventlog entry to 'fp'.
+ * Prefix and context may be NULL.
+ */
+void print_eventlog_entry (FILE *fp,
+                           const char *prefix,
+                           double timestamp,
+                           const char *name,
+                           json_t *context)
+{
+    char *context_s = NULL;
+
+    if (context) {
+        if (!(context_s = json_dumps (context, JSON_COMPACT)))
+            log_err_exit ("%s: error re-encoding context", __func__);
+    }
+    fprintf (stderr, "%s%s%.3f %s%s%s\n",
+             prefix ? prefix : "",
+             prefix ? ": " : "",
+             timestamp,
+             name,
+             context_s ? " " : "",
+             context_s ? context_s : "");
+    free (context_s);
+}
+
+/* Handle an event in the guest.output eventlog.
+ * This is a stream of responses, one response per event, terminated with
+ * an ENODATA error response (or another error if something went wrong).
+ * The first eventlog entry is a header; remaining entries are data.
+ * Print each data entry to stdout/stderr, with task rank prefix if --label
+ * was specified.
+ */
+void attach_output_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
@@ -810,6 +845,10 @@ void attach_cancel_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
+/* Handle the user typing ctrl-C (SIGINT) and ctrl-Z (SIGTSTP).
+ * If the user types ctrl-C twice within 2s, cancel the job.
+ * If the user types ctrl-C then ctrl-Z within 2s, detach from the job.
+ */
 void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
 {
@@ -856,11 +895,19 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+/* Handle an event in the guest.exec eventlog.
+ * This is a stream of responses, one response per event, terminated with
+ * an ENODATA error response (or another error if something went wrong).
+ * On the output-ready event, start watching the guest.output eventlog.
+ * It is guaranteed to exist when guest.output is emitted.
+ * If --show-exec was specified, print all events on stderr.
+ */
 void attach_exec_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
     json_t *o;
+    double timestamp;
     const char *name;
     json_t *context;
 
@@ -872,8 +919,9 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     }
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
+
     if (!strcmp (name, "output-ready")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
@@ -883,12 +931,17 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
         if (flux_future_then (ctx->output_f,
                               -1.,
-                              print_output_continuation,
+                              attach_output_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
+    }
 
-        if (flux_job_event_watch_cancel (f) < 0)
-            log_err_exit ("flux_job_event_watch_cancel");
+    if (optparse_hasopt (ctx->p, "show-exec")) {
+        print_eventlog_entry (stderr,
+                              "exec-event",
+                              timestamp - ctx->timestamp_zero,
+                              name,
+                              context);
     }
 
     json_decref (o);
@@ -899,11 +952,20 @@ done:
     ctx->exec_eventlog_f = NULL;
 }
 
+/* Handle an event in the main job eventlog.
+ * This is a stream of responses, one response per event, terminated with
+ * an ENODATA error response (or another error if something went wrong).
+ * If a fatal exception event occurs, print it on stderr.
+ * If --show-events was specified, print all events on stderr.
+ * If submit event occurs, begin watching guest.exec.eventlog.
+ * If finish event occurs, capture ctx->exit code.
+ */
 void attach_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
     json_t *o;
+    double timestamp;
     const char *name;
     json_t *context;
     int status;
@@ -916,8 +978,12 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     }
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
+
+    if (ctx->timestamp_zero == 0.)
+        ctx->timestamp_zero = timestamp;
+
     if (!strcmp (name, "exception")) {
         const char *type;
         int severity;
@@ -932,6 +998,18 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                  type,
                  severity,
                  note ? note : "");
+    }
+    else if (!strcmp (name, "submit")) {
+        if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
+                                                           ctx->id,
+                                                         "guest.exec.eventlog",
+                                                           0)))
+            log_err_exit ("flux_job_event_watch");
+        if (flux_future_then (ctx->exec_eventlog_f,
+                              -1,
+                              attach_exec_event_continuation,
+                              ctx) < 0)
+            log_err_exit ("flux_future_then");
     }
     else {
         if (!strcmp (name, "finish")) {
@@ -949,16 +1027,16 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             }
         }
     }
-    if (ctx->show_events && strcmp (name, "exception") != 0) {
-        char *s = NULL;
-        if (context && !(s = json_dumps (context, JSON_COMPACT)))
-            log_err_exit ("error re-encoding context");
-        fprintf (stderr, "job-event: %s%s%s\n",
-                 name,
-                 s ? " " : "",
-                 s ? s : "");
-        free (s);
+
+    if (optparse_hasopt (ctx->p, "show-events")
+                                    && strcmp (name, "exception") != 0) {
+        print_eventlog_entry (stderr,
+                              "job-event",
+                              timestamp - ctx->timestamp_zero,
+                              name,
+                              context);
     }
+
     json_decref (o);
     flux_future_reset (f);
     return;
@@ -981,7 +1059,6 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
-    ctx.show_events = optparse_hasopt (p, "show-events");
     ctx.p = p;
 
     if (!(ctx.h = flux_open (NULL, 0)))
@@ -997,17 +1074,6 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (flux_future_then (ctx.eventlog_f,
                           -1,
                           attach_event_continuation,
-                          &ctx) < 0)
-        log_err_exit ("flux_future_then");
-
-    if (!(ctx.exec_eventlog_f = flux_job_event_watch (ctx.h,
-                                                      ctx.id,
-                                                      "guest.exec.eventlog",
-                                                      0)))
-        log_err_exit ("flux_job_event_watch");
-    if (flux_future_then (ctx.exec_eventlog_f,
-                          -1,
-                          attach_exec_event_continuation,
                           &ctx) < 0)
         log_err_exit ("flux_future_then");
 

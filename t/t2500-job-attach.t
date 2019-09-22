@@ -16,6 +16,17 @@ test_expect_success 'attach: job ran successfully' '
 	run_timeout 5 flux job attach $(cat jobid1)
 '
 
+test_expect_success 'attach: --show-events shows clean event' '
+	run_timeout 5 flux job attach \
+		--show-event $(cat jobid1) 2>jobid1.events &&
+	grep clean jobid1.events
+'
+test_expect_success 'attach: --show-events shows done event' '
+	run_timeout 5 flux job attach \
+		--show-exec $(cat jobid1) 2>jobid1.exec &&
+	grep done jobid1.exec
+'
+
 test_expect_success 'attach: shows output from job' '
 	run_timeout 5 flux job attach $(cat jobid1) | grep foo
 '
