@@ -62,6 +62,7 @@ enum {
 struct shell_output_file {
     const char *path;
     int fd;
+    int label;
 };
 
 struct shell_output {
@@ -418,6 +419,13 @@ static int shell_output_file (struct shell_output *out)
                 sof = &out->stderr_file;
             }
             if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
+                if (sof->label) {
+                    char buf[64];
+                    int buflen;
+                    buflen = snprintf (buf, sizeof (buf), "%d: ", rank);
+                    if (shell_output_fd (sof->fd, buf, buflen) < 0)
+                        return -1;
+                }
                 if (shell_output_fd (sof->fd, data, len) < 0)
                     return -1;
             }
@@ -584,6 +592,7 @@ static void shell_output_file_init (struct shell_output_file *sof)
 {
     sof->path = NULL;
     sof->fd = -1;
+    sof->label = false;
 }
 
 static int shell_output_parse_type (struct shell_output *out,
@@ -616,6 +625,11 @@ static int shell_output_parse_type (struct shell_output *out,
             log_msg ("path for %s file output not specified", stream);
             return -1;
         }
+
+        if (flux_shell_getopt_unpack (out->shell, "output",
+                                      "{s:{s?:b}}",
+                                      stream, "label", &(sof->label)) < 0)
+            return -1;
     }
     else {
         log_msg ("invalid output type specified '%s'", typestr);
