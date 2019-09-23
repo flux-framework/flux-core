@@ -573,12 +573,13 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 static int shell_init (flux_shell_t *shell)
 {
     bool required = false;
-    const char *rcfile = shell_conf_get ("shell_initrc");
+    const char *rcfile = NULL;
 
-    /*  If initrc was passed on command line, it is an error if
-     *   the file is not found. O/w treat missing initrc as empty file
+    /* If initrc is set on commmand line or in jobspec, then
+     *  it is required, O/w initrc is treated as empty file.
      */
-    if (optparse_getopt (shell->p, "initrc", &rcfile) > 0)
+    if (optparse_getopt (shell->p, "initrc", &rcfile) > 0
+        || flux_shell_getopt_unpack (shell, "initrc", "s", &rcfile) > 0)
         required = true;
     else
         rcfile = shell_conf_get ("shell_initrc");
@@ -652,6 +653,10 @@ int main (int argc, char *argv[])
      */
     if (!(shell.info = shell_info_create (&shell)))
         exit (1);
+
+    /* Set verbose flag if set in attributes.system.shell.verbose */
+    if (flux_shell_getopt_unpack (&shell, "verbose", "b", &shell.verbose) < 0)
+        log_msg_exit ("failed to parse attributes.system.shell.verbose");
 
     /* Register service on the leader shell.
      */
