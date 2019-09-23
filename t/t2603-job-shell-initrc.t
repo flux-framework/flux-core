@@ -6,6 +6,9 @@ test_description='Test flux-shell initrc.lua implementation'
 
 test_under_flux 2
 
+jq=$(which jq 2>/dev/null)
+test -z "$jq" || test_set_prereq HAVE_JQ
+
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
@@ -32,6 +35,24 @@ test_expect_success 'flux-shell: initrc: specifying initrc of /dev/null works' '
 		--initrc=/dev/null 0 > devnull.log 2>&1 &&
 	test_debug "cat devnull.log" &&
 	grep "Loading /dev/null" devnull.log
+'
+test_expect_success HAVE_JQ 'flux-shell: initrc: bad initrc in jobspec fails' '
+	flux jobspec srun -N1 -n1 echo Hi \
+	    | jq ".attributes.system.shell.options.initrc = \"nosuchfile\"" \
+	    > j2 &&
+	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j2 -R R1 0
+'
+test_expect_success 'flux-shell: initrc: in jobspec works' '
+	name=ok &&
+	cat >${name}.lua <<-EOT &&
+	    print ("jobspec initrc OK")
+	EOT
+	flux jobspec srun -N1 -n1 echo Hi \
+	    | jq ".attributes.system.shell.options.initrc = \"${name}.lua\"" \
+	    > j3 &&
+	${FLUX_SHELL} -v -s -r 0 -j j3 -R R1 0 > ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log" &&
+	grep "jobspec initrc OK" ${name}.log
 '
 test_expect_success 'flux-shell: initrc: failed initrc causes termination' '
 	name=failed &&
