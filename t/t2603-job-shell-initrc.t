@@ -186,5 +186,15 @@ test_expect_success 'flux-shell: initrc: load invalid args plugins' '
 	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
 		--initrc=${name}.lua 0
 '
-
+test_expect_success HAVE_JQ 'flux-shell: initrc: load getopt plugin' '
+	name=getopt &&
+	cat >${name}.lua <<-EOF &&
+	plugin.searchpath = "${INITRC_PLUGINPATH}"
+	plugin.load { file = "getopt.so" }
+	EOF
+	cat j1 | jq ".attributes.system.shell.options.test = 1" >j.${name} &&
+	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0 \
+		> ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log"
+'
 test_done

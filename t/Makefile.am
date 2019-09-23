@@ -229,7 +229,8 @@ check_LTLIBRARIES = \
 	job-manager/sched-dummy.la \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
-	shell/plugins/invalid-args.la
+	shell/plugins/invalid-args.la \
+	shell/plugins/getopt.la
 
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
@@ -463,5 +464,12 @@ shell_plugins_invalid_args_la_SOURCES = shell/plugins/invalid-args.c
 shell_plugins_invalid_args_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_invalid_args_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_invalid_args_la_LIBADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+        $(top_builddir)/src/common/libflux-core.la
+
+shell_plugins_getopt_la_SOURCES = shell/plugins/getopt.c
+shell_plugins_getopt_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_getopt_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_getopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
         $(top_builddir)/src/common/libflux-core.la

@@ -50,6 +50,20 @@ static int shell_cb (flux_plugin_t *p,
     ok (!flux_shell_aux_get (shell, NULL) && errno == EINVAL,
         "flux_shell_aux_get (shell, NULL) returns EINVAL");
 
+    ok (flux_shell_getopt (NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_getopt with NULL args returns EINVAL");
+    ok (flux_shell_getopt (shell, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_getopt with NULL name returns EINVAL");
+    ok (flux_shell_getopt (shell, "foo", NULL) == 0,
+        "flux_shell_getopt no opt returns 0");
+
+    ok (flux_shell_getopt_unpack (NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_getopt_unpack with NULL args returns EINVAL");
+    ok (flux_shell_getopt_unpack (shell, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_getopt_unpack with NULL name returns EINVAL");
+    ok (flux_shell_getopt_unpack (shell, "foo", NULL) == 0,
+        "flux_shell_getopt_unpack no opt returns 0");
+
     ok (flux_shell_getenv (NULL, "foo") == NULL && errno == EINVAL,
         "flux_shell_getenv (NULL, 'foo') returns EINVAL");
     ok (flux_shell_getenv (shell, NULL) == NULL && errno == EINVAL,
