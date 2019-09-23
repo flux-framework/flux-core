@@ -4,6 +4,12 @@ test_description='Test flux-shell'
 
 . `dirname $0`/sharness.sh
 
+jq=$(which jq 2>/dev/null)
+if test -z "$jq" ; then
+    skip_all 'no jq found, skipping all tests'
+    test_done
+fi
+
 test_under_flux 4 job
 
 flux setattr log-stderr-level 1
@@ -11,6 +17,7 @@ flux setattr log-stderr-level 1
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
+TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 
@@ -206,6 +213,147 @@ test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	grep_dmesg "signal 199: Invalid argument" &&
 	grep status=$((15+128<<8)) kill5.finish.out
 '
+
+test_expect_success 'job-shell: generate 1-task echo jobspecs and matching R' '
+        flux jobspec srun -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j1echostdout &&
+        flux jobspec srun -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j1echostderr &&
+        flux jobspec srun -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j1echoboth
+'
+
+test_expect_success 'job-shell: generate 2-task echo jobspecs and matching R' '
+        flux jobspec srun -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j2echostdout &&
+        flux jobspec srun -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j2echostderr &&
+        flux jobspec srun -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j2echoboth
+'
+
+test_expect_success 'job-shell: run 1-task echo job (stdout file)' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out0\"" \
+            > j1echostdout-0 &&
+        id=$(cat j1echostdout-0 | flux job submit) &&
+        flux job wait-event $id clean &&
+        grep stdout:foo out0
+'
+
+test_expect_success 'job-shell: run 1-task echo job (stderr file)' '
+        cat j1echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err1\"" \
+            > j1echostderr-1 &&
+        id=$(cat j1echostderr-1 | flux job submit) &&
+        flux job wait-event $id clean &&
+        grep stderr:bar err1
+'
+
+test_expect_success 'job-shell: run 1-task echo job (stdout file/stderr file)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out2\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err2\"" \
+            > j1echoboth-2 &&
+        id=$(cat j1echoboth-2 | flux job submit) &&
+        flux job wait-event $id clean &&
+        grep stdout:baz out2 &&
+        grep stderr:baz err2
+'
+
+test_expect_success 'job-shell: run 1-task echo job (stdout file/stderr kvs)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out3\"" \
+            > j1echoboth-3 &&
+        id=$(cat j1echoboth-3 | flux job submit) &&
+        flux job wait-event $id clean &&
+        flux job attach $id 2> err3 &&
+        grep stdout:baz out3 &&
+        grep stderr:baz err3
+'
+
+test_expect_success 'job-shell: run 1-task echo job (stdout kvs/stderr file)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err4\"" \
+            > j1echoboth-4 &&
+        id=$(cat j1echoboth-4 | flux job submit) &&
+        flux job wait-event $id clean &&
+        flux job attach $id > out4 &&
+        grep stdout:baz out4 &&
+        grep stderr:baz err4
+'
+
+test_expect_success 'job-shell: run 2-task echo job (stdout file)' '
+        cat j2echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out5\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            > j2echostdout-5 &&
+        id=$(cat j2echostdout-5 | flux job submit) &&
+        flux job wait-event $id clean &&
+        grep "0: stdout:foo" out5 &&
+        grep "1: stdout:foo" out5
+'
+
+test_expect_success 'job-shell: run 2-task echo job (stderr file)' '
+        cat j2echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err6\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echostderr-6 &&
+        id=$(cat j2echostderr-6 | flux job submit) &&
+        flux job wait-event $id clean &&
+        grep "0: stderr:bar" err6 &&
+        grep "1: stderr:bar" err6
+'
+
+test_expect_success 'job-shell: run 2-task echo job (stdout file/stderr file)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out7\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err7\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echoboth-7 &&
+        id=$(cat j2echoboth-7 | flux job submit) &&
+        flux job wait-event $id clean &&
+        grep "0: stdout:baz" out7 &&
+        grep "1: stdout:baz" out7 &&
+        grep "0: stderr:baz" err7 &&
+        grep "1: stderr:baz" err7
+'
+
+test_expect_success 'job-shell: run 2-task echo job (stdout file/stderr kvs)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out8\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            > j2echoboth-8 &&
+        id=$(cat j2echoboth-8 | flux job submit) &&
+        flux job wait-event $id clean &&
+        flux job attach -l $id 2> err8 &&
+        grep "0: stdout:baz" out8 &&
+        grep "1: stdout:baz" out8 &&
+        grep "0: stderr:baz" err8 &&
+        grep "1: stderr:baz" err8
+'
+
+test_expect_success 'job-shell: run 2-task echo job (stdout kvs/stderr file)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err9\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echoboth-9 &&
+        id=$(cat j2echoboth-9 | flux job submit) &&
+        flux job wait-event $id clean &&
+        flux job attach -l $id > out9 &&
+        grep "0: stdout:baz" out9 &&
+        grep "1: stdout:baz" out9 &&
+        grep "0: stderr:baz" err9 &&
+        grep "1: stderr:baz" err9
+'
+
 test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
         flux module remove -r 0 job-exec &&
         flux module remove -r 0 sched-simple &&
