@@ -91,6 +91,94 @@ static void task_completion_cb (struct shell_task *task, void *arg)
         log_err ("failed to remove task%d completion reference", task->rank);
 }
 
+int flux_shell_setopt (flux_shell_t *shell,
+                       const char *name,
+                       const char *json_str)
+{
+    json_error_t err;
+    json_t *o;
+    if (!shell->info->jobspec->options) {
+        if (!(shell->info->jobspec->options = json_object ())) {
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    /* If flux_shell_setopt (shell, name, NULL), delete option:
+     */
+    if (!json_str)
+        return json_object_del (shell->info->jobspec->options, name);
+
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &err)))
+        return -1;
+    return json_object_set_new (shell->info->jobspec->options, name, o);
+}
+
+int flux_shell_setopt_pack (flux_shell_t *shell,
+                            const char *name,
+                            const char *fmt, ...)
+{
+    json_t *o;
+    json_error_t err;
+    va_list ap;
+
+    va_start (ap, fmt);
+    o = json_vpack_ex (&err, 0, fmt, ap);
+    va_end (ap);
+    if (!o)
+        return -1;
+    return json_object_set_new (shell->info->jobspec->options, name, o);
+}
+
+int flux_shell_getopt (flux_shell_t *shell, const char *name, char **json_str)
+{
+    json_t *o;
+
+    if (!shell || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!shell->info->jobspec->options
+        || !(o = json_object_get (shell->info->jobspec->options, name)))
+        return 0;
+
+    /*  NB: Use of JSON_ENCODE_ANY is purposeful here since we are encoding
+     *   just a fragment of the shell.options object, and these options
+     *   themselves do not have a requirement of being JSON objects.
+     */
+    if (json_str)
+        *json_str = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY);
+    return 1;
+}
+
+int flux_shell_getopt_unpack (flux_shell_t *shell,
+                              const char *name,
+                              const char *fmt, ...)
+{
+    int rc;
+    json_error_t err;
+    json_t *o;
+    va_list ap;
+
+    if (!shell || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!shell->info->jobspec->options
+        || !(o = json_object_get (shell->info->jobspec->options, name)))
+        return 0;
+
+    va_start (ap, fmt);
+    /*  Add JSON_DECODE_ANY since we're parsing a fragment of
+     *   attributes.system.shell.options which may not be an object or array.
+     */
+    if ((rc = json_vunpack_ex (o, &err, JSON_DECODE_ANY, fmt, ap)) < 0)
+        log_msg ("shell_getopt: unpack error: %s", err.text);
+    else
+        rc = 1;
+    va_end (ap);
+    return rc;
+}
+
 static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
 {
     int optindex;

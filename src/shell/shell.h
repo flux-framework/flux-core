@@ -38,6 +38,40 @@ int flux_shell_aux_set (flux_shell_t *shell,
 
 void * flux_shell_aux_get (flux_shell_t *shell, const char *name);
 
+/*  Get shell option as JSON string as set in jobspec
+ *   attributes.system.shell.options
+ *
+ *  Returns 1 on success, 0 if option "name" was not set, or -1 on failure.
+ */
+int flux_shell_getopt (flux_shell_t *shell, const char *name, char **json_str);
+
+/*  Unpack shell option from attributes.system.shell.options.<name> using
+ *   jansson style unpack arguments.
+ *
+ *  Returns 1 on success, 0 if option was not found, or -1 on error.
+ */
+int flux_shell_getopt_unpack (flux_shell_t *shell,
+                              const char *name,
+                              const char *fmt, ...);
+
+/*  Set shell option as a JSON string. Future calls to getopt will return
+ *   value encoded in the JSON string. If json_str is NULL, the option
+ *   will unset.
+ *
+ *  Returns 0 on success, -1 on error.
+ */
+int flux_shell_setopt (flux_shell_t *shell,
+                       const char *name,
+                       const char *json_str);
+
+/*  Set shell option using jansson style pack args
+ *
+ *  Returns 0 on success, -1 on error.
+ */
+int flux_shell_setopt_pack (flux_shell_t *shell,
+                            const char *name,
+                            const char *fmt, ...);
+
 /*  Get value of an environment variable from the global job environment
  */
 const char * flux_shell_getenv (flux_shell_t *shell, const char *name);
