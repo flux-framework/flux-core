@@ -70,6 +70,7 @@ struct shell_output_fd {
 struct shell_output_type_file {
     struct shell_output_fd *fdp;
     const char *path;
+    int label;
 };
 
 struct shell_output {
@@ -377,6 +378,13 @@ static int shell_output_file (struct shell_output *out)
                 ofp = &out->stderr_file;
             }
             if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
+                if (ofp->label) {
+                    char buf[64];
+                    int buflen;
+                    buflen = snprintf (buf, sizeof (buf), "%d: ", rank);
+                    if (shell_output_write_fd (ofp->fdp->fd, buf, buflen) < 0)
+                        return -1;
+                }
                 if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
                     return -1;
             }
@@ -582,8 +590,15 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
     }
 
-    if (ofp_copy)
+    if (flux_shell_getopt_unpack (out->shell, "output",
+                                  "{s:{s?:b}}",
+                                  stream, "label", &(ofp->label)) < 0)
+        return -1;
+
+    if (ofp_copy) {
         ofp_copy->path = ofp->path;
+        ofp_copy->label = ofp->label;
+    }
 
     return 0;
 }
