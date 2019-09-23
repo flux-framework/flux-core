@@ -101,7 +101,9 @@ TESTSCRIPTS = \
 	t2600-job-shell-rcalc.t \
 	t2601-job-shell-standalone.t \
 	t2602-job-shell.t \
+	t2603-job-shell-initrc.t \
 	t3000-mpi-basic.t \
+	t3001-mpi-personalities.t \
 	t3100-flux-in-flux.t \
 	t4000-issues-test-driver.t \
 	t5000-valgrind.t \
@@ -151,6 +153,7 @@ EXTRA_DIST= \
 	rc/rc3-job \
 	shell/input \
 	shell/output \
+	shell/initrc/tests \
 	jobspec
 
 dist_check_SCRIPTS = \
@@ -223,7 +226,10 @@ check_LTLIBRARIES = \
 	module/child.la \
 	request/req.la \
 	ingest/job-manager-dummy.la \
-	job-manager/sched-dummy.la
+	job-manager/sched-dummy.la \
+	shell/plugins/dummy.la \
+	shell/plugins/conftest.la \
+	shell/plugins/invalid-args.la
 
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
@@ -444,3 +450,18 @@ sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
 sched_simple_jj_reader_LDADD = \
 	$(top_builddir)/src/modules/sched-simple/libjj.la \
 	$(test_ldadd)
+
+shell_plugins_dummy_la_SOURCES = shell/plugins/dummy.c
+shell_plugins_dummy_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_dummy_la_LDFLAGS = -module -rpath /nowhere
+
+shell_plugins_conftest_la_SOURCES = shell/plugins/conftest.c
+shell_plugins_conftest_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_conftest_la_LDFLAGS = -module -rpath /nowhere
+
+shell_plugins_invalid_args_la_SOURCES = shell/plugins/invalid-args.c
+shell_plugins_invalid_args_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_invalid_args_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_invalid_args_la_LIBADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+        $(top_builddir)/src/common/libflux-core.la

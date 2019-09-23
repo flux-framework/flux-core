@@ -45,18 +45,19 @@ static struct shell_builtin * builtins [] = {
 static int shell_load_builtin (flux_shell_t *shell,
                                struct shell_builtin *sb)
 {
-    struct splugin *p = splugin_create ();
+    flux_plugin_t *p = flux_plugin_create ();
     if (!p)
         return -1;
 
-    if (splugin_set_name (p, sb->name) < 0
-        || splugin_set_sym (p, "flux_shell_validate",  sb->validate) < 0
-        || splugin_set_sym (p, "flux_shell_init",      sb->init) < 0
-        || splugin_set_sym (p, "flux_shell_exit",      sb->exit) < 0
-        || splugin_set_sym (p, "flux_shell_task_init", sb->task_init) < 0
-        || splugin_set_sym (p, "flux_shell_task_fork", sb->task_fork) < 0
-        || splugin_set_sym (p, "flux_shell_task_exec", sb->task_exec) < 0
-        || splugin_set_sym (p, "flux_shell_task_exit", sb->task_exit) < 0)
+    if (flux_plugin_aux_set (p, "flux::shell", shell, NULL) < 0
+        || flux_plugin_set_name (p, sb->name) < 0
+        || flux_plugin_add_handler (p, "shell.validate", sb->validate, NULL) < 0
+        || flux_plugin_add_handler (p, "shell.init", sb->init, NULL) < 0
+        || flux_plugin_add_handler (p, "shell.exit", sb->exit, NULL) < 0
+        || flux_plugin_add_handler (p, "task.init",  sb->task_init, NULL) < 0
+        || flux_plugin_add_handler (p, "task.fork",  sb->task_fork, NULL) < 0
+        || flux_plugin_add_handler (p, "task.exec",  sb->task_exec, NULL) < 0
+        || flux_plugin_add_handler (p, "task.exit",  sb->task_exit, NULL) < 0)
         return -1;
 
     if (shell->verbose)

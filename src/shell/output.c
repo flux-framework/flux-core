@@ -452,11 +452,18 @@ static void task_output_cb (struct shell_task *task,
     }
 }
 
-static int shell_output_task_init (flux_shell_t *shell)
+static int shell_output_task_init (flux_plugin_t *p,
+                                   const char *topic,
+                                   flux_plugin_arg_t *args,
+                                   void *data)
 {
-    struct shell_output *out = flux_shell_aux_get (shell,
-                                                  "shell::builtin.output");
-    flux_shell_task_t *task = flux_shell_current_task (shell);
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
+    flux_shell_task_t *task;
+
+    if (!shell || !out || !(task = flux_shell_current_task (shell)))
+        return -1;
+
     if (flux_shell_task_channel_subscribe (task, "stderr",
                                            task_output_cb, out) < 0
         || flux_shell_task_channel_subscribe (task, "stdout",
@@ -465,14 +472,16 @@ static int shell_output_task_init (flux_shell_t *shell)
     return 0;
 }
 
-static int shell_output_init (flux_shell_t *shell)
+static int shell_output_init (flux_plugin_t *p,
+                              const char *topic,
+                              flux_plugin_arg_t *args,
+                              void *data)
 {
+    flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_output *out = shell_output_create (shell);
     if (!out)
         return -1;
-    if (flux_shell_aux_set (shell,
-                            "shell::builtin.output",
-                            out,
+    if (flux_plugin_aux_set (p, "builtin.output", out,
                             (flux_free_f) shell_output_destroy) < 0) {
         shell_output_destroy (out);
         return -1;

@@ -25,12 +25,14 @@
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/intree.h"
 
 #include "internal.h"
 #include "builtins.h"
 #include "info.h"
 #include "svc.h"
 #include "task.h"
+#include "rc.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -46,6 +48,8 @@ static struct optparse_option shell_opts[] =  {
       .usage = "Log actions to stderr", },
     { .name = "standalone", .key = 's', .has_arg = 0,
       .usage = "Run local program without Flux instance", },
+    { .name = "initrc", .has_arg = 1, .arginfo = "FILE",
+      .usage = "Load shell initrc from FILE instead of the system default" },
     OPTPARSE_TABLE_END
 };
 
@@ -79,8 +83,8 @@ static void task_completion_cb (struct shell_task *task, void *arg)
         log_msg ("task %d complete status=%d", task->rank, task->rc);
 
     shell->current_task = task;
-    if (plugstack_call (shell->plugstack, "flux_shell_task_exit", 1, shell) < 0)
-        log_err ("flux_shell_task_exit plugin(s) failed");
+    if (plugstack_call (shell->plugstack, "task.exit", NULL) < 0)
+        log_err ("task.exit plugin(s) failed");
     shell->current_task = NULL;
 
     if (flux_shell_remove_completion_ref (shell, "task%d", task->rank) < 0)
@@ -145,18 +149,149 @@ static void shell_connect_flux (flux_shell_t *shell)
     }
 }
 
+flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p)
+{
+    return flux_plugin_aux_get (p, "flux::shell");
+}
+
 int flux_shell_aux_set (flux_shell_t *shell,
                         const char *key,
                         void *val,
                         flux_free_f free_fn)
 {
+    if (!shell || (!key && !val)) {
+        errno = EINVAL;
+        return -1;
+    }
     return aux_set (&shell->aux, key, val, free_fn);
 }
 
 void * flux_shell_aux_get (flux_shell_t *shell, const char *key)
 {
+    if (!shell || !key) {
+        errno = EINVAL;
+        return NULL;
+    }
     return aux_get (shell->aux, key);
 }
+
+const char * flux_shell_getenv (flux_shell_t *shell, const char *name)
+{
+    json_t *val;
+    if (!shell || !name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    val = json_object_get (shell->info->jobspec->environment, name);
+    if (val)
+        return json_string_value (val);
+    return NULL;
+}
+
+int flux_shell_get_environ (flux_shell_t *shell, char **json_str)
+{
+    if (!shell || !json_str) {
+        errno = EINVAL;
+        return -1;
+    }
+    *json_str = json_dumps (shell->info->jobspec->environment, JSON_COMPACT);
+    return 0;
+}
+
+int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
+                        const char *name, const char *fmt, ...)
+{
+    json_t *env;
+    va_list ap;
+    char *val;
+    int rc = -1;
+
+    if (!shell || !name || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    env = shell->info->jobspec->environment;
+    if (!overwrite && json_object_get (env, name)) {
+        errno = EEXIST;
+        return -1;
+    }
+
+    va_start (ap, fmt);
+    rc = vasprintf (&val, fmt, ap);
+    va_end (ap);
+    if (rc >= 0) {
+        json_t *o = json_string (val);
+        if (o)
+            rc = json_object_set_new (env, name, o);
+        free (val);
+    }
+    return rc;
+}
+
+int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
+{
+    if (!shell || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+    return json_object_del (shell->info->jobspec->environment, name);
+}
+
+int flux_shell_get_info (flux_shell_t *shell, char **json_str)
+{
+    json_error_t err;
+    json_t *o;
+    if (!shell || !json_str) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:b s:b }}",
+                           "jobid", shell->info->jobid,
+                           "rank",  shell->info->shell_rank,
+                           "size",  shell->info->shell_size,
+                           "ntasks", shell->info->rankinfo.ntasks,
+                           "jobspec", shell->info->jobspec->jobspec,
+                           "options",
+                              "verbose", shell->verbose,
+                              "standalone", shell->standalone)))
+        return -1;
+    *json_str = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (*json_str ? 0 : -1);
+}
+
+int flux_shell_get_rank_info (flux_shell_t *shell,
+                              int shell_rank,
+                              char **json_str)
+{
+    struct rcalc_rankinfo ri;
+    json_t *o = NULL;
+
+    if (!shell || !json_str || shell_rank < -1) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (shell_rank == -1)
+        shell_rank = shell->info->shell_rank;
+
+    if (rcalc_get_nth (shell->info->rcalc, shell_rank, &ri) < 0)
+        return -1;
+
+    o = json_pack ("{ s:i s:i s:{s:s}}",
+                   "broker_rank", ri.rank,
+                   "ntasks", ri.ntasks,
+                   "resources",
+                     "cores", shell->info->rankinfo.cores);
+    if (!o)
+        return -1;
+    *json_str = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (*json_str ? 0 : -1);
+}
+
+
 
 int flux_shell_add_event_handler (flux_shell_t *shell,
                                   const char *subtopic,
@@ -167,7 +302,7 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
     char *topic;
     flux_msg_handler_t *mh = NULL;
 
-    if (!shell->h) {
+    if (!shell || !shell->h || !subtopic || !cb) {
         errno = EINVAL;
         return -1;
     }
@@ -197,6 +332,10 @@ int flux_shell_service_register (flux_shell_t *shell,
                                  flux_msg_handler_f cb,
                                  void *arg)
 {
+    if (!shell || !method || !cb) {
+        errno = EINVAL;
+        return -1;
+    }
     return shell_svc_register (shell->svc, method, cb, arg);
 }
 
@@ -208,14 +347,36 @@ flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
 {
     flux_future_t *f;
     va_list ap;
+    if (!shell || !method || shell_rank < 0 || !fmt) {
+        errno = EINVAL;
+        return NULL;
+    }
     va_start (ap, fmt);
     f = shell_svc_vpack (shell->svc, method, shell_rank, flags, fmt, ap);
     va_end (ap);
     return f;
 }
 
+
+int flux_shell_plugstack_call (flux_shell_t *shell,
+                               const char *topic,
+                               flux_plugin_arg_t *args)
+{
+    if (!shell || !topic) {
+        errno = EINVAL;
+        return -1;
+    }
+    return plugstack_call (shell->plugstack, topic, args);
+}
+
+
+
 flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
 {
+    if (!shell) {
+        errno = EINVAL;
+        return NULL;
+    }
     return shell->current_task;
 }
 
@@ -236,8 +397,11 @@ static void shell_finalize (flux_shell_t *shell)
     /* Process completed tasks:
      * - reduce exit codes to shell 'rc'
      * - destroy
+     *
+     * NB: shell->rc may already be initialized to non-zero if
+     * another shell component failed and wanted to ensure that
+     * shell exits with error.
      */
-    shell->rc = 0;
     if (shell->tasks) {
         struct shell_task *task;
 
@@ -269,8 +433,23 @@ static void item_free (void **item)
     }
 }
 
-static void flux_shell_init (flux_shell_t *shell)
+static int conf_flags_get (void)
 {
+    if (executable_is_intree () == 1)
+        return CONF_FLAG_INTREE;
+    else
+        return 0;
+}
+
+static const char *shell_conf_get (const char *name)
+{
+    return flux_conf_get (name, conf_flags_get ());
+}
+
+static void shell_initialize (flux_shell_t *shell)
+{
+    const char *pluginpath = shell_conf_get ("shell_pluginpath");
+
     memset (shell, 0, sizeof (struct flux_shell));
     if (!(shell->completion_refs = zhashx_new ()))
         log_err_exit ("zhashx_new");
@@ -279,6 +458,12 @@ static void flux_shell_init (flux_shell_t *shell)
     if (!(shell->plugstack = plugstack_create ()))
         log_err_exit ("plugstack_create");
 
+    if (plugstack_plugin_aux_set (shell->plugstack, "flux::shell", shell) < 0)
+        log_err_exit ("plugstack_plugin_aux_set");
+
+    if (plugstack_set_searchpath (shell->plugstack, pluginpath) < 0)
+        log_err_exit ("plugstack_set_searchpath");
+
     if (shell_load_builtins (shell) < 0)
         log_err_exit ("shell_load_builtins");
 }
@@ -286,6 +471,8 @@ static void flux_shell_init (flux_shell_t *shell)
 void flux_shell_killall (flux_shell_t *shell, int signum)
 {
     struct shell_task *task;
+    if (!shell ||  signum <= 0 || !shell->tasks)
+        return;
     task = zlist_first (shell->tasks);
     while (task) {
         if (shell_task_kill (task, signum) < 0)
@@ -301,6 +488,11 @@ int flux_shell_add_completion_ref (flux_shell_t *shell,
     int *intp = NULL;
     char *ref = NULL;
     va_list ap;
+
+    if (!shell || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
 
     va_start (ap, fmt);
     if ((rc = vasprintf (&ref, fmt, ap)) < 0)
@@ -328,6 +520,11 @@ int flux_shell_remove_completion_ref (flux_shell_t *shell,
     int *intp;
     va_list ap;
     char *ref = NULL;
+
+    if (!shell || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
 
     va_start (ap, fmt);
     if ((rc = vasprintf (&ref, fmt, ap)) < 0)
@@ -375,29 +572,55 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
 static int shell_init (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_init", 1, shell);
+    bool required = false;
+    const char *rcfile = shell_conf_get ("shell_initrc");
+
+    /*  If initrc was passed on command line, it is an error if
+     *   the file is not found. O/w treat missing initrc as empty file
+     */
+    if (optparse_getopt (shell->p, "initrc", &rcfile) > 0)
+        required = true;
+    else
+        rcfile = shell_conf_get ("shell_initrc");
+
+    /*  Only try loading initrc if the file is readable or required:
+     */
+    if (access (rcfile, R_OK) == 0 || required) {
+        if (shell->verbose)
+            log_msg ("Loading %s", rcfile);
+
+        if (shell_rc (shell, rcfile) < 0) {
+            if (errno)
+                log_err_exit ("loading rc file %s", rcfile);
+            else
+                log_msg_exit ("failed to load rc file %s", rcfile);
+        }
+    }
+
+    return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 
 static int shell_task_init (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_task_init", 1, shell);
+    return plugstack_call (shell->plugstack, "task.init", NULL);
 }
 
 static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
     flux_shell_t *shell = arg;
-    if (plugstack_call (shell->plugstack, "flux_shell_task_exec", 1, shell) < 0)
-        log_err ("flux_shell_task_exec plugin(s) failed");
+    shell->current_task->in_pre_exec = true;
+    if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
+        log_err ("task.exec plugin(s) failed");
 }
 
 static int shell_task_forked (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_task_fork", 1, shell);
+    return plugstack_call (shell->plugstack, "task.fork", NULL);
 }
 
 static int shell_exit (flux_shell_t *shell)
 {
-    return plugstack_call (shell->plugstack, "flux_shell_exit", 1, shell);
+    return plugstack_call (shell->plugstack, "shell.exit", NULL);
 }
 
 int main (int argc, char *argv[])
@@ -407,7 +630,7 @@ int main (int argc, char *argv[])
 
     log_init (shell_name);
 
-    flux_shell_init (&shell);
+    shell_initialize (&shell);
 
     shell_parse_cmdline (&shell, argc, argv);
 
@@ -488,10 +711,20 @@ int main (int argc, char *argv[])
     if (flux_reactor_run (shell.r, 0) < 0)
         log_err ("flux_reactor_run");
 
-    if (shell_exit (&shell) < 0)
-        log_err ("shell_exit callback(s) failed");
+    if (shell_exit (&shell) < 0) {
+        log_msg ("shell_exit callback(s) failed");
+        /* Preset shell.rc to failure so failure here is ensured
+         *  to cause shell to exit with non-zero exit code.
+         * XXX: this should be replaced with more general fatal
+         *  error function.
+         */
+        shell.rc = 1;
+    }
 
     shell_finalize (&shell);
+
+    if (shell_rc_close ())
+        log_err ("shell_rc_close");
 
     if (shell.verbose)
         log_msg ("exit %d", shell.rc);

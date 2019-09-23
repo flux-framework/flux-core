@@ -96,6 +96,7 @@ struct shell_task *shell_task_create (struct shell_info *info,
     if (!(task = shell_task_new ()))
         return NULL;
 
+    task->index = index;
     task->rank = info->rankinfo.global_basis + index;
     task->size = info->jobspec->task_count;
     if (!(task->cmd = flux_cmd_create (0,
@@ -228,11 +229,19 @@ int shell_task_kill (struct shell_task *task, int signum)
 
 flux_cmd_t *flux_shell_task_cmd (flux_shell_task_t *task)
 {
+    if (!task) {
+        errno = EINVAL;
+        return NULL;
+    }
     return task->cmd;
 }
 
 flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task)
 {
+    if (!task) {
+        errno = EINVAL;
+        return NULL;
+    }
     return task->proc;
 }
 
@@ -241,7 +250,12 @@ int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
                                        flux_shell_task_io_f cb,
                                        void *arg)
 {
-    struct channel_watcher *cw = calloc (1, sizeof (*cw));
+    struct channel_watcher *cw;
+    if (!task || !name || !cb) {
+        errno = EINVAL;
+        return -1;
+    }
+    cw = calloc (1, sizeof (*cw));
     if (!cw)
         return -1;
     cw->cb = cb;
@@ -252,6 +266,90 @@ int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
         return -1;
     }
     return 0;
+}
+
+static int add_process_info_to_json (flux_subprocess_t *p, json_t *o)
+{
+    pid_t pid;
+    json_t *obj = NULL;
+
+    /*  Add "pid" to task.info object if pid is valid
+     */
+    if ((pid = flux_subprocess_pid (p)) > (pid_t) 0) {
+        obj = json_integer (pid);
+        if (!obj || json_object_set_new (o, "pid", obj) < 0)
+            goto error;
+    }
+
+    /*  Add wait_status, and signaled or exitcode for exited processes.
+     */
+    if (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED) {
+        int status = flux_subprocess_status (p);
+        int termsig;
+        int exitcode;
+
+        obj = json_integer (status);
+        if (!obj || json_object_set_new (o, "wait_status", obj) < 0)
+            goto error;
+
+        /*  Set "standard" exit code to 128 + signal if signaled, with
+         *   "signaled" = termsig. O/w, set signaled == 0 and exitcode
+         *   to real exit code.
+         */
+        if (WIFSIGNALED (status)) {
+            termsig = WTERMSIG (status);
+            exitcode = 128 + termsig;
+        }
+        else {
+            termsig = 0;
+            exitcode = WEXITSTATUS (status);
+        }
+
+        obj = json_integer (termsig);
+        if (!obj || json_object_set_new (o, "signaled", obj) < 0)
+            goto error;
+        obj = json_integer (exitcode);
+        if (!obj || json_object_set_new (o, "exitcode", obj) < 0)
+            goto error;
+    }
+    return 0;
+error:
+    json_decref (obj);
+    return -1;
+}
+
+static const char * task_state (flux_shell_task_t *task)
+{
+    if (task->proc) {
+        flux_subprocess_state_t state = flux_subprocess_state (task->proc);
+        return flux_subprocess_state_string (state);
+    }
+    else if (task->in_pre_exec)
+        return "Exec";
+    else
+        return "Init";
+}
+
+int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str)
+{
+    json_error_t err;
+    json_t *o = NULL;
+    if (!task || !json_str) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = json_pack_ex (&err, 0, "{ s:i s:i s:s }",
+                                     "localid", task->index,
+                                     "rank", task->rank,
+                                     "state", task_state (task))))
+        return -1;
+    if (task->proc && add_process_info_to_json (task->proc, o) < 0) {
+        json_decref (o);
+        return -1;
+    }
+    *json_str = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return (*json_str ? 0 : -1);
 }
 
 /*
