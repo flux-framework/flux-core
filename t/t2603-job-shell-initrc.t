@@ -110,10 +110,14 @@ test_expect_success 'flux-shell: initrc: return false from plugin aborts shell' 
 	test_debug "cat ${name}.log" &&
 	grep "plugin.*: shell.init failed" ${name}.log
 '
+test_expect_success HAVE_JQ 'flux-shell: initrc: add test options to jobspec' "
+	cat j1 | jq '.attributes.system.shell.options.test = \"test\"' \
+		> j.initrc
+"
 
 for initrc in ${INITRC_TESTDIR}/tests/*.lua; do
     test_expect_success "flux-shell: initrc: runtest $(basename $initrc)" '
-	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 --initrc=${initrc} 0
+	${FLUX_SHELL} -v -s -r 0 -j j.initrc -R R1 --initrc=${initrc} 0
     '
 done
 
