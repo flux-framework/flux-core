@@ -8,6 +8,9 @@ test_description="Test that Flux's MPI personalities work"
 SIZE=4
 test_under_flux ${SIZE}
 
+jq=$(which jq 2>/dev/null)
+test -z "$jq" || test_set_prereq HAVE_JQ
+
 run_program() {
         local timeout=$1
 	local nnodes=$2
@@ -34,7 +37,6 @@ test_expect_success 'mvapich mpi sets MPIRUN_RANK for tasks' '
   test_cmp mvapich.rank.expected mvapich.rank.out
 '
 
-
 test_expect_success "intel mpi rewrites I_MPI_MPI_LIBRARY" '
   export I_MPI_PMI_LIBRARY="foobar" &&
   test_when_finished "unset I_MPI_PMI_LIBRARY" &&
@@ -47,6 +49,18 @@ test_expect_success "intel mpi only rewrites when necessary" '
    run_program 5 ${SIZE} ${SIZE} printenv | grep I_MPI_PMI_LIBRARY \
        | tee intel-mpi.unset &&
    test "$(wc -l intel-mpi.unset | cut -f 1 -d " ")" = "0"
+'
+
+test_expect_success HAVE_JQ "spectrum mpi only enabled with option" '
+  LD_PRELOAD_saved=${LD_PRELOAD} &&
+  unset LD_PRELOAD &&
+  test_when_finished "export LD_PRELOAD=${LD_PRELOAD_saved}" &&
+  flux jobspec srun -n${SIZE} -N${SIZE} printenv LD_PRELOAD \
+    | jq ".attributes.system.shell.options.mpi = \"spectrum\"" > j.spectrum &&
+  test_expect_code 1 run_program 5 ${SIZE} ${SIZE} printenv LD_PRELOAD &&
+  jobid=$(flux job submit j.spectrum) &&
+  flux job attach ${jobid} > spectrum.out &&
+  grep /opt/ibm/spectrum spectrum.out
 '
 
 test_done
