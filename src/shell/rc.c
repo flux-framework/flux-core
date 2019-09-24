@@ -396,6 +396,56 @@ static int l_shell_info (lua_State *L)
     return rc;
 }
 
+/*  shell.options indexer
+ */
+static int l_shell_getopt (lua_State *L)
+{
+    int rc = 1;
+    const char *key = lua_tostring (L, -1);
+    char *json_str = NULL;
+
+    rc = flux_shell_getopt (rc_shell, key, &json_str);
+    if (rc < 0)
+        rc = lua_pusherror (L, "flux_shell_getopt: %s", strerror (errno));
+    else if (rc == 0) {
+        rc = 1;
+        lua_pushnil (L);
+    }
+    else if (json_object_string_to_lua (L, json_str) < 0)
+        rc = lua_pusherror (L, "json_string_to_lua: %s", strerror (errno));
+    free (json_str);
+    return rc;
+}
+
+/*  shell.options newindex handler
+ */
+static int l_shell_setopt (lua_State *L)
+{
+    int rc;
+    char *s = NULL;
+    const char *key = luaL_checkstring (L, -2);
+    if (!lua_isnoneornil (L, -1) && lua_value_to_json_string (L, -1, &s) < 0)
+        return lua_pusherror (L, "setopt: error converting value to json");
+    rc = flux_shell_setopt (rc_shell, key, s);
+    free (s);
+    return l_pushresult (L, rc);
+}
+
+static const struct luaL_Reg options_methods [] = {
+    { "__index",    l_shell_getopt },
+    { "__newindex", l_shell_setopt },
+    { NULL,         NULL           },
+};
+
+static int l_shell_pushoptions (lua_State *L)
+{
+    lua_newtable (L);
+    luaL_setfuncs (L, options_methods, 0);
+    lua_pushvalue (L, -1);
+    lua_setmetatable (L, -2);
+    return 1;
+}
+
 /*  shell.getenv
  */
 static int l_shell_getenv (lua_State *L)
@@ -707,6 +757,10 @@ int shell_rc (flux_shell_t *shell, const char *rcfile)
     luaL_setfuncs (L, shell_methods, 0);
     lua_pushstring (L, dirname (copy));
     lua_setfield (L, -2, "rcpath");
+
+    l_shell_pushoptions (L);
+    lua_setfield (L, -2, "options");
+
     lua_pushvalue (L, -1);
     lua_setmetatable (L, -2);
     lua_setglobal (L, "shell");

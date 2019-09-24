@@ -1,7 +1,6 @@
 -- Set environment specific to spectrum_mpi (derived from openmpi)
 --
-
-if not shell.options or shell.options.mpi ~= "spectrum" then return end
+if shell.options.mpi ~= "spectrum" then return end
 
 local posix = require 'posix'
 
@@ -13,7 +12,7 @@ function prepend_path (env_var, path)
     -- instead of possibly matching substrings of paths when trying
     -- to match "zero or more" colons.
     --
-    if ((":"..val..":"):match (":"..path..":")) then return end
+    if val and ((":"..val..":"):match (":"..path..":")) then return end
 
     if val == nil then
        suffix = ''
@@ -28,7 +27,7 @@ local function strip_env_by_prefix (env, prefix)
     -- Have to call env:get() to translate env object to Lua table
     --  in order to use pairs() to iterate environment keys:
     --
-    for k,v in pairs (env:get()) do
+    for k,v in pairs (env) do
         if k:match("^"..prefix) then
             shell.unsetenv (k)
         end
@@ -58,12 +57,21 @@ shell.setenv ('OMPI_MCA_coll_hcoll_enable', '0')
 prepend_path ('LD_LIBRARY_PATH', '/opt/ibm/spectrum_mpi/lib/pami_port')
 prepend_path ('LD_PRELOAD', '/opt/ibm/spectrum_mpi/lib/libpami_cudahook.so')
 
-local function task_init ()
-    local setrlimit = require 'posix'.setrlimit
-    -- Approximately `ulimit -Ss 10240`
-    -- Used to silence IBM MCM warnings
-   setrlimit ("stack", 10485760)
-end
+plugin.register {
+    name = "spectrum",
+    handlers = {
+        {
+         topic = "task.init",
+         fn = function ()
+            local setrlimit = require 'posix'.setrlimit
+            -- Approximately `ulimit -Ss 10240`
+            -- Used to silence IBM MCM warnings
+            setrlimit ("stack", 10485760)
+            end
+        }
+    }
+}
+
 
 -- vi: ts=4 sw=4 expandtab
 
