@@ -73,7 +73,7 @@ class CLIMain(object):
 
     def __call__(self, main_func):
         logging.basicConfig(
-            level=logging.INFO, format="%(module)s: %(levelname)s: %(message)s"
+            level=logging.INFO, format="%(name)s: %(levelname)s: %(message)s"
         )
         exit_code = 0
         try:

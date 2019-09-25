@@ -222,7 +222,7 @@ def get_slurm_common_parser():
     return slurm_parser
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("flux-jobspec")
 
 
 @util.CLIMain(logger)
