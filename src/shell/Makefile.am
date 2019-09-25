@@ -9,7 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS) \
-	$(LUA_INCLUDE)
+	$(LUA_INCLUDE) \
+	$(HWLOC_INCLUDE)
 
 shellrcdir = \
 	$(fluxrcdir)/shell
@@ -54,7 +55,8 @@ flux_shell_SOURCES = \
 	svc.c \
 	svc.h \
 	kill.c \
-	signals.c
+	signals.c \
+	affinity.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
@@ -63,7 +65,8 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(LUA_LIB)
+	$(LUA_LIB) \
+	$(HWLOC_LIBS)
 
 flux_shell_LDFLAGS = \
 	-export-dynamic \
