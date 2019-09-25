@@ -109,6 +109,7 @@ TESTSCRIPTS = \
 	t2601-job-shell-standalone.t \
 	t2602-job-shell.t \
 	t2603-job-shell-initrc.t \
+	t2604-job-shell-affinity.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
