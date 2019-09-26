@@ -433,7 +433,10 @@ static void local_child_report_exec_failed_errno (flux_subprocess_t *p, int e)
     if (write (fd, &e, sizeof (e)) != sizeof (e))
         flux_log_error (p->h, "local_child_report_exec_failed_errno");
 }
-
+ 
+#if CODE_COVERAGE_ENABLED
+void __gcov_flush (void);
+#endif
 static int local_child (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
@@ -512,6 +515,9 @@ static int local_child (flux_subprocess_t *p)
 
     environ = flux_cmd_env_expand (p->cmd);
     argv = flux_cmd_argv_expand (p->cmd);
+#if CODE_COVERAGE_ENABLED
+    __gcov_flush ();
+#endif
     execvp (argv[0], argv);
 
     errnum = errno;
