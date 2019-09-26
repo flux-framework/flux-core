@@ -16,7 +16,7 @@ run_program() {
 	local nnodes=$2
 	local ntasks=$3
 	shift 3
-        run_timeout $timeout flux srun $OPTS -n${ntasks} -N${nnodes} $*
+        run_timeout $timeout flux mini run $OPTS -n${ntasks} -N${nnodes} $*
 }
 
 CONF_PMI_LIBRARY_PATH=$(flux getattr conf.pmi_library_path | sed 's|/libpmi.so||')

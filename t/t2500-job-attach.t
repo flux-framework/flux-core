@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job attach and flux srun'
+test_description='Test flux job attach'
 
 . $(dirname $0)/sharness.sh
 
@@ -93,44 +93,6 @@ test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
 	! wait ${waitpid} &&
         grep before attach5.out &&
         ! grep after attach5.out
-'
-
-# Simple tests for flux srun
-
-test_expect_success 'flux srun with no args shows usage' '
-	flux srun 2>&1 | grep -i usage:
-'
-
-test_expect_success 'flux srun -h shows usage' '
-	flux srun -h 2>&1 | grep -i usage:
-'
-
-test_expect_success 'flux srun hostname works' '
-	flux srun hostname
-'
-
-test_expect_success 'flux srun -n4 hostname works' '
-	flux srun -n4 hostname
-'
-
-test_expect_success 'flux srun: -N4 hostname works' '
-	flux srun -N4 hostname
-'
-
-test_expect_success 'flux srun -c1 hostname works' '
-	flux srun -c1 hostname
-'
-
-test_expect_success 'flux srun -t0 hostname works' '
-	flux srun -t0 hostname
-'
-
-test_expect_success 'flux srun -N128 hostname fails' '
-	test_must_fail flux srun -N128 hostname
-'
-
-test_expect_success 'flux srun bad executable fails' '
-	test_must_fail flux srun abadfile
 '
 
 test_done

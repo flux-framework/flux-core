@@ -33,12 +33,12 @@ test_expect_success 'flux-shell: affinity hwloc-calc works' '
     hwloc-bind --get | hwloc-calc --number-of pu
 '
 test_expect_success 'flux-shell: default affinity works (1 core)' '
-    flux srun -n1 -c1 $CPUS_ALLOWED_COUNT > result.n1 &&
+    flux mini run -n1 -c1 $CPUS_ALLOWED_COUNT > result.n1 &&
     test_debug "cat result.n1" &&
     test "$(cat result.n1)" = "1"
 '
 test_expect_success MULTICORE 'flux-shell: default affinity works (2 cores)' '
-    flux srun -n1 -c2 $CPUS_ALLOWED_COUNT > result.n1 &&
+    flux mini run -n1 -c2 $CPUS_ALLOWED_COUNT > result.n1 &&
     test_debug "cat result.n1" &&
     test "$(cat result.n1)" = "2"
 '
