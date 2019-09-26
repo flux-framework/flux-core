@@ -1,0 +1,148 @@
+// flux-help-include: true
+FLUX-MINI(1)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux-mini - Minimal Job Submission Tool
+
+
+SYNOPSIS
+--------
+*flux* *mini* *submit* [OPTIONS] ['--ntasks=N'] COMMAND...
+
+*flux* *mini* *run* [OPTIONS] ['--ntasks=N'] COMMAND...
+
+
+DESCRIPTION
+-----------
+flux-mini(1) submits jobs to run under Flux.  The job consists of
+'N' copies of COMMAND launched together as a parallel job.
+If '--ntasks' is unspecified, a value of 'N=1' is assumed.
+
+The *submit* command enqueues the job and prints its numerical Job ID
+on standard output.
+
+The *run* command does the same interactively, blocking until the job
+has completed.
+
+The intent is for the "mini" commands to remain simple with stable interfaces
+over time, making them suitable for use in scripts.  For advanced usage,
+see flux-run(1) and flux-submit(1).
+
+The available OPTIONS are detailed below.
+
+
+JOB PARAMETERS
+--------------
+These commands accept only the simplest parameters for expressing
+the size of the parallel program and the geometry of its task slots:
+
+*-n, --ntasks=N*::
+Set the number of tasks to launch (default 1).
+
+*-c, --cores-per-task=N*::
+Set the number of cores to assign to each task (default 1).
+
+*-N, --nodes=N*::
+Set the number of nodes to assign to the job.  Tasks will be distributed
+evenly across the allocated nodes.  It is an error to request more nodes
+than there are tasks.  If unspecified, the number of nodes will be chosen
+by the scheduler.
+
+*-t, --time-limit=FSD*::
+Set a time limit for the job in Flux standard duration (RFC 23).
+FSD is a floating point number with a single character units suffix
+("s", "m", "h", or "d").  If unspecified, the job is subject to the
+system default time limit.
+
+
+STANDARD I/O
+------------
+By default, task stdout and stderr streams are redirected to the
+KVS, where they may be accessed with the `flux job attach` command.
+
+In addition, `flux-mini run` processes standard I/O in real time,
+emitting the job's I/O to its stdout and stderr.
+
+*--output=FILENAME*::
+Redirect stdout to the specified FILENAME, bypassing the KVS.
+The mustache template '{{id}}' is expanded to the numerical Job ID,
+useful to ensure FILENAME is unique across multiple jobs.
+
+*--error=FILENAME*::
+Redirect stderr to the specified FILENAME, bypassing the KVS.
+The mustache template '{{id}}' is expanded as above.
+
+*--label-io*::
+Add task rank prefixes to each line of output.
+
+
+EXIT STATUS
+-----------
+The job exit status, normally the largest task exit status, is stored
+in the KVS.  If one or more tasks are terminated with a signal,
+the job exit status is 128+signo.
+
+The `flux-job attach` command exits with the job exit status.
+
+In addition, `flux-mini run` runs until the job completes and exits
+with the job exit status.
+
+
+OTHER OPTIONS
+-------------
+*--priority=N*::
+Specify job priority, which affects queue order.  Numerically higher priority
+jobs are considered by the scheduler first.  Guests may submit jobs with
+priority in the range of 0 to 16, while instance owners may submit jobs
+with priority in the range of 0 to 31 (default 16).
+
+*-v, --verbose*::
+_(run only)_ Increase verbosity on stderr.  For example, currently `-v`
+displays jobid, `-vv` displays job events, and `-vvv` displays exec events.
+The specific output may change in the future.
+
+*-o, --setopt=KEY=VAL*::
+Set shell option.  Keys may include periods to denote hierarchy.
+VAL may be valid JSON (bare values, objects, or arrays), otherwise VAL
+is interpreted as a string.  See SHELL OPTIONS below.
+
+*--setattr=KEY=VAL*::
+Set jobspec attribute.  Keys may include periods to denote hierarchy.
+VAL may be valid JSON (bare values, objects, or arrays), otherwise VAL
+is interpreted as a string.
+
+*--dry-run*::
+Don't actually submit the job.  Just emit jobspec on stdout and exit.
+
+*-d, --debug*::
+Enable job debug events, primarily for debugging Flux itself.
+The specific effects of this option may change in the future.
+
+
+SHELL OPTIONS
+-------------
+Some useful options understood by shell plugins:
+
+*mpi=spectrum*::
+Load the MPI personality plugin for IBM Spectrum MPI.  All other MPI
+plugins are loaded by default.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
