@@ -38,7 +38,9 @@ VALGRIND_SHUTDOWN_GRACE=${VALGRIND_SHUTDOWN_GRACE:-16}
 test_expect_success \
   "valgrind reports no new errors on $VALGRIND_NBROKERS broker run" '
 	run_timeout 120 \
-	flux start -s ${VALGRIND_NBROKERS} --wrap=libtool,e,${VALGRIND} \
+	flux start -s ${VALGRIND_NBROKERS} \
+		--killer-timeout=20 \
+		--wrap=libtool,e,${VALGRIND} \
 		--wrap=--tool=memcheck \
 		--wrap=--leak-check=full \
 		--wrap=--gen-suppressions=all \
