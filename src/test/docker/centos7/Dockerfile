@@ -28,6 +28,7 @@ RUN yum -y update \
       ccache \
       cppcheck \
       czmq-devel \
+      hwloc \
       hwloc-devel \
       jansson-devel \
       sqlite-devel \
