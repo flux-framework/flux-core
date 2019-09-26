@@ -42,9 +42,16 @@ uninstall-local:
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__
 
+#  Put long running tests here. They will be included first
+#   in TESTS so that `make check` runs them first, hopefully resulting
+#   in a reduced makespan overall.
+LONGTESTSCRIPTS = \
+	t5000-valgrind.t \
+	t3100-flux-in-flux.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
 TESTSCRIPTS = \
+	$(LONGTESTSCRIPTS) \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
@@ -104,9 +111,7 @@ TESTSCRIPTS = \
 	t2603-job-shell-initrc.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
-	t3100-flux-in-flux.t \
 	t4000-issues-test-driver.t \
-	t5000-valgrind.t \
 	t9001-pymod.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
