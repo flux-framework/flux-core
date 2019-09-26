@@ -69,7 +69,7 @@ struct shell_output_fd {
 
 struct shell_output_type_file {
     struct shell_output_fd *fdp;
-    const char *path;
+    char *path;
     int label;
 };
 
@@ -502,6 +502,12 @@ error:
     return -1;
 }
 
+static void shell_output_type_file_cleanup (struct shell_output_type_file *ofp)
+{
+    if (ofp->path)
+        free (ofp->path);
+}
+
 void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
@@ -534,6 +540,8 @@ void shell_output_destroy (struct shell_output *out)
             }
         }
         json_decref (out->output);
+        shell_output_type_file_cleanup (&out->stdout_file);
+        shell_output_type_file_cleanup (&out->stderr_file);
         if (out->fds) { // leader only
             struct shell_output_fd *fdp = zhash_first (out->fds);
             while (fdp) {
@@ -574,21 +582,59 @@ static int shell_output_parse_type (struct shell_output *out,
     return 0;
 }
 
+/* handle mustache templates and the similar special cases */
+static char *shell_output_get_path (struct shell_output *out, const char *path)
+{
+    char *rv = NULL;
+    char *ptr;
+
+    /* replace {{id}} with jobid */
+    if ((ptr = strstr (path, "{{id}}"))) {
+        char buf[32];
+        int len, buflen, total_len;
+
+        len = strlen (path);
+        buflen = snprintf (buf, sizeof (buf), "%llu",
+                           (unsigned long long)out->shell->info->jobid);
+        /* -6 for {{id}}, +1 for NUL */
+        total_len = len - 6 + buflen + 1;
+        if (total_len > (PATH_MAX + 1)) {
+            errno = EOVERFLOW;
+            return NULL;
+        }
+        if (!(rv = calloc (1, total_len)))
+            return NULL;
+        memcpy (rv, path, ptr - path);
+        memcpy (rv + (ptr - path), buf, buflen);
+        memcpy (rv + (ptr - path) + buflen, ptr + 6, len - (ptr - path) - 6);
+    }
+    else {
+        if (!(rv = strdup (path)))
+            return NULL;
+    }
+    return rv;
+}
+
 static int
 shell_output_setup_type_file (struct shell_output *out,
                               const char *stream,
                               struct shell_output_type_file *ofp,
                               struct shell_output_type_file *ofp_copy)
 {
+    const char *path = NULL;
+
     if (flux_shell_getopt_unpack (out->shell, "output",
                                   "{s:{s?:s}}",
-                                  stream, "path", &(ofp->path)) < 0)
+                                  stream, "path", &path) < 0)
         return -1;
 
-    if (ofp->path == NULL) {
+    if (path == NULL) {
         log_msg ("path for %s file output not specified", stream);
         return -1;
     }
+
+    if (!(ofp->path = shell_output_get_path (out, path)))
+        return -1;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
                                   "{s:{s?:b}}",
@@ -596,7 +642,8 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
 
     if (ofp_copy) {
-        ofp_copy->path = ofp->path;
+        if (!(ofp_copy->path = strdup (ofp->path)))
+            return -1;
         ofp_copy->label = ofp->label;
     }
 
