@@ -24,6 +24,7 @@ struct rcalc_rankinfo {
     int ncores;               /* Number of cores allocated on this rank  */
     cpu_set_t cpuset;         /* cpu_set_t representation of cores list  */
     char cores [128];         /* String core list (directly from R_lite) */
+    char gpus [128];          /* String gpu list (directly from R)       */
 };
 
 /* Create resource calc object from JSON string in "Rlite" format */
@@ -35,6 +36,8 @@ void rcalc_destroy (rcalc_t *r);
 
 /*  Return # of total cores asssigned to rcalc object */
 int rcalc_total_cores (rcalc_t *r);
+/*  Return # of total gpus asssigned to rcalc object */
+int rcalc_total_gpus (rcalc_t *r);
 /*  Return total # of nodes/ranks in rcalc object */
 int rcalc_total_nodes (rcalc_t *r);
 /*  Return the total # of nodes/ranks with at least 1 task assigned */
