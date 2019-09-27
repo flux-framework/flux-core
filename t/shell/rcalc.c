@@ -36,8 +36,11 @@ int main (int ac, char **av)
         fprintf (stderr, "Invalid value for ntasks: %s\n", av[1]);
         exit (1);
     }
-    printf ("Distributing %d tasks across %d nodes with %d cores\n",
+    printf ("Distributing %d tasks across %d nodes with %d cores",
             ntasks, rcalc_total_nodes (r), rcalc_total_cores (r));
+    if (rcalc_total_gpus (r))
+        printf (" %d gpus", rcalc_total_gpus (r));
+    printf ("\n");
 
     if (rcalc_distribute (r, ntasks) < 0) {
         fprintf (stderr, "rcalc_distribute: %s\n", strerror (errno));
@@ -52,8 +55,11 @@ int main (int ac, char **av)
                      i, strerror (errno));
             exit (1);
         }
-        printf ("%d: rank=%d ntasks=%d basis=%d cores=%s\n",
+        printf ("%d: rank=%d ntasks=%d basis=%d cores=%s",
                 ri.nodeid, ri.rank, ri.ntasks, ri.global_basis, ri.cores);
+        if (strlen(ri.gpus))
+            printf (" gpus=%s", ri.gpus);
+        printf ("\n");
     }
     rcalc_destroy (r);
     return (0);
