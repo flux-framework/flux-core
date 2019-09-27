@@ -36,6 +36,7 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
 
@@ -113,6 +114,9 @@ static struct optparse_option attach_opts[] =  {
     },
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
+    },
+    { .name = "quiet", .key = 'q', .has_arg = 0,
+      .usage = "Suppress warnings written to stderr from flux-job",
     },
     OPTPARSE_TABLE_END
 };
@@ -781,9 +785,11 @@ void print_eventlog_entry (FILE *fp,
 /* Handle an event in the guest.output eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
- * The first eventlog entry is a header; remaining entries are data.
- * Print each data entry to stdout/stderr, with task rank prefix if --label-io
- * was specified.
+ * The first eventlog entry is a header; remaining entries are data or
+ * redirect.  Print each data entry to stdout/stderr, with task rank
+ * prefix if --label-io was specified.  For each redirect entry, print
+ * information on paths to redirected locations if --quiet is not
+ * speciifed.
  */
 void attach_output_continuation (flux_future_t *f, void *arg)
 {
@@ -828,6 +834,24 @@ void attach_output_continuation (flux_future_t *f, void *arg)
             fwrite (data, len, 1, fp);
         }
         free (data);
+    }
+    else if (!strcmp (name, "redirect")) {
+        const char *stream = NULL;
+        const char *rank = NULL;
+        const char *path = NULL;
+        if (!ctx->output_header_parsed)
+            log_msg_exit ("stream redirect read before header");
+        if (json_unpack (context, "{ s:s s:s s?:s }",
+                         "stream", &stream,
+                         "rank", &rank,
+                         "path", &path) < 0)
+            log_msg_exit ("malformed redirect context");
+        if (!optparse_hasopt (ctx->p, "quiet"))
+            fprintf (stderr, "%s: %s redirected%s%s\n",
+                     rank,
+                     stream,
+                     path ? " to " : "",
+                     path ? path : "");
     }
 
     json_decref (o);
