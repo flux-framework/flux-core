@@ -33,12 +33,14 @@ extern struct shell_builtin builtin_pmi;
 extern struct shell_builtin builtin_output;
 extern struct shell_builtin builtin_kill;
 extern struct shell_builtin builtin_signals;
+extern struct shell_builtin builtin_affinity;
 
 static struct shell_builtin * builtins [] = {
     &builtin_pmi,
     &builtin_output,
     &builtin_kill,
     &builtin_signals,
+    &builtin_affinity,
     &builtin_list_end,
 };
 
