@@ -49,6 +49,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
 
@@ -200,6 +201,87 @@ error:
     return rc;
 }
 
+static int shell_output_redirect_stream (struct shell_output *out,
+                                         flux_kvs_txn_t *txn,
+                                         const char *stream,
+                                         const char *path)
+{
+    struct idset *idset;
+    json_t *entry = NULL;
+    char *entrystr = NULL;
+    int saved_errno, rc = -1;
+    char *rankptr = NULL;
+    int ntasks = out->shell->info->rankinfo.ntasks;
+
+    if (ntasks > 1) {
+        int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
+        if (!(idset = idset_create (ntasks, 0))) {
+            log_err ("idset_create");
+            goto error;
+        }
+        if (idset_range_set (idset, 0, ntasks - 1) < 0) {
+            log_err ("idset_range_set");
+            goto error;
+        }
+        if (!(rankptr = idset_encode (idset, flags))) {
+            log_err ("idset_encode");
+            goto error;
+        }
+    }
+    else {
+        if (asprintf (&rankptr, "%d", 0) < 0) {
+            log_err ("asprintf");
+            goto error;
+        }
+    }
+
+    if (!(entry = eventlog_entry_pack (0., "redirect",
+                                       "{ s:s s:s s:s }",
+                                       "stream", stream,
+                                       "rank", rankptr,
+                                       "path", path))) {
+        log_err ("eventlog_entry_create");
+        goto error;
+    }
+    if (!(entrystr = eventlog_entry_encode (entry))) {
+        log_err ("eventlog_entry_encode");
+        goto error;
+    }
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", entrystr) < 0) {
+        log_err ("flux_kvs_txn_put");
+        goto error;
+    }
+    rc = 0;
+error:
+    /* on error, future destroyed via shell_output destroy */
+    saved_errno = errno;
+    json_decref (entry);
+    free (entrystr);
+    free (rankptr);
+    errno = saved_errno;
+    return rc;
+}
+
+static int shell_output_redirect (struct shell_output *out, flux_kvs_txn_t *txn)
+{
+    /* if file redirected, output redirect event */
+    if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE) {
+        if (shell_output_redirect_stream (out,
+                                          txn,
+                                          "stdout",
+                                          out->stdout_file.path) < 0)
+            return -1;
+    }
+    if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
+        if (shell_output_redirect_stream (out,
+                                          txn,
+                                          "stderr",
+                                          out->stderr_file.path) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
 {
     struct shell_output *out = arg;
@@ -229,6 +311,8 @@ static int shell_output_kvs_init (struct shell_output *out, json_t *header)
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", headerstr) < 0)
         goto error;
     if (shell_output_ready (out, txn) < 0)
+        goto error;
+    if (shell_output_redirect (out, txn) < 0)
         goto error;
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
@@ -818,8 +902,8 @@ static int shell_output_header (struct shell_output *out)
         if (shell_output_term_init (out, o) < 0)
             log_err ("shell_output_term_init");
     }
-    /* will also emit output-ready event.  Call this as long as we're
-     * not standalone.
+    /* will also emit output-ready event and any other initial events.
+     * Call this as long as we're not standalone.
      */
     if (!out->shell->standalone) {
         if (shell_output_kvs_init (out, o) < 0)
@@ -871,9 +955,6 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                 goto error;
             }
         }
-        if (shell_output_header (out) < 0)
-            goto error;
-
         if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE
             || out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
             if (!(out->fds = zhash_new ())) {
@@ -889,6 +970,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                     goto error;
             }
         }
+        if (shell_output_header (out) < 0)
+            goto error;
     }
     return out;
 error:
