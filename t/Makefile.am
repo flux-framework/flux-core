@@ -11,16 +11,15 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
         $(ZMQ_CFLAGS)
 
-#  If LUA_PATH is already set, ensure ./?.lua appears in LUA_PATH so that
-#   fluxometer.lua is found. O/w, if LUA_PATH is *not* set, ./?.lua already
-#   appears in the default LUA_PATH, so do nothing.
+#  Always set LUA_PATH such that builddir/?.lua is first so that the
+#   build version of fluxometer.lua is found.
 #
 #  If we're testing with "installed" Flux, then also add path to Lua bindings
 #   to LUA_CPATH, so that non-installed test modules can be found (at this
 #   time, only lalarm.so)
 #
 AM_TESTS_ENVIRONMENT = \
-	test -n "$$LUA_PATH" && export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH";\
+	export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH;;;";\
 	test -n "$$FLUX_TEST_INSTALLED_PATH" && \
 	export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;"; \
 	export PYTHONPATH="$(abs_top_builddir)/src/bindings/python:$(abs_top_srcdir)/src/bindings/python:$(top_srcdir)/t/python/tap:$(PYTHON_SITE_PKG):$$PYTHONPATH";
