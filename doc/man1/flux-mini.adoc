@@ -125,7 +125,8 @@ The specific effects of this option may change in the future.
 
 SHELL OPTIONS
 -------------
-Some useful options understood by shell plugins:
+These options are provided by built-in shell plugins that may be
+overridden in some cases:
 
 *mpi=spectrum*::
 Load the MPI personality plugin for IBM Spectrum MPI.  All other MPI
