@@ -204,7 +204,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout term/stderr
 '
 
 #
-# output file mustache tests
+# mustache {{id}} template tests
 #
 
 test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
@@ -230,29 +230,252 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout
 '
 
 #
+# 1 task output mustache {{taskid}} tests
+#
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job ({{taskid}} stdout)' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out16-{{taskid}}\"" \
+            > j1echostdout-16 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echostdout-16 -R R1 16 &&
+	grep stdout:foo out16-0
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job ({{taskid}} stderr)' '
+        cat j1echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err17-{{taskid}}\"" \
+            > j1echostderr-17 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echostderr-17 -R R1 17 &&
+	grep stderr:bar err17-0
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stderr to stdout {{taskid}})' '
+        cat j1echostderr \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out18-{{taskid}}\"" \
+            > j1echostderr-18 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echostderr-18 -R R1 18 &&
+	grep stderr:bar out18-0
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job ({{taskid}} stdout & stderr)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out19-{{taskid}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err19-{{taskid}}\"" \
+            > j1echoboth-19 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-19 -R R1 19 &&
+	grep stdout:baz out19-0 &&
+	grep stderr:baz err19-0
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout & stderr to stdout {{taskid}})' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out20-{{taskid}}\"" \
+            > j1echoboth-20 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-20 -R R1 20 &&
+	grep stdout:baz out20-0 &&
+	grep stderr:baz out20-0
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job ({{taskid}} stdout/stderr term)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out21-{{taskid}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"term\"" \
+            > j1echoboth-21 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-21 -R R1 2> err21 21 &&
+	grep stdout:baz out21-0 &&
+	grep stderr:baz err21
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout term/{{taskid}} stderr)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err22-{{taskid}}\"" \
+            > j1echoboth-22 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-22 -R R1 > out22 22 &&
+	grep stdout:baz out22 &&
+	grep stderr:baz err22-0
+'
+
+#
+# 2 task output mustache {{taskid}} tests
+#
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job ({{taskid}} stdout)' '
+        cat j2echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out23-{{taskid}}\"" \
+            > j2echostdout-23 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostdout-23 -R R2 23 &&
+	grep "stdout:foo" out23-0 &&
+	grep "stdout:foo" out23-1
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job ({{taskid}} stderr)' '
+        cat j2echostderr \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err24-{{taskid}}\"" \
+            > j2echostderr-24 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostderr-24 -R R2 24 &&
+	grep "stderr:bar" err24-0 &&
+	grep "stderr:bar" err24-1
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stderr to stdout {{taskid}})' '
+        cat j2echostderr \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out25-{{taskid}}\"" \
+            > j2echostderr-25 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echostderr-25 -R R2 25 &&
+	grep "stderr:bar" out25-0 &&
+	grep "stderr:bar" out25-1
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job ({{taskid}} stdout & stderr)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out26-{{taskid}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err26-{{taskid}}\"" \
+            > j2echoboth-26 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-26 -R R2 26 &&
+	grep "stdout:baz" out26-0 &&
+	grep "stdout:baz" out26-1 &&
+	grep "stderr:baz" err26-0 &&
+	grep "stderr:baz" err26-1
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout & stderr to stdout {{taskid}})' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out27-{{taskid}}\"" \
+            > j2echoboth-27 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-27 -R R2 27 &&
+	grep stdout:baz out27-0 &&
+	grep stdout:baz out27-1 &&
+	grep stderr:baz out27-0 &&
+	grep stderr:baz out27-1
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job ({{taskid}} stdout/stderr term)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out28-{{taskid}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"term\"" \
+            > j2echoboth-28 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-28 -R R2 2> err28 28 &&
+	grep "stdout:baz" out28-0 &&
+	grep "stdout:baz" out28-1 &&
+	grep "0: stderr:baz" err28 &&
+	grep "1: stderr:baz" err28
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout term/{{taskid}} stderr)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err29-{{taskid}}\"" \
+            > j2echoboth-29 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-29 -R R2 > out29 29 &&
+	grep "0: stdout:baz" out29 &&
+	grep "1: stdout:baz" out29 &&
+	grep "stderr:baz" err29-0 &&
+	grep "stderr:baz" err29-1
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job ({{taskid}} stdout/stderr file)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out30-{{taskid}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err30\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.label = true" \
+            > j2echoboth-30 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-30 -R R2 30 &&
+	grep "stdout:baz" out30-0 &&
+	grep "stdout:baz" out30-1 &&
+	grep "0: stderr:baz" err30 &&
+	grep "1: stderr:baz" err30
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file/{{taskid}} stderr)' '
+        cat j2echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out31\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.label = true" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err31-{{taskid}}\"" \
+            > j2echoboth-31 &&
+	${FLUX_SHELL} -v -s -r 0 -j j2echoboth-31 -R R2 31 &&
+	grep "0: stdout:baz" out31 &&
+	grep "1: stdout:baz" out31 &&
+	grep "stderr:baz" err31-0 &&
+	grep "stderr:baz" err31-1
+'
+
+#
+# test both {{id}} and {{taskid}}
+#
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id per-task stdout & stderr)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{id}}-{{taskid}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err{{id}}-{{taskid}}\"" \
+            > j1echoboth-32 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-32 -R R1 32 &&
+	grep stdout:baz out32-0 &&
+	grep stderr:baz err32-0
+'
+
+test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout & stderr to stdout per-task)' '
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{id}}-{{taskid}}\"" \
+            > j1echoboth-33 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-33 -R R1 33 &&
+	grep stdout:baz out33-0 &&
+	grep stderr:baz out33-0
+'
+
+#
 # output corner case tests
 #
 
 test_expect_success HAVE_JQ 'flux-shell: error on bad output type' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"foobar\"" \
-            > j1echostdout-16 &&
-        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-16 -R R1 16
+            > j1echostdout-34 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-34 -R R1 34
 '
 
 test_expect_success HAVE_JQ 'flux-shell: error on no path with file output' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
-            > j1echostdout-17 &&
-        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-17 -R R1 17
+            > j1echostdout-35 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-35 -R R1 35
 '
 
 test_expect_success HAVE_JQ 'flux-shell: error invalid path to file output' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"/foo/bar/baz\"" \
-            > j1echostdout-18 &&
-        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-18 -R R1 18
+            > j1echostdout-36 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-36 -R R1 36
+'
+
+test_expect_success HAVE_JQ 'flux-shell: error invalid path to file output ({{taskid}})' '
+        cat j1echostdout \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"/foo/bar/baz{{taskid}}\"" \
+            > j1echostdout-37 &&
+        ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-37 -R R1 37
 '
 
 test_done
