@@ -12,6 +12,7 @@ import sys
 import errno
 import json
 import logging
+import os
 
 import six
 
@@ -72,8 +73,9 @@ class CLIMain(object):
             self.logger = logger
 
     def __call__(self, main_func):
+        loglevel = int(os.environ.get("FLUX_PYCLI_LOGLEVEL", logging.INFO))
         logging.basicConfig(
-            level=logging.INFO, format="%(module)s: %(levelname)s: %(message)s"
+            level=loglevel, format="%(name)s: %(levelname)s: %(message)s"
         )
         exit_code = 0
         try:

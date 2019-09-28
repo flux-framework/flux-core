@@ -17,9 +17,9 @@ if command -v black 2>&1 > /dev/null ; then
         find src t -path "src/bindings/python/_flux" -prune -o \
              -type f \( -name "*.py" -print -o \
              -exec awk ' /^#!.*python/{print FILENAME} {nextfile}' {} + \) \
-            | xargs black --check
+            | xargs black --check --diff
     else
-        filter_pyfiles "$@" | xargs black --check
+        filter_pyfiles "$@" | xargs black --check --diff
     fi
 else
   echo "black not found, failing"

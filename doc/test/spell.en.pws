@@ -459,3 +459,9 @@ errmsg
 WAITCREATE
 incref
 decref
+vv
+vvv
+jobspec
+FSD
+enqueues
+cpus

@@ -33,44 +33,34 @@ test_expect_success 'flux-shell: affinity hwloc-calc works' '
     hwloc-bind --get | hwloc-calc --number-of pu
 '
 test_expect_success 'flux-shell: default affinity works (1 core)' '
-    flux srun -n1 -c1 $CPUS_ALLOWED_COUNT > result.n1 &&
+    flux mini run -n1 -c1 $CPUS_ALLOWED_COUNT > result.n1 &&
     test_debug "cat result.n1" &&
     test "$(cat result.n1)" = "1"
 '
 test_expect_success MULTICORE 'flux-shell: default affinity works (2 cores)' '
-    flux srun -n1 -c2 $CPUS_ALLOWED_COUNT > result.n1 &&
+    flux mini run -n1 -c2 $CPUS_ALLOWED_COUNT > result.n1 &&
     test_debug "cat result.n1" &&
     test "$(cat result.n1)" = "2"
 '
 test_expect_success HAVE_JQ,MULTICORE 'flux-shell: per-task affinity works' '
-    jobid=$(flux jobspec srun -n2 -c1 hwloc-bind --get \
-     | $jq ".attributes.system.shell.options[\"cpu-affinity\"] = \"per-task\"" \
-     | flux job submit) &&
-    flux job attach --label ${jobid} > per-task.out &&
+    flux mini run --label-io -ocpu-affinity=per-task -n2 -c1 \
+		hwloc-bind --get > per-task.out &&
     task0set=$(sed -n "s/^0: //p" per-task.out) &&
     task1set=$(sed -n "s/^1: //p" per-task.out) &&
     test_debug "echo checking ${task0set} not equal ${task1set}" &&
     test "$task0set" != "$task1set"
 '
 test_expect_success HAVE_JQ 'flux-shell: per-task affinity sanity check' '
-    jobid=$(flux jobspec srun -n1 -c1 hwloc-bind --get \
-     | $jq ".attributes.system.shell.options[\"cpu-affinity\"] = \"per-task\"" \
-     | flux job submit) &&
-    flux job attach --label ${jobid}
+    flux mini run --label-io -ocpu-affinity=per-task -n1 -c1 \
+		hwloc-bind --get
 '
 test_expect_success HAVE_JQ 'flux-shell: affinity can be disabled' '
-     hwloc-bind --get > affinity-off.expected &&
-    jobid=$(flux jobspec srun -n1 hwloc-bind --get \
-     | $jq ".attributes.system.shell.options[\"cpu-affinity\"] = \"off\"" \
-     | flux job submit) &&
-    flux job attach ${jobid} > affinity-off.out &&
+    hwloc-bind --get > affinity-off.expected &&
+    flux mini run -ocpu-affinity=off -n1 hwloc-bind --get >affinity-off.out &&
     test_cmp affinity-off.expected affinity-off.out
 '
 test_expect_success HAVE_JQ 'flux-shell: invalid option is ignored' '
-    jobid=$(flux jobspec srun -n1 hwloc-bind --get \
-     | $jq ".attributes.system.shell.options[\"cpu-affinity\"] = 1" \
-     | flux job submit) &&
-    flux job attach ${jobid} &&
+    flux mini run -ocpu-affinity=1 -n1 hwloc-bind --get &&
     flux dmesg | grep "invalid option"
 '
 flux dmesg

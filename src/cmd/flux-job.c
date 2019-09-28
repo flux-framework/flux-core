@@ -111,7 +111,7 @@ static struct optparse_option attach_opts[] =  {
     { .name = "show-exec", .key = 'X', .has_arg = 0,
       .usage = "Show exec events on stderr",
     },
-    { .name = "label", .key = 'l', .has_arg = 0,
+    { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
     },
     OPTPARSE_TABLE_END
@@ -782,7 +782,7 @@ void print_eventlog_entry (FILE *fp,
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
  * The first eventlog entry is a header; remaining entries are data.
- * Print each data entry to stdout/stderr, with task rank prefix if --label
+ * Print each data entry to stdout/stderr, with task rank prefix if --label-io
  * was specified.
  */
 void attach_output_continuation (flux_future_t *f, void *arg)
@@ -823,7 +823,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
         else
             fp = stderr;
         if (len > 0) {
-            if (optparse_hasopt (ctx->p, "label"))
+            if (optparse_hasopt (ctx->p, "label-io"))
                 fprintf (fp, "%d: ", rank);
             fwrite (data, len, 1, fp);
         }

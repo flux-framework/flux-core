@@ -22,7 +22,7 @@ run_program() {
 	local nnodes=$3
         local opts=$4
 	shift 3
-	run_timeout $timeout flux srun \
+	run_timeout $timeout flux mini run \
 		    -n${ntasks} -N${nnodes} $*
 }
 
