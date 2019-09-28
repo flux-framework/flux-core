@@ -217,11 +217,26 @@ X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 
+
+#  Edit PATH to remove $PWD/src/cmd so that AM_PATH_PYTHON doesn't find
+#  flux python script (thus creating a link to itself.) This needs to be
+#  done *before* AX_PYTHON_DEVEL.
+#
+saved_PATH=$PATH
+export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
+
 AX_PYTHON_DEVEL([>='2.7'])
+
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
   AC_MSG_ERROR([could not find python])
 fi
+if test "X$PYTHON" = "X"; then
+  AC_MSG_ERROR([could not find python])
+fi
+#  Restore original PATH:
+export PATH=${saved_PATH}
+
 # Flag for PYTHON_LDFLAGS workaround below.
 if test -n "$PYTHON_LDFLAGS"; then
   ac_python_ldflags_set_by_user=true
