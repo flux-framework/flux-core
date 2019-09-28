@@ -131,6 +131,12 @@ Some useful options understood by shell plugins:
 Load the MPI personality plugin for IBM Spectrum MPI.  All other MPI
 plugins are loaded by default.
 
+*affinity=per-task*::
+Tasks are distributed across the assigned resources.
+
+*affinity=off*::
+Disable task affinity plugin.
+
 
 AUTHOR
 ------
