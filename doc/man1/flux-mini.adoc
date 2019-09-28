@@ -118,7 +118,7 @@ is interpreted as a string.
 *--dry-run*::
 Don't actually submit the job.  Just emit jobspec on stdout and exit.
 
-*-d, --debug*::
+*--debug*::
 Enable job debug events, primarily for debugging Flux itself.
 The specific effects of this option may change in the future.
 
