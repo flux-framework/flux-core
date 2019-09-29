@@ -34,7 +34,9 @@ from datetime import timedelta
 
 
 class JobSpec:
-    def __init__(self, command, num_tasks=1, cores_per_task=1, num_nodes=None):
+    def __init__(
+        self, command, num_tasks=1, cores_per_task=1, gpus_per_task=None, num_nodes=None
+    ):
         """
         Constructor builds the minimum legal v1 jobspec.
         Use setters to assign additional properties.
@@ -45,12 +47,17 @@ class JobSpec:
             raise ValueError("task count must be a integer >= 1")
         if not isinstance(cores_per_task, int) or cores_per_task < 1:
             raise ValueError("cores per task must be an integer >= 1")
+        if gpus_per_task is not None:
+            if not isinstance(gpus_per_task, int) or gpus_per_task < 1:
+                raise ValueError("gpus per task must be an integer >= 1")
         if num_nodes is not None:
             if not isinstance(num_nodes, int) or num_nodes < 1:
                 raise ValueError("node count must be an integer >= 1 (if set)")
             if num_nodes > num_tasks:
                 raise ValueError("node count must not be greater than task count")
-        core = self.__create_resource("core", cores_per_task)
+        children = [self.__create_resource("core", cores_per_task)]
+        if gpus_per_task is not None:
+            children.append(self.__create_resource("gpu", gpus_per_task))
         if num_nodes is not None:
             num_slots = int(math.ceil(num_tasks / float(num_nodes)))
             if num_tasks % num_nodes != 0:
@@ -58,11 +65,11 @@ class JobSpec:
                 task_count_dict = {"total": num_tasks}
             else:
                 task_count_dict = {"per_slot": 1}
-            slot = self.__create_slot("task", num_slots, [core])
+            slot = self.__create_slot("task", num_slots, children)
             resource_section = self.__create_resource("node", num_nodes, [slot])
         else:
             task_count_dict = {"per_slot": 1}
-            slot = self.__create_slot("task", num_tasks, [core])
+            slot = self.__create_slot("task", num_tasks, children)
             resource_section = slot
 
         self.jobspec = {
@@ -209,6 +216,13 @@ class SubmitCmd:
             help="Number of cores to allocate per task",
         )
         parser.add_argument(
+            "-g",
+            "--gpus-per-task",
+            type=int,
+            metavar="N",
+            help="Number of GPUs to allocate per task",
+        )
+        parser.add_argument(
             "-t",
             "--time-limit",
             type=str,
@@ -275,6 +289,7 @@ class SubmitCmd:
             args.command,
             num_tasks=args.ntasks,
             cores_per_task=args.cores_per_task,
+            gpus_per_task=args.gpus_per_task,
             num_nodes=args.nodes,
         )
         jobspec.set_cwd(os.getcwd())
