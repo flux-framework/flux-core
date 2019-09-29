@@ -149,6 +149,11 @@ test_expect_success HAVE_JQ 'flux mini submit command arguments work' '
 	test $(jq ".tasks[0].command[1]" args.out) = "\"b\"" &&
 	test $(jq ".tasks[0].command[2]" args.out) = "\"c\""
 '
+test_expect_success 'flux mini submit --gpus-per-task adds gpus to task slot' '
+	flux mini submit --dry-run -g2 hostname >gpu.out &&
+	test $(jq ".resources[0].with[1].type" gpu.out) = "\"gpu\"" &&
+	test $(jq ".resources[0].with[1].count" gpu.out) = "2"
+'
 
 
 test_done

@@ -46,6 +46,9 @@ Set the number of tasks to launch (default 1).
 *-c, --cores-per-task=N*::
 Set the number of cores to assign to each task (default 1).
 
+*-g, --gpus-per-task=N*::
+Set the number of GPU devices to assign to each task (default none).
+
 *-N, --nodes=N*::
 Set the number of nodes to assign to the job.  Tasks will be distributed
 evenly across the allocated nodes.  It is an error to request more nodes
@@ -118,18 +121,33 @@ is interpreted as a string.
 *--dry-run*::
 Don't actually submit the job.  Just emit jobspec on stdout and exit.
 
-*-d, --debug*::
+*--debug*::
 Enable job debug events, primarily for debugging Flux itself.
 The specific effects of this option may change in the future.
 
 
 SHELL OPTIONS
 -------------
-Some useful options understood by shell plugins:
+These options are provided by built-in shell plugins that may be
+overridden in some cases:
 
 *mpi=spectrum*::
 Load the MPI personality plugin for IBM Spectrum MPI.  All other MPI
 plugins are loaded by default.
+
+*affinity=per-task*::
+Tasks are distributed across the assigned resources.
+
+*affinity=off*::
+Disable task affinity plugin.
+
+*gpu-affinity=per-task*::
+GPU devices are distributed evenly among local tasks.  Otherwise,
+GPU device affinity is to the job.
+
+*gpu-affinity=off*::
+Disable GPU affinity for this job.
+
 
 
 AUTHOR
