@@ -58,6 +58,8 @@ struct event_ctx {
     flux_watcher_t *timer;
     zlist_t *pending;
     zlist_t *pub_futures;
+    job_state_f state_cb;
+    void *state_arg;
 };
 
 struct event_batch {
@@ -450,6 +452,8 @@ int event_job_post_pack (struct event_ctx *ctx,
     if (job->state != old_state) {
         if (event_batch_pub_state (ctx, job) < 0)
             goto error;
+        if (ctx->state_cb)
+            ctx->state_cb (job, old_state, ctx->state_arg);
     }
     if (event_job_action (ctx, job) < 0)
         goto error;
@@ -474,6 +478,12 @@ void event_ctx_set_start_ctx (struct event_ctx *ctx,
                               struct start_ctx *start_ctx)
 {
     ctx->start_ctx = start_ctx;
+}
+
+void event_ctx_set_state_cb (struct event_ctx *ctx, job_state_f cb, void *arg)
+{
+    ctx->state_cb = cb;
+    ctx->state_arg = arg;
 }
 
 /* Finalizes in-flight batch KVS commits and event pubs (synchronously).

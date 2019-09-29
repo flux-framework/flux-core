@@ -53,6 +53,8 @@ void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
                               struct alloc_ctx *alloc_ctx);
 void event_ctx_set_start_ctx (struct event_ctx *ctx,
                               struct start_ctx *start_ctx);
+typedef void (*job_state_f)(struct job *job, flux_job_state_t old, void *arg);
+void event_ctx_set_state_cb (struct event_ctx *ctx, job_state_f cb, void *arg);
 
 void event_ctx_destroy (struct event_ctx *ctx);
 struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue);
