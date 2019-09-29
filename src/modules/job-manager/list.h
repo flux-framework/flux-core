@@ -21,7 +21,11 @@ void list_handle_request (flux_t *h, struct queue *queue,
 
 /* exposed for unit testing only */
 json_t *list_one_job (struct job *job, json_t *attrs);
-json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs);
+json_t *list_job_array (struct queue *queue,
+                        int max_entries,
+                        int flags,
+                        json_t *attrs);
+
 
 #endif /* ! _FLUX_JOB_MANAGER_LIST_H */
 /*

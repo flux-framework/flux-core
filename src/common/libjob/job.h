@@ -24,6 +24,10 @@ enum job_submit_flags {
     FLUX_JOB_DEBUG = 2,
 };
 
+enum job_list_flags {
+    FLUX_JOB_LIST_ALL = 1,
+};
+
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,
@@ -62,6 +66,7 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 
 /* Request a list of active jobs.
  * If 'max_entries' > 0, fetch at most that many jobs.
+ * If 'flags' is FLUX_JOB_LIST_ALL, include inactive jobs.
  * 'json_str' is an encoded JSON array of attribute strings, e.g.
  * ["id","userid",...] that will be returned in response.
 
@@ -73,7 +78,9 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
  *   ...
  * ])
  */
-flux_future_t *flux_job_list (flux_t *h, int max_entries,
+flux_future_t *flux_job_list (flux_t *h,
+                              int max_entries,
+                              int flags,
                               const char *json_str);
 
 /* Raise an exception for job.

@@ -66,6 +66,9 @@ static struct optparse_option list_opts[] =  {
     { .name = "suppress-header", .key = 's', .has_arg = 0,
       .usage = "Suppress printing of header line",
     },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Include inactive jobs",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -599,15 +602,18 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     json_t *jobs;
     size_t index;
     json_t *value;
+    int flags = 0;
 
     if (optindex != argc) {
         optparse_print_usage (p);
         exit (1);
     }
+    if (optparse_hasopt (p, "all"))
+        flags |= FLUX_JOB_LIST_ALL;
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_job_list (h, max_entries, attrs)))
+    if (!(f = flux_job_list (h, max_entries, flags, attrs)))
         log_err_exit ("flux_job_list");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");

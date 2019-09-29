@@ -22,6 +22,7 @@
  * Input:
  * - set of attributes to list per job
  * - max number of jobs to return from head of queue
+ * - whether to include inactive jobs
  *
  * Output:
  * - array of job objects (job objects contain the requested attributes
@@ -111,7 +112,10 @@ error:
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs)
+json_t *list_job_array (struct queue *queue,
+                        int max_entries,
+                        int flags,
+                        json_t *attrs)
 {
     json_t *jobs = NULL;
     struct job *job;
@@ -126,15 +130,18 @@ json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs)
         goto error_nomem;
     job = queue_first (queue);
     while (job) {
-        json_t *o;
-        if (!(o = list_one_job (job, attrs)))
-            goto error;
-        if (json_array_append_new (jobs, o) < 0) {
-            json_decref (o);
-            goto error_nomem;
+        if ((flags & FLUX_JOB_LIST_ALL) || job->state != FLUX_JOB_INACTIVE) {
+            json_t *o;
+
+            if (!(o = list_one_job (job, attrs)))
+                goto error;
+            if (json_array_append_new (jobs, o) < 0) {
+                json_decref (o);
+                goto error_nomem;
+            }
+            if (json_array_size (jobs) == max_entries)
+                break;
         }
-        if (json_array_size (jobs) == max_entries)
-            break;
         job = queue_next (queue);
     }
     return jobs;
@@ -153,12 +160,18 @@ void list_handle_request (flux_t *h, struct queue *queue,
     int max_entries;
     json_t *jobs;
     json_t *attrs;
+    int flags = 0;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:o}",
+    if (flux_request_unpack (msg, NULL, "{s:i s:i s:o}",
                                         "max_entries", &max_entries,
+                                        "flags", &flags,
                                         "attrs", &attrs) < 0)
         goto error;
-    if (!(jobs = list_job_array (queue, max_entries, attrs)))
+    if (flags != 0 && flags != FLUX_JOB_LIST_ALL) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(jobs = list_job_array (queue, max_entries, flags, attrs)))
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);

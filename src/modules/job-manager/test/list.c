@@ -59,14 +59,14 @@ int main (int argc, char *argv[])
 
     /* list_job_array */
 
-    o = list_job_array (q, 0, attrs);
+    o = list_job_array (q, 0, FLUX_JOB_LIST_ALL, attrs);
     ok (o != NULL && json_is_array (o),
         "list_job_array returns array");
     ok (json_array_size (o) == q_size,
         "array has expected size");
     json_decref (o);
 
-    o = list_job_array (q, 4, attrs);
+    o = list_job_array (q, 4, 0, attrs);
     ok (o != NULL && json_is_array (o),
         "list_job_array max_entries=4 returns array");
     ok (json_array_size (o) == 4,
@@ -86,11 +86,11 @@ int main (int argc, char *argv[])
     json_decref (o);
 
     errno = 0;
-    ok (list_job_array (q, -1, attrs) == NULL && errno == EPROTO,
+    ok (list_job_array (q, -1, 0, attrs) == NULL && errno == EPROTO,
         "list_job_array max_entries < 0 fails with EPROTO");
 
     errno = 0;
-    ok (list_job_array (q, -1, NULL) == NULL && errno == EPROTO,
+    ok (list_job_array (q, -1, 0, NULL) == NULL && errno == EPROTO,
         "list_job_array attrs=NULL fails with EPROTO");
 
     /* list_one_job */

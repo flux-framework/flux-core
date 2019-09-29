@@ -127,7 +127,10 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *jobid)
     return 0;
 }
 
-flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
+flux_future_t *flux_job_list (flux_t *h,
+                              int max_entries,
+                              int flags,
+                              const char *json_str)
 {
     flux_future_t *f;
     json_t *o = NULL;
@@ -139,8 +142,9 @@ flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, "job-manager.list", FLUX_NODEID_ANY, 0,
-                             "{s:i s:o}",
+                             "{s:i s:i s:o}",
                              "max_entries", max_entries,
+                             "flags", flags,
                              "attrs", o))) {
         saved_errno = errno;
         json_decref (o);
