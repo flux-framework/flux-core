@@ -465,3 +465,4 @@ jobspec
 FSD
 enqueues
 cpus
+gpu

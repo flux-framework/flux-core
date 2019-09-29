@@ -46,6 +46,9 @@ Set the number of tasks to launch (default 1).
 *-c, --cores-per-task=N*::
 Set the number of cores to assign to each task (default 1).
 
+*-g, --gpus-per-task=N*::
+Set the number of GPU devices to assign to each task (default none).
+
 *-N, --nodes=N*::
 Set the number of nodes to assign to the job.  Tasks will be distributed
 evenly across the allocated nodes.  It is an error to request more nodes
@@ -137,6 +140,14 @@ Tasks are distributed across the assigned resources.
 
 *affinity=off*::
 Disable task affinity plugin.
+
+*gpu-affinity=per-task*::
+GPU devices are distributed evenly among local tasks.  Otherwise,
+GPU device affinity is to the job.
+
+*gpu-affinity=off*::
+Disable GPU affinity for this job.
+
 
 
 AUTHOR
