@@ -108,7 +108,9 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPROTO;
         goto error;
     }
-    if (event_job_post_pack (event_ctx, job,
+    if (event_job_post_pack (event_ctx,
+                             job,
+                             0,
                              "exception",
                              "{ s:s s:i s:i s:s }",
                              "type", type,

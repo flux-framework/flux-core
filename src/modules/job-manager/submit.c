@@ -109,37 +109,6 @@ error:
     return NULL;
 }
 
-/* Submit event requires special handling.  It cannot go through
- * event_job_post_pack() because job-ingest already logged it.
- * However, we want to let the state machine choose the next state and action,
- * We instead re-create the event and run it directly through
- * event_job_update() and event_job_action().
- */
-int submit_post_event (struct event_ctx *event_ctx, struct job *job)
-{
-    json_t *entry = NULL;
-    int rv = -1;
-
-    entry = eventlog_entry_pack (job->t_submit,
-                                 "submit",
-                                 "{ s:i s:i s:i }",
-                                 "userid", job->userid,
-                                 "priority", job->priority,
-                                 "flags", job->flags);
-    if (!entry)
-        goto error;
-    if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
-        goto error;
-    if (event_batch_pub_state (event_ctx, job) < 0)
-        goto error;
-    if (event_job_action (event_ctx, job) < 0)
-        goto error;
-    rv = 0;
- error:
-    json_decref (entry);
-    return rv;
-}
-
 /* handle submit request (from job-ingest module)
  * This is a batched request for one or more jobs already validated
  * by the ingest module, and already instantiated in the KVS.
@@ -174,9 +143,18 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* Submitting user is being responded to with jobid's.
      * Now walk the list of new jobs and advance their state.
+     * N.B. job-ingest already logged the submit event to the job eventlog,
+     * so we set the NOLOG flag to prevent a duplicate event from being logged.
      */
     while ((job = zlist_pop (newjobs))) {
-        if (submit_post_event (ctx->event_ctx, job) < 0)
+        if (event_job_post_pack (ctx->event_ctx,
+                                 job,
+                                 EVENT_JOB_POST_NOLOG,
+                                 "submit",
+                                 "{ s:i s:i s:i }",
+                                 "userid", job->userid,
+                                 "priority", job->priority,
+                                 "flags", job->flags) < 0)
             flux_log_error (h, "%s: submit_post_event id=%llu",
                             __FUNCTION__, (unsigned long long)job->id);
         job_decref (job);

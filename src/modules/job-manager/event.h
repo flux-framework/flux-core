@@ -33,19 +33,21 @@ int event_job_action (struct event_ctx *ctx, struct job *job);
  */
 int event_job_update (struct job *job, json_t *event);
 
-/* Add notification of job's state transition to its current state
- * to batch for publication.
- */
-int event_batch_pub_state (struct event_ctx *ctx, struct job *job);
+enum event_job_post_flags {
+    EVENT_JOB_POST_NOLOG = 1, // skip posting event to eventlog (e.g. submit)
+};
 
 /* Post event 'name' and optionally 'context' to 'job'.
- * Internally, calls event_job_update(), then event_job_action(), then commits
- * the event to job KVS eventlog.  The KVS commit completes asynchronously.
- * The future passed in as an argument should not be destroyed.
+ * Internally, calls event_job_update(), then event_job_action(),
+ * then, if the EVENT_JOB_POST_NOLOG flag was not provided, commits the event
+ * to job KVS eventlog.  The KVS commit completes asynchronously.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         const char *name, const char *context_fmt, ...);
+int event_job_post_pack (struct event_ctx *ctx,
+                         struct job *job,
+                         int flags,
+                         const char *name,
+                         const char *context_fmt, ...);
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
                               struct alloc_ctx *alloc_ctx);

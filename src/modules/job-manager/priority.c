@@ -81,7 +81,7 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     }
     /* Post event, change job's queue position, and respond.
      */
-    if (event_job_post_pack (event_ctx, job,
+    if (event_job_post_pack (event_ctx, job, 0,
                              "priority",
                              "{ s:i s:i }",
                              "userid", userid,

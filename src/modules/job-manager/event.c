@@ -231,7 +231,7 @@ static int event_batch_commit_event (struct event_ctx *ctx, struct job *job,
     return 0;
 }
 
-int event_batch_pub_state (struct event_ctx *ctx, struct job *job)
+static int event_batch_pub_state (struct event_ctx *ctx, struct job *job)
 {
     json_t *o;
 
@@ -257,7 +257,7 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
         case FLUX_JOB_NEW:
             break;
         case FLUX_JOB_DEPEND:
-            if (event_job_post_pack (ctx, job, "depend", NULL) < 0)
+            if (event_job_post_pack (ctx, job, 0, "depend", NULL) < 0)
                 return -1;
             break;
         case FLUX_JOB_SCHED:
@@ -288,7 +288,7 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
                                    && !job->start_pending
                                    && !job->has_resources) {
 
-                if (event_job_post_pack (ctx, job, "clean", NULL) < 0)
+                if (event_job_post_pack (ctx, job, 0, "clean", NULL) < 0)
                     return -1;
             }
             break;
@@ -427,8 +427,11 @@ error:
     return -1;
 }
 
-int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         const char *name, const char *context_fmt, ...)
+int event_job_post_pack (struct event_ctx *ctx,
+                         struct job *job,
+                         int flags,
+                         const char *name,
+                         const char *context_fmt, ...)
 {
     va_list ap;
     json_t *entry = NULL;
@@ -440,8 +443,10 @@ int event_job_post_pack (struct event_ctx *ctx, struct job *job,
         return -1;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
-    if (event_batch_commit_event (ctx, job, entry) < 0)
-        goto error;
+    if (!(flags & EVENT_JOB_POST_NOLOG)) {
+        if (event_batch_commit_event (ctx, job, entry) < 0)
+            goto error;
+    }
     if (job->state != old_state) {
         if (event_batch_pub_state (ctx, job) < 0)
             goto error;
