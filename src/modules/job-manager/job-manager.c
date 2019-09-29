@@ -102,7 +102,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating exec interface");
         goto done;
     }
-    if (!(ctx.drain_ctx = drain_ctx_create (h, ctx.queue, ctx.submit_ctx))) {
+    if (!(ctx.drain_ctx = drain_ctx_create (h,
+                                            ctx.queue,
+                                            ctx.event_ctx,
+                                            ctx.submit_ctx))) {
         flux_log_error (h, "error creating drain interface");
         goto done;
     }
