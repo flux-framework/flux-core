@@ -71,6 +71,11 @@ void priority_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
+    if (job->state == FLUX_JOB_INACTIVE) {
+        errstr = "job is inactive";
+        errno = EINVAL;
+        goto error;
+    }
     /* Security: guests can only reduce priority, or increase up to default.
      */
     if (!(rolemask & FLUX_ROLE_OWNER)

@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* restart - reload active jobs from the KVS */
+/* restart - reload jobs from the KVS */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -146,7 +146,7 @@ static int restart_map_cb (struct job *job, void *arg)
     return 0;
 }
 
-/* Load any active jobs present in the KVS at startup.
+/* Load any jobs present in the KVS at startup.
  */
 int restart_from_kvs (flux_t *h, struct queue *queue,
                       struct event_ctx *event_ctx)

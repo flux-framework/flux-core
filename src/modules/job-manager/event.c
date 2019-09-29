@@ -295,7 +295,6 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
             }
             break;
         case FLUX_JOB_INACTIVE:
-            queue_delete (ctx->queue, job, job->queue_handle);
             break;
     }
     return 0;

@@ -103,6 +103,10 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
+    if ((job->state == FLUX_JOB_INACTIVE)) {
+        errstr = "job is inactive";
+        goto error;
+    }
     if (note && strchr (note, '=')) {
         errstr = "exception note may not contain key=value attributes";
         errno = EPROTO;
