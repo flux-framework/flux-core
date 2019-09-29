@@ -6,9 +6,6 @@ test_description='Test flux-shell default affinity implementation'
 
 test_under_flux 2
 
-jq=$(which jq 2>/dev/null)
-test -z "$jq" || test_set_prereq HAVE_JQ
-
 if ! which hwloc-bind > /dev/null; then
     skip_all='skipping affinity tests since hwloc-bind not found'
     test_done
@@ -42,7 +39,7 @@ test_expect_success MULTICORE 'flux-shell: default affinity works (2 cores)' '
     test_debug "cat result.n1" &&
     test "$(cat result.n1)" = "2"
 '
-test_expect_success HAVE_JQ,MULTICORE 'flux-shell: per-task affinity works' '
+test_expect_success MULTICORE 'flux-shell: per-task affinity works' '
     flux mini run --label-io -ocpu-affinity=per-task -n2 -c1 \
 		hwloc-bind --get > per-task.out &&
     task0set=$(sed -n "s/^0: //p" per-task.out) &&
@@ -50,19 +47,85 @@ test_expect_success HAVE_JQ,MULTICORE 'flux-shell: per-task affinity works' '
     test_debug "echo checking ${task0set} not equal ${task1set}" &&
     test "$task0set" != "$task1set"
 '
-test_expect_success HAVE_JQ 'flux-shell: per-task affinity sanity check' '
+test_expect_success 'flux-shell: per-task affinity sanity check' '
     flux mini run --label-io -ocpu-affinity=per-task -n1 -c1 \
 		hwloc-bind --get
 '
-test_expect_success HAVE_JQ 'flux-shell: affinity can be disabled' '
+test_expect_success 'flux-shell: affinity can be disabled' '
     hwloc-bind --get > affinity-off.expected &&
     flux mini run -ocpu-affinity=off -n1 hwloc-bind --get >affinity-off.out &&
     test_cmp affinity-off.expected affinity-off.out
 '
-test_expect_success HAVE_JQ 'flux-shell: invalid option is ignored' '
+test_expect_success 'flux-shell: invalid option is ignored' '
     flux mini run -ocpu-affinity=1 -n1 hwloc-bind --get &&
     flux dmesg | grep "invalid option"
 '
-flux dmesg
-flux dmesg | grep 'unable to get cpuset'
+#  GPU affinity tests use standalone shell since simple-sched doesnt
+#   schedule GPUs.
+#
+test_expect_success 'flux-shell: create multi-gpu R' '
+	cat >R.gpu <<-EOF
+	        {"version": 1, "execution":{ "R_lite":[
+                { "children": { "core": "0-1", "gpu": "0-3" }, "rank": "0" }
+        ]}}
+	EOF
+'
+test_expect_success 'flux-shell: gpu-affinity works by default' '
+	name=gpu-basic &&
+	flux mini run -N1 -n2 --dry-run \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0-3
+	1: 0-3
+	EOF
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 &&
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
+		> ${name}.out 2>${name}.err &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity=on' '
+	name=gpu-on &&
+	flux mini run -N1 -n2 --dry-run -o gpu-affinity=on \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0-3
+	1: 0-3
+	EOF
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
+		> ${name}.out 2>${name}.err &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity=per-task' '
+	name=gpu-per-task &&
+	flux mini run -N1 -n2 --dry-run -o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0-1
+	1: 2-3
+	EOF
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
+		> ${name}.out 2>${name}.err &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity=off' '
+	name=gpu-off &&
+	flux mini run -N1 -n2 --dry-run -o gpu-affinity=off \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	cat >${name}.expected <<-EOF  &&
+	EOF
+	test_expect_code 1  ${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 \
+	  | sort -k1,1n \
+	  > ${name}.out 2>${name}.err &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity bad arg is ignored' '
+	name=gpu-bad-arg &&
+	flux mini run -N1 -n2 --dry-run -o gpu-affinity="[1]" \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 \
+	  >${name}.out 2>${name}.err &&
+	test_debug "cat ${name}.out" &&
+	test_debug "cat ${name}.err" >&2 &&
+	grep "Failed to get gpu-affinity shell option" ${name}.err
+'
 test_done

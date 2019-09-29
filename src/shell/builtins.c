@@ -34,6 +34,7 @@ extern struct shell_builtin builtin_output;
 extern struct shell_builtin builtin_kill;
 extern struct shell_builtin builtin_signals;
 extern struct shell_builtin builtin_affinity;
+extern struct shell_builtin builtin_gpubind;
 
 static struct shell_builtin * builtins [] = {
     &builtin_pmi,
@@ -41,6 +42,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_kill,
     &builtin_signals,
     &builtin_affinity,
+    &builtin_gpubind,
     &builtin_list_end,
 };
 

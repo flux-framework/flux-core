@@ -367,11 +367,12 @@ int flux_shell_get_rank_info (flux_shell_t *shell,
     if (rcalc_get_nth (shell->info->rcalc, shell_rank, &ri) < 0)
         return -1;
 
-    o = json_pack ("{ s:i s:i s:{s:s}}",
+    o = json_pack ("{ s:i s:i s:{s:s s:s?}}",
                    "broker_rank", ri.rank,
                    "ntasks", ri.ntasks,
                    "resources",
-                     "cores", shell->info->rankinfo.cores);
+                     "cores", shell->info->rankinfo.cores,
+                     "gpus",  shell->info->rankinfo.gpus);
     if (!o)
         return -1;
     *json_str = json_dumps (o, JSON_COMPACT);

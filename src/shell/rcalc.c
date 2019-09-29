@@ -26,7 +26,9 @@ struct rankinfo {
     int id;
     int rank;
     int ncores;
+    int ngpus;
     const char *cores;
+    const char *gpus;
     cpu_set_t cpuset;
 };
 
@@ -40,6 +42,7 @@ struct rcalc {
     json_t *json;
     int nranks;
     int ncores;
+    int ngpus;
     int ntasks;
     struct rankinfo *ranks;
     struct allocinfo *alloc;
@@ -131,14 +134,24 @@ static int cstr_to_cpuset(cpu_set_t *mask, const char* str)
     return 0;
 }
 
+static int cstr_count (const char *str)
+{
+    cpu_set_t set;
+    if (str == NULL)
+        return 0;
+    if (cstr_to_cpuset (&set, str))
+        return -1;
+    return CPU_COUNT (&set);
+}
 
 static int rankinfo_get (json_t *o, struct rankinfo *ri)
 {
     json_error_t error;
-    int rc = json_unpack_ex (o, &error, 0, "{s:i, s:{s:s}}",
+    int rc = json_unpack_ex (o, &error, 0, "{s:i, s:{s:s,s?:s}}",
                 "rank", &ri->rank,
                 "children",
-                "core", &ri->cores);
+                "core", &ri->cores,
+                "gpu",  &ri->gpus);
     if (rc < 0) {
         fprintf (stderr, "json_unpack: %s\n", error.text);
         return -1;
@@ -148,6 +161,7 @@ static int rankinfo_get (json_t *o, struct rankinfo *ri)
         return -1;
 
     ri->ncores = CPU_COUNT (&ri->cpuset);
+    ri->ngpus = cstr_count (ri->gpus);
     return (0);
 }
 
@@ -245,6 +259,7 @@ static rcalc_t * rcalc_create_json (json_t *o)
         if (rankinfo_get (json_array_get (r->json, i), &r->ranks[i]) < 0)
             goto fail;
         r->ncores += r->ranks[i].ncores;
+        r->ngpus += r->ranks[i].ngpus;
     }
     return (r);
 fail:
@@ -282,6 +297,11 @@ rcalc_t *rcalc_createf (FILE *fp)
 int rcalc_total_cores (rcalc_t *r)
 {
     return r->ncores;
+}
+
+int rcalc_total_gpus (rcalc_t *r)
+{
+    return r->ngpus;
 }
 
 int rcalc_total_nodes_used (rcalc_t *r)
@@ -404,10 +424,23 @@ static struct rankinfo *rcalc_rankinfo_find (rcalc_t *r, int rank)
     return (NULL);
 }
 
+static void strcpy_trunc (char *dst, size_t dstlen, const char *src)
+{
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
+    }
+    if (strlen (src) < dstlen)
+        strcpy (dst, src);
+    else {
+        strncpy (dst, src, dstlen-1);
+        dst[dstlen-2] = '+'; /* Indicate truncation */
+    }
+}
+
 static void rcalc_rankinfo_set (rcalc_t *r, int id,
                                 struct rcalc_rankinfo *rli)
 {
-    int coreslen = sizeof (rli->cores);
     struct rankinfo *ri = &r->ranks[id];
     struct allocinfo *ai = &r->alloc[id];
     rli->nodeid = ri->id;
@@ -419,12 +452,8 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     /*  Copy cores string to rli, in the very unlikely event that
      *   we get a huge cores string, indicate truncation.
      */
-    if (strlen (ri->cores) < coreslen)
-        strcpy (rli->cores, ri->cores);
-    else {
-        strncpy (rli->cores, ri->cores, coreslen-1);
-        rli->cores [coreslen-2] = '+'; /* Indicate truncation */
-    }
+    strcpy_trunc (rli->cores, sizeof (rli->cores), ri->cores);
+    strcpy_trunc (rli->gpus, sizeof (rli->gpus), ri->gpus);
 }
 
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *rli)
