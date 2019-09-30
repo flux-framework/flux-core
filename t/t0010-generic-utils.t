@@ -42,6 +42,20 @@ test_expect_success 'version: reports expected values not under an instance' '
 	! grep -q broker     version2.out &&
 	! grep -q FLUX_URI   version2.out
 '
+test_expect_success 'version: flux -V works under an instance' '
+	flux --version >version3.out &&
+	grep -q libflux-core version3.out &&
+	grep -q commands     version3.out &&
+	grep -q broker       version3.out &&
+	grep -q FLUX_URI     version3.out
+'
+test_expect_success 'version: flux -V works not under and instance' '
+	(unset FLUX_URI; flux -V >version4.out) &&
+	grep -q libflux-core version4.out &&
+	grep -q commands     version4.out &&
+	! grep -q broker     version4.out &&
+	! grep -q FLUX_URI   version4.out
+'
 
 heaptrace_error_check()
 {
