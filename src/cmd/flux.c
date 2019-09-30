@@ -42,6 +42,9 @@ static struct optparse_option opts[] = {
     { .name = "verbose",         .key = 'v', .has_arg = 0,
       .usage = "Be verbose about environment and command search",
     },
+    { .name = "version",         .key = 'V', .has_arg = 0,
+      .usage = "Display command and component versions",
+    },
     { .name = "parent",         .key = 'p', .has_arg = 0,
       .usage = "Set environment of parent instead of current instance",
     },
@@ -124,6 +127,10 @@ int main (int argc, char *argv[])
     if (optparse_hasopt (p, "help")) {
         usage (p); // N.B. accesses "conf_flags"
         exit (0);
+    }
+    if (optparse_hasopt (p, "version")) {
+        execlp ("flux", "flux", "version", (char *) NULL);
+        log_err_exit ("Failed to run flux-version");
     }
     optindex = optparse_option_index (p);
     if (argc - optindex == 0) {

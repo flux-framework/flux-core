@@ -38,6 +38,9 @@ in the parent. This option may be specified multiple times.
 *-v, --verbose*::
 Display command environment, and the path search for 'CMD'.
 
+*-V, --version*::
+Convenience option to run flux-version(1).
+
 
 SUB-COMMAND ENVIRONMENT
 -----------------------
