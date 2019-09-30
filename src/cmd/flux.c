@@ -129,7 +129,7 @@ int main (int argc, char *argv[])
         exit (0);
     }
     if (optparse_hasopt (p, "version")) {
-        execlp ("flux", "flux", "version", (char *) NULL);
+        execlp (argv0, "flux", "version", (char *) NULL);
         log_err_exit ("Failed to run flux-version");
     }
     optindex = optparse_option_index (p);
