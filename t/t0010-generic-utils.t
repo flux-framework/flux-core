@@ -50,7 +50,8 @@ test_expect_success 'version: flux -V works under an instance' '
 	grep -q FLUX_URI     version3.out
 '
 test_expect_success 'version: flux -V works not under and instance' '
-	(unset FLUX_URI; flux -V >version4.out) &&
+	(unset FLUX_URI; PATH=/bin:/usr/bin; \
+		${FLUX_BUILD_DIR}/src/cmd/flux -V >version4.out) &&
 	grep -q libflux-core version4.out &&
 	grep -q commands     version4.out &&
 	! grep -q broker     version4.out &&
