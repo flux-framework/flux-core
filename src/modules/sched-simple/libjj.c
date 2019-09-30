@@ -18,15 +18,16 @@
 
 #include "libjj.h"
 
-static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
+static int jj_read_level (json_t *o, int level, struct jj_counts *jj);
+
+static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
 {
     int count;
     const char *type = NULL;
     json_t *with = NULL;
     json_error_t error;
 
-    /* Only one item per level allowed */
-    if (json_unpack_ex (o, &error, 0, "[{s:s,s:i,s?o}]",
+    if (json_unpack_ex (o, &error, 0, "{ s:s s:i s?o }",
                        "type", &type,
                        "count", &count,
                        "with", &with) < 0) {
@@ -48,12 +49,31 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
     else if (strcmp (type, "core") == 0)
         jj->slot_size = count;
     else {
-        sprintf (jj->error, "Invalid type '%s'", type);
+        sprintf (jj->error, "Unsupported resource type '%s'", type);
         errno = EINVAL;
         return -1;
     }
     if (with)
         return jj_read_level (with, level+1, jj);
+    return 0;
+
+}
+
+static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
+{
+    int i;
+    json_t *v = NULL;
+
+    if (!json_is_array (o)) {
+        snprintf (jj->error, sizeof (jj->error) - 1,
+                  "level %d: must be an array", level);
+        errno = EINVAL;
+        return -1;
+    }
+    json_array_foreach (o, i, v) {
+        if (jj_read_vertex (v, level, jj) < 0)
+            return -1;
+    }
     return 0;
 }
 
