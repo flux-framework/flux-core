@@ -250,6 +250,12 @@ class SubmitCmd:
             metavar="KEY=VAL",
         )
         parser.add_argument(
+            "--input",
+            type=str,
+            help="Redirect job stdin from FILENAME, bypassing KVS",
+            metavar="FILENAME",
+        )
+        parser.add_argument(
             "--output",
             type=str,
             help="Redirect job stdout to FILENAME, bypassing KVS",
@@ -296,6 +302,10 @@ class SubmitCmd:
         jobspec.set_environment(dict(os.environ))
         if args.time_limit is not None:
             jobspec.set_duration(args.time_limit)
+
+        if args.input is not None:
+            jobspec.setattr_shopt("input.stdin.type", "file")
+            jobspec.setattr_shopt("input.stdin.path", args.input)
 
         if args.output is not None:
             jobspec.setattr_shopt("output.stdout.type", "file")
