@@ -41,7 +41,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
 	  jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
-	jj-reader: Invalid type '\''beans'\''
+	jj-reader: Unsupported resource type '\''beans'\''
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
@@ -72,10 +72,10 @@ jobspec/valid/basic.yaml        ==jj-reader: Unable to determine slot size
 jobspec/valid/example2.yaml     ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_1.2.yaml ==jj-reader: level 0: Expected integer, got object
 jobspec/valid/use_case_1.3.yaml ==jj-reader: level 2: Expected integer, got object
-jobspec/valid/use_case_1.4.yaml ==jj-reader: Invalid type 'socket'
-jobspec/valid/use_case_1.5.yaml ==jj-reader: Invalid type 'cluster'
-jobspec/valid/use_case_1.6.yaml ==jj-reader: Invalid type 'cluster'
-jobspec/valid/use_case_1.7.yaml ==jj-reader: Invalid type 'switch'
+jobspec/valid/use_case_1.4.yaml ==jj-reader: Unsupported resource type 'socket'
+jobspec/valid/use_case_1.5.yaml ==jj-reader: Unsupported resource type 'cluster'
+jobspec/valid/use_case_1.6.yaml ==jj-reader: Unsupported resource type 'cluster'
+jobspec/valid/use_case_1.7.yaml ==jj-reader: Unsupported resource type 'switch'
 jobspec/valid/use_case_2.1.yaml ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_2.2.yaml ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_2.5.yaml ==jj-reader: level 1: Expected integer, got object
@@ -120,5 +120,27 @@ while read line; do
 	test_cmp expected.$test_count output.$test_count
   '
 done < inputs.txt
+
+
+# Invalid inputs:
+# <mini command args> == <expected result>
+#
+cat <<EOF >mini-invalid.txt
+run -g1             ==jj-reader: Unsupported resource type 'gpu'
+run -N1 -n2 -c2 -g1 ==jj-reader: Unsupported resource type 'gpu'
+EOF
+
+while read line; do
+  args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+  expected=$(echo $line | awk -F== '{print $2}')
+
+  test_expect_success "jj-reader: flux mini $args gets expected error" '
+	echo $expected >expected.$test_count &&
+	flux mini $args --dry-run hostname >$test_count.json &&
+	test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
+	test_cmp expected.$test_count out.$test_count
+  '
+done <mini-invalid.txt
+
 
 test_done
