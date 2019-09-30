@@ -1,3 +1,78 @@
+flux-core version 0.13.0 - 2019-10-01
+-------------------------------------
+
+## Summary:
+
+This version of flux-core enhances the new execution system to near full
+functionality, including new tools for job submission, better MPI support,
+task and GPU affinity options, and flexible job output handling including
+redirection to bypass the KVS. A powerful shell plugin infrastructure allows
+execution features to be selectively enabled by users.
+
+See flux-mini(1) for more info on the new job submission interface.
+
+Some deficiencies present in this release:
+
+ * flux job list doesn't show inactive jobs
+ * no per-task output redirection
+ * output is space-inefficient in KVS (base64 encoding, one commit per line)
+ * no stdin redirection
+ * need better shell task cleanup and early task exit detection
+ * no debugger support (MPIR)
+
+### New features
+
+ * flux-mini: new run/submit interface (#2409, #2390)
+ * flux-version: make flux -V,--version an alias, add manpage (#2412, #2426)
+ * shell: add gpu affinity support (#2406)
+ * shell: add builtin core affinity plugin (#2397)
+ * shell: Support stdout/stderr redirect to a file (#2395)
+ * shell: add support for plugins and shell initrc (#2376, #2392, #2357, #2335)
+ * shell: flush output to KVS on every line (#2366, #2332)
+ * shell: limit the number of I/O requests in flight (#2296)
+ * shell: use RFC 24 eventlog output (#2308)
+ * flux-job attach: add timestamps, --show-exec option (#2388)
+ * libioencode: convenience library for encoding io (#2293)
+ * libsubprocess: add start/stop for streams (#2271, #2333)
+ * libsubprocess: add `flux_subprocess_kill()` (#2297)
+ * job-info: development in support of job output (#2341, #2374, #2360,
+   #2303, #2307)
+ * flux-in-flux: flux --parent option, add `instance-level`, `jobid`
+   broker attributes (#2326, #2362)
+ * flux-in-flux: set `local_uri`, `remote_uri` in enclosing instance KVS (#2322)
+
+### Improvements
+
+ * libflux/reactor: add `flux_reactor_active_incref()`, `_decref()` (#2387)
+ * libflux/module: add `flux_module_debug_test()` (#2373)
+ * libschedutil: export library for use by flux-sched and others (#2380)
+ * libschedutil: destroy pending futures on scheduler unload (#2226)
+ * libflux/message: drop `flux_msg_sendfd()`, `_recvfd()` from API (#2375)
+ * libflux/message: add `flux_msg_incref()` and `_decref()` (#2334)
+ * libflux: update message dispatch to support routers (#2367)
+ * libflux/buffer: increase efficiency of line buffered I/O (#2294)
+ * libsubprocess: cleanup ( #2343, #2286)
+ * testsuite improvements (#2404, #2400)
+ * build system cleanup (#2407)
+ * documentation cleanup (#2327)
+ * abstract in-tree detection into libutil (#2351)
+ * libjob: `flux_job_kvs_namespace()` (#2315)
+
+### Fixes
+
+ * build: bump libflux-core.so version to 2 (#2427)
+ * sched-simple: reject requests with unknown resource types (#2425)
+ * restore libpmi2 to support MPICH/MVAPICH configured for slurm pmi2 (#2381)
+ * broker: avoid accidentally consuming % format characters in initial
+   program args (#2285)
+ * connector-local: suppress EPIPE write errors (#2316)
+ * libidset: fix `idset_last()` at size=32 (#2340, #2342)
+ * connectors/loop: do not accidentally close STDIN (#2339)
+ * job-exec: fix exception handling of jobs in transition states (#2309)
+ * broker: don't read `FLUX_RCX_PATH` to set rc1,rc3 paths (#2431)
+ * job-ingest: validator shebang can pick the wrong python (#2435)
+
+
 flux-core version 0.12.0 - 2019-08-01
 -------------------------------------
 
