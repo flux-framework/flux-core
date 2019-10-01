@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "http://github.com/flux-framework/rfc/tree/master/data/spec_14/schema.json",
-  "title": "jobspec-01",
+  "title": "canonical-jobspec",
 
-  "description":         "Flux jobspec version 1",
+  "description":         "Flux canonical jobspec",
 
   "definitions": {
     "complex_range": {
@@ -82,8 +82,7 @@
   "properties": {
     "version": {
       "description": "the jobspec version",
-      "type": "integer",
-      "enum": [1]
+      "type": "integer"
     },
     "resources": {
       "description": "requested resources",
@@ -98,7 +97,9 @@
         "system": {
           "type": "object",
           "properties": {
-            "duration": { "type": "number", "minimum": 0 }
+            "duration": { "type": "number", "minimum": 0 },
+            "cwd": { "type": "string" },
+            "environment": { "type": "object" }
           }
         },
         "user": {
@@ -130,7 +131,10 @@
           "distribution": { "type": "string" },
           "attributes": {
             "type": "object",
-	    "additionalProperties": { "type": "string" }
+            "properties": {
+              "environment": { "type" : "object"}
+            },
+	        "additionalProperties": { "type": "string" }
           }
         },
 	"additionalProperties": false
