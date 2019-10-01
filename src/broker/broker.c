@@ -55,6 +55,7 @@
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/intree.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -769,8 +770,6 @@ static struct attrmap attrmap[] = {
     { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1, 0 },
     { "FLUX_MODULE_PATH",       "conf.module_path",         1, 0 },
     { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1, 0 },
-    { "FLUX_RC1_PATH",          "broker.rc1_path",          1, 0 },
-    { "FLUX_RC3_PATH",          "broker.rc3_path",          1, 0 },
     { "FLUX_SEC_DIRECTORY",     "security.keydir",          1, 0 },
 
     { "FLUX_URI",               "parent-uri",               0, 1 },
@@ -809,6 +808,18 @@ static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
     free (pidval);
 }
 
+static void init_attrs_rc_paths (attr_t *attrs)
+{
+    int flags = 0;
+    if (executable_is_intree () == 1)
+        flags |= CONF_FLAG_INTREE;
+    if (attr_add (attrs, "broker.rc1_path",
+                  flux_conf_get ("rc1_path", flags), 0) < 0
+        || attr_add (attrs, "broker.rc3_path",
+                  flux_conf_get ("rc3_path", flags), 0) < 0)
+        log_err_exit ("attr_add rc1,rc3_path");
+}
+
 static void init_attrs (attr_t *attrs, pid_t pid)
 {
     /* Initialize config attrs from environment set up by flux(1)
@@ -818,6 +829,8 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     /* Initialize other miscellaneous attrs
      */
     init_attrs_broker_pid (attrs, pid);
+    init_attrs_rc_paths (attrs);
+
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
