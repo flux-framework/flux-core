@@ -20,6 +20,8 @@ JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J=${JOBSPEC}/y2j.py
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
+VALIDATOR=${FLUX_BUILD_DIR}/src/modules/job-ingest/validators/validate-schema.py
 
 DUMMY_EVENTLOG=test.ingest.eventlog
 
@@ -53,8 +55,19 @@ test_expect_success 'job-ingest: submit fails without job-ingest' '
 	test_must_fail flux job submit basic.json 2>nosys.out
 '
 
+test_expect_success 'job-ingest: job-ingest fails with bad option' '
+	test_must_fail flux module load job-ingest badopt=xyz
+'
+test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
+	test_must_fail flux module load job-ingest validator=/noexist
+'
+test_expect_success 'job-ingest: job-ingest fails with bad schema path' '
+	test_must_fail flux module load job-ingest schema=/noexist
+'
+
 test_expect_success 'job-ingest: load job-ingest && job-info' '
-	flux module load -r all job-ingest &&
+	flux module load -r all job-ingest \
+		schema=${SCHEMA} validator=${VALIDATOR} &&
 	flux module load -r all job-info
 '
 
