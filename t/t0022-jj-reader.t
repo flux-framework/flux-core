@@ -82,13 +82,19 @@ jobspec/valid/use_case_2.5.yaml ==jj-reader: level 1: Expected integer, got obje
 jobspec/valid/use_case_2.6.yaml ==jj-reader: level 2: Expected integer, got object
 EOF
 
+#
+# N.B. RFC 14 examples recently bumped the version from 1 to 999.  Since
+# the tests below check that certain constructs in those examples trigger
+# appropriate libjj errors, we change version back to 1 just for this block
+# of tests to retain that coverage.  --Jim G.
+#
 while read line; do
   yaml=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
   expected=$(echo $line | awk -F== '{print $2}')
 
   test_expect_success "jj-reader: $(basename $yaml) gets expected error" '
 	echo $expected >expected.$test_count &&
-	$y2j<$SHARNESS_TEST_SRCDIR/$yaml >$test_count.json &&
+	sed -e 's/999/1/' $SHARNESS_TEST_SRCDIR/$yaml |$y2j >$test_count.json &&
 	test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
 	test_cmp expected.$test_count out.$test_count
   '

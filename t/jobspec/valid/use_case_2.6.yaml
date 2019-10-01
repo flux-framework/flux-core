@@ -1,4 +1,4 @@
-version: 1
+version: 999
 resources:
   - type: slot
     label: 4GB-node
@@ -19,3 +19,6 @@ tasks:
 attributes:
   system:
     duration: 3600.
+    cwd: "/home/flux"
+    environment:
+      HOME: "/home/flux"
