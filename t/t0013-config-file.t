@@ -8,19 +8,18 @@ test_description='Test config file overlay bootstrap'
 TCONFDIR=${FLUX_SOURCE_DIR}/t/conf.d
 
 # Avoid loading unnecessary modules in back to back broker tests
-export FLUX_RC1_PATH=
-export FLUX_RC3_PATH=
+ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
 #
 # check boot.method
 #
 
 test_expect_success 'flux broker with explicit PMI boot method works' '
-	flux broker -Sboot.method=pmi /bin/true
+	flux broker ${ARGS} -Sboot.method=pmi /bin/true
 '
 
 test_expect_success 'flux broker with unknown boot method fails' '
-	test_must_fail flux broker -Sboot.method=badmethod /bin/true
+	test_must_fail flux broker ${ARGS} -Sboot.method=badmethod /bin/true
 '
 
 #
@@ -28,26 +27,26 @@ test_expect_success 'flux broker with unknown boot method fails' '
 #
 
 test_expect_success 'flux broker without boot.config_file fails' '
-	test_must_fail flux broker -Sboot.method=config /bin/true
+	test_must_fail flux broker ${ARGS} -Sboot.method=config /bin/true
 '
 
 test_expect_success 'flux broker with boot.config_file=/badfile fails' '
-	test_must_fail flux broker -Sboot.method=config \
+	test_must_fail flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=/badfile /bin/true
 '
 
 test_expect_success 'flux broker with boot.config_file=bad-toml fails' '
-	test_must_fail flux broker -Sboot.method=config \
+	test_must_fail flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/bad-toml.conf /bin/true
 '
 
 test_expect_success 'flux broker with missing required items fails' '
-	test_must_fail flux broker -Sboot.method=config \
+	test_must_fail flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/bad-missing.conf /bin/true
 '
 
 test_expect_success 'flux broker with boot.config_file=bad-rank fails' '
-	test_must_fail flux broker -Sboot.method=config \
+	test_must_fail flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/bad-rank.conf /bin/true
 '
 
@@ -62,7 +61,7 @@ test_expect_success 'flux broker with boot.config_file=bad-rank fails' '
 #
 
 test_expect_success 'start size=1 with shared config file, expected attrs set' '
-	run_timeout 5 flux broker -Sboot.method=config \
+	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/shared.conf \
 		--shutdown-grace=0.1 \
 		flux lsattr -v >1s.out &&
@@ -70,20 +69,20 @@ test_expect_success 'start size=1 with shared config file, expected attrs set' '
 '
 
 test_expect_success 'start size=1 with shared config file, ipc endpoint' '
-	run_timeout 5 flux broker -Sboot.method=config \
+	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/shared_ipc.conf \
 		--shutdown-grace=0.1 \
 		/bin/true
 '
 
 test_expect_success 'start size=1 with shared config file, no endpoint' '
-	test_must_fail flux broker -Sboot.method=config \
+	test_must_fail flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/shared_none.conf \
 		/bin/true
 '
 
 test_expect_success 'start size=1 with private config file' '
-	run_timeout 5 flux broker -Sboot.method=config \
+	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/private.conf /bin/true
 '
 
@@ -92,9 +91,9 @@ test_expect_success 'start size=1 with private config file' '
 #
 
 test_expect_success NO_CHAIN_LINT 'start size=2 with private config files' '
-	flux broker -Sboot.method=config \
+	flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/priv2.1.conf &
-	run_timeout 5 flux broker -Sboot.method=config \
+	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
 		-Sboot.config_file=${TCONFDIR}/priv2.0.conf \
 		--shutdown-grace=0.1 \
 		flux getattr size >2p.out &&

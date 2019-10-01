@@ -55,8 +55,7 @@ ARGS="$ARGS $BUG1006"
 
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
-export FLUX_RC1_PATH=""
-export FLUX_RC3_PATH=""
+ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc_path="
 
 test_expect_success 'broker --shutdown-grace option works' '
 	flux start -o,--shutdown-grace=0.1 -o -Sbroker.rc1_path=/bin/true /bin/true
@@ -129,8 +128,6 @@ test_expect_success 'flux-start --wrap option works with --size' '
 test_expect_success 'flux-start dies gracefully when run from removed dir' '
 	mkdir foo && (
 	 cd foo &&
-	 unset FLUX_RC1_PATH &&
-	 unset FLUX_RC3_PATH &&
 	 rmdir ../foo &&
 	 test_must_fail flux start /bin/true )
 '

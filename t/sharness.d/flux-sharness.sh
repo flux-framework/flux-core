@@ -91,16 +91,16 @@ test_under_flux() {
     fi
 
     if test "$personality" = "minimal"; then
-        export FLUX_RC1_PATH=""
-        export FLUX_RC3_PATH=""
+        RC1_PATH=""
+        RC3_PATH=""
     elif test "$personality" != "full"; then
-        export FLUX_RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
-        export FLUX_RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
-        test -x $FLUX_RC1_PATH || error "cannot execute $FLUX_RC1_PATH"
-        test -x $FLUX_RC3_PATH || error "cannot execute $FLUX_RC3_PATH"
+        RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
+        RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
+        test -x $RC1_PATH || error "cannot execute $RC1_PATH"
+        test -x $RC3_PATH || error "cannot execute $RC3_PATH"
     else
-        unset FLUX_RC1_PATH
-        unset FLUX_RC3_PATH
+        unset RC1_PATH
+        unset RC3_PATH
     fi
     if test -n "$FLUX_TEST_VALGRIND" ; then
         VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
@@ -115,6 +115,8 @@ test_under_flux() {
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
       exec flux start --bootstrap=selfpmi --size=${size} \
+                      ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
+                      ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
                       ${logopts} \
                       ${timeout} \
                       ${valgrind} \
