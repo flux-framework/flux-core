@@ -7,7 +7,7 @@ test_description='Test the flux-jobspec command'
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 VALIDATE=${JOBSPEC}/validate.py
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
-MINI_SCHEMA=${JOBSPEC}/minimal-schema.json
+MINI_SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec_v1.jsonschema
 SUMMARIZE=${JOBSPEC}/summarize-minimal-jobspec.py
 
 #  Set path to jq
