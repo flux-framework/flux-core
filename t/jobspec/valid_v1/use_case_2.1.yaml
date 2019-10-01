@@ -1,0 +1,22 @@
+version: 1
+resources:
+  - type: node
+    count: 4
+    with:
+      - type: slot
+        count: 1
+        label: myslot
+        with:
+          - type: core
+            count: 1
+tasks:
+  - command: hostname
+    slot: myslot
+    count:
+      total: 5
+attributes:
+  system:
+    duration: 3600.
+    cwd: "/home/flux"
+    environment:
+      HOME: "/home/flux"
