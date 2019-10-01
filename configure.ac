@@ -286,6 +286,7 @@ AC_SUBST(fluxpymoddir)
 AC_SUBST(PYTHON_LIBRARY, lib${ac_python_library}.so)
 
 AC_DEFINE_UNQUOTED([PYTHON_INTERPRETER], ["$PYTHON"], [The python interpreter flux is configured with])
+AC_SUBST(PYTHON)
 
 AC_ARG_ENABLE([pylint],
   [AS_HELP_STRING([--enable-pylint],
@@ -491,6 +492,11 @@ AC_CONFIG_FILES( \
   t/Makefile \
   t/fluxometer/conf.lua \
   t/fluxometer/conf.lua.installed \
+)
+
+AC_CONFIG_FILES( \
+  [src/modules/job-ingest/validators/validate-schema.py],
+      [chmod +x src/modules/job-ingest/validators/validate-schema.py] \
 )
 
 AC_CONFIG_LINKS([ \
