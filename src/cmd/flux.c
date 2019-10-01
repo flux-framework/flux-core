@@ -198,10 +198,6 @@ int main (int argc, char *argv[])
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
 
-    environment_from_env (env, "FLUX_RC1_PATH",
-                          flux_conf_get ("rc1_path", flags), 0);
-    environment_from_env (env, "FLUX_RC3_PATH",
-                          flux_conf_get ("rc3_path", flags), 0);
     environment_from_env (env, "FLUX_PMI_LIBRARY_PATH",
                           flux_conf_get ("pmi_library_path", flags), 0);
 
