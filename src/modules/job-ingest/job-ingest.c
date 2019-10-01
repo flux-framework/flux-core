@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -20,6 +21,7 @@
 #endif
 
 #include "src/common/libutil/fluid.h"
+#include "src/common/libutil/intree.h"
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libeventlog/eventlog.h"
 
@@ -575,6 +577,58 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+/* Configure the validator.
+ * Use compiled in paths for validator program and schema,
+ * unless overridden with validator=path or schema=path on module load
+ * command line.
+ */
+int validate_initialize (flux_t *h,
+                         int argc,
+                         char **argv,
+                         struct validate **validate)
+{
+    const char *usage_message = "Usage: flux module load [OPTIONS] job-ingest "
+                                " [schema=PATH] [validator=PATH]";
+    int flags = 0;
+    const char *valpath;
+    const char *schpath;
+    struct validate *v;
+    int i;
+
+    if (executable_is_intree () == 1)
+        flags |= CONF_FLAG_INTREE;
+    valpath = flux_conf_get ("jobspec_validate_path", flags);
+    schpath = flux_conf_get ("jobspec_schema_path", flags);
+    for (i = 0; i < argc; i++) {
+        if (!strncmp (argv[i], "schema=", 7)) {
+            schpath = argv[i] + 7;
+            if (access (schpath, R_OK) < 0) {
+                flux_log_error (h, "schema %s", schpath);
+                return -1;
+            }
+        }
+        else if (!strncmp (argv[i], "validator=", 10)) {
+            valpath = argv[i] + 10;
+            if (access (valpath, X_OK) < 0) {
+                flux_log_error (h, "validator %s", valpath);
+                return -1;
+            }
+        }
+        else {
+            flux_log (h, LOG_ERR, "invalid option %s", argv[i]);
+            flux_log (h, LOG_ERR, "%s", usage_message);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    if (!(v = validate_create (h, valpath, schpath))) {
+        flux_log_error (h, "validate_create");
+        return -1;
+    }
+    *validate = v;
+    return 0;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     flux_reactor_t *r = flux_get_reactor (h);
@@ -615,10 +669,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log (h, LOG_ERR, "fluid_init failed");
         errno = EINVAL;
     }
-    if (!(ctx.validate = validate_create (h))) {
-        flux_log_error (h, "validate_create");
+    if (validate_initialize (h, argc, argv, &ctx.validate) < 0)
         goto done;
-    }
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;

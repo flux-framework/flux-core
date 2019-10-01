@@ -74,7 +74,9 @@ void validate_destroy (struct validate *v)
     }
 }
 
-struct validate *validate_create (flux_t *h)
+struct validate *validate_create (flux_t *h,
+                                  const char *validate_path,
+                                  const char *schema_path)
 {
     struct validate *v;
     char *argv[4];
@@ -87,9 +89,9 @@ struct validate *validate_create (flux_t *h)
 
     if (executable_is_intree ())
         conf_flags |= CONF_FLAG_INTREE;
-    argv[0] = (char *)flux_conf_get ("jobspec_validate_path", conf_flags);
+    argv[0] = (char *)validate_path,
     argv[1] = "--schema";
-    argv[2] = (char *)flux_conf_get ("jobspec_schema_path", conf_flags);
+    argv[2] = (char *)schema_path,
     argv[3] = NULL;
     assert (argv[0] != NULL);
     assert (argv[2] != NULL);

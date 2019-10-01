@@ -20,7 +20,9 @@ struct validate *v;
  */
 flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len);
 
-struct validate *validate_create (flux_t *h);
+struct validate *validate_create (flux_t *h,
+                                  const char *validate_path,
+                                  const char *schema_path);
 
 void validate_destroy (struct validate *v);
 
