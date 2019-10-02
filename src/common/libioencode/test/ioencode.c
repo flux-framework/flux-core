@@ -19,7 +19,7 @@
 void basic_corner_case (void)
 {
     errno = 0;
-    ok (ioencode (NULL, -1, NULL, -1, false) == NULL
+    ok (ioencode (NULL, NULL, NULL, -1, false) == NULL
         && errno == EINVAL,
         "ioencode returns EINVAL on bad input");
 
@@ -33,17 +33,17 @@ void basic (void)
 {
     json_t *o;
     const char *stream;
-    int rank;
+    const char *rank;
     char *data;
     int len;
     bool eof;
 
-    ok ((o = ioencode ("stdout", 1, "foo", 3, false)) != NULL,
+    ok ((o = ioencode ("stdout", "1", "foo", 3, false)) != NULL,
         "ioencode success (data, eof = false)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
     ok (!strcmp (stream, "stdout")
-        && rank == 1
+        && !strcmp (rank, "1")
         && !strcmp (data, "foo")
         && len == 3
         && eof == false,
@@ -51,12 +51,12 @@ void basic (void)
     free (data);
     json_decref (o);
 
-    ok ((o = ioencode ("stdout", 2, "bar", 3, true)) != NULL,
+    ok ((o = ioencode ("stdout", "[0-8]", "bar", 3, true)) != NULL,
         "ioencode success (data, eof = true)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
     ok (!strcmp (stream, "stdout")
-        && rank == 2
+        && !strcmp (rank, "[0-8]")
         && !strcmp (data, "bar")
         && len == 3
         && eof == true,
@@ -64,12 +64,12 @@ void basic (void)
     free (data);
     json_decref (o);
 
-    ok ((o = ioencode ("stderr", 3, NULL, 0, true)) != NULL,
+    ok ((o = ioencode ("stderr", "[4,5]", NULL, 0, true)) != NULL,
         "ioencode success (no data, eof = true)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
     ok (!strcmp (stream, "stderr")
-        && rank == 3
+        && !strcmp (rank, "[4,5]")
         && data == NULL
         && len == 0
         && eof == true,

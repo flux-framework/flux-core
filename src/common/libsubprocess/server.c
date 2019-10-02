@@ -241,9 +241,11 @@ static int rexec_output (flux_subprocess_t *p,
                          bool eof)
 {
     json_t *io = NULL;
+    char rankstr[64];
     int rv = -1;
 
-    if (!(io = ioencode (stream, s->rank, data, len, eof))) {
+    snprintf (rankstr, sizeof (rankstr), "%d", s->rank);
+    if (!(io = ioencode (stream, rankstr, data, len, eof))) {
         flux_log_error (s->h, "%s: ioencode", __FUNCTION__);
         goto error;
     }

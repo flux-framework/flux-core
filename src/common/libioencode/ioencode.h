@@ -14,25 +14,25 @@
 #include <stdbool.h>
 #include <jansson.h>
 
-/* encode io data and/or EOF into json_t object
+/* encode io data and/or EOF into RFC24 data event object
  * - to set only EOF, set data to NULL and data_len to 0
  * - it is an error to provide no data and EOF = false
  * - returned object should be json_decref()'d after use
  */
 json_t *ioencode (const char *stream,
-                  int rank,
+                  const char *rank,
                   const char *data,
                   int len,
                   bool eof);
 
-/* decode json_t io object
+/* decode RFC24 data event object
  * - both data and EOF can be available
  * - if no data available, data set to NULL and len to 0
  * - data must be freed after return
  */
 int iodecode (json_t *o,
               const char **stream,
-              int *rank,
+              const char **rank,
               char **data,
               int *len,
               bool *eof);

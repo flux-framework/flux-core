@@ -184,7 +184,7 @@ static int remote_write (struct subprocess_channel *c)
         eof = true;
 
     /* rank not needed, set to 0 */
-    if (!(io = ioencode (c->name, 0, ptr, lenp, eof))) {
+    if (!(io = ioencode (c->name, "0", ptr, lenp, eof))) {
         flux_log_error (c->p->h, "ioencode");
         goto error;
     }
@@ -215,7 +215,7 @@ static int remote_close (struct subprocess_channel *c)
     int rv = -1;
 
     /* rank not needed, set to 0 */
-    if (!(io = ioencode (c->name, 0, NULL, 0, true))) {
+    if (!(io = ioencode (c->name, "0", NULL, 0, true))) {
         flux_log_error (c->p->h, "ioencode");
         goto error;
     }
