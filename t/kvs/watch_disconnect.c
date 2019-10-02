@@ -88,7 +88,7 @@ int main (int argc, char **argv)
         w1 = count_watchers (h) - w0;
         if (w1 == rankcount)
             break;
-        usleep (100000);
+        usleep (1000);
     }
 
     log_msg ("test watchers: %d", w1);
