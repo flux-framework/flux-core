@@ -61,10 +61,13 @@ test_expect_success 'rc1 failure transitions to rc3, fails instance' '
 '
 
 test_expect_success 'rc1 bad path handled same as failure' '
-	test_expect_code 127 flux start \
+	(
+	  SHELL=/bin/sh &&
+	  test_expect_code 127 flux start \
 		-o,-Sbroker.rc1_path=rc1-nonexist,-Sbroker.rc3_path= \
 		-o,-Slog-stderr-level=6,-Sinit.mode=normal \
-		/bin/true 2>bad1.log &&
+		/bin/true 2>bad1.log
+	) &&
 	grep -q "Run level 1 starting" bad1.log &&
 	grep -q "Run level 1 Exited with non-zero status" bad1.log &&
 	! grep -q "Run level 2 starting" bad1.log &&
