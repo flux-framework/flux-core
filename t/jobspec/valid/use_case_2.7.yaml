@@ -1,7 +1,7 @@
 version: 999
 resources:
   - type: slot
-    count: 4
+    count: 1
     label: default
     with:
       - type: node
@@ -11,9 +11,18 @@ tasks:
     slot: default
     count:
       per_slot: 1
+  - command: [ "flux", "start" ]
+    slot: default
+    count:
+      per_slot: 1
+    attributes:
+      environment:
+        FOO: null
+        BAR: "2"
 attributes:
   system:
     duration: 3600.
     cwd: "/home/flux"
     environment:
-      HOME: "/home/flux"
+      FOO: "/tmp"
+      BAR: "1"

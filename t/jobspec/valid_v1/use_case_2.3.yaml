@@ -1,13 +1,15 @@
-version: 999
+version: 1
 resources:
   - type: slot
-    count: 4
+    count: 10
     label: default
     with:
-      - type: node
+      - type: core
+        count: 2
+      - type: gpu
         count: 1
 tasks:
-  - command: [ "flux", "start" ]
+  - command: [ "myapp" ]
     slot: default
     count:
       per_slot: 1

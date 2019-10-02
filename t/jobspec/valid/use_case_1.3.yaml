@@ -1,4 +1,4 @@
-version: 1
+version: 999
 resources:
   - type: slot
     count: 4
@@ -22,4 +22,7 @@ tasks:
       per_slot: 1
 attributes:
   system:
-    duration: 3600.0
+    duration: 3600.
+    cwd: "/home/flux"
+    environment:
+      HOME: "/home/flux"

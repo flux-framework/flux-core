@@ -105,14 +105,7 @@ def create_slurm_style_jobspec(
     jobspec = {
         "version": 1,
         "resources": [resource_section],
-        "tasks": [
-            {
-                "command": command,
-                "slot": "task",
-                "count": task_count_dict,
-                "attributes": {},
-            }
-        ],
+        "tasks": [{"command": command, "slot": "task", "count": task_count_dict}],
         "attributes": {"system": {"cwd": os.getcwd(), "environment": environ}},
     }
     if walltime:

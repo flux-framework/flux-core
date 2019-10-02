@@ -1,16 +1,19 @@
 version: 1
 resources:
-  - type: slot
+  - type: node
     count: 4
-    label: default
     with:
-      - type: node
+      - type: slot
         count: 1
+        label: myslot
+        with:
+          - type: core
+            count: 1
 tasks:
   - command: hostname
-    slot: default
+    slot: myslot
     count:
-      per_slot: 1
+      total: 5
 attributes:
   system:
     duration: 3600.

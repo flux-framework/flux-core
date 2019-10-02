@@ -49,7 +49,7 @@ class TestJob(unittest.TestCase):
         self.fh.mrpc_create("cmb.insmod", {"path": job_manager_path, "args": []})
 
         # get a valid jobspec
-        basic_jobspec_fname = os.path.join(jobspec_dir, "valid", "basic.yaml")
+        basic_jobspec_fname = os.path.join(jobspec_dir, "valid", "basic_v1.yaml")
         with open(basic_jobspec_fname, "rb") as infile:
             basic_yaml = infile.read()
         self.jobspec = yaml_to_json(basic_yaml)

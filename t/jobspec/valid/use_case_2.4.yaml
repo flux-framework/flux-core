@@ -1,4 +1,4 @@
-version: 1
+version: 999
 resources:
   - type: node
     count: 1
@@ -33,3 +33,6 @@ tasks:
 attributes:
   system:
     duration: 3600.
+    cwd: "/home/flux"
+    environment:
+      HOME: "/home/flux"

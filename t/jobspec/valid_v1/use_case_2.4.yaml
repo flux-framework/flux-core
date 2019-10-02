@@ -1,13 +1,18 @@
 version: 1
 resources:
-  - type: slot
+  - type: node
     count: 4
-    label: default
     with:
-      - type: node
-        count: 1
+    - type: slot
+      count: 4
+      label: default
+      with:
+        - type: core
+          count: 1
+        - type: gpu
+          count: 1
 tasks:
-  - command: hostname
+  - command: [ "myapp" ]
     slot: default
     count:
       per_slot: 1

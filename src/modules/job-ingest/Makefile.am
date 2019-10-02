@@ -34,4 +34,6 @@ fluxlibexec_SCRIPTS = \
 	validators/validate-schema.py
 
 fluxschemadir = $(datadir)/flux/schema/jobspec/
-dist_fluxschema_DATA = schemas/jobspec.jsonschema
+dist_fluxschema_DATA = \
+	schemas/jobspec.jsonschema \
+	schemas/jobspec_v1.jsonschema

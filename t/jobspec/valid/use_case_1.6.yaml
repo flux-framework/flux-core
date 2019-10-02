@@ -1,22 +1,28 @@
-version: 1
+version: 999
 resources:
     - type: cluster
       count: 2
       with:
-          - type: node
-            count: 15
+          - type: slot
+            count: 1
+            label: default
             with:
-                - type: slot
-                  count: 1
-                  label: default
+                - type: node
+                  count: {min: 1}
+                  exclusive: false
                   with:
                     - type: core
-                      count: 1
+                      count: 30
 tasks:
   - command: [ "flux", "start" ]
     slot: default
     count:
-      per_slot: 1
+      per_resource:
+        type: node
+        count: 1
 attributes:
   system:
     duration: 3600.
+    cwd: "/home/flux"
+    environment:
+      HOME: "/home/flux"
