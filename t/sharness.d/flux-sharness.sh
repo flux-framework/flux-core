@@ -155,4 +155,11 @@ fi
 #  Some tests in flux don't work with --chain-lint, add a prereq for
 #   --no-chain-lint:
 test "$chain_lint" = "t" || test_set_prereq NO_CHAIN_LINT
+
+#  Set LONGTEST prereq
+if test "$TEST_LONG" = "t" || test "$LONGTEST" = "t"; then
+    test_set_prereq LONGTEST
+fi
+
+
 # vi: ts=4 sw=4 expandtab

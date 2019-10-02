@@ -11,10 +11,6 @@ any other tests that require kvs functionality.
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 # Size the session to one more than the number of cores, minimum of 4
