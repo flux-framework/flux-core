@@ -55,7 +55,7 @@ ARGS="$ARGS $BUG1006"
 
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc_path="
+ARGS="$ARGS -o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
 test_expect_success 'broker --shutdown-grace option works' '
 	flux start -o,--shutdown-grace=0.1 -o -Sbroker.rc1_path=/bin/true /bin/true
