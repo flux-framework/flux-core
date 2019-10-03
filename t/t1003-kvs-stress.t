@@ -5,10 +5,6 @@ test_description='Stress test KVS in flux session'
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
@@ -103,8 +99,8 @@ test_expect_success 'kvs: store 10,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir --count 10000
 '
 
-test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir2 --count 1000000
+test_expect_success LONGTEST 'kvs: store 100,000 keys in one dir' '
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir2 --count 100000
 '
 
 # kvs merging tests

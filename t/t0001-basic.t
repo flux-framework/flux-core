@@ -55,7 +55,7 @@ ARGS="$ARGS $BUG1006"
 
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc_path="
+ARGS="$ARGS -o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
 test_expect_success 'broker --shutdown-grace option works' '
 	flux start -o,--shutdown-grace=0.1 -o -Sbroker.rc1_path=/bin/true /bin/true
@@ -256,11 +256,13 @@ test_expect_success 'broker --verbose option works' '
 test_expect_success 'broker --heartrate option works' '
 	flux start ${ARGS} -o,--heartrate=0.1 /bin/true
 '
-test_expect_success 'broker --k-ary option works' '
-	flux start ${ARGS} -s4 -o,--k-ary=1 /bin/true &&
-	flux start ${ARGS} -s4 -o,--k-ary=2 /bin/true &&
-	flux start ${ARGS} -s4 -o,--k-ary=3 /bin/true &&
-	flux start ${ARGS} -s4 -o,--k-ary=4 /bin/true
+test_expect_success NO_CHAIN_LINT 'broker --k-ary option works' '
+	pids="" &&
+	flux start ${ARGS} -s4 -o,--k-ary=1 /bin/true & pids=$!
+	flux start ${ARGS} -s4 -o,--k-ary=2 /bin/true & pids="$pids $!"
+	flux start ${ARGS} -s4 -o,--k-ary=3 /bin/true & pids="$pids $!"
+	flux start ${ARGS} -s4 -o,--k-ary=4 /bin/true & pids="$pids $!" 
+	wait $pids
 '
 
 test_expect_success 'flux-help command list can be extended' '

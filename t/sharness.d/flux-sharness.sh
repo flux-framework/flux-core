@@ -88,6 +88,8 @@ test_under_flux() {
     timeout="-o -Sinit.rc2_timeout=300"
     if test -n "$FLUX_TEST_DISABLE_TIMEOUT"; then
         timeout=""
+    elif test_have_prereq LONGTEST; then
+        timeout="-o,-Sinit.rc2_timeout=900"
     fi
 
     if test "$personality" = "minimal"; then
@@ -155,4 +157,11 @@ fi
 #  Some tests in flux don't work with --chain-lint, add a prereq for
 #   --no-chain-lint:
 test "$chain_lint" = "t" || test_set_prereq NO_CHAIN_LINT
+
+#  Set LONGTEST prereq
+if test "$TEST_LONG" = "t" || test "$LONGTEST" = "t"; then
+    test_set_prereq LONGTEST
+fi
+
+
 # vi: ts=4 sw=4 expandtab
