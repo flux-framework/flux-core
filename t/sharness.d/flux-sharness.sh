@@ -88,6 +88,8 @@ test_under_flux() {
     timeout="-o -Sinit.rc2_timeout=300"
     if test -n "$FLUX_TEST_DISABLE_TIMEOUT"; then
         timeout=""
+    elif test_have_prereq LONGTEST; then
+        timeout="-o,-Sinit.rc2_timeout=900"
     fi
 
     if test "$personality" = "minimal"; then
