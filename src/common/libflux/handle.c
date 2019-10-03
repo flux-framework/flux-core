@@ -311,9 +311,7 @@ done:
 
 void flux_close (flux_t *h)
 {
-    int saved_errno = errno;
     flux_handle_destroy (h);
-    errno = saved_errno;
 }
 
 flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
@@ -374,6 +372,7 @@ static void report_leaked_matchtags (struct tagpool *tp)
 void flux_handle_destroy (flux_t *h)
 {
     if (h && --h->usecount == 0) {
+        int saved_errno = errno;
         aux_destroy (&h->aux);
         if ((h->flags & FLUX_O_CLONE)) {
             flux_handle_destroy (h->parent); // decr usecount
@@ -391,6 +390,7 @@ void flux_handle_destroy (flux_t *h)
                 (void)close (h->pollfd);
         }
         free (h);
+        errno = saved_errno;
     }
 }
 
