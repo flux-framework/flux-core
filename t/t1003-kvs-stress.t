@@ -99,8 +99,8 @@ test_expect_success 'kvs: store 10,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir --count 10000
 '
 
-test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir2 --count 1000000
+test_expect_success LONGTEST 'kvs: store 100,000 keys in one dir' '
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir2 --count 100000
 '
 
 # kvs merging tests
