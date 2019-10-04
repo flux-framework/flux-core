@@ -26,15 +26,12 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/popen2.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libyuarel/yuarel.h"
 #include "src/common/librouter/usock.h"
 
 struct ssh_connector {
     struct usock_client *uclient;
-    const char *ssh_cmd;
-    char *ssh_argz;
-    size_t ssh_argz_len;
-    char **ssh_argv;
-    int ssh_argc;
     struct popen2_child *p;
     flux_t *h;
 };
@@ -110,88 +107,10 @@ static void op_fini (void *impl)
     if (ctx) {
         int saved_errno = errno;
         usock_client_destroy (ctx->uclient);
-        free (ctx->ssh_argz);
-        free (ctx->ssh_argv);
         pclose2 (ctx->p);
         free (ctx);
         errno = saved_errno;
     }
-}
-
-static int parse_ssh_port (struct ssh_connector *c, const char *path)
-{
-    char *p, *cpy = NULL;
-    int rc = -1;
-
-    if ((p = strchr (path, ':'))) {
-        if (!(cpy = strdup (p + 1))) {
-            errno = ENOMEM;
-            goto done;
-        }
-        if ((p = strchr (cpy, '/')) || (p = strchr (cpy, '?')))
-            *p = '\0';
-        if (argz_add (&c->ssh_argz, &c->ssh_argz_len, "-p") != 0
-         || argz_add (&c->ssh_argz, &c->ssh_argz_len, cpy) != 0) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    if (cpy)
-        free (cpy);
-    return rc;
-}
-
-static int parse_ssh_user_at_host (struct ssh_connector *c, const char *path)
-{
-    char *p, *cpy = NULL;
-    int rc = -1;
-
-    if (!(cpy = strdup (path))) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if ((p = strchr (cpy, ':')) || (p = strchr (cpy, '/'))
-                                || (p = strchr (cpy, '?')))
-        *p = '\0';
-    if (argz_add (&c->ssh_argz, &c->ssh_argz_len, cpy) != 0) {
-        errno = ENOMEM;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (cpy)
-        free (cpy);
-    return rc;
-}
-
-static int parse_extra_args (char **argz, size_t *argz_len, const char *s)
-{
-    char *cpy = NULL;
-    char *tok, *a1, *saveptr = NULL;
-
-    if (!(cpy = strdup (s)))
-        goto nomem;
-    a1 = cpy;
-    while ((tok = strtok_r (a1, "?&", &saveptr))) {
-        char *arg;
-        error_t e;
-        if (asprintf (&arg, "--%s", tok) < 0)
-            goto nomem;
-        e = argz_add (argz, argz_len, arg);
-        free (arg);
-        if (e != 0)
-            goto nomem;
-        a1 = NULL;
-    }
-    free (cpy);
-    return 0;
-nomem:
-    if (cpy)
-        free (cpy);
-    errno = ENOMEM;
-    return -1;
 }
 
 static char *which (const char *prog, char *buf, size_t size)
@@ -213,102 +132,150 @@ static char *which (const char *prog, char *buf, size_t size)
             a1 = NULL;
         }
     }
-    if (cpy)
-        free (cpy);
+    free (cpy);
     return result;
 }
 
-static int parse_ssh_rcmd (struct ssh_connector *c, const char *path)
+/* uri_path is interpreted as:
+ *   [user@]hostname[:port]/unix-path
+ * Sets *argvp, *argbuf (caller must free).
+ * The last argv[] element is a NULL (required by popen2).
+ * Returns 0 on success, -1 on failure with errno set.
+ */
+int build_ssh_command (const char *uri_path,
+                       const char *ssh_cmd,
+                       const char *flux_cmd,
+                       char ***argvp,
+                       char **argbuf)
 {
-    char *cpy = NULL, *local = NULL, *extra = NULL;
-    char *proxy_argz = NULL;
-    size_t proxy_argz_len = 0;
-    const char *flux_cmd = getenv ("FLUX_SSH_RCMD");
-    char pathbuf[PATH_MAX + 1];
-    int rc = -1;
+    char buf[PATH_MAX + 1];
+    struct yuarel yuri;
+    char *cpy;
+    char *argz = NULL;
+    size_t argz_len = 0;
+    int argc;
+    char **argv;
 
-    if (flux_cmd && !*flux_cmd) {
+    if (asprintf (&cpy, "ssh://%s", uri_path) < 0)
+        return -1;
+    if (yuarel_parse (&yuri, cpy) < 0) {
         errno = EINVAL;
-        goto done;
+        goto error;
     }
-    if (!flux_cmd)
-        flux_cmd = which ("flux", pathbuf, sizeof (pathbuf));
-    if (!flux_cmd)
-        flux_cmd = "flux";
-    if (argz_add (&proxy_argz, &proxy_argz_len, flux_cmd) != 0
-     || argz_add (&proxy_argz, &proxy_argz_len, "relay") != 0) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if (!(cpy = strdup (path))) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if (!(local = strchr (cpy, '/'))) {
+    if (!yuri.path || !yuri.host || yuri.query || yuri.fragment) {
         errno = EINVAL;
-        goto done;
+        goto error;
     }
-    if ((extra = strchr (local, '?')))
-        *extra++ = '\0';
-    if (extra) {
-        if (parse_extra_args (&proxy_argz, &proxy_argz_len, extra) < 0)
-            goto done;
+    /* ssh */
+    if (argz_add (&argz, &argz_len, ssh_cmd) != 0)
+        goto nomem;
+
+    /* [-p port] */
+    if (yuri.port != 0) {
+        (void)snprintf (buf, sizeof (buf), "%d", yuri.port);
+        if (argz_add (&argz, &argz_len, "-p") != 0)
+            goto nomem;
+        if (argz_add (&argz, &argz_len, buf) != 0)
+            goto nomem;
     }
-    if (argz_add (&proxy_argz, &proxy_argz_len, local) != 0) {
-        errno = ENOMEM;
-        goto done;
+    /* [user@]hostname */
+    if (yuri.username) {
+        (void)snprintf (buf, sizeof (buf), "%s@%s", yuri.username, yuri.host);
+        if (argz_add (&argz, &argz_len, buf) != 0)
+            goto nomem;
     }
-    argz_stringify (proxy_argz, proxy_argz_len, ' ');
-    if (argz_add (&c->ssh_argz, &c->ssh_argz_len, proxy_argz) != 0) {
-        errno = ENOMEM;
-        goto done;
+    else {
+        if (argz_add (&argz, &argz_len, yuri.host) != 0)
+            goto nomem;
     }
-    rc = 0;
-done:
-    if (cpy)
-        free (cpy);
-    if (proxy_argz)
-        free (proxy_argz);
-    return rc;
+    /* flux-relay */
+    if (argz_add (&argz, &argz_len, flux_cmd) != 0)
+        goto nomem;
+    if (argz_add (&argz, &argz_len, "relay") != 0)
+        goto nomem;
+
+    /* path */
+    (void)snprintf (buf, sizeof (buf), "/%s", yuri.path);
+    if (argz_add (&argz, &argz_len, buf) != 0)
+        goto nomem;
+
+    /* Convert argz to argv needed by popen2()
+     */
+    argc = argz_count (argz, argz_len) + 1;
+    if (!(argv = calloc (argc, sizeof (argv[0]))))
+        goto error;
+    argz_extract (argz, argz_len, argv);
+
+    free (cpy);
+
+    *argvp = argv;
+    *argbuf = argz;
+
+    return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (free, cpy);
+    ERRNO_SAFE_WRAP (free, argz);
+    return -1;
 }
 
-/* Path is interpreted as
- *   [user@]hostname[:port][/unix-path][?key=val[&key=val]...]
- */
 flux_t *connector_init (const char *path, int flags)
 {
-    struct ssh_connector *ctx = NULL;
+    struct ssh_connector *ctx;
+    char buf[PATH_MAX + 1];
+    const char *ssh_cmd;
+    const char *flux_cmd;
+    char *argbuf = NULL;
+    char **argv = NULL;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if (!(ctx->ssh_cmd = getenv ("FLUX_SSH")))
-        ctx->ssh_cmd = PATH_SSH;
-    if (argz_add (&ctx->ssh_argz, &ctx->ssh_argz_len, ctx->ssh_cmd) != 0)
+
+    /* FLUX_SSH may be used to select a different remote shell command
+     * from the compiled-in default.  Most rsh variants ought to work.
+     */
+    if (!(ssh_cmd = getenv ("FLUX_SSH")))
+        ssh_cmd = PATH_SSH;
+    /* FLUX_SSH_RCMD may be used to select a different path to the flux
+     * command front end than the default.  The default is to use the one
+     * from the client's PATH.
+     */
+    flux_cmd = getenv ("FLUX_SSH_RCMD");
+    if (!flux_cmd)
+        flux_cmd = which ("flux", buf, sizeof (buf));
+    if (!flux_cmd)
+        flux_cmd = "flux"; // maybe this will work for installed version
+
+    /* Construct argv for ssh command from uri "path" (non-scheme part)
+     * and flux and ssh command paths.
+     */
+    if (build_ssh_command (path, ssh_cmd, flux_cmd, &argv, &argbuf) < 0)
         goto error;
-    if (parse_ssh_port (ctx, path) < 0) /* [-p port] */
-        goto error;
-    if (parse_ssh_user_at_host (ctx, path) < 0) /* [user@]host */
-        goto error;
-    if (parse_ssh_rcmd (ctx, path) < 0) /* flux-relay path [args...] */
-        goto error;
-    ctx->ssh_argc = argz_count (ctx->ssh_argz, ctx->ssh_argz_len) + 1;
-    if (!(ctx->ssh_argv = calloc (sizeof (char *), ctx->ssh_argc)))
-        goto error;
-    argz_extract (ctx->ssh_argz, ctx->ssh_argz_len, ctx->ssh_argv);
-    if (!(ctx->p = popen2 (ctx->ssh_cmd, ctx->ssh_argv))) {
+
+    /* Start the ssh command
+     */
+    if (!(ctx->p = popen2 (ssh_cmd, argv))) {
         /* If popen fails because ssh cannot be found, flux_open()
          * will just fail with errno = ENOENT, which is not all that helpful.
          * Emit a hint on stderr even though this is perhaps not ideal.
          */
-        fprintf (stderr, "ssh-connector: %s: %s\n",
-                 ctx->ssh_cmd, strerror (errno));
+        fprintf (stderr, "ssh-connector: %s: %s\n", ssh_cmd, strerror (errno));
         fprintf (stderr, "Hint: set FLUX_SSH in environment to override\n");
         goto error;
     }
+    /* The ssh command is the "client" here, tunneling through flux-relay
+     * to a remote local:// connector.  The "auth handshake" is performed
+     * between this client and flux-relay.  The byte returned is always zero,
+     * but performing this handshake forces some errors to be handled here
+     * inside flux_open() rather than in some less obvious context later.
+     */
     if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p))))
         goto error;
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
+    free (argbuf);
+    free (argv);
     return ctx->h;
 error:
     if (ctx) {
@@ -317,6 +284,8 @@ error:
         else
             op_fini (ctx);
     }
+    ERRNO_SAFE_WRAP (free, argbuf);
+    ERRNO_SAFE_WRAP (free, argv);
     return NULL;
 }
 
