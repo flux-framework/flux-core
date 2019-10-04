@@ -8,18 +8,21 @@ usage() {
     exit 1
 }
 
-#echo tssh: $* >&2
-
 while getopts "p:v" opt; do
     case ${opt} in
         p) port=${OPTARG} ;;
         *) usage ;;
     esac
 done
+userathost=$1
 shift $((${OPTIND} - 1))
 [ $# -gt 1 ] || usage
 hostname=$1
 shift
+
+echo hostname=${hostname} >&2
+[ -n "$port" ] && echo port=${port} >&2
+echo cmd=\"$*\" >&2
 
 unset FLUX_URI
 eval $*
