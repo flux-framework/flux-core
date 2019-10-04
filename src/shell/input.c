@@ -10,7 +10,9 @@
 
 /* std input handling
  *
- * Currently, only standard input via file is supported.
+ * Depending on inputs from user, a service is started to receive
+ * stdin from front-end command or file is read for redirected
+ * standard input.
  */
 
 #if HAVE_CONFIG_H
@@ -26,6 +28,7 @@
 #include "src/common/libioencode/ioencode.h"
 
 #include "task.h"
+#include "svc.h"
 #include "internal.h"
 #include "builtins.h"
 
@@ -33,7 +36,7 @@ struct shell_input;
 
 /* input type configured by user for input to the shell */
 enum {
-    FLUX_INPUT_TYPE_NONE = 1,
+    FLUX_INPUT_TYPE_SERVICE = 1, /* default */
     FLUX_INPUT_TYPE_FILE = 2,
 };
 
@@ -104,6 +107,89 @@ void shell_input_destroy (struct shell_input *in)
     }
 }
 
+static void shell_input_put_kvs_completion (flux_future_t *f, void *arg)
+{
+    struct shell_input *in = arg;
+
+    if (flux_future_get (f, NULL) < 0)
+        /* failng to write stdin to input is a fatal error.  Should be
+         * cleaner in future. Issue #2378 */
+        log_err_exit ("shell_input_put_kvs");
+    flux_future_destroy (f);
+
+    if (flux_shell_remove_completion_ref (in->shell, "input.kvs") < 0)
+        log_err ("flux_shell_remove_completion_ref");
+}
+
+static int shell_input_put_kvs (struct shell_input *in, json_t *context)
+{
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+    json_t *entry = NULL;
+    char *entrystr = NULL;
+    int saved_errno;
+    int rc = -1;
+
+    if (!(entry = eventlog_entry_pack (0.0, "data", "O", context)))
+        goto error;
+    if (!(entrystr = eventlog_entry_encode (entry)))
+        goto error;
+    if (!(txn = flux_kvs_txn_create ()))
+        goto error;
+    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "input", entrystr) < 0)
+        goto error;
+    if (!(f = flux_kvs_commit (in->shell->h, NULL, 0, txn)))
+        goto error;
+    if (flux_future_then (f, -1, shell_input_put_kvs_completion, in) < 0)
+        goto error;
+    if (flux_shell_add_completion_ref (in->shell, "input.kvs") < 0) {
+        log_err ("flux_shell_remove_completion_ref");
+        goto error;
+    }
+    /* f memory responsibility of shell_input_put_kvs_completion()
+     * callback */
+    f = NULL;
+    rc = 0;
+ error:
+    saved_errno = errno;
+    flux_kvs_txn_destroy (txn);
+    free (entrystr);
+    json_decref (entry);
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return rc;
+}
+
+/* Convert 'iodecode' object to an valid RFC 24 data event.
+ * N.B. the iodecode object is a valid "context" for the event.
+ */
+static void shell_input_stdin_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    struct shell_input *in = arg;
+    bool eof = false;
+    json_t *o;
+
+    if (shell_svc_allowed (in->shell->svc, msg) < 0)
+        goto error;
+    if (flux_request_unpack (msg, NULL, "o", &o) < 0)
+        goto error;
+    if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
+        goto error;
+    if (shell_input_put_kvs (in, o) < 0)
+        goto error;
+    if (eof)
+        flux_msg_handler_stop (mh);
+    if (flux_respond (in->shell->h, msg, NULL) < 0)
+        log_err ("flux_respond");
+    return;
+error:
+    if (flux_respond_error (in->shell->h, msg, errno, NULL) < 0)
+        log_err ("flux_respond");
+}
+
 static void shell_input_type_file_init (struct shell_input *in)
 {
     struct shell_input_type_file *fp = &(in->stdin_file);
@@ -123,7 +209,9 @@ static int shell_input_parse_type (struct shell_input *in)
     if (!ret || !typestr)
         return 0;
 
-    if (!strcmp (typestr, "file")) {
+    if (!strcmp (typestr, "service"))
+        in->stdin_type = FLUX_INPUT_TYPE_SERVICE;
+    else if (!strcmp (typestr, "file")) {
         struct shell_input_type_file *fp = &(in->stdin_file);
 
         in->stdin_type = FLUX_INPUT_TYPE_FILE;
@@ -146,15 +234,19 @@ static int shell_input_parse_type (struct shell_input *in)
     return 0;
 }
 
-/* log entry to exec.eventlog that we've created the input eventlog */
+/* log entry to exec.eventlog that we've created the input eventlog /
+ * started stdin service */
 static int shell_input_ready (struct shell_input *in, flux_kvs_txn_t *txn)
 {
     json_t *entry = NULL;
     char *entrystr = NULL;
     const char *key = "exec.eventlog";
+    int rank = in->shell->info->rankinfo.rank;
     int saved_errno, rc = -1;
 
-    if (!(entry = eventlog_entry_create (0., "input-ready", NULL))) {
+    if (!(entry = eventlog_entry_pack (0., "input-ready",
+                                       "{s:i}",
+                                       "leader-rank", rank))) {
         log_err ("eventlog_entry_create");
         goto error;
     }
@@ -257,62 +349,23 @@ static int shell_input_header (struct shell_input *in)
     return rc;
 }
 
-static void shell_input_put_kvs_completion (flux_future_t *f, void *arg)
+static int shell_input_put_kvs_raw (struct shell_input *in,
+                                    void *buf,
+                                    int len,
+                                    bool eof)
 {
-    struct shell_input *in = arg;
-
-    if (flux_future_get (f, NULL) < 0)
-        /* failng to write stdin to input is a fatal error.  Should be
-         * cleaner in future. Issue #2378 */
-        log_err_exit ("shell_input_put_kvs");
-    flux_future_destroy (f);
-
-    if (flux_shell_remove_completion_ref (in->shell, "input.kvs") < 0)
-        log_err ("flux_shell_remove_completion_ref");
-}
-
-static int shell_input_put_kvs (struct shell_input *in,
-                                void *buf,
-                                int len,
-                                bool eof)
-{
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-    json_t *entry = NULL;
-    char *entrystr = NULL;
     json_t *context = NULL;
     int saved_errno;
     int rc = -1;
 
     if (!(context = ioencode ("stdin", in->stdin_file.rankstr, buf, len, eof)))
         goto error;
-    if (!(entry = eventlog_entry_pack (0.0, "data", "O", context)))
+    if (shell_input_put_kvs (in, context) < 0)
         goto error;
-    if (!(entrystr = eventlog_entry_encode (entry)))
-        goto error;
-    if (!(txn = flux_kvs_txn_create ()))
-        goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "input", entrystr) < 0)
-        goto error;
-    if (!(f = flux_kvs_commit (in->shell->h, NULL, 0, txn)))
-        goto error;
-    if (flux_future_then (f, -1, shell_input_put_kvs_completion, in) < 0)
-        goto error;
-    if (flux_shell_add_completion_ref (in->shell, "input.kvs") < 0) {
-        log_err ("flux_shell_remove_completion_ref");
-        goto error;
-    }
-    /* f memory responsibility of shell_input_put_kvs_completion()
-     * callback */
-    f = NULL;
     rc = 0;
  error:
     saved_errno = errno;
-    flux_kvs_txn_destroy (txn);
     json_decref (context);
-    free (entrystr);
-    json_decref (entry);
-    flux_future_destroy (f);
     errno = saved_errno;
     return rc;
 }
@@ -332,15 +385,15 @@ static void shell_input_type_file_cb (flux_reactor_t *r, flux_watcher_t *w,
      * future.  Issue #2378 */
 
     while ((n = read (fp->fd, buf, ps)) > 0) {
-        if (shell_input_put_kvs (in, buf, n, false) < 0)
-            log_err_exit ("shell_input_put_kvs");
+        if (shell_input_put_kvs_raw (in, buf, n, false) < 0)
+            log_err_exit ("shell_input_put_kvs_raw");
     }
 
     if (n < 0)
-        log_err_exit ("shell_input_put_kvs");
+        log_err_exit ("shell_input_put_kvs_raw");
 
-    if (shell_input_put_kvs (in, NULL, 0, true) < 0)
-        log_err_exit ("shell_input_put_kvs");
+    if (shell_input_put_kvs_raw (in, NULL, 0, true) < 0)
+        log_err_exit ("shell_input_put_kvs_raw");
 
     flux_watcher_stop (w);
 }
@@ -388,7 +441,7 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
     if (!(in = calloc (1, sizeof (*in))))
         return NULL;
     in->shell = shell;
-    in->stdin_type = FLUX_INPUT_TYPE_NONE;
+    in->stdin_type = FLUX_INPUT_TYPE_SERVICE;
     in->ntasks = shell->info->rankinfo.ntasks;
 
     task_inputs_size = sizeof (struct shell_task_input) * in->ntasks;
@@ -407,6 +460,17 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
     if (shell->info->shell_rank == 0) {
         /* can't use stdin in standalone, no kvs to write to */
         if (!in->shell->standalone) {
+            if (in->stdin_type == FLUX_INPUT_TYPE_SERVICE) {
+                if (flux_shell_service_register (in->shell,
+                                                 "stdin",
+                                                 shell_input_stdin_cb,
+                                                 in) < 0)
+                    log_err_exit ("flux_shell_service_register");
+
+                /* Do not add a completion reference for the stdin service, we
+                 * don't care if the user ever sends stdin */
+            }
+
             if (shell_input_header (in) < 0)
                 goto error;
 
