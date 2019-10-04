@@ -1,6 +1,7 @@
 SUBDIRS = libtap \
 	  libtestutil \
 	  libev \
+	  libyuarel \
 	  libpmi \
 	  liblsd \
 	  libutil \
@@ -30,6 +31,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libidset/libidset.la \
 	$(builddir)/libev/libev.la \
+	$(builddir)/libyuarel/libyuarel.la \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(builddir)/libeventlog/libeventlog.la \
 	$(builddir)/libioencode/libioencode.la \

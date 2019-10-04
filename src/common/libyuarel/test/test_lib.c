@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <yuarel.h>
+#include "src/common/libyuarel/yuarel.h"
 #include "minunit.h"
 
 int tests_run;
@@ -442,10 +442,12 @@ main(void)
 {
 	unsigned char *result;
 
+	plan (NO_PLAN);
+
 	result = all_tests();
 	if (result != 0) {
 		exit(EXIT_FAILURE);
 	}
 
-	exit(EXIT_SUCCESS);
+	done_testing();
 }

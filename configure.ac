@@ -448,6 +448,7 @@ AC_CONFIG_FILES( \
   src/common/libeventlog/Makefile \
   src/common/libioencode/Makefile \
   src/common/librouter/Makefile \
+  src/common/libyuarel/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \

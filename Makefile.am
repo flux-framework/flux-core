@@ -26,7 +26,8 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"*/common/libutil/sds.*" \
 	"*/common/libminilzo/*" \
 	"*/common/liboptparse/getopt*" \
-	"*/common/libtestutil/*"
+	"*/common/libtestutil/*" \
+	"*/common/libyuarel/*"
 
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
