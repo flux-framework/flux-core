@@ -88,6 +88,13 @@ test_parse_http_url_ok()
 	assert_struct(url, "http", "u", "p", "example.com", 0, NULL, NULL, NULL);
 	free(url_string);
 
+	/* With credentials (user only) */
+	url_string = strdup("http://u@example.com");
+	rc = yuarel_parse(&url, url_string);
+	mu_assert("with user credential only", -1 != rc);
+	assert_struct(url, "http", "u", NULL, "example.com", 0, NULL, NULL, NULL);
+	free(url_string);
+
 	/* With port and path */
 	url_string = strdup("http://example.com:8080/port/and/path");
 	rc = yuarel_parse(&url, url_string);
@@ -116,6 +123,14 @@ test_parse_http_url_ok()
 	assert_struct(url, "http", "u", "p", "example.com", 8080, NULL, NULL, NULL);
 	free(url_string);
 
+	/* With port and credentials (user only) */
+	url_string = strdup("http://u@example.com:8080");
+	rc = yuarel_parse(&url, url_string);
+	mu_assert("with port and user credential only", -1 != rc);
+	assert_struct(url, "http", "u", NULL, "example.com", 8080, NULL, NULL, NULL);
+	free(url_string);
+
+
 	/* With path and query */
 	url_string = strdup("http://example.com/path/and/query?q=yes");
 	rc = yuarel_parse(&url, url_string);
@@ -142,6 +157,13 @@ test_parse_http_url_ok()
 	rc = yuarel_parse(&url, url_string);
 	mu_assert("with query and credentials", -1 != rc);
 	assert_struct(url, "http", "u", "p", "example.com", 0, NULL, "q=yes", NULL);
+	free(url_string);
+
+	/* With query and credentials (user only) */
+	url_string = strdup("http://u@example.com?q=yes");
+	rc = yuarel_parse(&url, url_string);
+	mu_assert("with query and credentials", -1 != rc);
+	assert_struct(url, "http", "u", NULL, "example.com", 0, NULL, "q=yes", NULL);
 	free(url_string);
 
 	/* With empty credentials */
