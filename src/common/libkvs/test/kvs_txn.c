@@ -129,9 +129,9 @@ void basic (void)
     txn = flux_kvs_txn_create ();
     ok (txn != NULL,
         "flux_kvs_txn_create works");
-    rc = flux_kvs_txn_pack (txn, 0, "foo.bar.baz",  "i", 42);
+    rc = flux_kvs_txn_pack (txn, FLUX_KVS_APPEND, "foo.bar.baz",  "i", 42);
     ok (rc == 0,
-        "1: flux_kvs_txn_pack(i) works");
+        "1: flux_kvs_txn_pack(i) flags=FLUX_KVS_APPEND works");
     rc = flux_kvs_txn_pack (txn, 0, "foo.bar.bleep",  "s", "foo");
     ok (rc == 0,
         "2: flux_kvs_txn_pack(s) works");
@@ -179,7 +179,7 @@ void basic (void)
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
     ok (!strcmp (key, "foo.bar.baz")
-        && flags == 0
+        && flags == FLUX_KVS_APPEND
         && check_int_value (dirent, 42) == 0,
         "1: put foo.bar.baz = 42");
 
