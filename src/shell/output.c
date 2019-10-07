@@ -146,7 +146,7 @@ static int shell_output_term (struct shell_output *out)
             int output_type;
             FILE *f;
             const char *stream = NULL;
-            int rank;
+            const char *rank = NULL;
             char *data = NULL;
             int len = 0;
             if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
@@ -162,7 +162,7 @@ static int shell_output_term (struct shell_output *out)
                 f = stderr;
             }
             if ((output_type == FLUX_OUTPUT_TYPE_TERM) && len > 0) {
-                fprintf (f, "%d: ", rank);
+                fprintf (f, "%s: ", rank);
                 fwrite (data, len, 1, f);
             }
             free (data);
@@ -415,7 +415,7 @@ error:
     return rc;
 }
 
-static int shell_output_write_fd (int fd, void *buf, size_t len)
+static int shell_output_write_fd (int fd, const void *buf, size_t len)
 {
     size_t count = 0;
     int n = 0;
@@ -446,7 +446,7 @@ static int shell_output_file (struct shell_output *out)
             struct shell_output_type_file *ofp;
             int output_type;
             const char *stream = NULL;
-            int rank;
+            const char *rank = NULL;
             char *data = NULL;
             int len = 0;
             if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
@@ -463,11 +463,15 @@ static int shell_output_file (struct shell_output *out)
             }
             if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
                 if (ofp->label) {
-                    char buf[64];
+                    char *buf = NULL;
                     int buflen;
-                    buflen = snprintf (buf, sizeof (buf), "%d: ", rank);
-                    if (shell_output_write_fd (ofp->fdp->fd, buf, buflen) < 0)
+                    if ((buflen = asprintf (&buf, "%s: ", rank)) < 0)
                         return -1;
+                    if (shell_output_write_fd (ofp->fdp->fd, buf, buflen) < 0) {
+                        free (buf);
+                        return -1;
+                    }
+                    free (buf);
                 }
                 if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
                     return -1;
@@ -562,8 +566,10 @@ static int shell_output_write (struct shell_output *out,
 {
     flux_future_t *f = NULL;
     json_t *o = NULL;
+    char rankstr[64];
 
-    if (!(o = ioencode (stream, rank, data, len, eof))) {
+    snprintf (rankstr, sizeof (rankstr), "%d", rank);
+    if (!(o = ioencode (stream, rankstr, data, len, eof))) {
         log_err ("ioencode");
         return -1;
     }

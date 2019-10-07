@@ -64,7 +64,7 @@ static char *base642bin (const char *base64_data, size_t *bin_len)
 }
 
 json_t *ioencode (const char *stream,
-                  int rank,
+                  const char *rank,
                   const char *data,
                   int len,
                   bool eof)
@@ -72,30 +72,30 @@ json_t *ioencode (const char *stream,
     char *base64_data = NULL;
     json_t *o = NULL;
     json_t *rv = NULL;
-    char rankstr[64];
 
     /* data can be NULL and len == 0 if eof true */
     if (!stream
+        || !rank
         || (data && len <= 0)
         || (!data && len != 0)
         || (!data && !len && !eof)) {
         errno = EINVAL;
         return NULL;
     }
-    (void)snprintf (rankstr, sizeof (rankstr), "%d", rank);
+
     if (data && len) {
         if (!(base64_data = bin2base64 (data, len)))
             goto error;
         if (!(o = json_pack ("{s:s s:s s:s}",
                              "stream", stream,
-                             "rank", rankstr,
+                             "rank", rank,
                              "data", base64_data)))
             goto error;
     }
     else {
         if (!(o = json_pack ("{s:s s:s}",
                              "stream", stream,
-                             "rank", rankstr)))
+                             "rank", rank)))
             goto error;
     }
     if (eof) {
@@ -110,14 +110,13 @@ error:
 
 int iodecode (json_t *o,
               const char **streamp,
-              int *rankp,
+              const char **rankp,
               char **datap,
               int *lenp,
               bool *eofp)
 {
     const char *stream;
-    const char *rankstr;
-    int rank;
+    const char *rank;
     const char *base64_data;
     char *bin_data = NULL;
     size_t bin_len = 0;
@@ -133,9 +132,8 @@ int iodecode (json_t *o,
 
     if (json_unpack (o, "{s:s s:s}",
                      "stream", &stream,
-                     "rank", &rankstr) < 0)
+                     "rank", &rank) < 0)
         goto cleanup;
-    rank = strtoul (rankstr, NULL, 10);
     if (json_unpack (o, "{s:s}", "data", &base64_data) == 0) {
         has_data = true;
         if (!(bin_data = base642bin (base64_data, &bin_len)))

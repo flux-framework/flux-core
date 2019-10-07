@@ -817,7 +817,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     else if (!strcmp (name, "data")) {
         FILE *fp;
         const char *stream;
-        int rank;
+        const char *rank;
         char *data;
         int len;
         if (!ctx->output_header_parsed)
@@ -830,7 +830,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
             fp = stderr;
         if (len > 0) {
             if (optparse_hasopt (ctx->p, "label-io"))
-                fprintf (fp, "%d: ", rank);
+                fprintf (fp, "%s: ", rank);
             fwrite (data, len, 1, fp);
         }
         free (data);
