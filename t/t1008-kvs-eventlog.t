@@ -57,4 +57,14 @@ test_expect_success 'flux kvs eventlog append fails with invalid context' '
 	! flux kvs eventlog append test.c foo not_a_object
 '
 
+test_expect_success 'flux kvs eventlog append and work on alternate namespaces' '
+        flux kvs namespace create EVENTLOGTESTNS &&
+        flux kvs eventlog append test.ns main &&
+        flux kvs eventlog append --namespace=EVENTLOGTESTNS test.ns guest &&
+        flux kvs eventlog get test.ns > get_f1.out &&
+        grep main get_f1.out &&
+        flux kvs eventlog get --namespace=EVENTLOGTESTNS test.ns > get_f2.out &&
+        grep guest get_f2.out
+'
+
 test_done

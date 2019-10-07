@@ -187,7 +187,7 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if (validate_flags (flags, 0) < 0)
+    if (validate_flags (flags, FLUX_KVS_APPEND) < 0)
         goto error;
     val = json_vpack_ex (NULL, 0, fmt, ap);
     if (!val) {

@@ -1829,7 +1829,9 @@ static char *eventlog_context_from_args (char **argv)
  * If timestamp < 0, use wall clock.
  * Enclose event in a KVS transaction and send the commit request.
  */
-static flux_future_t *eventlog_append_event (flux_t *h, const char *key,
+static flux_future_t *eventlog_append_event (flux_t *h,
+                                             const char *ns,
+                                             const char *key,
                                              double timestamp,
                                              const char *name,
                                              const char *context)
@@ -1847,7 +1849,7 @@ static flux_future_t *eventlog_append_event (flux_t *h, const char *key,
         log_err_exit ("eventlog_entry_encode");
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0)
         log_err_exit ("flux_kvs_txn_put");
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
+    if (!(f = flux_kvs_commit (h, ns, 0, txn)))
         log_err_exit ("flux_kvs_commit");
     free (entrystr);
     json_decref (entry);
@@ -1857,6 +1859,7 @@ static flux_future_t *eventlog_append_event (flux_t *h, const char *key,
 int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
     int optindex = optparse_option_index (p);
     const char *key;
     const char *name;
@@ -1868,12 +1871,14 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    ns = optparse_get_str (p, "namespace", NULL);
+
     key = argv[optindex++];
     name = argv[optindex++];
     if (optindex < argc)
         context = eventlog_context_from_args (argv + optindex);
 
-    f = eventlog_append_event (h, key, timestamp, name, context);
+    f = eventlog_append_event (h, ns, key, timestamp, name, context);
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
 
@@ -1982,6 +1987,7 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
 int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
     int optindex = optparse_option_index (p);
     const char *key;
     flux_future_t *f;
@@ -1992,6 +1998,8 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+    ns = optparse_get_str (p, "namespace", NULL);
+
     key = argv[optindex++];
     if (optparse_hasopt (p, "watch")) {
         flags |= FLUX_KVS_WATCH;
@@ -2002,7 +2010,7 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     ctx.count = 0;
     ctx.maxcount = optparse_get_int (p, "count", 0);
 
-    if (!(f = flux_kvs_lookup (h, NULL, flags, key)))
+    if (!(f = flux_kvs_lookup (h, ns, flags, key)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
@@ -2013,6 +2021,9 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
 }
 
 static struct optparse_option eventlog_append_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "timestamp", .key = 't', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "Specify timestamp in seconds since epoch",
     },
@@ -2020,6 +2031,9 @@ static struct optparse_option eventlog_append_opts[] =  {
 };
 
 static struct optparse_option eventlog_get_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
     { .name = "watch", .key = 'w', .has_arg = 0,
       .usage = "Monitor eventlog",
     },
@@ -2034,14 +2048,14 @@ static struct optparse_option eventlog_get_opts[] =  {
 
 static struct optparse_subcommand eventlog_subcommands[] = {
     { "append",
-      "[-t SECONDS] key name [context ...]",
+      "[-N ns] [-t SECONDS] key name [context ...]",
       "Append to eventlog",
       cmd_eventlog_append,
       0,
       eventlog_append_opts,
     },
     { "get",
-      "[-u] [-w] [-c COUNT] key",
+      "[-N ns] [-u] [-w] [-c COUNT] key",
       "Get eventlog",
       cmd_eventlog_get,
       0,
