@@ -23,6 +23,7 @@
 
 #include "src/common/liblsd/cbuf.h"
 
+#define FLUX_BUFFER_MIN   4096
 #define FLUX_BUFFER_MAGIC 0xeb4feb4f
 
 enum {
@@ -48,6 +49,7 @@ struct flux_buffer {
 flux_buffer_t *flux_buffer_create (int size)
 {
     flux_buffer_t *fb = NULL;
+    int minsize = FLUX_BUFFER_MIN;
 
     if (size <= 0) {
         errno = EINVAL;
@@ -61,16 +63,21 @@ flux_buffer_t *flux_buffer_create (int size)
 
     fb->magic = FLUX_BUFFER_MAGIC;
     fb->size = size;
+    if (size < FLUX_BUFFER_MIN)
+        minsize = size;
+    else
+        minsize = FLUX_BUFFER_MIN;
     fb->readonly = false;
 
-    if (!(fb->cbuf = cbuf_create (fb->size, fb->size)))
+    /* buffer can grow to size specified by user */
+    if (!(fb->cbuf = cbuf_create (minsize, fb->size)))
         goto cleanup;
 
     if (cbuf_opt_set (fb->cbuf, CBUF_OPT_OVERWRITE, CBUF_NO_DROP) < 0)
         goto cleanup;
 
     /* +1 for possible NUL on line reads */
-    fb->buflen = size + 1;
+    fb->buflen = minsize + 1;
 
     if (!(fb->buf = malloc (fb->buflen))) {
         errno = ENOMEM;
@@ -267,6 +274,36 @@ int flux_buffer_drop (flux_buffer_t *fb, int len)
     return ret;
 }
 
+/* check if internal buffer can hold data from user */
+static int return_buffer_check (flux_buffer_t *fb)
+{
+    int used = cbuf_used (fb->cbuf);
+
+    if (used < 0)
+        return -1;
+
+    assert (used <= fb->size);
+
+    /* +1 for potential NUL char */
+    if (fb->buflen < (used + 1)) {
+        size_t newsize = fb->buflen;
+        char *newbuf;
+
+        while ((newsize < (used + 1))) {
+            newsize = (newsize - 1) * 2 + 1;
+            if (newsize > (fb->size + 1))
+                newsize = fb->size + 1;
+        }
+
+        if (!(newbuf = realloc (fb->buf, newsize)))
+            return -1;
+        fb->buf = newbuf;
+        fb->buflen = newsize;
+    }
+
+    return 0;
+}
+
 const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp)
 {
     int ret;
@@ -275,6 +312,9 @@ const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp)
         errno = EINVAL;
         return NULL;
     }
+
+    if (return_buffer_check (fb) < 0)
+        return NULL;
 
     if (len < 0)
         len = cbuf_used (fb->cbuf);
@@ -300,6 +340,9 @@ const void *flux_buffer_read (flux_buffer_t *fb, int len, int *lenp)
         errno = EINVAL;
         return NULL;
     }
+
+    if (return_buffer_check (fb) < 0)
+        return NULL;
 
     if (len < 0)
         len = cbuf_used (fb->cbuf);
@@ -390,6 +433,9 @@ const void *flux_buffer_peek_line (flux_buffer_t *fb, int *lenp)
         return NULL;
     }
 
+    if (return_buffer_check (fb) < 0)
+        return NULL;
+
     if ((ret = cbuf_peek_line (fb->cbuf, fb->buf, fb->buflen, 1)) < 0)
         return NULL;
 
@@ -426,6 +472,9 @@ const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp)
         errno = EINVAL;
         return NULL;
     }
+
+    if (return_buffer_check (fb) < 0)
+        return NULL;
 
     if ((ret = cbuf_read_line (fb->cbuf, fb->buf, fb->buflen, 1)) < 0)
         return NULL;
