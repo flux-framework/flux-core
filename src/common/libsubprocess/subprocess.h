@@ -246,7 +246,7 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *
  *  "BUFSIZE" option
  *
- *   By default, stdio and channels use an internal buffer of 1 meg.
+ *   By default, stdio and channels use an internal buffer of 4 megs.
  *   The buffer size can be adjusted with this option.
  *
  *   - name + "_BUFSIZE" - set buffer size on channel name
