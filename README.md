@@ -48,7 +48,7 @@ sqlite-devel	| libsqlite3-dev	| >= 3.0.0		|
 lua		| lua5.1		| >= 5.1, < 5.3		|
 lua-devel	| liblua5.1-dev		| >= 5.1, < 5.3		|
 lua-posix 	| lua-posix             | 			| *1*
-python-devel	| python-dev		| >= 2.7		|
+python-devel	| python-dev		| >= 3.6		|
 python-cffi	| python-cffi		| >= 1.1		|
 python-six	| python-six		| >= 1.9		|
 python-yaml	| python-yaml		| >= 3.10.0		|
