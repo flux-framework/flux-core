@@ -37,7 +37,8 @@ TESTS = \
 	test_usock.t \
 	test_usock_echo.t \
 	test_subhash.t \
-	test_router.t
+	test_router.t \
+	test_servhash.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -91,3 +92,7 @@ test_subhash_t_LDADD = $(test_ldadd)
 test_router_t_SOURCES = test/router.c
 test_router_t_CPPFLAGS = $(test_cppflags)
 test_router_t_LDADD = $(test_ldadd)
+
+test_servhash_t_SOURCES = test/servhash.c
+test_servhash_t_CPPFLAGS = $(test_cppflags)
+test_servhash_t_LDADD = $(test_ldadd)
