@@ -30,6 +30,7 @@
 #include "task.h"
 #include "svc.h"
 #include "internal.h"
+#include "util.h"
 #include "builtins.h"
 
 struct shell_input;
@@ -43,6 +44,7 @@ enum {
 /* how input will reach each task */
 enum {
     FLUX_TASK_INPUT_KVS = 1,
+    FLUX_TASK_INPUT_FILE = 2,
 };
 
 struct shell_task_input_kvs {
@@ -52,11 +54,16 @@ struct shell_task_input_kvs {
     bool eof_reached;
 };
 
+struct shell_task_input_file {
+    int fd;
+};
+
 struct shell_task_input {
     struct shell_input *in;
     struct shell_task *task;
     int type;
     struct shell_task_input_kvs input_kvs;
+    struct shell_task_input_file input_file;
 };
 
 struct shell_input_type_file {
@@ -64,6 +71,7 @@ struct shell_input_type_file {
     int fd;
     flux_watcher_t *w;
     char *rankstr;
+    bool per_task;
 };
 
 struct shell_input {
@@ -81,9 +89,15 @@ static void shell_task_input_kvs_cleanup (struct shell_task_input_kvs *kp)
     flux_future_destroy (kp->input_f);
 }
 
+static void shell_task_input_file_cleanup (struct shell_task_input_file *fp)
+{
+    close (fp->fd);
+}
+
 static void shell_task_input_cleanup (struct shell_task_input *tp)
 {
     shell_task_input_kvs_cleanup (&(tp->input_kvs));
+    shell_task_input_file_cleanup (&(tp->input_file));
 }
 
 static void shell_input_type_file_cleanup (struct shell_input_type_file *fp)
@@ -224,6 +238,13 @@ static int shell_input_parse_type (struct shell_input *in)
         if (fp->path == NULL) {
             log_msg ("path for stdin file input not specified");
             return -1;
+        }
+
+        if (strstr (fp->path, "{{taskid}}")) {
+            int i;
+            for (i = 0; i < in->ntasks; i++)
+                in->task_inputs[i].type = FLUX_TASK_INPUT_FILE;
+            fp->per_task = true;
         }
     }
     else {
@@ -448,8 +469,10 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
     if (!(in->task_inputs = calloc (1, task_inputs_size)))
         goto error;
 
-    for (i = 0; i < in->ntasks; i++)
+    for (i = 0; i < in->ntasks; i++) {
         in->task_inputs[i].type = FLUX_TASK_INPUT_KVS;
+        in->task_inputs[i].input_file.fd = -1;
+    }
 
     shell_input_type_file_init (in);
 
@@ -474,7 +497,8 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
             if (shell_input_header (in) < 0)
                 goto error;
 
-            if (in->stdin_type == FLUX_INPUT_TYPE_FILE) {
+            if (in->stdin_type == FLUX_INPUT_TYPE_FILE
+                && !in->stdin_file.per_task) {
                 if (shell_input_type_file_setup (in) < 0)
                     goto error;
             }
@@ -667,6 +691,41 @@ static int shell_task_input_kvs_setup (struct shell_task_input *task_input)
     return -1;
 }
 
+static int shell_task_input_file_setup (struct shell_task_input *task_input)
+{
+    int open_flags = O_RDONLY;
+    char path_full[PATH_MAX+1];
+    char buf_fd[64];
+    int fd = -1;
+    int saved_errno;
+
+    if (shell_util_taskid_path (task_input->in->stdin_file.path,
+                                task_input->task->rank,
+                                path_full,
+                                PATH_MAX + 1) < 0)
+        goto error;
+
+    if ((fd = open (path_full, open_flags)) < 0) {
+        log_err ("error opening input file '%s'", path_full);
+        goto error;
+    }
+
+    snprintf (buf_fd, sizeof (buf_fd), "%d", fd);
+
+    if (flux_cmd_setopt (task_input->task->cmd, "stdin_INPUT_FD", buf_fd) < 0) {
+        log_err ("error setting 'stdin_INPUT_FD'");
+        goto error;
+    }
+
+    return 0;
+
+error:
+    saved_errno = errno;
+    close (fd);
+    errno = saved_errno;
+    return -1;
+}
+
 static int shell_input_task_init (flux_plugin_t *p,
                                   const char *topic,
                                   flux_plugin_arg_t *args,
@@ -690,6 +749,10 @@ static int shell_input_task_init (flux_plugin_t *p,
             if (shell_task_input_kvs_setup (task_input) < 0)
                 return -1;
         }
+    }
+    else if (task_input->type == FLUX_TASK_INPUT_FILE) {
+        if (shell_task_input_file_setup (task_input) < 0)
+            return -1;
     }
 
     in->task_inputs_count++;
