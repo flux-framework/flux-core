@@ -24,7 +24,10 @@ test_expect_success 'job-shell: load barrier,job-exec,sched-simple modules' '
 test_expect_success 'flux-shell: generate input for stdin input tests' '
        echo "foo" > input_stdin_file &&
        echo "doh" >> input_stdin_file &&
-       ${LPTEST} 79 10000 > lptestXXL_input
+       echo "foo" > input-0 &&
+       echo "bar" > input-1 &&
+       ${LPTEST} 79 10000 > lptestXXL_input &&
+       ${LPTEST} 79 10000 > lptestXXL-0
 '
 
 #
@@ -207,6 +210,68 @@ test_expect_success 'flux-shell: input file invalid' '
 
 test_expect_success 'flux-shell: task stdin via file, try to pipe into stdin fails' '
         id=$(flux mini submit -n1 --input=input_stdin_file sleep 60) &&
+        flux job wait-event $id start &&
+        test_must_fail flux job attach $id < input_stdin_file &&
+        flux job cancel $id
+'
+
+#
+# input file per-task tests
+#
+
+test_expect_success 'flux-shell: run 1-task per-task input file' '
+        flux mini run -n1 --input="input-{{taskid}}" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -O -n > pertask0.out &&
+        test_cmp input-0 pertask0.out
+'
+
+test_expect_success 'flux-shell: run 2-task per-task input file' '
+        flux mini run -n2 --input="input-{{taskid}}" --label-io \
+             ${TEST_SUBPROCESS_DIR}/test_echo -O -n > pertask1.out &&
+        grep "0: foo" pertask1.out &&
+        grep "1: bar" pertask1.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux-shell: multiple jobs, each want stdin via file' '
+        id1=$(flux mini submit -n1 --input="input-{{taskid}}" \
+              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
+        id2=$(flux mini submit -n1 --input="input-{{taskid}}" \
+              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
+        id3=$(flux mini submit -n1 --input="input-{{taskid}}" \
+              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
+        id4=$(flux mini submit -n1 --input="input-{{taskid}}" \
+              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
+        flux job attach $id1 > pertask2_1.out 2> pertask2_1.err &
+        pid1=$!
+        flux job attach $id2 > pertask2_2.out 2> pertask2_2.err &
+        pid2=$!
+        flux job attach $id3 > pertask2_3.out 2> pertask2_3.err &
+        pid3=$!
+        flux job attach $id4 > pertask2_4.out 2> pertask2_4.err &
+        pid4=$!
+        wait $pid1 &&
+        wait $pid2 &&
+        wait $pid3 &&
+        wait $pid4 &&
+        test_cmp input-0 pertask2_1.out &&
+        test_cmp input-0 pertask2_2.out &&
+        test_cmp input-0 pertask2_3.out &&
+        test_cmp input-0 pertask2_4.out
+'
+
+test_expect_success LONGTEST 'flux-shell: 10K line lptest input works' '
+        flux mini run -n1 --input=lptestXXL-0 \
+             ${TEST_SUBPROCESS_DIR}/test_echo -O -n > pertask3.out &&
+	test_cmp lptestXXL_input pertask3.out
+'
+
+test_expect_success 'flux-shell: per-task input file invalid' '
+        test_must_fail flux mini run -n1 --input="foobar-{{taskid}}" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -O -n > pertask4.out
+'
+
+test_expect_success 'flux-shell: task stdin via per-task file, try to pipe into stdin fails' '
+        id=$(flux mini submit -n1 --input="input-{{taskid}}" sleep 60) &&
         flux job wait-event $id start &&
         test_must_fail flux job attach $id < input_stdin_file &&
         flux job cancel $id
