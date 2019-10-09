@@ -1165,6 +1165,50 @@ void readonly_buffer (void)
     close (pipefds[1]);
 }
 
+/* tests to ensure internal buffers grow appropriately.  Current
+ * buffer default min is 4096, so we need to test > 4096 bytes of
+ * data.
+ */
+void large_data (void)
+{
+    flux_buffer_t *fb;
+    const char *data = "0123456789ABCDEF0123456789ABCDEF";
+    const char *ptr;
+    int len;
+    int i;
+
+    ok ((fb = flux_buffer_create (FLUX_BUFFER_TEST_MAXSIZE)) != NULL,
+        "flux_buffer_create works");
+
+    ok (flux_buffer_size (fb) == FLUX_BUFFER_TEST_MAXSIZE,
+        "flux_buffer_size returns correct size");
+
+    ok (flux_buffer_bytes (fb) == 0,
+        "flux_buffer_bytes initially returns 0");
+
+    ok (flux_buffer_space (fb) == FLUX_BUFFER_TEST_MAXSIZE,
+        "flux_buffer_space initially returns FLUX_BUFFER_TEST_MAXSIZE");
+
+    for (i = 0; i < 256; i++) {
+        if (flux_buffer_write (fb, data, 32) != 32)
+            ok (false, "flux_buffer_write fail: %s", strerror (errno));
+    }
+
+    ok (flux_buffer_space (fb) == (FLUX_BUFFER_TEST_MAXSIZE - 8192),
+        "flux_buffer_space returns length of space left");
+
+    ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL
+        && len == 8192,
+        "flux_buffer_read with length -1 works");
+
+    for (i = 0; i < 256; i++) {
+        if (memcmp (ptr + (i * 32), data, 32) != 0)
+            ok (false, "flux_buffer_read returned bad data");
+    }
+
+    flux_buffer_destroy (fb);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1176,6 +1220,7 @@ int main (int argc, char *argv[])
     corner_case ();
     full_buffer ();
     readonly_buffer ();
+    large_data ();
 
     done_testing();
 
