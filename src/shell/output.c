@@ -56,6 +56,7 @@
 #include "task.h"
 #include "svc.h"
 #include "internal.h"
+#include "util.h"
 #include "builtins.h"
 
 enum {
@@ -1023,33 +1024,6 @@ static void task_output_cb (struct shell_task *task,
     }
 }
 
-static int shell_output_get_taskid_path (const char *path,
-                                         int rank,
-                                         char *pathbuf,
-                                         int pathbuflen)
-{
-    char *ptr;
-    char buf[32];
-    int len, buflen, total_len;
-
-    ptr = strstr (path, "{{taskid}}");
-    assert (ptr);
-
-    len = strlen (path);
-    buflen = snprintf (buf, sizeof (buf), "%d", rank);
-    /* -10 for {{taskid}}, +1 for NUL */
-    total_len = len - 10 + buflen + 1;
-    if (total_len > pathbuflen) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    memset (pathbuf, '\0', pathbuflen);
-    memcpy (pathbuf, path, ptr - path);
-    memcpy (pathbuf + (ptr - path), buf, buflen);
-    memcpy (pathbuf + (ptr - path) + buflen, ptr + 10, len - (ptr - path) - 10);
-    return 0;
-}
-
 static int
 shell_output_type_per_task_setup (struct shell_output *out,
                                   struct shell_task *task,
@@ -1063,10 +1037,10 @@ shell_output_type_per_task_setup (struct shell_output *out,
     char buf_opt[64];
     char buf_fd[64];
 
-    if (shell_output_get_taskid_path (ofp->path,
-                                      task->rank,
-                                      path_full,
-                                      PATH_MAX + 1) < 0)
+    if (shell_util_taskid_path (ofp->path,
+                                task->rank,
+                                path_full,
+                                PATH_MAX + 1) < 0)
         return -1;
 
     if (!(fdp = zhash_lookup (out->fds, path_full))) {
