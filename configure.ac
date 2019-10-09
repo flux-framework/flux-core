@@ -225,7 +225,7 @@ AC_CHECK_LIB(m, floor)
 saved_PATH=$PATH
 export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
 
-AX_PYTHON_DEVEL([>='2.7'])
+AX_PYTHON_DEVEL([>='3.6'])
 
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
@@ -247,6 +247,7 @@ AM_CHECK_PYMOD(cffi,
                ,
                [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
                )
+# TODO: remove this dependency when time permits, only needed for 2/3 compat
 AM_CHECK_PYMOD(six,
                [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
                ,
@@ -268,7 +269,7 @@ AM_CHECK_PYMOD(jsonschema,
 # search can lead to linking problems.
 #
 # Logic below assumes only newer Python versions, protected by
-# above check for atleast Python 2.7.
+# above check for atleast Python 3.6.
 if test "$ac_python_ldflags_set_by_user" != "true"; then
   AC_CHECK_LIB([$ac_python_library], [PyArg_ParseTuple],
                [ac_python_in_ld_path=true])
