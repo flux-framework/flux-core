@@ -11,6 +11,7 @@ export TEST_URI=$FLUX_URI
 export TEST_SOCKDIR=$(echo $FLUX_URI | sed -e "s!local://!!") &&
 export TEST_FLUX=${FLUX_BUILD_DIR}/src/cmd/flux
 export TEST_TMPDIR=${TMPDIR:-/tmp}
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'flux-proxy creates new socket' '
 	PROXY_URI=$(flux proxy $TEST_URI printenv FLUX_URI) &&
@@ -42,5 +43,29 @@ test_expect_success 'flux-proxy manages event redistribution' '
 	test $(egrep "connector-local.*debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1 &&
 	test $(egrep "proxy.*debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1
 '
+
+test_expect_success 'flux-proxy permits dynamic service registration' "
+        echo '{\"service\":\"fubar\"}' >service.add.in &&
+        flux proxy $TEST_URI \
+	  $RPC service.add 0 <service.add.in
+"
+
+test_expect_success 'flux-proxy can re-register service after disconnect' "
+	echo '{\"service\":\"fubar\"}' >service2.add.in &&
+        flux proxy $TEST_URI \
+	  $RPC service.add 0 <service2.add.in
+"
+
+test_expect_success 'flux-proxy cannot register service with method (EINVAL)' "
+	echo '{\"service\":\"fubar.baz\"}' >service3.add.in &&
+        flux proxy $TEST_URI \
+	  $RPC service.add 22 <service3.add.in
+"
+
+test_expect_success 'flux-proxy cannot shadow a broker service (EEXIST)' "
+	echo '{\"service\":\"cmb\"}' >service4.add.in &&
+        flux proxy $TEST_URI \
+	  $RPC service.add 17 <service4.add.in
+"
 
 test_done
