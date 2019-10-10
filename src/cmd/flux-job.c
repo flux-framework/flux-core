@@ -755,7 +755,19 @@ struct attach_ctx {
     optparse_t *p;
     bool output_header_parsed;
     double timestamp_zero;
+    int eventlog_watch_count;
+    int eventlog_watch_completed;
 };
+
+void attach_eventlog_watch_completed_check (struct attach_ctx *ctx)
+{
+    /* eventlog and output watch are the two eventlog watches we need
+     * to complete before shutting off reactor */
+    if (ctx->eventlog_watch_completed >= ctx->eventlog_watch_count) {
+        flux_watcher_stop (ctx->sigint_w);
+        flux_watcher_stop (ctx->sigtstp_w);
+    }
+}
 
 /* Print eventlog entry to 'fp'.
  * Prefix and context may be NULL.
@@ -860,6 +872,8 @@ void attach_output_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->output_f = NULL;
+    ctx->eventlog_watch_completed++;
+    attach_eventlog_watch_completed_check (ctx);
 }
 
 void attach_cancel_continuation (flux_future_t *f, void *arg)
@@ -884,7 +898,6 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
         if (monotime_since (ctx->t_sigint) > 2000) {
             monotime (&ctx->t_sigint);
             flux_watcher_start (ctx->sigtstp_w);
-            flux_reactor_active_decref (r);
             log_msg ("one more ctrl-C within 2s to cancel or ctrl-Z to detach");
         }
         else {
@@ -912,7 +925,6 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
             log_msg ("detaching...");
         }
         else {
-            flux_reactor_active_incref (r);
             flux_watcher_stop (ctx->sigtstp_w);
             log_msg ("one more ctrl-Z to suspend");
         }
@@ -958,6 +970,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
                               attach_output_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
+
+        ctx->eventlog_watch_count++;
     }
 
     if (optparse_hasopt (ctx->p, "show-exec")) {
@@ -974,6 +988,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->exec_eventlog_f = NULL;
+    ctx->eventlog_watch_completed++;
+    attach_eventlog_watch_completed_check (ctx);
 }
 
 /* Handle an event in the main job eventlog.
@@ -1034,6 +1050,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                               attach_exec_event_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
+
+        ctx->eventlog_watch_count++;
     }
     else {
         if (!strcmp (name, "finish")) {
@@ -1067,6 +1085,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
+    ctx->eventlog_watch_completed++;
+    attach_eventlog_watch_completed_check (ctx);
 }
 
 int cmd_attach (optparse_t *p, int argc, char **argv)
@@ -1101,6 +1121,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
                           &ctx) < 0)
         log_err_exit ("flux_future_then");
 
+    ctx.eventlog_watch_count++;
+
     ctx.sigint_w = flux_signal_watcher_create (r,
                                                SIGINT,
                                                attach_signal_cb,
@@ -1112,7 +1134,6 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!ctx.sigint_w || !ctx.sigtstp_w)
         log_err_exit ("flux_signal_watcher_create");
     flux_watcher_start (ctx.sigint_w);
-    flux_reactor_active_decref (r);
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
