@@ -756,14 +756,13 @@ struct attach_ctx {
     bool output_header_parsed;
     double timestamp_zero;
     int eventlog_watch_count;
-    int eventlog_watch_completed;
 };
 
-void attach_eventlog_watch_completed_check (struct attach_ctx *ctx)
+void attach_completed_check (struct attach_ctx *ctx)
 {
     /* eventlog and output watch are the two eventlog watches we need
      * to complete before shutting off reactor */
-    if (ctx->eventlog_watch_completed >= ctx->eventlog_watch_count) {
+    if (!ctx->eventlog_watch_count) {
         flux_watcher_stop (ctx->sigint_w);
         flux_watcher_stop (ctx->sigtstp_w);
     }
@@ -872,8 +871,8 @@ void attach_output_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->output_f = NULL;
-    ctx->eventlog_watch_completed++;
-    attach_eventlog_watch_completed_check (ctx);
+    ctx->eventlog_watch_count--;
+    attach_completed_check (ctx);
 }
 
 void attach_cancel_continuation (flux_future_t *f, void *arg)
@@ -988,8 +987,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->exec_eventlog_f = NULL;
-    ctx->eventlog_watch_completed++;
-    attach_eventlog_watch_completed_check (ctx);
+    ctx->eventlog_watch_count--;
+    attach_completed_check (ctx);
 }
 
 /* Handle an event in the main job eventlog.
@@ -1085,8 +1084,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
-    ctx->eventlog_watch_completed++;
-    attach_eventlog_watch_completed_check (ctx);
+    ctx->eventlog_watch_count--;
+    attach_completed_check (ctx);
 }
 
 int cmd_attach (optparse_t *p, int argc, char **argv)
