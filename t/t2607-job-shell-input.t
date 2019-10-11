@@ -74,10 +74,10 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: attach twice, one with data' '
         pid1=$!
         flux job attach $id < input_stdin_file > pipe4B.out 2> pipe4B.err &
         pid2=$!
-        exec 100> stdin4.pipe &&
+        exec 9> stdin4.pipe &&
         wait $pid1 &&
         wait $pid2 &&
-        exec 100>&- &&
+        exec 9>&- &&
         test_cmp input_stdin_file pipe4A.out &&
         test_cmp input_stdin_file pipe4B.out
 '
