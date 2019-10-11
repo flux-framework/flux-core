@@ -272,6 +272,13 @@ test_expect_success 'job-shell: attach --quiet suppresses redirected file (1-tas
 # output corner case tests
 #
 
+#
+# sharness will redirect /dev/null to stdin by default, leading to the
+# possibility of seeing an EOF warning on stdin.  We'll check for that
+# manually in the next two tests and filter it out from the stderr
+# output.
+#
+
 test_expect_success 'job-shell: job attach exits cleanly if no kvs output (1-task)' '
         id=$(flux mini submit -n1 \
              --output=out25 --error=err25 \
@@ -281,6 +288,7 @@ test_expect_success 'job-shell: job attach exits cleanly if no kvs output (1-tas
         grep stdout:baz out25 &&
         grep stderr:baz err25 &&
         ! test -s out25.attach &&
+        sed -i -e "/stdin EOF could not be sent/d" err25.attach &&
         ! test -s err25.attach
 '
 
@@ -293,6 +301,7 @@ test_expect_success 'job-shell: job attach exits cleanly if no kvs output (2-tas
         grep stdout:baz out26 &&
         grep stderr:baz err26 &&
         ! test -s out26.attach &&
+        sed -i -e "/stdin EOF could not be sent/d" err26.attach &&
         ! test -s err26.attach
 '
 
