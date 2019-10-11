@@ -119,8 +119,15 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: no stdin desired in job' '
         test_expect_code 143 wait $pid
 '
 
+# There is a small racy possibility that `flux job attach` could
+# notice the job is completed BEFORE it is informed the shell is not
+# receiving stdin, thus the `flux job attach` call does not fail.
+#
+# To greatly decrease the odds of that happening, make sure the test
+# job outputs a very nice chunk of data.
 test_expect_success 'flux-shell: task completed, try to pipe into stdin' '
-        id=$(flux mini submit -n1 echo foo) &&
+        ${LPTEST} 79 500 > big_dataset &&
+        id=$(flux mini submit -n1 cat big_dataset) &&
         flux job wait-event $id clean 2> pipe7A.err &&
         test_must_fail flux job attach $id < input_stdin_file 2> pipe7B.err
 '
