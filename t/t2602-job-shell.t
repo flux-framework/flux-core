@@ -125,10 +125,18 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 	flux job attach -l $id >lptest.out &&
 	test_cmp lptest.exp lptest.out
 '
+#
+# sharness will redirect /dev/null to stdin by default, leading to the
+# possibility of seeing an EOF warning on stdin.  We'll check for that
+# manually in a few of the tests and filter it out from the stderr
+# output.
+#
+
 test_expect_success 'job-shell: verify output of 1-task lptest job on stderr' '
         id=$(flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
 		| flux job submit) &&
 	flux job attach -l $id 2>lptest.err &&
+        sed -i -e "/stdin EOF could not be sent/d" lptest.err &&
 	test_cmp lptest.exp lptest.err
 '
 test_expect_success 'job-shell: verify output of 4-task lptest job' '
@@ -142,6 +150,7 @@ test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
 		| flux job submit) &&
 	flux job attach -l $id 2>lptest4_raw.err &&
 	sort -snk1 <lptest4_raw.err >lptest4.err &&
+        sed -i -e "/stdin EOF could not be sent/d" lptest4.err &&
 	test_cmp lptest4.exp lptest4.err
 '
 test_expect_success LONGTEST 'job-shell: verify 10K line lptest output works' '
