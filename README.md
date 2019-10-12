@@ -48,11 +48,11 @@ sqlite-devel	| libsqlite3-dev	| >= 3.0.0		|
 lua		| lua5.1		| >= 5.1, < 5.3		|
 lua-devel	| liblua5.1-dev		| >= 5.1, < 5.3		|
 lua-posix 	| lua-posix             | 			| *1*
-python-devel	| python-dev		| >= 3.6		|
-python-cffi	| python-cffi		| >= 1.1		|
-python-six	| python-six		| >= 1.9		|
-python-yaml	| python-yaml		| >= 3.10.0		|
-python-jsonschema | python-jsonschema	| >= 2.3.0		|
+python36-devel	| python3-dev		| >= 3.6		|
+python36-cffi	| python3-cffi		| >= 1.1		|
+python36-six	| python3-six		| >= 1.9		|
+python36-yaml	| python3-yaml		| >= 3.10.0		|
+python36-jsonschema | python3-jsonschema | >= 2.3.0		|
 asciidoc	| asciidoc         	| 			| *2*
 asciidoctor	| asciidoctor         	| >= 1.5.7		| *2*
 aspell		| aspell		|			| *3*
