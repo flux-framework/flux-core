@@ -74,15 +74,28 @@ AC_DEFUN([AX_PYTHON_DEVEL],[
 	#
 	# Allow the use of a (user set) custom python version
 	#
+	# N.B. modified for Flux:
+	# If PYTHON_VERSION is unset, look for "python3" first, then "python".
+	# Most os's now install the v2 interpreter as "python" and v3 as
+	# "python3" so users on those os's would otherwise be required to run
+	# "$PYTHON_VERSION=3 ./configure" to get a working python for Flux.
+	#
 	AC_ARG_VAR([PYTHON_VERSION],[The installed Python
 		version to use, for example '2.3'. This string
 		will be appended to the Python interpreter
 		canonical name.])
 
-	AC_PATH_PROG([PYTHON],[python[$PYTHON_VERSION]])
-	if test -z "$PYTHON"; then
-	   AC_MSG_ERROR([Cannot find python$PYTHON_VERSION in your system path])
-	   PYTHON_VERSION=""
+	if test -n "$PYTHON_VERSION"; then
+		AC_PATH_PROG([PYTHON],[python[$PYTHON_VERSION]])
+		if test -z "$PYTHON"; then
+		   AC_MSG_ERROR([Cannot find python$PYTHON_VERSION in your system path])
+		   PYTHON_VERSION=""
+		fi
+	else
+		AC_PATH_PROGS([PYTHON],[python3 python])
+		if test -z "$PYTHON"; then
+		   AC_MSG_ERROR([Cannot find python in your system path])
+		fi
 	fi
 
 	#
