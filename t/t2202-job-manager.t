@@ -8,8 +8,8 @@ test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
 
-DRAIN_UNDRAIN=${FLUX_SOURCE_DIR}/t/job-manager/drain-undrain.py
-DRAIN_CANCEL=${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py
+DRAIN_UNDRAIN="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-undrain.py"
+DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 # List jobs without header

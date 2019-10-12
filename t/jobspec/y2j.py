@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# Usage: flux python y2j <in.yaml >out.json
 
 import sys, yaml, json
 

@@ -17,7 +17,7 @@ test_under_flux 4 kvs
 flux setattr log-stderr-level 1
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
-Y2J=${JOBSPEC}/y2j.py
+Y2J="flux python ${JOBSPEC}/y2j.py"
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema

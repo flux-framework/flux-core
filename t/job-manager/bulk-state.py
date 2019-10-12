@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ###############################################################
 # Copyright 2019 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -10,7 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# Usage: bulk-state.py njobs
+# Usage: flux python bulk-state.py njobs
 #
 # Submit njobs jobs while watching job state notification events.
 # Ensure that each job progresses through an expected set of states,

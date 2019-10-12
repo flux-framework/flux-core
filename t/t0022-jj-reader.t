@@ -9,7 +9,7 @@ test_description='Test json-jobspec *cough* parser *cough*'
 jq=$(which jq 2>/dev/null)
 test -n "$jq" && test_set_prereq HAVE_JQ
 jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
-y2j=${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py
+y2j="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 
 test_expect_success HAVE_JQ 'jj-reader: unexpected version throws error' '
 	flux jobspec srun hostname | jq ".version = 2" >input.$test_count &&

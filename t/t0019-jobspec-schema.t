@@ -5,7 +5,7 @@ test_description='Test the jobspec schema validation'
 . `dirname $0`/sharness.sh
 
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
-VALIDATE=${JOBSPEC}/validate.py
+VALIDATE="flux python ${JOBSPEC}/validate.py"
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 SCHEMA_V1=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec_v1.jsonschema
 

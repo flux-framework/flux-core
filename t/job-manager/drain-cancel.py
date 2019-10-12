@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ###############################################################
 # Copyright 2019 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -10,7 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# Usage: drain-cancel.py jobid
+# Usage: flux python drain-cancel.py jobid
 #
 # Send a blocking drain request, then cancel jobid.
 # The drain response should be received, assuming the queue
