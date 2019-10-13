@@ -1043,7 +1043,7 @@ static int create_broker_rundir (overlay_t *ov, void *arg)
     }
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        if (asprintf (&uri, "local://%s", broker_rundir) < 0) {
+        if (asprintf (&uri, "local://%s/local", broker_rundir) < 0) {
             log_err ("create_broker_rundir: asprintf (uri)");
             goto cleanup;
         }

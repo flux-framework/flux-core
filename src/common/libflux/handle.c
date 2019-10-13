@@ -284,7 +284,7 @@ flux_t *flux_open (const char *uri, int flags)
     if (!uri)
         conf = parse_conf_flux_uri (&uri);
     if (!uri) {
-        if (asprintf (&default_uri, "local://%s",
+        if (asprintf (&default_uri, "local://%s/local",
                       flux_conf_builtin_get ("rundir",
                                              FLUX_CONF_INSTALLED)) < 0)
             goto error;

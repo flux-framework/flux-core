@@ -192,9 +192,9 @@ error:
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct connector_local ctx;
-    char sockpath[PATH_MAX + 1];
     const char *local_uri = NULL;
     char *tmpdir;
+    const char *sockpath;
     int rc = -1;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -216,8 +216,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log (h, LOG_ERR, "malformed local-uri");
         goto done;
     }
-    tmpdir += strlen ("local://");
-    snprintf (sockpath, sizeof (sockpath), "%s/local", tmpdir);
+    sockpath = tmpdir + 8;
 
     /* Create listen socket and watcher to handle new connections
      */

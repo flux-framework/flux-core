@@ -203,16 +203,9 @@ static int override_retry_count (struct usock_retry_params *retry)
 flux_t *connector_init (const char *path, int flags)
 {
     struct local_connector *ctx;
-    char sockpath[PATH_MAX + 1];
-    int n;
     struct usock_retry_params retry = USOCK_RETRY_DEFAULT;
 
     if (!path || override_retry_count (&retry) < 0) {
-        errno = EINVAL;
-        return NULL;
-    }
-    n = snprintf (sockpath, sizeof (sockpath), "%s/local", path);
-    if (n >= sizeof (sockpath)) {
         errno = EINVAL;
         return NULL;
     }
@@ -222,7 +215,7 @@ flux_t *connector_init (const char *path, int flags)
     ctx->testing_userid = FLUX_USERID_UNKNOWN;
     ctx->testing_rolemask = FLUX_ROLE_NONE;
 
-    ctx->fd = usock_client_connect (sockpath, retry);
+    ctx->fd = usock_client_connect (path, retry);
     if (ctx->fd < 0)
         goto error;
     if (!(ctx->uclient = usock_client_create (ctx->fd)))
