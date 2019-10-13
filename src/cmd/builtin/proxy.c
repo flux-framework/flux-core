@@ -41,6 +41,7 @@ struct proxy_command {
     flux_subprocess_t *p;
     int exit_code;
     uid_t proxy_user;
+    uid_t allow_user;
 };
 
 static const char *route_auxkey = "flux::route";
@@ -193,11 +194,11 @@ static void acceptor_cb (struct usock_conn *uconn, void *arg)
     const struct auth_cred *cred;
     struct router_entry *entry;
 
-    /* Userid is the user running flux-proxy (else reject).
+    /* Userid is connecting user (proxy user or --allow-user).
      * Rolemask in FLUX_ROLE_NONE (delegate to upstream).
      */
     cred = usock_conn_get_cred (uconn);
-    if (cred->userid != ctx->proxy_user) {
+    if (cred->userid != ctx->proxy_user && cred->userid != ctx->allow_user) {
         errno = EPERM;
         goto error;
     }
@@ -245,6 +246,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         log_err_exit ("%s", uri);
     flux_log_set_appname (ctx.h, "proxy");
     ctx.proxy_user = geteuid ();
+    ctx.allow_user = optparse_get_int (p, "allow-user", ctx.proxy_user);
     if (!(r = flux_reactor_create (SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (ctx.h, r) < 0)
@@ -296,6 +298,13 @@ done:
     return (0);
 }
 
+static struct optparse_option proxy_opts[] = {
+    { .name = "allow-user", .key = 'u', .has_arg = 1, .arginfo = "UID",
+      .usage = "Allow one additional user to connect",
+    },
+    OPTPARSE_TABLE_END
+};
+
 int subcommand_proxy_register (optparse_t *p)
 {
     optparse_err_t e;
@@ -304,7 +313,7 @@ int subcommand_proxy_register (optparse_t *p)
         "[OPTIONS] URI [COMMAND...]",
         "Route messages to/from Flux instance",
         0,
-        NULL);
+        proxy_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
