@@ -12,7 +12,7 @@ flux-proxy - create proxy environment for Flux instance
 
 SYNOPSIS
 --------
-*flux* *proxy* URI [command [args...]]
+*flux* *proxy* [OPTIONS] URI [command [args...]]
 
 
 DESCRIPTION
@@ -28,18 +28,34 @@ The purpose of *flux proxy* is to allow a connection to be reused,
 for example where connection establishment has high latency or
 requires authentication.
 
+Only the user that invoked flux-proxy is allowed to connect
+to the proxy socket, unless otherwise specified (see below).
+
+OPTIONS
+-------
+*-u, --allow-user=UID*::
+Allow one additional user to connect to the proxy socket.
+
+*-c, --chdir=DIR*::
+Change directory to DIR before running the command.
+
+*-e, --setenv=NAME=VAL*::
+Set NAME to VAL in the environment of the command.  If the environment
+variable is already set, its value is changed.  The FLUX_URI environment
+variable cannot be set with this option.
+
 EXAMPLES
 --------
 
 Connect to a job running on the localhost which has a FLUX_URI
-of local:///tmp/flux-123456-abcdef/0 and spawn an interactive
+of local:///tmp/flux-123456-abcdef/0/local and spawn an interactive
 shell:
 
-  $ flux proxy local:///tmp/flux-123456-abcdef/0
+  $ flux proxy local:///tmp/flux-123456-abcdef/0/local
 
 Connect to the same job remotely on host foo.com:
 
-  $ flux proxy ssh://foo.com/tmp/flux-123456-abcdef/0
+  $ flux proxy ssh://foo.com/tmp/flux-123456-abcdef/0/local
 
 
 AUTHOR
