@@ -838,10 +838,10 @@ void print_eventlog_entry (FILE *fp,
         if (!(context_s = json_dumps (context, JSON_COMPACT)))
             log_err_exit ("%s: error re-encoding context", __func__);
     }
-    fprintf (stderr, "%-10s%s%.3f %s%s%s\n",
-             prefix ? prefix : "",
-             prefix ? ": " : "",
+    fprintf (stderr, "%.3fs: %s%s%s%s%s\n",
              timestamp,
+             prefix ? prefix : "",
+             prefix ? "." : "",
              name,
              context_s ? " " : "",
              context_s ? context_s : "");
@@ -1169,7 +1169,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
     if (optparse_hasopt (ctx->p, "show-exec")) {
         print_eventlog_entry (stderr,
-                              "exec-event",
+                              "exec",
                               timestamp - ctx->timestamp_zero,
                               name,
                               context);
@@ -1266,7 +1266,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (optparse_hasopt (ctx->p, "show-events")
                                     && strcmp (name, "exception") != 0) {
         print_eventlog_entry (stderr,
-                              "job-event",
+                              "job",
                               timestamp - ctx->timestamp_zero,
                               name,
                               context);
