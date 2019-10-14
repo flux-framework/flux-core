@@ -848,6 +848,49 @@ void print_eventlog_entry (FILE *fp,
     free (context_s);
 }
 
+static void handle_output_data (struct attach_ctx *ctx, json_t *context)
+{
+    FILE *fp;
+    const char *stream;
+    const char *rank;
+    char *data;
+    int len;
+    if (!ctx->output_header_parsed)
+        log_msg_exit ("stream data read before header");
+    if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
+        log_msg_exit ("malformed event context");
+    if (!strcmp (stream, "stdout"))
+        fp = stdout;
+    else
+        fp = stderr;
+    if (len > 0) {
+        if (optparse_hasopt (ctx->p, "label-io"))
+            fprintf (fp, "%s: ", rank);
+        fwrite (data, len, 1, fp);
+    }
+    free (data);
+}
+
+static void handle_output_redirect (struct attach_ctx *ctx, json_t *context)
+{
+    const char *stream = NULL;
+    const char *rank = NULL;
+    const char *path = NULL;
+    if (!ctx->output_header_parsed)
+        log_msg_exit ("stream redirect read before header");
+    if (json_unpack (context, "{ s:s s:s s?:s }",
+                              "stream", &stream,
+                              "rank", &rank,
+                              "path", &path) < 0)
+        log_msg_exit ("malformed redirect context");
+    if (!optparse_hasopt (ctx->p, "quiet"))
+        fprintf (stderr, "%s: %s redirected%s%s\n",
+                         rank,
+                         stream,
+                         path ? " to " : "",
+                         path ? path : "");
+}
+
 /* Handle an event in the guest.output eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -881,43 +924,10 @@ void attach_output_continuation (flux_future_t *f, void *arg)
         ctx->output_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
-        FILE *fp;
-        const char *stream;
-        const char *rank;
-        char *data;
-        int len;
-        if (!ctx->output_header_parsed)
-            log_msg_exit ("stream data read before header");
-        if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
-            log_msg_exit ("malformed event context");
-        if (!strcmp (stream, "stdout"))
-            fp = stdout;
-        else
-            fp = stderr;
-        if (len > 0) {
-            if (optparse_hasopt (ctx->p, "label-io"))
-                fprintf (fp, "%s: ", rank);
-            fwrite (data, len, 1, fp);
-        }
-        free (data);
+        handle_output_data (ctx, context);
     }
     else if (!strcmp (name, "redirect")) {
-        const char *stream = NULL;
-        const char *rank = NULL;
-        const char *path = NULL;
-        if (!ctx->output_header_parsed)
-            log_msg_exit ("stream redirect read before header");
-        if (json_unpack (context, "{ s:s s:s s?:s }",
-                         "stream", &stream,
-                         "rank", &rank,
-                         "path", &path) < 0)
-            log_msg_exit ("malformed redirect context");
-        if (!optparse_hasopt (ctx->p, "quiet"))
-            fprintf (stderr, "%s: %s redirected%s%s\n",
-                     rank,
-                     stream,
-                     path ? " to " : "",
-                     path ? path : "");
+        handle_output_redirect (ctx, context);
     }
 
     json_decref (o);
