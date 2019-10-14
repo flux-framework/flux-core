@@ -1,0 +1,88 @@
+#!/bin/bash
+
+##############################################################
+# Copyright 2019 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+##############################################################
+
+#
+# flux-remote - run remote command with forwarded FLUX_URI
+#
+# This command makes use of OpenSSH UNIX domain socket "reverse forwarding".
+# Ensure that your server is configured to allow this, e.g.
+#   AllowStreamLocalForwarding all  # or set to "remote" (more restrictive)
+#   StreamLocalBindUnlink yes
+#
+# The remote command is run under flux-proxy.  This has the following effects:
+# - flux(1) initializes the environment e.g. for flux-shell to operate
+# - flux-proxy changes remote directory to match local directory
+# - (future) flux-proxy --allow USERID permits flux-shell as guest to connect
+# - flux-proxy scales to many connections
+#
+# The OpenSSH server doesn't unlink dead ssh proxy sockets.  We suggest
+# setting the StreamLocalBindUnlink server option which unlinks a proxy socket
+# (connected or not) that is in the way of a new one created by the same user.
+# This recycling of socket names should not pose a problem since:
+# - existing connections are undisturbed when the socket is unlinked
+# - flux-proxy will be the only user of any given ssh proxy socket,
+#   and will open it exactly once
+# - we choose socket names so they are unlikely to conflict
+# - sshd refuses to unlink an existing socket owned by another user
+# An alternative approach would be to add a second ssh command to this script
+# to unlink the socket on exit.
+#
+
+die() {
+    echo "flux-remote: FATAL: $@" >&2
+    exit 1
+}
+
+usage() {
+    echo "Usage: flux-remote hostname command ..." >&2
+    exit 1
+}
+
+# Usage: make_local_socket_path $FLUX_URI
+make_local_socket_path() {
+    local local_uri=$1
+
+    echo $local_uri | sed -e 's!^local://!!'
+}
+
+# Usage: make_remote_socket_path local_socket
+make_remote_socket_path() {
+         local local_socket=$1
+
+    # Embed hostname + local socket path in remote path
+    # This somewhat uniquely identifies which socket is being forwarded
+    echo "${TMPDIR:-/tmp}/$(hostname)$(echo ${local_socket} | sed -e 's!/!-!g')"
+}
+
+
+test $# -lt 2 && usage
+remote_host=$1; shift
+
+test -n "$FLUX_URI" || die "FLUX_URI is not set"
+flux_path=$(which flux)
+
+local_socket=$(make_local_socket_path ${FLUX_URI})
+remote_socket=$(make_remote_socket_path ${local_socket})
+remote_uri="local://${remote_socket}"
+
+opts="--chdir $(pwd)"
+if test -n "${FLUX_KVS_NAMESPACE}"; then
+    opts="${opts} --setenv FLUX_KVS_NAMESPACE=${FLUX_KVS_NAMESPACE}"
+fi
+
+exec ssh -tt \
+        -o ExitOnForwardFailure=yes \
+        -R ${remote_socket}:${local_socket} \
+        ${remote_host} \
+        exec ${flux_path} proxy ${opts} ${remote_uri} "$@"
+
+# vi: ts=4 sw=4 expandtab
