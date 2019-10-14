@@ -838,7 +838,7 @@ void print_eventlog_entry (FILE *fp,
         if (!(context_s = json_dumps (context, JSON_COMPACT)))
             log_err_exit ("%s: error re-encoding context", __func__);
     }
-    fprintf (stderr, "%s%s%.3f %s%s%s\n",
+    fprintf (stderr, "%-10s%s%.3f %s%s%s\n",
              prefix ? prefix : "",
              prefix ? ": " : "",
              timestamp,
