@@ -15,8 +15,8 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libidset/idset.h"
 
-#include "util.h"
-#include "util_rpc.h"
+#include "src/common/libtestutil/util.h"
+#include "src/common/libtestutil/util_rpc.h"
 
 static uint32_t fake_size = 1;
 static uint32_t fake_rank = 0;

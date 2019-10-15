@@ -44,6 +44,7 @@ flux_SOURCES = \
 	builtin/hwloc.c \
 	builtin/heaptrace.c \
 	builtin/proxy.c \
+	builtin/relay.c \
 	builtin/python.c \
 	builtin/user.c
 nodist_flux_SOURCES = \

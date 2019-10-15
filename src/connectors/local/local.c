@@ -24,149 +24,121 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/macros.h"
-#include "src/common/libutil/fdutils.h"
-#include "src/common/librouter/sendfd.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/librouter/usock.h"
 
-#define CTX_MAGIC   0xf434aaab
-typedef struct {
-    int magic;
-    int fd;
-    int fd_nonblock;
-    struct iobuf outbuf;
-    struct iobuf inbuf;
+struct local_connector {
+    struct usock_client *uclient;
     uint32_t testing_userid;
     uint32_t testing_rolemask;
     flux_t *h;
-} local_ctx_t;
+    int fd;
+};
 
 static const struct flux_handle_ops handle_ops;
 
-static int set_nonblock (local_ctx_t *c, int nonblock)
-{
-    if (c->fd_nonblock == nonblock)
-        return 0;
-    if ((nonblock ? fd_set_nonblocking (c->fd) : fd_set_blocking (c->fd)) < 0)
-        return -1;
-    c->fd_nonblock = nonblock;
-    return 0;
-}
-
 static int op_pollevents (void *impl)
 {
-    local_ctx_t *c = impl;
-    struct pollfd pfd = {
-        .fd = c->fd,
-        .events = POLLIN | POLLOUT | POLLERR | POLLHUP,
-        .revents = 0,
-    };
-    int revents = 0;
-    switch (poll (&pfd, 1, 0)) {
-        case 1:
-            if (pfd.revents & POLLIN)
-                revents |= FLUX_POLLIN;
-            if (pfd.revents & POLLOUT)
-                revents |= FLUX_POLLOUT;
-            if ((pfd.revents & POLLERR) || (pfd.revents & POLLHUP))
-                revents |= FLUX_POLLERR;
-            break;
-        case 0:
-            break;
-        default: /* -1 */
-            revents |= FLUX_POLLERR;
-            break;
-    }
-    return revents;
+    struct local_connector *ctx = impl;
+
+    return usock_client_pollevents (ctx->uclient);
 }
 
 static int op_pollfd (void *impl)
 {
-    local_ctx_t *c = impl;
-    return c->fd;
+    struct local_connector *ctx = impl;
+
+    return usock_client_pollfd (ctx->uclient);
 }
 
-static int send_normal (local_ctx_t *c, const flux_msg_t *msg, int flags)
-{
-    if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
-        return -1;
-    if (sendfd (c->fd, msg, &c->outbuf) < 0)
-        return -1;
-    return 0;
-}
-
-static int send_testing (local_ctx_t *c, const flux_msg_t *msg, int flags)
+/* Special send function for testing that sets the userid/rolemask to
+ * values set with flux_opt_set().  The connector-local module
+ * overwrites these credentials for guests, but allows pass-through for
+ * instance owner.  This is useful for service access control testing.
+ */
+static int send_testing (struct local_connector *ctx,
+                         const flux_msg_t *msg,
+                         int flags)
 {
     flux_msg_t *cpy;
-    int rc = -1;
 
     if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
-    if (flux_msg_set_userid (cpy, c->testing_userid) < 0)
-        goto done;
-    if (flux_msg_set_rolemask (cpy, c->testing_rolemask) < 0)
-        goto done;
-    rc = send_normal (c, cpy, flags);
-done:
+        return -1;
+    if (flux_msg_set_userid (cpy, ctx->testing_userid) < 0)
+        goto error;
+    if (flux_msg_set_rolemask (cpy, ctx->testing_rolemask) < 0)
+        goto error;
+    if (usock_client_send (ctx->uclient, cpy, flags) < 0)
+        goto error;
     flux_msg_destroy (cpy);
-    return rc;
+    return 0;
+error:
+    flux_msg_destroy (cpy);
+    return -1;
 }
-
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    local_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    if (c->testing_userid != FLUX_USERID_UNKNOWN
-                                || c->testing_rolemask != FLUX_ROLE_NONE)
-        return send_testing (c, msg, flags);
-    else
-        return send_normal (c, msg, flags);
+    struct local_connector *ctx = impl;
+
+    if (ctx->testing_userid != FLUX_USERID_UNKNOWN
+                                || ctx->testing_rolemask != FLUX_ROLE_NONE)
+        return send_testing (ctx, msg, flags);
+
+    return usock_client_send (ctx->uclient, msg, flags);
 }
 
 static flux_msg_t *op_recv (void *impl, int flags)
 {
-    local_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
+    struct local_connector *ctx = impl;
 
-    if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
-        return NULL;
-    return recvfd (c->fd, &c->inbuf);
-}
-
-static int op_event (void *impl, const char *topic, const char *msg_topic)
-{
-    local_ctx_t *c = impl;
-    flux_future_t *f;
-    int rc = -1;
-
-    assert (c->magic == CTX_MAGIC);
-
-    if (!(f = flux_rpc_pack (c->h, msg_topic, FLUX_NODEID_ANY, 0,
-                             "{s:s}", "topic", topic)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
+    return usock_client_recv (ctx->uclient, flags);
 }
 
 static int op_event_subscribe (void *impl, const char *topic)
 {
-    return op_event (impl, topic, "local.sub");
+    struct local_connector *ctx = impl;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "local.sub",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "topic", topic)))
+        return -1;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
 }
 
 static int op_event_unsubscribe (void *impl, const char *topic)
 {
-    return op_event (impl, topic, "local.unsub");
+    struct local_connector *ctx = impl;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "local.unsub",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "topic", topic)))
+        return -1;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
 }
 
 static int op_setopt (void *impl, const char *option,
                       const void *val, size_t size)
 {
-    local_ctx_t *ctx = impl;
-    assert (ctx->magic == CTX_MAGIC);
+    struct local_connector *ctx = impl;
     size_t val_size;
     int rc = -1;
 
@@ -195,107 +167,71 @@ done:
 
 static void op_fini (void *impl)
 {
-    local_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
+    struct local_connector *ctx = impl;
 
-    iobuf_clean (&c->outbuf);
-    iobuf_clean (&c->inbuf);
-    if (c->fd >= 0)
-        (void)close (c->fd);
-    c->magic = ~CTX_MAGIC;
-    free (c);
+    if (ctx) {
+        int saved_errno = errno;
+        usock_client_destroy (ctx->uclient);
+        if (ctx->fd >= 0)
+            ERRNO_SAFE_WRAP (close, ctx->fd);
+        free (ctx);
+        errno = saved_errno;
+    }
 }
 
-static int env_getint (char *name, int dflt)
+static int override_retry_count (struct usock_retry_params *retry)
 {
-    char *s = getenv (name);
-    return s ? strtol (s, NULL, 10) : dflt;
-}
+    const char *s;
 
-/* Connect socket `fd` to unix domain socket `file` and fail after `retries`
- *  attempts with exponential retry backoff starting at 16ms.
- * Return 0 on success, or -1 on failure.
- */
-static int connect_sock_with_retry (int fd, const char *file, int retries)
-{
-    int count = 0;
-    struct sockaddr_un addr;
-    useconds_t s = 8 * 1000;
-    int maxdelay = 2000000;
-    do {
-        memset (&addr, 0, sizeof (struct sockaddr_un));
-        addr.sun_family = AF_UNIX;
-        if (strncpy (addr.sun_path, file, sizeof (addr.sun_path) - 1) < 0) {
+    if ((s = getenv ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT"))) {
+        char *endptr;
+        int n;
+
+        errno = 0;
+        n = strtol (s, &endptr, 10);
+        if (errno != 0 || *endptr != '\0') {
             errno = EINVAL;
-            return -1;
+            return  -1;
         }
-        if (connect (fd, (struct sockaddr *)&addr, sizeof (addr)) == 0)
-            return 0;
-        if (s < maxdelay)
-            s = 2*s < maxdelay ? 2*s : maxdelay;
-    } while ((++count <= retries) && (usleep (s) == 0));
-    return -1;
+        retry->max_retry = n;
+    }
+    return 0;
 }
 
 /* Path is interpreted as the directory containing the unix domain socket.
  */
 flux_t *connector_init (const char *path, int flags)
 {
-    local_ctx_t *c = NULL;
-    char sockfile [SIZEOF_FIELD (struct sockaddr_un, sun_path)];
+    struct local_connector *ctx;
+    char sockpath[PATH_MAX + 1];
     int n;
-    int retries = env_getint ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT", 5);
+    struct usock_retry_params retry = USOCK_RETRY_DEFAULT;
 
-    if (!path) {
+    if (!path || override_retry_count (&retry) < 0) {
         errno = EINVAL;
-        goto error;
+        return NULL;
     }
-    n = snprintf (sockfile, sizeof (sockfile), "%s/local", path);
-    if (n >= sizeof (sockfile)) {
+    n = snprintf (sockpath, sizeof (sockpath), "%s/local", path);
+    if (n >= sizeof (sockpath)) {
         errno = EINVAL;
-        goto error;
+        return NULL;
     }
-    if (!(c = malloc (sizeof (*c)))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    memset (c, 0, sizeof (*c));
-    c->magic = CTX_MAGIC;
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
 
-    c->testing_userid = FLUX_USERID_UNKNOWN;
-    c->testing_rolemask = FLUX_ROLE_NONE;
+    ctx->testing_userid = FLUX_USERID_UNKNOWN;
+    ctx->testing_rolemask = FLUX_ROLE_NONE;
 
-    c->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (c->fd < 0)
+    ctx->fd = usock_client_connect (sockpath, retry);
+    if (ctx->fd < 0)
         goto error;
-    c->fd_nonblock = -1;
-    if (connect_sock_with_retry (c->fd, sockfile, retries) < 0)
+    if (!(ctx->uclient = usock_client_create (ctx->fd)))
         goto error;
-    /* read 1 byte indicating success or failure of auth */
-    unsigned char e;
-    int rc;
-    rc = read (c->fd, &e, 1);
-    if (rc < 0)
+    if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
-    if (rc == 0) {
-        errno = ECONNRESET;
-        goto error;
-    }
-    if (e != 0) {
-        errno = e;
-        goto error;
-    }
-    iobuf_init (&c->outbuf);
-    iobuf_init (&c->inbuf);
-    if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
-        goto error;
-    return c->h;
+    return ctx->h;
 error:
-    if (c) {
-        int saved_errno = errno;
-        op_fini (c);
-        errno = saved_errno;
-    }
+    op_fini (ctx);
     return NULL;
 }
 

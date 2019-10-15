@@ -436,6 +436,7 @@ AC_CONFIG_FILES( \
   src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
   src/common/libflux/version.h \
+  src/common/libtestutil/Makefile \
   src/common/libkvs/Makefile \
   src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
@@ -447,6 +448,7 @@ AC_CONFIG_FILES( \
   src/common/libeventlog/Makefile \
   src/common/libioencode/Makefile \
   src/common/librouter/Makefile \
+  src/common/libyuarel/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \

@@ -13,8 +13,8 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
-#include "util.h"
-#include "util_rpc.h"
+#include "src/common/libtestutil/util.h"
+#include "src/common/libtestutil/util_rpc.h"
 
 /* increment integer and send it back */
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,

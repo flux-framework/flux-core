@@ -11,7 +11,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 #include "src/common/libtap/tap.h"
-#include "util.h"
+#include "src/common/libtestutil/util.h"
 
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)

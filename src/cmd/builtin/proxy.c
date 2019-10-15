@@ -29,728 +29,41 @@
 #include <czmq.h>
 #include <inttypes.h>
 
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/fdutils.h"
-#include "src/common/librouter/sendfd.h"
+#include "src/common/librouter/usock.h"
+#include "src/common/librouter/router.h"
 
-#define LISTEN_BACKLOG      5
 
-typedef struct {
-    int listen_fd;
-    flux_watcher_t *listen_w;
-    zlist_t *clients;
+struct proxy_command {
+    struct usock_server *server;
+    struct router *router;
     flux_t *h;
-    flux_reactor_t *reactor;
-    uid_t session_owner;
-    zhash_t *subscriptions;
     flux_subprocess_t *p;
-    bool oneshot;
     int exit_code;
-} proxy_ctx_t;
-
-typedef void (*unsubscribe_f)(void *handle, const char *topic);
-
-typedef struct {
-    char *topic;
-    int usecount;
-    unsubscribe_f unsubscribe;
-    void *handle;
-} subscription_t;
-
-typedef struct {
-    int rfd;
-    int wfd;
-    flux_watcher_t *inw;
-    flux_watcher_t *outw;
-    struct iobuf inbuf;
-    struct iobuf outbuf;
-    zlist_t *outqueue;  /* queue of outbound flux_msg_t */
-    proxy_ctx_t *ctx;
-    zhash_t *disconnect_notify;
-    zhash_t *subscriptions;
-    zuuid_t *uuid;
-} client_t;
-
-struct disconnect_notify {
-    char *topic;
-    uint32_t nodeid;
-    int flags;
-    client_t *c;
+    uid_t proxy_user;
 };
 
-static void client_destroy (client_t *c);
-static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg);
-static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg);
-
-static void ctx_destroy (proxy_ctx_t *ctx)
-{
-    if (ctx) {
-        zlist_destroy (&ctx->clients);
-        zhash_destroy (&ctx->subscriptions);
-        free (ctx);
-    }
-}
-
-static proxy_ctx_t *ctx_create (flux_t *h)
-{
-    proxy_ctx_t *ctx = xzmalloc (sizeof (*ctx));
-    ctx->h = h;
-    if (!(ctx->reactor = flux_reactor_create (SIGCHLD)))
-        log_err_exit ("flux_reactor_create");
-    if (flux_set_reactor (h, ctx->reactor) < 0)
-        log_err_exit ("flux_set_reactor");
-    if (!(ctx->clients = zlist_new ()))
-        oom ();
-    if (!(ctx->subscriptions = zhash_new ()))
-        oom ();
-    ctx->session_owner = geteuid ();
-
-    return ctx;
-}
-
-static client_t * client_create (proxy_ctx_t *ctx, int rfd, int wfd)
-{
-    client_t *c;
-    flux_t *h = ctx->h;
-
-    c = xzmalloc (sizeof (*c));
-    c->rfd = rfd;
-    c->wfd = wfd;
-    if (!(c->uuid = zuuid_new ()))
-        oom ();
-    c->ctx = ctx;
-    if (!(c->disconnect_notify = zhash_new ()))
-        oom ();
-    if (!(c->subscriptions = zhash_new ()))
-        oom ();
-    if (!(c->outqueue = zlist_new ()))
-        oom ();
-    c->inw = flux_fd_watcher_create (ctx->reactor, c->rfd,
-                                     FLUX_POLLIN, client_read_cb, c);
-    c->outw = flux_fd_watcher_create (ctx->reactor, c->wfd,
-                                      FLUX_POLLOUT, client_write_cb, c);
-    if (!c->inw || !c->outw) {
-        flux_log_error (h, "flux_fd_watcher_create");
-        goto error;
-    }
-    flux_watcher_start (c->inw);
-    iobuf_init (&c->inbuf);
-    iobuf_init (&c->outbuf);
-    if (fd_set_nonblocking (c->rfd) < 0) {
-        flux_log_error (h, "fd_set_nonblocking");
-        goto error;
-    }
-    if (c->wfd != c->rfd && fd_set_nonblocking (c->wfd) < 0) {
-        flux_log_error (h, "fd_set_nonblocking");
-        goto error;
-    }
-
-    return (c);
-error:
-    client_destroy (c);
-    return NULL;
-}
-
-static int client_send_try (client_t *c)
-{
-    flux_msg_t *msg = zlist_head (c->outqueue);
-
-    if (msg) {
-        if (sendfd (c->wfd, msg, &c->outbuf) < 0) {
-            if (errno != EWOULDBLOCK && errno != EAGAIN)
-                return -1;
-            //flux_log (c->ctx->h, LOG_DEBUG, "send: client not ready");
-            flux_watcher_start (c->outw);
-            errno = 0;
-        } else {
-            msg = zlist_pop (c->outqueue);
-            flux_msg_destroy (msg);
-        }
-    }
-    return 0;
-}
-
-static int client_send_nocopy (client_t *c, flux_msg_t **msg)
-{
-    if (zlist_append (c->outqueue, *msg) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    *msg = NULL;
-    return client_send_try (c);
-}
-
-static int client_send (client_t *c, const flux_msg_t *msg)
-{
-    flux_msg_t *cpy = flux_msg_copy (msg, true);
-    int rc;
-
-    if (!cpy) {
-        errno = ENOMEM;
-        return -1;
-    }
-    rc = client_send_nocopy (c, &cpy);
-    flux_msg_destroy (cpy);
-    return rc;
-}
-
-static subscription_t *subscription_create (const char *topic)
-{
-    subscription_t *sub = xzmalloc (sizeof (*sub));
-    sub->topic = xstrdup (topic);
-    return sub;
-}
-
-static void subscription_destroy (void *data)
-{
-    subscription_t *sub = data;
-    if (sub->unsubscribe)
-        (void) sub->unsubscribe (sub->handle, sub->topic);
-    free (sub->topic);
-    free (sub);
-}
-
-static int global_subscribe (proxy_ctx_t *ctx, const char *topic)
-{
-    subscription_t *sub;
-    int rc = -1;
-
-    if (!(sub = zhash_lookup (ctx->subscriptions, topic))) {
-        if (flux_event_subscribe (ctx->h, topic) < 0) {
-            flux_log_error (ctx->h, "%s: flux_event_subscribe %s",
-                            __FUNCTION__, topic);
-            goto done;
-        }
-        sub = subscription_create (topic);
-        sub->unsubscribe = (unsubscribe_f) flux_event_unsubscribe;
-        sub->handle = ctx->h;
-        zhash_update (ctx->subscriptions, topic, sub);
-        zhash_freefn (ctx->subscriptions, topic, subscription_destroy);
-        /* N.B. t1008-proxy.t looks for this log message */ 
-        flux_log (ctx->h, LOG_DEBUG, "subscribe %s", topic);
-    }
-    sub->usecount++;
-    rc = 0;
-done:
-    return rc;
-}
-
-static int global_unsubscribe (proxy_ctx_t *ctx, const char *topic)
-{
-    subscription_t *sub;
-    int rc = -1;
-
-    if (!(sub = zhash_lookup (ctx->subscriptions, topic)))
-        goto done;
-    if (--sub->usecount == 0) {
-        zhash_delete (ctx->subscriptions, topic);
-        /* N.B. t1008-proxy.t looks for this log message */ 
-        flux_log (ctx->h, LOG_DEBUG, "unsubscribe %s", topic);
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-static int client_subscribe (client_t *c, const char *topic)
-{
-    subscription_t *sub;
-    int rc = -1;
-
-    if (!(sub = zhash_lookup (c->subscriptions, topic))) {
-        if (global_subscribe (c->ctx, topic) < 0)
-            goto done;
-        sub = subscription_create (topic);
-        sub->unsubscribe = (unsubscribe_f) global_unsubscribe;
-        sub->handle = c->ctx;
-        zhash_update (c->subscriptions, topic, sub);
-        zhash_freefn (c->subscriptions, topic, subscription_destroy);
-        //flux_log (c->ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
-    }
-    sub->usecount++;
-    rc = 0;
-done:
-    return rc;
-}
-
-static int client_unsubscribe (client_t *c, const char *topic)
-{
-    subscription_t *sub;
-    int rc = -1;
-
-    if (!(sub = zhash_lookup (c->subscriptions, topic)))
-        goto done;
-    if (--sub->usecount == 0) {
-        zhash_delete (c->subscriptions, topic);
-        //flux_log (c->ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-int sub_request (client_t *c, const flux_msg_t *msg, bool subscribe)
-{
-    const char *topic;
-    int rc = -1;
-
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
-        goto done;
-    if (subscribe)
-        rc = client_subscribe (c, topic);
-    else
-        rc = client_unsubscribe (c, topic);
-done:
-    return rc;
-}
-
-static bool client_is_subscribed (client_t *c, const char *topic)
-{
-    subscription_t *sub;
-
-    if (zhash_lookup (c->subscriptions, topic))
-        return true;
-    sub = zhash_first (c->subscriptions);
-    while (sub) {
-        if (!strncmp (topic, sub->topic, strlen (sub->topic)))
-            return true;
-        sub = zhash_next (c->subscriptions);
-    }
-    return false;
-}
-
-static int disconnect_sendmsg (struct disconnect_notify *d)
-{
-    int rc = -1;
-    flux_msg_t *msg = NULL;
-
-    if (!d || !d->topic || !d->c) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (msg, d->topic) < 0)
-        goto done;
-    if (flux_msg_enable_route (msg) < 0)
-        goto done;
-    if (flux_msg_push_route (msg, zuuid_str (d->c->uuid)) < 0)
-        goto done;
-    if (d->flags != 0) {
-        uint8_t flags;
-        if (flux_msg_get_flags (msg, &flags) < 0)
-            goto done;
-        if (flux_msg_set_flags (msg, flags | d->flags) < 0)
-            goto done;
-    }
-    if (flux_msg_set_nodeid (msg, d->nodeid) < 0)
-        goto done;
-    if (flux_send (d->c->ctx->h, msg, 0) < 0) {
-        flux_log_error (d->c->ctx->h, "%s flux_send disconnect for %s",
-                        __FUNCTION__, zuuid_str (d->c->uuid));
-    }
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
-}
-
-static void disconnect_destroy (void *arg)
-{
-    struct disconnect_notify *d = arg;
-
-    if (d) {
-        (void)disconnect_sendmsg (d);
-        if (d->topic)
-            free (d->topic);
-        free (d);
-    }
-}
-
-static int disconnect_update (client_t *c, const flux_msg_t *msg)
-{
-    char *p;
-    char *key = NULL;
-    char *svc = NULL;
-    const char *topic;
-    uint32_t nodeid;
-    uint8_t flags;
-    struct disconnect_notify *d;
-    int rc = -1;
-
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        goto done;
-    if (flux_msg_get_nodeid (msg, &nodeid) < 0)
-        goto done;
-    if (flux_msg_get_flags (msg, &flags) < 0)
-        goto done;
-    flags &= FLUX_MSGFLAG_UPSTREAM; // the only flag that affects routing
-    svc = xstrdup (topic);
-    if ((p = strchr (svc, '.')))
-        *p = '\0';
-    key = xasprintf ("%s:%"PRIu32":%d", svc, nodeid, flags);
-    if (!zhash_lookup (c->disconnect_notify, key)) {
-        d = xzmalloc (sizeof (*d));
-        d->c = c;
-        d->nodeid = nodeid;
-        d->flags = flags;
-        d->topic = xasprintf ("%s.disconnect", svc);
-        zhash_update (c->disconnect_notify, key, d);
-        zhash_freefn (c->disconnect_notify, key, disconnect_destroy);
-    }
-    rc = 0;
-done:
-    if (svc)
-        free (svc);
-    if (key)
-        free (key);
-    return rc;
-}
-
-static void client_destroy (client_t *c)
-{
-    zhash_destroy (&c->disconnect_notify);
-    zhash_destroy (&c->subscriptions);
-    if (c->uuid)
-        zuuid_destroy (&c->uuid);
-    if (c->outqueue) {
-        flux_msg_t *msg;
-        while ((msg = zlist_pop (c->outqueue)))
-            flux_msg_destroy (msg);
-        zlist_destroy (&c->outqueue);
-    }
-    flux_watcher_stop (c->outw);
-    flux_watcher_destroy (c->outw);
-    iobuf_clean (&c->outbuf);
-
-    flux_watcher_stop (c->inw);
-    flux_watcher_destroy (c->inw);
-    iobuf_clean (&c->inbuf);
-
-    if (c->rfd != -1)
-        close (c->rfd);
-    if (c->wfd != -1 && c->wfd != c->rfd)
-        close (c->wfd);
-
-    free (c);
-}
-
-static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
-                             int revents, void *arg)
-{
-    client_t *c = arg;
-    proxy_ctx_t *ctx = c->ctx;
-
-    if (revents & FLUX_POLLERR)
-        goto disconnect;
-    if (revents & FLUX_POLLOUT) {
-        if (client_send_try (c) < 0)
-            goto disconnect;
-        //flux_log (h, LOG_DEBUG, "send: client ready");
-    }
-    if (zlist_size (c->outqueue) == 0)
-        flux_watcher_stop (w);
-    return;
-disconnect:
-    zlist_remove (c->ctx->clients, c);
-    client_destroy (c);
-    if (ctx->oneshot)
-        flux_reactor_stop (r);
-}
-
-static bool internal_request (client_t *c, const flux_msg_t *msg)
-{
-    const char *topic;
-    int rc = -1;
-    flux_msg_t *rmsg = NULL;
-    uint32_t matchtag;
-
-    if (flux_msg_get_topic (msg, &topic) < 0
-            || flux_msg_get_matchtag (msg, &matchtag) < 0)
-        return false;
-    else if (!strcmp (topic, "local.sub"))
-        rc = sub_request (c, msg, true);
-    else if (!strcmp (topic, "local.unsub"))
-        rc = sub_request (c, msg, false);
-    else
-        return false;
-
-    /* Respond to client
-     */
-    if (!(rmsg = flux_response_encode (topic, NULL))
-                    || flux_msg_set_errnum (rmsg, rc < 0 ? errno : 0) < 0
-                    || flux_msg_set_matchtag (rmsg, matchtag) < 0
-                    || flux_msg_set_rolemask (rmsg, FLUX_ROLE_OWNER) < 0)
-        flux_log_error (c->ctx->h, "%s: encoding response", __FUNCTION__);
-
-    else if (client_send_nocopy (c, &rmsg) < 0)
-        flux_log_error (c->ctx->h, "%s: client_send_nocopy", __FUNCTION__);
-    flux_msg_destroy (rmsg);
-    return true;
-}
-
-static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
-{
-    client_t *c = arg;
-    proxy_ctx_t *ctx = c->ctx;
-    flux_t *h = ctx->h;
-    flux_msg_t *msg = NULL;
-    int type;
-
-    if (revents & FLUX_POLLERR)
-        goto disconnect;
-    if (!(revents & FLUX_POLLIN))
-        return;
-    /* ECONNRESET is a normal disconnect error
-     * EWOULDBLOCK, EAGAIN stores state in c->inbuf for continuation
-     */
-    //flux_log (h, LOG_DEBUG, "recv: client ready");
-    if (!(msg = recvfd (c->rfd, &c->inbuf))) {
-        if (errno == EWOULDBLOCK || errno == EAGAIN) {
-            //flux_log (h, LOG_DEBUG, "recv: client not ready");
-            return;
-        }
-        if (errno != ECONNRESET)
-            flux_log_error (h, "recvfd");
-        goto disconnect;
-    }
-    if (flux_msg_get_type (msg, &type) < 0) {
-        flux_log_error (h, "flux_msg_get_type");
-        goto disconnect;
-    }
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            if (!internal_request (c, msg)) {
-                /* insert disconnect notifier before forwarding request */
-                if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
-                    flux_log_error (h, "disconnect_update");
-                    goto disconnect;
-                }
-                if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
-                    oom (); /* FIXME */
-                if (flux_send (h, msg, 0) < 0)
-                    log_err ("%s: flux_send", __FUNCTION__);
-            }
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_send (h, msg, 0) < 0)
-                log_err ("%s: flux_send", __FUNCTION__);
-            break;
-        default:
-            flux_log (h, LOG_ERR, "drop unexpected %s",
-                      flux_msg_typestr (type));
-            break;
-    }
-    flux_msg_destroy (msg);
-    return;
-disconnect:
-    flux_msg_destroy (msg);
-    zlist_remove (ctx->clients, c);
-    client_destroy (c);
-    if (ctx->oneshot)
-        flux_reactor_stop (r);
-}
-
-/* Received response message from broker.
- * Look up the sender uuid in clients hash and deliver.
- * Responses for disconnected clients are silently discarded.
- */
-static void response_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
-{
-    proxy_ctx_t *ctx = arg;
-    char *uuid = NULL;
-    client_t *c;
-    flux_msg_t *cpy = flux_msg_copy (msg, true);
-
-    if (!cpy)
-        oom ();
-    if (flux_msg_pop_route (cpy, &uuid) < 0)
-        goto done;
-    if (!uuid) {
-        const char *topic = NULL;
-        (void) flux_msg_get_topic (msg, &topic);
-        flux_log (h, LOG_ERR, "%s: topic %s: missing sender uuid",
-                  __FUNCTION__, topic ? topic : "NULL");
-        goto done;
-    }
-    c = zlist_first (ctx->clients);
-    while (c) {
-        if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (client_send_nocopy (c, &cpy) < 0) { /* FIXME handle errors */
-                int type = FLUX_MSGTYPE_ANY;
-                const char *topic = "unknown";
-                (void)flux_msg_get_type (msg, &type);
-                (void)flux_msg_get_topic (msg, &topic);
-                flux_log_error (h, "send %s %s to client %.*s",
-                                topic, flux_msg_typestr (type),
-                                5, zuuid_str (c->uuid));
-                errno = 0;
-            }
-            break;
-        }
-        c = zlist_next (ctx->clients);
-    }
-done:
-    if (uuid)
-        free (uuid);
-    flux_msg_destroy (cpy);
-}
-
-/* Received an event message from broker.
- * Find all subscribers and deliver.
- */
-static void event_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
-{
-    proxy_ctx_t *ctx = arg;
-    client_t *c;
-    const char *topic;
-    int count = 0;
-
-    if (flux_msg_get_topic (msg, &topic) < 0) {
-        flux_log_error (h, "%s: dropped", __FUNCTION__);
-        return;
-    }
-    c = zlist_first (ctx->clients);
-    while (c) {
-        if (client_is_subscribed (c, topic)) {
-            if (client_send (c, msg) < 0) { /* FIXME handle errors */
-                int type = FLUX_MSGTYPE_ANY;
-                const char *topic = "unknown";
-                (void)flux_msg_get_type (msg, &type);
-                (void)flux_msg_get_topic (msg, &topic);
-                flux_log_error (h, "send %s %s to client %.*s",
-                                topic, flux_msg_typestr (type),
-                                5, zuuid_str (c->uuid));
-                errno = 0;
-            }
-            count++;
-        }
-        c = zlist_next (ctx->clients);
-    }
-    //flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic, count);
-}
-
-static int check_cred (proxy_ctx_t *ctx, int fd)
-{
-    struct ucred ucred;
-    socklen_t crlen = sizeof (ucred);
-    int rc = -1;
-
-    if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &ucred, &crlen) < 0) {
-        flux_log_error (ctx->h, "getsockopt SO_PEERCRED");
-        goto done;
-    }
-    assert (crlen == sizeof (ucred));
-    if (ucred.uid != ctx->session_owner) {
-        flux_log (ctx->h, LOG_ERR, "connect by uid=%d pid=%d denied",
-                  ucred.uid, (int)ucred.pid);
-        errno = EPERM;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-static int send_auth_response (int fd, unsigned char e)
-{
-    return write (fd, &e, 1);
-}
-
-/* Accept a connection from new client.
- */
-static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
-{
-    int fd = flux_fd_watcher_get_fd (w);
-    proxy_ctx_t *ctx = arg;
-    flux_t *h = ctx->h;
-
-    if (revents & FLUX_POLLIN) {
-        client_t *c;
-        int cfd;
-
-        if ((cfd = accept4 (fd, NULL, NULL, SOCK_CLOEXEC)) < 0) {
-            flux_log_error (h, "accept");
-            goto done;
-        }
-        if (check_cred (ctx, cfd) < 0) {
-            send_auth_response (cfd, errno);
-            close (cfd);
-            goto done;
-        }
-        send_auth_response (cfd, 0);
-        if (!(c = client_create (ctx, cfd, cfd))) {
-            close (cfd);
-            goto done;
-        }
-        if (zlist_append (ctx->clients, c) < 0)
-            oom ();
-    }
-    if (revents & FLUX_POLLERR) {
-        flux_log_error (h, "poll listen fd");
-    }
-done:
-    return;
-}
-
-static int listener_init (proxy_ctx_t *ctx, char *sockpath)
-{
-    struct sockaddr_un addr;
-    int fd;
-
-    fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (fd < 0) {
-        flux_log_error (ctx->h, "socket");
-        goto done;
-    }
-    if (remove (sockpath) < 0 && errno != ENOENT) {
-        flux_log_error (ctx->h, "remove %s", sockpath);
-        goto error_close;
-    }
-    memset (&addr, 0, sizeof (struct sockaddr_un));
-    addr.sun_family = AF_UNIX;
-    strncpy (addr.sun_path, sockpath, sizeof (addr.sun_path) - 1);
-
-    if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0) {
-        flux_log_error (ctx->h, "bind");
-        goto error_close;
-    }
-    if (listen (fd, LISTEN_BACKLOG) < 0) {
-        flux_log_error (ctx->h, "listen");
-        goto error_close;
-    }
-done:
-    cleanup_push_string(cleanup_file, sockpath);
-    return fd;
-error_close:
-    close (fd);
-    return -1;
-}
+static const char *route_auxkey = "flux::route";
 
 static void completion_cb (flux_subprocess_t *p)
 {
-    proxy_ctx_t *ctx = flux_subprocess_aux_get (p, "ctx");
+    struct proxy_command *ctx = flux_subprocess_aux_get (p, "ctx");
 
     assert (ctx);
 
     if ((ctx->exit_code = flux_subprocess_exit_code (p)) < 0) {
-        /* bash standard, signals + 128 */
-        if ((ctx->exit_code = flux_subprocess_signaled (p)) >= 0)
-            ctx->exit_code += 128;
+       /* bash standard, signals + 128 */
+       if ((ctx->exit_code = flux_subprocess_signaled (p)) >= 0)
+           ctx->exit_code += 128;
     }
-    flux_reactor_stop (ctx->reactor);
+    flux_reactor_stop (flux_get_reactor (ctx->h));
     flux_subprocess_destroy (p);
 }
 
-static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpath)
+static int child_create (struct proxy_command *ctx,
+                         int ac,
+                         char **av,
+                         const char *workpath)
 {
     const char *shell = getenv ("SHELL");
     char *argz = NULL;
@@ -800,7 +113,7 @@ static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpa
     /* We want stdio fallthrough so subprocess can capture tty if
      * necessary (i.e. an interactive shell)
      */
-    if (!(p = flux_local_exec (ctx->reactor,
+    if (!(p = flux_local_exec (flux_get_reactor (ctx->h),
                                FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
                                cmd,
                                &ops,
@@ -821,141 +134,165 @@ error:
     return -1;
 }
 
-static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     NULL, event_cb, 0 },
-    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, 0 },
-    FLUX_MSGHANDLER_TABLE_END
-};
+/* Usock client encouters an error.
+ */
+static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
+{
+    struct proxy_command *ctx = arg;
 
-static struct optparse_option proxy_opts[] = {
-    { .name = "stdio", .key = 's', .has_arg = 0,
-      .usage = "Present proxy interface on stdio", },
-    { .name = "setenv", .key = 'e', .has_arg = 1,
-      .usage = "Set NAME=VALUE in flux-proxy environment", },
-    OPTPARSE_TABLE_END
-};
+    if (errnum != EPIPE && errnum != EPROTO && errnum != ECONNRESET) {
+        const struct auth_cred *cred = usock_conn_get_cred (uconn);
+        errno = errnum;
+        flux_log_error (ctx->h,
+                        "client=%.5s userid=%u",
+                        usock_conn_get_uuid (uconn),
+                        (unsigned int)cred->userid);
+    }
+    usock_conn_destroy (uconn);
+}
+
+/* Usock client sends message to router.
+ */
+static void uconn_recv (struct usock_conn *uconn, flux_msg_t *msg, void *arg)
+{
+    struct router_entry *entry = usock_conn_aux_get (uconn, route_auxkey);
+
+    router_entry_recv (entry, msg);
+}
+
+
+/* Router sends message to a usock client.
+ * If event is private, ensure user's credentials allow delivery.
+ */
+static int uconn_send (const flux_msg_t *msg, void *arg)
+{
+    struct usock_conn *uconn = arg;
+    const struct auth_cred *cred;
+    int type;
+
+    if (flux_msg_get_type (msg, &type) < 0)
+        return -1;
+    switch (type) {
+        case FLUX_MSGTYPE_EVENT:
+            cred = usock_conn_get_cred (uconn);
+            if (auth_check_event_privacy (msg, cred) < 0)
+                return -1;
+            break;
+        default:
+            break;
+    }
+    return usock_conn_send (uconn, msg);
+}
+
+/* Accept a connection from new client.
+ * This function must call usock_conn_accept() or usock_conn_reject().
+ */
+static void acceptor_cb (struct usock_conn *uconn, void *arg)
+{
+    struct proxy_command *ctx = arg;
+    const struct auth_cred *cred;
+    struct router_entry *entry;
+
+    /* Userid is the user running flux-proxy (else reject).
+     * Rolemask in FLUX_ROLE_NONE (delegate to upstream).
+     */
+    cred = usock_conn_get_cred (uconn);
+    if (cred->userid != ctx->proxy_user) {
+        errno = EPERM;
+        goto error;
+    }
+    if (!(entry = router_entry_add (ctx->router,
+                                    usock_conn_get_uuid (uconn),
+                                    uconn_send,
+                                    uconn)))
+        goto error;
+    if (usock_conn_aux_set (uconn,
+                            route_auxkey,
+                            entry,
+                            (flux_free_f)router_entry_delete) < 0) {
+        router_entry_delete (entry);
+        goto error;
+    }
+    usock_conn_set_error_cb (uconn, uconn_error, ctx);
+    usock_conn_set_recv_cb (uconn, uconn_recv, ctx);
+    usock_conn_accept (uconn, cred);
+    return;
+error:
+    usock_conn_reject (uconn, errno);
+    usock_conn_destroy (uconn);
+}
 
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
-    flux_t *h = NULL;
     int n;
-    proxy_ctx_t *ctx;
+    struct proxy_command ctx;
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];
-    const char *path;
-    const char *optarg;
+    const char *uri;
     int optindex;
-    flux_msg_handler_t **handlers = NULL;
+    flux_reactor_t *r;
 
     log_init ("flux-proxy");
 
     optindex = optparse_option_index (p);
     if (optindex == ac)
         optparse_fatal_usage (p, 1, "URI argument is required\n");
-    path = av[optindex++];
+    uri = av[optindex++];
 
-    if (optparse_hasopt (p, "stdio") && optindex != ac)
-        optparse_fatal_usage (p, 1, "there can be no COMMAND with --stdio\n");
+    memset (&ctx, 0, sizeof (ctx));
+    if (!(ctx.h = flux_open (uri, 0)))
+        log_err_exit ("%s", uri);
+    flux_log_set_appname (ctx.h, "proxy");
+    ctx.proxy_user = geteuid ();
+    if (!(r = flux_reactor_create (SIGCHLD)))
+        log_err_exit ("flux_reactor_create");
+    if (flux_set_reactor (ctx.h, r) < 0)
+        log_err_exit ("flux_set_reactor");
 
-    while ((optarg = optparse_getopt_next (p, "setenv"))) {
-        char *name = xstrdup (optarg);
-        char *val = strchr (name, '=');
-        if (val)
-            *val++ = '\0';
-        if (!val)
-            optparse_fatal_usage (p, 1, "--setenv optarg format is NAME=VAL");
-        setenv (name, val, 1);
-        free (name);
-    }
-
-    /* Users call flux-proxy with a URI argument, while the ssh connector
-     * calls it with just the path part.
+    /* Create router
      */
-    if (strstr (path, "://")) {
-        if (!(h = flux_open (path, 0)))
-            log_err_exit ("%s", path);
-    } else {
-        char *uri;
-        if (asprintf (&uri, "local://%s", path) < 0)
-            log_err_exit ("asprintf");
-        if (!(h = flux_open (uri, 0)))
-            log_err_exit ("%s", uri);
-         free (uri);
-    }
+    if (!(ctx.router = router_create (ctx.h)))
+        log_err_exit ("router_create");
 
-    flux_log_set_appname (h, "proxy");
-    ctx = ctx_create (h);
-
-    ctx->listen_fd = -1;
-
-    if (optparse_hasopt (p, "stdio")) {
-        client_t *c;
-        if (!(c = client_create (ctx, STDIN_FILENO, STDOUT_FILENO)))
-            log_err_exit ("error creating stdio client");
-        if (zlist_append (ctx->clients, c) < 0)
-            oom ();
-        ctx->oneshot = true;
-    } else {
-        /* Create socket directory.
-         */
-        n = snprintf (workpath, sizeof (workpath), "%s/flux-proxy-XXXXXX",
-                                 tmpdir ? tmpdir : "/tmp");
-        assert (n < sizeof (workpath));
-        if (!mkdtemp (workpath))
-            log_err_exit ("error creating proxy socket directory");
-        cleanup_push_string(cleanup_directory, workpath);
-
-        /* Listen on socket
-         */
-        n = snprintf (sockpath, sizeof (sockpath), "%s/local", workpath);
-        assert (n < sizeof (sockpath));
-        if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
-            goto done;
-        if (!(ctx->listen_w = flux_fd_watcher_create (ctx->reactor,
-                                               ctx->listen_fd,
-                                               FLUX_POLLIN | FLUX_POLLERR,
-                                               listener_cb, ctx))) {
-            goto done;
-        }
-        flux_watcher_start (ctx->listen_w);
-
-        /* Create child
-         */
-        if (child_create (ctx, ac - optindex, av + optindex, workpath) < 0)
-            log_err_exit ("child_create");
-   }
-
-    /* Create/start event/response message watchers
+    /* Create socket directory.
      */
-    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
-        flux_log_error (h, "flux_msg_watcher_addvec");
-        goto done;
-    }
+    n = snprintf (workpath, sizeof (workpath), "%s/flux-proxy-XXXXXX",
+                             tmpdir ? tmpdir : "/tmp");
+    assert (n < sizeof (workpath));
+    if (!mkdtemp (workpath))
+        log_err_exit ("error creating proxy socket directory");
+    cleanup_push_string(cleanup_directory, workpath);
+
+    n = snprintf (sockpath, sizeof (sockpath), "%s/local", workpath);
+    assert (n < sizeof (sockpath));
+
+    /* Create listen socket and watcher to handle new connections
+     */
+    if (!(ctx.server = usock_server_create (r, sockpath, 0777)))
+        log_err_exit ("%s: cannot set up socket listener", sockpath);
+    cleanup_push_string (cleanup_file, sockpath);
+    usock_server_set_acceptor (ctx.server, acceptor_cb, &ctx);
+
+    /* Create child
+     */
+    if (child_create (&ctx, ac - optindex, av + optindex, workpath) < 0)
+        log_err_exit ("child_create");
 
     /* Start reactor
      */
-    if (flux_reactor_run (ctx->reactor, 0) < 0) {
-        flux_log_error (h, "flux_reactor_run");
+    if (flux_reactor_run (r, 0) < 0) {
+        log_err ("flux_reactor_run");
         goto done;
     }
 done:
-    flux_msg_handler_delvec (handlers);
-    flux_watcher_destroy (ctx->listen_w);
-    if (ctx->listen_fd >= 0) {
-        if (close (ctx->listen_fd) < 0)
-            flux_log_error (h, "close listen_fd");
-    }
-    if (ctx->clients) {
-        client_t *c;
-        while ((c = zlist_pop (ctx->clients)))
-            client_destroy (c);
-    }
-    if (ctx->exit_code)
-        exit (ctx->exit_code);
+    usock_server_destroy (ctx.server); // destroy before router
+    router_destroy (ctx.router);
 
-    ctx_destroy (ctx);
-    flux_close (h);
+    if (ctx.exit_code)
+        exit (ctx.exit_code);
+
+    flux_close (ctx.h);
     return (0);
 }
 
@@ -967,7 +304,7 @@ int subcommand_proxy_register (optparse_t *p)
         "[OPTIONS] URI [COMMAND...]",
         "Route messages to/from Flux instance",
         0,
-        proxy_opts);
+        NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
