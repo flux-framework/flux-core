@@ -891,12 +891,56 @@ static void handle_output_redirect (struct attach_ctx *ctx, json_t *context)
                          path ? path : "");
 }
 
+/*  Level prefix strings. Nominally, output log event 'level' integers
+ *   are Internet RFC 5424 severity levels. In the context of flux-shell,
+ *   the first 3 levels are equivalently "fatal" errors.
+ */
+static const char *levelstr[] = {
+    "FATAL", "FATAL", "FATAL", "ERROR", " WARN", NULL, "DEBUG", "TRACE"
+};
+
+static void handle_output_log (struct attach_ctx *ctx,
+                               double ts,
+                               json_t *context)
+{
+    const char *msg = NULL;
+    const char *file = NULL;
+    const char *component = NULL;
+    int rank = -1;
+    int line = -1;
+    int level = -1;
+    json_error_t err;
+
+    if (json_unpack_ex (context, &err, 0,
+                        "{ s?i s:i s:s s?:s s?:s s?:i }",
+                        "rank", &rank,
+                        "level", &level,
+                        "message", &msg,
+                        "component", &component,
+                        "file", &file,
+                        "line", &line) < 0) {
+        log_err ("invalid log event in guest.output: %s", err.text);
+        return;
+    }
+    if (!optparse_hasopt (ctx->p, "quiet")) {
+        const char *label = levelstr [level];
+        fprintf (stderr, "%.3fs: flux-shell", ts - ctx->timestamp_zero);
+        if (rank >= 0)
+            fprintf (stderr, "[%d]", rank);
+        if (label)
+            fprintf (stderr, ": %s", label);
+        if (component)
+            fprintf (stderr, ": %s", component);
+        fprintf (stderr, ": %s\n", msg);
+    }
+}
+
 /* Handle an event in the guest.output eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
- * The first eventlog entry is a header; remaining entries are data or
- * redirect.  Print each data entry to stdout/stderr, with task rank
- * prefix if --label-io was specified.  For each redirect entry, print
+ * The first eventlog entry is a header; remaining entries are data,
+ * redirect, or log messages.  Print each data entry to stdout/stderr,
+ * with task/rank prefix if --label-io was specified.  For each redirect entry, print
  * information on paths to redirected locations if --quiet is not
  * speciifed.
  */
@@ -906,6 +950,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     const char *entry;
     json_t *o;
     const char *name;
+    double ts;
     json_t *context;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
@@ -916,7 +961,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     }
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (o, &ts, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
     if (!strcmp (name, "header")) {
@@ -928,6 +973,9 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     }
     else if (!strcmp (name, "redirect")) {
         handle_output_redirect (ctx, context);
+    }
+    else if (!strcmp (name, "log")) {
+        handle_output_log (ctx, ts, context);
     }
 
     json_decref (o);
