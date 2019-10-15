@@ -37,6 +37,7 @@
 #include "src/common/libutil/msglist.h"
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/errno_safe.h"
 
 #if HAVE_CALIPER
 struct profiling_context {
@@ -209,31 +210,32 @@ static connector_init_f *find_connector (const char *scheme, void **dsop)
 
     if (!searchpath) {
         errno = ENOENT;
-        goto done;
+        return NULL;
     }
     if (snprintf (name, sizeof (name), "%s.so", scheme) >= sizeof (name)) {
         errno = ENAMETOOLONG;
-        goto done;
+        return NULL;
     }
-    if (!(path = find_file (name, searchpath)))
-        goto done;
+    if (!(path = find_file (name, searchpath))) {
+        errno = ENOENT;
+        goto error;
+    }
     if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
         errno = EINVAL;
-        goto done;
+        goto error;
     }
     if (!(connector_init = dlsym (dso, "connector_init"))) {
-        dlclose (dso);
         errno = EINVAL;
-        goto done;
+        goto error_dlopen;
     }
     *dsop = dso;
-done:
-    if (path) {
-        int saved_errno = errno;
-        free (path);
-        errno = saved_errno;
-    }
+    free (path);
     return connector_init;
+error_dlopen:
+    ERRNO_SAFE_WRAP (dlclose, dso);
+error:
+    ERRNO_SAFE_WRAP (free, path);
+    return NULL;
 }
 
 static char *strtrim (char *s, const char *trim)
@@ -259,27 +261,25 @@ flux_t *flux_open (const char *uri, int flags)
     if (!uri) {
         if (asprintf (&default_uri, "local://%s",
                       flux_conf_get ("rundir", 0)) < 0)
-            goto done;
+            goto error;
         uri = default_uri;
     }
-    if (!(scheme = strdup (uri))) {
-        errno = ENOMEM;
-        goto done;
-    }
+    if (!(scheme = strdup (uri)))
+        goto error;
     path = strstr (scheme, "://");
     if (path) {
         *path = '\0';
         path = strtrim (path + 3, " \t");
     }
     if (!(connector_init = find_connector (scheme, &dso)))
-        goto done;
+        goto error;
     if (getenv ("FLUX_HANDLE_TRACE"))
         flags |= FLUX_O_TRACE;
     if (getenv ("FLUX_HANDLE_MATCHDEBUG"))
         flags |= FLUX_O_MATCHDEBUG;
     if (!(h = connector_init (path, flags))) {
-        dlclose (dso);
-        goto done;
+        ERRNO_SAFE_WRAP (dlclose, dso);
+        goto error;
     }
     h->dso = dso;
 #if HAVE_CALIPER
@@ -288,25 +288,24 @@ flux_t *flux_open (const char *uri, int flags)
     if ((s = getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
         if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid,
-                                                      sizeof (userid)) < 0) {
-            flux_handle_destroy (h);
-            h = NULL;
-            goto done;
-        }
+                                                      sizeof (userid)) < 0)
+            goto error_handle;
     }
     if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
         uint32_t rolemask = strtoul (s, NULL, 0);
         if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask,
-                                                    sizeof (rolemask)) < 0) {
-            flux_handle_destroy (h);
-            h = NULL;
-            goto done;
-        }
+                                                    sizeof (rolemask)) < 0)
+            goto error_handle;
     }
-done:
     free (scheme);
     free (default_uri);
     return h;
+error_handle:
+    flux_handle_destroy (h);
+error:
+    ERRNO_SAFE_WRAP (free, scheme);
+    ERRNO_SAFE_WRAP (free, default_uri);
+    return NULL;
 }
 
 void flux_close (flux_t *h)
