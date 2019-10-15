@@ -51,6 +51,7 @@ flux_shell_SOURCES = \
 	task.c \
 	task.h \
 	pmi.c \
+	input.c \
 	output.c \
 	svc.c \
 	svc.h \

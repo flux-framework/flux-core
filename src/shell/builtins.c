@@ -30,6 +30,7 @@ static struct shell_builtin builtin_list_end = { 0 };
  *  to get the builtin automatically loaded at shell startup.
  */
 extern struct shell_builtin builtin_pmi;
+extern struct shell_builtin builtin_input;
 extern struct shell_builtin builtin_output;
 extern struct shell_builtin builtin_kill;
 extern struct shell_builtin builtin_signals;
@@ -38,6 +39,7 @@ extern struct shell_builtin builtin_gpubind;
 
 static struct shell_builtin * builtins [] = {
     &builtin_pmi,
+    &builtin_input,
     &builtin_output,
     &builtin_kill,
     &builtin_signals,

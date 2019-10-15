@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <jansson.h>
 #include <argz.h>
+#include <czmq.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #if HAVE_FLUX_SECURITY
@@ -54,6 +55,8 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_drain (optparse_t *p, int argc, char **argv);
 int cmd_undrain (optparse_t *p, int argc, char **argv);
+
+int stdin_flags;
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -752,10 +755,34 @@ struct attach_ctx {
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
     struct timespec t_sigint;
+    flux_watcher_t *stdin_w;
+    zlist_t *stdin_rpcs;
+    bool stdin_data_sent;
     optparse_t *p;
     bool output_header_parsed;
+    int leader_rank;
     double timestamp_zero;
+    int eventlog_watch_count;
 };
+
+void attach_completed_check (struct attach_ctx *ctx)
+{
+    /* stop all non-eventlog watchers and destroy all lingering
+     * futures so we can exit the reactor */
+    if (!ctx->eventlog_watch_count) {
+        if (ctx->stdin_rpcs) {
+            flux_future_t *f = zlist_pop (ctx->stdin_rpcs);
+            while (f) {
+                flux_future_destroy (f);
+                zlist_remove (ctx->stdin_rpcs, f);
+                f = zlist_pop (ctx->stdin_rpcs);
+            }
+        }
+        flux_watcher_stop (ctx->sigint_w);
+        flux_watcher_stop (ctx->sigtstp_w);
+        flux_watcher_stop (ctx->stdin_w);
+    }
+}
 
 /* Print eventlog entry to 'fp'.
  * Prefix and context may be NULL.
@@ -860,6 +887,8 @@ void attach_output_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->output_f = NULL;
+    ctx->eventlog_watch_count--;
+    attach_completed_check (ctx);
 }
 
 void attach_cancel_continuation (flux_future_t *f, void *arg)
@@ -884,7 +913,6 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
         if (monotime_since (ctx->t_sigint) > 2000) {
             monotime (&ctx->t_sigint);
             flux_watcher_start (ctx->sigtstp_w);
-            flux_reactor_active_decref (r);
             log_msg ("one more ctrl-C within 2s to cancel or ctrl-Z to detach");
         }
         else {
@@ -912,9 +940,115 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
             log_msg ("detaching...");
         }
         else {
-            flux_reactor_active_incref (r);
             flux_watcher_stop (ctx->sigtstp_w);
             log_msg ("one more ctrl-Z to suspend");
+        }
+    }
+}
+
+/* atexit handler
+ * This is a good faith attempt to restore stdin flags to what they were
+ * before we set O_NONBLOCK.
+ */
+void restore_stdin_flags (void)
+{
+    (void)fcntl (STDIN_FILENO, F_SETFL, stdin_flags);
+}
+
+static void attach_send_shell_completion (flux_future_t *f, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+
+    /* failng to write stdin to service is (generally speaking) a
+     * fatal error */
+    if (flux_future_get (f, NULL) < 0) {
+        /* stdin may not be accepted for multiple reasons
+         * - job has completed
+         * - user requested stdin via file
+         * - stdin stream already closed due to prior pipe in
+         */
+        if (errno == ENOSYS) {
+            /* If the user only closes stdin, such as by redirecting
+             * /dev/null to stdin, consider it a warning and not an
+             * error.
+             */
+            if (ctx->stdin_data_sent)
+                log_msg_exit ("stdin not accepted by job");
+            else
+                log_msg ("stdin EOF could not be sent");
+        }
+        else
+            log_err_exit ("attach_send_shell");
+    }
+    flux_future_destroy (f);
+    zlist_remove (ctx->stdin_rpcs, f);
+}
+
+static int attach_send_shell (struct attach_ctx *ctx,
+                              const void *buf,
+                              int len,
+                              bool eof)
+{
+    json_t *context = NULL;
+    char topic[1024];
+    flux_future_t *f = NULL;
+    int saved_errno;
+    int rc = -1;
+
+    snprintf (topic, sizeof (topic), "shell-%ju.stdin", (uintmax_t)ctx->id);
+    if (!(context = ioencode ("stdin", "all", buf, len, eof)))
+        goto error;
+    if (!(f = flux_rpc_pack (ctx->h, topic, ctx->leader_rank, 0, "O", context)))
+        goto error;
+    if (flux_future_then (f, -1, attach_send_shell_completion, ctx) < 0)
+        goto error;
+    if (zlist_append (ctx->stdin_rpcs, f) < 0)
+        goto error;
+    /* f memory now in hands of attach_send_shell_completion() or ctx->stdin_rpcs */
+    f = NULL;
+    rc = 0;
+ error:
+    saved_errno = errno;
+    json_decref (context);
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return rc;
+}
+
+/* Handle std input from user */
+void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    flux_buffer_t *fb;
+    const char *ptr;
+    int len;
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+    assert (fb);
+
+    if (!(ptr = flux_buffer_read_line (fb, &len)))
+        log_err_exit ("flux_buffer_read_line on stdin");
+
+    if (len > 0) {
+        if (attach_send_shell (ctx, ptr, len, false) < 0)
+            log_err_exit ("attach_send_shell");
+        ctx->stdin_data_sent = true;
+    }
+    else {
+        /* possibly left over data before EOF */
+        if (!(ptr = flux_buffer_read (fb, -1, &len)))
+            log_err_exit ("flux_buffer_read on stdin");
+
+        if (len > 0) {
+            if (attach_send_shell (ctx, ptr, len, false) < 0)
+                log_err_exit ("attach_send_shell");
+            ctx->stdin_data_sent = true;
+        }
+        else {
+            if (attach_send_shell (ctx, NULL, 0, true) < 0)
+                log_err_exit ("attach_send_shell");
+            flux_watcher_stop (ctx->stdin_w);
         }
     }
 }
@@ -946,7 +1080,39 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "output-ready")) {
+    if (!strcmp (name, "input-ready")) {
+        flux_watcher_t *w;
+
+        if (json_unpack (context, "{s:i}",
+                         "leader-rank", &ctx->leader_rank) < 0)
+            log_err_exit ("error decoding input-ready context");
+
+        /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
+         * stdin */
+
+        if ((stdin_flags = fcntl (STDIN_FILENO, F_GETFL)) < 0)
+            log_err_exit ("fcntl F_GETFL stdin");
+        if (atexit (restore_stdin_flags) != 0)
+            log_err_exit ("atexit");
+        if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
+            log_err_exit ("fcntl F_SETFL stdin");
+
+        w = flux_buffer_read_watcher_create (flux_get_reactor (ctx->h),
+                                             STDIN_FILENO,
+                                             1 << 20,
+                                             attach_stdin_cb,
+                                             FLUX_WATCHER_LINE_BUFFER,
+                                             ctx);
+        if (!w)
+            log_err_exit ("flux_buffer_read_watcher_create");
+
+        if (!(ctx->stdin_rpcs = zlist_new ()))
+            log_err_exit ("zlist_new");
+
+        ctx->stdin_w = w;
+        flux_watcher_start (ctx->stdin_w);
+    }
+    else if (!strcmp (name, "output-ready")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
                                                     "guest.output",
@@ -958,6 +1124,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
                               attach_output_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
+
+        ctx->eventlog_watch_count++;
     }
 
     if (optparse_hasopt (ctx->p, "show-exec")) {
@@ -974,6 +1142,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->exec_eventlog_f = NULL;
+    ctx->eventlog_watch_count--;
+    attach_completed_check (ctx);
 }
 
 /* Handle an event in the main job eventlog.
@@ -1034,6 +1204,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                               attach_exec_event_continuation,
                               ctx) < 0)
             log_err_exit ("flux_future_then");
+
+        ctx->eventlog_watch_count++;
     }
     else {
         if (!strcmp (name, "finish")) {
@@ -1067,6 +1239,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 done:
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
+    ctx->eventlog_watch_count--;
+    attach_completed_check (ctx);
 }
 
 int cmd_attach (optparse_t *p, int argc, char **argv)
@@ -1101,6 +1275,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
                           &ctx) < 0)
         log_err_exit ("flux_future_then");
 
+    ctx.eventlog_watch_count++;
+
     ctx.sigint_w = flux_signal_watcher_create (r,
                                                SIGINT,
                                                attach_signal_cb,
@@ -1112,13 +1288,14 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!ctx.sigint_w || !ctx.sigtstp_w)
         log_err_exit ("flux_signal_watcher_create");
     flux_watcher_start (ctx.sigint_w);
-    flux_reactor_active_decref (r);
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    zlist_destroy (&(ctx.stdin_rpcs));
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
+    flux_watcher_destroy (ctx.stdin_w);
     flux_close (ctx.h);
     return ctx.exit_code;
 }
