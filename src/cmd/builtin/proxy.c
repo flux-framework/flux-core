@@ -247,6 +247,28 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     flux_log_set_appname (ctx.h, "proxy");
     ctx.proxy_user = geteuid ();
     ctx.allow_user = optparse_get_int (p, "allow-user", ctx.proxy_user);
+
+    /* Alter working directory and environment of flux-proxy per options,
+     * to be inherited by command.
+     */
+    if (optparse_hasopt (p, "chdir")) {
+        const char *path = optparse_get_str (p, "chdir", NULL);
+        if (chdir (path) < 0)
+            log_err_exit ("chdir %s", path);
+    }
+    if (optparse_hasopt (p, "setenv")) {
+        const char *optarg;
+        while ((optarg = optparse_getopt_next (p, "setenv"))) {
+            char *name, *val;
+            if (!(name = strdup (optarg)))
+                log_err_exit ("strdup");
+            if ((val = strchr (name, '=')))
+                *val++ = '\0';
+            if (setenv (name, val, 1) < 0)
+                log_err_exit ("setenv %s", optarg);
+        }
+    }
+
     if (!(r = flux_reactor_create (SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (ctx.h, r) < 0)
@@ -301,6 +323,12 @@ done:
 static struct optparse_option proxy_opts[] = {
     { .name = "allow-user", .key = 'u', .has_arg = 1, .arginfo = "UID",
       .usage = "Allow one additional user to connect",
+    },
+    { .name = "chdir", .key = 'c', .has_arg = 1, .arginfo = "DIR",
+      .usage = "Change directory to DIR before running command",
+    },
+    { .name = "setenv", .key = 'e', .has_arg = 1, .arginfo = "NAME=VALUE",
+      .usage = "Set NAME=VALUE in the command's environment",
     },
     OPTPARSE_TABLE_END
 };
