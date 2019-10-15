@@ -30,6 +30,23 @@ test_expect_success 'flux-proxy exits with command return code' '
 	! flux proxy $TEST_URI /bin/false
 '
 
+test_expect_success 'flux-proxy --chdir works' '
+	mkdir tmprundir &&
+	echo "$(pwd)/tmprundir" >chdir.exp &&
+	flux proxy --chdir tmprundir $TEST_URI pwd >chdir.out &&
+	test_cmp chdir.exp chdir.out
+'
+
+test_expect_success 'flux-proxy --setenv works' '
+	cat >printenv.exp <<-EOT &&
+	bar
+	baz
+	EOT
+	flux proxy --setenv TESTAA=bar --setenv TESTBB=baz $TEST_URI \
+				printenv TESTAA TESTBB >printenv.out &&
+	test_cmp printenv.exp printenv.out
+'
+
 test_expect_success 'flux-proxy forwards getattr request' '
 	ATTR_SIZE=$(flux proxy $TEST_URI flux getattr size) &&
 	test "$ATTR_SIZE" = "$SIZE"
