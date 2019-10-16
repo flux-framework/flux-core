@@ -14,12 +14,15 @@
 #include <flux/core.h>
 #include <czmq.h>
 
+#include "job_state.h"
+
 struct info_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zlist_t *lookups;
     zlist_t *watchers;
     zlist_t *guest_watchers;
+    struct job_state_ctx *jsctx;
 };
 
 #endif /* _FLUX_JOB_INFO_INFO_H */
