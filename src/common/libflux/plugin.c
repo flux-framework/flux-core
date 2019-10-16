@@ -376,6 +376,14 @@ static int arg_set (flux_plugin_arg_t *args, int flags, json_t *o)
 {
     json_t **dstp;
     dstp = arg_get (args, flags);
+    if (flags & FLUX_PLUGIN_ARG_UPDATE && *dstp != NULL) {
+        /*  On update, the object 'o' is spiritually inherited by
+         *   args, so decref this object after attempting the update.
+         */
+        int rc = json_object_update (*dstp, o);
+        json_decref (o);
+        return rc;
+    }
     json_decref (*dstp);
     *dstp = o;
     return 0;
