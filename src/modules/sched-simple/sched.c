@@ -297,7 +297,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     }
     key = zlist_first (ss->res);
     while (key) {
-        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE, key))
+        if (!(f = flux_kvs_lookup (h, NULL, 0, key))
                || flux_kvs_lookup_get (f, &by_rank) < 0) {
             flux_log_error (h, "flux_kvs_lookup %s", key);
             goto out;
