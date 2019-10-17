@@ -115,6 +115,87 @@ static const char *job_get_cwd (struct jobinfo *job)
     return (cwd);
 }
 
+/* Call bulk_exec_push_cmd() with idset containing only 'rank'.
+ */
+int push_one_cmd (struct bulk_exec *exec,
+                  unsigned int rank,
+                  flux_cmd_t *cmd,
+                  int flags)
+{
+    struct idset *idset;
+    if (!(idset = idset_create (rank + 1, 0)))
+        return -1;
+    if (idset_set (idset, rank) < 0)
+        goto err;
+    if (bulk_exec_push_cmd (exec, idset, cmd, flags) < 0)
+        goto err;
+    idset_destroy (idset);
+    return 0;
+err:
+    idset_destroy (idset);
+    return -1;
+}
+
+/* Push command to launch flux-remote (ssh) on 'broker_rank',
+   which in turn launches flux-shell on 'host' (as 'target_rank').
+ */
+static int push_foreign_cmd (struct bulk_exec *exec,
+                             struct jobinfo *job,
+                             unsigned int target_rank,
+                             unsigned int broker_rank,
+                             const char *host)
+{
+    flux_cmd_t *cmd;
+
+    if (!(cmd = flux_cmd_create (0, NULL, environ)))
+        return -1;
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0)
+        goto err;
+    if (flux_cmd_argv_append (cmd, "flux") < 0
+        || flux_cmd_argv_append (cmd, "remote") < 0
+        || flux_cmd_argv_append (cmd, host) < 0
+        || flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
+        || flux_cmd_argv_appendf (cmd, "--target-rank=%u", target_rank) < 0
+        || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0)
+        goto err;
+    if (flux_cmd_setcwd (cmd, job_get_cwd (job)) < 0)
+        goto err;
+    if (push_one_cmd (exec, broker_rank, cmd, 0) < 0)
+        goto err;
+    flux_cmd_destroy (cmd);
+    return 0;
+err:
+    flux_cmd_destroy (cmd);
+    return -1;
+}
+
+/* Push command to run flux-shell on 'ranks' idset.
+ * N.B. Shell assumes target_rank == broker_rank if no --target-rank opt
+ */
+static int push_native_cmd (struct bulk_exec *exec,
+                            struct jobinfo *job,
+                            const struct idset *ranks)
+{
+    flux_cmd_t *cmd;
+
+    if (!(cmd = flux_cmd_create (0, NULL, environ)))
+        return -1;
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0)
+        goto err;
+    if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
+        || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0)
+        goto err;
+    if (flux_cmd_setcwd (cmd, job_get_cwd (job)) < 0)
+        goto err;
+    if (bulk_exec_push_cmd (exec, ranks, cmd, 0) < 0)
+        goto err;
+    flux_cmd_destroy (cmd);
+    return 0;
+err:
+    flux_cmd_destroy (cmd);
+    return -1;
+}
+
 static void start_cb (struct bulk_exec *exec, void *arg)
 {
     struct jobinfo *job = arg;
@@ -161,13 +242,18 @@ static struct bulk_exec_ops exec_ops = {
 
 static int exec_init (struct jobinfo *job)
 {
-    flux_cmd_t *cmd = NULL;
     struct exec_conf *conf = NULL;
     struct bulk_exec *exec = NULL;
-    const struct idset *ranks = NULL;
+    const struct idset *targets = NULL;
+    unsigned int target_rank;
+    struct idset *native_targets = NULL;
 
-    if (!(ranks = resource_set_ranks (job->R))) {
+    if (!(targets = resource_set_ranks (job->R))) {
         flux_log_error (job->h, "exec_init: resource_set_ranks");
+        goto err;
+    }
+    if (!(native_targets = idset_create (idset_last (targets) + 1, 0))) {
+        flux_log_error (job->h, "exec_init: idset_create");
         goto err;
     }
     if (!(exec = bulk_exec_create (&exec_ops, job))) {
@@ -183,32 +269,40 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_aux_set");
         goto err;
     }
-    if (!(cmd = flux_cmd_create (0, NULL, environ))) {
-        flux_log_error (job->h, "exec_init: flux_cmd_create");
+    target_rank = idset_first (targets);
+    while (target_rank != IDSET_INVALID_ID) {
+        unsigned int broker_rank;
+        const char *host;
+
+        if (jobinfo_lookup_target (job, target_rank, &broker_rank, &host) < 0)
+            goto err;
+        if (host) {
+            if (push_foreign_cmd (exec,
+                                  job,
+                                  target_rank,
+                                  broker_rank,
+                                  host) < 0) {
+                flux_log_error (job->h, "exec_init: push_foreign_cmd");
+                goto err;
+            }
+        }
+        else {
+            if (idset_set (native_targets, target_rank) < 0) {
+                flux_log_error (job->h, "exec_init: idset_set");
+                goto err;
+            }
+        }
+        target_rank = idset_next (targets, target_rank);
+    }
+    if (push_native_cmd (exec, job, native_targets) < 0) {
+        flux_log_error (job->h, "exec_init: push_native_cmd");
         goto err;
     }
-    if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0) {
-        flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
-        goto err;
-    }
-    if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
-        || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0) {
-        flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
-        goto err;
-    }
-    if (flux_cmd_setcwd (cmd, job_get_cwd (job)) < 0) {
-        flux_log_error (job->h, "exec_init: flux_cmd_setcwd");
-        goto err;
-    }
-    if (bulk_exec_push_cmd (exec, ranks, cmd, 0) < 0) {
-        flux_log_error (job->h, "exec_init: bulk_exec_push_cmd");
-        goto err;
-    }
-    flux_cmd_destroy (cmd);
     job->data = exec;
+    idset_destroy (native_targets);
     return 1;
 err:
-    flux_cmd_destroy (cmd);
+    idset_destroy (native_targets);
     bulk_exec_destroy (exec);
     return -1;
 }
