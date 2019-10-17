@@ -235,6 +235,8 @@ static void shell_connect_flux (flux_shell_t *shell)
             log_err ("error fetching broker rank");
         shell->broker_rank = rank;
     }
+    if (plugstack_call (shell->plugstack, "shell.connect", NULL) < 0)
+        log_err ("shell.connect");
 }
 
 flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p)
