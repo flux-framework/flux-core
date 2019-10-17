@@ -165,7 +165,7 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     struct shell_info *info;
     char *R = NULL;
     char *jobspec = NULL;
-    int broker_rank = shell->broker_rank;
+    int target_rank = shell->target_rank;
 
     if (!(info = calloc (1, sizeof (*info)))) {
         shell_log_errno ("shell_info_create");
@@ -190,8 +190,8 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
                          info->jobspec->task_count);
         goto error;
     }
-    if (rcalc_get_rankinfo (info->rcalc, broker_rank, &info->rankinfo) < 0) {
-        shell_log_error ("error fetching rankinfo for rank %d", broker_rank);
+    if (rcalc_get_rankinfo (info->rcalc, target_rank, &info->rankinfo) < 0) {
+        shell_log_error ("error fetching rankinfo for rank %d", target_rank);
         goto error;
     }
     info->shell_size = rcalc_total_nodes (info->rcalc);

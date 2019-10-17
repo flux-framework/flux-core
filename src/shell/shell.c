@@ -43,8 +43,8 @@ static struct optparse_option shell_opts[] =  {
       .usage = "Get jobspec from FILE, not job-info service", },
     { .name = "resources", .key = 'R', .has_arg = 1, .arginfo = "FILE",
       .usage = "Get R from FILE, not job-info service", },
-    { .name = "broker-rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
-      .usage = "Set broker rank, rather than asking broker", },
+    { .name = "target-rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
+      .usage = "Set execution target rank, otherwise use broker rank", },
     { .name = "verbose", .key = 'v', .has_arg = 0,
       .usage = "Log actions to stderr", },
     { .name = "standalone", .key = 's', .has_arg = 0,
@@ -199,20 +199,20 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
     if (parse_jobid (argv[optindex++], &shell->jobid) < 0)
         exit (1);
 
-    /* In standalone mode, jobspec, resources and broker-rank must be
+    /* In standalone mode, jobspec, resources and target-rank must be
      *  set on command line:
      */
     if ((shell->standalone = optparse_hasopt (p, "standalone"))) {
         if (  !optparse_hasopt (p, "jobspec")
            || !optparse_hasopt (p, "resources")
-           || !optparse_hasopt (p, "broker-rank"))
+           || !optparse_hasopt (p, "target-rank"))
             shell_die (1, "standalone mode requires --jobspec, "
-                       "--resources and --broker-rank");
+                       "--resources and --target-rank");
     }
 
     if ((shell->verbose = optparse_getopt (p, "verbose", NULL)))
         shell_set_verbose (shell->verbose);
-    shell->broker_rank = optparse_get_int (p, "broker-rank", -1);
+    shell->target_rank = optparse_get_int (p, "target-rank", -1);
     shell->p = p;
 }
 
@@ -225,13 +225,13 @@ static void shell_connect_flux (flux_shell_t *shell)
      */
     flux_set_reactor (shell->h, shell->r);
 
-    /*  Fetch local rank if not already set
+    /*  Use broker rank for target rank if not set
      */
-    if (shell->broker_rank < 0) {
+    if (shell->target_rank < 0) {
         uint32_t rank;
         if (flux_get_rank (shell->h, &rank) < 0)
             shell_log_errno ("error fetching broker rank");
-        shell->broker_rank = rank;
+        shell->target_rank = rank;
     }
     if (plugstack_call (shell->plugstack, "shell.connect", NULL) < 0)
         shell_log_errno ("shell.connect");

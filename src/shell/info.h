@@ -31,7 +31,7 @@ struct shell_info {
 };
 
 /* Create shell_info.
- * Check for jobspec, R, and broker rank on cmdline or fetch from
+ * Check for jobspec, R, and execution target rank on cmdline or fetch from
  *  job-info service
  */
 struct shell_info *shell_info_create (flux_shell_t *shell);
