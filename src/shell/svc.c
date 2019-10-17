@@ -8,7 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* Register a service named "shell-<jobid>" on each shell and provide
+/* Register a service named "shell-<jobid>" on the leader shell,
+ * and "shell-<jobid>-<shell_rank> on follower shells.  Provide
  * helpers for registering request handlers for different "methods".
  *
  * Notes:
@@ -59,13 +60,18 @@ static int lookup_rank (struct shell_svc *svc, int shell_rank, int *rank)
 
 static int build_topic (struct shell_svc *svc,
                         const char *method,
+                        unsigned int shell_rank,
                         char *buf,
                         int len)
 {
+    char rankbuf[32];
+    (void)snprintf (rankbuf, sizeof (rankbuf), "%u", shell_rank);
     if (snprintf (buf,
                   len,
-                  "shell-%ju%s%s",
+                  "shell-%ju%s%s%s%s",
                   (uintmax_t)svc->shell->info->jobid,
+                  shell_rank > 0 ? "-" : "",
+                  shell_rank > 0 ? rankbuf : "",
                   method ? "." : "",
                   method ? method : "") >= len) {
         errno = EINVAL;
@@ -86,7 +92,7 @@ flux_future_t *shell_svc_vpack (struct shell_svc *svc,
 
     if (lookup_rank (svc, shell_rank, &rank) < 0)
         return NULL;
-    if (build_topic (svc, method, topic, sizeof (topic)) < 0)
+    if (build_topic (svc, method, shell_rank, topic, sizeof (topic)) < 0)
         return NULL;
 
     return flux_rpc_vpack (svc->shell->h, topic, rank, flags, fmt, ap);
@@ -129,9 +135,10 @@ int shell_svc_register (struct shell_svc *svc,
     struct flux_match match = FLUX_MATCH_REQUEST;
     flux_msg_handler_t *mh;
     flux_t *h = svc->shell->h;
+    unsigned int shell_rank = svc->shell->info->shell_rank;
     char topic[TOPIC_STRING_SIZE];
 
-    if (build_topic (svc, method, topic, sizeof (topic)) < 0)
+    if (build_topic (svc, method, shell_rank, topic, sizeof (topic)) < 0)
         return -1;
     match.topic_glob = topic;
     if (!(mh = flux_msg_handler_create (h, match, cb, arg)))
@@ -167,6 +174,7 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     struct shell_svc *svc;
     struct rcalc_rankinfo ri;
     int shell_size = shell->info->shell_size;
+    int shell_rank = shell->info->shell_rank;
     int i;
 
     if (!(svc = calloc (1, sizeof (*svc))))
@@ -182,7 +190,11 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     }
     if (!shell->standalone) {
         flux_future_t *f;
-        if (build_topic (svc, NULL, svc->name, sizeof (svc->name)) < 0)
+        if (build_topic (svc,
+                         NULL,
+                         shell_rank,
+                         svc->name,
+                         sizeof (svc->name)) < 0)
             goto error;
         if (!(f = flux_service_register (shell->h, svc->name)))
             goto error;
