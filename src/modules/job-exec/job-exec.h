@@ -88,6 +88,16 @@ struct jobinfo {
 void jobinfo_incref (struct jobinfo *job);
 void jobinfo_decref (struct jobinfo *job);
 
+/* Map execution target rank to broker rank.
+ * A foreign target is launched from broker_rank to host.
+ * A native target is launched on broker_rank (host = NULL).
+ * Returns 0 on success, or -1 on json parse error (logs to broker).
+ */
+int jobinfo_lookup_target (struct jobinfo *job,
+                           unsigned int target_rank,
+                           unsigned int *broker_rank,
+                           const char **host);
+
 /* Emit an event to the exec.eventlog */
 int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
                                      const char *name,

@@ -117,6 +117,7 @@ struct job_exec_ctx {
     flux_t *              h;
     flux_msg_handler_t ** handlers;
     zhashx_t *            jobs;
+    json_t *targets;
 };
 
 void jobinfo_incref (struct jobinfo *job)
@@ -414,6 +415,32 @@ void jobinfo_fatal_error (struct jobinfo *job, int errnum,
         va_end (ap);
     }
     errno = saved_errno;
+}
+
+int jobinfo_lookup_target (struct jobinfo *job,
+                           unsigned int target_rank,
+                           unsigned int *broker_rank,
+                           const char **host)
+{
+    char key[32];
+    json_t *val;
+    json_error_t error;
+
+    if (!job->ctx->targets)
+        goto native;
+    (void)snprintf (key, sizeof (key), "%u", target_rank);
+    if (!(val = json_object_get (job->ctx->targets, key)))
+        goto native;
+    if (json_unpack_ex (val, &error, 0, "[i,s]", broker_rank, host) < 0) {
+        flux_log (job->h, LOG_ERR, "target %u: %s", target_rank, error.text);
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+native:
+    *broker_rank = target_rank;
+    *host = NULL;
+    return 0;
 }
 
 static void namespace_delete (flux_future_t *f, void *arg)
@@ -960,6 +987,7 @@ static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
         return;
     zhashx_destroy (&ctx->jobs);
     flux_msg_handler_delvec (ctx->handlers);
+    json_decref (ctx->targets);
     free (ctx);
 }
 
@@ -993,6 +1021,50 @@ static int exec_hello (flux_t *h, const char *service)
     return rc;
 }
 
+static json_t *lookup_targets (flux_t *h, const char *key)
+{
+    json_t *targets;
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
+        return NULL;
+    if (flux_kvs_lookup_get_unpack (f, "O", &targets) < 0)
+        goto error;
+    flux_future_destroy (f);
+    return targets;
+error:
+    flux_future_destroy (f);
+    return NULL;
+}
+
+static int process_args (flux_t *h,
+                         struct job_exec_ctx *ctx,
+                         int argc,
+                         char **argv)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (!strncmp (argv[i], "targets=", 8)) {
+            const char *key = argv[i] + 8;
+
+            if (ctx->targets) {
+                errno = EINVAL;
+                flux_log_error (h, "only one targets= option is allowed");
+                return -1;
+            }
+            if (!(ctx->targets = lookup_targets (h, key))) {
+                flux_log_error (h, "error loading targets=%s", key);
+                return -1;
+            }
+        }
+        else {
+            flux_log_error (h, "Unknown module option: '%s'", argv[i]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static const struct flux_msg_handler_spec htab[]  = {
     { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
     { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
@@ -1003,6 +1075,15 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h);
+
+    if (!ctx) {
+        flux_log_error (h, "job_exec_ctx_create");
+        return -1;
+    }
+    if (process_args (h, ctx, argc, argv) < 0) {
+        job_exec_ctx_destroy (ctx);
+        return -1;
+    }
 
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
