@@ -50,11 +50,15 @@ struct shell_svc {
 
 static int lookup_rank (struct shell_svc *svc, int shell_rank, int *rank)
 {
-    if (shell_rank < 0 || shell_rank >= svc->shell->info->shell_size) {
-        errno = EINVAL;
-        return -1;
+    if (!svc->rank_table)
+        *rank = 0; // see comment in shell_svc_create()
+    else {
+        if (shell_rank < 0 || shell_rank >= svc->shell->info->shell_size) {
+            errno = EINVAL;
+            return -1;
+        }
+        *rank = svc->rank_table[shell_rank];
     }
-    *rank = svc->rank_table[shell_rank];
     return 0;
 }
 
@@ -175,19 +179,38 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     struct rcalc_rankinfo ri;
     int shell_size = shell->info->shell_size;
     int shell_rank = shell->info->shell_rank;
+    uint32_t instance_size;
     int i;
 
     if (!(svc = calloc (1, sizeof (*svc))))
         return NULL;
     svc->shell = shell;
     svc->uid = geteuid ();
-    if (!(svc->rank_table = calloc (shell_size, sizeof (*svc->rank_table))))
+
+    /* The rank_table maps shell rank => broker rank for message routing.
+     * FIXME: Although rcalc can map shell rank => exec target rank, we do
+     * not have way in the shell to map from exec target rank to broker rank.
+     * Therefore, the following hack:
+     * - If instance size == 1, map all shell ranks to broker rank 0
+     * - If instance size > 1, map shell rank to exec target rank, and assume
+     *   exec target rank == broker rank.
+     * The latter assumption only holds true for hwloc.by_rank resources,
+     * which happens to set the exec target rank to the instance broker rank.
+     * Therefore, foreign resources, where this is not true, may only be used
+     * on a instance size of 1.
+     */
+    if (flux_get_size (shell->h, &instance_size) < 0)
         goto error;
-    for (i = 0; i < shell_size; i++) {
-        if (rcalc_get_nth (shell->info->rcalc, i, &ri) < 0)
+    if (instance_size > 1) {
+        if (!(svc->rank_table = calloc (shell_size, sizeof (*svc->rank_table))))
             goto error;
-        svc->rank_table[i] = ri.rank;
+        for (i = 0; i < shell_size; i++) {
+            if (rcalc_get_nth (shell->info->rcalc, i, &ri) < 0)
+                goto error;
+            svc->rank_table[i] = ri.rank;
+        }
     }
+
     if (!shell->standalone) {
         flux_future_t *f;
         if (build_topic (svc,
