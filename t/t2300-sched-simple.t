@@ -32,11 +32,11 @@ test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 test_expect_success 'sched-simple: load default by_rank' '
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank)" &&
-	flux kvs get resource.hwloc.by_rank
+	flux kvs put resource.default="$(echo $hwloc_by_rank)" &&
+	flux kvs get resource.default
 '
 test_expect_success 'sched-simple: load sched-simple' '
-	flux module load -r 0 sched-simple &&
+	flux module load -r 0 sched-simple res=resource.default &&
 	flux dmesg 2>&1 | grep "ready:.*rank\[0-1\]/core\[0-1\]" &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
@@ -101,7 +101,7 @@ test_expect_success 'sched-simple: cancel all jobs' '
 '
 test_expect_success 'sched-simple: reload in best-fit mode' '
 	flux module remove -r 0 sched-simple &&
-	flux module load -r 0 sched-simple mode=best-fit
+	flux module load -r 0 sched-simple mode=best-fit res=resource.default
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '
 	flux job submit basic.json >job6.id &&
@@ -137,8 +137,8 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 '
 test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove -r 0 sched-simple &&
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank_first_fit)" &&
-        flux module load -r 0 sched-simple mode=first-fit &&
+	flux kvs put resource.ff="$(echo $hwloc_by_rank_first_fit)" &&
+        flux module load -r 0 sched-simple mode=first-fit res=resource.ff &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '
 test_expect_success 'sched-simple: submit 3 more jobs' '
@@ -159,7 +159,7 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 '
 test_expect_success 'sched-simple: reload with outstanding allocations' '
 	flux module remove -r 0 sched-simple &&
-	flux module load sched-simple &&
+	flux module load -r 0 sched-simple res=resource.ff &&
 	flux dmesg | grep "hello: alloc rank0/core0" &&
 	test "$($query)" = ""
 '

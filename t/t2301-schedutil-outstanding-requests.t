@@ -23,13 +23,13 @@ test_expect_success 'schedutil: alloc/free fail with ENOSYS(38) after unload' '
     ${REQ_AND_UNLOAD} sched-dummy
 '
 
-test_expect_success 'schedutil: load default by_rank' '
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank)" &&
-	flux kvs get resource.hwloc.by_rank
+test_expect_success 'schedutil: load fake by_rank' '
+	flux kvs put resource.fake="$(echo $hwloc_by_rank)" &&
+	flux kvs get resource.fake
 '
 
 test_expect_success 'schedutil: successfully loaded sched-simple' '
-	flux module load -r 0 sched-simple
+	flux module load -r 0 sched-simple res=resource.fake
 '
 
 test_expect_success 'schedutil: set bit to hang alloc/free requests' '

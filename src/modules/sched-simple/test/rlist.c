@@ -261,10 +261,14 @@ static void test_issue2202 (void)
 {
     char *result = NULL;
     struct rlist *a = NULL;
+    int rc;
 
-    struct rlist *rl = rlist_from_hwloc_by_rank (by_rank_issue2202);
-    ok (rl != NULL, "issue2202: rlist_from_by_rank");
+    struct rlist *rl = rlist_create ();
     if (!rl)
+        BAIL_OUT ("rlist_create failed");
+    rc = rlist_add_hwloc_by_rank (rl, by_rank_issue2202);
+    ok (rc == 0, "issue2202: add_hwloc_by_rank");
+    if (rc < 0)
         BAIL_OUT ("unable to create rlist from by_rank_issue2202");
 
     result = rlist_dumps (rl);
@@ -299,9 +303,12 @@ static void test_issue2202 (void)
 
     /*  Part B:  test with multiple cores per rank, same cpuset size
      */
-    rl = rlist_from_hwloc_by_rank (by_rank_issue2202b);
-    ok (rl != NULL, "issue2202: rlist_from_hwloc_by_rank");
+    rl = rlist_create ();
     if (!rl)
+        BAIL_OUT ("rlist_create failed");
+    rc = rlist_add_hwloc_by_rank (rl, by_rank_issue2202b);
+    ok (rc == 0, "issue2202: rlist_add_hwloc_by_rank");
+    if (rc < 0)
         BAIL_OUT ("unable to create rlist from by_rank_issue2202b");
 
     result = rlist_dumps (rl);
@@ -354,10 +361,14 @@ static void test_issue2473 (void)
     char *result;
     struct rlist *rl;
     struct rlist *a, *a2;
+    int rc;
 
-    rl = rlist_from_hwloc_by_rank (by_rank_issue2473);
-    ok (rl != NULL, "issue2473: add_hwloc_by_rank");
-    if (rl == NULL)
+    rl = rlist_create ();
+    if (!rl)
+        BAIL_OUT ("rlist_create failed");
+    rc = rlist_add_hwloc_by_rank (rl, by_rank_issue2473);
+    ok (rc== 0, "issue2473: add_hwloc_by_rank");
+    if (rc < 0)
         BAIL_OUT ("unable to create rlist from by_rank_issue2473");
 
     ok (rlist_nnodes (rl) == 3,

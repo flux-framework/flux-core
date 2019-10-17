@@ -70,9 +70,9 @@ hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 
 test_expect_success 'load job-exec,sched-simple modules' '
         #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
+        flux kvs put resource.fake="$hwloc_fake_config" &&
         flux module load -r all barrier &&
-        flux module load -r 0 sched-simple &&
+        flux module load -r 0 sched-simple res=resource.fake &&
         flux module load -r 0 job-exec
 '
 

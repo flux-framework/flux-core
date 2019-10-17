@@ -32,6 +32,7 @@ struct simple_sched {
     struct rlist *rlist;    /* list of resources */
     struct jobreq *job;     /* currently processed job */
     schedutil_t *util_ctx;
+    zlist_t *res;           /* list of KVS keys defining static reosurces */
 };
 
 static void jobreq_destroy (struct jobreq *job)
@@ -72,6 +73,12 @@ static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
         jobreq_destroy (ss->job);
     }
     rlist_destroy (ss->rlist);
+    if (ss->res) {
+        char *s;
+        while ((s = zlist_pop (ss->res)))
+            free (s);
+        zlist_destroy (&ss->res);
+    }
     free (ss->mode);
     free (ss);
 }
@@ -81,6 +88,11 @@ static struct simple_sched * simple_sched_create (void)
     struct simple_sched *ss = calloc (1, sizeof (*ss));
     if (ss == NULL)
         return NULL;
+    if (!(ss->res = zlist_new ())) {
+        free (ss);
+        errno = ENOMEM;
+        return NULL;
+    }
     return ss;
 }
 
@@ -272,21 +284,30 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     int rc = -1;
     char *s = NULL;
     flux_future_t *f = NULL;
+    const char *key;
     const char *by_rank = NULL;
 
-    /* synchronously lookup by_rank for initialization */
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE,
-                                  "resource.hwloc.by_rank"))) {
-        flux_log_error (h, "lookup resource.hwloc.by_rank");
+    /* Synchronously lookup resource keys for initialization.
+     * Values are expected to be in the flux-specific "by_rank"
+     * hwloc summary form.
+     */
+    if (!(ss->rlist = rlist_create ())) {
+        flux_log_error (h ,"rlist_create");
         goto out;
     }
-    if (flux_kvs_lookup_get (f, &by_rank) < 0) {
-        flux_log_error (h, "kvs_lookup_get (resource.hwloc.by_rank)");
-        goto out;
-    }
-    if (!(ss->rlist = rlist_from_hwloc_by_rank (by_rank))) {
-        flux_log_error (h, "rank_list_create");
-        goto out;
+    key = zlist_first (ss->res);
+    while (key) {
+        if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE, key))
+               || flux_kvs_lookup_get (f, &by_rank) < 0) {
+            flux_log_error (h, "flux_kvs_lookup %s", key);
+            goto out;
+        }
+        if (rlist_add_hwloc_by_rank (ss->rlist, by_rank) < 0) {
+            errno = EINVAL;
+            flux_log_error (h, "rlist_add_hwloc_by_rank %s", key);
+            goto out;
+        }
+        key = zlist_next (ss->res);
     }
     /*  Complete synchronous hello protocol:
      */
@@ -327,10 +348,27 @@ static int process_args (flux_t *h, struct simple_sched *ss,
             free (ss->mode);
             ss->mode = get_alloc_mode (h, argv[i]+5);
         }
+        else if (strncmp ("res=", argv[i], 4) == 0) {
+            char *key = strdup (argv[i] + 4);
+            if (!key) {
+                flux_log_error (h, "strdup");
+                return -1;
+            }
+            if (zlist_append (ss->res, key) < 0) {
+                free (key);
+                errno = ENOMEM;
+                flux_log_error (h, "zlist_append");
+                return -1;
+            }
+        }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
             return -1;
         }
+    }
+    if (zlist_size (ss->res) == 0) {
+        flux_log_error (h, "At least one res= option must be provied");
+        return -1;
     }
     return 0;
 }

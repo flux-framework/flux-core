@@ -32,9 +32,9 @@ struct rlist *rlist_create (void);
 /*  Create a copy of rlist rl with all cores available */
 struct rlist *rlist_copy_empty (const struct rlist *rl);
 
-/*  Create an rlist object from resource.hwloc.by_rank JSON input
+/*  Add resources from resource.hwloc.by_rank JSON input
  */
-struct rlist *rlist_from_hwloc_by_rank (const char *by_rank);
+int rlist_add_hwloc_by_rank (struct rlist *rl, const char *by_rank);
 
 /*  Destroy an rlist object */
 void rlist_destroy (struct rlist *rl);

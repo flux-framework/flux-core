@@ -201,29 +201,24 @@ out:
     return rc;
 }
 
-struct rlist *rlist_from_hwloc_by_rank (const char *by_rank)
+int rlist_add_hwloc_by_rank (struct rlist *rl, const char *by_rank)
 {
-    struct rlist *rl = NULL;
     const char *key = NULL;
     json_t *entry = NULL;
 
     json_t *o = json_loads (by_rank, 0, NULL);
     if (o == NULL)
-        return NULL;
-    if (!(rl = rlist_create ()))
-        goto err;
+        return -1;
 
     json_object_foreach (o, key, entry) {
         if (rlist_append (rl, key, entry) < 0)
             goto err;
     }
     json_decref (o);
-
-    return (rl);
+    return 0;
 err:
     json_decref (o);
-    rlist_destroy (rl);
-    return NULL;
+    return -1;
 }
 
 int rlist_append_rank (struct rlist *rl, unsigned int rank, const char *ids)

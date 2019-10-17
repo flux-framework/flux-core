@@ -18,7 +18,7 @@ test_expect_success 'job-shell: load barrier,job-exec,sched-simple modules' '
         #  Add fake by_rank configuration to kvs:
         flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
         flux module load barrier &&
-        flux module load -r 0 sched-simple &&
+        flux module load -r 0 sched-simple res=resource.hwloc.by_rank &&
         flux module load -r 0 job-exec
 '
 test_expect_success 'job-shell: execute across all ranks' '
