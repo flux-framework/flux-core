@@ -48,11 +48,17 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int lookups = zlist_size (ctx->lookups);
     int watchers = zlist_size (ctx->watchers);
     int guest_watchers = zlist_size (ctx->guest_watchers);
-
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i}",
+    int pending = zlistx_size (ctx->jsctx->pending);
+    int running = zlistx_size (ctx->jsctx->running);
+    int inactive = zlistx_size (ctx->jsctx->inactive);
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:{s:i s:i s:i}}",
                            "lookups", lookups,
                            "watchers", watchers,
-                           "guest_watchers", guest_watchers) < 0) {
+                           "guest_watchers", guest_watchers,
+                           "jobs",
+                           "pending", pending,
+                           "running", running,
+                           "inactive", inactive) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
