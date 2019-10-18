@@ -220,6 +220,7 @@ check_PROGRAMS = \
 	rexec/rexec_ps \
 	rexec/rexec_count_stdout \
 	rexec/rexec_getline \
+	job-manager/list-jobs \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
@@ -446,6 +447,11 @@ ingest_job_manager_dummy_la_LIBADD = \
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
 ingest_submitbench_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+job_manager_list_jobs_SOURCES = job-manager/list-jobs.c
+job_manager_list_jobs_CPPFLAGS = $(test_cppflags)
+job_manager_list_jobs_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 job_manager_sched_dummy_la_SOURCES = job-manager/sched-dummy.c
