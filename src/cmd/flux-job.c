@@ -596,7 +596,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     int max_entries = optparse_get_int (p, "count", 0);
-    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"state\"]";
+    char *attrs = "[\"userid\",\"priority\",\"t_submit\",\"state\"]";
     flux_t *h;
     flux_future_t *f;
     json_t *jobs;
@@ -610,7 +610,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_job_list (h, max_entries, attrs)))
+    if (!(f = flux_job_list (h, max_entries, attrs, FLUX_USERID_UNKNOWN, 0)))
         log_err_exit ("flux_job_list");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");

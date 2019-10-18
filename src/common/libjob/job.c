@@ -127,21 +127,31 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *jobid)
     return 0;
 }
 
-flux_future_t *flux_job_list (flux_t *h, int max_entries, const char *json_str)
+flux_future_t *flux_job_list (flux_t *h,
+                              int max_entries,
+                              const char *json_str,
+                              uint32_t userid,
+                              int flags)
 {
     flux_future_t *f;
     json_t *o = NULL;
+    int valid_flags = (FLUX_JOB_LIST_PENDING
+                       | FLUX_JOB_LIST_RUNNING
+                       | FLUX_JOB_LIST_INACTIVE);
     int saved_errno;
 
     if (!h || max_entries < 0 || !json_str
-           || !(o = json_loads (json_str, 0, NULL))) {
+           || !(o = json_loads (json_str, 0, NULL))
+           || flags & ~valid_flags) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.list", FLUX_NODEID_ANY, 0,
-                             "{s:i s:o}",
+    if (!(f = flux_rpc_pack (h, "job-info.list", FLUX_NODEID_ANY, 0,
+                             "{s:i s:o s:i s:i}",
                              "max_entries", max_entries,
-                             "attrs", o))) {
+                             "attrs", o,
+                             "userid", userid,
+                             "flags", flags))) {
         saved_errno = errno;
         json_decref (o);
         errno = saved_errno;

@@ -67,11 +67,11 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
  */
 int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 
-/* Request a list of active jobs.
+/* Request a list of jobs.
  * If 'max_entries' > 0, fetch at most that many jobs.
  * 'json_str' is an encoded JSON array of attribute strings, e.g.
  * ["id","userid",...] that will be returned in response.
-
+ *
  * Process the response payload with flux_rpc_get() or flux_rpc_get_unpack().
  * It is a JSON object containing an array of job objects, e.g.
  * { "jobs":[
@@ -79,9 +79,16 @@ int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
  *   {"id":m, "userid":n},
  *   ...
  * ])
+ *
+ * flags can be set to an OR of FLUX_JOB_LIST_PENDING,
+ * FLUX_JOB_LIST_RUNNING, and FLUX_JOB_LIST_INACTIVE, or to
+ * FLUX_JOB_LIST_ALL to list all groups of jobs.
  */
-flux_future_t *flux_job_list (flux_t *h, int max_entries,
-                              const char *json_str);
+flux_future_t *flux_job_list (flux_t *h,
+                              int max_entries,
+                              const char *json_str,
+                              uint32_t userid,
+                              int flags);
 
 /* Raise an exception for job.
  * Severity is 0-7, with severity=0 causing the job to abort.
