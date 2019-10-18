@@ -17,6 +17,7 @@
 #include "info.h"
 #include "allow.h"
 #include "job_state.h"
+#include "list.h"
 #include "lookup.h"
 #include "watch.h"
 #include "guest_watch.h"
@@ -86,6 +87,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.guest-eventlog-watch-cancel",
       .cb           = guest_watch_cancel_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.list",
+      .cb           = list_cb,
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
