@@ -75,11 +75,12 @@ static int is_intree (void)
      *  If realpath(3) returns ENOENT, then BINDIR doesn't exist and flux
      *   clearly can't be from the installed path:
      */
-    if (!(builddir = realpath (ABS_TOP_BUILDDIR, NULL))
-       && (errno != ENOENT)
-       && (errno != EACCES))
-        ret = -1;
-    else if (strncmp (builddir, selfdir, strlen (builddir)) == 0)
+    if (!(builddir = realpath (ABS_TOP_BUILDDIR, NULL))) {
+        if ((errno == ENOENT) || (errno == EACCES))
+            return 0;
+        return -1;
+    }
+    if (strncmp (builddir, selfdir, strlen (builddir)) == 0)
         ret = 1;
     free (builddir);
     return ret;
