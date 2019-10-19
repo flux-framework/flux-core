@@ -38,7 +38,7 @@ struct flux_shell {
 
     int rc;
 
-    bool verbose;
+    int verbose;
     bool standalone;
 
     struct aux_item *aux;

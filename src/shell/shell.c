@@ -341,7 +341,7 @@ int flux_shell_get_info (flux_shell_t *shell, char **json_str)
         errno = EINVAL;
         return -1;
     }
-    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:b s:b }}",
+    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:i s:b }}",
                            "jobid", shell->info->jobid,
                            "rank",  shell->info->shell_rank,
                            "size",  shell->info->shell_size,
@@ -751,7 +751,7 @@ int main (int argc, char *argv[])
         exit (1);
 
     /* Set verbose flag if set in attributes.system.shell.verbose */
-    if (flux_shell_getopt_unpack (&shell, "verbose", "b", &shell.verbose) < 0)
+    if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
         log_msg_exit ("failed to parse attributes.system.shell.verbose");
 
     /* Register service on the leader shell.
