@@ -8,6 +8,8 @@ test_description='Test flux job info service'
 
 test_under_flux 4 job
 
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 # Usage: submit_job
@@ -60,6 +62,7 @@ get_timestamp_field() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
+        flux jobspec --format json srun -N1 hostname > hostname.json &&
         flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
 '
 
@@ -71,6 +74,190 @@ test_expect_success 'load job-exec,sched-simple modules' '
         flux module load -r all barrier &&
         flux module load -r 0 sched-simple &&
         flux module load -r 0 job-exec
+'
+
+#
+# job list tests
+#
+# these tests come first, as we do not want job submissions below to
+# interfere with expected results
+#
+
+# submit a whole bunch of jobs for job list testing
+#
+# - the first loop of job submissions are intended to have some jobs run
+#   quickly and complete
+# - the second loop of job submissions are intended to eat up all resources
+# - the last job submissions are intended to get a create a set of
+#   pending jobs, because jobs from the second loop have taken all resources
+#   - we desire pending jobs sorted in priority order, so we need to
+#   create the sorted list for comparison later.
+# - job ids are stored in files in the order we expect them to be listed
+#   - pending jobs - by priority (highest first)
+#   - running jobs - by start time (most recent first)
+#   - inactive jobs - by completion time (most recent first)
+#
+# TODO
+# - in order to test sorting, jobs should be submitted below in an
+#   unordered fashion.  However, issues exist that do not allow for
+#   such testing at this moment.  See Issue #2470.
+# - alternate userid job listing
+
+test_expect_success 'submit jobs for job list testing' '
+        for i in `seq 1 4`; do \
+            flux job submit hostname.json >> job_ids1.out; \
+            flux job wait-event `tail -n 1 job_ids1.out` clean ; \
+        done &&
+        tac job_ids1.out > job_ids_inactive.out &&
+        for i in `seq 1 8`; do \
+            flux job submit sleeplong.json >> job_ids2.out; \
+            flux job wait-event `tail -n 1 job_ids2.out` start; \
+        done &&
+        tac job_ids2.out > job_ids_running.out &&
+        id1=$(flux job submit -p31 hostname.json) &&
+        id2=$(flux job submit -p20 hostname.json) &&
+        id3=$(flux job submit      hostname.json) &&
+        id4=$(flux job submit -p0  hostname.json) &&
+        echo $id1 >> job_ids_pending.out &&
+        echo $id2 >> job_ids_pending.out &&
+        echo $id3 >> job_ids_pending.out &&
+        echo $id4 >> job_ids_pending.out
+'
+
+#
+# the job-info module has eventual consistency with the jobs stored in
+# the job-manager's queue.  We can't be 100% sure that the pending
+# jobs have been updated in the job-info module by the time these
+# tests have started.  To reduce the chances of that happening, all
+# tests related to pending jobs are done after the running / inactive
+# tests.
+#
+
+test_expect_success 'flux job list running jobs in started order' '
+        flux job list -s --running | cut -f1 > list_started.out &&
+        test_cmp list_started.out job_ids_running.out
+'
+
+test_expect_success 'flux job list running jobs with correct state' '
+        for count in `seq 1 8`; do \
+            echo "R" >> list_state_R.exp; \
+        done &&
+        flux job list -s --running | cut -f2 > list_state_R.out &&
+        test_cmp list_state_R.out list_state_R.exp
+'
+
+test_expect_success 'flux job list inactive jobs in completed order' '
+        flux job list -s --inactive | cut -f1 > list_inactive.out &&
+        test_cmp list_inactive.out job_ids_inactive.out
+'
+
+test_expect_success 'flux job list inactive jobs with correct state' '
+        for count in `seq 1 4`; do \
+            echo "I" >> list_state_I.exp; \
+        done &&
+        flux job list -s --inactive | cut -f2 > list_state_I.out &&
+        test_cmp list_state_I.out list_state_I.exp
+'
+
+test_expect_success 'flux job list pending jobs in priority order' '
+        flux job list -s --pending | cut -f1 > list_pending.out &&
+        test_cmp list_pending.out job_ids_pending.out
+'
+
+test_expect_success 'flux job list pending jobs with correct priority' '
+        cat >list_priority.exp <<-EOT &&
+31
+20
+16
+0
+EOT
+        flux job list -s --pending | cut -f4 > list_priority.out &&
+        test_cmp list_priority.out list_priority.exp
+'
+
+test_expect_success 'flux job list pending jobs with correct state' '
+        for count in `seq 1 4`; do \
+            echo "S" >> list_state_S.exp; \
+        done &&
+        flux job list -s --pending | cut -f2 > list_state_S.out &&
+        test_cmp list_state_S.out list_state_S.exp
+'
+
+test_expect_success 'flux job list jobs with correct userid' '
+        for count in `seq 1 16`; do \
+            id -u >> list_userid.exp; \
+        done &&
+        flux job list -s --pending --running --inactive | cut -f3 > list_userid.out &&
+        test_cmp list_userid.out list_userid.exp
+'
+
+test_expect_success 'flux job list defaults to listing pending & running jobs' '
+        flux job list -s > list_default.out &&
+        count=$(wc -l < list_default.out) &&
+        test "$count" = "12" &&
+        tail -n 8 list_default.out | cut -f1 > list_default_running.out &&
+        test_cmp list_default_running.out job_ids_running.out &&
+        head -n 4 list_default.out | cut -f1 > list_default_pending.out &&
+        test_cmp list_default_pending.out job_ids_pending.out
+'
+
+test_expect_success 'flux job list --userid=userid works' '
+        uid=$(id -u) &&
+        flux job list -s --userid=$uid> list_userid.out &&
+        count=$(wc -l < list_userid.out) &&
+        test "$count" = "12"
+'
+
+test_expect_success 'flux job list --userid=all works' '
+        flux job list -s --userid=all > list_all.out &&
+        count=$(wc -l < list_all.out) &&
+        test "$count" = "12"
+'
+
+test_expect_success 'flux job list --count works' '
+        flux job list -s --pending --running --inactive --count=8 > list_count.out &&
+        count=$(wc -l < list_count.out) &&
+        test "$count" = "8" &&
+        head -n 4 list_count.out | cut -f1 > list_count_pending.out &&
+        test_cmp list_count_pending.out job_ids_pending.out &&
+        tail -n 4 list_count.out | cut -f1 > list_count_running.out &&
+        head -n 4 job_ids_running.out > job_ids_running_head4.out &&
+        test_cmp list_count_running.out job_ids_running_head4.out
+'
+
+test_expect_success 'cleanup job listing jobs ' '
+        for jobid in `cat job_ids_pending.out`; do \
+            flux job cancel $jobid; \
+        done &&
+        for jobid in `cat job_ids_running.out`; do \
+            flux job cancel $jobid; \
+        done
+'
+
+#
+# job list special cases
+#
+
+test_expect_success HAVE_JQ 'list request with empty attrs works' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[]}" \
+          | $RPC job-info.list > list_empty_attrs.out &&
+        test_must_fail grep "userid" list_empty_attrs.out &&
+        test_must_fail grep "priority" list_empty_attrs.out &&
+        test_must_fail grep "t_submit" list_empty_attrs.out &&
+        test_must_fail grep "state" list_empty_attrs.out
+'
+test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:100000, userid:${id}, flags:0, attrs:[]}" \
+          | $RPC job-info.list
+'
+test_expect_success HAVE_JQ 'list-attrs works' '
+        $RPC job-info.list-attrs < /dev/null > list_attrs.out &&
+        grep userid list_attrs.out &&
+        grep priority list_attrs.out &&
+        grep t_submit list_attrs.out &&
+        grep state list_attrs.out
 '
 
 #
@@ -464,7 +651,10 @@ test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventl
 test_expect_success 'job-info stats works' '
         flux module stats job-info | grep "lookups" &&
         flux module stats job-info | grep "watchers" &&
-        flux module stats job-info | grep "guest_watchers"
+        flux module stats job-info | grep "guest_watchers" &&
+        flux module stats job-info | grep "pending" &&
+        flux module stats job-info | grep "running" &&
+        flux module stats job-info | grep "inactive"
 '
 
 test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
@@ -475,6 +665,24 @@ test_expect_success 'eventlog-watch request with empty payload fails with EPROTO
 '
 test_expect_success 'guest-eventlog-watch request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.guest-eventlog-watch 71 </dev/null
+'
+test_expect_success 'list request with empty payload fails with EPROTO(71)' '
+	${RPC} job-info.list 71 </dev/null
+'
+test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:5}" \
+          | $RPC job-info.list 71
+'
+test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[5]}" \
+          | $RPC job-info.list 22
+'
+test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[\"foo\"]}" \
+          | $RPC job-info.list 22
 '
 
 #
