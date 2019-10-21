@@ -103,11 +103,6 @@ void raise_handle_request (flux_t *h, struct queue *queue,
         errno = EPERM;
         goto error;
     }
-    if (note && strchr (note, '=')) {
-        errstr = "exception note may not contain key=value attributes";
-        errno = EPROTO;
-        goto error;
-    }
     if (event_job_post_pack (event_ctx, job,
                              "exception",
                              "{ s:s s:i s:i s:s }",
