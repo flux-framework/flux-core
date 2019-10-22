@@ -13,31 +13,32 @@ AM_CPPFLAGS = \
 
 fluxmod_LTLIBRARIES = job-manager.la
 
-job_manager_la_SOURCES = job-manager.c \
-			 job.c \
-			 job.h \
-			 submit.c \
-			 submit.h \
-			 drain.c \
-			 drain.h \
-			 queue.c \
-			 queue.h \
-			 event.h \
-			 event.c \
-			 restart.h \
-			 restart.c \
-			 raise.h \
-			 raise.c \
-			 kill.h \
-			 kill.c \
-			 alloc.h \
-			 alloc.c \
-			 start.h \
-			 start.c \
-			 list.h \
-			 list.c \
-			 priority.h \
-			 priority.c
+job_manager_la_SOURCES = \
+	job-manager.c \
+	job.c \
+	job.h \
+	submit.c \
+	submit.h \
+	drain.c \
+	drain.h \
+	queue.c \
+	queue.h \
+	event.h \
+	event.c \
+	restart.h \
+	restart.c \
+	raise.h \
+	raise.c \
+	kill.h \
+	kill.c \
+	alloc.h \
+	alloc.c \
+	start.h \
+	start.c \
+	list.h \
+	list.c \
+	priority.h \
+	priority.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = $(fluxmod_libadd) \
