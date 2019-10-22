@@ -34,6 +34,7 @@
 #include "queue.h"
 #include "event.h"
 #include "kill.h"
+#include <job-manager.h>
 
 #ifndef SIGRTMAX
 #  define SIGRTMAX 64
@@ -61,10 +62,12 @@ static int kill_event_topic_str (char *s, size_t len, flux_jobid_t id)
     return 0;
 }
 
-void kill_handle_request (flux_t *h, struct queue *queue,
-                          struct event_ctx *event_ctx,
-                          const flux_msg_t *msg)
+void kill_handle_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
+    struct job_manager *ctx = arg;
     uint32_t userid;
     uint32_t rolemask;
     flux_jobid_t id;
@@ -85,7 +88,7 @@ void kill_handle_request (flux_t *h, struct queue *queue,
         errno = EINVAL;
         goto error;
     }
-    if (!(job = queue_lookup_by_id (queue, id))) {
+    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
         errstr = "unknown job id";
         errno = EINVAL;
         goto error;
