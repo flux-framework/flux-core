@@ -24,6 +24,13 @@ enum job_submit_flags {
     FLUX_JOB_DEBUG = 2,
 };
 
+enum job_list_flags {
+    FLUX_JOB_LIST_ALL = 0,
+    FLUX_JOB_LIST_PENDING = 1,
+    FLUX_JOB_LIST_RUNNING = 2,
+    FLUX_JOB_LIST_INACTIVE = 4,
+};
+
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,

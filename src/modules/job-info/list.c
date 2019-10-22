@@ -124,11 +124,14 @@ int list_job_append (json_t *jobs,
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *list_jobs (struct info_ctx *ctx, int max_entries, json_t *attrs)
+json_t *list_jobs (struct info_ctx *ctx,
+                   int max_entries,
+                   json_t *attrs,
+                   int flags)
 {
     json_t *jobs = NULL;
     int saved_errno;
-    int ret;
+    int ret = 0;
 
     if (!(jobs = json_array ()))
         goto error_nomem;
@@ -136,26 +139,32 @@ json_t *list_jobs (struct info_ctx *ctx, int max_entries, json_t *attrs)
     /* We return jobs in the following order, pending, running,
      * inactive */
 
-    if ((ret = list_job_append (jobs,
-                                ctx->jsctx->pending,
-                                max_entries,
-                                attrs)) < 0)
-        goto error;
-
-    if (!ret) {
+    if (flags & FLUX_JOB_LIST_PENDING) {
         if ((ret = list_job_append (jobs,
-                                    ctx->jsctx->running,
+                                    ctx->jsctx->pending,
                                     max_entries,
                                     attrs)) < 0)
             goto error;
     }
 
-    if (!ret) {
-        if ((ret = list_job_append (jobs,
-                                    ctx->jsctx->inactive,
-                                    max_entries,
-                                    attrs)) < 0)
-            goto error;
+    if (flags & FLUX_JOB_LIST_RUNNING) {
+        if (!ret) {
+            if ((ret = list_job_append (jobs,
+                                        ctx->jsctx->running,
+                                        max_entries,
+                                        attrs)) < 0)
+                goto error;
+        }
+    }
+
+    if (flags & FLUX_JOB_LIST_INACTIVE) {
+        if (!ret) {
+            if ((ret = list_job_append (jobs,
+                                        ctx->jsctx->inactive,
+                                        max_entries,
+                                        attrs)) < 0)
+                goto error;
+        }
     }
 
     return jobs;
@@ -192,7 +201,13 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     if (max_entries > MAX_ENTRIES_CAP)
         max_entries = MAX_ENTRIES_CAP;
 
-    if (!(jobs = list_jobs (ctx, max_entries, attrs)))
+    /* If user sets no flags, assume they want all information */
+    if (!flags)
+        flags = (FLUX_JOB_LIST_PENDING
+                 | FLUX_JOB_LIST_RUNNING
+                 | FLUX_JOB_LIST_INACTIVE);
+
+    if (!(jobs = list_jobs (ctx, max_entries, attrs, flags)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
