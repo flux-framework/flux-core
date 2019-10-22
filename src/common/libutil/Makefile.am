@@ -52,8 +52,6 @@ libutil_la_SOURCES = \
 	blobref.c \
 	sha256.h \
 	sha256.c \
-	fdwalk.h \
-	fdwalk.c \
 	popen2.h \
 	popen2.c \
 	environment.h \
