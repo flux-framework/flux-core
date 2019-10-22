@@ -26,42 +26,33 @@
 #include "event.h"
 #include "drain.h"
 
-struct job_manager_ctx {
-    flux_t *h;
-    flux_msg_handler_t **handlers;
-    struct queue *queue;
-    struct start_ctx *start_ctx;
-    struct alloc_ctx *alloc_ctx;
-    struct event_ctx *event_ctx;
-    struct submit_ctx *submit_ctx;
-    struct drain_ctx *drain_ctx;
-};
+#include "job-manager.h"
 
 static void list_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct job_manager_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     list_handle_request (h, ctx->queue, msg);
 }
 
 static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct job_manager_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     raise_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
 static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
-    struct job_manager_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     kill_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
 static void priority_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
-    struct job_manager_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     priority_handle_request (h, ctx->queue, ctx->event_ctx, msg);
 }
 
@@ -77,7 +68,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     flux_reactor_t *r = flux_get_reactor (h);
     int rc = -1;
-    struct job_manager_ctx ctx;
+    struct job_manager ctx;
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;

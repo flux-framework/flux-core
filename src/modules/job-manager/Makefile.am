@@ -15,6 +15,7 @@ fluxmod_LTLIBRARIES = job-manager.la
 
 job_manager_la_SOURCES = \
 	job-manager.c \
+	job-manager.h \
 	job.c \
 	job.h \
 	submit.c \
