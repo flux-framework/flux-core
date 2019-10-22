@@ -25,7 +25,6 @@
 #include <stdio.h>
 
 #include "popen2.h"
-#include "fdwalk.h"
 #include "fdutils.h"
 
 #define PXOPEN_CHILD_MAGIC 0xc00ceeee
@@ -51,9 +50,8 @@ int popen2_get_fd (struct popen2_child *p)
     return p->fd[SP_PARENT];
 }
 
-static void popen2_child_close_fd (void *arg, int fd)
+static void popen2_child_close_fd (struct popen2_child *p, int fd)
 {
-    struct popen2_child *p = arg;
     if (fd != STDIN_FILENO && fd != STDOUT_FILENO && fd != STDERR_FILENO
                                                   && fd != p->ctl[SP_CHILD])
         (void)close (fd);
@@ -62,6 +60,9 @@ static void popen2_child_close_fd (void *arg, int fd)
 static void child (struct popen2_child *p, const char *path, char *const argv[])
 {
     int saved_errno;
+    int i, openmax = sysconf (_SC_OPEN_MAX);
+
+    assert (openmax > 0);
 
     (void)close (STDIN_FILENO);
     (void)close (STDOUT_FILENO);
@@ -72,10 +73,9 @@ static void child (struct popen2_child *p, const char *path, char *const argv[])
     }
     (void)close (p->fd[SP_CHILD]);
 
-    if (fdwalk (popen2_child_close_fd, p)) {
-        saved_errno = errno;
-        goto error;
-    }
+    for (i = 0; i < openmax; i++)
+        popen2_child_close_fd (p, i);
+
     execvp (path, argv);
     saved_errno = errno;
 error:

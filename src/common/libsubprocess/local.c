@@ -22,7 +22,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/fdutils.h"
 
 #include "subprocess.h"
@@ -388,9 +387,8 @@ static void close_child_fds (flux_subprocess_t *p)
     close_fds (p, false);
 }
 
-static void closefd_child (void *arg, int fd)
+static void closefd_child (flux_subprocess_t *p, int fd)
 {
-    flux_subprocess_t *p = arg;
     struct subprocess_channel *c;
     if (fd < 3 || fd == p->sync_fds[1])
         return;
@@ -443,6 +441,9 @@ static int local_child (flux_subprocess_t *p)
     int errnum;
     char **argv;
     const char *cwd;
+    int i, openmax = sysconf (_SC_OPEN_MAX);
+
+    assert (openmax > 0);
 
     /* Throughout this function use _exit() instead of exit(), to
      * avoid calling any atexit() routines of parent.
@@ -492,10 +493,8 @@ static int local_child (flux_subprocess_t *p)
         _exit (1);
 
     // Close fds
-    if (fdwalk (closefd_child, (void *) p) < 0) {
-        flux_log_error (p->h, "Failed closing all fds");
-        _exit (1);
-    }
+    for (i = 3; i < openmax; i++)
+        closefd_child (p, i);
 
     if (p->hooks.pre_exec) {
         /* always a chance caller may destroy subprocess in callback */
