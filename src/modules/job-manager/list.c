@@ -43,6 +43,8 @@
 
 #include "job.h"
 #include "queue.h"
+#include "list.h"
+#include "job-manager.h"
 
 /* For a given job, create a JSON object containing the requested
  * attributes and their values.  Returns JSON object which the caller
@@ -147,9 +149,12 @@ error:
     return NULL;
 }
 
-void list_handle_request (flux_t *h, struct queue *queue,
-                          const flux_msg_t *msg)
+void list_handle_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
+    struct job_manager *ctx = arg;
     int max_entries;
     json_t *jobs;
     json_t *attrs;
@@ -158,7 +163,7 @@ void list_handle_request (flux_t *h, struct queue *queue,
                                         "max_entries", &max_entries,
                                         "attrs", &attrs) < 0)
         goto error;
-    if (!(jobs = list_job_array (queue, max_entries, attrs)))
+    if (!(jobs = list_job_array (ctx->queue, max_entries, attrs)))
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
