@@ -28,13 +28,6 @@
 
 #include "job-manager.h"
 
-static void raise_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
-{
-    struct job_manager *ctx = arg;
-    raise_handle_request (h, ctx->queue, ctx->event_ctx, msg);
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -45,7 +38,7 @@ static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.raise",
-        raise_cb,
+        raise_handle_request,
         FLUX_ROLE_USER
     },
     {
