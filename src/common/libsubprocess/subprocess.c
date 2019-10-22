@@ -22,7 +22,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/aux.h"
 
 #include "subprocess.h"

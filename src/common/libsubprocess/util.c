@@ -21,8 +21,6 @@
 
 #include <flux/core.h>
 
-#include "src/common/libutil/fdwalk.h"
-
 #include "subprocess.h"
 #include "subprocess_private.h"
 #include "util.h"

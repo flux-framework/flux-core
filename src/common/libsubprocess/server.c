@@ -24,7 +24,6 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/macros.h"
 #include "src/common/libioencode/ioencode.h"
 
