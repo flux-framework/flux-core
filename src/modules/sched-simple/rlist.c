@@ -708,10 +708,15 @@ static struct rlist *rlist_alloc_nnodes (struct rlist *rl, int nnodes,
         if (rc < 0)
             goto unwind;
 
-        /*  Reorder the current item in list so we get least loaded node
-         *   at front again for the next call to zlistx_first()
+        /*  If a node is empty, remove it from consideration.
+         *  O/w, force it to the back of the list to ensure all N
+         *   nodes are considered at least once.
          */
         zlistx_reorder (cl, zlistx_cursor (cl), false);
+        if (rnode_avail (n) == 0)
+            zlistx_detach (cl, zlistx_cursor (cl));
+        else
+            zlistx_move_end (cl, zlistx_cursor (cl));
         slots--;
     }
     zlistx_destroy (&cl);
