@@ -334,6 +334,99 @@ static void test_issue2202 (void)
     rlist_destroy (rl);
 }
 
+const char by_rank_issue2473[] = "{\
+\"0\": {\
+    \"Package\": 1,\
+    \"Core\": 4,\
+    \"PU\": 4,\
+    \"cpuset\": \"0-3\"\
+  },\
+\"1-2\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"0-1\"\
+  }\
+}";
+
+static void test_issue2473 (void)
+{
+    char *result;
+    struct rlist *rl;
+    struct rlist *a, *a2;
+
+    rl = rlist_from_hwloc_by_rank (by_rank_issue2473);
+    ok (rl != NULL, "issue2473: add_hwloc_by_rank");
+    if (rl == NULL)
+        BAIL_OUT ("unable to create rlist from by_rank_issue2473");
+
+    ok (rlist_nnodes (rl) == 3,
+        "issue2473: created rlist with 3 nodes");
+    result = rlist_dumps (rl);
+    is (result,
+        "rank0/core[0-3] rank[1-2]/core[0-1]",
+        "issue2473: rlist_dumps works");
+    free (result);
+
+    /* problem: allocated 3 cores on one node */
+    a = rlist_alloc (rl, "worst-fit", 3, 3, 1);
+    ok (a != NULL,
+        "issue2473: rlist_alloc nnodes=3 slots=3 slotsz=1 worked");
+    if (!a)
+        BAIL_OUT ("rlist_alloc failed");
+    ok (rlist_nnodes (a) == 3,
+        "issue2473: allocation has 3 nodes");
+
+    result = rlist_dumps (a);
+    is (result,
+        "rank[0-2]/core0",
+        "issue2473: rlist_dumps shows one core per node");
+    free (result);
+    rlist_free (rl, a);
+
+    /* problem: unsatisfiable */
+    a = rlist_alloc (rl, "worst-fit", 3, 8, 1);
+    ok (a != NULL,
+        "issue2473: rlist_alloc nnodes=3 slots=8 slotsz=1 worked");
+    if (a) {
+        rlist_free (rl, a);
+        rlist_destroy (a);
+    }
+
+    /* not a problem but verify slightly counter-intuitive case discussed
+     * in the issue:
+     * - alloc 1 core on rank0
+     * - ask for 2 cores spread across 2 nodes
+     * - we should get cores on rank[0-1] not rank[1-2]
+     */
+    a = rlist_alloc (rl, "worst-fit", 1, 1, 1);
+    ok (a != NULL,
+        "issue2473: rlist_alloc nnodes=1 slots=1 slotsz=1 worked");
+    if (!a)
+        BAIL_OUT ("rlist_alloc failed");
+
+    result = rlist_dumps (rl);
+    is (result,
+        "rank0/core[1-3] rank[1-2]/core[0-1]",
+        "issue2473: one core was allocated from rank0");
+    free (result);
+
+    a2 = rlist_alloc (rl, "worst-fit", 2, 2, 1);
+    ok (a2 != NULL,
+        "issue2473: rlist_alloc nnodes=2 slots=2 slotsz=1 worked");
+    result = rlist_dumps (a2);
+    is (result,
+        "rank0/core1 rank1/core0",
+        "issue2473: allocated a core from used node, not starting new bin");
+    free (result);
+    rlist_free (rl, a);
+    rlist_destroy (a);
+    rlist_free (rl, a2);
+    rlist_destroy (a2);
+
+    rlist_destroy (rl);
+}
+
 static void test_dumps (void)
 {
     char *result = NULL;
@@ -382,6 +475,7 @@ int main (int ac, char *av[])
     run_test_entries (test_6n_4c,       6, 4);
     run_test_entries (test_1024n_4c, 1024, 4);
     test_issue2202 ();
+    test_issue2473 ();
 
     done_testing ();
 }
