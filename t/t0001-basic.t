@@ -12,6 +12,9 @@ other tests.
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
+test_expect_success 'run ulimit' '
+        ulimit -a
+'
 test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
 '
