@@ -244,6 +244,11 @@ flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p)
     return flux_plugin_aux_get (p, "flux::shell");
 }
 
+flux_t *flux_shell_get_flux (flux_shell_t *shell)
+{
+    return shell->h;
+}
+
 int flux_shell_aux_set (flux_shell_t *shell,
                         const char *key,
                         void *val,
