@@ -33,6 +33,8 @@ libshell_la_SOURCES = \
 	plugstack.h \
 	jobspec.c \
 	jobspec.h \
+	eventlogger.c \
+	eventlogger.h \
 	rcalc.c \
 	rcalc.h
 
