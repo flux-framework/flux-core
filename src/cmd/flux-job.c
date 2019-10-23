@@ -1227,10 +1227,11 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          "severity", &severity,
                          "note", &note) < 0)
             log_err_exit ("error decoding exception context");
-        fprintf (stderr, "job-event: exception type=%s severity=%d %s\n",
-                 type,
-                 severity,
-                 note ? note : "");
+        fprintf (stderr, "%.3fs: job.exception type=%s severity=%d %s\n",
+                         timestamp - ctx->timestamp_zero,
+                         type,
+                         severity,
+                         note ? note : "");
     }
     else if (!strcmp (name, "submit")) {
         if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
