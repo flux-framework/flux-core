@@ -14,8 +14,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/log.h"
-
 #include "jobspec.h"
 
 struct res_level {

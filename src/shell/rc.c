@@ -22,10 +22,10 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <flux/core.h>
+#include <flux/shell.h>
 
 #include "src/bindings/lua/jansson-lua.h"
 #include "src/bindings/lua/lutil.h"
-#include "src/common/libutil/log.h"
 #include "internal.h"
 #include "info.h"
 
@@ -149,13 +149,13 @@ static int lua_plugin_cb (flux_plugin_t *p,
     struct lua_plugin *lp = flux_plugin_aux_get (p, "lua.plugin");
     struct lua_plugref *ref = data;
     if (!ref) {
-        log_msg ("lua plugin: %s: no ref for topic %s", lp->name, topic);
+        shell_log_error ("lua plugin: %s: no ref for topic %s", lp->name, topic);
         return 0;
     }
     lua_rawgeti (L, LUA_REGISTRYINDEX, ref->lua_ref);
     lua_pushstring (L, topic);
     if (lua_pcall (L, 1, LUA_MULTRET, 0) != 0) {
-        log_msg ("lua plugin %s: %s", lp->name, lua_tostring (L, -1));
+        shell_log_error ("lua plugin %s: %s", lp->name, lua_tostring (L, -1));
         return -1;
     }
     if (lua_gettop (L) > 0) {
@@ -323,11 +323,11 @@ static int shell_run_rcfile (flux_shell_t *shell,
     /*  Compile rcfile onto stack
      */
     if (luaL_loadfile (L, rcfile) != 0) {
-        log_msg ("%s: %s", rcfile, lua_tostring (L, -1));
+        shell_log_error ("%s: %s", rcfile, lua_tostring (L, -1));
         return -1;
     }
     if (lua_pcall (L, 0, 0, 0) != 0) {
-        log_msg ("%s", lua_tostring (L, -1));
+        shell_log_error ("%s", lua_tostring (L, -1));
         return -1;
     }
     file_stack_pop ();

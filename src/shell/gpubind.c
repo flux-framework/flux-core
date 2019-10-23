@@ -24,7 +24,6 @@
 #include <flux/shell.h>
 #include <flux/idset.h>
 
-#include "src/common/libutil/log.h"
 #include "builtins.h"
 
 int ngpus_per_task = -1;
@@ -40,23 +39,21 @@ int get_shell_gpus (flux_shell_t *shell,
     json_error_t err;
     struct idset *gpus = NULL;
 
-    if (flux_shell_get_rank_info (shell, -1, &s) < 0) {
-        log_err ("flux_shell_get_rank_info");
-        return -1;
-    }
+    if (flux_shell_get_rank_info (shell, -1, &s) < 0)
+        return shell_log_errno ("flux_shell_get_rank_info");
     if (!(o = json_loads (s, 0, NULL))) {
-        log_err ("json_loads");
+        shell_log_errno ("json_loads");
         goto out;
     }
     if (json_unpack_ex (o, &err, 0, "{s:i s:{s?:s}}",
                                    "ntasks", ntasks,
                                    "resources",
                                      "gpus", &gpu_list) < 0) {
-        log_err ("json_unpack: %s", err.text);
+        shell_log_error ("json_unpack: %s", err.text);
         goto out;
     }
     if (!(gpus = idset_decode (gpu_list ? gpu_list : ""))) {
-        log_err ("idset_encode (%s)", gpu_list);
+        shell_log_errno ("idset_encode (%s)", gpu_list);
         goto out;
     }
     rc = 0;
@@ -118,7 +115,7 @@ static int gpubind_init (flux_plugin_t *p,
                                        "s",
                                         &opt)) <= 0) {
         if (rc < 0)
-            log_msg ("Failed to get gpu-affinity shell option, ignoring");
+            shell_warn ("Failed to get gpu-affinity shell option, ignoring");
         /* gpu-affinity defaults to "on" */
         opt = "on";
     }
@@ -127,7 +124,7 @@ static int gpubind_init (flux_plugin_t *p,
     if (get_shell_gpus (shell, &ntasks, &gpus) < 0)
         return -1;
     if (flux_plugin_aux_set (p, NULL, gpus, (flux_free_f)idset_destroy) < 0) {
-        log_err ("flux_plugin_aux_set");
+        shell_log_errno ("flux_plugin_aux_set");
         idset_destroy (gpus);
         return -1;
     }
@@ -143,10 +140,8 @@ static int gpubind_init (flux_plugin_t *p,
         if (flux_plugin_add_handler (p,
                                      "task.init",
                                      gpubind_task_init,
-                                     gpus) < 0) {
-            log_err ("gpubind: flux_plugin_add_handler");
-            return -1;
-        }
+                                     gpus) < 0)
+            return shell_log_errno ("gpubind: flux_plugin_add_handler");
     }
     else {
         char *ids = idset_encode (gpus, IDSET_FLAG_RANGE);

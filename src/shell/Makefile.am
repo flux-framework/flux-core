@@ -110,8 +110,8 @@ test_jobspec_t_SOURCES = test/jobspec.c
 test_jobspec_t_CPPFLAGS = $(test_cppflags)
 test_jobspec_t_LDADD = $(test_ldadd)
 
-test_plugstack_t_SOURCES = test/plugstack.c
-test_plugstack_t_CPPFLAGS = $(test_cppflags)
+test_plugstack_t_SOURCES = plugstack.c test/plugstack.c
+test_plugstack_t_CPPFLAGS = $(test_cppflags) -DPLUGSTACK_STANDALONE
 test_plugstack_t_LDADD = $(test_ldadd)
 
 test_a_plugin_la_SOURCES = test/plugin_test.c

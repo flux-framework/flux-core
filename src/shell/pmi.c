@@ -75,7 +75,6 @@
 
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/clique.h"
-#include "src/common/libutil/log.h"
 
 #include "builtins.h"
 #include "internal.h"
@@ -163,20 +162,20 @@ static int shell_pmi_kvs_get (void *arg,
                                sizeof (nkey),
                                pmi->shell->jobid,
                                key) < 0) {
-            log_err ("shell_pmi_kvs_key");
+            shell_log_errno ("shell_pmi_kvs_key");
             goto out;
         }
         if (!(f = flux_kvs_lookup (h, NULL, 0, nkey))) {
-            log_err ("flux_kvs_lookup");
+            shell_log_errno ("flux_kvs_lookup");
             goto out;
         }
         if (flux_future_aux_set (f, "flux::shell_pmi", cli, NULL) < 0) {
-            log_err ("flux_future_aux_set");
+            shell_log_errno ("flux_future_aux_set");
             flux_future_destroy (f);
             goto out;
         }
         if (flux_future_then (f, -1., kvs_lookup_continuation, pmi) < 0) {
-            log_err ("flux_future_then");
+            shell_log_errno ("flux_future_then");
             flux_future_destroy (f);
             goto out;
         }
@@ -215,7 +214,7 @@ static int shell_pmi_barrier_enter (void *arg)
              (uintmax_t)pmi->shell->jobid,
              pmi->cycle++);
     if (!(txn = flux_kvs_txn_create ())) {
-        log_err ("flux_kvs_txn_create");
+        shell_log_errno ("flux_kvs_txn_create");
         goto error;
     }
     val = zhashx_first (pmi->kvs);
@@ -234,21 +233,21 @@ static int shell_pmi_barrier_enter (void *arg)
                                sizeof (nkey),
                                pmi->shell->jobid,
                                key) < 0) {
-            log_err ("key buffer overflow");
+            shell_log_errno ("key buffer overflow");
             goto error;
         }
         if (flux_kvs_txn_put (txn, 0, nkey, val) < 0) {
-            log_err ("flux_kvs_txn_put");
+            shell_log_errno ("flux_kvs_txn_put");
             goto error;
         }
         val = zhashx_next (pmi->kvs);
     }
     if (!(f = flux_kvs_fence (pmi->shell->h, NULL, 0, name, nprocs, txn))) {
-        log_err ("flux_kvs_fence");
+        shell_log_errno ("flux_kvs_fence");
         goto error;
     }
     if (flux_future_then (f, -1., kvs_fence_continuation, pmi) < 0) {
-        log_err ("flux_future_then");
+        shell_log_errno ("flux_future_then");
         flux_future_destroy (f);
         goto error;
     }
@@ -270,7 +269,7 @@ static void shell_pmi_debug_trace (void *client, const char *line)
 {
     struct shell_task *task = client;
 
-    fprintf (stderr, "%d: %s", task->rank, line);
+    shell_trace ("%d: %s", task->rank, line);
 }
 
 static void pmi_fd_cb (flux_shell_task_t *task,
@@ -284,25 +283,21 @@ static void pmi_fd_cb (flux_shell_task_t *task,
 
     line = flux_subprocess_read_line (task->proc, "PMI_FD", &len);
     if (len < 0) {
-        if (pmi->shell->verbose)
-            fprintf (stderr, "%d: C: pmi read error: %s\n",
+        shell_trace ("%d: C: pmi read error: %s",
                      task->rank, flux_strerror (errno));
         return;
     }
     if (len == 0) {
-        if (pmi->shell->verbose)
-            fprintf (stderr, "%d: C: pmi EOF\n", task->rank);
+        shell_trace ("%d: C: pmi EOF", task->rank);
         return;
     }
     rc = pmi_simple_server_request (pmi->server, line, task, task->rank);
     if (rc < 0) {
-        if (pmi->shell->verbose)
-            fprintf (stderr, "%d: S: pmi request error\n", task->rank);
+        shell_trace ("%d: S: pmi request error", task->rank);
         return;
     }
     if (rc == 1) {
-        if (pmi->shell->verbose)
-            fprintf (stderr, "%d: S: pmi finalized\n", task->rank);
+        shell_trace ("%d: S: pmi finalized", task->rank);
     }
 }
 
@@ -344,7 +339,7 @@ static int init_clique (struct shell_pmi *pmi)
      * a missing key as an error.  It should be unusual though so log it.
      */
     if (pmi_process_mapping_encode (blocks, nblocks, val, sizeof (val)) < 0) {
-        log_err ("pmi_process_mapping_encode");
+        shell_log_errno ("pmi_process_mapping_encode");
         goto out;
     }
     pmi_kvs_put_local (pmi, "PMI_process_mapping", val);
@@ -372,12 +367,12 @@ static int set_flux_instance_level (struct shell_pmi *pmi)
     errno = 0;
     l = strtol (level, &p, 10);
     if (errno != 0 || *p != '\0' || l < 0) {
-        log_msg ("set_flux_instance_level level=%s invalid", level);
+        shell_log_error ("set_flux_instance_level level=%s invalid", level);
         goto out;
     }
     n = snprintf (val, sizeof (val), "%lu", l+1);
     if (n >= sizeof (val)) {
-        log_err ("set_flux_instance_level: snprintf");
+        shell_log_errno ("set_flux_instance_level: snprintf");
         goto out;
     }
     pmi_kvs_put_local (pmi, "flux.instance-level", val);

@@ -25,7 +25,6 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
-#include "src/common/libutil/log.h"
 #include "internal.h"
 #include "builtins.h"
 
@@ -34,8 +33,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     flux_shell_t *shell = arg;
     int sig = flux_signal_watcher_get_signum (w);
-    if (shell->verbose)
-        log_msg ("forwarding signal %d to tasks", sig);
+    shell_debug ("forwarding signal %d to tasks", sig);
     flux_shell_killall (shell, sig);
 }
 
@@ -60,7 +58,7 @@ static int signals_init (flux_plugin_t *p,
         return -1;
     /* forward local SIGINT, SIGTERM to tasks */
     if (trap_signal (shell, SIGINT) < 0 || trap_signal (shell, SIGTERM) < 0)
-        log_err ("failed to set up signal watchers");
+        shell_log_errno ("failed to set up signal watchers");
     return 0;
 }
 
