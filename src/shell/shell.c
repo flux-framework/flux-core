@@ -781,6 +781,10 @@ int main (int argc, char *argv[])
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
         shell_die ("failed to parse attributes.system.shell.verbose");
 
+    /* Reinitialize log facility with new verbosity/shell.info */
+    if (shell_log_reinit (&shell) < 0)
+        shell_die_errno ("shell_log_reinit");
+
     /* Now that verbosity may have changed, log shell startup info */
     shell_log_info (&shell);
 
