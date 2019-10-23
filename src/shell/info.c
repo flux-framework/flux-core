@@ -196,26 +196,6 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     }
     info->shell_size = rcalc_total_nodes (info->rcalc);
     info->shell_rank = info->rankinfo.nodeid;
-    if (shell->verbose) {
-        if (info->shell_rank == 0)
-            shell_debug ("0: task_count=%d slot_count=%d "
-                         "cores_per_slot=%d slots_per_node=%d",
-                         info->jobspec->task_count,
-                         info->jobspec->slot_count,
-                         info->jobspec->cores_per_slot,
-                         info->jobspec->slots_per_node);
-        if (info->rankinfo.ntasks > 1)
-            shell_debug ("%d: tasks [%d-%d] on cores %s",
-                         info->shell_rank,
-                         info->rankinfo.global_basis,
-                         info->rankinfo.global_basis+info->rankinfo.ntasks - 1,
-                         info->rankinfo.cores);
-        else
-            shell_debug ("%d: tasks [%d] on cores %s",
-                         info->shell_rank,
-                         info->rankinfo.global_basis,
-                         info->rankinfo.cores);
-    }
     return info;
 error:
     shell_info_destroy (info);

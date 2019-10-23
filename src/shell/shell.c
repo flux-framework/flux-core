@@ -720,6 +720,33 @@ static int shell_exit (flux_shell_t *shell)
     return plugstack_call (shell->plugstack, "shell.exit", NULL);
 }
 
+/*  Log basic shell info at startup.
+ */
+static void shell_log_info (flux_shell_t *shell)
+{
+    if (shell->verbose) {
+        struct shell_info *info = shell->info;
+        if (info->shell_rank == 0)
+            shell_debug ("0: task_count=%d slot_count=%d "
+                         "cores_per_slot=%d slots_per_node=%d",
+                         info->jobspec->task_count,
+                         info->jobspec->slot_count,
+                         info->jobspec->cores_per_slot,
+                         info->jobspec->slots_per_node);
+        if (info->rankinfo.ntasks > 1)
+            shell_debug ("%d: tasks [%d-%d] on cores %s",
+                         info->shell_rank,
+                         info->rankinfo.global_basis,
+                         info->rankinfo.global_basis+info->rankinfo.ntasks - 1,
+                         info->rankinfo.cores);
+        else
+            shell_debug ("%d: tasks [%d] on cores %s",
+                         info->shell_rank,
+                         info->rankinfo.global_basis,
+                         info->rankinfo.cores);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -753,6 +780,9 @@ int main (int argc, char *argv[])
     /* Set verbose flag if set in attributes.system.shell.verbose */
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
         shell_die ("failed to parse attributes.system.shell.verbose");
+
+    /* Now that verbosity may have changed, log shell startup info */
+    shell_log_info (&shell);
 
     /* Register service on the leader shell.
      */
