@@ -62,7 +62,8 @@ flux_shell_SOURCES = \
 	kill.c \
 	signals.c \
 	affinity.c \
-	gpubind.c
+	gpubind.c \
+	evlog.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
