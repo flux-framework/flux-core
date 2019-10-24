@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <flux/core.h>
 #include <jansson.h>
+#include <czmq.h>
 
 #include "job.h"
 #include "event.h"
@@ -80,6 +81,41 @@ error:
     job_decref (job);
     json_decref (a);
     return NULL;
+}
+
+#define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
+
+/* Decref a job.
+ * N.B. zhashx_destructor_fn / zlistx_destructor_fn signature
+ */
+void job_destructor (void **item)
+{
+    if (item) {
+        job_decref (*item);
+        *item = NULL;
+    }
+}
+
+/* Duplicate a job
+ * N.B. zhashx_duplicator_fn / zlistx_duplicator_fn signature
+ */
+void *job_duplicator (const void *item)
+{
+    return job_incref ((struct job *)item);
+}
+
+/* Compare jobs, ordering by (1) priority, (2) t_submit.
+ * N.B. zlistx_comparator_fn signature
+ */
+int job_pending_cmp (const void *a1, const void *a2)
+{
+    const struct job *j1 = a1;
+    const struct job *j2 = a2;
+    int rc;
+
+    if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
+        rc = NUMCMP (j1->t_submit, j2->t_submit);
+    return rc;
 }
 
 /*

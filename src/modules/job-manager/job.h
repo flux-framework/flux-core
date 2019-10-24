@@ -12,6 +12,7 @@
 #define _FLUX_JOB_MANAGER_JOB_H
 
 #include <stdint.h>
+#include <czmq.h>
 #include "src/common/libjob/job.h"
 
 struct job {
@@ -39,6 +40,13 @@ struct job *job_incref (struct job *job);
 struct job *job_create (void);
 
 struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
+
+/* Helpers for maintaining czmq containers of 'struct job'.
+ * The comparator sorts by (1) priority, then (2) t_submit.
+ */
+void job_destructor (void **item);
+void *job_duplicator (const void *item);
+int job_pending_cmp (const void *a1, const void *a2);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
