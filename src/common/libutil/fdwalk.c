@@ -42,11 +42,54 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
+
+/* getdents64() based version inspired by glib safe_fdwalk.c:
+ *
+ * See https://github.com/GNOME/glib/blob/master/glib/gspawn.c
+ *
+ * File Copyright duplicated here:
+ * gspawn.c - Process launching
+ *
+ *  Copyright 2000 Red Hat, Inc.
+ *  g_execvpe implementation based on GNU libc execvp:
+ *   Copyright 1991, 92, 95, 96, 97, 98, 99 Free Software Foundation, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+#define _GNU_SOURCE
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <stdint.h>
+
+#ifdef __linux__
+#include <sys/syscall.h> /* syscall and SYS_getdents64 */
+struct linux_dirent64
+{
+  uint64_t       d_ino;    /* 64-bit inode number */
+  uint64_t       d_off;    /* 64-bit offset to next structure */
+  unsigned short d_reclen; /* Size of this dirent */
+  unsigned char  d_type;   /* File type */
+  char           d_name[]; /* Filename (null-terminated) */
+};
+#endif /* __linux__ */
 
 #include "fdwalk.h"
 
@@ -69,47 +112,43 @@ static int parse_fd(const char *s) {
     return val;
 }
 
-int fdwalk(void (*func)(void *, int), void *opaque) {
-    DIR *dir = opendir("/proc/self/fd");
-    if (!dir) {
-        return -1;
-    }
-    int opendirfd = dirfd(dir);
-    int parse_errors = 0;
-    struct dirent *ent;
-    // Have to clear errno to distinguish readdir() completion from failure.
-    while (errno = 0, (ent = readdir(dir)) != NULL) {
-        if (strcmp(ent->d_name, ".") == 0 ||
-                strcmp(ent->d_name, "..") == 0) {
-            continue;
+int fdwalk (void (*func)(void *, int), void *data) {
+    int fd;
+    int open_max;
+    int rc = 0;
+
+    /* On Linux use getdents64 to avoid malloc in opendir() and
+     *  still walk only open fds. If not on linux or open() of /proc/self
+     *  fails, fall back to iterating over all possible fds.
+     */
+#ifdef __linux__
+    int dir_fd = open ("/proc/self/fd", O_RDONLY | O_DIRECTORY);
+    if (dir_fd >= 0) {
+        char buf [4096];
+        int pos, n;
+        struct linux_dirent64 *de = NULL;
+
+        while ((n = syscall (SYS_getdents64, dir_fd, buf, sizeof(buf))) > 0) {
+            for (pos = 0; pos < n; pos += de->d_reclen) {
+                de = (struct linux_dirent64 *)(buf + pos);
+
+                fd = parse_fd (de->d_name);
+                if (fd > 0 && fd != dir_fd)
+                    func (data, fd);
+            }
         }
-        // We avoid atoi or strtol because those are part of libc and they involve
-        // locale stuff, which is probably not safe from a post-fork context in a
-        // multi-threaded app.
-        int fd = parse_fd(ent->d_name);
-        if (fd < 0) {
-            parse_errors = 1;
-            continue;
-        }
-        if (fd != opendirfd) {
-            (*func)(opaque, fd);
-        }
+
+        close (dir_fd);
+        return rc;
     }
-    int saved_errno = errno;
-    if (closedir(dir) < 0) {
-        if (!saved_errno) {
-            // Return the closedir error.
-            return -1;
-        }
-        // Else ignore it because we have a more relevant error to return.
-    }
-    if (saved_errno) {
-        errno = saved_errno;
-        return -1;
-    } else if (parse_errors) {
-        errno = EBADF;
-        return -1;
-    } else {
-        return 0;
-    }
+#endif
+
+    open_max = sysconf (_SC_OPEN_MAX);
+
+    for (fd = 0; fd < open_max; fd++)
+        func (data, fd);
+    return rc;
 }
+
+/* vi: ts=4 sw=4 expandtab
+ */
