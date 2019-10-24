@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# Usage: flux python request-and-unload.py module-name
 
 import argparse
 import sys

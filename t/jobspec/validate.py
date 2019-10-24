@@ -1,7 +1,5 @@
-#!/usr/bin/env python
-
-# Usage: validate.py --schema=jobspec.json data.json [data.json ...]
-# Usage: cat data.json | validate.py --schema=jobspec.json
+# Usage: flux python validate.py --schema=jobspec.json data.json [data.json ...]
+# Usage: cat data.json | flux python validate.py --schema=jobspec.json
 
 import sys
 import argparse

@@ -29,7 +29,7 @@ jobs:
       stage: test
       compiler: gcc
       env:
-       - PYTHON_VERSION=2.7
+       - PYTHON_VERSION=3.6
     - name: "Ubuntu: py3.6 distcheck"
       stage: test
       compiler: gcc
@@ -45,7 +45,7 @@ jobs:
        - CXX=g++-8
        - ARGS="--with-flux-security --enable-caliper"
        - DISTCHECK=t
-       - PYTHON_VERSION=2.7
+       - PYTHON_VERSION=3.6
     - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security"
       stage: test
       compiler: clang-6.0
@@ -54,14 +54,14 @@ jobs:
        - CXX=clang++-6.0
        - chain_lint=t
        - ARGS="--with-flux-security"
-       - PYTHON_VERSION=2.7
+       - PYTHON_VERSION=3.6
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
       stage: test
       compiler: gcc
       env:
        - COVERAGE=t
        - ARGS="--with-flux-security --enable-caliper"
-       - PYTHON_VERSION=2.7
+       - PYTHON_VERSION=3.6
     - name: "Ubuntu: TEST_INSTALL docker-deploy"
       stage: test
       compiler: gcc
@@ -69,7 +69,7 @@ jobs:
        - ARGS="--with-flux-security --enable-caliper"
        - TEST_INSTALL=t
        - DOCKER_TAG=t
-       - PYTHON_VERSION=2.7
+       - PYTHON_VERSION=3.6
     - name: "Centos 7: --with-flux-security --enable-caliper docker-deploy"
       stage: test
       compiler: gcc
@@ -77,7 +77,7 @@ jobs:
        - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
        - IMG=centos7
        - DOCKER_TAG=t
-       - PYTHON_VERSION=2.7
+       - PYTHON_VERSION=3.6
     - name: "Centos 7: py3.6 --with-flux-security"
       stage: test
       compiler: gcc

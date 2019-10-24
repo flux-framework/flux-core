@@ -9,7 +9,7 @@ test_under_flux 1 job
 hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-1"}}'
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SCHED_DUMMY=${FLUX_BUILD_DIR}/t/job-manager/.libs/sched-dummy.so
-REQ_AND_UNLOAD=${SHARNESS_TEST_SRCDIR}/schedutil/req_and_unload.py
+REQ_AND_UNLOAD="flux python ${SHARNESS_TEST_SRCDIR}/schedutil/req_and_unload.py"
 
 test_expect_success 'schedutil: load sched-dummy --cores=2' '
 	flux module load -r 0 ${SCHED_DUMMY} --cores=2

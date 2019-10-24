@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ###############################################################
 # Copyright 2019 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -10,7 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# Usage: drain-undrain.py
+# Usage: flux python drain-undrain.py
 #
 # Send a drain request immediately followed by an undrain request.
 #
