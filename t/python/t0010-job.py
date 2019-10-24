@@ -40,13 +40,6 @@ class TestJob(unittest.TestCase):
         jobspec_dir = os.path.abspath(
             os.path.join(os.environ["FLUX_SOURCE_DIR"], "t", "jobspec")
         )
-        ingest_dir = os.path.abspath(
-            os.path.join(os.environ["FLUX_BUILD_DIR"], "t", "ingest")
-        )
-
-        # load the dummy job manager
-        job_manager_path = os.path.join(ingest_dir, ".libs", "job-manager-dummy.so")
-        self.fh.mrpc_create("cmb.insmod", {"path": job_manager_path, "args": []})
 
         # get a valid jobspec
         basic_jobspec_fname = os.path.join(jobspec_dir, "valid", "basic_v1.yaml")
