@@ -48,7 +48,7 @@ def rerun_under_flux(size=1, personality="full"):
     command = [flux_exe, "start", "--bootstrap=selfpmi", "--size", str(size)]
     if personality != "full":
         for rc_num in [1, 3]:
-            attr = "broker.{}_path".format(rc_num)
+            attr = "broker.rc{}_path".format(rc_num)
             if personality == "minimal":
                 command.append("-o,-S{}=".format(attr))
             else:

@@ -166,6 +166,17 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         set_error (error, "Unable to parse command");
         goto error;
     }
+    if (json_is_string (job->command)) {
+        job->command = json_pack ("[o]", job->command);
+        if (!job->command) {
+            set_error (error, "Failed to pack bare command into an array");
+            goto error;
+        }
+    }
+    else if (!json_is_array (job->command)) {
+        set_error (error, "Malformed command entry");
+        goto error;
+    }
     return job;
 error:
     jobspec_destroy (job);
