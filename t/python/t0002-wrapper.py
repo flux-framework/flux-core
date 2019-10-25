@@ -73,6 +73,21 @@ class TestWrapper(unittest.TestCase):
     def test_read_basic_value(self):
         self.assertGreater(flux.constants.FLUX_NODEID_ANY, 0)
 
+    def test_invalid_constructor_call(self):
+        """Test that a TypeError is raised due to missing arguments rather than a
+        infinite recursion as documented in
+        https://github.com/flux-framework/flux-core/issues/2485
+        """
+        with six.assertRaisesRegex(
+            self,
+            TypeError,
+            (
+                r"(.*takes at least.*arguments.*)"
+                r"|(.*missing.*required positional arguments.*)"
+            ),
+        ):
+            flux.wrapper.Wrapper()
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
