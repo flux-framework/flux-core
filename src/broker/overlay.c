@@ -220,6 +220,7 @@ char *overlay_lspeer_encode (overlay_t *ov)
     }
     if (!(json_str = json_dumps (o, 0)))
         goto nomem;
+    json_decref (o);
     return json_str;
 nomem:
     json_decref (o);
