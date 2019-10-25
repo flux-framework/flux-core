@@ -87,7 +87,8 @@ static void lua_plugref_destroy (struct lua_plugref *ref)
 {
     if (ref) {
         free (ref->topic);
-        luaL_unref (L, LUA_REGISTRYINDEX, ref->lua_ref);
+        if (L)
+            luaL_unref (L, LUA_REGISTRYINDEX, ref->lua_ref);
         free (ref);
     }
 }
@@ -792,6 +793,7 @@ int shell_rc_close (void)
     rc_shell = NULL;
     if (L)
         lua_close (L);
+    L = NULL;
 
     /*  Destroy file stack
      */
