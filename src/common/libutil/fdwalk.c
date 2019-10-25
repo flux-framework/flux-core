@@ -112,9 +112,17 @@ static int parse_fd(const char *s) {
     return val;
 }
 
+int _fdwalk_portable (void (*func)(void *, int), void *data)
+{
+    int open_max = sysconf (_SC_OPEN_MAX);
+    for (int fd = 0; fd < open_max; fd++)
+        func (data, fd);
+    return 0;
+
+}
+
 int fdwalk (void (*func)(void *, int), void *data) {
     int fd;
-    int open_max;
     int rc = 0;
 
     /* On Linux use getdents64 to avoid malloc in opendir() and
@@ -142,12 +150,7 @@ int fdwalk (void (*func)(void *, int), void *data) {
         return rc;
     }
 #endif
-
-    open_max = sysconf (_SC_OPEN_MAX);
-
-    for (fd = 0; fd < open_max; fd++)
-        func (data, fd);
-    return rc;
+    return _fdwalk_portable (func, data);
 }
 
 /* vi: ts=4 sw=4 expandtab
