@@ -17,6 +17,8 @@
 #include <sys/resource.h>
 
 #include "src/common/libtap/tap.h"
+
+#define FDWALK_INTERFACE_TEST
 #include "src/common/libutil/fdwalk.h"
 
 
@@ -27,8 +29,11 @@ static int get_high_fd_number (void)
         "getrlimit (RLIMIT_NOFILE)");
     diag ("rlmit.nofile = %d", rl.rlim_cur);
     // Let's be reasonable here
-    if (rl.rlim_cur > 10000)
+    if (rl.rlim_cur > 10000) {
         rl.rlim_cur = 10000;
+        ok (setrlimit (RLIMIT_NOFILE, &rl) == 0,
+            "setrlimit nofile=%d", rl.rlim_cur);
+    }
     return rl.rlim_cur - 1;
 }
 
@@ -48,6 +53,24 @@ static int * get_open_fds (int maxfd)
         ok (fdwalk (set_fd, fds) == 0,
             "fdwalk () worked");
     return fds;
+}
+
+static void test_fdwalk_fallback (int maxfd)
+{
+    int *fds = calloc (maxfd * 2, sizeof (int));
+    if (!fds)
+        BAIL_OUT ("test_fdwalk_fallback: out of memory");
+    ok (_fdwalk_portable (set_fd, fds) == 0,
+        "_fdwalk_portable() worked");
+    int count = 0;
+    for (int i = 0; i <= maxfd; i++)
+        if (fds[i] == 1) count++;
+
+    ok (count == maxfd + 1,
+        "_fdwalk_portable() visited all %d fds (expected %d)",
+        count, maxfd + 1);
+
+    free (fds);
 }
 
 int main (int argc, char *argv[])
@@ -106,6 +129,8 @@ int main (int argc, char *argv[])
 
     free (fds);
     free (openfds);
+
+    test_fdwalk_fallback (maxfd);
 
     done_testing ();
     return 0;
