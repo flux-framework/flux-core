@@ -23,6 +23,12 @@ extern "C" {
 // The file descriptors that are enumerated will not include the file descriptor
 // used for the enumeration itself.
 int fdwalk(void (*func)(void *, int), void *opaque);
+
+#ifdef FDWALK_INTERFACE_TEST
+// Broken out "portable" version of fdwalk that iterates all possible
+// fds from 0 to _SC_OPEN_MAX calling func() for each fd.
+int _fdwalk_portable (void (*func)(void *, int), void *data);
+#endif /* FDWALK_INTERFACE_TEST */
 #ifdef __cplusplus
 }  // extern "C"
 #endif

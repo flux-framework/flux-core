@@ -120,7 +120,8 @@ TESTS = test_ev.t \
 	test_fdutils.t \
 	test_fsd.t \
 	test_zsecurity.t \
-	test_intree.t
+	test_intree.t \
+	test_fdwalk.t
 
 
 test_ldadd = \
@@ -245,3 +246,7 @@ test_zsecurity_t_LDADD = $(test_ldadd)
 test_intree_t_SOURCES = test/intree.c
 test_intree_t_CPPFLAGS = $(test_cppflags)
 test_intree_t_LDADD = $(test_ldadd)
+
+test_fdwalk_t_SOURCES = test/fdwalk.c
+test_fdwalk_t_CPPFLAGS = $(test_cppflags)
+test_fdwalk_t_LDADD = $(test_ldadd)
