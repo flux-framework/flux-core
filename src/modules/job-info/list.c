@@ -231,6 +231,26 @@ error:
     json_decref (jobs);
 }
 
+void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
+                    const flux_msg_t *msg, void *arg)
+{
+    if (flux_respond_pack (h, msg, "{s:[s,s,s,s]}",
+                           "attrs",
+                           "userid",
+                           "priority",
+                           "t_submit",
+                           "state") < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

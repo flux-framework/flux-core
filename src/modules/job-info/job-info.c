@@ -101,6 +101,11 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.list-attrs",
+      .cb           = list_attrs_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.disconnect",
       .cb           = disconnect_cb,
       .rolemask     = 0
