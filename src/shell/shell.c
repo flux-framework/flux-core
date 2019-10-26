@@ -486,24 +486,34 @@ static void shell_events_subscribe (flux_shell_t *shell)
     }
 }
 
-static void shell_finalize (flux_shell_t *shell)
+static int shell_max_task_exit (flux_shell_t *shell)
 {
     /* Process completed tasks:
      * - reduce exit codes to shell 'rc'
-     * - destroy
      *
      * NB: shell->rc may already be initialized to non-zero if
      * another shell component failed and wanted to ensure that
      * shell exits with error.
      */
+    int rc = shell->rc;
+    if (shell->tasks) {
+        struct shell_task *task = zlist_first (shell->tasks);
+
+        while (task) {
+            if (rc < task->rc)
+                rc = task->rc;
+            task = zlist_next (shell->tasks);
+        }
+    }
+    return rc;
+}
+
+static void shell_finalize (flux_shell_t *shell)
+{
     if (shell->tasks) {
         struct shell_task *task;
-
-        while ((task = zlist_pop (shell->tasks))) {
-            if (shell->rc < task->rc)
-                shell->rc = task->rc;
+        while ((task = zlist_pop (shell->tasks)))
             shell_task_destroy (task);
-        }
         zlist_destroy (&shell->tasks);
     }
     aux_destroy (&shell->aux);
@@ -856,14 +866,14 @@ int main (int argc, char *argv[])
         shell.rc = 1;
     }
 
-    shell_finalize (&shell);
+    shell.rc = shell_max_task_exit (&shell);
+    shell_debug ("exit %d", shell.rc);
 
     if (shell_rc_close ())
         shell_log_errno ("shell_rc_close");
 
-    shell_debug ("exit %d", shell.rc);
-
     shell_log_fini ();
+    shell_finalize (&shell);
     exit (shell.rc);
 }
 
