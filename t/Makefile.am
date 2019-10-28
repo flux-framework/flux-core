@@ -112,6 +112,7 @@ TESTSCRIPTS = \
 	t2605-job-shell-output-redirection-standalone.t \
 	t2606-job-shell-output-redirection.t \
 	t2607-job-shell-input.t \
+	t2608-job-shell-log.t \
 	t2700-mini-cmd.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
