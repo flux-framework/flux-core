@@ -180,21 +180,6 @@ test_expect_success 'job-shell: test shell kill event handling: numeric signal' 
 	flux job wait-event $id finish >kill3.finish.out &&
 	grep status=$((2+128<<8)) kill3.finish.out
 '
-grep_dmesg() {
-	i=0
-	flux dmesg | grep "$1"
-	while [ $? -ne 0 ] && [ $i -lt 25 ]
-	do
-	    sleep 0.1
-	    i=$((i+1))
-	    flux dmesg | grep "$1"
-	done
-        if [ "$i" -eq "25" ]
-	then
-	    return 1
-	fi
-        return 0
-}
 test_expect_success 'job-shell: mangled shell kill event logged' '
 	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
 	flux job wait-event $id start &&
@@ -202,8 +187,8 @@ test_expect_success 'job-shell: mangled shell kill event logged' '
 	flux job kill ${id} &&
 	flux job wait-event -vt 1 $id finish >kill4.finish.out &&
 	test_debug "cat kill4.finish.out" &&
-	grep_dmesg "kill: ignoring malformed event" &&
-	grep status=$((15+128<<8)) kill4.finish.out
+	test_expect_code 143 flux job attach ${id} >kill4.log 2>&1 &&
+	grep "ignoring malformed event" kill4.log
 '
 test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
@@ -212,7 +197,8 @@ test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	flux job kill ${id} &&
 	flux job wait-event $id finish >kill5.finish.out &&
 	test_debug "cat kill5.finish.out" &&
-	grep_dmesg "signal 199: Invalid argument" &&
+	test_expect_code 143 flux job attach ${id} >kill5.log 2>&1 &&
+	grep "signal 199: Invalid argument" kill5.log &&
 	grep status=$((15+128<<8)) kill5.finish.out
 '
 test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
