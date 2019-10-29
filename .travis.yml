@@ -37,6 +37,16 @@ jobs:
        - DISTCHECK=t
        - PYTHON_VERSION=3.6
        - GITHUB_RELEASES_DEPLOY=t
+    - name: "Ubuntu: gcc-8 address-sanitizer --with-flux-security"
+      stage: test
+      compiler: gcc-8
+      env:
+       - CC=gcc-8
+       - CXX=g++-8
+       - ARGS="--with-flux-security --enable-sanitizer=address"
+       - PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/8/libasan.so
+       - ASAN_OPTIONS=detect_leaks=0 # TODO: fix/suppress tests so we can turn this on
+       - PYTHON_VERSION=3.6
     - name: "Ubuntu: gcc-8 --with-flux-security/caliper, distcheck"
       stage: test
       compiler: gcc-8
