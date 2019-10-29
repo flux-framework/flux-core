@@ -78,9 +78,6 @@ int main (int argc, char **argv)
 
     check_codec ();
 
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_builtin_get ("connector_path",
-                                         FLUX_CONF_INTREE), 0);
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "opened loop connector");
     if (!h)
