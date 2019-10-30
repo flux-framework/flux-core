@@ -238,8 +238,9 @@ class SubmitCmd:
             "-o",
             "--setopt",
             action="append",
-            help="Set shell option (multiple use OK)",
-            metavar="KEY=VAL",
+            help="Set shell option OPT. An optional value is supported with"
+            + " OPT=VAL (default VAL=1) (multiple use OK)",
+            metavar="OPT",
         )
         parser.add_argument(
             "--setattr",
@@ -319,12 +320,12 @@ class SubmitCmd:
 
         if args.setopt is not None:
             for kv in args.setopt:
-                tmp = kv.split("=", 1)
-                key = tmp[0]
+                # Split into key, val with a default for 1 if no val given:
+                key, val = (kv.split("=", 1) + [1])[:2]
                 try:
-                    val = json.loads(tmp[1])
+                    val = json.loads(val)
                 except:
-                    val = tmp[1]
+                    pass
                 jobspec.setattr_shopt(key, val)
 
         if args.setattr is not None:
