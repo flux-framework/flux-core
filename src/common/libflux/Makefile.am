@@ -106,6 +106,7 @@ libflux_la_SOURCES = \
 	panic.c \
 	event.c \
 	module.c \
+	conf_private.h \
 	conf.c \
 	tagpool.h \
 	tagpool.c \
@@ -165,6 +166,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBSODIUM_LIBS)
 
