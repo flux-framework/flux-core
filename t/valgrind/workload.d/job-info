@@ -8,3 +8,4 @@ id=$(flux jobspec srun -t 1 -n 1 /bin/true | flux job submit)
 flux job attach ${id}
 
 flux job info ${id} eventlog jobspec R >/dev/null
+flux job list --pending --running --inactive
