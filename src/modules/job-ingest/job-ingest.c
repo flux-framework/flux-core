@@ -21,7 +21,6 @@
 #endif
 
 #include "src/common/libutil/fluid.h"
-#include "src/common/libutil/intree.h"
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libeventlog/eventlog.h"
 
@@ -589,17 +588,13 @@ int validate_initialize (flux_t *h,
 {
     const char *usage_message = "Usage: flux module load [OPTIONS] job-ingest "
                                 " [schema=PATH] [validator=PATH]";
-    int flags = 0;
     const char *valpath;
     const char *schpath;
     struct validate *v;
     int i;
-    enum flux_conf_flags flags = FLUX_CONF_BUILTIN;
 
-    if (executable_is_intree () == 1)
-        flags = FLUX_CONF_INTREE;
-    valpath = flux_conf_builtin_get ("jobspec_validate_path", flags);
-    schpath = flux_conf_builtin_get ("jobspec_schema_path", flags);
+    valpath = flux_conf_builtin_get ("jobspec_validate_path", FLUX_CONF_AUTO);
+    schpath = flux_conf_builtin_get ("jobspec_schema_path", FLUX_CONF_AUTO);
     for (i = 0; i < argc; i++) {
         if (!strncmp (argv[i], "schema=", 7)) {
             schpath = argv[i] + 7;

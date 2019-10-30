@@ -32,8 +32,6 @@
 
 #include <unistd.h>
 
-#include "src/common/libutil/intree.h"
-
 #include "job-exec.h"
 #include "bulk-exec.h"
 #include "rset.h"
@@ -84,17 +82,11 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
     return path;
 }
 
-static enum flux_conf_flags conf_flags (void)
-{
-    if (executable_is_intree () == 1)
-        return FLUX_CONF_INTREE;
-    return FLUX_CONF_INSTALLED;
-}
-
 static const char *default_job_shell_path (void)
 {
     if (!default_job_shell)
-        default_job_shell = flux_conf_builtin_get ("shell_path", conf_flags());
+        default_job_shell = flux_conf_builtin_get ("shell_path",
+                                                   FLUX_CONF_AUTO);
     return default_job_shell;
 }
 

@@ -18,11 +18,13 @@ extern "C" {
 enum flux_conf_flags {
     FLUX_CONF_INSTALLED=0,
     FLUX_CONF_INTREE=1,
+    FLUX_CONF_AUTO=2,
 };
 
 /* Retrieve builtin (compiled-in) configuration value by name.
  * If flags=INSTALLED, installed paths are used.
  * If flags=INTREE, source/build tree paths are used.
+ * If flags=AUTO, a heuristic is employed internally to select paths.
  * This function returns NULL with errno=EINVAL on invalid name.
  */
 const char *flux_conf_builtin_get (const char *name,

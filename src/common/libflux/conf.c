@@ -13,6 +13,11 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <stdbool.h>
+
+#include "src/common/libutil/intree.h"
+
 #include "conf.h"
 
 struct builtin {
@@ -62,6 +67,13 @@ const char *flux_conf_builtin_get (const char *name,
             break;
         case FLUX_CONF_INTREE:
             intree = true;
+            break;
+        case FLUX_CONF_AUTO:
+            /* In this context, if executable_is_intree() returns -1 due to
+             * an unlikely internal error, we return the installed value.
+             */
+            if (executable_is_intree () == 1)
+                intree = true;
             break;
     }
     for (entry = &builtin_tab[0]; entry->key != NULL; entry++) {

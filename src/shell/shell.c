@@ -25,7 +25,7 @@
 
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
-#include "src/common/libutil/intree.h"
+#include "src/common/libutil/log.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -540,17 +540,9 @@ static void item_free (void **item)
     }
 }
 
-static enum flux_conf_flags conf_flags_get (void)
-{
-    if (executable_is_intree () == 1)
-        return FLUX_CONF_INTREE;
-    else
-        return FLUX_CONF_INSTALLED;
-}
-
 static const char *shell_conf_get (const char *name)
 {
-    return flux_conf_builtin_get (name, conf_flags_get ());
+    return flux_conf_builtin_get (name, FLUX_CONF_AUTO);
 }
 
 static void shell_initialize (flux_shell_t *shell)
