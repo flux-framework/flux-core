@@ -116,12 +116,22 @@ test_expect_success HAVE_JQ 'flux mini submit --setattr works' '
 	test $(jq ".attributes.user.foo2" attr.out) = "\"yyy\"" &&
 	test $(jq ".attributes.system.bar" attr.out) = "42"
 '
+test_expect_success 'flux mini submit --setattr fails without value' '
+	test_expect_code 1 \
+		flux mini submit --dry-run \
+		--setattr foo \
+		hostname >attr_fail.out 2>&1 &&
+	test_debug "cat attr_fail.out" &&
+	grep "Missing value for attr foo" attr_fail.out
+'
 test_expect_success HAVE_JQ 'flux mini submit --setopt works' '
 	flux mini submit --dry-run \
 		--setopt foo=true \
+		--setopt baz \
 		--setopt bar.baz=42 hostname >opt.out &&
 	test $(jq ".attributes.system.shell.options.foo" opt.out) = "true" &&
-	test $(jq ".attributes.system.shell.options.bar.baz" opt.out) = "42"
+	test $(jq ".attributes.system.shell.options.bar.baz" opt.out) = "42" &&
+	test $(jq ".attributes.system.shell.options.baz" opt.out) = "1"
 '
 test_expect_success HAVE_JQ 'flux mini submit --output passes through to shell' '
 	flux mini submit --dry-run --output=my/file hostname >output.out &&
