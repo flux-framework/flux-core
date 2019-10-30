@@ -209,8 +209,8 @@ static size_t matchtag_hasher (const void *key)
 static int copy_match (struct flux_match *dst,
                        const struct flux_match src)
 {
-    if (dst->topic_glob)
-        free (dst->topic_glob);
+
+    flux_match_free (*dst);
     *dst = src;
     if (src.topic_glob) {
         if (!(dst->topic_glob = strdup (src.topic_glob)))
@@ -477,8 +477,7 @@ static void free_msg_handler (flux_msg_handler_t *mh)
     if (mh) {
         int saved_errno = errno;
         assert (mh->magic == HANDLER_MAGIC);
-        if (mh->match.topic_glob)
-            free (mh->match.topic_glob);
+        flux_match_free (mh->match);
         mh->magic = ~HANDLER_MAGIC;
         free (mh);
         errno = saved_errno;
