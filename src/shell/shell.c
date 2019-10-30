@@ -582,7 +582,7 @@ void flux_shell_killall (flux_shell_t *shell, int signum)
         return;
     task = zlist_first (shell->tasks);
     while (task) {
-        if (shell_task_kill (task, signum) < 0)
+        if (shell_task_running (task) && shell_task_kill (task, signum) < 0)
             shell_log_errno ("kill task %d: signal %d", task->rank, signum);
         task = zlist_next (shell->tasks);
     }
