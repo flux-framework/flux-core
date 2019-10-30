@@ -331,6 +331,8 @@ class SubmitCmd:
         if args.setattr is not None:
             for kv in args.setattr:
                 tmp = kv.split("=", 1)
+                if len(tmp) != 2:
+                    raise ValueError("--setattr: Missing value for attr " + kv)
                 key = tmp[0]
                 try:
                     val = json.loads(tmp[1])
