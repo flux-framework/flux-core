@@ -273,13 +273,31 @@ class Wrapper(WrapperBase):
         )
 
     def __getattr__(self, name):
+        """Look up and return attributes that are not defined on this instance.
+
+        This function is called when code tries to read from an attribute that
+        is not defined in this instance's __dict__. This function looks up
+        the attribute on self.lib, and adds a variety of prefixes to the
+        attribute name if necessary. If the attribute is not found on self.lib,
+        an AttributeError is raised; if it is found, it is returned. However,
+        if the attribute is callable, the attribute is first bound to this
+        instance as a method.
+
+        :param name: the name of the attribute to find
+        :raises AttributeError: if the attribute (possibly with prefixes)
+        is not found on self.lib
+        """
         fun = None
         if re.match("__.*__", name):
             # This is a python internal name, skip it
             raise AttributeError
+        if name == "lib":
+            # If "lib" is not defined in self.__dict__, this function would
+            # enter an infinite recursion if it tried to access self.lib.
+            raise AttributeError
 
         # try it bare
-        llib = getattr(self, "lib")
+        llib = self.lib
         try:
             fun = getattr(llib, name)
         except AttributeError:
@@ -310,8 +328,9 @@ class Wrapper(WrapperBase):
 
     def __clear(self):
         # avoid recursion
-        handle = self._handle
-        if handle is None:
+        if hasattr(self, "_handle") and self._handle is not None:
+            handle = self._handle
+        else:
             return
         if self.destructor is None:
             return
