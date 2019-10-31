@@ -48,7 +48,6 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
@@ -99,11 +98,11 @@ static void shell_output_control_task (struct shell_task *task,
 {
     if (stop) {
         if (flux_subprocess_stream_stop (task->proc, stream) < 0)
-            log_err ("flux_subprocess_stream_stop %d:%s", task->rank, stream);
+            shell_log_errno ("flux_subprocess_stream_stop %d:%s", task->rank, stream);
     }
     else {
         if (flux_subprocess_stream_start (task->proc, stream) < 0)
-            log_err ("flux_subprocess_stream_start %d:%s", task->rank, stream);
+            shell_log_errno ("flux_subprocess_stream_start %d:%s", task->rank, stream);
     }
 }
 
@@ -139,7 +138,7 @@ static int shell_output_term (struct shell_output *out)
         json_t *context;
         const char *name;
         if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            log_err ("eventlog_entry_parse");
+            shell_log_errno ("eventlog_entry_parse");
             return -1;
         }
         if (!strcmp (name, "data")) {
@@ -150,7 +149,7 @@ static int shell_output_term (struct shell_output *out)
             char *data = NULL;
             int len = 0;
             if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
-                log_err ("iodecode");
+                shell_log_errno ("iodecode");
                 return -1;
             }
             if (!strcmp (stream, "stdout")) {
@@ -180,15 +179,15 @@ static int shell_output_ready (struct shell_output *out, flux_kvs_txn_t *txn)
     int saved_errno, rc = -1;
 
     if (!(entry = eventlog_entry_create (0., "output-ready", NULL))) {
-        log_err ("eventlog_entry_create");
+        shell_log_errno ("eventlog_entry_create");
         goto error;
     }
     if (!(entrystr = eventlog_entry_encode (entry))) {
-        log_err ("eventlog_entry_encode");
+        shell_log_errno ("eventlog_entry_encode");
         goto error;
     }
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0) {
-        log_err ("flux_kvs_txn_put");
+        shell_log_errno ("flux_kvs_txn_put");
         goto error;
     }
     rc = 0;
@@ -216,21 +215,21 @@ static int shell_output_redirect_stream (struct shell_output *out,
     if (ntasks > 1) {
         int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
         if (!(idset = idset_create (ntasks, 0))) {
-            log_err ("idset_create");
+            shell_log_errno ("idset_create");
             goto error;
         }
         if (idset_range_set (idset, 0, ntasks - 1) < 0) {
-            log_err ("idset_range_set");
+            shell_log_errno ("idset_range_set");
             goto error;
         }
         if (!(rankptr = idset_encode (idset, flags))) {
-            log_err ("idset_encode");
+            shell_log_errno ("idset_encode");
             goto error;
         }
     }
     else {
         if (asprintf (&rankptr, "%d", 0) < 0) {
-            log_err ("asprintf");
+            shell_log_errno ("asprintf");
             goto error;
         }
     }
@@ -240,15 +239,15 @@ static int shell_output_redirect_stream (struct shell_output *out,
                                        "stream", stream,
                                        "rank", rankptr,
                                        "path", path))) {
-        log_err ("eventlog_entry_create");
+        shell_log_errno ("eventlog_entry_create");
         goto error;
     }
     if (!(entrystr = eventlog_entry_encode (entry))) {
-        log_err ("eventlog_entry_encode");
+        shell_log_errno ("eventlog_entry_encode");
         goto error;
     }
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", entrystr) < 0) {
-        log_err ("flux_kvs_txn_put");
+        shell_log_errno ("flux_kvs_txn_put");
         goto error;
     }
     rc = 0;
@@ -289,11 +288,11 @@ static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0)
         /* failng to commit output-ready or header is a fatal
          * error.  Should be cleaner in future. Issue #2378 */
-        log_err_exit ("shell_output_kvs_init");
+        shell_die_errno ("shell_output_kvs_init");
     flux_future_destroy (f);
 
     if (flux_shell_remove_completion_ref (out->shell, "output.kvs-init") < 0)
-        log_err ("flux_shell_remove_completion_ref");
+        shell_log_errno ("flux_shell_remove_completion_ref");
 }
 
 static int shell_output_kvs_init (struct shell_output *out, json_t *header)
@@ -319,7 +318,7 @@ static int shell_output_kvs_init (struct shell_output *out, json_t *header)
     if (flux_future_then (f, -1, shell_output_kvs_init_completion, out) < 0)
         goto error;
     if (flux_shell_add_completion_ref (out->shell, "output.kvs-init") < 0) {
-        log_err ("flux_shell_remove_completion_ref");
+        shell_log_errno ("flux_shell_remove_completion_ref");
         goto error;
     }
     /* f memory responsibility of shell_output_kvs_init_completion()
@@ -342,11 +341,11 @@ static void shell_output_kvs_completion (flux_future_t *f, void *arg)
     /* Error failing to commit is a fatal error.  Should be cleaner in
      * future. Issue #2378 */
     if (flux_future_get (f, NULL) < 0)
-        log_err_exit ("shell_output_kvs");
+        shell_die_errno ("shell_output_kvs");
     flux_future_destroy (f);
 
     if (flux_shell_remove_completion_ref (out->shell, "output.kvs") < 0)
-        log_err ("flux_shell_remove_completion_ref");
+        shell_log_errno ("flux_shell_remove_completion_ref");
 }
 
 static int shell_output_kvs (struct shell_output *out)
@@ -365,13 +364,13 @@ static int shell_output_kvs (struct shell_output *out)
         const char *name;
         const char *stream = NULL;
         if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            log_err ("eventlog_entry_parse");
+            shell_log_errno ("eventlog_entry_parse");
             return -1;
         }
         if (!strcmp (name, "data")) {
             int output_type;
             if (iodecode (context, &stream, NULL, NULL, NULL, NULL) < 0) {
-                log_err ("iodecode");
+                shell_log_errno ("iodecode");
                 return -1;
             }
             if (!strcmp (stream, "stdout"))
@@ -381,7 +380,7 @@ static int shell_output_kvs (struct shell_output *out)
             if (output_type == FLUX_OUTPUT_TYPE_KVS) {
                 char *entrystr = eventlog_entry_encode (entry);
                 if (!entrystr) {
-                    log_err ("eventlog_entry_encode");
+                    shell_log_errno ("eventlog_entry_encode");
                     goto error;
                 }
                 if (flux_kvs_txn_put (txn,
@@ -400,7 +399,7 @@ static int shell_output_kvs (struct shell_output *out)
     if (flux_future_then (f, -1, shell_output_kvs_completion, out) < 0)
         goto error;
     if (flux_shell_add_completion_ref (out->shell, "output.kvs") < 0) {
-        log_err ("flux_shell_remove_completion_ref");
+        shell_log_errno ("flux_shell_remove_completion_ref");
         goto error;
     }
     /* f memory responsibility of shell_output_kvs_completion()
@@ -439,7 +438,7 @@ static int shell_output_file (struct shell_output *out)
         json_t *context;
         const char *name;
         if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            log_err ("eventlog_entry_parse");
+            shell_log_errno ("eventlog_entry_parse");
             return -1;
         }
         if (!strcmp (name, "data")) {
@@ -450,7 +449,7 @@ static int shell_output_file (struct shell_output *out)
             char *data = NULL;
             int len = 0;
             if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
-                log_err ("iodecode");
+                shell_log_errno ("iodecode");
                 return -1;
             }
             if (!strcmp (stream, "stdout")) {
@@ -513,35 +512,35 @@ static void shell_output_write_cb (flux_t *h,
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM
          || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM))) {
         if (shell_output_term (out) < 0)
-            log_err_exit ("shell_output_term");
+            shell_die_errno ("shell_output_term");
     }
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
          || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
         if (shell_output_kvs (out) < 0)
-            log_err_exit ("shell_output_kvs");
+            shell_die_errno ("shell_output_kvs");
     }
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
          || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {
         if (shell_output_file (out) < 0)
-            log_err ("shell_output_file");
+            shell_log_errno ("shell_output_file");
     }
     if (json_array_clear (out->output) < 0) {
-        log_msg ("json_array_clear failed");
+        shell_log_error ("json_array_clear failed");
         goto error;
     }
     if (eof) {
         if (--out->eof_pending == 0) {
             flux_msg_handler_stop (mh);
             if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
-                log_err ("flux_shell_remove_completion_ref");
+                shell_log_errno ("flux_shell_remove_completion_ref");
         }
     }
     if (flux_respond (out->shell->h, msg, NULL) < 0)
-        log_err ("flux_respond");
+        shell_log_errno ("flux_respond");
     return;
 error:
     if (flux_respond_error (out->shell->h, msg, errno, NULL) < 0)
-        log_err ("flux_respond");
+        shell_log_errno ("flux_respond");
 }
 
 static void shell_output_write_completion (flux_future_t *f, void *arg)
@@ -549,7 +548,7 @@ static void shell_output_write_completion (flux_future_t *f, void *arg)
     struct shell_output *out = arg;
 
     if (flux_future_get (f, NULL) < 0)
-        log_err ("shell_output_write");
+        shell_log_errno ("shell_output_write");
     zlist_remove (out->pending_writes, f);
     flux_future_destroy (f);
 
@@ -570,7 +569,7 @@ static int shell_output_write (struct shell_output *out,
 
     snprintf (rankstr, sizeof (rankstr), "%d", rank);
     if (!(o = ioencode (stream, rankstr, data, len, eof))) {
-        log_err ("ioencode");
+        shell_log_errno ("ioencode");
         return -1;
     }
 
@@ -579,7 +578,7 @@ static int shell_output_write (struct shell_output *out,
     if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
         goto error;
     if (zlist_append (out->pending_writes, f) < 0)
-        log_msg ("zlist_append failed");
+        shell_log_error ("zlist_append failed");
     json_decref (o);
 
     if (zlist_size (out->pending_writes) >= shell_output_hwm)
@@ -607,7 +606,7 @@ void shell_output_destroy (struct shell_output *out)
 
             while ((f = zlist_pop (out->pending_writes))) { // leader+follower
                 if (flux_future_get (f, NULL) < 0)
-                    log_err ("shell_output_write");
+                    shell_log_errno ("shell_output_write");
                 flux_future_destroy (f);
             }
             zlist_destroy (&out->pending_writes);
@@ -616,17 +615,17 @@ void shell_output_destroy (struct shell_output *out)
             if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM)
                 || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM)) {
                 if (shell_output_term (out) < 0)
-                    log_err ("shell_output_term");
+                    shell_log_errno ("shell_output_term");
             }
             if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS)
                 || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS)) {
                 if (shell_output_kvs (out) < 0)
-                    log_err ("shell_output_kvs");
+                    shell_log_errno ("shell_output_kvs");
             }
             if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
                  || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {
                 if (shell_output_file (out) < 0)
-                    log_err ("shell_output_file");
+                    shell_log_errno ("shell_output_file");
             }
         }
         json_decref (out->output);
@@ -665,10 +664,10 @@ static int shell_output_parse_type (struct shell_output *out,
         (*typep) = FLUX_OUTPUT_TYPE_KVS;
     else if (!strcmp (typestr, "file"))
         (*typep) = FLUX_OUTPUT_TYPE_FILE;
-    else {
-        log_msg ("invalid output type specified '%s'", typestr);
-        return -1;
-    }
+    else
+        return shell_log_errn (EINVAL,
+                               "invalid output type specified '%s'",
+                               typestr);
     return 0;
 }
 
@@ -719,7 +718,7 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
 
     if (path == NULL) {
-        log_msg ("path for %s file output not specified", stream);
+        shell_log_error ("path for %s file output not specified", stream);
         return -1;
     }
 
@@ -857,7 +856,7 @@ static int shell_output_type_file_setup (struct shell_output *out,
     }
 
     if ((fd = open (ofp->path, open_flags, mode)) < 0) {
-        log_err ("error opening output file '%s'", ofp->path);
+        shell_log_errno ("error opening output file '%s'", ofp->path);
         goto error;
     }
 
@@ -906,14 +905,14 @@ static int shell_output_header (struct shell_output *out)
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM)
         || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM)) {
         if (shell_output_term_init (out, o) < 0)
-            log_err ("shell_output_term_init");
+            shell_log_errno ("shell_output_term_init");
     }
     /* will also emit output-ready event and any other initial events.
      * Call this as long as we're not standalone.
      */
     if (!out->shell->standalone) {
         if (shell_output_kvs_init (out, o) < 0)
-            log_err ("shell_output_kvs_init");
+            shell_log_errno ("shell_output_kvs_init");
     }
     rc = 0;
 error:
@@ -995,15 +994,15 @@ static void task_output_cb (struct shell_task *task,
 
     data = flux_subprocess_getline (task->proc, stream, &len);
     if (len < 0) {
-        log_err ("read %s task %d", stream, task->rank);
+        shell_log_errno ("read %s task %d", stream, task->rank);
     }
     else if (len > 0) {
         if (shell_output_write (out, task->rank, stream, data, len, false) < 0)
-            log_err ("write %s task %d", stream, task->rank);
+            shell_log_errno ("write %s task %d", stream, task->rank);
     }
     else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
         if (shell_output_write (out, task->rank, stream, NULL, 0, true) < 0)
-            log_err ("write eof %s task %d", stream, task->rank);
+            shell_log_errno ("write eof %s task %d", stream, task->rank);
     }
 }
 

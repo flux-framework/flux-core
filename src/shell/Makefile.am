@@ -33,6 +33,8 @@ libshell_la_SOURCES = \
 	plugstack.h \
 	jobspec.c \
 	jobspec.h \
+	eventlogger.c \
+	eventlogger.h \
 	rcalc.c \
 	rcalc.h
 
@@ -50,6 +52,8 @@ flux_shell_SOURCES = \
 	info.h \
 	task.c \
 	task.h \
+	log.c \
+	log.h \
 	pmi.c \
 	input.c \
 	output.c \
@@ -58,7 +62,8 @@ flux_shell_SOURCES = \
 	kill.c \
 	signals.c \
 	affinity.c \
-	gpubind.c
+	gpubind.c \
+	evlog.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
@@ -108,8 +113,8 @@ test_jobspec_t_SOURCES = test/jobspec.c
 test_jobspec_t_CPPFLAGS = $(test_cppflags)
 test_jobspec_t_LDADD = $(test_ldadd)
 
-test_plugstack_t_SOURCES = test/plugstack.c
-test_plugstack_t_CPPFLAGS = $(test_cppflags)
+test_plugstack_t_SOURCES = plugstack.c test/plugstack.c
+test_plugstack_t_CPPFLAGS = $(test_cppflags) -DPLUGSTACK_STANDALONE
 test_plugstack_t_LDADD = $(test_ldadd)
 
 test_a_plugin_la_SOURCES = test/plugin_test.c

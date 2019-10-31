@@ -1,0 +1,248 @@
+#!/bin/sh
+#
+test_description='Test flux-shell logging implementation'
+
+. `dirname $0`/sharness.sh
+
+test_under_flux 2
+
+FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
+
+INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
+INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
+
+# test initrc files need to be able to find fluxometer.lua:
+export LUA_PATH="$LUA_PATH;${SHARNESS_TEST_DIRECTORY}/?.lua"
+
+test_expect_success 'flux-shell: log: generate 1-task jobspec and matching R' '
+	flux jobspec srun -N1 -n1 echo Hi >j1 &&
+	cat >R1 <<-EOT
+	{"version": 1, "execution":{ "R_lite":[
+		{ "children": { "core": "0,1" }, "rank": "0" }
+        ]}}
+	EOT
+'
+test_expect_success 'flux-shell: run log testing plugin' '
+	name=log &&
+	cat >${name}.lua <<-EOF &&
+	plugin.searchpath = "${INITRC_PLUGINPATH}"
+	plugin.load { file = "log.so" }
+	EOF
+	${FLUX_SHELL} -v -v -s -r 0 -j j1 -R R1 --initrc=${name}.lua 0 \
+		> ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log"
+'
+for topic in "shell.init" "shell.exit" \
+	     "task.init" "task.exit" \
+	     "task.fork" "task.fork"; do
+    test_expect_success "$topic: got TRACE level message" "
+        grep \"TRACE: log: .*: $topic: trace message\" log.log
+    "
+    test_expect_success "$topic: got DEBUG level message" "
+        grep \"DEBUG: log: .*: $topic: debug message\" log.log
+    "
+    test_expect_success "$topic: got INFO level message" "
+        grep \" INFO: log: .*: $topic: log message\" log.log
+    "
+    test_expect_success "$topic: got WARN level message" "
+        grep \" WARN: log: .*: $topic: warn message\" log.log
+    "
+    test_expect_success "$topic: got ERROR level message" "
+        grep \"ERROR: log: .*: $topic: error message\" log.log
+    "
+    test_expect_success "$topic: got log_errn message" "
+	grep \"ERROR:.*: $topic: log_errn message: Operation not permitted\" log.log
+    "
+    test_expect_success "$topic: got log_errno message" "
+	grep \"ERROR: log: .*: $topic: log_errno message: Invalid argument\" log.log
+    "
+done
+
+test_expect_success 'flux-shell: run job with verbose logging to output' '
+	flux mini run -o verbose=2 -o initrc=log.lua -n2 -N2 hostname \
+		>log-test.output 2>log-test.err
+'
+
+for topic in "shell.init" "shell.exit" \
+	     "task.init" "task.exit" \
+	     "task.fork" "task.fork"; do
+    test_expect_success "$topic: got TRACE level message in output eventlog" "
+        grep \"flux-shell\[0\]: TRACE: log: $topic: trace message\" log-test.err&&
+        grep \"flux-shell\[1\]: TRACE: log: $topic: trace message\" log-test.err
+    "
+    test_expect_success "$topic: got DEBUG level message in output eventlog" "
+        grep \"flux-shell\[0\]: DEBUG: log: $topic: debug message\" log-test.err&&
+        grep \"flux-shell\[1\]: DEBUG: log: $topic: debug message\" log-test.err
+    "
+    test_expect_success "$topic: got INFO level message in output eventlog" "
+        grep \"flux-shell\[0\]: log: $topic: log message\" log-test.err &&
+        grep \"flux-shell\[1\]: log: $topic: log message\" log-test.err
+    "
+    test_expect_success "$topic: got WARN level message in output eventlog" "
+        grep \"flux-shell\[0\]:  WARN: log: $topic: warn message\" log-test.err &&
+        grep \"flux-shell\[1\]:  WARN: log: $topic: warn message\" log-test.err
+    "
+    test_expect_success "$topic: got ERROR level message in output eventlog" "
+        grep \"flux-shell\[0\]: ERROR: log: $topic: error message\" log-test.err &&
+        grep \"flux-shell\[1\]: ERROR: log: $topic: error message\" log-test.err
+    "
+    test_expect_success "$topic: got log_errn message in output eventlog" "
+	grep \"flux-shell\[0\]: ERROR: log: $topic: log_errn message: Operation not permitted\" log-test.err &&
+	grep \"flux-shell\[1\]: ERROR: log: $topic: log_errn message: Operation not permitted\" log-test.err
+    "
+    test_expect_success "$topic: got log_errno message in output eventlog" "
+	grep \"flux-shell\[0\]: ERROR: log: $topic: log_errno message: Invalid argument\" log-test.err &&
+	grep \"flux-shell\[1\]: ERROR: log: $topic: log_errno message: Invalid argument\" log-test.err
+    "
+done
+
+test_expect_success 'flux-shell: run job with normal logging level' '
+	flux mini run -o initrc=log.lua -n2 -N2 hostname \
+		>log-test.output 2>log-test.err
+'
+
+for topic in "shell.init" "shell.exit" \
+	     "task.init" "task.exit" \
+	     "task.fork" "task.fork"; do
+    test_expect_success "$topic: no TRACE level messages in output eventlog" "
+        test_must_fail grep TRACE log-test.err
+    "
+    test_expect_success "$topic: no DEBUG level messages in output eventlog" "
+	test_must_fail grep DEBUG log-test.err
+    "
+    test_expect_success "$topic: got INFO level message in output eventlog" "
+        grep \"flux-shell\[0\]: log: $topic: log message\" log-test.err &&
+        grep \"flux-shell\[1\]: log: $topic: log message\" log-test.err
+    "
+    test_expect_success "$topic: got WARN level message in output eventlog" "
+        grep \"flux-shell\[0\]:  WARN: log: $topic: warn message\" log-test.err &&
+        grep \"flux-shell\[1\]:  WARN: log: $topic: warn message\" log-test.err
+    "
+    test_expect_success "$topic: got ERROR level message in output eventlog" "
+        grep \"flux-shell\[0\]: ERROR: log: $topic: error message\" log-test.err &&
+        grep \"flux-shell\[1\]: ERROR: log: $topic: error message\" log-test.err
+    "
+    test_expect_success "$topic: got log_errn message in output eventlog" "
+	grep \"flux-shell\[0\]: ERROR: log: $topic: log_errn message: Operation not permitted\" log-test.err &&
+	grep \"flux-shell\[1\]: ERROR: log: $topic: log_errn message: Operation not permitted\" log-test.err
+    "
+    test_expect_success "$topic: got log_errno message in output eventlog" "
+	grep \"flux-shell\[0\]: ERROR: log: $topic: log_errno message: Invalid argument\" log-test.err &&
+	grep \"flux-shell\[1\]: ERROR: log: $topic: log_errno message: Invalid argument\" log-test.err
+    "
+done
+
+test_expect_success 'flux-shell: missing command logs fatal error' '
+	test_expect_code 1 flux mini run nosuchcommand 2>missing.err &&
+	grep "flux-shell\[0\]: FATAL: failed to start taskid=0" missing.err &&
+	grep "job.exception type=exec severity=0 failed to start taskid=0" missing.err
+'
+
+test_expect_success 'job-exec: set kill-timeout to low value for testing' '
+	flux setattr job-exec.kill_timeout 0.25
+'
+
+#  Fatal error tests below must exit with failure, but exit due to
+#  SIGTERM should also be allowed. Therefore adapt sharness `test_must_fail`
+#  to allow exit 1 or 143 for succcess.
+#
+test_must_fail_or_be_terminated() {
+    "$@"
+    exit_code=$?
+    # Allow death by SIGTERM
+    if test $exit_code = 143; then
+        return 0
+    elif test $exit_code = 0; then
+        echo >&2 "test_must_fail: command succeeded: $*"
+        return 1
+    elif test $exit_code -gt 129 -a $exit_code -le 192; then
+        echo >&2 "test_must_fail: died by non-SIGTERM signal: $*"
+        return 1
+    elif test $exit_code = 127; then
+        echo >&2 "test_must_fail: command not found: $*"
+        return 1
+    fi
+    return 0
+}
+
+dump_job_output_eventlog() {
+    flux job eventlog -p guest.output $(sed -n 's/^jobid: //p' fatal-$1.out)
+}
+
+test_expect_success 'flux-shell: fatal error in shell.init works' '
+	site=shell.init &&
+	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
+	test_must_fail_or_be_terminated \
+		flux mini run -vvv -o verbose=2 -n2 -N2 \
+			-o initrc=log.lua \
+			-o log-fatal-error=$site hostname \
+		>fatal-${site}.out 2>&1 &&
+	test_debug "cat fatal-${site}.out" &&
+	id=$(sed -n "s/jobid: //p" fatal-${site}.out) &&
+	test_must_fail_or_be_terminated flux job attach -XEl ${id} &&
+	test_might_fail \
+		grep "flux-shell\[1\]: FATAL: log: log-fatal-error requested!" \
+			fatal-${site}.out &&
+	dump_job_output_eventlog $site | grep log-fatal-error
+'
+test_expect_success 'flux-shell: fatal error in shell.exit works' '
+	site=shell.exit &&
+	echo "running mini run" &&
+	test_must_fail_or_be_terminated \
+		flux mini run -vvv -n2 -N2 \
+			-o verbose=2 \
+			-o initrc=log.lua \
+                	-o log-fatal-error=$site hostname &&
+	test $? -eq 0 &&
+	echo "mini run done"
+'
+test_expect_success 'flux-shell: fatal error in task.init works' '
+	site=task.init &&
+	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
+	test_must_fail_or_be_terminated \
+		flux mini run -vvv -n2 -N2 \
+                        -o verbose=2 \
+			-o initrc=log.lua \
+                	-o log-fatal-error=$site hostname \
+		>fatal-${site}.out 2>&1 &&
+	test_debug "cat fatal-${site}.out" &&
+	id=$(sed -n "s/jobid: //p" fatal-${site}.out) &&
+	test_must_fail_or_be_terminated flux job attach -XEl ${id} &&
+	test_might_fail \
+	    grep "log-fatal-error requested!" fatal-${site}.out &&
+	dump_job_output_eventlog $site | grep log-fatal-error
+
+'
+test_expect_success 'flux-shell: fatal error in task.fork works' '
+	site=task.fork &&
+	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
+	test_must_fail_or_be_terminated \
+		flux mini run -v -n2 -N2 \
+			-o initrc=log.lua \
+                	-o log-fatal-error=$site hostname \
+		>fatal-${site}.out 2>&1 &&
+	id=$(sed -n "s/jobid: //p" fatal-${site}.out) &&
+	test_must_fail_or_be_terminated flux job attach -XEl ${id} &&
+	test_might_fail \
+	    grep "flux-shell\[1\]: FATAL: log: log-fatal-error requested!" \
+		fatal-${site}.out &&
+	dump_job_output_eventlog $site | grep log-fatal-error
+
+'
+test_expect_success 'flux-shell: fatal error in task.exec works' '
+	site=task.fork &&
+	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
+	test_must_fail_or_be_terminated \
+		flux mini run -v -n2 -N2 \
+			-o initrc=log.lua \
+                	-o log-fatal-error=$site hostname \
+		>fatal-${site}.out 2>&1 &&
+	test_debug "cat fatal-${site}.out" &&
+	id=$(sed -n "s/jobid: //p" fatal-${site}.out) &&
+	test_must_fail_or_be_terminated flux job attach -XEl ${id} &&
+	test_might_fail \
+	    grep "flux-shell\[1\]: FATAL: log: log-fatal-error requested!" \
+		fatal-${site}.out &&
+	dump_job_output_eventlog $site | grep log-fatal-error
+'
+test_done

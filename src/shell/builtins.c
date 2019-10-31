@@ -14,7 +14,7 @@
 #include "config.h"
 #endif
 
-#include "src/common/libutil/log.h"
+#include <flux/shell.h>
 
 #include "internal.h"
 #include "builtins.h"
@@ -29,6 +29,7 @@ static struct shell_builtin builtin_list_end = { 0 };
  *  Then, the name should be added to the 'builtins' list
  *  to get the builtin automatically loaded at shell startup.
  */
+extern struct shell_builtin builtin_log_eventlog;
 extern struct shell_builtin builtin_pmi;
 extern struct shell_builtin builtin_input;
 extern struct shell_builtin builtin_output;
@@ -38,6 +39,7 @@ extern struct shell_builtin builtin_affinity;
 extern struct shell_builtin builtin_gpubind;
 
 static struct shell_builtin * builtins [] = {
+    &builtin_log_eventlog,
     &builtin_pmi,
     &builtin_input,
     &builtin_output,
@@ -58,6 +60,7 @@ static int shell_load_builtin (flux_shell_t *shell,
     if (flux_plugin_aux_set (p, "flux::shell", shell, NULL) < 0
         || flux_plugin_set_name (p, sb->name) < 0
         || flux_plugin_add_handler (p, "shell.validate", sb->validate, NULL) < 0
+        || flux_plugin_add_handler (p, "shell.connect",  sb->connect, NULL) < 0
         || flux_plugin_add_handler (p, "shell.init", sb->init, NULL) < 0
         || flux_plugin_add_handler (p, "shell.exit", sb->exit, NULL) < 0
         || flux_plugin_add_handler (p, "task.init",  sb->task_init, NULL) < 0
@@ -66,8 +69,7 @@ static int shell_load_builtin (flux_shell_t *shell,
         || flux_plugin_add_handler (p, "task.exit",  sb->task_exit, NULL) < 0)
         return -1;
 
-    if (shell->verbose)
-        log_msg ("loading builtin plugin \"%s\"", sb->name);
+    shell_debug ("loading builtin plugin \"%s\"", sb->name);
     if (plugstack_push (shell->plugstack, p) < 0)
         return -1;
     return (0);

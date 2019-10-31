@@ -208,6 +208,13 @@ int shell_task_start (struct shell_task *task,
     return 0;
 }
 
+int shell_task_running (struct shell_task *task)
+{
+    if (!task->proc)
+        return 0;
+    return (flux_subprocess_state (task->proc) == FLUX_SUBPROCESS_RUNNING);
+}
+
 int shell_task_kill (struct shell_task *task, int signum)
 {
     int rc;

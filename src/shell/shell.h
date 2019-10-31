@@ -29,6 +29,10 @@ typedef void (*flux_shell_task_io_f) (flux_shell_task_t *task,
  */
 flux_shell_t * flux_plugin_get_shell (flux_plugin_t *p);
 
+/*  Get flux handle from shell
+ */
+flux_t * flux_shell_get_flux (flux_shell_t *shell);
+
 /* flux_shell_t interface */
 
 int flux_shell_aux_set (flux_shell_t *shell,
@@ -221,6 +225,93 @@ int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
                                        const char *channel,
                                        flux_shell_task_io_f cb,
                                        void *arg);
+
+/* shell logging functions:
+ *
+ * Logging levels are remapped from Internet RFC 5452 severity levels,
+ *  where here the enumeration identifiers are renamed to make sense
+ *  in the context of shell logging.
+ */
+enum {
+    FLUX_SHELL_FATAL  = 0,  /* LOG_EMERG   */
+    /* Level 1 Reserved */  /* LOG_ALERT   */
+    /* Level 2 Reserved */  /* LOG_CRIT    */
+    FLUX_SHELL_ERROR  = 3,  /* LOG_ERR     */
+    FLUX_SHELL_WARN   = 4,  /* LOG_WARNING */
+    FLUX_SHELL_NOTICE = 5,  /* LOG_NOTICE  */
+    FLUX_SHELL_DEBUG  = 6,  /* LOG_INFO    */
+    FLUX_SHELL_TRACE  = 7,  /* LOG_DEBUG   */
+};
+
+#define shell_trace(...) \
+    flux_shell_log (FLUX_SHELL_TRACE, __FILE__, __LINE__, __VA_ARGS__)
+
+#define shell_debug(...) \
+    flux_shell_log (FLUX_SHELL_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
+
+#define shell_log(...) \
+    flux_shell_log (FLUX_SHELL_NOTICE, __FILE__, __LINE__, __VA_ARGS__)
+
+#define shell_warn(...) \
+    flux_shell_log (FLUX_SHELL_WARN, __FILE__, __LINE__, __VA_ARGS__)
+
+#define shell_log_error(...) \
+    flux_shell_log (FLUX_SHELL_ERROR, __FILE__, __LINE__, __VA_ARGS__)
+
+#define shell_log_errn(errn, ...) \
+    flux_shell_err (__FILE__, __LINE__, errn, __VA_ARGS__)
+
+#define shell_log_errno(...) \
+    flux_shell_err (__FILE__, __LINE__, errno, __VA_ARGS__)
+
+#define shell_die(...) \
+    flux_shell_fatal (__FILE__, __LINE__, 0, __VA_ARGS__)
+
+#define shell_die_errno(...) \
+    flux_shell_fatal (__FILE__, __LINE__, errno, __VA_ARGS__)
+
+#define shell_set_verbose(n) \
+    flux_shell_log_setlevel(FLUX_SHELL_NOTICE+n, NULL)
+
+#define shell_set_quiet(n) \
+    flux_shell_log_setlevel(FLUX_SHELL_NOTICE-n, NULL)
+
+/*  Log a message at level to all registered loggers at level or above
+ */
+void flux_shell_log (int level,
+                     const char *file,
+                     int line,
+                     const char *fmt, ...)
+                     __attribute__ ((format (printf, 4, 5)));
+
+/*  Log a message at FLUX_SHELL_ERROR level, additionally appending the
+ *   result of strerror (errnum) for convenience.
+ *
+ *  Returns -1 with errno = errnum, so that the function can be used as
+ *   return flux_shell_err (...);
+ */
+int flux_shell_err (const char *file,
+                    int line,
+                    int errnum,
+                    const char *fmt, ...)
+                    __attribute__ ((format (printf, 4, 5)));
+
+/*  Log a message at FLUX_SHELL_FATAL level and schedule termination of
+ *   the job shell. May generate an exception if tasks are already
+ *   running.
+ */
+void flux_shell_fatal (const char *file,
+                      int line,
+                      int errnum,
+                      const char *fmt, ...)
+                      __attribute__ ((format (printf, 4, 5)));
+
+/*  Set default severity of logging destination 'dest' to level.
+ *   If dest == NULL then set the internal log dispatch level --
+ *   (i.e. no messages above severity level will be logged to any
+ *    log destination)
+ */
+int flux_shell_log_setlevel (int level, const char *dest);
 
 #ifdef __cplusplus
 }

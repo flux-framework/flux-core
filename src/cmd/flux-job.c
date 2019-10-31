@@ -838,22 +838,109 @@ void print_eventlog_entry (FILE *fp,
         if (!(context_s = json_dumps (context, JSON_COMPACT)))
             log_err_exit ("%s: error re-encoding context", __func__);
     }
-    fprintf (stderr, "%s%s%.3f %s%s%s\n",
-             prefix ? prefix : "",
-             prefix ? ": " : "",
+    fprintf (stderr, "%.3fs: %s%s%s%s%s\n",
              timestamp,
+             prefix ? prefix : "",
+             prefix ? "." : "",
              name,
              context_s ? " " : "",
              context_s ? context_s : "");
     free (context_s);
 }
 
+static void handle_output_data (struct attach_ctx *ctx, json_t *context)
+{
+    FILE *fp;
+    const char *stream;
+    const char *rank;
+    char *data;
+    int len;
+    if (!ctx->output_header_parsed)
+        log_msg_exit ("stream data read before header");
+    if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
+        log_msg_exit ("malformed event context");
+    if (!strcmp (stream, "stdout"))
+        fp = stdout;
+    else
+        fp = stderr;
+    if (len > 0) {
+        if (optparse_hasopt (ctx->p, "label-io"))
+            fprintf (fp, "%s: ", rank);
+        fwrite (data, len, 1, fp);
+    }
+    free (data);
+}
+
+static void handle_output_redirect (struct attach_ctx *ctx, json_t *context)
+{
+    const char *stream = NULL;
+    const char *rank = NULL;
+    const char *path = NULL;
+    if (!ctx->output_header_parsed)
+        log_msg_exit ("stream redirect read before header");
+    if (json_unpack (context, "{ s:s s:s s?:s }",
+                              "stream", &stream,
+                              "rank", &rank,
+                              "path", &path) < 0)
+        log_msg_exit ("malformed redirect context");
+    if (!optparse_hasopt (ctx->p, "quiet"))
+        fprintf (stderr, "%s: %s redirected%s%s\n",
+                         rank,
+                         stream,
+                         path ? " to " : "",
+                         path ? path : "");
+}
+
+/*  Level prefix strings. Nominally, output log event 'level' integers
+ *   are Internet RFC 5424 severity levels. In the context of flux-shell,
+ *   the first 3 levels are equivalently "fatal" errors.
+ */
+static const char *levelstr[] = {
+    "FATAL", "FATAL", "FATAL", "ERROR", " WARN", NULL, "DEBUG", "TRACE"
+};
+
+static void handle_output_log (struct attach_ctx *ctx,
+                               double ts,
+                               json_t *context)
+{
+    const char *msg = NULL;
+    const char *file = NULL;
+    const char *component = NULL;
+    int rank = -1;
+    int line = -1;
+    int level = -1;
+    json_error_t err;
+
+    if (json_unpack_ex (context, &err, 0,
+                        "{ s?i s:i s:s s?:s s?:s s?:i }",
+                        "rank", &rank,
+                        "level", &level,
+                        "message", &msg,
+                        "component", &component,
+                        "file", &file,
+                        "line", &line) < 0) {
+        log_err ("invalid log event in guest.output: %s", err.text);
+        return;
+    }
+    if (!optparse_hasopt (ctx->p, "quiet")) {
+        const char *label = levelstr [level];
+        fprintf (stderr, "%.3fs: flux-shell", ts - ctx->timestamp_zero);
+        if (rank >= 0)
+            fprintf (stderr, "[%d]", rank);
+        if (label)
+            fprintf (stderr, ": %s", label);
+        if (component)
+            fprintf (stderr, ": %s", component);
+        fprintf (stderr, ": %s\n", msg);
+    }
+}
+
 /* Handle an event in the guest.output eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
- * The first eventlog entry is a header; remaining entries are data or
- * redirect.  Print each data entry to stdout/stderr, with task rank
- * prefix if --label-io was specified.  For each redirect entry, print
+ * The first eventlog entry is a header; remaining entries are data,
+ * redirect, or log messages.  Print each data entry to stdout/stderr,
+ * with task/rank prefix if --label-io was specified.  For each redirect entry, print
  * information on paths to redirected locations if --quiet is not
  * speciifed.
  */
@@ -863,6 +950,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     const char *entry;
     json_t *o;
     const char *name;
+    double ts;
     json_t *context;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
@@ -873,7 +961,7 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     }
     if (!(o = eventlog_entry_decode (entry)))
         log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (o, &ts, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
     if (!strcmp (name, "header")) {
@@ -881,43 +969,13 @@ void attach_output_continuation (flux_future_t *f, void *arg)
         ctx->output_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
-        FILE *fp;
-        const char *stream;
-        const char *rank;
-        char *data;
-        int len;
-        if (!ctx->output_header_parsed)
-            log_msg_exit ("stream data read before header");
-        if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
-            log_msg_exit ("malformed event context");
-        if (!strcmp (stream, "stdout"))
-            fp = stdout;
-        else
-            fp = stderr;
-        if (len > 0) {
-            if (optparse_hasopt (ctx->p, "label-io"))
-                fprintf (fp, "%s: ", rank);
-            fwrite (data, len, 1, fp);
-        }
-        free (data);
+        handle_output_data (ctx, context);
     }
     else if (!strcmp (name, "redirect")) {
-        const char *stream = NULL;
-        const char *rank = NULL;
-        const char *path = NULL;
-        if (!ctx->output_header_parsed)
-            log_msg_exit ("stream redirect read before header");
-        if (json_unpack (context, "{ s:s s:s s?:s }",
-                         "stream", &stream,
-                         "rank", &rank,
-                         "path", &path) < 0)
-            log_msg_exit ("malformed redirect context");
-        if (!optparse_hasopt (ctx->p, "quiet"))
-            fprintf (stderr, "%s: %s redirected%s%s\n",
-                     rank,
-                     stream,
-                     path ? " to " : "",
-                     path ? path : "");
+        handle_output_redirect (ctx, context);
+    }
+    else if (!strcmp (name, "log")) {
+        handle_output_log (ctx, ts, context);
     }
 
     json_decref (o);
@@ -1169,7 +1227,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
     if (optparse_hasopt (ctx->p, "show-exec")) {
         print_eventlog_entry (stderr,
-                              "exec-event",
+                              "exec",
                               timestamp - ctx->timestamp_zero,
                               name,
                               context);
@@ -1227,10 +1285,11 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          "severity", &severity,
                          "note", &note) < 0)
             log_err_exit ("error decoding exception context");
-        fprintf (stderr, "job-event: exception type=%s severity=%d %s\n",
-                 type,
-                 severity,
-                 note ? note : "");
+        fprintf (stderr, "%.3fs: job.exception type=%s severity=%d %s\n",
+                         timestamp - ctx->timestamp_zero,
+                         type,
+                         severity,
+                         note ? note : "");
     }
     else if (!strcmp (name, "submit")) {
         if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
@@ -1266,7 +1325,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (optparse_hasopt (ctx->p, "show-events")
                                     && strcmp (name, "exception") != 0) {
         print_eventlog_entry (stderr,
-                              "job-event",
+                              "job",
                               timestamp - ctx->timestamp_zero,
                               name,
                               context);

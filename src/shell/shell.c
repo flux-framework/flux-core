@@ -21,10 +21,10 @@
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <flux/shell.h>
 
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/intree.h"
 
 #include "internal.h"
@@ -33,6 +33,7 @@
 #include "svc.h"
 #include "task.h"
 #include "rc.h"
+#include "log.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -63,14 +64,10 @@ static int parse_jobid (const char *optarg, flux_jobid_t *jobid)
 
     errno = 0;
     i = strtoull (optarg, &endptr, 10);
-    if (errno != 0) {
-        log_err ("error parsing jobid");
-        return -1;
-    }
-    if (*endptr != '\0') {
-        log_msg ("error parsing jobid: garbage follows number");
-        return -1;
-    }
+    if (errno != 0)
+        return shell_log_errno ("error parsing jobid");
+    if (*endptr != '\0')
+        return shell_log_errno ("error parsing jobid: garbage follows number");
     *jobid = i;
     return 0;
 }
@@ -79,16 +76,16 @@ static void task_completion_cb (struct shell_task *task, void *arg)
 {
     struct flux_shell *shell = arg;
 
-    if (shell->verbose)
-        log_msg ("task %d complete status=%d", task->rank, task->rc);
+    shell_debug ("task %d complete status=%d", task->rank, task->rc);
 
     shell->current_task = task;
     if (plugstack_call (shell->plugstack, "task.exit", NULL) < 0)
-        log_err ("task.exit plugin(s) failed");
+        shell_log_errno ("task.exit plugin(s) failed");
     shell->current_task = NULL;
 
     if (flux_shell_remove_completion_ref (shell, "task%d", task->rank) < 0)
-        log_err ("failed to remove task%d completion reference", task->rank);
+        shell_log_errno ("failed to remove task%d completion reference",
+                         task->rank);
 }
 
 int flux_shell_setopt (flux_shell_t *shell,
@@ -172,7 +169,7 @@ int flux_shell_getopt_unpack (flux_shell_t *shell,
      *   attributes.system.shell.options which may not be an object or array.
      */
     if ((rc = json_vunpack_ex (o, &err, JSON_DECODE_ANY, fmt, ap)) < 0)
-        log_msg ("shell_getopt: unpack error: %s", err.text);
+        shell_log_error ("shell_getopt: unpack error: %s", err.text);
     else
         rc = 1;
     va_end (ap);
@@ -185,11 +182,11 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
     optparse_t *p = optparse_create (shell_name);
 
     if (p == NULL)
-        log_msg_exit ("optparse_create");
+        shell_die ("optparse_create");
     if (optparse_add_option_table (p, shell_opts) != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_add_option_table failed");
+        shell_die ("optparse_add_option_table failed");
     if (optparse_set (p, OPTPARSE_USAGE, shell_usage) != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_set usage failed");
+        shell_die ("optparse_set usage failed");
     if ((optindex = optparse_parse_args (p, argc, argv)) < 0)
         exit (1);
 
@@ -209,11 +206,12 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
         if (  !optparse_hasopt (p, "jobspec")
            || !optparse_hasopt (p, "resources")
            || !optparse_hasopt (p, "broker-rank"))
-            log_err_exit ("standalone mode requires --jobspec, "
-                          "--resources and --broker-rank");
+            shell_die ("standalone mode requires --jobspec, "
+                       "--resources and --broker-rank");
     }
 
-    shell->verbose = optparse_getopt (p, "verbose", NULL);
+    if ((shell->verbose = optparse_getopt (p, "verbose", NULL)))
+        shell_set_verbose (shell->verbose);
     shell->broker_rank = optparse_get_int (p, "broker-rank", -1);
     shell->p = p;
 }
@@ -221,7 +219,7 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
 static void shell_connect_flux (flux_shell_t *shell)
 {
     if (!(shell->h = flux_open (shell->standalone ? "loop://" : NULL, 0)))
-        log_err_exit ("flux_open");
+        shell_die_errno ("flux_open");
 
     /*  Set reactor for flux handle to our custom created reactor.
      */
@@ -232,14 +230,21 @@ static void shell_connect_flux (flux_shell_t *shell)
     if (shell->broker_rank < 0) {
         uint32_t rank;
         if (flux_get_rank (shell->h, &rank) < 0)
-            log_err ("error fetching broker rank");
+            shell_log_errno ("error fetching broker rank");
         shell->broker_rank = rank;
     }
+    if (plugstack_call (shell->plugstack, "shell.connect", NULL) < 0)
+        shell_log_errno ("shell.connect");
 }
 
 flux_shell_t *flux_plugin_get_shell (flux_plugin_t *p)
 {
     return flux_plugin_aux_get (p, "flux::shell");
+}
+
+flux_t *flux_shell_get_flux (flux_shell_t *shell)
+{
+    return shell->h;
 }
 
 int flux_shell_aux_set (flux_shell_t *shell,
@@ -334,7 +339,7 @@ int flux_shell_get_info (flux_shell_t *shell, char **json_str)
         errno = EINVAL;
         return -1;
     }
-    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:b s:b }}",
+    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:i s:b }}",
                            "jobid", shell->info->jobid,
                            "rank",  shell->info->shell_rank,
                            "size",  shell->info->shell_size,
@@ -399,12 +404,12 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
                   "shell-%ju.%s",
                   (uintmax_t) shell->jobid,
                   subtopic) < 0) {
-        log_err ("add_event: asprintf");
+        shell_log_errno ("add_event: asprintf");
         return -1;
     }
     match.topic_glob = topic;
     if (!(mh = flux_msg_handler_create (shell->h, match, cb, arg))) {
-        log_err ("add_event: flux_msg_handler_create");
+        shell_log_errno ("add_event: flux_msg_handler_create");
         free (topic);
         return -1;
     }
@@ -474,35 +479,48 @@ static void shell_events_subscribe (flux_shell_t *shell)
     if (shell->h) {
         char *topic;
         if (asprintf (&topic, "shell-%ju.", (uintmax_t) shell->jobid) < 0)
-            log_err_exit ("shell subscribe: asprintf");
+            shell_die_errno ("shell subscribe: asprintf");
         if (flux_event_subscribe (shell->h, topic) < 0)
-            log_err_exit ("shell subscribe: flux_event_subscribe");
+            shell_die_errno ("shell subscribe: flux_event_subscribe");
         free (topic);
     }
 }
 
-static void shell_finalize (flux_shell_t *shell)
+static int shell_max_task_exit (flux_shell_t *shell)
 {
     /* Process completed tasks:
      * - reduce exit codes to shell 'rc'
-     * - destroy
      *
      * NB: shell->rc may already be initialized to non-zero if
      * another shell component failed and wanted to ensure that
      * shell exits with error.
      */
+    int rc = shell->rc;
+    if (shell->tasks) {
+        struct shell_task *task = zlist_first (shell->tasks);
+
+        while (task) {
+            if (rc < task->rc)
+                rc = task->rc;
+            task = zlist_next (shell->tasks);
+        }
+    }
+    return rc;
+}
+
+static void shell_finalize (flux_shell_t *shell)
+{
     if (shell->tasks) {
         struct shell_task *task;
-
-        while ((task = zlist_pop (shell->tasks))) {
-            if (shell->rc < task->rc)
-                shell->rc = task->rc;
+        while ((task = zlist_pop (shell->tasks)))
             shell_task_destroy (task);
-        }
         zlist_destroy (&shell->tasks);
     }
     aux_destroy (&shell->aux);
+
     plugstack_destroy (shell->plugstack);
+    shell->plugstack = NULL;
+
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
@@ -541,20 +559,20 @@ static void shell_initialize (flux_shell_t *shell)
 
     memset (shell, 0, sizeof (struct flux_shell));
     if (!(shell->completion_refs = zhashx_new ()))
-        log_err_exit ("zhashx_new");
+        shell_die_errno ("zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
 
     if (!(shell->plugstack = plugstack_create ()))
-        log_err_exit ("plugstack_create");
+        shell_die_errno ("plugstack_create");
 
     if (plugstack_plugin_aux_set (shell->plugstack, "flux::shell", shell) < 0)
-        log_err_exit ("plugstack_plugin_aux_set");
+        shell_die_errno ("plugstack_plugin_aux_set");
 
     if (plugstack_set_searchpath (shell->plugstack, pluginpath) < 0)
-        log_err_exit ("plugstack_set_searchpath");
+        shell_die_errno ("plugstack_set_searchpath");
 
     if (shell_load_builtins (shell) < 0)
-        log_err_exit ("shell_load_builtins");
+        shell_die_errno ("shell_load_builtins");
 }
 
 void flux_shell_killall (flux_shell_t *shell, int signum)
@@ -564,8 +582,8 @@ void flux_shell_killall (flux_shell_t *shell, int signum)
         return;
     task = zlist_first (shell->tasks);
     while (task) {
-        if (shell_task_kill (task, signum) < 0)
-            log_err ("kill task %d: signal %d", task->rank, signum);
+        if (shell_task_running (task) && shell_task_kill (task, signum) < 0)
+            shell_log_errno ("kill task %d: signal %d", task->rank, signum);
         task = zlist_next (shell->tasks);
     }
 }
@@ -634,29 +652,114 @@ out:
     return (rc);
 }
 
+static void eventlog_cb (flux_future_t *f, void *arg)
+{
+    json_t *o = NULL;
+    json_t *context = NULL;
+    const char *name;
+    const char *entry;
+
+    if (flux_job_event_watch_get (f, &entry) < 0) {
+        if (errno == ENODATA)
+            return;
+        shell_log_errno ("flux_job_event_watch_get");
+        return;
+    }
+    if (!(o = eventlog_entry_decode (entry))) {
+        shell_log_errno ("eventlog_entry_decode: %s", entry);
+        return;
+    }
+    if (eventlog_entry_parse (o, NULL, &name, &context) < 0) {
+        shell_log_errno ("eventlog_entry_parse: %s", entry);
+        return;
+    }
+    if (strcmp (name, "exception") == 0) {
+        const char *type;
+        int severity;
+        const char *note = NULL;
+        if (json_unpack (context, "{s:s s:i s?s}",
+                         "type", &type,
+                         "severity", &severity,
+                         "note", &note) < 0) {
+            shell_log_errno ("exception event unpack");
+            return;
+        }
+        shell_log_set_exception_logged ();
+        shell_die ("job.exception during init barrier, aborting");
+    }
+    json_decref (o);
+    flux_future_reset (f);
+}
+
+static void barrier_cb (flux_future_t *f, void *arg)
+{
+    flux_reactor_t *r = flux_future_get_reactor (f);
+    if (flux_future_get (f, NULL) < 0) {
+        shell_log_errno ("flux_future_get: shell_barrier");
+        flux_reactor_stop_error (r);
+    }
+    else {
+        shell_trace ("shell barrier complete");
+        flux_reactor_stop (r);
+    }
+}
+
 static int shell_barrier (flux_shell_t *shell, const char *name)
 {
-    flux_future_t *f;
+    flux_future_t *log_f = NULL;
+    flux_future_t *f = NULL;
+    flux_t *h = NULL;
+    flux_jobid_t id;
     char fqname[128];
+    int rc = -1;
 
     if (shell->standalone || shell->info->shell_size == 1)
         return 0; // NO-OP
+    id = shell->info->jobid;
     if (snprintf (fqname,
                   sizeof (fqname),
                   "shell-%ju-%s",
-                  (uintmax_t)shell->info->jobid,
+                  (uintmax_t) id,
                    name) >= sizeof (fqname)) {
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_barrier (shell->h, fqname, shell->info->shell_size)))
-        return -1;
-    if (flux_future_get (f, NULL) < 0) {
-        flux_future_destroy (f);
-        return -1;
+    /*  Clone shell flux handle so that only barrier and eventlog watch
+     *   messages are dispatched in the temporary reactor call here.
+     *   This allows messages from other shell services to be requeued
+     *   for the real reactor in main().
+     */
+    if (!(h = flux_clone (shell->h)))
+        shell_die_errno ("flux_handle_clone");
+
+    if (!(f = flux_barrier (h, fqname, shell->info->shell_size))) {
+        shell_log_errno ("flux_barrier");
+        goto out;
     }
+    if (!(log_f = flux_job_event_watch (h, id, "eventlog", 0))) {
+        shell_log_errno ("flux_job_event_watch");
+        goto out;
+    }
+    if (flux_future_then (log_f, -1., eventlog_cb, NULL) < 0
+        ||  flux_future_then (f, -1., barrier_cb, NULL) < 0) {
+        shell_log_errno ("flux_future_then");
+        goto out;
+    }
+    if (flux_future_then (f, -1., barrier_cb, shell) < 0) {
+        shell_log_errno ("flux_future_then");
+        goto out;
+    }
+    if (flux_reactor_run (flux_get_reactor (h), 0) >= 0)
+        rc = 0;
+    shell_trace ("exited barrier with rc = %d", rc);
+out:
+    flux_job_event_watch_cancel (log_f);
+    flux_future_destroy (log_f);
     flux_future_destroy (f);
-    return 0;
+
+    /*  Close the cloned handle */
+    flux_close (h);
+    return rc;
 }
 
 static int shell_init (flux_shell_t *shell)
@@ -676,14 +779,13 @@ static int shell_init (flux_shell_t *shell)
     /*  Only try loading initrc if the file is readable or required:
      */
     if (access (rcfile, R_OK) == 0 || required) {
-        if (shell->verbose)
-            log_msg ("Loading %s", rcfile);
+        shell_debug ("Loading %s", rcfile);
 
         if (shell_rc (shell, rcfile) < 0) {
-            if (errno)
-                log_err_exit ("loading rc file %s", rcfile);
-            else
-                log_msg_exit ("failed to load rc file %s", rcfile);
+            shell_die ("loading rc file %s%s%s",
+                       rcfile,
+                       errno ? ": " : "",
+                       errno ? strerror (errno) : "");
         }
     }
 
@@ -700,7 +802,7 @@ static void shell_task_exec (flux_shell_task_t *task, void *arg)
     flux_shell_t *shell = arg;
     shell->current_task->in_pre_exec = true;
     if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
-        log_err ("task.exec plugin(s) failed");
+        shell_log_errno ("task.exec plugin(s) failed");
 }
 
 static int shell_task_forked (flux_shell_t *shell)
@@ -713,12 +815,39 @@ static int shell_exit (flux_shell_t *shell)
     return plugstack_call (shell->plugstack, "shell.exit", NULL);
 }
 
+/*  Log basic shell info at startup.
+ */
+static void shell_log_info (flux_shell_t *shell)
+{
+    if (shell->verbose) {
+        struct shell_info *info = shell->info;
+        if (info->shell_rank == 0)
+            shell_debug ("0: task_count=%d slot_count=%d "
+                         "cores_per_slot=%d slots_per_node=%d",
+                         info->jobspec->task_count,
+                         info->jobspec->slot_count,
+                         info->jobspec->cores_per_slot,
+                         info->jobspec->slots_per_node);
+        if (info->rankinfo.ntasks > 1)
+            shell_debug ("%d: tasks [%d-%d] on cores %s",
+                         info->shell_rank,
+                         info->rankinfo.global_basis,
+                         info->rankinfo.global_basis+info->rankinfo.ntasks - 1,
+                         info->rankinfo.cores);
+        else
+            shell_debug ("%d: tasks [%d] on cores %s",
+                         info->shell_rank,
+                         info->rankinfo.global_basis,
+                         info->rankinfo.cores);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
     int i;
 
-    log_init (shell_name);
+    shell_log_init (&shell, shell_name);
 
     shell_initialize (&shell);
 
@@ -727,7 +856,7 @@ int main (int argc, char *argv[])
     /* Get reactor capable of monitoring subprocesses.
      */
     if (!(shell.r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
-        log_err_exit ("flux_reactor_create");
+        shell_die_errno ("flux_reactor_create");
 
     /* Connect to broker, or if standalone, open loopback connector.
      */
@@ -744,33 +873,40 @@ int main (int argc, char *argv[])
         exit (1);
 
     /* Set verbose flag if set in attributes.system.shell.verbose */
-    if (flux_shell_getopt_unpack (&shell, "verbose", "b", &shell.verbose) < 0)
-        log_msg_exit ("failed to parse attributes.system.shell.verbose");
+    if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
+        shell_die ("failed to parse attributes.system.shell.verbose");
+
+    /* Reinitialize log facility with new verbosity/shell.info */
+    if (shell_log_reinit (&shell) < 0)
+        shell_die_errno ("shell_log_reinit");
+
+    /* Now that verbosity may have changed, log shell startup info */
+    shell_log_info (&shell);
 
     /* Register service on the leader shell.
      */
     if (!(shell.svc = shell_svc_create (&shell)))
-        log_err_exit ("shell_svc_create");
+        shell_die ("shell_svc_create");
 
     /* Call shell initialization routines and "shell_init" plugins.
      */
     if (shell_init (&shell) < 0)
-        log_err_exit ("shell_prepare");
+        shell_die_errno ("shell_prepare");
 
     /* Barrier to ensure initialization has completed across all shells.
      */
     if (shell_barrier (&shell, "init") < 0)
-        log_err_exit ("shell_barrier");
+        shell_die_errno ("shell_barrier");
 
     /* Create tasks
      */
     if (!(shell.tasks = zlist_new ()))
-        log_msg_exit ("zlist_new failed");
+        shell_die ("zlist_new failed");
     for (i = 0; i < shell.info->rankinfo.ntasks; i++) {
         struct shell_task *task;
 
         if (!(task = shell_task_create (shell.info, i)))
-            log_err_exit ("shell_task_create index=%d", i);
+            shell_die ("shell_task_create index=%d", i);
 
         task->pre_exec_cb = shell_task_exec;
         task->pre_exec_arg = &shell;
@@ -779,21 +915,21 @@ int main (int argc, char *argv[])
         /*  Call all plugin task_init callbacks:
          */
         if (shell_task_init (&shell) < 0)
-            log_err_exit ("shell_task_init");
+            shell_die ("failed to initialize taskid=%d", i);
 
         if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0)
-            log_err_exit ("shell_task_start index=%d", i);
+            shell_die ("failed to start taskid=%d", i);
 
         if (zlist_append (shell.tasks, task) < 0)
-            log_msg_exit ("zlist_append failed");
+            shell_die ("zlist_append failed");
 
         if (flux_shell_add_completion_ref (&shell, "task%d", task->rank) < 0)
-            log_msg_exit ("flux_shell_add_completion_ref");
+            shell_die ("flux_shell_add_completion_ref");
 
         /*  Call all plugin task_fork callbacks:
          */
         if (shell_task_forked (&shell) < 0)
-            log_err_exit ("shell_task_forked");
+            shell_die ("shell_task_forked");
     }
     /*  Reset current task since we've left task-specific context:
      */
@@ -803,10 +939,10 @@ int main (int argc, char *argv[])
      * Exits when all completion references released
      */
     if (flux_reactor_run (shell.r, 0) < 0)
-        log_err ("flux_reactor_run");
+        shell_log_errno ("flux_reactor_run");
 
     if (shell_exit (&shell) < 0) {
-        log_msg ("shell_exit callback(s) failed");
+        shell_log_error ("shell_exit callback(s) failed");
         /* Preset shell.rc to failure so failure here is ensured
          *  to cause shell to exit with non-zero exit code.
          * XXX: this should be replaced with more general fatal
@@ -815,15 +951,14 @@ int main (int argc, char *argv[])
         shell.rc = 1;
     }
 
-    shell_finalize (&shell);
+    shell.rc = shell_max_task_exit (&shell);
+    shell_debug ("exit %d", shell.rc);
 
     if (shell_rc_close ())
-        log_err ("shell_rc_close");
+        shell_log_errno ("shell_rc_close");
 
-    if (shell.verbose)
-        log_msg ("exit %d", shell.rc);
-
-    log_fini ();
+    shell_log_fini ();
+    shell_finalize (&shell);
     exit (shell.rc);
 }
 

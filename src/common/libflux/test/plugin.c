@@ -178,6 +178,39 @@ void test_plugin_args ()
     ok (arg == 5,
         "flux_plugin_arg_unpack returned valid value for arg");
 
+    ok (flux_plugin_arg_set (args,
+                             FLUX_PLUGIN_ARG_IN | FLUX_PLUGIN_ARG_UPDATE,
+                             "{\"b\":7}") == 0,
+        "flux_plugin_arg_set with FLUX_PLUGIN_ARG_UPDATE works");
+    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s:i}", "b", &arg) == 0,
+        "flux_plugin_arg_unpack worked");
+    ok (arg == 7,
+        "flux_plugin_arg_unpack returned valid value for new arg");
+    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s:i}", "a", &arg) == 0,
+        "flux_plugin_arg_unpack worked");
+    ok (arg == 5,
+        "flux_plugin_arg_unpack returned valid value for old arg");
+
+
+    /* Test update with unset args */
+    flux_plugin_arg_t *new = flux_plugin_arg_create ();
+    if (!new)
+        BAIL_OUT ("flux_plugin_arg_create failed");
+    ok (flux_plugin_arg_set (args,
+                             FLUX_PLUGIN_ARG_IN | FLUX_PLUGIN_ARG_UPDATE,
+                            "{\"count\": 29}") == 0,
+        "flux_plugin_arg_set with ARG_UPDATE works for empty args");
+    flux_plugin_arg_destroy (new);
+
+    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s:i}", "count", &arg) == 0,
+        "flux_plugin_arg_unpack worked");
+    ok (arg == 29,
+        "flux_plugin_arg_unpack returned valid value for arg");
+
+
     /*  Test pack
      */
     ok (flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_IN,

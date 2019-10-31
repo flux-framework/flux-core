@@ -19,17 +19,25 @@
 #include <czmq.h>
 #include <stdarg.h>
 #include <flux/core.h>
+#include <flux/shell.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 
 #include "plugstack.h"
+
+#ifdef PLUGSTACK_STANDALONE
+#undef  shell_log_error
+#undef  shell_log_errno
+#define shell_log_error(...) fprintf (stderr, __VA_ARGS__)
+#define shell_log_errno(...) fprintf (stderr, __VA_ARGS__)
+#endif
 
 struct plugstack {
     char *searchpath;   /* If set, search path for plugstack_load()        */
     zhashx_t *aux;      /* aux items to propagate to loaded plugins        */
     zlistx_t *plugins;  /* Ordered list of loaded plugins                  */
     zhashx_t *names;    /* Hash for lookup of plugins by name              */
+    zlistx_t *current;  /* stack holding current plugin in plugstack_call  */
 };
 
 void plugstack_unload_name (struct plugstack *st, const char *name)
@@ -91,7 +99,7 @@ int plugstack_push (struct plugstack *st, flux_plugin_t *p)
     plugstack_unload_name (st, name);
 
     if (zhashx_insert (st->names, name, item) < 0)
-        log_err ("failed to register plugin as name=%s", name);
+        shell_log_error ("failed to register plugin as name=%s", name);
     return 0;
 }
 
@@ -100,6 +108,7 @@ void plugstack_destroy (struct plugstack *st)
     if (st) {
         int saved_errno = errno;
         zlistx_destroy (&st->plugins);
+        zlistx_destroy (&st->current);
         zhashx_destroy (&st->names);
         zhashx_destroy (&st->aux);
         free (st->searchpath);
@@ -119,6 +128,7 @@ struct plugstack * plugstack_create (void)
     struct plugstack *st = calloc (1, sizeof (*st));
     if (!st
         || !(st->plugins = zlistx_new ())
+        || !(st->current = zlistx_new ())
         || !(st->names = zhashx_new ())
         || !(st->aux = zhashx_new ())) {
         plugstack_destroy (st);
@@ -128,19 +138,56 @@ struct plugstack * plugstack_create (void)
     return (st);
 }
 
+const char *plugstack_current_name (struct plugstack *st)
+{
+    if (!st) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!st->current)
+        return NULL;
+    return flux_plugin_get_name (zlistx_first (st->current));
+}
+
+/*  Copy the plugin list, unsetting the destructor so plugins aren't
+ *   destroyed on destruction of the list copy.
+ */
+static zlistx_t *plugstack_list_dup (struct plugstack *st)
+{
+    zlistx_t *l = zlistx_dup (st->plugins);
+    if (l)
+        zlistx_set_destructor (l, NULL);
+    return l;
+}
+
 int plugstack_call (struct plugstack *st,
                     const char *name,
                     flux_plugin_arg_t *args)
 {
     int rc = 0;
-    flux_plugin_t *p = zlistx_first (st->plugins);
+    flux_plugin_t *p = NULL;
+
+    /* Duplicate list to make plugstack_call() reentrant.
+     */
+    zlistx_t *l = plugstack_list_dup (st);
+    if (!l)
+        return -1;
+
+    p = zlistx_first (l);
     while (p) {
+        /*  Push plugin onto the current plugin stack */
+        void * item = zlistx_add_start (st->current, p);
         if (flux_plugin_call (p, name, args) < 0) {
-            log_msg ("plugin '%s': %s failed", flux_plugin_get_name (p), name);
+            shell_log_error ("plugin '%s': %s failed",
+                             plugstack_current_name (st),
+                             name);
             rc = -1;
         }
-        p = zlistx_next (st->plugins);
+        /* Pop plugin from the current plugin stack */
+        zlistx_detach (st->current, item);
+        p = zlistx_next (l);
     }
+    zlistx_destroy (&l);
     return rc;
 }
 
@@ -163,18 +210,18 @@ static int load_plugin (struct plugstack *st,
     if (!p)
         return -1;
     if (conf && flux_plugin_set_conf (p, conf) < 0) {
-        log_msg ("set_conf: %s: %s", path, flux_plugin_strerror (p));
+        shell_log_error ("set_conf: %s: %s", path, flux_plugin_strerror (p));
         goto error;
     }
     if (plugin_aux_from_zhashx (p, st->aux) < 0) {
-        log_msg ("%s: failed to set aux items", path);
+        shell_log_error ("%s: failed to set aux items", path);
     }
     if (flux_plugin_load_dso (p, path) < 0) {
-        log_msg ("%s", flux_plugin_strerror (p));
+        shell_log_error ("%s", flux_plugin_strerror (p));
         goto error;
     }
     if (plugstack_push (st, p) < 0) {
-        log_err ("plugstack_push (%s)", path);
+        shell_log_errno ("plugstack_push (%s)", path);
         goto error;
     }
     return 0;
@@ -211,13 +258,13 @@ static int plugstack_glob (struct plugstack *st,
             rc = 0;
             break;
         case GLOB_NOSPACE:
-            log_msg ("glob: Out of memory");
+            shell_log_error ("glob: Out of memory");
             break;
         case GLOB_ABORTED:
             //log_err ("glob: failed to read %s", pattern);
             break;
         default:
-            log_msg ("glob: unknown rc = %d", rc);
+            shell_log_error ("glob: unknown rc = %d", rc);
     }
     globfree (&gl);
     return rc;

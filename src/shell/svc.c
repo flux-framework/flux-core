@@ -41,6 +41,8 @@
 
 struct shell_svc {
     flux_shell_t *shell;
+    char name[TOPIC_STRING_SIZE];
+    int registered;
     uid_t uid;      // effective uid of shell
     int *rank_table;// map shell rank to broker rank
 };
@@ -147,6 +149,13 @@ void shell_svc_destroy (struct shell_svc *svc)
 {
     if (svc) {
         int saved_errno = errno;
+        if (svc->registered) {
+            flux_future_t *f = NULL;
+            if (!(f = flux_service_unregister (svc->shell->h, svc->name))
+                || (flux_future_get (f, NULL) < 0))
+                fprintf (stderr, "unregister %s\n", svc->name);
+            flux_future_destroy (f);
+        }
         free (svc->rank_table);
         free (svc);
         errno = saved_errno;
@@ -173,16 +182,16 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     }
     if (!shell->standalone) {
         flux_future_t *f;
-        char name[TOPIC_STRING_SIZE];
-        if (build_topic (svc, NULL, name, sizeof (name)) < 0)
+        if (build_topic (svc, NULL, svc->name, sizeof (svc->name)) < 0)
             goto error;
-        if (!(f = flux_service_register (shell->h, name)))
+        if (!(f = flux_service_register (shell->h, svc->name)))
             goto error;
         if (flux_future_get (f, NULL) < 0) {
             flux_future_destroy (f);
             goto error;
         }
         flux_future_destroy (f);
+        svc->registered = 1;
     }
     return svc;
 error:

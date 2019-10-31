@@ -16,7 +16,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
 
 #include "internal.h"
@@ -51,7 +50,7 @@ static int lookup_job_info_get (flux_future_t *f,
         goto error;
     return 0;
 error:
-    log_msg ("job-info: %s", future_strerror (f, errno));
+    shell_log_error ("job-info: %s", future_strerror (f, errno));
     return -1;
 }
 
@@ -69,7 +68,7 @@ static flux_future_t *lookup_job_info (flux_t *h,
     if (!(keys = json_array ())
             || (!R && array_append_string (keys, "R") < 0)
             || (!jobspec && array_append_string (keys, "jobspec") < 0)) {
-        log_msg ("error building json array");
+        shell_log_error ("error building json array");
         return NULL;
     }
     f = flux_rpc_pack (h,
@@ -81,7 +80,7 @@ static flux_future_t *lookup_job_info (flux_t *h,
                        "keys", keys,
                        "flags", 0);
     if (!f)
-        log_msg ("error sending job-info request");
+        shell_log_error ("error sending job-info request");
     json_decref (keys);
     return f;
 }
@@ -99,12 +98,12 @@ static char *parse_arg_file (const char *optarg)
         fd = STDIN_FILENO;
     else {
         if ((fd = open (optarg, O_RDONLY)) < 0) {
-            log_err ("error opening %s", optarg);
+            shell_log_errno ("error opening %s", optarg);
             return NULL;
         }
     }
     if ((size = read_all (fd, &buf)) < 0)
-        log_err ("error reading %s", optarg);
+        shell_log_errno ("error reading %s", optarg);
     if (fd != STDIN_FILENO)
         (void)close (fd);
     return buf;
@@ -140,7 +139,7 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     if (!R || !jobspec) {
         /* Fetch missing jobinfo from broker job-info service */
         if (shell->standalone) {
-            log_msg ("Invalid arguments: standalone and R/jobspec are unset");
+            shell_log_error ("Invalid arguments: standalone and R/jobspec are unset");
             return -1;
         }
         if (!(f = lookup_job_info (shell->h, shell->jobid, jobspec, R))
@@ -148,11 +147,11 @@ static int shell_init_jobinfo (flux_shell_t *shell,
             goto out;
     }
     if (!(info->jobspec = jobspec_parse (jobspec, &error))) {
-        log_msg ("error parsing jobspec: %s", error.text);
+        shell_log_error ("error parsing jobspec: %s", error.text);
         goto out;
     }
     if (!(info->rcalc = rcalc_create (R))) {
-        log_msg ("error decoding R");
+        shell_log_error ("error decoding R");
         goto out;
     }
     rc = 0;
@@ -169,7 +168,7 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     int broker_rank = shell->broker_rank;
 
     if (!(info = calloc (1, sizeof (*info)))) {
-        log_err ("shell_info_create");
+        shell_log_errno ("shell_info_create");
         return NULL;
     }
     info->jobid = shell->jobid;
@@ -187,36 +186,16 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     free (R);
 
    if (rcalc_distribute (info->rcalc, info->jobspec->task_count) < 0) {
-        log_msg ("error distributing %d tasks over R",
-                 info->jobspec->task_count);
+        shell_log_error ("error distributing %d tasks over R",
+                         info->jobspec->task_count);
         goto error;
     }
     if (rcalc_get_rankinfo (info->rcalc, broker_rank, &info->rankinfo) < 0) {
-        log_msg ("error fetching rankinfo for rank %d", broker_rank);
+        shell_log_error ("error fetching rankinfo for rank %d", broker_rank);
         goto error;
     }
     info->shell_size = rcalc_total_nodes (info->rcalc);
     info->shell_rank = info->rankinfo.nodeid;
-    if (shell->verbose) {
-        if (info->shell_rank == 0)
-            log_msg ("0: task_count=%d slot_count=%d "
-                     "cores_per_slot=%d slots_per_node=%d",
-                     info->jobspec->task_count,
-                     info->jobspec->slot_count,
-                     info->jobspec->cores_per_slot,
-                     info->jobspec->slots_per_node);
-        if (info->rankinfo.ntasks > 1)
-            log_msg ("%d: tasks [%d-%d] on cores %s",
-                     info->shell_rank,
-                     info->rankinfo.global_basis,
-                     info->rankinfo.global_basis + info->rankinfo.ntasks - 1,
-                     info->rankinfo.cores);
-        else
-            log_msg ("%d: tasks [%d] on cores %s",
-                     info->shell_rank,
-                     info->rankinfo.global_basis,
-                     info->rankinfo.cores);
-    }
     return info;
 error:
     shell_info_destroy (info);

@@ -59,6 +59,9 @@ int shell_task_start (struct shell_task *task,
 /* Send signal `signum` to shell task */
 int shell_task_kill (struct shell_task *task, int signum);
 
+/* Return 1 if `task` is running, 0 otherwise */
+int shell_task_running (struct shell_task *task);
+
 #endif /* !SHELL_TASK_H */
 
 /*

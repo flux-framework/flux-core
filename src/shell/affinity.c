@@ -20,8 +20,6 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
-#include "src/common/libutil/log.h"
-
 #include "builtins.h"
 
 struct shell_affinity {
@@ -100,14 +98,14 @@ static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
 
     if (!(coreset = hwloc_bitmap_alloc ())
         || !(resultset = hwloc_bitmap_alloc ())) {
-        log_err ("hwloc_bitmap_alloc");
+        shell_log_errno ("hwloc_bitmap_alloc");
         goto err;
     }
 
     /*  Parse cpus as bitmap list
      */
     if (hwloc_bitmap_list_sscanf (coreset, cores) < 0) {
-        log_msg ("affinity: failed to read core list: %s", cores);
+        shell_log_error ("affinity: failed to read core list: %s", cores);
         goto err;
     }
 
@@ -116,7 +114,7 @@ static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
     depth = hwloc_get_type_depth (sa->topo, HWLOC_OBJ_CORE);
     if (depth == HWLOC_TYPE_DEPTH_UNKNOWN
         || depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
-        log_msg ("hwloc_get_type_depth (CORE) returned nonsense");
+        shell_log_error ("hwloc_get_type_depth (CORE) returned nonsense");
         goto err;
     }
 
@@ -126,7 +124,7 @@ static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
     while (i >= 0) {
         hwloc_obj_t core = hwloc_get_obj_by_depth (sa->topo, depth, i);
         if (!core) {
-            log_msg ("affinity: core%d not in topology", i);
+            shell_log_error ("affinity: core%d not in topology", i);
             goto err;
         }
         hwloc_bitmap_or (resultset, resultset, core->cpuset);
@@ -149,9 +147,9 @@ static json_t *shell_rankinfo (flux_shell_t *shell)
     char *json_str = NULL;
     json_t *o = NULL;
     if (flux_shell_get_rank_info (shell, -1, &json_str) < 0)
-        log_err ("flux_shell_get_rank_info");
+        shell_log_errno ("flux_shell_get_rank_info");
     else if (!(o = json_loads (json_str, 0, NULL)))
-        log_err ("json_loads");
+        shell_log_errno ("json_loads");
     free (json_str);
     return o;
 }
@@ -178,18 +176,12 @@ static void shell_affinity_destroy (void *arg)
  */
 static int shell_affinity_topology_init (struct shell_affinity *sa)
 {
-    if (hwloc_topology_init (&sa->topo) < 0) {
-        log_err ("hwloc_topology_init");
-        return -1;
-    }
-    if (hwloc_topology_load (sa->topo) < 0) {
-        log_err ("hwloc_topology_load");
-        return -1;
-    }
-    if (topology_restrict_current (sa->topo) < 0) {
-        log_err ("topology_restrict_current");
-        return -1;
-    }
+    if (hwloc_topology_init (&sa->topo) < 0)
+        return shell_log_errno ("hwloc_topology_init");
+    if (hwloc_topology_load (sa->topo) < 0)
+        return shell_log_errno ("hwloc_topology_load");
+    if (topology_restrict_current (sa->topo) < 0)
+        return shell_log_errno ("topology_restrict_current");
     return 0;
 }
 
@@ -210,7 +202,7 @@ static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
                                    "ntasks", &sa->ntasks,
                                    "resources",
                                      "cores", &sa->cores) < 0) {
-        log_err ("json_unpack");
+        shell_log_errno ("json_unpack");
         goto err;
     }
     return sa;
@@ -233,7 +225,7 @@ static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
         return true;
     }
     else if (rc < 0) {
-        log_msg ("cpu-affinity: invalid option");
+        shell_warn ("cpu-affinity: invalid option: %s", *resultp);
         return true;
     }
     else if (strcmp (*resultp, "off") == 0)
@@ -305,34 +297,29 @@ static int affinity_init (flux_plugin_t *p,
     struct shell_affinity *sa = NULL;
     flux_shell_t *shell = flux_plugin_get_shell (p);
 
-    if (!shell) {
-        log_err ("flux_plugin_get_shell");
-        return -1;
-    }
+    if (!shell)
+        return shell_log_errno ("flux_plugin_get_shell");
     if (!affinity_getopt (shell, &option))
         return 0;
-    if (!(sa = shell_affinity_create (shell))) {
-        log_err ("shell_affinity_create");
-        return -1;
-    }
+    if (!(sa = shell_affinity_create (shell)))
+        return shell_log_errno ("shell_affinity_create");
+
     /*  Attempt to get cpuset union of all allocated cores. If this
      *   fails, then it might be because the allocated cores exceeds
      *   the real cores available on this machine, so just log an
      *   informational message and skip setting affinity.
      */
     if (!(sa->cpuset = shell_affinity_get_cpuset (sa, sa->cores))) {
-        log_msg ("unable to get cpuset for cores %s. Disabling affinity",
-                 sa->cores);
+        shell_warn ("unable to get cpuset for cores %s. Disabling affinity",
+                    sa->cores);
         return 0;
     }
     if (flux_plugin_aux_set (p, "affinity", sa, shell_affinity_destroy) < 0) {
         shell_affinity_destroy (sa);
         return -1;
     }
-    if (hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0) {
-        log_err ("shell_affinity_bind");
-        return -1;
-    }
+    if (hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0)
+        return shell_log_errno ("hwloc_set_cpubind");
 
     /*  If cpu-affinity=per-task, then distribute ntasks over whatever
      *   resources to which the shell is now bound (from above)
@@ -342,11 +329,11 @@ static int affinity_init (flux_plugin_t *p,
         if (!(sa->pertask = distribute_tasks (sa->topo,
                                               sa->cpuset,
                                               sa->ntasks)))
-            log_err ("distribute_tasks failed");
+            shell_log_errno ("distribute_tasks failed");
         if (flux_plugin_add_handler (p, "task.exec",
                                      task_affinity,
                                      sa) < 0)
-            log_err ("failed to add task.exec handler");
+            shell_log_errno ("failed to add task.exec handler");
     }
 
     return 0;

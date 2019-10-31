@@ -112,6 +112,7 @@ TESTSCRIPTS = \
 	t2605-job-shell-output-redirection-standalone.t \
 	t2606-job-shell-output-redirection.t \
 	t2607-job-shell-input.t \
+	t2608-job-shell-log.t \
 	t2700-mini-cmd.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
@@ -240,7 +241,8 @@ check_LTLIBRARIES = \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
 	shell/plugins/invalid-args.la \
-	shell/plugins/getopt.la
+	shell/plugins/getopt.la \
+	shell/plugins/log.la
 
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
@@ -486,5 +488,12 @@ shell_plugins_getopt_la_SOURCES = shell/plugins/getopt.c
 shell_plugins_getopt_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_getopt_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_getopt_la_LIBADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+        $(top_builddir)/src/common/libflux-core.la
+
+shell_plugins_log_la_SOURCES = shell/plugins/log.c
+shell_plugins_log_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_log_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_log_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
         $(top_builddir)/src/common/libflux-core.la

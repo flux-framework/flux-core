@@ -61,6 +61,10 @@ int plugstack_call (struct plugstack *st,
                     const char *name,
                     flux_plugin_arg_t *args);
 
+/*  Return currently active plugin name, or NULL if not in plugstack
+ */
+const char * plugstack_current_name (struct plugstack *st);
+
 #endif /* !_SHELL_PLUGSTACK_H */
 
 /* vi: ts=4 sw=4 expandtab

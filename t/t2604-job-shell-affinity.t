@@ -57,8 +57,9 @@ test_expect_success 'flux-shell: affinity can be disabled' '
     test_cmp affinity-off.expected affinity-off.out
 '
 test_expect_success 'flux-shell: invalid option is ignored' '
-    flux mini run -ocpu-affinity=1 -n1 hwloc-bind --get &&
-    flux dmesg | grep "invalid option"
+    flux mini run -ocpu-affinity=1 -n1 hwloc-bind --get >invalid.out 2>&1 &&
+    test_debug "cat invalid.out" &&
+    grep "invalid option" invalid.out
 '
 #  GPU affinity tests use standalone shell since simple-sched doesnt
 #   schedule GPUs.

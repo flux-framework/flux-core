@@ -21,8 +21,6 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
-#include "src/common/libutil/log.h"
-
 #include "builtins.h"
 
 static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -31,7 +29,7 @@ static void kill_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_shell_t *shell = arg;
     int signum;
     if (flux_msg_unpack (msg, "{s:i}", "signum", &signum) < 0) {
-        log_msg ("kill: ignoring malformed event");
+        shell_warn ("kill: ignoring malformed event");
         return;
     }
     flux_shell_killall (shell, signum);
