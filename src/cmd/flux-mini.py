@@ -245,8 +245,8 @@ class SubmitCmd:
         parser.add_argument(
             "--setattr",
             action="append",
-            help="Set job attribute (multiple use OK)",
-            metavar="KEY=VAL",
+            help="Set job attribute ATTR to VAL (multiple use OK)",
+            metavar="ATTR=VAL",
         )
         parser.add_argument(
             "--input",
