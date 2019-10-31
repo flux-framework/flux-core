@@ -179,6 +179,49 @@ class JobSpec:
         return json.dumps(self.jobspec)
 
 
+class CleanFormatter(argparse.HelpFormatter):
+    def _format_action_invocation(self, action):
+        if not action.option_strings:
+            (metavar,) = self._metavar_formatter(action, action.dest)(1)
+            return metavar
+
+        else:
+            opts = list(action.option_strings)
+
+            #  Default optstring is `-l, --long-opt`
+            optstring = ", ".join(opts)
+
+            #  If only a long option is supported, then prefix with
+            #   whitepsace by the width of a short option so that all
+            #   long opts start in the same column:
+            if len(opts) == 1 and len(opts[0]) > 2:
+                optstring = "    " + opts[0]
+
+            #  We're done if no argument supported
+            if action.nargs == 0:
+                return optstring
+
+            #  Append option argument string after `=`
+            default = action.dest.upper()
+            args_string = self._format_args(action, default)
+            return optstring + "=" + args_string
+
+
+def make_fmt(formatter, argwidth=40):
+    """
+    Return our 'clean' HelpFormatter, if possible, with a wider default
+     for the max width allowed for options.
+    """
+    try:
+        # https://stackoverflow.com/a/5464440
+        # beware: "Only the name of this class is considered a public API."
+        # https://stackoverflow.com/questions/44333577
+        return lambda prog: formatter(prog, max_help_position=argwidth)
+    except TypeError:
+        warnings.warn("argparse help formatter failed, falling back.")
+        return formatter
+
+
 class SubmitCmd:
     """
     SubmitCmd submits a job, displays the jobid on stdout, and returns.
@@ -416,14 +459,20 @@ def main():
     # run
     run = RunCmd()
     mini_run_parser_sub = subparsers.add_parser(
-        "run", parents=[run.get_parser()], help="run a job interactively"
+        "run",
+        parents=[run.get_parser()],
+        help="run a job interactively",
+        formatter_class=make_fmt(CleanFormatter),
     )
     mini_run_parser_sub.set_defaults(func=run.main)
 
     # submit
     submit = SubmitCmd()
     mini_submit_parser_sub = subparsers.add_parser(
-        "submit", parents=[submit.get_parser()], help="enqueue a job"
+        "submit",
+        parents=[submit.get_parser()],
+        help="enqueue a job",
+        formatter_class=make_fmt(CleanFormatter),
     )
     mini_submit_parser_sub.set_defaults(func=submit.main)
 
