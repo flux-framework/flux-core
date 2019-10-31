@@ -810,14 +810,20 @@ static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
 
 static void init_attrs_rc_paths (attr_t *attrs)
 {
-    int flags = 0;
+    enum flux_conf_flags flags = FLUX_CONF_INSTALLED;
     if (executable_is_intree () == 1)
-        flags |= CONF_FLAG_INTREE;
-    if (attr_add (attrs, "broker.rc1_path",
-                  flux_conf_get ("rc1_path", flags), 0) < 0
-        || attr_add (attrs, "broker.rc3_path",
-                  flux_conf_get ("rc3_path", flags), 0) < 0)
-        log_err_exit ("attr_add rc1,rc3_path");
+        flags = FLUX_CONF_INTREE;
+    if (attr_add (attrs,
+                  "broker.rc1_path",
+                  flux_conf_builtin_get ("rc1_path", flags),
+                  0) < 0)
+        log_err_exit ("attr_add rc1_path");
+
+    if (attr_add (attrs,
+                  "broker.rc3_path",
+                  flux_conf_builtin_get ("rc3_path", flags),
+                  0) < 0)
+        log_err_exit ("attr_add rc3_path");
 }
 
 static void init_attrs (attr_t *attrs, pid_t pid)

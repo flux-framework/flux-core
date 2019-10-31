@@ -594,11 +594,12 @@ int validate_initialize (flux_t *h,
     const char *schpath;
     struct validate *v;
     int i;
+    enum flux_conf_flags flags = FLUX_CONF_BUILTIN;
 
     if (executable_is_intree () == 1)
-        flags |= CONF_FLAG_INTREE;
-    valpath = flux_conf_get ("jobspec_validate_path", flags);
-    schpath = flux_conf_get ("jobspec_schema_path", flags);
+        flags = FLUX_CONF_INTREE;
+    valpath = flux_conf_builtin_get ("jobspec_validate_path", flags);
+    schpath = flux_conf_builtin_get ("jobspec_schema_path", flags);
     for (i = 0; i < argc; i++) {
         if (!strncmp (argv[i], "schema=", 7)) {
             schpath = argv[i] + 7;

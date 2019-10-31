@@ -84,17 +84,17 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
     return path;
 }
 
-static int conf_flags (void)
+static enum flux_conf_flags conf_flags (void)
 {
     if (executable_is_intree () == 1)
-        return CONF_FLAG_INTREE;
-    return 0;
+        return FLUX_CONF_INTREE;
+    return FLUX_CONF_INSTALLED;
 }
 
 static const char *default_job_shell_path (void)
 {
     if (!default_job_shell)
-        default_job_shell = flux_conf_get ("shell_path", conf_flags());
+        default_job_shell = flux_conf_builtin_get ("shell_path", conf_flags());
     return default_job_shell;
 }
 

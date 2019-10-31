@@ -260,7 +260,8 @@ flux_t *flux_open (const char *uri, int flags)
         uri = getenv ("FLUX_URI");
     if (!uri) {
         if (asprintf (&default_uri, "local://%s",
-                      flux_conf_get ("rundir", 0)) < 0)
+                      flux_conf_builtin_get ("rundir",
+                                             FLUX_CONF_INSTALLED)) < 0)
             goto error;
         uri = default_uri;
     }

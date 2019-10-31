@@ -15,13 +15,13 @@
 #include <string.h>
 #include "conf.h"
 
-struct config {
+struct builtin {
     char *key;
-    const char *val;
+    const char *val_installed;
     const char *val_intree;
 };
 
-static struct config default_config[] = {
+static struct builtin builtin_tab[] = {
     { "lua_cpath_add",  INSTALLED_LUA_CPATH_ADD,    INTREE_LUA_CPATH_ADD },
     { "lua_path_add",   INSTALLED_LUA_PATH_ADD,     INTREE_LUA_PATH_ADD },
     { "python_path",    INSTALLED_PYTHON_PATH,      INTREE_PYTHON_PATH },
@@ -49,14 +49,31 @@ static struct config default_config[] = {
     { NULL, NULL, NULL },
 };
 
-const char *flux_conf_get (const char *name, int flags)
+const char *flux_conf_builtin_get (const char *name,
+                                   enum flux_conf_flags flags)
 {
-    struct config *c;
+    struct builtin *entry;
+    bool intree = false;
+    const char *val = NULL;
 
-    for (c = &default_config[0]; c->key != NULL; c++) {
-        if (!strcmp (c->key, name))
-            return (flags & CONF_FLAG_INTREE) ? c->val_intree : c->val;
+    switch (flags) {
+        case FLUX_CONF_INSTALLED:
+            break;
+        case FLUX_CONF_INTREE:
+            intree = true;
+            break;
     }
+    for (entry = &builtin_tab[0]; entry->key != NULL; entry++) {
+        if (!strcmp (entry->key, name)) {
+            val = intree ? entry->val_intree : entry->val_installed;
+            break;
+        }
+    }
+    if (!val)
+        goto error;
+    return val;
+error:
+    errno = EINVAL;
     return NULL;
 }
 

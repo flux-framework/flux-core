@@ -15,11 +15,18 @@
 extern "C" {
 #endif
 
-enum {
-    CONF_FLAG_INTREE=1,
+enum flux_conf_flags {
+    FLUX_CONF_INSTALLED=0,
+    FLUX_CONF_INTREE=1,
 };
 
-const char *flux_conf_get (const char *name, int flags);
+/* Retrieve builtin (compiled-in) configuration value by name.
+ * If flags=INSTALLED, installed paths are used.
+ * If flags=INTREE, source/build tree paths are used.
+ * This function returns NULL with errno=EINVAL on invalid name.
+ */
+const char *flux_conf_builtin_get (const char *name,
+                                   enum flux_conf_flags flags);
 
 #ifdef __cplusplus
 }
