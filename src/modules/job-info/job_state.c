@@ -18,6 +18,7 @@
 #include <flux/core.h>
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/fluid.h"
 
 #include "job_state.h"
 
@@ -43,10 +44,10 @@ static int job_hash_key_cmp (const void *key1, const void *key2)
     return NUMCMP (*id1, *id2);
 }
 
-/* Compare items for sorting in list.
+/* Compare items for sorting in list, priority first, t_submit second
  * N.B. zlistx_comparator_fn signature
  */
-static int job_list_cmp (const void *a1, const void *a2)
+static int job_priority_cmp (const void *a1, const void *a2)
 {
     const struct job *j1 = a1;
     const struct job *j2 = a2;
@@ -55,6 +56,26 @@ static int job_list_cmp (const void *a1, const void *a2)
     if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
         rc = NUMCMP (j1->t_submit, j2->t_submit);
     return rc;
+}
+
+/* Compare items for sorting in list by timestamp (note that sorting
+ * is in reverse order, most recently running/completed comes first).
+ * N.B. zlistx_comparator_fn signature
+ */
+static int job_running_cmp (const void *a1, const void *a2)
+{
+    const struct job *j1 = a1;
+    const struct job *j2 = a2;
+
+    return NUMCMP (j2->t_running, j1->t_running);
+}
+
+static int job_inactive_cmp (const void *a1, const void *a2)
+{
+    const struct job *j1 = a1;
+    const struct job *j2 = a2;
+
+    return NUMCMP (j2->t_inactive, j1->t_inactive);
 }
 
 static void job_destroy (void *data)
@@ -107,13 +128,15 @@ struct job_state_ctx *job_state_create (flux_t *h)
 
     if (!(jsctx->pending = zlistx_new ()))
         goto error;
-    zlistx_set_comparator (jsctx->pending, job_list_cmp);
+    zlistx_set_comparator (jsctx->pending, job_priority_cmp);
 
     if (!(jsctx->running = zlistx_new ()))
         goto error;
+    zlistx_set_comparator (jsctx->running, job_running_cmp);
 
     if (!(jsctx->inactive = zlistx_new ()))
         goto error;
+    zlistx_set_comparator (jsctx->inactive, job_inactive_cmp);
 
     if (!(jsctx->processing = zlistx_new ()))
         goto error;
@@ -183,18 +206,12 @@ static bool search_direction (struct job *job)
         return false;
 }
 
-/* remove job from one list and move it to another based on the
- * newstate */
-static void job_change_list (struct job_state_ctx *jsctx,
+static void job_insert_list (struct job_state_ctx *jsctx,
                              struct job *job,
-                             zlistx_t *oldlist,
                              flux_job_state_t newstate)
 {
-    if (zlistx_detach (oldlist, job->list_handle) < 0)
-        flux_log_error (jsctx->h, "%s: zlistx_detach",
-                        __FUNCTION__);
-    job->list_handle = NULL;
-
+    /* Note: comparator is set for running & inactive lists, but the
+     * sort calls are not called on zlistx_add_start() */
     if (newstate == FLUX_JOB_DEPEND
         || newstate == FLUX_JOB_SCHED) {
         if (!(job->list_handle = zlistx_insert (jsctx->pending,
@@ -216,6 +233,21 @@ static void job_change_list (struct job_state_ctx *jsctx,
             flux_log_error (jsctx->h, "%s: zlistx_add_start",
                             __FUNCTION__);
     }
+}
+
+/* remove job from one list and move it to another based on the
+ * newstate */
+static void job_change_list (struct job_state_ctx *jsctx,
+                             struct job *job,
+                             zlistx_t *oldlist,
+                             flux_job_state_t newstate)
+{
+    if (zlistx_detach (oldlist, job->list_handle) < 0)
+        flux_log_error (jsctx->h, "%s: zlistx_detach",
+                        __FUNCTION__);
+    job->list_handle = NULL;
+
+    job_insert_list (jsctx, job, newstate);
 }
 
 static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
@@ -450,6 +482,224 @@ void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     update_jobs (ctx, transitions);
 
     return;
+}
+
+static struct job *eventlog_parse (struct info_ctx *ctx,
+                                   const char *eventlog,
+                                   flux_jobid_t id)
+{
+    struct job *job = NULL;
+    json_t *a = NULL;
+    size_t index;
+    json_t *value;
+
+    if (!(job = job_create (ctx, id)))
+        goto error;
+    job->state = FLUX_JOB_NEW;
+
+    if (!(a = eventlog_decode (eventlog))) {
+        flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
+                        __FUNCTION__, (unsigned long long)job->id);
+        goto error;
+    }
+
+    json_array_foreach (a, index, value) {
+        const char *name;
+        double timestamp;
+        json_t *context = NULL;
+
+        if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
+            flux_log_error (ctx->h, "%s: error parsing entry for %llu",
+                            __FUNCTION__, (unsigned long long)job->id);
+            goto error;
+        }
+
+        if (!strcmp (name, "submit")) {
+            if (!context) {
+                flux_log_error (ctx->h, "%s: no submit context for %llu",
+                                __FUNCTION__, (unsigned long long)job->id);
+                goto error;
+            }
+
+            if (json_unpack (context, "{ s:i s:i s:i }",
+                             "priority", &job->priority,
+                             "userid", &job->userid,
+                             "flags", &job->flags) < 0) {
+                flux_log_error (ctx->h, "%s: submit context for %llu invalid",
+                                __FUNCTION__, (unsigned long long)job->id);
+                goto error;
+            }
+            job->t_submit = timestamp;
+            job->job_info_retrieved = true;
+            job->state = FLUX_JOB_DEPEND;
+        }
+        else if (!strcmp (name, "depend")) {
+            job->state = FLUX_JOB_SCHED;
+        }
+        else if (!strcmp (name, "priority")) {
+            if (json_unpack (context, "{ s:i }",
+                                      "priority", &job->priority) < 0) {
+                flux_log_error (ctx->h, "%s: priority context for %llu invalid",
+                                __FUNCTION__, (unsigned long long)job->id);
+                goto error;
+            }
+        }
+        else if (!strcmp (name, "exception")) {
+            int severity;
+            if (json_unpack (context, "{ s:i }", "severity", &severity) < 0) {
+                flux_log_error (ctx->h, "%s: exception context for %llu invalid",
+                                __FUNCTION__, (unsigned long long)job->id);
+                goto error;
+            }
+            if (severity == 0) {
+                job->state = FLUX_JOB_CLEANUP;
+                job->t_inactive = timestamp;
+            }
+        }
+        else if (!strcmp (name, "alloc")) {
+            if (job->state == FLUX_JOB_SCHED) {
+                job->state = FLUX_JOB_RUN;
+                job->t_running = timestamp;
+            }
+        }
+        else if (!strcmp (name, "finish")) {
+            if (job->state == FLUX_JOB_RUN)
+                job->state = FLUX_JOB_CLEANUP;
+        }
+        else if (!strcmp (name, "clean")) {
+            job->state = FLUX_JOB_INACTIVE;
+            job->t_inactive = timestamp;
+        }
+    }
+
+    if (job->state == FLUX_JOB_NEW) {
+        flux_log_error (ctx->h, "%s: eventlog has no transition events",
+                        __FUNCTION__);
+        goto error;
+    }
+
+    json_decref (a);
+    return job;
+
+error:
+    job_destroy (job);
+    json_decref (a);
+    return NULL;
+}
+
+static int depthfirst_count_depth (const char *s)
+{
+    int count = 0;
+    while (*s) {
+        if (*s++ == '.')
+            count++;
+    }
+    return count;
+}
+
+static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
+                               int dirskip)
+{
+    struct job *job = NULL;
+    flux_jobid_t id;
+    flux_future_t *f;
+    const char *eventlog;
+    char path[64];
+    int rc = -1;
+
+    if (strlen (key) <= dirskip) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
+        return -1;
+    if (flux_job_kvs_key (path, sizeof (path), id, "eventlog") < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &eventlog) < 0)
+        goto done;
+
+    if ((job = eventlog_parse (ctx, eventlog, id))) {
+        if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
+            flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
+            job_destroy (job);
+            goto done;
+        }
+        job_insert_list (ctx->jsctx, job, job->state);
+    }
+    rc = 1;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int depthfirst_map (struct info_ctx *ctx, const char *key,
+                           int dirskip)
+{
+    flux_future_t *f;
+    const flux_kvsdir_t *dir;
+    flux_kvsitr_t *itr;
+    const char *name;
+    int path_level;
+    int count = 0;
+    int rc = -1;
+
+    path_level = depthfirst_count_depth (key + dirskip);
+    if (!(f = flux_kvs_lookup (ctx->h, NULL, FLUX_KVS_READDIR, key)))
+        return -1;
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
+        if (errno == ENOENT && path_level == 0)
+            rc = 0;
+        goto done;
+    }
+    if (!(itr = flux_kvsitr_create (dir)))
+        goto done;
+    while ((name = flux_kvsitr_next (itr))) {
+        char *nkey;
+        int n;
+        if (!flux_kvsdir_isdir (dir, name))
+            continue;
+        if (!(nkey = flux_kvsdir_key_at (dir, name)))
+            goto done_destroyitr;
+        if (path_level == 3) // orig 'key' = .A.B.C, thus 'nkey' is complete
+            n = depthfirst_map_one (ctx, nkey, dirskip);
+        else
+            n = depthfirst_map (ctx, nkey, dirskip);
+        if (n < 0) {
+            int saved_errno = errno;
+            free (nkey);
+            errno = saved_errno;
+            goto done_destroyitr;
+        }
+        count += n;
+        free (nkey);
+    }
+    rc = count;
+done_destroyitr:
+    flux_kvsitr_destroy (itr);
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+/* Read jobs present in the KVS at startup. */
+int job_state_init_from_kvs (struct info_ctx *ctx)
+{
+    const char *dirname = "job";
+    int dirskip = strlen (dirname);
+    int count;
+
+    count = depthfirst_map (ctx, dirname, dirskip);
+    if (count < 0)
+        return -1;
+    flux_log (ctx->h, LOG_DEBUG, "%s: read %d jobs", __FUNCTION__, count);
+
+    zlistx_sort (ctx->jsctx->running);
+    zlistx_sort (ctx->jsctx->inactive);
+    return 0;
 }
 
 /*

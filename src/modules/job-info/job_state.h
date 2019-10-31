@@ -54,6 +54,8 @@ struct job {
     /* if userid, priority, t_submit, and flags have been set */
     bool job_info_retrieved;
     void *list_handle;
+    double t_running;           /* for sorting */
+    double t_inactive;          /* for sorting */
 };
 
 struct job_state_ctx *job_state_create (flux_t *h);
@@ -62,6 +64,8 @@ void job_state_destroy (void *data);
 
 void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                    const flux_msg_t *msg, void *arg);
+
+int job_state_init_from_kvs (struct info_ctx *ctx);
 
 #endif /* ! _FLUX_JOB_INFO_JOB_STATE_H */
 
