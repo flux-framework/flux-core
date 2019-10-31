@@ -18,6 +18,10 @@ job_info_la_SOURCES = \
 	info.h \
 	allow.h \
 	allow.c \
+	job_state.h \
+	job_state.c \
+	list.h \
+	list.c \
 	lookup.h \
 	lookup.c \
 	watch.h \

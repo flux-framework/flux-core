@@ -16,6 +16,8 @@
 
 #include "info.h"
 #include "allow.h"
+#include "job_state.h"
+#include "list.h"
 #include "lookup.h"
 #include "watch.h"
 #include "guest_watch.h"
@@ -46,11 +48,17 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int lookups = zlist_size (ctx->lookups);
     int watchers = zlist_size (ctx->watchers);
     int guest_watchers = zlist_size (ctx->guest_watchers);
-
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i}",
+    int pending = zlistx_size (ctx->jsctx->pending);
+    int running = zlistx_size (ctx->jsctx->running);
+    int inactive = zlistx_size (ctx->jsctx->inactive);
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:{s:i s:i s:i}}",
                            "lookups", lookups,
                            "watchers", watchers,
-                           "guest_watchers", guest_watchers) < 0) {
+                           "guest_watchers", guest_watchers,
+                           "jobs",
+                           "pending", pending,
+                           "running", running,
+                           "inactive", inactive) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -88,6 +96,16 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.list",
+      .cb           = list_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.list-attrs",
+      .cb           = list_attrs_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.disconnect",
       .cb           = disconnect_cb,
       .rolemask     = 0
@@ -95,6 +113,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.stats.get",
       .cb           = stats_cb,
+      .rolemask     = 0
+    },
+    { .typemask     = FLUX_MSGTYPE_EVENT,
+      .topic_glob   = "job-state",
+      .cb           = job_state_cb,
       .rolemask     = 0
     },
     FLUX_MSGHANDLER_TABLE_END,
@@ -116,6 +139,8 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             guest_watch_cleanup (ctx);
             zlist_destroy (&ctx->guest_watchers);
         }
+        if (ctx->jsctx)
+            job_state_destroy (ctx->jsctx);
         free (ctx);
         errno = saved_errno;
     }
@@ -134,6 +159,8 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     if (!(ctx->watchers = zlist_new ()))
         goto error;
     if (!(ctx->guest_watchers = zlist_new ()))
+        goto error;
+    if (!(ctx->jsctx = job_state_create (h)))
         goto error;
     return ctx;
 error:

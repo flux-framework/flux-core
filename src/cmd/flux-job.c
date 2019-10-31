@@ -69,6 +69,19 @@ static struct optparse_option list_opts[] =  {
     { .name = "suppress-header", .key = 's', .has_arg = 0,
       .usage = "Suppress printing of header line",
     },
+    { .name = "pending", .key = 'p', .has_arg = 0,
+      .usage = "List pending jobs",
+    },
+    { .name = "running", .key = 'r', .has_arg = 0,
+      .usage = "List running jobs",
+    },
+    { .name = "inactive", .key = 'i', .has_arg = 0,
+      .usage = "List inactive jobs",
+    },
+    { .name = "userid", .key = 'u', .has_arg = 1, .arginfo = "UID",
+      .usage = "Limit output to specific userid. " \
+               "Specify \"all\" for all users.",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -596,12 +609,15 @@ int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     int max_entries = optparse_get_int (p, "count", 0);
-    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"state\"]";
+    char *attrs = "[\"userid\",\"priority\",\"t_submit\",\"state\"]";
     flux_t *h;
     flux_future_t *f;
     json_t *jobs;
     size_t index;
     json_t *value;
+    uint32_t userid = geteuid ();
+    const char *userid_str;
+    int flags = 0;
 
     if (optindex != argc) {
         optparse_print_usage (p);
@@ -610,7 +626,30 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_job_list (h, max_entries, attrs)))
+    if (optparse_hasopt (p, "pending"))
+        flags |= FLUX_JOB_LIST_PENDING;
+    if (optparse_hasopt (p, "running"))
+        flags |= FLUX_JOB_LIST_RUNNING;
+    if (optparse_hasopt (p, "inactive"))
+        flags |= FLUX_JOB_LIST_INACTIVE;
+    /* if no job listing specifics listed, default to listing pending
+     * & running jobs */
+    if (!flags)
+        flags = FLUX_JOB_LIST_PENDING | FLUX_JOB_LIST_RUNNING;
+
+    if ((userid_str = optparse_get_str (p, "userid", NULL))) {
+        if (!strcmp (userid_str, "all"))
+            userid = FLUX_USERID_UNKNOWN;
+        else {
+            char *endptr;
+            errno = 0;
+            userid = strtoul (userid_str, &endptr, 10);
+            if (errno != 0 || (*endptr) != '\0')
+                log_msg_exit ("error parsing userid: \"%s\"", userid_str);
+        }
+    }
+
+    if (!(f = flux_job_list (h, max_entries, attrs, userid, flags)))
         log_err_exit ("flux_job_list");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");

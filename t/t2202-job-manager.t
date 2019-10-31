@@ -11,11 +11,7 @@ flux setattr log-stderr-level 1
 DRAIN_UNDRAIN="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-undrain.py"
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
-
-# List jobs without header
-list_jobs() {
-	flux job list -s
-}
+LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 
 test_expect_success 'job-manager: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
@@ -32,7 +28,7 @@ test_expect_success 'job-manager: submit one job' '
 '
 
 test_expect_success 'job-manager: queue contains 1 job' '
-	list_jobs >list1.out &&
+	${LIST_JOBS} >list1.out &&
 	test $(wc -l <list1.out) -eq 1
 '
 
@@ -76,7 +72,7 @@ test_expect_success 'job-manager: exception note with embedded = is rejected' '
 '
 
 test_expect_success 'job-manager: queue contains 1 jobs' '
-	test $(list_jobs | wc -l) -eq 1
+	test $(${LIST_JOBS} | wc -l) -eq 1
 '
 
 test_expect_success 'job-manager: cancel job' '
@@ -88,7 +84,7 @@ test_expect_success 'job-manager: cancel job' '
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
-	test $(list_jobs | wc -l) -eq 0
+	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
@@ -98,7 +94,7 @@ test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
 '
 
 test_expect_success 'job-manager: queue contains 3 jobs' '
-	list_jobs >list3.out &&
+	${LIST_JOBS} >list3.out &&
 	test $(wc -l <list3.out) -eq 3
 '
 
@@ -112,12 +108,12 @@ test_expect_success 'job-manager: queue is sorted in priority order' '
 	test_cmp list3_pri.exp list3_pri.out
 '
 
-test_expect_success 'job-manager: flux job list --count shows highest priority jobs' '
+test_expect_success 'job-manager: list-jobs --count shows highest priority jobs' '
 	cat >list3_lim2.exp <<-EOT &&
 	31
 	16
 	EOT
-	flux job list -s -c 2 | cut -f4 >list3_lim2.out &&
+	${LIST_JOBS} -c 2 | cut -f4 >list3_lim2.out &&
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 
@@ -128,7 +124,7 @@ test_expect_success 'job-manager: cancel jobs' '
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
-       test $(list_jobs | wc -l) -eq 0
+       test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: submit 10 jobs of equal priority' '
@@ -139,7 +135,7 @@ test_expect_success 'job-manager: submit 10 jobs of equal priority' '
 '
 
 test_expect_success 'job-manager: jobs are listed in submit order' '
-	list_jobs >list10.out &&
+	${LIST_JOBS} >list10.out &&
 	cut -f1 <list10.out >list10_ids.out &&
 	test_cmp submit10.out list10_ids.out
 '
@@ -158,7 +154,7 @@ test_expect_success 'job-manager: priority was updated in KVS' '
 '
 
 test_expect_success 'job-manager: that job is now the first job' '
-	list_jobs >list10_reordered.out &&
+	${LIST_JOBS} >list10_reordered.out &&
 	firstid=$(cut -f1 <list10_reordered.out | head -1) &&
 	lastid=$(tail -1 <list10_ids.out) &&
 	test "${lastid}" -eq "${firstid}"
@@ -170,7 +166,7 @@ test_expect_success 'job-manager: reload the job manager' '
 '
 
 test_expect_success 'job-manager: queue was successfully reconstructed' '
-	list_jobs >list_reload.out &&
+	${LIST_JOBS} >list_reload.out &&
 	test_cmp list10_reordered.out list_reload.out
 '
 
@@ -178,7 +174,7 @@ test_expect_success 'job-manager: cancel jobs' '
 	for jobid in $(cut -f1 <list_reload.out); do \
 		flux job cancel ${jobid}; \
 	done &&
-	test $(list_jobs | wc -l) -eq 0
+	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: flux job priority fails on invalid priority' '
@@ -230,7 +226,7 @@ test_expect_success 'job-manager: guest cannot cancel others jobs' '
 '
 
 test_expect_success 'job-manager: no jobs in the queue' '
-	test $(list_jobs | wc -l) -eq 0
+	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: reload the job manager' '
@@ -239,7 +235,7 @@ test_expect_success 'job-manager: reload the job manager' '
 '
 
 test_expect_success 'job-manager: still no jobs in the queue' '
-	test $(list_jobs | wc -l) -eq 0
+	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: flux job drain works' '
@@ -280,7 +276,7 @@ test_expect_success 'job-manager: flux job drain canceled by undrain' '
 '
 
 test_expect_success 'job-manager: there is still one job in the queue' '
-	list_jobs >list.out &&
+	${LIST_JOBS} >list.out &&
 	test $(wc -l <list.out) -eq 1
 '
 
