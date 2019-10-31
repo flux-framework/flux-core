@@ -164,6 +164,7 @@ void job_state_destroy (void *data)
             zlistx_destroy (&jsctx->pending);
         if (jsctx->index)
             zhashx_destroy (&jsctx->index);
+        (void)flux_event_unsubscribe (jsctx->h, "job-state");
         free (jsctx);
     }
 }
