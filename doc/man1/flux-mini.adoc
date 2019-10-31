@@ -108,10 +108,11 @@ _(run only)_ Increase verbosity on stderr.  For example, currently `-v`
 displays jobid, `-vv` displays job events, and `-vvv` displays exec events.
 The specific output may change in the future.
 
-*-o, --setopt=KEY=VAL*::
+*-o, --setopt=KEY[=VAL]*::
 Set shell option.  Keys may include periods to denote hierarchy.
-VAL may be valid JSON (bare values, objects, or arrays), otherwise VAL
-is interpreted as a string.  See SHELL OPTIONS below.
+VAL is optional and may be valid JSON (bare values, objects, or arrays),
+otherwise VAL is interpreted as a string. If VAL is not set, then the
+default value is 1. See SHELL OPTIONS below.
 
 *--setattr=KEY=VAL*::
 Set jobspec attribute.  Keys may include periods to denote hierarchy.
