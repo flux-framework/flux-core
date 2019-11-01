@@ -143,6 +143,7 @@ TESTS = test_message.t \
 	test_composite_future.t \
 	test_reactor.t \
 	test_buffer.t \
+	test_conf.t \
 	test_rpc.t \
 	test_mrpc.t \
 	test_rpc_chained.t \
@@ -217,6 +218,10 @@ test_future_t_LDADD = $(test_ldadd) $(LIBDL)
 test_composite_future_t_SOURCES = test/composite_future.c
 test_composite_future_t_CPPFLAGS = $(test_cppflags)
 test_composite_future_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_conf_t_SOURCES = test/conf.c
+test_conf_t_CPPFLAGS = $(test_cppflags)
+test_conf_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
