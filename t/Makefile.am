@@ -191,7 +191,8 @@ dist_check_SCRIPTS = \
 	job-manager/bulk-state.py \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
-	schedutil/req_and_unload.py
+	schedutil/req_and_unload.py \
+	ingest/fake-validate.sh
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
