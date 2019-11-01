@@ -77,7 +77,7 @@ const char *flux_conf_builtin_get (const char *name,
             break;
     }
     for (entry = &builtin_tab[0]; entry->key != NULL; entry++) {
-        if (!strcmp (entry->key, name)) {
+        if (name && !strcmp (entry->key, name)) {
             val = intree ? entry->val_intree : entry->val_installed;
             break;
         }
