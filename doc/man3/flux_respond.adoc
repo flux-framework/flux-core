@@ -19,7 +19,7 @@ SYNOPSIS
                         const char *fmt, ...);
 
  int flux_respond_raw (flux_t *h, const flux_msg_t *request,
-                       int errnum, const void *data, int length);
+                       const void *data, int length);
 
  int flux_respond_error (flux_t *h, const flux_msg_t *request,
                          int errnum, const char *errmsg);
