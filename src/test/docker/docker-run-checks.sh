@@ -17,8 +17,8 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:"
-declare -r short_opts="hqIdi:S:j:t:"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:"
+declare -r short_opts="hqIdi:S:j:t:D:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
 Build docker image for travis builds, then run tests inside the new\n\
@@ -36,6 +36,7 @@ Options:\n\
  -S, --flux-security-version=N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
+ -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
  -I, --interactive             Instead of running travis build, run docker\n\
                                 image with interactive shell.\n\
 "
@@ -61,6 +62,7 @@ while true; do
       -j|--jobs)                   JOBS="$2";                  shift 2 ;;
       -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
+      -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
@@ -101,6 +103,7 @@ echo "mounting $TOP as /usr/src"
 
 export JOBS
 export DISTCHECK
+export BUILD_DIR
 export chain_lint
 
 docker run --rm \
@@ -127,6 +130,7 @@ docker run --rm \
     -e PYTHON_VERSION \
     -e PRELOAD \
     -e ASAN_OPTIONS \
+    -e BUILD_DIR \
     --cap-add SYS_PTRACE \
     --tty \
     ${INTERACTIVE:+--interactive} \
