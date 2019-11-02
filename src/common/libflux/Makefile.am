@@ -24,6 +24,7 @@ installed_conf_cppflags = \
 	-DINSTALLED_PMI_LIBRARY_PATH=\"$(fluxlibdir)/libpmi.so\" \
 	-DINSTALLED_RC1_PATH=\"$(fluxrcdir)/rc1\" \
 	-DINSTALLED_RC3_PATH=\"$(fluxrcdir)/rc3\" \
+	-DINSTALLED_CF_PATH=\"$(fluxcfdir)\" \
 	-DINSTALLED_SHELL_PATH=\"$(fluxlibexecdir)/flux-shell\" \
 	-DINSTALLED_SHELL_PLUGINPATH=\"$(fluxlibdir)/shell/plugins\" \
 	-DINSTALLED_SHELL_INITRC=\"$(fluxrcdir)/shell/initrc.lua\" \
@@ -46,6 +47,7 @@ intree_conf_cppflags = \
 	-DINTREE_PMI_LIBRARY_PATH=\"$(abs_top_builddir)/src/common/.libs/libpmi.so\" \
 	-DINTREE_RC1_PATH=\"$(abs_top_srcdir)/etc/rc1\" \
 	-DINTREE_RC3_PATH=\"$(abs_top_srcdir)/etc/rc3\" \
+	-DINTREE_CF_PATH=\"$(abs_top_srcdir)/etc\" \
 	-DINTREE_SHELL_PATH=\"$(abs_top_builddir)/src/shell/flux-shell\" \
 	-DINTREE_SHELL_PLUGINPATH=\"$(abs_top_builddir)/src/shell/plugins\" \
 	-DINTREE_SHELL_INITRC=\"$(abs_top_srcdir)/src/shell/initrc.lua\" \
@@ -104,6 +106,7 @@ libflux_la_SOURCES = \
 	panic.c \
 	event.c \
 	module.c \
+	conf_private.h \
 	conf.c \
 	tagpool.h \
 	tagpool.c \
@@ -140,6 +143,7 @@ TESTS = test_message.t \
 	test_composite_future.t \
 	test_reactor.t \
 	test_buffer.t \
+	test_conf.t \
 	test_rpc.t \
 	test_mrpc.t \
 	test_rpc_chained.t \
@@ -163,6 +167,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBSODIUM_LIBS)
 
@@ -213,6 +218,10 @@ test_future_t_LDADD = $(test_ldadd) $(LIBDL)
 test_composite_future_t_SOURCES = test/composite_future.c
 test_composite_future_t_CPPFLAGS = $(test_cppflags)
 test_composite_future_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_conf_t_SOURCES = test/conf.c
+test_conf_t_CPPFLAGS = $(test_cppflags)
+test_conf_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)

@@ -32,6 +32,7 @@
 #include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
+#include "conf_private.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/msglist.h"
@@ -246,6 +247,24 @@ static char *strtrim (char *s, const char *trim)
     return *s ? s : NULL;
 }
 
+/* Helper for flux_open() - parse config (best effort) and return it.
+ * Return NULL if config could not be parsed.
+ * If "flux_uri" is configured, set 'uri' to its value, else set it to NULL.
+ */
+static flux_conf_t *parse_conf_flux_uri (const char **uri)
+{
+    flux_conf_t *conf;
+    char pat[PATH_MAX + 1];
+
+    if (conf_get_default_pattern (pat, sizeof (pat)) < 0)
+        return NULL;
+    if (!(conf = conf_parse (pat, NULL)))
+        return NULL;
+    if (flux_conf_unpack (conf, NULL, "{s:s}", "flux_uri", uri) < 0)
+        *uri = NULL;
+    return conf;
+}
+
 flux_t *flux_open (const char *uri, int flags)
 {
     char *default_uri = NULL;
@@ -255,12 +274,19 @@ flux_t *flux_open (const char *uri, int flags)
     connector_init_f *connector_init = NULL;
     const char *s;
     flux_t *h = NULL;
+    flux_conf_t *conf = NULL;
 
+    /* Try to get URI from (in descending precedence):
+     *   argument > environment > config file > builtin
+     */
     if (!uri)
         uri = getenv ("FLUX_URI");
+    if (!uri)
+        conf = parse_conf_flux_uri (&uri);
     if (!uri) {
         if (asprintf (&default_uri, "local://%s",
-                      flux_conf_get ("rundir", 0)) < 0)
+                      flux_conf_builtin_get ("rundir",
+                                             FLUX_CONF_INSTALLED)) < 0)
             goto error;
         uri = default_uri;
     }
@@ -297,6 +323,8 @@ flux_t *flux_open (const char *uri, int flags)
                                                     sizeof (rolemask)) < 0)
             goto error_handle;
     }
+    if (conf && handle_set_conf (h, conf) < 0)
+        goto error_handle;
     free (scheme);
     free (default_uri);
     return h;
@@ -305,6 +333,7 @@ error_handle:
 error:
     ERRNO_SAFE_WRAP (free, scheme);
     ERRNO_SAFE_WRAP (free, default_uri);
+    conf_destroy (conf);
     return NULL;
 }
 

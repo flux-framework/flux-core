@@ -54,7 +54,7 @@ static struct optparse_option opts[] = {
 static const char *default_cmdhelp_pattern (optparse_t *p)
 {
     int *flags = optparse_get_data (p, "conf_flags");
-    return flux_conf_get ("cmdhelp_pattern", *flags);
+    return flux_conf_builtin_get ("cmdhelp_pattern", *flags);
 }
 
 void usage (optparse_t *p)
@@ -113,7 +113,7 @@ int main (int argc, char *argv[])
     optparse_t *p;
     const char *searchpath, *s;
     const char *argv0 = argv[0];
-    int flags = 0;
+    int flags = FLUX_CONF_INSTALLED;
     int optindex;
 
     log_init ("flux");
@@ -121,7 +121,7 @@ int main (int argc, char *argv[])
     p = setup_optparse_parse_args (argc, argv);
 
     if (!flux_is_installed ())
-        flags |= CONF_FLAG_INTREE;
+        flags = FLUX_CONF_INTREE;
     optparse_set_data (p, "conf_flags", &flags);
 
     if (optparse_hasopt (p, "help")) {
@@ -152,23 +152,31 @@ int main (int argc, char *argv[])
      */
     environment_from_env (env, "LUA_CPATH", "", ';');
     environment_no_dedup_push_back (env, "LUA_CPATH", ";;");
-    environment_push (env, "LUA_CPATH", flux_conf_get ("lua_cpath_add", flags));
+    environment_push (env,
+                      "LUA_CPATH",
+                      flux_conf_builtin_get ("lua_cpath_add", flags));
     environment_push (env, "LUA_CPATH", getenv ("FLUX_LUA_CPATH_PREPEND"));
 
     environment_from_env (env, "LUA_PATH", "", ';');
     environment_no_dedup_push_back (env, "LUA_PATH", ";;");
-    environment_push (env, "LUA_PATH", flux_conf_get ("lua_path_add", flags));
+    environment_push (env,
+                      "LUA_PATH",
+                      flux_conf_builtin_get ("lua_path_add", flags));
     environment_push (env, "LUA_PATH", getenv ("FLUX_LUA_PATH_PREPEND"));
 
     environment_from_env (env, "PYTHONPATH", "", ':');
-    environment_push (env, "PYTHONPATH", flux_conf_get ("python_path", flags));
+    environment_push (env,
+                      "PYTHONPATH",
+                      flux_conf_builtin_get ("python_path", flags));
     environment_push (env, "PYTHONPATH", getenv ("FLUX_PYTHONPATH_PREPEND"));
 
     if ((s = getenv ("MANPATH")) && strlen (s) > 0) {
         environment_from_env (env, "MANPATH", ":", ':');
-        environment_push (env, "MANPATH", flux_conf_get ("man_path", flags));
+        environment_push (env,
+                          "MANPATH",
+                          flux_conf_builtin_get ("man_path", flags));
     } else { /* issue 745 */
-        char *s = xasprintf ("%s:", flux_conf_get ("man_path", flags));
+        char *s = xasprintf ("%s:", flux_conf_builtin_get ("man_path", flags));
         environment_set (env, "MANPATH", s, 0);
         free (s);
         environment_set_separator (env, "MANPATH", ':');
@@ -176,18 +184,20 @@ int main (int argc, char *argv[])
 
     environment_from_env (env, "FLUX_EXEC_PATH", "", ':');
     environment_push (env, "FLUX_EXEC_PATH",
-                      flux_conf_get ("exec_path", flags));
+                      flux_conf_builtin_get ("exec_path", flags));
     environment_push (env, "FLUX_EXEC_PATH", getenv ("FLUX_EXEC_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_CONNECTOR_PATH", "", ':');
-    environment_push (env, "FLUX_CONNECTOR_PATH",
-                      flux_conf_get ("connector_path", flags));
+    environment_push (env,
+                      "FLUX_CONNECTOR_PATH",
+                      flux_conf_builtin_get ("connector_path", flags));
     environment_push (env, "FLUX_CONNECTOR_PATH",
                       getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_MODULE_PATH", "", ':');
-    environment_push (env, "FLUX_MODULE_PATH",
-                      flux_conf_get ("module_path", flags));
+    environment_push (env,
+                      "FLUX_MODULE_PATH",
+                      flux_conf_builtin_get ("module_path", flags));
     environment_push (env, "FLUX_MODULE_PATH",
                       getenv ("FLUX_MODULE_PATH_PREPEND"));
 
@@ -198,8 +208,9 @@ int main (int argc, char *argv[])
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
 
-    environment_from_env (env, "FLUX_PMI_LIBRARY_PATH",
-                          flux_conf_get ("pmi_library_path", flags), 0);
+    environment_from_env (env,
+                          "FLUX_PMI_LIBRARY_PATH",
+                          flux_conf_builtin_get ("pmi_library_path", flags), 0);
 
     environment_apply (env);
 
@@ -267,7 +278,7 @@ void setup_keydir (struct environment *env, int flags)
     char *new_dir = NULL;
 
     if (!dir)
-        dir = flux_conf_get ("keydir", flags);
+        dir = flux_conf_builtin_get ("keydir", flags);
     if (!dir) {
         struct passwd *pw = getpwuid (getuid ());
         if (!pw)

@@ -16,7 +16,7 @@
 static int no_docs_set (optparse_t *p)
 {
     int *flags = optparse_get_data (p, "conf_flags");
-    const char *no_docs_path = flux_conf_get ("no_docs_path", *flags);
+    const char *no_docs_path = flux_conf_builtin_get ("no_docs_path", *flags);
     struct stat sb;
 
     /* FLUX_IGNORE_NO_DOCS environment workaround for unit tests */

@@ -24,7 +24,8 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
+                  flux_conf_builtin_get ("connector_path",
+                                         FLUX_CONF_INTREE), 0);
     ok ((h_srv = flux_open ("shmem://test&bind", 0)) != NULL,
         "created server handle");
     ok ((h_cli = flux_open ("shmem://test&connect", 0)) != NULL,

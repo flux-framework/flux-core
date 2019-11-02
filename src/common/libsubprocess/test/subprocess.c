@@ -148,7 +148,8 @@ void test_basic_errors (flux_reactor_t *r)
     flux_cmd_t *cmd;
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
+                  flux_conf_builtin_get ("connector_path",
+                                         FLUX_CONF_INTREE), 0);
 
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "flux_open on loop works");

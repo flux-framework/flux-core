@@ -33,7 +33,8 @@ int main (int argc, char *argv[])
     begin = fdcount ();
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
+                  flux_conf_builtin_get ("connector_path",
+                                         FLUX_CONF_INTREE), 0);
 
     if (!(h = flux_open ("loop://", 0))) {
         perror ("flux_open");

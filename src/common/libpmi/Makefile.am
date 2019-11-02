@@ -54,6 +54,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) \
 	$(LIBRT) $(LIBDL)
