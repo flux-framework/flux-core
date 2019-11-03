@@ -496,11 +496,6 @@ AC_CONFIG_FILES( \
   t/fluxometer/conf.lua.installed \
 )
 
-AC_CONFIG_FILES( \
-  [src/modules/job-ingest/validators/validate-schema.py],
-      [chmod +x src/modules/job-ingest/validators/validate-schema.py] \
-)
-
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \
 ])

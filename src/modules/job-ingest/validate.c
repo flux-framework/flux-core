@@ -72,27 +72,41 @@ void validate_destroy (struct validate *v)
     }
 }
 
+static bool str_ends_with (const char *str, const char *suffix)
+{
+    int str_len = strlen (str);
+    int suffix_len = strlen (suffix);
+
+    return (str_len >= suffix_len) && \
+        (!strncmp ((str + str_len) - suffix_len, suffix, suffix_len));
+}
+
 struct validate *validate_create (flux_t *h,
                                   const char *validate_path,
                                   const char *schema_path)
 {
     struct validate *v;
-    char *argv[4];
+    char *argv[5];
+    int argc = 0;
     int i;
 
     if (!(v = calloc (1, sizeof (*v))))
         return NULL;
     v->h = h;
 
-    argv[0] = (char *)validate_path,
-    argv[1] = "--schema";
-    argv[2] = (char *)schema_path,
-    argv[3] = NULL;
-    assert (argv[0] != NULL);
-    assert (argv[2] != NULL);
+    assert (validate_path != NULL);
+    assert (schema_path != NULL);
+
+    if (str_ends_with (validate_path, ".py"))
+        argv[argc++] = PYTHON_INTERPRETER;
+    argv[argc++] = (char *)validate_path;
+    argv[argc++] = "--schema";
+    argv[argc++] = (char *)schema_path,
+    argv[argc] = NULL;
+
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
         if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout,
-                                            3, argv)))
+                                            argc, argv)))
             goto error;
     }
     return v;

@@ -21,7 +21,8 @@ Y2J="flux python ${JOBSPEC}/y2j.py"
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
-VALIDATOR=${FLUX_BUILD_DIR}/src/modules/job-ingest/validators/validate-schema.py
+PY_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
+FAKE_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/fake-validate.sh
 
 DUMMY_EVENTLOG=test.ingest.eventlog
 
@@ -67,7 +68,7 @@ test_expect_success 'job-ingest: job-ingest fails with bad schema path' '
 
 test_expect_success 'job-ingest: load job-ingest && job-info' '
 	flux module load -r all job-ingest \
-		schema=${SCHEMA} validator=${VALIDATOR} &&
+		schema=${SCHEMA} validator=${PY_VALIDATOR} &&
 	flux module load -r all job-info
 '
 
@@ -148,6 +149,16 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 
 test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 	${RPC} job-ingest.submit 71 </dev/null
+'
+
+test_expect_success 'job-ingest: test non-python validator' '
+	flux module remove -r all job-ingest &&
+	flux module load -r all job-ingest \
+		schema=${SCHEMA} validator=${FAKE_VALIDATOR}
+'
+
+test_expect_success 'job-ingest: submit succeeds with non-python validator' '
+    flux job submit basic.json
 '
 
 test_expect_success 'job-ingest: remove modules' '
