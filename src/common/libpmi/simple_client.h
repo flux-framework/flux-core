@@ -86,9 +86,14 @@ int pmi_simple_client_get_clique_ranks (struct pmi_simple_client *pmi,
                                         int ranks[],
                                         int length);
 
+/* Abort
+ */
+int pmi_simple_client_abort (struct pmi_simple_client *pmi,
+                             int exit_code,
+                             const char *msg);
 
 /* Not implemented (yet):
- * abort, publish, unpublish, lookup, spawn
+ * publish, unpublish, lookup, spawn
  */
 
 #endif /* _FLUX_CORE_PMI_SIMPLE_CLIENT_H */
