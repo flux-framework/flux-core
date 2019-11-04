@@ -15,7 +15,7 @@ is (err, nil, "error is nil")
 -- Test timeout: 5s
 f:timer {
     timeout = 5000,
-    handler = function () f:reactor_stop_error () end
+    handler = function () f:reactor_stop_error ("test timed out") end
 }
 
 -- Create statwatcher for file "xyzzy"
