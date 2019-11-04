@@ -116,6 +116,11 @@ int PMI2_Initialized (void)
 
 int PMI2_Abort (int flag, const char msg[])
 {
+    /* pmi_simple_client_abort() only returns on error, in which case
+     * we fall back to printing the msg on stderr and call exit().
+     * (return code not checked because we don't do anything with it)
+     */
+    (void) pmi_simple_client_abort (pmi_global_ctx, 1, msg);
     fprintf (stderr, "PMI2_Abort: (%d) %s\n",
              pmi_global_ctx ? pmi_global_ctx->rank : -1,
              msg ? msg : "NULL");
