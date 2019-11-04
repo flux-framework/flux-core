@@ -71,6 +71,17 @@ of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
 
 *Note 3 - optional, for enabling additional tests*.
 
+##### Installing RedHat/CentOS Packages
+```
+yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python-devel python-cffi python-six python-yaml python-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+```
+
+##### Installing Ubuntu Packages
+```
+apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python-dev python-cffi python-six python-yaml python-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+```
+
+##### Building from Source
 ```
 ./autogen.sh   # skip if building from a release tarball
 ./configure
