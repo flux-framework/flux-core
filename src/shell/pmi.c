@@ -90,6 +90,18 @@ struct shell_pmi {
     int cycle;      // count cycles of put / barrier / get
 };
 
+static void shell_pmi_abort (void *arg,
+                             void *client,
+                             int exit_code,
+                             const char *msg)
+{
+    /* Generate job exception (exit_code ignored for now) */
+    shell_die (exit_code,
+               "MPI_Abort%s%s",
+               msg ? ": " : "",
+               msg ? msg : "");
+}
+
 static int shell_pmi_kvs_put (void *arg,
                               const char *kvsname,
                               const char *key,
@@ -417,6 +429,7 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .barrier_enter  = shell_pmi_barrier_enter,
     .response_send  = shell_pmi_response_send,
     .debug_trace    = shell_pmi_debug_trace,
+    .abort          = shell_pmi_abort,
 };
 
 
