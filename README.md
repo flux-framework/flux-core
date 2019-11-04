@@ -33,32 +33,32 @@ Protocols and API's used in Flux will be documented as Flux RFC's.
 
 flux-core requires the following packages to build:
 
-**redhat**	| **ubuntu** 		| **version**		| **note**
----------- 	| ---------- 		| -----------		| --------
-autoconf	| autoconf		|			|
-automake	| automake		|			|
-libtool		| libtool		|			|
-libsodium-devel	| libsodium-dev		| >= 1.0.14		|
-zeromq4-devel	| libzmq3-dev		| >= 4.0.4		|
-czmq-devel	| libczmq-dev		| >= 3.0.1		|
-jansson-devel	| libjansson-dev	| >= 2.6		|
-lz4-devel	| liblz4-dev		|			|
-hwloc-devel	| libhwloc-dev		| >= v1.11.1, < 2.0	|
-sqlite-devel	| libsqlite3-dev	| >= 3.0.0		|
-lua		| lua5.1		| >= 5.1, < 5.3		|
-lua-devel	| liblua5.1-dev		| >= 5.1, < 5.3		|
-lua-posix 	| lua-posix             | 			| *1*
-python-devel	| python-dev		| >= 2.7		|
-python-cffi	| python-cffi		| >= 1.1		|
-python-six	| python-six		| >= 1.9		|
-python-yaml	| python-yaml		| >= 3.10.0		|
-python-jsonschema | python-jsonschema	| >= 2.3.0		|
-asciidoc	| asciidoc         	| 			| *2*
-asciidoctor	| asciidoctor         	| >= 1.5.7		| *2*
-aspell		| aspell		|			| *3*
-valgrind	| valgrind		|			| *3*
-mpich		| mpich			|			| *3*
-jq		    | jq			|			| *3*
+**redhat**        | **ubuntu**        | **version**       | **note**
+----------        | ----------        | -----------       | --------
+autoconf          | autoconf          |                   |
+automake          | automake          |                   |
+libtool           | libtool           |                   |
+libsodium-devel   | libsodium-dev     | >= 1.0.14         |
+zeromq4-devel     | libzmq3-dev       | >= 4.0.4          |
+czmq-devel        | libczmq-dev       | >= 3.0.1          |
+jansson-devel     | libjansson-dev    | >= 2.6            |
+lz4-devel         | liblz4-dev        |                   |
+hwloc-devel       | libhwloc-dev      | >= v1.11.1, < 2.0 |
+sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
+lua               | lua5.1            | >= 5.1, < 5.3     |
+lua-devel         | liblua5.1-dev     | >= 5.1, < 5.3     |
+lua-posix         | lua-posix         |                   | *1*
+python-devel      | python-dev        | >= 2.7            |
+python-cffi       | python-cffi       | >= 1.1            |
+python-six        | python-six        | >= 1.9            |
+python-yaml       | python-yaml       | >= 3.10.0         |
+python-jsonschema | python-jsonschema | >= 2.3.0          |
+asciidoc          | asciidoc          |                   | *2*
+asciidoctor       | asciidoctor       | >= 1.5.7          | *2*
+aspell            | aspell            |                   | *3*
+valgrind          | valgrind          |                   | *3*
+mpich             | mpich             |                   | *3*
+jq                | jq                |                   | *3*
 
 *Note 1 - Due to a packaging issue, Ubuntu lua-posix may need the
 following symlink (true for version 33.4.0-2):*
@@ -71,6 +71,17 @@ of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
 
 *Note 3 - optional, for enabling additional tests*.
 
+##### Installing RedHat/CentOS Packages
+```
+yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python-devel python-cffi python-six python-yaml python-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+```
+
+##### Installing Ubuntu Packages
+```
+apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python-dev python-cffi python-six python-yaml python-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+```
+
+##### Building from Source
 ```
 ./autogen.sh   # skip if building from a release tarball
 ./configure
