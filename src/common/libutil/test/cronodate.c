@@ -33,6 +33,7 @@ static bool string_to_tv (char *s, struct timeval *tvp)
     struct tm tm;
     char *p = strptime (s, "%Y-%m-%d %H:%M:%S", &tm);
 
+    tm.tm_isdst = -1;
     if ((t = mktime (&tm)) == (time_t) -1)
         return (false);
 
