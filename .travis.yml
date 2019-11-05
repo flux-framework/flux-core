@@ -30,6 +30,12 @@ jobs:
       compiler: gcc
       env:
        - PYTHON_VERSION=2.7
+    - name: "Ubuntu eoan (19.10): no configure flags, lua5.1"
+      stage: test
+      compiler: gcc
+      env:
+       - IMG=eoan
+       - PYTHON_VERSION=2.7
     - name: "Ubuntu: py3.6 distcheck"
       stage: test
       compiler: gcc
