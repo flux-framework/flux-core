@@ -864,11 +864,6 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     if (!(job = jobinfo_new ()))
         return -1;
 
-    /*  Take a reference until initialization complete in case an
-     *   exception is generated during this phase
-     */
-    jobinfo_incref (job);
-
     /* Copy flux handle for each job to allow implementation access.
      * (This could also be done with an accessor, but choose the simpler
      *  approach for now)
@@ -887,6 +882,11 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
         jobinfo_decref (job);
         return -1;
     }
+    /*  Take a reference until initialization complete in case an
+     *   exception is generated during this phase
+     */
+    jobinfo_incref (job);
+
     if (flux_job_kvs_namespace (job->ns, sizeof (job->ns), job->id) < 0) {
         jobinfo_fatal_error (job, errno, "failed to create ns name for job");
         flux_log_error (ctx->h, "job_ns_create");
