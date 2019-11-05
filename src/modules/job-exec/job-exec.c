@@ -348,6 +348,10 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
  */
 static void jobinfo_cancel (struct jobinfo *job)
 {
+    /*  If a kill-timer is already active, the cancellation is in progress */
+    if (job->kill_timer)
+        return;
+
     if (job->impl->cancel)
         (*job->impl->cancel) (job);
 
