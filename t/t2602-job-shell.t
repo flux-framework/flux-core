@@ -112,7 +112,17 @@ test_expect_success 'job-shell: PMI KVS works' '
 	flux job attach $id >kvstest.out 2>kvstest.err &&
 	grep "t phase" kvstest.out
 '
-
+test_expect_success 'job-exec: decrease kill timeout for tests' '
+	flux setattr job-exec.kill_timeout 0.1
+'
+#  Use `!` here instead of test_must_fail because flux-job attach
+#   may exit with 143, killed by signal
+#
+test_expect_success 'job-shell: PMI_Abort works' '
+	! flux mini run -N4 -n4 ${PMI_INFO} --abort=1 >abort.log 2>&1 &&
+	test_debug "cat abort.log" &&
+	grep "job.exception.*MPI_Abort: Test abort error." abort.log
+'
 test_expect_success 'job-shell: create expected I/O output' '
 	${LPTEST} | sed -e "s/^/0: /" >lptest.exp &&
 	(for i in $(seq 0 3); do \
