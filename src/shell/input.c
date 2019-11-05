@@ -112,7 +112,7 @@ static void shell_input_put_kvs_completion (flux_future_t *f, void *arg)
 
     if (flux_future_get (f, NULL) < 0)
         /* failng to write stdin to input is a fatal error */
-        shell_die ("shell_input_put_kvs: %s", strerror (errno));
+        shell_die (1, "shell_input_put_kvs: %s", strerror (errno));
     flux_future_destroy (f);
 
     if (flux_shell_remove_completion_ref (in->shell, "input.kvs") < 0)
@@ -270,7 +270,7 @@ static void shell_input_kvs_init_completion (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0)
         /* failng to commit header is a fatal error.  Should be
          * cleaner in future. Issue #2378 */
-        shell_die_errno ("shell_input_kvs_init");
+        shell_die_errno (1, "shell_input_kvs_init");
     flux_future_destroy (f);
 
     if (flux_shell_remove_completion_ref (in->shell, "input.kvs-init") < 0)
@@ -381,14 +381,14 @@ static void shell_input_type_file_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     while ((n = read (fp->fd, buf, ps)) > 0) {
         if (shell_input_put_kvs_raw (in, buf, n, false) < 0)
-            shell_die_errno ("shell_input_put_kvs_raw");
+            shell_die_errno (1, "shell_input_put_kvs_raw");
     }
 
     if (n < 0)
-        shell_die_errno ("shell_input_put_kvs_raw");
+        shell_die_errno (1, "shell_input_put_kvs_raw");
 
     if (shell_input_put_kvs_raw (in, NULL, 0, true) < 0)
-        shell_die_errno ("shell_input_put_kvs_raw");
+        shell_die_errno (1, "shell_input_put_kvs_raw");
 
     flux_watcher_stop (w);
 }
@@ -452,7 +452,7 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
                                                  "stdin",
                                                  shell_input_stdin_cb,
                                                  in) < 0)
-                    shell_die_errno ("flux_shell_service_register");
+                    shell_die_errno (1, "flux_shell_service_register");
 
                 /* Do not add a completion reference for the stdin service, we
                  * don't care if the user ever sends stdin */
@@ -506,13 +506,13 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
             goto done;
-        shell_die ("flux_job_event_watch_get: %s",
+        shell_die (1, "flux_job_event_watch_get: %s",
                    future_strerror (f, errno));
     }
     if (!(o = eventlog_entry_decode (entry)))
-        shell_die_errno ("eventlog_entry_decode");
+        shell_die_errno (1, "eventlog_entry_decode");
     if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
-        shell_die_errno ("eventlog_entry_parse");
+        shell_die_errno (1, "eventlog_entry_parse");
 
     if (!strcmp (name, "header")) {
         /* Future: per-stream encoding */
@@ -522,9 +522,9 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
         const char *rank = NULL;
         bool data_ok = false;
         if (!kp->input_header_parsed)
-            shell_die ("stream data read before header");
+            shell_die (1, "stream data read before header");
         if (iodecode (context, NULL, &rank, NULL, NULL, NULL) < 0)
-            shell_die ("malformed event context");
+            shell_die (1, "malformed event context");
         if (!strcmp (rank, "all"))
             data_ok = true;
         else {
@@ -542,23 +542,23 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
             int len;
             bool eof;
             if (kp->eof_reached) {
-                shell_die ("stream data after EOF");
+                shell_die (1, "stream data after EOF");
                 goto out;
             }
             if (iodecode (context, &stream, NULL, &data, &len, &eof) < 0)
-                shell_die ("malformed event context");
+                shell_die (1, "malformed event context");
             if (len > 0) {
                 if (flux_subprocess_write (task_input->task->proc,
                                            stream,
                                            data,
                                            len) < 0)
-                    shell_die_errno ("flux_subprocess_write");
+                    shell_die_errno (1, "flux_subprocess_write");
             }
             if (eof) {
                 if (flux_subprocess_close (task_input->task->proc, stream) < 0)
-                    shell_die_errno ("flux_subprocess_close");
+                    shell_die_errno (1, "flux_subprocess_close");
                 if (flux_job_event_watch_cancel (f) < 0)
-                    shell_die_errno ("flux_job_event_watch_cancel");
+                    shell_die_errno (1, "flux_job_event_watch_cancel");
             }
             free (data);
         }
@@ -588,27 +588,27 @@ static void shell_task_input_kvs_exec_cb (flux_future_t *f, void *arg)
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
             goto done;
-        shell_die ("flux_job_event_watch_get: %s",
+        shell_die (1, "flux_job_event_watch_get: %s",
                    future_strerror (f, errno));
     }
     if (!(o = eventlog_entry_decode (entry)))
-        shell_die_errno ("eventlog_entry_decode");
+        shell_die_errno (1, "eventlog_entry_decode");
     if (eventlog_entry_parse (o, NULL, &name, NULL) < 0)
-        shell_die_errno ("eventlog_entry_parse");
+        shell_die_errno (1, "eventlog_entry_parse");
 
     if (!strcmp (name, "input-ready")) {
         if (!(input_f = flux_job_event_watch (task_input->in->shell->h,
                                               task_input->in->shell->info->jobid,
                                               "guest.input",
                                               0)))
-            shell_die_errno ("flux_job_event_watch");
+            shell_die_errno (1, "flux_job_event_watch");
 
         if (flux_future_then (input_f,
                               -1.,
                               shell_task_input_kvs_input_cb,
                               arg) < 0) {
             flux_future_destroy (input_f);
-            shell_die_errno ("flux_future_then");
+            shell_die_errno (1, "flux_future_then");
         }
 
         kp->input_f = input_f;

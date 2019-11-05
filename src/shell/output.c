@@ -288,7 +288,7 @@ static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0)
         /* failng to commit output-ready or header is a fatal
          * error.  Should be cleaner in future. Issue #2378 */
-        shell_die_errno ("shell_output_kvs_init");
+        shell_die_errno (1, "shell_output_kvs_init");
     flux_future_destroy (f);
 
     if (flux_shell_remove_completion_ref (out->shell, "output.kvs-init") < 0)
@@ -341,7 +341,7 @@ static void shell_output_kvs_completion (flux_future_t *f, void *arg)
     /* Error failing to commit is a fatal error.  Should be cleaner in
      * future. Issue #2378 */
     if (flux_future_get (f, NULL) < 0)
-        shell_die_errno ("shell_output_kvs");
+        shell_die_errno (1, "shell_output_kvs");
     flux_future_destroy (f);
 
     if (flux_shell_remove_completion_ref (out->shell, "output.kvs") < 0)
@@ -512,12 +512,12 @@ static void shell_output_write_cb (flux_t *h,
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_TERM
          || (out->stderr_type == FLUX_OUTPUT_TYPE_TERM))) {
         if (shell_output_term (out) < 0)
-            shell_die_errno ("shell_output_term");
+            shell_die_errno (1, "shell_output_term");
     }
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
          || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
         if (shell_output_kvs (out) < 0)
-            shell_die_errno ("shell_output_kvs");
+            shell_die_errno (1, "shell_output_kvs");
     }
     if ((out->stdout_type == FLUX_OUTPUT_TYPE_FILE
          || (out->stderr_type == FLUX_OUTPUT_TYPE_FILE))) {

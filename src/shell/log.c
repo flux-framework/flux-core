@@ -218,6 +218,7 @@ int flux_shell_err (const char *file,
 void flux_shell_fatal (const char *file,
                        int line,
                        int errnum,
+                       int exit_code,
                        const char *fmt, ...)
 {
     flux_shell_t *shell = logger.shell;
@@ -258,7 +259,7 @@ void flux_shell_fatal (const char *file,
         else
             shell_log_set_exception_logged ();
     }
-    exit (1);
+    exit (exit_code);
 }
 
 void shell_log_set_exception_logged (void)
@@ -342,7 +343,7 @@ int shell_log_reinit (flux_shell_t *shell)
         shell->verbose = 2;
     }
     if (flux_shell_log_setlevel (FLUX_SHELL_NOTICE + shell->verbose, "any") < 0)
-        shell_die ("failed to set log level");
+        shell_die (1, "failed to set log level");
     return 0;
 }
 

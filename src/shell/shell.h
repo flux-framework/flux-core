@@ -264,11 +264,11 @@ enum {
 #define shell_log_errno(...) \
     flux_shell_err (__FILE__, __LINE__, errno, __VA_ARGS__)
 
-#define shell_die(...) \
-    flux_shell_fatal (__FILE__, __LINE__, 0, __VA_ARGS__)
+#define shell_die(code,...) \
+    flux_shell_fatal (__FILE__, __LINE__, 0, code, __VA_ARGS__)
 
-#define shell_die_errno(...) \
-    flux_shell_fatal (__FILE__, __LINE__, errno, __VA_ARGS__)
+#define shell_die_errno(code,...) \
+    flux_shell_fatal (__FILE__, __LINE__, errno, code, __VA_ARGS__)
 
 #define shell_set_verbose(n) \
     flux_shell_log_setlevel(FLUX_SHELL_NOTICE+n, NULL)
@@ -298,13 +298,14 @@ int flux_shell_err (const char *file,
 
 /*  Log a message at FLUX_SHELL_FATAL level and schedule termination of
  *   the job shell. May generate an exception if tasks are already
- *   running.
+ *   running. Exits with exit_code.
  */
 void flux_shell_fatal (const char *file,
                       int line,
                       int errnum,
+                      int exit_code,
                       const char *fmt, ...)
-                      __attribute__ ((format (printf, 4, 5)));
+                      __attribute__ ((format (printf, 5, 6)));
 
 /*  Set default severity of logging destination 'dest' to level.
  *   If dest == NULL then set the internal log dispatch level --
