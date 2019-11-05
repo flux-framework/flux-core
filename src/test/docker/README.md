@@ -13,9 +13,9 @@ or a tagged version of flux-core.
 
 #### fluxrm/testenv Docker images
 
-The Dockerfiles under `bionic/Dockerfile` and
+The Dockerfiles under `bionic/Dockerfile`, `focal/Dockerfile` and
 `centos7/Dockerfile` describe the images built under the
-`fluxrm/testenv:bionic` and `fluxrm/testenv:centos7`
+`fluxrm/testenv:bionic`, `fluxrm/testenv:focal` and `fluxrm/testenv:centos7`
 respectively, and include the base dependencies required to build
 flux-core. These images are updated manually by flux-core maintainers, but
 the Dockerfiles should be kept up to date for a single point of management.

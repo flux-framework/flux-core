@@ -39,9 +39,10 @@ RUN set -x && groupadd fluxuser \
  && useradd -g fluxuser -d /home/fluxuser -m fluxuser -s /bin/bash \
  && printf "fluxuser ALL= NOPASSWD: ALL\\n" >> /etc/sudoers
 
-# Make sure user in appropriate group for sudo on different platorms
+# Make sure user in appropriate group for sudo on different platforms
 RUN case $BASE_IMAGE in \
      bionic*) adduser $USER sudo && adduser fluxuser sudo ;; \
+     focal*)  adduser $USER sudo && adduser fluxuser sudo ;; \
      centos*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
@@ -54,6 +55,7 @@ RUN case $BASE_IMAGE in \
 #
 RUN case $BASE_IMAGE in \
      bionic*) ;; \
+     focal*) ;; \
      centos*) ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
