@@ -209,10 +209,8 @@ static connector_init_f *find_connector (const char *scheme, void **dsop)
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
 
-    if (!searchpath) {
-        errno = ENOENT;
-        return NULL;
-    }
+    if (!searchpath)
+        searchpath = flux_conf_builtin_get ("connector_path", FLUX_CONF_AUTO);
     if (snprintf (name, sizeof (name), "%s.so", scheme) >= sizeof (name)) {
         errno = ENAMETOOLONG;
         return NULL;
@@ -284,7 +282,7 @@ flux_t *flux_open (const char *uri, int flags)
     if (!uri)
         conf = parse_conf_flux_uri (&uri);
     if (!uri) {
-        if (asprintf (&default_uri, "local://%s",
+        if (asprintf (&default_uri, "local://%s/local",
                       flux_conf_builtin_get ("rundir",
                                              FLUX_CONF_INSTALLED)) < 0)
             goto error;

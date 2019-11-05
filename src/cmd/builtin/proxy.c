@@ -63,7 +63,7 @@ static void completion_cb (flux_subprocess_t *p)
 static int child_create (struct proxy_command *ctx,
                          int ac,
                          char **av,
-                         const char *workpath)
+                         const char *sockpath)
 {
     const char *shell = getenv ("SHELL");
     char *argz = NULL;
@@ -107,7 +107,7 @@ static int child_create (struct proxy_command *ctx,
             goto error;
     }
 
-    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "local://%s", workpath) < 0)
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "local://%s", sockpath) < 0)
         goto error;
 
     /* We want stdio fallthrough so subprocess can capture tty if
@@ -276,7 +276,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     /* Create child
      */
-    if (child_create (&ctx, ac - optindex, av + optindex, workpath) < 0)
+    if (child_create (&ctx, ac - optindex, av + optindex, sockpath) < 0)
         log_err_exit ("child_create");
 
     /* Start reactor
