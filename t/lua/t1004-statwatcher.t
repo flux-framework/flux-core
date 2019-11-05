@@ -15,7 +15,7 @@ is (err, nil, "error is nil")
 -- Test timeout: 5s
 f:timer {
     timeout = 5000,
-    handler = function () f:reactor_stop_error () end
+    handler = function () f:reactor_stop_error ("test timed out") end
 }
 
 -- Create statwatcher for file "xyzzy"
@@ -29,10 +29,9 @@ local s, err = f:statwatcher {
     handler = function (s, st, prev)
         ok (st, "got current stat ok")
         ok (prev, "got prev stat ok")
-        if not finfo.fp then
-            finfo.fp = io.open (file, "r")
-            ok (finfo.fp, "opened file")
-        end
+        finfo.fp = io.open (file, "r")
+        ok (finfo.fp, "opened file")
+        finfo.line = 0
         for line in finfo.fp:lines () do
             finfo.line = finfo.line + 1
             is (line, expected [finfo.line], "line "..finfo.line.." matches")
@@ -40,6 +39,8 @@ local s, err = f:statwatcher {
                 f:reactor_stop ()
             end
         end
+        finfo.fp:close()
+        finfo.fp = nil
     end
 }
 ok (s, "Created statwatcher")
@@ -67,7 +68,7 @@ local r, err = f:reactor ()
 ok (r, "reactor exited normally: "..tostring (err))
 
 -- Close fp so we do not carry a file reference into done_testing()
-finfo.fp:close ()
+if finfo.fp then finfo.fp:close () end
 
 done_testing ()
 
