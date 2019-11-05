@@ -23,9 +23,10 @@
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libpmi/clique.h"
 
-#define OPTIONS "c"
+#define OPTIONS "ca:"
 static const struct option longopts[] = {
     {"clique",       no_argument,        0, 'c'},
+    {"abort",        required_argument,  0, 'a'},
     {0, 0, 0, 0},
 };
 
@@ -37,11 +38,15 @@ int main(int argc, char *argv[])
     char *kvsname;
     int ch;
     int copt = 0;
+    int abort = -1;
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'c':   /* --clique */
                 copt++;
+                break;
+            case 'a':   /* --abort */
+                abort = atoi (optarg);
                 break;
         }
     }
@@ -113,6 +118,10 @@ int main(int argc, char *argv[])
         printf ("%d: size=%d appnum=%d maxes=%d:%d:%d kvsname=%s\n",
                 rank, size, appnum, kvsname_len, key_len, val_len, kvsname);
     }
+
+    if (abort == rank)
+        PMI_Abort (1, "Test abort error. ok. yeah!");
+
     e = PMI_Finalize ();
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_Finalize: %s", rank, pmi_strerror (e));
