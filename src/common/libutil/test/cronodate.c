@@ -30,7 +30,7 @@ static bool string_to_tm (char *s, struct tm *tmp)
 static bool string_to_tv (char *s, struct timeval *tvp)
 {
     time_t t;
-    struct tm tm;
+    struct tm tm = {0};
     char *p = strptime (s, "%Y-%m-%d %H:%M:%S", &tm);
 
     if ((t = mktime (&tm)) == (time_t) -1)
@@ -52,7 +52,7 @@ static bool string_to_tv (char *s, struct timeval *tvp)
 
 static bool cronodate_check_match (struct cronodate *d, char *s)
 {
-    struct tm tm;
+    struct tm tm = {0};
     ok (string_to_tm (s, &tm), "string_to_tm (%s)", s);
     return cronodate_match (d, &tm);
 }
@@ -62,7 +62,7 @@ static bool cronodate_check_next (struct cronodate *d,
 {
     char buf [256];
     time_t t, t_exp;
-    struct tm tm;
+    struct tm tm = {0};
     int rc;
 
     memset (&tm, 0, sizeof (tm));
@@ -101,7 +101,7 @@ int main (int argc, char *argv[])
     int i;
     int rc;
     double x;
-    struct tm tm;
+    struct tm tm = {0};
     struct timeval tv;
     struct cronodate *d;
 
