@@ -2767,7 +2767,9 @@ void lookup_stall_ref (void) {
      *
      * dirref1_ref
      * "val" : val to "foo"
-     * "valref" : valref to valref_ref
+     * "valref" : valref to valref1_ref
+     * "valref_multi" : valref to [ valref1_ref, valref2_ref ]
+     * "valref_multi2" : valref to [ valref3_ref, valref4_ref ]
      * "valrefmisc" : valref to valrefmisc1_ref
      * "valrefmisc_multi" : valref to [ valrefmisc1_ref, valrefmisc2_ref ]
      *
