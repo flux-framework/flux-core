@@ -12,6 +12,7 @@ export TEST_SOCKDIR=$(echo $FLUX_URI | sed -e "s!local://!!") &&
 export TEST_FLUX=${FLUX_BUILD_DIR}/src/cmd/flux
 export TEST_TMPDIR=${TMPDIR:-/tmp}
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+EVENT_TRACE="$SHARNESS_TEST_SRCDIR/scripts/event-trace.lua"
 
 test_expect_success 'flux-proxy creates new socket' '
 	PROXY_URI=$(flux proxy $TEST_URI printenv FLUX_URI) &&
@@ -36,12 +37,14 @@ test_expect_success 'flux-proxy forwards getattr request' '
 
 test_expect_success 'flux-proxy manages event redistribution' '
 	flux proxy $TEST_URI \
-	  "flux event sub -c1 hb& flux event sub -c1 hb& wait;wait" &&
+	  "${EVENT_TRACE} -t 2 foobar foobar.exit \\
+       ${EVENT_TRACE} -t 2 foobar foobar.exit \\
+       flux event pub foobar.exit" &&
 	FLUX_URI=$TEST_URI flux dmesg | sed -e "s/[^ ]* //" >event.out &&
-	test $(egrep "connector-local.*debug\[0\]: subscribe hb" event.out|wc -l) -eq 1 &&
-	test $(egrep "proxy.*debug\[0\]: subscribe hb" event.out|wc -l) -eq 1 &&
-	test $(egrep "connector-local.*debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1 &&
-	test $(egrep "proxy.*debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1
+	test $(egrep "connector-local.*debug\[0\]: subscribe foobar" event.out|wc -l) -eq 1 &&
+	test $(egrep "proxy.*debug\[0\]: subscribe foobar" event.out|wc -l) -eq 1 &&
+	test $(egrep "connector-local.*debug\[0\]: unsubscribe foobar" event.out|wc -l) -eq 1 &&
+	test $(egrep "proxy.*debug\[0\]: unsubscribe foobar" event.out|wc -l) -eq 1
 '
 
 test_expect_success 'flux-proxy permits dynamic service registration' "
