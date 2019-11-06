@@ -48,11 +48,11 @@ test_expect_success 'job-exec: job shell output sent to flux log' '
 test_expect_success 'job-exec: job shell failure recorded' '
 	id=$(flux jobspec srun -N4  "test \$JOB_SHELL_RANK = 0 && exit 1" \
 	     | flux job submit) &&
-	flux job wait-event -vt 1 $id finish | grep status=256
+	flux job wait-event -vt 3 $id finish | grep status=256
 '
 test_expect_success 'job-exec: status is maximum job shell exit codes' '
 	id=$(flux jobspec srun -N4 "exit \$JOB_SHELL_RANK" | flux job submit) &&
-	flux job wait-event -vt 1 $id finish | grep status=768
+	flux job wait-event -vt 3 $id finish | grep status=768
 '
 test_expect_success 'job-exec: job exception kills job shells' '
 	id=$(flux jobspec srun -N4 sleep 300 | flux job submit) &&
