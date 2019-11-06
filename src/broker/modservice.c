@@ -183,7 +183,7 @@ static int register_event (modservice_ctx_t *ctx, const char *name,
     flux_msg_handler_t *mh = NULL;
     int rc = -1;
 
-    if (asprintf (&match.topic_glob,
+    if (flux_match_asprintf (&match,
                   "%s.%s",
                   module_get_name (ctx->p),
                   name) < 0) {
@@ -209,7 +209,7 @@ static int register_event (modservice_ctx_t *ctx, const char *name,
     rc = 0;
 cleanup:
     flux_msg_handler_destroy (mh);
-    free (match.topic_glob);
+    flux_match_free (match);
     return rc;
 }
 
@@ -220,7 +220,7 @@ static int register_request (modservice_ctx_t *ctx, const char *name,
     flux_msg_handler_t *mh = NULL;
     int rc = -1;
 
-    if (asprintf (&match.topic_glob,
+    if (flux_match_asprintf (&match,
                   "%s.%s",
                   module_get_name (ctx->p),
                   name) < 0) {
@@ -242,7 +242,7 @@ static int register_request (modservice_ctx_t *ctx, const char *name,
     rc = 0;
 cleanup:
     flux_msg_handler_destroy (mh);
-    free (match.topic_glob);
+    flux_match_free (match);
     return rc;
 }
 
