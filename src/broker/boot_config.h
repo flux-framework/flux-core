@@ -32,6 +32,12 @@
  *
  *   # if commented out, instance size is the size of tbon-endpoints.
  *   size = 3
+ *
+ * Caveat: the tbon-endpoints array entries specify a ZMQ endpoint used
+ * in both "bind" and "connect" API calls.  ZMQ "bind" endpoints accept
+ * an IP address or an interface name.  ZMQ "connect" endpoints accept
+ * an IP address or hostname.  Therefore only IPs -- not hostnames, and not
+ * interface names -- may be used here.
  */
 
 #include "attr.h"
