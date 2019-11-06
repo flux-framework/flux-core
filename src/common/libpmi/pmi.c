@@ -91,6 +91,11 @@ int PMI_Finalize (void)
 
 int PMI_Abort (int exit_code, const char error_msg[])
 {
+    /* pmi_simple_client_abort() only returns on error, in which case
+     * we fall back to printing the message on stderr and call exit()
+     * (return code not checked because we don't do anything with it)
+     */
+    (void) pmi_simple_client_abort (pmi_global_ctx, exit_code, error_msg);
     fprintf (stderr, "PMI_Abort: (%d) %s\n",
              pmi_global_ctx ? pmi_global_ctx->rank : -1,
              error_msg);

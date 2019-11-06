@@ -40,6 +40,10 @@
  *   If flags | PMI_SIMPLE_SERVER_TRACE, this callback will be made
  *   with protocol telemetry for debugging.
  *
+ * abort
+ *   Abort the MPI program. Callback should log a message and terminate
+ *   MPI application.
+ *
  * Notes:
  * - The void *client argument is passed in to pmi_simple_server_request()
  *   by the user and represents a "client handle" of some sort.  It is passed
@@ -55,8 +59,6 @@
  *
  * - The following PMI-1 wire protocol commands always return PMI_FAIL:
  *   publish, unpublish, lookup, spawn.
- *
- * - Abort is implemented as a no-op.
  */
 
 #if HAVE_CONFIG_H
@@ -241,8 +243,26 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     }
     /* abort */
     else if (keyval_parse_isword (buf, "cmd", "abort") == 0) {
-        /* FIXME - terminate program */
-        snprintf (resp, sizeof (resp), "\n");
+        unsigned int code;
+        char *msg = "aborted";
+        char error_msg[SIMPLE_KVS_VAL_MAX];
+
+        /*  mpich circa 2014 sends `exit_code` but not `error_msg`.
+         *  Flux implementation sends both.
+         *  Older mpich and derivatives just exit from the task,
+         *   sending nothing.
+         */
+        if (keyval_parse_uint (buf, "exit_code", &code) < 0)
+            goto proto;
+        if (keyval_parse_string (buf,
+                                 "error_msg",
+                                 error_msg,
+                                 sizeof (error_msg)) == 0)
+            msg = error_msg;
+        if (pmi->ops.abort)
+            pmi->ops.abort (pmi->arg, cli, code, msg);
+
+        /*  Abort call above should kill program, o/w continue as before */
     }
     /* finalize */
     else if (keyval_parse_isword (buf, "cmd", "finalize") == 0) {

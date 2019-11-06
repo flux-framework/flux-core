@@ -48,11 +48,11 @@ static int check_shell_log (flux_plugin_t *p,
 
     shell_rank = get_shell_rank (shell);
     if (flux_shell_getopt_unpack (shell, "log-fatal-error", "s", &s) < 0)
-        shell_die ("error parsing log-fatal-error");
+        shell_die (1, "error parsing log-fatal-error");
 
     if (s) {
         if (strcmp (s, topic) == 0 && shell_rank == 1)
-            shell_die ("log-fatal-error requested!");
+            shell_die (1, "log-fatal-error requested!");
         /* For log-fatal-error test, avoid the remaining log testing
          *  below on the non-fatal ranks
          */

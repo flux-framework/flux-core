@@ -356,6 +356,28 @@ int pmi_simple_client_get_clique_ranks (struct pmi_simple_client *pmi,
     return result;
 }
 
+int pmi_simple_client_abort (struct pmi_simple_client *pmi,
+                             int exit_code,
+                             const char *msg)
+{
+    int result = PMI_FAIL;
+
+    if (!pmi || !pmi->initialized)
+        return PMI_ERR_INIT;
+    if (exit_code < 0)
+        return PMI_ERR_INVALID_ARG;
+    if (dprintf (pmi->fd,
+                 "cmd=abort exit_code=%d%s%s\n",
+                 exit_code,
+                 msg ? " error_msg=" : "",
+                 msg ? msg : "") < 0)
+        goto done;
+    exit (exit_code);
+    /* NOTREACHED */
+done:
+    return result;
+}
+
 void *pmi_simple_client_aux_get (struct pmi_simple_client *pmi,
                                  const char *name)
 {
