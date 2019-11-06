@@ -59,6 +59,13 @@ int cache_entry_set_dirty (struct cache_entry *entry, bool val);
 int cache_entry_clear_dirty (struct cache_entry *entry);
 int cache_entry_force_clear_dirty (struct cache_entry *entry);
 
+/* take/remove reference on the cache entry.  Useful if you are using
+ * data from cache_entry_get_raw() or cache_entry_get_treeobj() and do
+ * not want the cache entry to accidentally expire.
+ */
+void cache_entry_incref (struct cache_entry *entry);
+void cache_entry_decref (struct cache_entry *entry);
+
 /* Accessors for cache entry data.
  *
  * raw set accessor transfers ownership of 'data' to the cache entry
