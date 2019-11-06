@@ -18,21 +18,21 @@ test_expect_success 'heartbeat is received on all ranks' '
 '
 
 test_expect_success 'events from rank 0 received correctly on rank 0' '
-	run_timeout 5 \
-          $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
-            testcase testcase.eof \
-	      $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh 0 >trace &&
-        $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh >trace.expected &&
-        test_cmp trace.expected trace
+	run_timeout 15 \
+         $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+         t1 t1.eof \
+         $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh t1 0 >trace &&
+         $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh t1 >trace.expected &&
+         test_cmp trace.expected trace
 '
 
 test_expect_success "events from rank $LASTRANK received correctly on rank 0" '
-	run_timeout 5 \
-          $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
-            testcase testcase.eof \
-	      $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh $LASTRANK >trace &&
-        $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh >trace.expected &&
-        test_cmp trace.expected trace
+	run_timeout 15 \
+         $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+         t2 t2.eof \
+         $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh t2 $LASTRANK >trace &&
+         $SHARNESS_TEST_SRCDIR/scripts/t0004-event-helper.sh t2 >trace.expected &&
+         test_cmp trace.expected trace
 '
 
 test_expect_success 'publish event with no payload (loopback)' '
