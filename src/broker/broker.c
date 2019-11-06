@@ -166,6 +166,8 @@ static void init_attrs (attr_t *attrs, pid_t pid);
 
 static const struct flux_handle_ops broker_handle_ops;
 
+static int parse_config_files (flux_t *h);
+
 static int exit_rc = 1;
 
 #define OPTIONS "+vM:X:k:s:g:EIS:"
@@ -370,6 +372,11 @@ int main (int argc, char *argv[])
         log_err ("flux_set_reactor");
         goto cleanup;
     }
+
+    /* Parse config file(s).  The result is cached in ctx.h.
+     */
+    if (parse_config_files (ctx.h) < 0)
+        goto cleanup;
 
     /* Prepare signal handling
      */
@@ -836,6 +843,29 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
+}
+
+/* Parse TOML config, emitting any parse error here.
+ * This will fail if no configuration exists.
+ */
+static int parse_config_files (flux_t *h)
+{
+    flux_conf_error_t error;
+
+    if (flux_get_conf (h, &error) == NULL) {
+        if (error.lineno == -1)
+            log_err ("Config file error: %s%s%s",
+                     error.filename,
+                     *error.filename ? ": " : "",
+                     error.errbuf);
+        else
+            log_err ("Config file error: %s:%d: %s",
+                     error.filename,
+                     error.lineno,
+                     error.errbuf);
+        return -1;
+    }
+    return 0;
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)
