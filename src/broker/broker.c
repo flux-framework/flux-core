@@ -447,7 +447,7 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
     if (!strcmp (boot_method, "config")) {
-        if (boot_config (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
+        if (boot_config (ctx.h, ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }

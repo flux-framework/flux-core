@@ -8,16 +8,20 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* boot_config.c - get broker wireup info from config file */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <unistd.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <argz.h>
 #include <fnmatch.h>
+#include <jansson.h>
+#include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/cf.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
 
@@ -27,30 +31,29 @@
 
 /* Attributes that may not be set for this boot method.
  */
-static const char *badat[] = {
+static const char *broker_attr_blacklist[] = {
     "tbon.endpoint",
     NULL,
 };
 
-/* Config file table expectations.
- */
-static const struct cf_option opts[] = {
-    { "tbon-endpoints", CF_ARRAY, true },
-    { "rank", CF_INT64, false },
-    { "size", CF_INT64, false },
-    CF_OPTIONS_TABLE_END,
-};
-
-static int get_cf_endpoints_size (const cf_t *cf)
+static int parse_endpoint_by_rank (const json_t *endpoints,
+                                   int rank,
+                                   const char **entry)
 {
-    const cf_t *endpoints = cf_get_in (cf, "tbon-endpoints");
-    return cf_array_size (endpoints);
-}
+    const json_t *value;
+    const char *s;
 
-static const char *get_cf_endpoint (const cf_t *cf, int rank)
-{
-    const cf_t *endpoints = cf_get_in (cf, "tbon-endpoints");
-    return cf_string (cf_get_at (endpoints, rank));
+    if (!(value = json_array_get (endpoints, rank))) {
+        log_msg ("Config file error [bootstrap]: rank out of range");
+        return -1;
+    }
+    if (!(s = json_string_value (value))) {
+        log_msg ("Config file error [bootstrap]: malformed tbon-endpoints");
+        log_msg ("Hint: all array entries must be strings");
+        return -1;
+    }
+    *entry = s;
+    return 0;
 }
 
 /* Search array of configured endpoints, ordered by rank, for one that
@@ -58,22 +61,23 @@ static const char *get_cf_endpoint (const cf_t *cf, int rank)
  * or tcp://127.0.0.0 address.  On success, array index (rank) is returned.
  * On failure, -1 is returned with diagnostics on stderr.
  */
-static int find_local_cf_endpoint (const cf_t *cf, int size)
+static int find_local_endpoint (const json_t *endpoints)
 {
     char *addrs = NULL;
     size_t addrs_len = 0;
     char error[200];
-    int i;
+    int rank;
+    const json_t *value;
 
     if (ipaddr_getall (&addrs, &addrs_len, error, sizeof (error)) < 0) {
         log_msg ("%s", error);
         return -1;
     }
-    for (i = 0; i < size; i++) {
-        const char *s = get_cf_endpoint (cf, i);
+    json_array_foreach (endpoints, rank, value) {
+        const char *s = json_string_value (value);
         const char *entry = NULL;
 
-        if (!s) // short array
+        if (!s) // array element is not a string
             break;
         if (fnmatch ("tcp://127.0.0.*:*", s, 0) == 0)
             break;
@@ -89,46 +93,68 @@ static int find_local_cf_endpoint (const cf_t *cf, int size)
             break;
     }
     free (addrs);
-    if (i == size) {
-        log_msg ("local address not found in tbon-endpoints array");
+    if (rank == json_array_size (endpoints))
         return -1;
-    }
-    return i;
+
+    return rank;
 }
 
-/* Parse the config file, returning a table, pre-checked for
- * required keys and types.  Caller must free with cf_destroy().
- */
-static cf_t *parse_config_file (attr_t *attrs)
+static int parse_config_file (flux_t *h,
+                              int *rankp,
+                              int *sizep,
+                              const json_t **endpointsp)
 {
-    cf_t *cf = NULL;
-    const char *path;
-    struct cf_error error;
+    const flux_conf_t *conf;
+    int size = INT_MAX; // optional in config file
+    int rank = INT_MAX; // optional in config file
+    const json_t *endpoints;
+    flux_conf_error_t error;
 
-    if (attr_get (attrs, "boot.config_file", &path, NULL) < 0) {
-        log_err ("getattr boot.config_file");
-        goto error;
+    /* N.B. the broker parses config early, and treats missing/malformed
+     * TOML as a fatal error.  The checks that we make here are specific
+     * to the [bootstrap] section.
+     */
+    conf = flux_get_conf (h, NULL);
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s:{s?:i s?:i s:o}}",
+                          "bootstrap",
+                            "size", &size,
+                            "rank", &rank,
+                            "tbon-endpoints", &endpoints) < 0) {
+        log_msg ("Config file error [bootstrap]: %s", error.errbuf);
+        return -1;
     }
-    if (!(cf = cf_create ())) {
-        log_err ("cf_create");
-        goto error;
+    if (json_array_size (endpoints) == 0) { // returns 0 if non-array
+        log_msg ("Config file error [bootstrap]: malformed tbon-endpoints");
+        log_msg ("Hint: must be an array with at least one element.");
+        return -1;
     }
-    if (cf_update_file (cf, path, &error) < 0)
-        goto error_cfmsg;
-    if (cf_check (cf, opts, CF_STRICT, &error) < 0)
-        goto error_cfmsg;
-    return cf;
-error_cfmsg:
-    if (errno == EINVAL) {
-        if (strlen (error.filename) == 0)
-            log_msg ("%s", error.errbuf);
-        else
-            log_msg ("%s::%d: %s", error.filename, error.lineno, error.errbuf);
-    } else
-        log_err ("%s", path);
-error:
-    cf_destroy (cf);
-    return NULL;
+    /* If size and/or rank were unspecified, infer them by looking at the
+     * size of the tbon-endpoints array, and/or by scanning the array for
+     * an address that matches a local interface.
+     */
+    if (size == INT_MAX)
+        size = json_array_size (endpoints);
+    if (rank == INT_MAX) {
+        if ((rank = find_local_endpoint (endpoints)) < 0) {
+            log_msg ("Config file error [bootstrap]: could not determine rank");
+            log_msg ("Hint: set rank in config file or ensure tbon-endpoints");
+            log_msg ("  contains a local address");
+            return -1;
+        }
+    }
+    if (rank < 0 || rank > size - 1) {
+        log_msg ("Config file error [bootstrap]: invalid rank %d for size %d",
+                 rank,
+                 size);
+        return -1;
+    }
+    *rankp = rank;
+    *sizep = size;
+    *endpointsp = endpoints;
+    return 0;
 }
 
 /* Find attributes that, if set, should cause a fatal error.  Unlike PMI boot,
@@ -137,81 +163,77 @@ error:
  * from the shared config file.  Return 0 on success (no bad attrs),
  * or -1 on failure (one or more), with diagnostics on stderr.
  */
-static int find_incompat_attrs (attr_t *attrs)
+static int find_blacklist_attrs (attr_t *attrs)
 {
-    int i;
     int errors = 0;
+    const char **cp;
 
-    for (i = 0; badat[i] != NULL; i++) {
-        if (attr_get (attrs, badat[i], NULL, NULL) == 0) {
-            log_msg ("%s may not be set with boot_method=config", badat[i]);
+    for (cp = &broker_attr_blacklist[0]; *cp != NULL; cp++) {
+        if (attr_get (attrs, *cp, NULL, NULL) == 0) {
+            log_msg ("attribute %s may not be set with boot_method=config",
+                     *cp);
             errors++;
         }
     }
-    return errors > 0 ? -1 : 0;
+    if (errors > 0)
+        return -1;
+    return 0;
 }
 
-int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k)
+int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k)
 {
-    int rc = -1;
-    cf_t *cf = NULL;
-    const cf_t *tmp;
-    int64_t size;
-    int64_t rank;
+    int size;
+    int rank;
+    const json_t *endpoints;
+    const char *this_endpoint;
 
-    if (find_incompat_attrs (attrs) < 0)
+    if (find_blacklist_attrs (attrs) < 0)
         return -1;
-    if (!(cf = parse_config_file (attrs)))
+    if (parse_config_file (h, &rank, &size, &endpoints) < 0)
         return -1;
-
-    /* rank and size are optional in the config file.
-     * If unspecified, infer from tbon-endpoint array.
-     */
-    if ((tmp = cf_get_in (cf, "size")))
-        size = cf_int64 (tmp);
-    else
-        size = get_cf_endpoints_size (cf);
-    if ((tmp = cf_get_in (cf, "rank")))
-        rank = cf_int64 (tmp);
-    else
-        rank = find_local_cf_endpoint (cf, size);
-    if (rank < 0 || rank > size - 1) {
-        log_err ("invalid rank %d size %d", (int)rank, (int)size);
-        goto done;
-    }
 
     /* Initialize overlay network parameters.
      */
     if (overlay_init (overlay, size, rank, tbon_k) < 0)
-        goto done;
-    if (overlay_set_child (overlay, get_cf_endpoint (cf, rank)) < 0) {
-        log_err ("overlay_set_child");
-        goto done;
+        return -1;
+    if (parse_endpoint_by_rank (endpoints, rank, &this_endpoint) < 0)
+        return -1;
+    if (overlay_set_child (overlay, this_endpoint) < 0) {
+        log_err ("overlay_set_child %s", this_endpoint);
+        return -1;
     }
     if (rank > 0) {
-        int prank = kary_parentof (tbon_k, rank);
-        if (overlay_set_parent (overlay, get_cf_endpoint (cf, prank)) < 0) {
-            log_err ("overlay_set_parent");
-            goto done;
+        int parent_rank = kary_parentof (tbon_k, rank);
+        const char *parent_endpoint;
+
+        if (parse_endpoint_by_rank (endpoints,
+                                    parent_rank,
+                                    &parent_endpoint) < 0)
+            return -1;
+        if (overlay_set_parent (overlay, parent_endpoint) < 0) {
+            log_err ("overlay_set_parent %s", parent_endpoint);
+            return -1;
         }
     }
 
     /* Update attributes.
      */
-    if (attr_add (attrs, "tbon.endpoint", get_cf_endpoint (cf, rank),
+    if (attr_add (attrs,
+                  "tbon.endpoint",
+                  this_endpoint,
                   FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("setattr tbon.endpoint");
-        goto done;
+        log_err ("setattr tbon.endpoint %s", this_endpoint);
+        return -1;
     }
-    if (attr_add (attrs, "instance-level", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("setattr instance-level");
-        goto done;
+    if (attr_add (attrs,
+                  "instance-level",
+                  "0",
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("setattr instance-level 0");
+        return -1;
     }
 
-    rc = 0;
-done:
-    cf_destroy (cf);
-    return rc;
+    return 0;
 }
 
 /*

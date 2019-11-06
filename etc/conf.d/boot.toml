@@ -1,3 +1,4 @@
+[bootstrap]
 
 #mcast-endpoint = "epgm://eth0;229.0.0.1:8050"
 

@@ -23,32 +23,48 @@ test_expect_success 'flux broker with unknown boot method fails' '
 '
 
 #
-# check boot.config_file
+# check config file parsing
 #
 
-test_expect_success 'flux broker without boot.config_file fails' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=config /bin/true
-'
+test_expect_success 'broker startup with missing config fails' "
+	! FLUX_CONF_DIR=/noexist \
+		flux broker ${ARGS} /bin/true
+"
 
-test_expect_success 'flux broker with boot.config_file=/badfile fails' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=/badfile /bin/true
-'
+test_expect_success 'broker startup with invalid TOML fails' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-toml \
+		flux broker ${ARGS} /bin/true
+"
 
-test_expect_success 'flux broker with boot.config_file=bad-toml fails' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/bad-toml.conf /bin/true
-'
+test_expect_success 'bootstrap config with missing bootstrap table fails' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-nobootstrap \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
 
-test_expect_success 'flux broker with missing required items fails' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/bad-missing.conf /bin/true
-'
+test_expect_success 'bootstrap config with missing endpoints array fails' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-noendpoints \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
 
-test_expect_success 'flux broker with boot.config_file=bad-rank fails' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/bad-rank.conf /bin/true
-'
+test_expect_success 'bootstrap config with bad endpoints array' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-intendpoints2 \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
+
+test_expect_success 'bootstrap config with bad endpoints array element' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-intendpoints \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
+
+test_expect_success 'bootstrap config with negative rank fails' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-rank \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
+
+test_expect_success 'bootstrap config with >= size rank fails' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-rank2 \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
 
 # N.B. set short shutdown grace to speed up test, as in t0001-basic
 
@@ -60,41 +76,40 @@ test_expect_success 'flux broker with boot.config_file=bad-rank fails' '
 # a single-node test).
 #
 
-test_expect_success 'start size=1 with shared config file, expected attrs set' '
-	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/shared.conf \
+test_expect_success 'start size=1 with shared config file, expected attrs set' "
+	FLUX_CONF_DIR=${TCONFDIR}/shared \
+		flux broker ${ARGS} -Sboot.method=config \
 		--shutdown-grace=0.1 \
 		flux lsattr -v >1s.out &&
-	grep -q "tbon.endpoint[ ]*tcp://127.0.0.1:8500$" 1s.out
-'
+	grep -q 'tbon.endpoint[ ]*tcp://127.0.0.1:8500$' 1s.out
+"
 
-test_expect_success 'start size=1 with shared config file, ipc endpoint' '
-	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/shared_ipc.conf \
+test_expect_success 'start size=1 with shared config file, ipc endpoint' "
+	FLUX_CONF_DIR=${TCONFDIR}/shared_ipc \
+		flux broker ${ARGS} -Sboot.method=config \
 		--shutdown-grace=0.1 \
 		/bin/true
-'
+"
 
-test_expect_success 'start size=1 with shared config file, no endpoint' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/shared_none.conf \
-		/bin/true
-'
+test_expect_success 'start size=1 with shared config file, no endpoint' "
+	! FLUX_CONF_DIR=${TCONFDIR}/shared_none \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
 
-test_expect_success 'start size=1 with private config file' '
-	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/private.conf /bin/true
-'
+test_expect_success 'start size=1 with private config file' "
+	FLUX_CONF_DIR=${TCONFDIR}/private \
+		flux broker ${ARGS} -Sboot.method=config /bin/true
+"
 
 #
 # size=2 boot from config file
 #
 
 test_expect_success NO_CHAIN_LINT 'start size=2 with private config files' '
-	flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/priv2.1.conf &
-	run_timeout 5 flux broker ${ARGS} -Sboot.method=config \
-		-Sboot.config_file=${TCONFDIR}/priv2.0.conf \
+	FLUX_CONF_DIR=${TCONFDIR}/priv2-1 \
+		flux broker ${ARGS} -Sboot.method=config &
+	FLUX_CONF_DIR=${TCONFDIR}/priv2-0 \
+		flux broker ${ARGS} -Sboot.method=config \
 		--shutdown-grace=0.1 \
 		flux getattr size >2p.out &&
 	echo 2 >2p.exp &&
