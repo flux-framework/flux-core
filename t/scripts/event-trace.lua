@@ -56,11 +56,6 @@ local fn = assert (loadstring ("local topic,msg = ...; "..code))
 
 -- Connect to flux, subscribe, and launch command in background
 local f,err = flux.new()
-f:subscribe (s)
-
---- XXX: switch to posix.fork so we can capture failure of cmd?
-os.execute (cmd .. " &")
-
 -- Add timer if -t, --timeout was supplied
 local tw
 if opts.t then
@@ -84,5 +79,14 @@ local mh, err = f:msghandler {
 	end
     end
 }
+if err then
+   io.stderr:write("Error in registering exit event watcher\n")
+   os.exit(1)
+end
+assert (f:subscribe (s))
+
+
+--- XXX: switch to posix.fork so we can capture failure of cmd?
+os.execute (cmd .. " &")
 
 f:reactor()
