@@ -3418,6 +3418,195 @@ void lookup_stall_namespace_removed (void) {
     json_decref (root);
 }
 
+/* lookup stall ref tests - expire important cache entries after stalls */
+void lookup_stall_ref_expire_cache_entries (void) {
+    json_t *root;
+    json_t *dirref1;
+    json_t *dirref2;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    char valref_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref1_ref[BLOBREF_MAX_STRING_SIZE];
+    char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
+    char root_ref[BLOBREF_MAX_STRING_SIZE];
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * valref_ref
+     * "abcd"
+     *
+     * dirref1_ref
+     * "val" : val to "foo"
+     * "valref" : valref to valref_ref
+     *
+     * dirref2_ref
+     * "val" : val to "bar"
+     *
+     * root_ref
+     * "symlink" : symlink to "dirref2"
+     * "dirref1" : dirref to dirref1_ref
+     * "dirref2" : dirref to dirref2_ref
+     *
+     */
+
+    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (valref_ref));
+
+    dirref1 = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dirref1, "val", "foo", 3);
+    _treeobj_insert_entry_valref (dirref1, "valref", valref_ref);
+
+    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (dirref1_ref));
+
+    dirref2 = treeobj_create_dir ();
+    _treeobj_insert_entry_val (dirref2, "val", "bar", 3);
+    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (dirref2_ref));
+
+    root = treeobj_create_dir ();
+    _treeobj_insert_entry_dirref (root, "dirref1", dirref1_ref);
+    _treeobj_insert_entry_dirref (root, "dirref2", dirref2_ref);
+    _treeobj_insert_entry_symlink (root, "symlink", NULL, "dirref2");
+    treeobj_hash ("sha1", root, root_ref, sizeof (root_ref));
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    /* lookup dirref1.val, should stall on root */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "dirref1.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref1.val");
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref1.val stall #1");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
+
+    /* next call to lookup, should stall */
+    check_stall (lh, EAGAIN, 1, dirref1_ref, "dirref1.val stall #2");
+
+    ok (cache_count_entries (cache) == 1,
+        "cache_count_entries returns 1");
+
+    ok (cache_expire_entries (cache, 10, 1) == 0,
+        "cache_expire_entries expires 0 entries, b/c references appropriately taken");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (dirref1_ref, dirref1));
+
+    /* final call to lookup, should succeed */
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "dirref1.val");
+    json_decref (test);
+
+    /* clear cache */
+
+    ok (cache_expire_entries (cache, 10, 1) == 2,
+        "cache_expire_entries expires 2 entries");
+
+    ok (cache_count_entries (cache) == 0,
+        "cache_count_entries returns 0");
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             NULL,
+                             root_ref,
+                             0,
+                             "symlink.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create stalltest symlink.val");
+    check_stall (lh, EAGAIN, 1, root_ref, "symlink.val stall #1");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
+
+    check_stall (lh, EAGAIN, 1, dirref2_ref, "symlink.val stall #2");
+
+    ok (cache_count_entries (cache) == 1,
+        "cache_count_entries returns 1");
+
+    ok (cache_expire_entries (cache, 10, 1) == 0,
+        "cache_expire_entries expires 0 entries, b/c references appropriately taken");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (dirref2_ref, dirref2));
+
+    /* lookup symlink.val, should succeed */
+    test = treeobj_create_val ("bar", 3);
+    check_value (lh, test, "symlink.val");
+    json_decref (test);
+
+    /* clear cache */
+
+    ok (cache_expire_entries (cache, 10, 1) == 2,
+        "cache_expire_entries expires 2 entries");
+
+    ok (cache_count_entries (cache) == 0,
+        "cache_count_entries returns 0");
+
+    /* lookup dirref1.valref, should stall */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             0,
+                             "dirref1.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref1.valref");
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref1.valref stall #1");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (root_ref, root));
+
+    check_stall (lh, EAGAIN, 1, dirref1_ref, "dirref1.valref stall #2");
+
+    (void)cache_insert (cache, create_cache_entry_treeobj (dirref1_ref, dirref1));
+
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref1.valref stall #3");
+
+    ok (cache_count_entries (cache) == 2,
+        "cache_count_entries returns 2");
+
+    ok (cache_expire_entries (cache, 10, 1) == 1,
+        "cache_expire_entries expires 1 entry, only 1 entry has reference on it");
+
+    (void)cache_insert (cache, create_cache_entry_raw (valref_ref, "abcd", 4));
+
+    /* lookup dirref1.valref, should succeed */
+    test = treeobj_create_val ("abcd", 4);
+    check_value (lh, test, "dirref1.valref");
+    json_decref (test);
+
+    /* clear cache */
+
+    ok (cache_expire_entries (cache, 10, 1) == 2,
+        "cache_expire_entries expires 2 entries");
+
+    ok (cache_count_entries (cache) == 0,
+        "cache_count_entries returns 0");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+    json_decref (dirref1);
+    json_decref (dirref2);
+    json_decref (root);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -3439,6 +3628,7 @@ int main (int argc, char *argv[])
     lookup_stall_ref_root ();
     lookup_stall_ref ();
     lookup_stall_namespace_removed ();
+    lookup_stall_ref_expire_cache_entries ();
 
     done_testing ();
     return (0);
