@@ -301,7 +301,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
          */
         if (!strcmp (target, ".")) {
             if (root) {
-                free (wl->tmp_dirent);
+                json_decref (wl->tmp_dirent);
                 wl->tmp_dirent = treeobj_create_dirref (root->ref);
                 if (!wl->tmp_dirent) {
                     lh->errnum = errno;
