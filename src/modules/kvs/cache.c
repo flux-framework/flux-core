@@ -49,6 +49,7 @@ struct cache_entry {
     bool dirty;
     int errnum;
     char *blobref;
+    int refcount;
 };
 
 struct cache {
@@ -135,6 +136,18 @@ int cache_entry_force_clear_dirty (struct cache_entry *entry)
         return 0;
     }
     return -1;
+}
+
+void cache_entry_incref (struct cache_entry *entry)
+{
+    if (entry)
+        entry->refcount++;
+}
+
+void cache_entry_decref (struct cache_entry *entry)
+{
+    if (entry)
+        entry->refcount--;
 }
 
 int cache_entry_get_raw (struct cache_entry *entry, const void **data,
@@ -354,6 +367,7 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
         if ((entry = zhashx_lookup (cache->zhx, ref))
             && !cache_entry_get_dirty (entry)
             && cache_entry_get_valid (entry)
+            && !entry->refcount
             && (thresh == 0
                 || cache_entry_age (entry, current_epoch) > thresh)) {
                 zhashx_delete (cache->zhx, ref);

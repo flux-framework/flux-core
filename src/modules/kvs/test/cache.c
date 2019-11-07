@@ -560,12 +560,14 @@ void cache_remove_entry_tests (void)
 void cache_expiration_tests (void)
 {
     struct cache *cache;
-    struct cache_entry *e1, *e2, *e3, *e4;
+    struct cache_entry *e1, *e2, *e3, *e4, *e5, *e6;
     tstat_t ts;
     int size, incomplete, dirty;
     json_t *o1;
     json_t *otest;
     const json_t *otmp;
+    const void *data;
+    int len;
 
     /* Put entry in cache and test lookup, expire
      */
@@ -656,6 +658,40 @@ void cache_expiration_tests (void)
         "cache_expire_entries now=43 thresh=1 expired 0");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
+    ok (cache_expire_entries (cache, 44, 1) == 1,
+        "cache_expire_entries now=44 thresh=1 expired 1");
+    ok (cache_count_entries (cache) == 1,
+        "cache contains 1 entry");
+
+    /* third test w/ entry that is incref-ed and then decref-ed */
+
+    ok ((e5 = cache_entry_create ("xxx3")) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_set_raw (e5, "foobar", 6) == 0,
+        "cache_entry_set_raw success");
+    ok (cache_insert (cache, e5) == 0,
+        "cache_insert works");
+    ok (cache_count_entries (cache) == 2,
+        "cache contains 2 entries after insert");
+    ok (cache_lookup (cache, "yyy3", 0) == NULL,
+        "cache_lookup of wrong hash fails");
+    ok ((e6 = cache_lookup (cache, "xxx3", 42)) != NULL,
+        "cache_lookup of correct hash works (last use=42)");
+    ok (cache_entry_get_raw (e6, &data, &len) == 0,
+        "cache_entry_get_raw found entry");
+    ok (len == 6
+        && memcmp (data, "foobar", len) == 0,
+        "cache_entry_get_raw returned correct data");
+
+    cache_entry_incref (e6);
+
+    ok (cache_expire_entries (cache, 44, 1) == 0,
+        "cache_expire_entries now=44 thresh=1 expired 0");
+    ok (cache_count_entries (cache) == 2,
+        "cache contains 2 entries");
+
+    cache_entry_decref (e6);
+
     ok (cache_expire_entries (cache, 44, 1) == 1,
         "cache_expire_entries now=44 thresh=1 expired 1");
     ok (cache_count_entries (cache) == 1,

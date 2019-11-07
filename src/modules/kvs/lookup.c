@@ -43,6 +43,11 @@ typedef struct {
     const json_t *dirent;
     json_t *tmp_dirent;         /* tmp dirent that may need to be created */
     zlist_t *pathcomps;
+
+    /* If 'dirent' field is set and depends on cache entry not
+     * expiring, use this to manage grabbing/giving up reference to
+     * cache entry. */
+    struct cache_entry *entry;
 } walk_level_t;
 
 struct lookup {
@@ -154,8 +159,19 @@ static void walk_level_destroy (void *data)
         json_decref (wl->root_dirent);
         json_decref (wl->tmp_dirent);
         free (wl->path_copy);
+        cache_entry_decref (wl->entry);
         free (wl);
     }
+}
+
+static inline void walk_level_update_dirent (walk_level_t *wl,
+                                             const json_t *dirent_new,
+                                             struct cache_entry *entry_new)
+{
+    cache_entry_decref (wl->entry);
+    wl->dirent = dirent_new;
+    wl->entry = entry_new;
+    cache_entry_incref (wl->entry);
 }
 
 static walk_level_t *walk_level_create (const char *root_ref,
@@ -182,11 +198,11 @@ static walk_level_t *walk_level_create (const char *root_ref,
         saved_errno = errno;
         goto error;
     }
-    wl->dirent = wl->root_dirent;
     if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl))) {
         saved_errno = errno;
         goto error;
     }
+    walk_level_update_dirent (wl, wl->root_dirent, NULL);
 
     return wl;
 
@@ -253,6 +269,7 @@ done:
  */
 static lookup_process_t walk_symlink (lookup_t *lh,
                                       walk_level_t *wl,
+                                      struct cache_entry *entry,
                                       const json_t *dirent_tmp,
                                       char *current_pathcomp,
                                       walk_level_t **wlp)
@@ -294,23 +311,23 @@ static lookup_process_t walk_symlink (lookup_t *lh,
         /* Set wl->dirent, now that we've resolved any potential
          * namespace in the target.
          */
-        wl->dirent = dirent_tmp;
+        walk_level_update_dirent (wl, dirent_tmp, entry);
 
         /* if symlink target is root, no need to recurse, just get
          * root_dirent and continue on.
          */
         if (!strcmp (target, ".")) {
             if (root) {
-                free (wl->tmp_dirent);
+                json_decref (wl->tmp_dirent);
                 wl->tmp_dirent = treeobj_create_dirref (root->ref);
                 if (!wl->tmp_dirent) {
                     lh->errnum = errno;
                     goto cleanup;
                 }
-                wl->dirent = wl->tmp_dirent;
+                walk_level_update_dirent (wl, wl->tmp_dirent, NULL);
             }
             else
-                wl->dirent = wl->root_dirent;
+                walk_level_update_dirent (wl, wl->root_dirent, NULL);
         }
         else {
             /* "recursively" determine link dirent */
@@ -327,7 +344,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
         }
     }
     else
-        wl->dirent = dirent_tmp;
+        walk_level_update_dirent (wl, dirent_tmp, entry);
 
     (*wlp) = NULL;
 done:
@@ -356,11 +373,11 @@ static lookup_process_t walk (lookup_t *lh)
 
     /* walk directories */
     while ((pathcomp = zlist_head (wl->pathcomps))) {
+        struct cache_entry *entry = NULL;
 
         /* Get directory of dirent */
 
         if (treeobj_is_dirref (wl->dirent)) {
-            struct cache_entry *entry;
             const char *refstr;
             int refcount;
 
@@ -447,7 +464,7 @@ static lookup_process_t walk (lookup_t *lh)
             walk_level_t *wltmp = NULL;
             lookup_process_t sret;
 
-            sret = walk_symlink (lh, wl, dirent_tmp, pathcomp, &wltmp);
+            sret = walk_symlink (lh, wl, entry, dirent_tmp, pathcomp, &wltmp);
             if (sret == LOOKUP_PROCESS_ERROR)
                 goto error;
             else if (sret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE)
@@ -460,7 +477,7 @@ static lookup_process_t walk (lookup_t *lh)
             }
         }
         else
-            wl->dirent = dirent_tmp;
+            walk_level_update_dirent (wl, dirent_tmp, entry);
 
         if (last_pathcomp (wl->pathcomps, pathcomp)
             && wl->depth) {
@@ -475,7 +492,7 @@ static lookup_process_t walk (lookup_t *lh)
                 wl_tmp = zlist_head (lh->levels);
                 pathcomp_tmp = zlist_head (wl_tmp->pathcomps);
 
-                wl_tmp->dirent = wl->dirent;
+                walk_level_update_dirent (wl_tmp, wl->dirent, wl->entry);
 
                 walk_level_destroy (wl);
 
