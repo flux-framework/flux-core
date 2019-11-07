@@ -329,6 +329,10 @@ void test_dir (void)
             && treeobj_get_count (dir) == 2
             && treeobj_get_entry (dir, "nil") == val3,
         "treeobj_insert_entry accepts json_null value");
+    ok (treeobj_insert_entry_novalidate (dir, "novalidate", val1) == 0
+            && treeobj_get_count (dir) == 3
+            && treeobj_get_entry (dir, "novalidate") == val1,
+        "treeobj_insert_entry_novalidate works");
     ok (treeobj_validate (dir) == 0,
         "treeobj_validate likes populated dir");
 
@@ -347,6 +351,18 @@ void test_dir (void)
     errno = 0;
     ok (treeobj_insert_entry (dir, "baz", NULL) < 0 && errno == EINVAL,
         "treeobj_insert_entry fails with EINVAL on NULL value");
+    errno = 0;
+    ok (treeobj_insert_entry_novalidate (val1, "foo", val1) < 0
+        && errno == EINVAL,
+        "treeobj_insert_entry_novalidate fails with EINVAL on non-dir treeobj");
+    errno = 0;
+    ok (treeobj_insert_entry_novalidate (dir, NULL, val1) < 0
+        && errno == EINVAL,
+        "treeobj_insert_entry_novalidate fails with EINVAL on NULL key");
+    errno = 0;
+    ok (treeobj_insert_entry_novalidate (dir, "baz", NULL) < 0
+        && errno == EINVAL,
+        "treeobj_insert_entry_novalidate fails with EINVAL on NULL value");
     errno = 0;
     ok (treeobj_get_entry (dir, "noexist") == NULL && errno == ENOENT,
         "treeobj_get_entry fails with ENOENT on unknown key");

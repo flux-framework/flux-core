@@ -326,6 +326,28 @@ int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2)
     return 0;
 }
 
+/* identical to treeobj_insert_entry() but does not call
+ * treeobj_validate() */
+int treeobj_insert_entry_novalidate (json_t *obj,
+                                     const char *name,
+                                     json_t *obj2)
+{
+    const char *type;
+    json_t *data;
+
+    if (!name || !obj2 || treeobj_unpack (obj, &type, &data) < 0
+            || strcmp (type, "dir") != 0
+            || treeobj_peek (obj2, NULL, NULL) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (json_object_set (data, name, obj2) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 const json_t *treeobj_peek_entry (const json_t *obj, const char *name)
 {
     const char *type;

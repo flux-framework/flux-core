@@ -86,6 +86,15 @@ json_t *treeobj_get_entry (json_t *obj, const char *name);
 int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2);
 int treeobj_delete_entry (json_t *obj, const char *name);
 
+/* faster version of treeobj_insert_entry(), which does not do a full
+ * treeobj_validate() call on `obj2`.  Can vastly improve performance
+ * when `obj2` is extremely large, such as an extremely long valref
+ * array or large dir object.
+ */
+int treeobj_insert_entry_novalidate (json_t *obj,
+                                     const char *name,
+                                     json_t *obj2);
+
 /* peek directory entry
  * identical to treeobj_get_entry(), but is a const equivalent.  Good
  * to use when modifications will not occur.
