@@ -474,7 +474,16 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
             return -1;
         }
 
-        if (treeobj_insert_entry (dir, final_name, cpy) < 0) {
+        /* To improve performance, call
+         * treeobj_insert_entry_novalidate() instead of
+         * treeobj_insert_entry(), as the former will not call
+         * treeobj_validate() on the internal valref treeobj array,
+         * thus avoiding expensive checks if the array is long.  Since
+         * we're appending a blobref to this KVS entry, we really only
+         * need to check the new blobref for validity.  The check done
+         * by treeobj_append_blobref() should be sufficient. */
+
+        if (treeobj_insert_entry_novalidate (dir, final_name, cpy) < 0) {
             json_decref (cpy);
             return -1;
         }
