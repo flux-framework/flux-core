@@ -239,6 +239,25 @@ static int append_async (struct eventlogger *ev,
     return 0;
 }
 
+int eventlogger_append_entry (struct eventlogger *ev,
+                              int flags,
+                              const char *path,
+                              json_t *entry)
+{
+    char *entrystr = NULL;
+    int rc = -1;
+
+    if (!(entrystr = eventlog_entry_encode (entry)))
+        return -1;
+
+    if (flags & EVENTLOGGER_FLAG_WAIT)
+        rc = append_wait (ev, path, entrystr);
+    else
+        rc = append_async (ev, path, entry, entrystr);
+    free (entrystr);
+    return rc;
+}
+
 int eventlogger_append (struct eventlogger *ev,
                         int flags,
                         const char *path,
@@ -246,26 +265,16 @@ int eventlogger_append (struct eventlogger *ev,
                         const char *context)
 {
     int rc = -1;
-    char *entrystr = NULL;
-    int wait = 0;
-    json_t *entry;
+    json_t *entry = NULL;
 
-    if (flags & EVENTLOGGER_FLAG_WAIT)
-        wait = 1;
-
-    if (!(entry = eventlog_entry_create (0., name, context))
-        || !(entrystr = eventlog_entry_encode (entry)))
+    if (!(entry = eventlog_entry_create (0., name, context)))
         goto out;
-
-    if (wait)
-        rc = append_wait (ev, path, entrystr);
-    else
-        rc = append_async (ev, path, entry, entrystr);
+    rc = eventlogger_append_entry (ev, flags, path, entry);
 out:
     json_decref (entry);
-    free (entrystr);
     return rc;
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -56,6 +56,7 @@
 #include "svc.h"
 #include "internal.h"
 #include "builtins.h"
+#include "eventlogger.h"
 
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
@@ -75,6 +76,8 @@ struct shell_output_type_file {
 
 struct shell_output {
     flux_shell_t *shell;
+    struct eventlogger *ev;
+    double batch_timeout;
     int refcount;
     int eof_pending;
     zlist_t *pending_writes;
@@ -334,84 +337,39 @@ error:
     return rc;
 }
 
-static void shell_output_kvs_completion (flux_future_t *f, void *arg)
+static int entry_output_is_kvs (struct shell_output *out, json_t *entry)
 {
-    struct shell_output *out = arg;
-
-    /* Error failing to commit is a fatal error.  Should be cleaner in
-     * future. Issue #2378 */
-    if (flux_future_get (f, NULL) < 0)
-        shell_die_errno (1, "shell_output_kvs");
-    flux_future_destroy (f);
-
-    if (flux_shell_remove_completion_ref (out->shell, "output.kvs") < 0)
-        shell_log_errno ("flux_shell_remove_completion_ref");
+    json_t *context;
+    const char *name;
+    const char *stream;
+    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
+        shell_log_errno ("eventlog_entry_parse");
+        return 0;
+    }
+    if (!strcmp (name, "data")) {
+        if (iodecode (context, &stream, NULL, NULL, NULL, NULL) < 0) {
+            shell_log_errno ("iodecode");
+            return 0;
+        }
+        if (!strcmp (stream, "stdout"))
+            return (out->stdout_type == FLUX_OUTPUT_TYPE_KVS);
+        else
+            return (out->stderr_type == FLUX_OUTPUT_TYPE_KVS);
+    }
+    return 0;
 }
 
 static int shell_output_kvs (struct shell_output *out)
 {
     json_t *entry;
     size_t index;
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-    int saved_errno;
-    int rc = -1;
-
-    if (!(txn = flux_kvs_txn_create ()))
-        goto error;
     json_array_foreach (out->output, index, entry) {
-        json_t *context;
-        const char *name;
-        const char *stream = NULL;
-        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
-            shell_log_errno ("eventlog_entry_parse");
-            return -1;
-        }
-        if (!strcmp (name, "data")) {
-            int output_type;
-            if (iodecode (context, &stream, NULL, NULL, NULL, NULL) < 0) {
-                shell_log_errno ("iodecode");
-                return -1;
-            }
-            if (!strcmp (stream, "stdout"))
-                output_type = out->stdout_type;
-            else
-                output_type = out->stderr_type;
-            if (output_type == FLUX_OUTPUT_TYPE_KVS) {
-                char *entrystr = eventlog_entry_encode (entry);
-                if (!entrystr) {
-                    shell_log_errno ("eventlog_entry_encode");
-                    goto error;
-                }
-                if (flux_kvs_txn_put (txn,
-                                      FLUX_KVS_APPEND,
-                                      "output",
-                                      entrystr) < 0) {
-                    free (entrystr);
-                    goto error;
-                }
-                free (entrystr);
-            }
+        if (entry_output_is_kvs (out, entry) &&
+            eventlogger_append_entry (out->ev, 0, "output", entry) < 0) {
+            return shell_log_errno ("eventlogger_append");
         }
     }
-    if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
-        goto error;
-    if (flux_future_then (f, -1, shell_output_kvs_completion, out) < 0)
-        goto error;
-    if (flux_shell_add_completion_ref (out->shell, "output.kvs") < 0) {
-        shell_log_errno ("flux_shell_remove_completion_ref");
-        goto error;
-    }
-    /* f memory responsibility of shell_output_kvs_completion()
-     * callback */
-    f = NULL;
-    rc = 0;
-error:
-    saved_errno = errno;
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return rc;
+    return 0;
 }
 
 static int shell_output_write_fd (int fd, const void *buf, size_t len)
@@ -639,6 +597,7 @@ void shell_output_destroy (struct shell_output *out)
             }
             zhash_destroy (&out->fds);
         }
+        eventlogger_destroy (out->ev);
         free (out);
         errno = saved_errno;
     }
@@ -920,6 +879,43 @@ error:
     return rc;
 }
 
+static void output_ref (struct eventlogger *ev, void *arg)
+{
+    struct shell_output *out = arg;
+    flux_shell_add_completion_ref (out->shell, "output.txn");
+}
+
+
+static void output_unref (struct eventlogger *ev, void *arg)
+{
+    struct shell_output *out = arg;
+    flux_shell_remove_completion_ref (out->shell, "output.txn");
+}
+
+static int output_eventlogger_start (struct shell_output *out)
+{
+    flux_t *h = flux_shell_get_flux (out->shell);
+    struct eventlogger_ops ops = {
+        .busy = output_ref,
+        .idle = output_unref
+    };
+
+    out->batch_timeout = 0.5;
+
+    if (flux_shell_getopt_unpack (out->shell,
+                                  "output",
+                                  "{s?F}",
+                                  "batch-timeout", &out->batch_timeout) < 0)
+        return shell_log_errno ("invalid output.batch-timeout option");
+
+    shell_debug ("batch timeout = %.3fs", out->batch_timeout);
+
+    out->ev = eventlogger_create (h, out->batch_timeout, &ops, out);
+    if (!out->ev)
+        return shell_log_errno ("eventlogger_create");
+    return 0;
+}
+
 struct shell_output *shell_output_create (flux_shell_t *shell)
 {
     struct shell_output *out;
@@ -975,6 +971,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                     goto error;
             }
         }
+        if (output_eventlogger_start (out) < 0)
+            goto error;
         if (shell_output_header (out) < 0)
             goto error;
     }
