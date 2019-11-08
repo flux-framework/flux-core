@@ -13,6 +13,7 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <czmq.h>
 #include <string.h>
 
 #include "kvs_txn_private.h"

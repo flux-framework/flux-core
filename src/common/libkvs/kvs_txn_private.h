@@ -25,6 +25,8 @@ int txn_decode_op (json_t *op, const char **key, int *flags, json_t **dirent);
 
 int txn_encode_op (const char *key, int flags, json_t *dirent, json_t **op);
 
+int txn_compact (flux_kvs_txn_t *txn);
+
 #endif /* !_KVS_TXN_PRIVATE_H */
 
 /*
