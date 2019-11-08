@@ -75,8 +75,6 @@ libutil_la_SOURCES = \
 	tomltk.h \
 	timestamp.c \
 	timestamp.h \
-	cf.c \
-	cf.h \
 	mnemonic.c \
 	mnemonic.h \
 	mn_wordlist.c \
@@ -113,7 +111,6 @@ TESTS = test_ev.t \
 	test_dirwalk.t \
 	test_read_all.t \
 	test_tomltk.t \
-	test_cf.t \
 	test_ipaddr.t \
 	test_fluid.t \
 	test_aux.t \
@@ -214,10 +211,6 @@ test_read_all_t_LDADD = $(test_ldadd)
 test_tomltk_t_SOURCES = test/tomltk.c
 test_tomltk_t_CPPFLAGS = $(test_cppflags)
 test_tomltk_t_LDADD = $(test_ldadd)
-
-test_cf_t_SOURCES = test/cf.c
-test_cf_t_CPPFLAGS = $(test_cppflags)
-test_cf_t_LDADD = $(test_ldadd)
 
 test_ipaddr_t_SOURCES = test/ipaddr.c
 test_ipaddr_t_CPPFLAGS = $(test_cppflags)

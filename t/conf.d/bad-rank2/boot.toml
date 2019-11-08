@@ -1,0 +1,10 @@
+[bootstrap]
+
+size = 1
+
+# rank is out of range
+rank = 42
+
+tbon-endpoints = [
+    "ipc://@test",
+]

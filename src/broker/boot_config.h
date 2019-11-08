@@ -13,10 +13,12 @@
 
 /* boot_config - bootstrap broker/overlay from config file */
 
-/* Usage: flux broker -Sboot.method=config -Sboot.config_file=PATH
+/* Usage: flux broker -Sboot.method=config
  *
  * Example config file (TOML):
  *
+ *   [bootstrap]
+
  *   # tbon-endpoints array is ordered by rank (zeromq URI format)
  *   tbon-endpoints = [
  *       "tcp://192.168.1.100:8020",  # rank 0
@@ -30,18 +32,23 @@
  *
  *   # if commented out, instance size is the size of tbon-endpoints.
  *   size = 3
+ *
+ * Caveat: the tbon-endpoints array entries specify a ZMQ endpoint used
+ * in both "bind" and "connect" API calls.  ZMQ "bind" endpoints accept
+ * an IP address or an interface name.  ZMQ "connect" endpoints accept
+ * an IP address or hostname.  Therefore only IPs -- not hostnames, and not
+ * interface names -- may be used here.
  */
 
 #include "attr.h"
 #include "overlay.h"
 
 /* Broker attributes read/written directly by this method:
- *   boot.config_file (r)
  *   tbon.endpoint (w)
  *   instance-level (w)
  */
 
-int boot_config (overlay_t *overlay, attr_t *attrs, int tbon_k);
+int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k);
 
 #endif /* BROKER_BOOT_CONFIG_H */
 
