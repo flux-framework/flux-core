@@ -46,65 +46,6 @@
 #include "list.h"
 #include "job-manager.h"
 
-/* For a given job, create a JSON object containing the requested
- * attributes and their values.  Returns JSON object which the caller
- * must free.  On error, return NULL with errno set:
- *
- * EPROTO - malformed attrs array
- * ENOMEM - out of memory
- */
-json_t *list_one_job (struct job *job, json_t *attrs)
-{
-    size_t index;
-    json_t *value;
-    json_t *o;
-    int saved_errno;
-
-    if (!(o = json_object ()))
-        goto error_nomem;
-    json_array_foreach (attrs, index, value) {
-        const char *attr = json_string_value (value);
-        json_t *val = NULL;
-        if (!attr) {
-            errno = EPROTO;
-            goto error;
-        }
-        if (!strcmp (attr, "id")) {
-            val = json_integer (job->id);
-        }
-        else if (!strcmp (attr, "userid")) {
-            val = json_integer (job->userid);
-        }
-        else if (!strcmp (attr, "priority")) {
-            val = json_integer (job->priority);
-        }
-        else if (!strcmp (attr, "t_submit")) {
-            val = json_real (job->t_submit);
-        }
-        else if (!strcmp (attr, "state")) {
-            val = json_integer (job->state);
-        }
-        else {
-            errno = EINVAL;
-            goto error;
-        }
-        if (val == NULL)
-            goto error_nomem;
-        if (json_object_set_new (o, attr, val) < 0) {
-            json_decref (val);
-            goto error_nomem;
-        }
-    }
-    return o;
-error_nomem:
-    errno = ENOMEM;
-error:
-    saved_errno = errno;
-    json_decref (o);
-    errno = saved_errno;
-    return NULL;
-}
-
 /* Create a JSON array of 'job' objects, representing the head of the queue.
  * 'max_entries' determines the max number of jobs to return, 0=unlimited.
  * Returns JSON object which the caller must free.  On error, return NULL
@@ -113,14 +54,13 @@ error:
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs)
+json_t *list_job_array (struct queue *queue, int max_entries)
 {
     json_t *jobs = NULL;
     struct job *job;
     int saved_errno;
 
-    if (max_entries < 0 || !json_is_array (attrs)
-                        || json_array_size (attrs) == 0) {
+    if (max_entries < 0) {
         errno = EPROTO;
         goto error;
     }
@@ -129,7 +69,17 @@ json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs)
     job = queue_first (queue);
     while (job) {
         json_t *o;
-        if (!(o = list_one_job (job, attrs)))
+        if (!(o = json_pack ("{s:I s:i s:i s:f s:i}",
+                             "id",
+                             job->id,
+                             "userid",
+                             job->userid,
+                             "priority",
+                             job->priority,
+                             "t_submit",
+                             job->t_submit,
+                             "state",
+                             job->state)))
             goto error;
         if (json_array_append_new (jobs, o) < 0) {
             json_decref (o);
@@ -157,13 +107,14 @@ void list_handle_request (flux_t *h,
     struct job_manager *ctx = arg;
     int max_entries;
     json_t *jobs;
-    json_t *attrs;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:o}",
-                                        "max_entries", &max_entries,
-                                        "attrs", &attrs) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i}",
+                             "max_entries",
+                             &max_entries) < 0)
         goto error;
-    if (!(jobs = list_job_array (ctx->queue, max_entries, attrs)))
+    if (!(jobs = list_job_array (ctx->queue, max_entries)))
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);

@@ -52,12 +52,10 @@ int main (int argc, char *argv[])
     optparse_t *opts;
     int max_entries;
     int optindex;
-    char *attrs = "[\"id\",\"userid\",\"priority\",\"t_submit\",\"state\"]";
     flux_future_t *f;
     json_t *jobs;
     size_t index;
     json_t *value;
-    json_t *attrs_array;
 
     log_init ("list-jobs");
 
@@ -77,13 +75,13 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(attrs_array = json_loads (attrs, 0, NULL)))
-        log_err_exit ("json_loads");
-
-    if (!(f = flux_rpc_pack (h, "job-manager.list", FLUX_NODEID_ANY, 0,
-                             "{s:i s:O}",
-                             "max_entries", max_entries,
-                             "attrs", attrs_array)))
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.list",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i}",
+                             "max_entries",
+                             max_entries)))
         log_err_exit ("flux_rpc_pack");
 
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
@@ -114,7 +112,6 @@ int main (int argc, char *argv[])
                 timestr);
     }
 
-    json_decref (attrs_array);
     flux_future_destroy (f);
     flux_close (h);
     log_fini ();
