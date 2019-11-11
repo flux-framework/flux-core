@@ -60,6 +60,8 @@ int eventlogger_append_entry (struct eventlogger *ev,
 
 int eventlogger_set_commit_timeout (struct eventlogger *ev, double timeout);
 
+int eventlogger_flush (struct eventlogger *ev);
+
 #ifdef __cplusplus
 }
 #endif

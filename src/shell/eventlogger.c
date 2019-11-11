@@ -188,9 +188,6 @@ static int append_wait (struct eventlogger *ev,
                         const char *path,
                         const char *entrystr)
 {
-    int rc = -1;
-    flux_future_t *f = NULL;
-
     /*  append_wait also appends all pending transactions synchronously  */
     struct eventlog_batch *batch = eventlog_batch_get (ev);
     if (!batch)
@@ -201,17 +198,7 @@ static int append_wait (struct eventlogger *ev,
                           path, entrystr) < 0)
         return -1;
 
-    if (!(f = flux_kvs_commit (ev->h, NULL, 0, ev->current->txn))
-        || flux_future_wait_for (f, ev->commit_timeout) < 0)
-        goto out;
-    if ((rc = flux_future_get (f, NULL)) < 0)
-        eventlog_batch_error (batch, errno);
-
-    eventlogger_batch_complete (ev, ev->current);
-    ev->current = NULL;
-out:
-    flux_future_destroy (f);
-    return rc;
+    return eventlogger_flush (ev);
 }
 
 static int append_async (struct eventlogger *ev,
@@ -275,6 +262,27 @@ out:
     return rc;
 }
 
+int eventlogger_flush (struct eventlogger *ev)
+{
+    int rc = -1;
+    flux_future_t *f = NULL;
+    struct eventlog_batch *batch;
+
+    if (!(batch = eventlog_batch_get (ev)))
+        return -1;
+
+    if (!(f = flux_kvs_commit (ev->h, NULL, 0, ev->current->txn))
+        || flux_future_wait_for (f, ev->commit_timeout) < 0)
+        goto out;
+    if ((rc = flux_future_get (f, NULL)) < 0)
+        eventlog_batch_error (batch, errno);
+
+    eventlogger_batch_complete (ev, ev->current);
+    ev->current = NULL;
+out:
+    flux_future_destroy (f);
+    return rc;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
