@@ -491,6 +491,13 @@ static void shell_output_write_cb (flux_t *h,
             flux_msg_handler_stop (mh);
             if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
                 shell_log_errno ("flux_shell_remove_completion_ref");
+            /* no more output is coming, flush the last batch of
+             * output */
+            if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
+                 || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
+                if (eventlogger_flush (out->ev) < 0)
+                    shell_log_errno ("eventlogger_flush");
+            }
         }
     }
     if (flux_respond (out->shell->h, msg, NULL) < 0)
