@@ -11,26 +11,13 @@
 /* list - list jobs
  *
  * Purpose:
- *   Support queue lister tool like "flux queue" or queue watcher tool like
- *   "flux top" to obtain the jobs at head of queue with low overhead.
- *   Allow the set of job attributes returned to be customized, for
- *   customizable tool output.
- *
- *   The entire queue can be dumped if desired.  This is useful for testing
- *   job-manager queue management.
+ *   List active jobs.  This is useful for testing the job-manager.
  *
  * Input:
- * - set of attributes to list per job
  * - max number of jobs to return from head of queue
  *
  * Output:
- * - array of job objects (job objects contain the requested attributes
- *   and their values)
- *
- * Caveats:
- * - Always returns one response message regardless of number of jobs.
- * - Only a hardwired list of attributes is supported.
- * - No limits on guest access.
+ * - array of job objects
  */
 
 #if HAVE_CONFIG_H
@@ -42,61 +29,35 @@
 #include "src/common/libjob/job.h"
 
 #include "job.h"
-#include "queue.h"
 #include "list.h"
+#include "alloc.h"
 #include "job-manager.h"
 
-/* Create a JSON array of 'job' objects, representing the head of the queue.
- * 'max_entries' determines the max number of jobs to return, 0=unlimited.
- * Returns JSON object which the caller must free.  On error, return NULL
- * with errno set:
- *
- * EPROTO - malformed or empty attrs array, max_entries out of range
- * ENOMEM - out of memory
- */
-json_t *list_job_array (struct queue *queue, int max_entries)
-{
-    json_t *jobs = NULL;
-    struct job *job;
-    int saved_errno;
 
-    if (max_entries < 0) {
-        errno = EPROTO;
-        goto error;
+int list_append_job (json_t *jobs, struct job *job)
+{
+    json_t *o;
+
+    if (!(o = json_pack ("{s:I s:i s:i s:f s:i}",
+                         "id",
+                         job->id,
+                         "userid",
+                         job->userid,
+                         "priority",
+                         job->priority,
+                         "t_submit",
+                         job->t_submit,
+                         "state",
+                         job->state))) {
+        errno = ENOMEM;
+        return -1;
     }
-    if (!(jobs = json_array ()))
-        goto error_nomem;
-    job = queue_first (queue);
-    while (job) {
-        json_t *o;
-        if (!(o = json_pack ("{s:I s:i s:i s:f s:i}",
-                             "id",
-                             job->id,
-                             "userid",
-                             job->userid,
-                             "priority",
-                             job->priority,
-                             "t_submit",
-                             job->t_submit,
-                             "state",
-                             job->state)))
-            goto error;
-        if (json_array_append_new (jobs, o) < 0) {
-            json_decref (o);
-            goto error_nomem;
-        }
-        if (json_array_size (jobs) == max_entries)
-            break;
-        job = queue_next (queue);
+    if (json_array_append_new (jobs, o) < 0) {
+        json_decref (o);
+        errno = ENOMEM;
+        return -1;
     }
-    return jobs;
-error_nomem:
-    errno = ENOMEM;
-error:
-    saved_errno = errno;
-    json_decref (jobs);
-    errno = saved_errno;
-    return NULL;
+    return 0;
 }
 
 void list_handle_request (flux_t *h,
@@ -106,7 +67,8 @@ void list_handle_request (flux_t *h,
 {
     struct job_manager *ctx = arg;
     int max_entries;
-    json_t *jobs;
+    json_t *jobs = NULL;
+    struct job *job;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -114,8 +76,34 @@ void list_handle_request (flux_t *h,
                              "max_entries",
                              &max_entries) < 0)
         goto error;
-    if (!(jobs = list_job_array (ctx->queue, max_entries)))
+    if (max_entries < 0) {
+        errno = EPROTO;
         goto error;
+    }
+    if (!(jobs = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    /* First list the scheduler inqueue, where order is significant.
+     */
+    job = alloc_pending_first (ctx->alloc);
+    while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {
+        if (list_append_job (jobs, job) < 0)
+            goto error;
+        job = alloc_pending_next (ctx->alloc);
+    }
+    /* Then list jobs in the active_jobs hash (omitting those in the scheduler
+     * inqueue), in no particular order.
+     */
+    job = zhashx_first (ctx->active_jobs);
+    while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {
+        if (!job->alloc_queued) {
+            if (list_append_job (jobs, job) < 0)
+                goto error;
+        }
+        job = zhashx_next (ctx->active_jobs);
+    }
+
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (jobs);

@@ -32,10 +32,11 @@
 #include <flux/core.h>
 
 #include "job.h"
-#include "queue.h"
 #include "event.h"
-#include "priority.h"
+#include "alloc.h"
 #include "job-manager.h"
+
+#include "priority.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
 
@@ -63,7 +64,7 @@ void priority_handle_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job";
         goto error;
     }
@@ -90,7 +91,7 @@ void priority_handle_request (flux_t *h,
                              "userid", userid,
                              "priority", priority) < 0)
         goto error;
-    queue_reorder (ctx->queue, job, job->queue_handle);
+    alloc_pending_reorder (ctx->alloc, job);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

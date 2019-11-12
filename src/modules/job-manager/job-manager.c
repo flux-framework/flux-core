@@ -13,8 +13,9 @@
 #endif
 #include <flux/core.h>
 
+#include "src/common/libjob/job_hash.h"
+
 #include "job.h"
-#include "queue.h"
 #include "submit.h"
 #include "restart.h"
 #include "raise.h"
@@ -65,10 +66,12 @@ int mod_main (flux_t *h, int argc, char **argv)
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
 
-    if (!(ctx.queue = queue_create (true))) {
-        flux_log_error (h, "error creating queue");
+    if (!(ctx.active_jobs = job_hash_create ())) {
+        flux_log_error (h, "error creating active_jobs hash");
         goto done;
     }
+    zhashx_set_destructor (ctx.active_jobs, job_destructor);
+    zhashx_set_duplicator (ctx.active_jobs, job_duplicator);
     if (!(ctx.event = event_ctx_create (&ctx))) {
         flux_log_error (h, "error creating event batcher");
         goto done;
@@ -109,7 +112,7 @@ done:
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);
-    queue_destroy (ctx.queue);
+    zhashx_destroy (&ctx.active_jobs);
     return rc;
 }
 

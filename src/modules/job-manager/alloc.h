@@ -34,6 +34,15 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job);
  */
 int alloc_send_free_request (struct alloc *alloc, struct job *job);
 
+/* List pending jobs
+ */
+struct job *alloc_pending_first (struct alloc *alloc);
+struct job *alloc_pending_next (struct alloc *alloc);
+
+/* Reorder job in scheduler queue, e.g. after priority change.
+ */
+void alloc_pending_reorder (struct alloc *alloc, struct job *job);
+
 #endif /* ! _FLUX_JOB_MANAGER_ALLOC_H */
 
 /*

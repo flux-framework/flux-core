@@ -118,7 +118,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
         flux_log (ctx->h, LOG_DEBUG, "alloc: stop due to %s: %s",
                   s, flux_strerror (errnum));
 
-        job = queue_first (ctx->queue);
+        job = zhashx_first (ctx->active_jobs);
         while (job) {
             /* jobs with alloc pending need to go back in the queue
              * so they will automatically send alloc again.
@@ -135,7 +135,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
              * need to be picked up again after 'hello'.
              */
             job->free_pending = 0;
-            job = queue_next (ctx->queue);
+            job = zhashx_next (ctx->active_jobs);
         }
         alloc->ready = false;
         alloc->active_alloc_count = 0;
@@ -155,7 +155,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
         goto teardown;
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log_error (h, "sched.free-response: id=%llu not active",
                         (unsigned long long)id);
         goto teardown;
@@ -218,7 +218,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto teardown;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log_error (h, "sched.alloc-response: id=%llu not active",
                         (unsigned long long)id);
         goto teardown;
@@ -314,7 +314,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_log (h, LOG_DEBUG, "scheduler: hello");
     if (!(o = json_array ()))
         goto nomem;
-    job = queue_first (ctx->queue);
+    job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources) {
             if (!(entry = json_pack ("{s:I s:i s:i s:f}",
@@ -328,18 +328,23 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
                 goto nomem;
             }
         }
-        job = queue_next (ctx->queue);
+        job = zhashx_next (ctx->active_jobs);
     }
     if (flux_respond_pack (h, msg, "{s:O}", "alloc", o) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     /* Restart any free requests that might have been interrupted
      * when scheduler was last unloaded.
      */
-    job = queue_first (ctx->queue);
+    job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if (event_job_action (ctx->event, job) < 0)
-            flux_log_error (h, "%s: event_job_action", __FUNCTION__);
-        job = queue_next (ctx->queue);
+        /* N.B. first/next are NOT deletion safe but event_job_action()
+         * won't call zhashx_delete() for jobs in FLUX_JOB_CLEANUP state.
+         */
+        if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
+            if (event_job_action (ctx->event, job) < 0)
+                flux_log_error (h, "%s: event_job_action", __FUNCTION__);
+        }
+        job = zhashx_next (ctx->active_jobs);
     }
     json_decref (o);
     return;
@@ -470,6 +475,21 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
         job->alloc_queued = 0;
         alloc->active_alloc_count--;
     }
+}
+
+struct job *alloc_pending_first (struct alloc *alloc)
+{
+    return queue_first (alloc->inqueue);
+}
+
+struct job *alloc_pending_next (struct alloc *alloc)
+{
+    return queue_next (alloc->inqueue);
+}
+
+void alloc_pending_reorder (struct alloc *alloc, struct job *job)
+{
+    queue_reorder (alloc->inqueue, job, job->aux_queue_handle);
 }
 
 void alloc_ctx_destroy (struct alloc *alloc)

@@ -37,14 +37,13 @@ struct drain {
     zlist_t *requests;
 };
 
-static void drain_complete_cb (struct queue *queue, void *arg)
+void drain_empty_notify (struct drain *drain)
 {
-    struct job_manager *ctx = arg;
     const flux_msg_t *msg;
 
-    while ((msg = zlist_pop (ctx->drain->requests))) {
-        if (flux_respond (ctx->h, msg, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    while ((msg = zlist_pop (drain->requests))) {
+        if (flux_respond (drain->ctx->h, msg, NULL) < 0)
+            flux_log_error (drain->ctx->h, "%s: flux_respond", __FUNCTION__);
         flux_msg_decref (msg);
     }
 }
@@ -63,8 +62,11 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     submit_disable (ctx->submit);
-    /* N.B. If queue is empty, calls drain_complete_cb() immediately */
-    queue_set_notify_empty (ctx->queue, drain_complete_cb, ctx);
+    /* N.B. If queue is empty, call drain_empty_notify() immediately
+     * Otherwise it will be called when last job transitions to inactive.
+     */
+    if (zhashx_size (ctx->active_jobs) == 0)
+        drain_empty_notify (ctx->drain);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)

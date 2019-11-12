@@ -85,9 +85,7 @@
 #include <flux/core.h>
 #include <assert.h>
 
-#include "queue.h"
 #include "job.h"
-#include "queue.h"
 #include "event.h"
 
 #include "start.h"
@@ -112,13 +110,13 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
      * allowing new exec service to override.
      */
     if (start->topic) {
-        job = queue_first (ctx->queue);
+        job = zhashx_first (ctx->active_jobs);
         while (job) {
             if (job->start_pending) {
                 errno = EINVAL;
                 goto error;
             }
-            job = queue_next (ctx->queue);
+            job = zhashx_next (ctx->active_jobs);
         }
         free (start->topic);
         start->topic = NULL;
@@ -129,14 +127,14 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     /* Response has been sent, now take action on jobs in run state.
      */
-    job = queue_first (ctx->queue);
+    job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->state == FLUX_JOB_RUN) {
             if (event_job_action (ctx->event, job) < 0)
                 flux_log_error (h, "%s: event_job_action id=%llu", __FUNCTION__,
                                 (unsigned long long)job->id);
         }
-        job = queue_next (ctx->queue);
+        job = zhashx_next (ctx->active_jobs);
     }
     return;
 error:
@@ -156,7 +154,7 @@ static void interface_teardown (struct start *start, char *s, int errnum)
         free (start->topic);
         start->topic = NULL;
 
-        job = queue_first (ctx->queue);
+        job = zhashx_first (ctx->active_jobs);
         while (job) {
             if (job->start_pending) {
                 if ((job->flags & FLUX_JOB_DEBUG))
@@ -165,7 +163,7 @@ static void interface_teardown (struct start *start, char *s, int errnum)
                                                "{ s:s }", "note", s);
                 job->start_pending = 0;
             }
-            job = queue_next (ctx->queue);
+            job = zhashx_next (ctx->active_jobs);
         }
     }
 }
@@ -193,7 +191,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "start response payload");
         goto error;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log_error (h, "start response: id=%llu not active",
                         (unsigned long long)id);
         goto error;

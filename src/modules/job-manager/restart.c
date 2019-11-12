@@ -23,7 +23,6 @@
 #include "job.h"
 #include "restart.h"
 #include "event.h"
-#include "queue.h"
 
 /* restart_map callback should return -1 on error to stop map with error,
  * or 0 on success.  'job' is only valid for the duration of the callback.
@@ -132,7 +131,7 @@ static int restart_map_cb (struct job *job, void *arg)
 {
     struct job_manager *ctx = arg;
 
-    if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
+    if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0)
         return -1;
     if (event_job_action (ctx->event, job) < 0) {
         flux_log_error (ctx->h, "%s: event_job_action id=%llu",

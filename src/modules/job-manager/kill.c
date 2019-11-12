@@ -31,7 +31,6 @@
 #include <flux/core.h>
 
 #include "job.h"
-#include "queue.h"
 #include "event.h"
 #include "kill.h"
 #include <job-manager.h>
@@ -88,7 +87,7 @@ void kill_handle_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job id";
         errno = EINVAL;
         goto error;

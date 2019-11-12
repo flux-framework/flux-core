@@ -32,7 +32,6 @@
 #include <flux/core.h>
 
 #include "job.h"
-#include "queue.h"
 #include "event.h"
 #include "raise.h"
 #include "job-manager.h"
@@ -97,7 +96,7 @@ void raise_handle_request (flux_t *h,
         errno = EPROTO;
         goto error;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job id";
         goto error;
     }

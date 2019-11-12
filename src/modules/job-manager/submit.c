@@ -18,7 +18,6 @@
 #include <flux/core.h>
 
 #include "job.h"
-#include "queue.h"
 #include "alloc.h"
 #include "event.h"
 
@@ -32,10 +31,10 @@ struct submit {
     flux_msg_handler_t **handlers;
 };
 
-/* Decode 'o' into a struct job, then add it to the queue.
+/* Decode 'o' into a struct job, then add it to the active_job hash.
  * Also record the job in 'newjobs'.
  */
-int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
+int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
 {
     struct job *job;
 
@@ -51,14 +50,16 @@ int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
         job_decref (job);
         return -1;
     }
-    if (queue_insert (queue, job, &job->queue_handle) < 0) {
+    if (zhashx_insert (active_jobs, &job->id, job) < 0) {
         job_decref (job);
-        // EEXIST is not an error - there is a window for restart_from_kvs()
-        // to pick up a job that also has a submit request in flight.
-        return (errno == EEXIST ? 0 : -1);
+        /* zhashx_insert() fails if hash item already exists.
+         * This is not an error - there is a window for restart_from_kvs()
+         * to pick up a job that also has a submit request in flight.
+         */
+        return 0;
     }
     if (zlist_push (newjobs, job) < 0) {
-        queue_delete (queue, job, job->queue_handle);
+        zhashx_delete (active_jobs, &job->id);
         job_decref (job);
         errno = ENOMEM;
         return -1;
@@ -69,13 +70,13 @@ int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
 /* The submit request has failed.  Dequeue jobs recorded in 'newjobs',
  * then destroy the newjobs list.
  */
-void submit_enqueue_jobs_cleanup (struct queue *queue, zlist_t *newjobs)
+void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlist_t *newjobs)
 {
     if (newjobs) {
         int saved_errno = errno;
         struct job *job;
         while ((job = zlist_pop (newjobs))) {
-            queue_delete (queue, job, job->queue_handle);
+            zhashx_delete (active_jobs, &job->id);
             job_decref (job);
         }
         zlist_destroy (&newjobs);
@@ -83,11 +84,11 @@ void submit_enqueue_jobs_cleanup (struct queue *queue, zlist_t *newjobs)
     }
 }
 
-/* Enqueue jobs from 'jobs' array in queue.
+/* Add jobs from 'jobs' array to 'active_jobs' hash.
  * On success, return a list of struct job's.
- * On failure, return NULL with errno set (no jobs enqueued).
+ * On failure, return NULL with errno set (no jobs added).
  */
-zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs)
+zlist_t *submit_add_jobs (zhashx_t *active_jobs, json_t *jobs)
 {
     size_t index;
     json_t *el;
@@ -98,12 +99,12 @@ zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs)
         return NULL;
     }
     json_array_foreach (jobs, index, el) {
-        if (submit_enqueue_one_job (queue, newjobs, el) < 0)
+        if (submit_add_one_job (active_jobs, newjobs, el) < 0)
             goto error;
     }
     return newjobs;
 error:
-    submit_enqueue_jobs_cleanup (queue, newjobs);
+    submit_add_jobs_cleanup (active_jobs, newjobs);
     return NULL;
 }
 
@@ -161,7 +162,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = "job submission is disabled";
         goto error;
     }
-    if (!(newjobs = submit_enqueue_jobs (ctx->queue, jobs))) {
+    if (!(newjobs = submit_add_jobs (ctx->active_jobs, jobs))) {
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
