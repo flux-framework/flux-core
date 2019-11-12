@@ -93,7 +93,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
-    if (restart_from_kvs (h, ctx.queue, ctx.event) < 0) {
+    if (restart_from_kvs (&ctx) < 0) {
         flux_log_error (h, "restart_from_kvs");
         goto done;
     }

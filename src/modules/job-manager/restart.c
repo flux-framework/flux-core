@@ -23,12 +23,7 @@
 #include "job.h"
 #include "restart.h"
 #include "event.h"
-
-struct restart_ctx {
-    struct queue *queue;
-    struct event *event_ctx;
-    flux_t *h;
-};
+#include "queue.h"
 
 /* restart_map callback should return -1 on error to stop map with error,
  * or 0 on success.  'job' is only valid for the duration of the callback.
@@ -135,11 +130,11 @@ done:
  */
 static int restart_map_cb (struct job *job, void *arg)
 {
-    struct restart_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
 
     if (queue_insert (ctx->queue, job, &job->queue_handle) < 0)
         return -1;
-    if (event_job_action (ctx->event_ctx, job) < 0) {
+    if (event_job_action (ctx->event, job) < 0) {
         flux_log_error (ctx->h, "%s: event_job_action id=%llu",
                         __FUNCTION__, (unsigned long long)job->id);
     }
@@ -148,22 +143,16 @@ static int restart_map_cb (struct job *job, void *arg)
 
 /* Load any active jobs present in the KVS at startup.
  */
-int restart_from_kvs (flux_t *h, struct queue *queue,
-                      struct event *event_ctx)
+int restart_from_kvs (struct job_manager *ctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);
     int count;
-    struct restart_ctx ctx;
 
-    ctx.h = h;
-    ctx.queue = queue;
-    ctx.event_ctx = event_ctx;
-
-    count = depthfirst_map (h, dirname, dirskip, restart_map_cb, &ctx);
+    count = depthfirst_map (ctx->h, dirname, dirskip, restart_map_cb, ctx);
     if (count < 0)
         return -1;
-    flux_log (h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__, count);
+    flux_log (ctx->h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__, count);
     return 0;
 }
 
