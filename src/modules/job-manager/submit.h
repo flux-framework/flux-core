@@ -29,7 +29,7 @@ void submit_disable (struct submit *submit);
 int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o);
 void submit_enqueue_jobs_cleanup (struct queue *queue, zlist_t *newjobs);
 zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs);
-int submit_post_event (struct event_ctx *event_ctx, struct job *job);
+int submit_post_event (struct event *event, struct job *job);
 
 #endif /* ! _FLUX_JOB_MANAGER_SUBMIT_H */
 

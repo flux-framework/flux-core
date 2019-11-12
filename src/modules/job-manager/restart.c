@@ -26,7 +26,7 @@
 
 struct restart_ctx {
     struct queue *queue;
-    struct event_ctx *event_ctx;
+    struct event *event_ctx;
     flux_t *h;
 };
 
@@ -149,7 +149,7 @@ static int restart_map_cb (struct job *job, void *arg)
 /* Load any active jobs present in the KVS at startup.
  */
 int restart_from_kvs (flux_t *h, struct queue *queue,
-                      struct event_ctx *event_ctx)
+                      struct event *event_ctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);

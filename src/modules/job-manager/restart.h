@@ -22,7 +22,7 @@ int restart_count_char (const char *s, char c);
 
 int restart_from_kvs (flux_t *h,
                       struct queue *queue,
-                      struct event_ctx *event_ctx);
+                      struct event *event);
 
 #endif /* _FLUX_JOB_MANAGER_RESTART_H */
 

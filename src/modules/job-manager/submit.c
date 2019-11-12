@@ -113,7 +113,7 @@ error:
  * We instead re-create the event and run it directly through
  * event_job_update() and event_job_action().
  */
-int submit_post_event (struct event_ctx *event_ctx, struct job *job)
+int submit_post_event (struct event *event, struct job *job)
 {
     json_t *entry = NULL;
     int rv = -1;
@@ -128,9 +128,9 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
         goto error;
     if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
         goto error;
-    if (event_batch_pub_state (event_ctx, job) < 0)
+    if (event_batch_pub_state (event, job) < 0)
         goto error;
-    if (event_job_action (event_ctx, job) < 0)
+    if (event_job_action (event, job) < 0)
         goto error;
     rv = 0;
  error:
@@ -174,7 +174,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      * Now walk the list of new jobs and advance their state.
      */
     while ((job = zlist_pop (newjobs))) {
-        if (submit_post_event (ctx->event_ctx, job) < 0)
+        if (submit_post_event (ctx->event, job) < 0)
             flux_log_error (h, "%s: submit_post_event id=%llu",
                             __FUNCTION__, (unsigned long long)job->id);
         job_decref (job);

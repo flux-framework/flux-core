@@ -69,7 +69,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating queue");
         goto done;
     }
-    if (!(ctx.event_ctx = event_ctx_create (h, ctx.queue))) {
+    if (!(ctx.event = event_ctx_create (&ctx))) {
         flux_log_error (h, "error creating event batcher");
         goto done;
     }
@@ -93,7 +93,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
-    if (restart_from_kvs (h, ctx.queue, ctx.event_ctx) < 0) {
+    if (restart_from_kvs (h, ctx.queue, ctx.event) < 0) {
         flux_log_error (h, "restart_from_kvs");
         goto done;
     }
@@ -108,7 +108,7 @@ done:
     start_ctx_destroy (ctx.start);
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
-    event_ctx_destroy (ctx.event_ctx);
+    event_ctx_destroy (ctx.event);
     queue_destroy (ctx.queue);
     return rc;
 }

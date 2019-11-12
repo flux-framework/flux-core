@@ -106,7 +106,7 @@ void raise_handle_request (flux_t *h,
         errno = EPERM;
         goto error;
     }
-    if (event_job_post_pack (ctx->event_ctx, job,
+    if (event_job_post_pack (ctx->event, job,
                              "exception",
                              "{ s:s s:i s:i s:s }",
                              "type", type,

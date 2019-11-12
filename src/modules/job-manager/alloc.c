@@ -167,7 +167,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     job->free_pending = 0;
-    if (event_job_post_pack (ctx->event_ctx, job, "free", NULL) < 0)
+    if (event_job_post_pack (ctx->event, job, "free", NULL) < 0)
         goto teardown;
     return;
 teardown:
@@ -245,7 +245,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
      * Raise alloc exception and transition to CLEANUP state.
      */
     if (type == 2) { // error: alloc was rejected
-        if (event_job_post_pack (ctx->event_ctx, job, "exception",
+        if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
                                  "severity", 0,
@@ -265,7 +265,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
 
-    if (event_job_post_pack (ctx->event_ctx, job, "alloc",
+    if (event_job_post_pack (ctx->event, job, "alloc",
                              "{ s:s }",
                              "note", note ? note : "") < 0)
         goto teardown;
@@ -337,7 +337,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     job = queue_first (ctx->queue);
     while (job) {
-        if (event_job_action (ctx->event_ctx, job) < 0)
+        if (event_job_action (ctx->event, job) < 0)
             flux_log_error (h, "%s: event_job_action", __FUNCTION__);
         job = queue_next (ctx->queue);
     }
@@ -430,7 +430,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         job->alloc_queued = 0;
         alloc->active_alloc_count++;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event_ctx, job,
+            (void)event_job_post_pack (ctx->event, job,
                                        "debug.alloc-request", NULL);
 
     }
@@ -444,7 +444,7 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
             return -1;
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (alloc->ctx->event_ctx, job,
+            (void)event_job_post_pack (alloc->ctx->event, job,
                                        "debug.free-request", NULL);
     }
     return 0;
@@ -515,7 +515,6 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
     }
     flux_watcher_start (alloc->prep);
     flux_watcher_start (alloc->check);
-    event_ctx_set_alloc_ctx (ctx->event_ctx, alloc);
     return alloc;
 error:
     alloc_ctx_destroy (alloc);
