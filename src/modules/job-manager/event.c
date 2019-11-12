@@ -42,6 +42,7 @@
 
 #include "alloc.h"
 #include "start.h"
+#include "queue.h"
 
 #include "event.h"
 
@@ -52,7 +53,7 @@ const double batch_timeout = 0.01;
 struct event_ctx {
     flux_t *h;
     struct queue *queue;
-    struct alloc_ctx *alloc_ctx;
+    struct alloc *alloc_ctx;
     struct start *start;
     struct event_batch *batch;
     flux_watcher_t *timer;
@@ -460,9 +461,9 @@ error:
 }
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
-                              struct alloc_ctx *alloc_ctx)
+                              struct alloc *alloc)
 {
-    ctx->alloc_ctx = alloc_ctx;
+    ctx->alloc_ctx = alloc;
 }
 
 void event_ctx_set_start_ctx (struct event_ctx *ctx,

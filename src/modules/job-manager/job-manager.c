@@ -77,7 +77,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating submit interface");
         goto done;
     }
-    if (!(ctx.alloc_ctx = alloc_ctx_create (h, ctx.queue, ctx.event_ctx))) {
+    if (!(ctx.alloc = alloc_ctx_create (&ctx))) {
         flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
@@ -106,7 +106,7 @@ done:
     flux_msg_handler_delvec (ctx.handlers);
     drain_ctx_destroy (ctx.drain);
     start_ctx_destroy (ctx.start);
-    alloc_ctx_destroy (ctx.alloc_ctx);
+    alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event_ctx);
     queue_destroy (ctx.queue);

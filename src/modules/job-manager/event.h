@@ -48,7 +48,7 @@ int event_job_post_pack (struct event_ctx *ctx, struct job *job,
                          const char *name, const char *context_fmt, ...);
 
 void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
-                              struct alloc_ctx *alloc_ctx);
+                              struct alloc *alloc);
 void event_ctx_set_start_ctx (struct event_ctx *ctx,
                               struct start *start);
 

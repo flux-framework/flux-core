@@ -13,31 +13,26 @@
 
 #include <flux/core.h>
 
-#include "queue.h"
 #include "job.h"
-#include "event.h"
+#include "job-manager.h"
 
-struct alloc_ctx;
-struct event_ctx;
-
-void alloc_ctx_destroy (struct alloc_ctx *ctx);
-struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
-                                    struct event_ctx *event_ctx);
+void alloc_ctx_destroy (struct alloc *alloc);
+struct alloc *alloc_ctx_create (struct job_manager *ctx);
 
 /* Call from SCHED state to put job in queue to request resources.
  * This function is a no-op if job->alloc_queued or job->alloc_pending is set.
  */
-int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job);
+int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job);
 
 /* Dequeue job from sched inqueue, e.g. on exception.
  * This function is a no-op if job->alloc_queued is not set.
  */
-void alloc_dequeue_alloc_request (struct alloc_ctx *ctx, struct job *job);
+void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job);
 
 /* Call from CLEANUP state to release resources.
  * This function is a no-op if job->free_pending is set.
  */
-int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job);
+int alloc_send_free_request (struct alloc *alloc, struct job *job);
 
 #endif /* ! _FLUX_JOB_MANAGER_ALLOC_H */
 
