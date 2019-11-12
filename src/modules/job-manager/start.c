@@ -92,18 +92,17 @@
 
 #include "start.h"
 
-struct start_ctx {
-    flux_t *h;
+struct start {
+    struct job_manager *ctx;
     flux_msg_handler_t **handlers;
-    struct queue *queue;    // main active job queue
-    struct event_ctx *event_ctx;
-    char *start_topic;
+    char *topic;
 };
 
 static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct start_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
+    struct start *start = ctx->start;
     struct job *job;
     const char *service_name;
 
@@ -112,7 +111,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     /* If existing exec service is loaded, ensure it is idle before
      * allowing new exec service to override.
      */
-    if (ctx->start_topic) {
+    if (start->topic) {
         job = queue_first (ctx->queue);
         while (job) {
             if (job->start_pending) {
@@ -121,10 +120,10 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
             }
             job = queue_next (ctx->queue);
         }
-        free (ctx->start_topic);
-        ctx->start_topic = NULL;
+        free (start->topic);
+        start->topic = NULL;
     }
-    if (asprintf (&ctx->start_topic, "%s.start", service_name) < 0)
+    if (asprintf (&start->topic, "%s.start", service_name) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
@@ -145,16 +144,17 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void interface_teardown (struct start_ctx *ctx, char *s, int errnum)
+static void interface_teardown (struct start *start, char *s, int errnum)
 {
-    if (ctx->start_topic) {
+    if (start->topic) {
+        struct job_manager *ctx = start->ctx;
         struct job *job;
 
         flux_log (ctx->h, LOG_DEBUG, "start: stop due to %s: %s",
                   s, flux_strerror (errnum));
 
-        free (ctx->start_topic);
-        ctx->start_topic = NULL;
+        free (start->topic);
+        start->topic = NULL;
 
         job = queue_first (ctx->queue);
         while (job) {
@@ -173,7 +173,8 @@ static void interface_teardown (struct start_ctx *ctx, char *s, int errnum)
 static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    struct start_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
+    struct start *start = ctx->start;
     const char *topic;
     flux_jobid_t id;
     const char *type;
@@ -182,7 +183,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_response_decode (msg, &topic, NULL) < 0)
         goto teardown; // e.g. ENOSYS
-    if (!ctx->start_topic || strcmp (ctx->start_topic, topic) != 0) {
+    if (!start->topic || strcmp (start->topic, topic) != 0) {
         flux_log_error (h, "start: topic=%s not registered", topic);
         goto error;
     }
@@ -258,19 +259,20 @@ error_post:
 error:
     return;
 teardown:
-    interface_teardown (ctx, "start response error", errno);
+    interface_teardown (start, "start response error", errno);
 }
 
 /* Send <exec_service>.start request for job.
  * Idempotent.
  */
-int start_send_request (struct start_ctx *ctx, struct job *job)
+int start_send_request (struct start *start, struct job *job)
 {
+    struct job_manager *ctx = start->ctx;
     flux_msg_t *msg;
 
     assert (job->state == FLUX_JOB_RUN);
-    if (!job->start_pending && ctx->start_topic != NULL) {
-        if (!(msg = flux_request_encode (ctx->start_topic, NULL)))
+    if (!job->start_pending && start->topic != NULL) {
+        if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
         if (flux_msg_pack (msg, "{s:I s:i}",
                                 "id", job->id,
@@ -290,13 +292,13 @@ error:
     return -1;
 }
 
-void start_ctx_destroy (struct start_ctx *ctx)
+void start_ctx_destroy (struct start *start)
 {
-    if (ctx) {
+    if (start) {
         int saved_errno = errno;;
-        flux_msg_handler_delvec (ctx->handlers);
-        free (ctx->start_topic);
-        free (ctx);
+        flux_msg_handler_delvec (start->handlers);
+        free (start->topic);
+        free (start);
         errno = saved_errno;
     }
 }
@@ -307,22 +309,19 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct start_ctx *start_ctx_create (flux_t *h, struct queue *queue,
-                                    struct event_ctx *event_ctx)
+struct start *start_ctx_create (struct job_manager *ctx)
 {
-    struct start_ctx *ctx;
+    struct start *start;
 
-    if (!(ctx = calloc (1, sizeof (*ctx))))
+    if (!(start = calloc (1, sizeof (*start))))
         return NULL;
-    ctx->h = h;
-    ctx->queue = queue;
-    ctx->event_ctx = event_ctx;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+    start->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &start->handlers) < 0)
         goto error;
-    event_ctx_set_start_ctx (event_ctx, ctx);
-    return ctx;
+    event_ctx_set_start_ctx (ctx->event_ctx, start);
+    return start;
 error:
-    start_ctx_destroy (ctx);
+    start_ctx_destroy (start);
     return NULL;
 }
 

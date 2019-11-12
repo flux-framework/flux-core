@@ -15,7 +15,7 @@ struct job_manager {
     flux_t *h;
     flux_msg_handler_t **handlers;
     struct queue *queue;
-    struct start_ctx *start_ctx;
+    struct start *start;
     struct alloc_ctx *alloc_ctx;
     struct event_ctx *event_ctx;
     struct submit *submit;

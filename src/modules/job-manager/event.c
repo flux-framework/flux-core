@@ -53,7 +53,7 @@ struct event_ctx {
     flux_t *h;
     struct queue *queue;
     struct alloc_ctx *alloc_ctx;
-    struct start_ctx *start_ctx;
+    struct start *start;
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
@@ -265,7 +265,7 @@ int event_job_action (struct event_ctx *ctx, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_RUN:
-            if (start_send_request (ctx->start_ctx, job) < 0)
+            if (start_send_request (ctx->start, job) < 0)
                 return -1;
             break;
         case FLUX_JOB_CLEANUP:
@@ -466,9 +466,9 @@ void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
 }
 
 void event_ctx_set_start_ctx (struct event_ctx *ctx,
-                              struct start_ctx *start_ctx)
+                              struct start *start)
 {
-    ctx->start_ctx = start_ctx;
+    ctx->start = start;
 }
 
 /* Finalizes in-flight batch KVS commits and event pubs (synchronously).
