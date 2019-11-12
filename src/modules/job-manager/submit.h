@@ -17,7 +17,6 @@
 #include <flux/core.h>
 
 #include "queue.h"
-#include "alloc.h"
 
 struct submit_ctx;
 

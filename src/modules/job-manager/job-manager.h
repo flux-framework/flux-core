@@ -19,7 +19,7 @@ struct job_manager {
     struct alloc_ctx *alloc_ctx;
     struct event_ctx *event_ctx;
     struct submit_ctx *submit_ctx;
-    struct drain_ctx *drain_ctx;
+    struct drain *drain;
 };
 
 #endif /* !_FLUX_JOB_MANAGER_H */

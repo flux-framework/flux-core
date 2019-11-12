@@ -85,7 +85,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating exec interface");
         goto done;
     }
-    if (!(ctx.drain_ctx = drain_ctx_create (h, ctx.queue, ctx.submit_ctx))) {
+    if (!(ctx.drain = drain_ctx_create (&ctx))) {
         flux_log_error (h, "error creating drain interface");
         goto done;
     }
@@ -104,7 +104,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
-    drain_ctx_destroy (ctx.drain_ctx);
+    drain_ctx_destroy (ctx.drain);
     start_ctx_destroy (ctx.start_ctx);
     alloc_ctx_destroy (ctx.alloc_ctx);
     submit_ctx_destroy (ctx.submit_ctx);
