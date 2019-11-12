@@ -62,7 +62,7 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = ENOMEM;
         goto error;
     }
-    submit_disable (ctx->submit_ctx);
+    submit_disable (ctx->submit);
     /* N.B. If queue is empty, calls drain_complete_cb() immediately */
     queue_set_notify_empty (ctx->queue, drain_complete_cb, ctx);
     return;
@@ -82,7 +82,7 @@ static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         return;
     }
-    submit_enable (ctx->submit_ctx);
+    submit_enable (ctx->submit);
     while ((req = zlist_pop (ctx->drain->requests))) {
         if (flux_respond_error (ctx->h, req, EINVAL,
                                 "queue was re-enabled") < 0)

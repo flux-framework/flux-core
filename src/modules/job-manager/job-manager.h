@@ -18,7 +18,7 @@ struct job_manager {
     struct start_ctx *start_ctx;
     struct alloc_ctx *alloc_ctx;
     struct event_ctx *event_ctx;
-    struct submit_ctx *submit_ctx;
+    struct submit *submit;
     struct drain *drain;
 };
 

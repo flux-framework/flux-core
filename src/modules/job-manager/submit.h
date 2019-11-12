@@ -16,17 +16,14 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "job-manager.h"
 #include "queue.h"
 
-struct submit_ctx;
+struct submit *submit_ctx_create (struct job_manager *ctx);
+void submit_ctx_destroy (struct submit *submit);
 
-void submit_ctx_destroy (struct submit_ctx *ctx);
-struct submit_ctx *submit_ctx_create (flux_t *h,
-                                      struct queue *queue,
-                                      struct event_ctx *event_ctx);
-
-void submit_enable (struct submit_ctx *ctx);
-void submit_disable (struct submit_ctx *ctx);
+void submit_enable (struct submit *submit);
+void submit_disable (struct submit *submit);
 
 /* exposed for unit testing only */
 int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o);

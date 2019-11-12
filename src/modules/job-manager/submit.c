@@ -26,12 +26,10 @@
 
 #include "src/common/libeventlog/eventlog.h"
 
-struct submit_ctx {
-    flux_t *h;
+struct submit {
+    struct job_manager *ctx;
     bool submit_disable;
     flux_msg_handler_t **handlers;
-    struct queue *queue;
-    struct event_ctx *event_ctx;
 };
 
 /* Decode 'o' into a struct job, then add it to the queue.
@@ -148,7 +146,7 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
 static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
-    struct submit_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     json_t *jobs;
     zlist_t *newjobs;
     struct job *job;
@@ -158,7 +156,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s", __FUNCTION__);
         goto error;
     }
-    if (ctx->submit_disable) {
+    if (ctx->submit->submit_disable) {
         errno = EINVAL;
         errmsg = "job submission is disabled";
         goto error;
@@ -188,22 +186,22 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-void submit_enable (struct submit_ctx *ctx)
+void submit_enable (struct submit *submit)
 {
-    ctx->submit_disable = false;
+    submit->submit_disable = false;
 }
 
-void submit_disable (struct submit_ctx *ctx)
+void submit_disable (struct submit *submit)
 {
-    ctx->submit_disable = true;
+    submit->submit_disable = true;
 }
 
-void submit_ctx_destroy (struct submit_ctx *ctx)
+void submit_ctx_destroy (struct submit *submit)
 {
-    if (ctx) {
+    if (submit) {
         int saved_errno = errno;
-        flux_msg_handler_delvec (ctx->handlers);
-        free (ctx);
+        flux_msg_handler_delvec (submit->handlers);
+        free (submit);
         errno = saved_errno;
     }
 }
@@ -213,22 +211,18 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct submit_ctx *submit_ctx_create (flux_t *h,
-                                      struct queue *queue,
-                                      struct event_ctx *event_ctx)
+struct submit *submit_ctx_create (struct job_manager *ctx)
 {
-    struct submit_ctx *ctx;
+    struct submit *submit;
 
-    if (!(ctx = calloc (1, sizeof (*ctx))))
+    if (!(submit = calloc (1, sizeof (*submit))))
         return NULL;
-    ctx->h = h;
-    ctx->queue = queue;
-    ctx->event_ctx = event_ctx;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+    submit->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &submit->handlers) < 0)
         goto error;
-    return ctx;
+    return submit;
 error:
-    submit_ctx_destroy (ctx);
+    submit_ctx_destroy (submit);
     return NULL;
 }
 

@@ -73,7 +73,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating event batcher");
         goto done;
     }
-    if (!(ctx.submit_ctx = submit_ctx_create (h, ctx.queue, ctx.event_ctx))) {
+    if (!(ctx.submit = submit_ctx_create (&ctx))) {
         flux_log_error (h, "error creating submit interface");
         goto done;
     }
@@ -107,7 +107,7 @@ done:
     drain_ctx_destroy (ctx.drain);
     start_ctx_destroy (ctx.start_ctx);
     alloc_ctx_destroy (ctx.alloc_ctx);
-    submit_ctx_destroy (ctx.submit_ctx);
+    submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event_ctx);
     queue_destroy (ctx.queue);
     return rc;
