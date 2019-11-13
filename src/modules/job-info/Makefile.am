@@ -31,6 +31,7 @@ job_info_la_SOURCES = \
 
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_info_la_LIBADD = $(fluxmod_libadd) \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
