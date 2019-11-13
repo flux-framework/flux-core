@@ -96,8 +96,10 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/errno_safe.h"
 #include "job-exec.h"
 
 #define DEFAULT_KILL_TIMEOUT 5.0
@@ -952,22 +954,6 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static size_t job_hash_fn (const void *key)
-{
-    const flux_jobid_t *id = key;
-    return *id;
-}
-
-#define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
-
-static int job_hash_key_cmp (const void *x, const void *y)
-{
-    const flux_jobid_t *id1 = x;
-    const flux_jobid_t *id2 = y;
-
-    return NUMCMP (*id1, *id2);
-}
-
 static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
 {
     if (ctx == NULL)
@@ -983,11 +969,10 @@ static struct job_exec_ctx * job_exec_ctx_create (flux_t *h)
     if (ctx == NULL)
         return NULL;
     ctx->h = h;
-    ctx->jobs = zhashx_new ();
-    zhashx_set_key_hasher (ctx->jobs, job_hash_fn);
-    zhashx_set_key_comparator (ctx->jobs, job_hash_key_cmp);
-    zhashx_set_key_duplicator (ctx->jobs, NULL);
-    zhashx_set_key_destructor (ctx->jobs, NULL);
+    if (!(ctx->jobs = job_hash_create ())) {
+        ERRNO_SAFE_WRAP (free, ctx);
+        return NULL;
+    }
     return (ctx);
 }
 
