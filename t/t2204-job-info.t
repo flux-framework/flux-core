@@ -225,6 +225,15 @@ test_expect_success 'flux job list --count works' '
         test_cmp list_count_running.out job_ids_running_head4.out
 '
 
+test_expect_success 'flux job list all jobs works' '
+        flux job list -s --pending --running --inactive > list_all.out &&
+        cat list_all.out | cut -f1 > list_all_jobids.out &&
+        cat job_ids_pending.out >> list_all_jobids.exp &&
+        cat job_ids_running.out >> list_all_jobids.exp &&
+        cat job_ids_inactive.out >> list_all_jobids.exp &&
+        test_cmp list_all_jobids.exp list_all_jobids.out
+'
+
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat job_ids_pending.out`; do \
             flux job cancel $jobid; \
@@ -232,6 +241,27 @@ test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat job_ids_running.out`; do \
             flux job cancel $jobid; \
         done
+'
+
+test_expect_success 'reload the job-info module' '
+        flux module remove -r all job-info &&
+        flux module load -r all job-info
+'
+
+# inactive jobs are listed by most recently completed first, so must
+# construct order based on order of jobs canceled above
+test_expect_success 'job-info: list successfully reconstructed' '
+        flux job list -s --pending --running --inactive > list_reload.out &&
+        for count in `seq 1 16`; do \
+            echo "I" >> list_reload_state.exp; \
+        done &&
+        cat list_reload.out | cut -f2 > list_reload_state.out &&
+        test_cmp list_reload_state.exp list_reload_state.out &&
+        tac job_ids_running.out >> list_reload_ids.exp &&
+        tac job_ids_pending.out >> list_reload_ids.exp &&
+        cat job_ids_inactive.out >> list_reload_ids.exp &&
+        cat list_reload.out | cut -f1 > list_reload_ids.out &&
+        test_cmp list_reload_ids.exp list_reload_ids.out
 '
 
 #
