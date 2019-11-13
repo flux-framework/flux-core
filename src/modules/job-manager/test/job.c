@@ -37,8 +37,8 @@ void test_create (void)
         && !job->free_pending
         && !job->has_resources,
         "job_create set no internal flags");
-    ok (job->aux_queue_handle == NULL && job->queue_handle == NULL,
-        "job_create set queue handles to NULL");
+    ok (job->handle == NULL,
+        "job_create set queue handle to NULL");
     ok (job_incref (job) == job && job->refcount == 2,
         "job_incref incremented refcount and returned original job pointer");
     job_decref (job);

@@ -22,8 +22,6 @@ job_manager_la_SOURCES = \
 	submit.h \
 	drain.c \
 	drain.h \
-	queue.c \
-	queue.h \
 	event.h \
 	event.c \
 	restart.h \
@@ -51,7 +49,6 @@ job_manager_la_LIBADD = $(fluxmod_libadd) \
 
 TESTS = \
 	test_job.t \
-	test_queue.t \
 	test_list.t \
 	test_raise.t \
 	test_restart.t \
@@ -59,7 +56,6 @@ TESTS = \
 
 test_ldadd = \
         $(top_builddir)/src/modules/job-manager/event.o \
-        $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/alloc.o \
         $(top_builddir)/src/modules/job-manager/start.o \
@@ -83,11 +79,6 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
 test_job_t_LDADD = \
-        $(test_ldadd)
-
-test_queue_t_SOURCES = test/queue.c
-test_queue_t_CPPFLAGS = $(test_cppflags)
-test_queue_t_LDADD = \
         $(test_ldadd)
 
 test_list_t_SOURCES = test/list.c

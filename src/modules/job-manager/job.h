@@ -29,9 +29,8 @@ struct job {
     uint8_t has_resources:1;
     uint8_t start_pending:1;// start request sent to job-exec
 
-    void *aux_queue_handle;
-    void *queue_handle; // primary queue handle (for listing all active jobs)
-    int refcount;       // private to job.c
+    void *handle;           // zlistx_t handle
+    int refcount;           // private to job.c
 };
 
 void job_decref (struct job *job);
