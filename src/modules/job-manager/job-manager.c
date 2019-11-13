@@ -34,7 +34,7 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.list",
         list_handle_request,
-        FLUX_ROLE_USER
+        0
     },
     {
         FLUX_MSGTYPE_REQUEST,
