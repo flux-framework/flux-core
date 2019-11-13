@@ -18,7 +18,9 @@ fluxcoreinclude_HEADERS = job.h
 libjob_la_SOURCES = \
 	job.c \
 	sign_none.c \
-	sign_none.h
+	sign_none.h \
+	job_hash.c \
+	job_hash.h
 
 TESTS = \
 	test_job.t \
