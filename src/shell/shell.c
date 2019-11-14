@@ -474,6 +474,32 @@ flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
     return shell->current_task;
 }
 
+flux_shell_task_t *flux_shell_task_first (flux_shell_t *shell)
+{
+    if (!shell) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!shell->tasks) {
+        errno = EAGAIN;
+        return NULL;
+    }
+    return zlist_first (shell->tasks);
+}
+
+flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell)
+{
+    if (!shell) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!shell->tasks) {
+        errno = EAGAIN;
+        return NULL;
+    }
+    return zlist_next (shell->tasks);
+}
+
 static void shell_events_subscribe (flux_shell_t *shell)
 {
     if (shell->h) {
