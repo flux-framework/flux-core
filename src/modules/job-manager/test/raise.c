@@ -15,7 +15,6 @@
 
 #include "src/common/libtap/tap.h"
 
-#include "src/modules/job-manager/queue.h"
 #include "src/modules/job-manager/job.h"
 #include "src/modules/job-manager/raise.h"
 

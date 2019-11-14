@@ -19,30 +19,11 @@
 
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fluid.h"
+#include "src/common/libjob/job_hash.h"
 
 #include "job_state.h"
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
-
-/* Hash numerical jobid in 'key'.
- * N.B. zhashx_hash_fn signature
- */
-static size_t job_hasher (const void *key)
-{
-    const flux_jobid_t *id = key;
-    return *id;
-}
-
-/* Compare hash keys.
- * N.B. zhashx_comparator_fn signature
- */
-static int job_hash_key_cmp (const void *key1, const void *key2)
-{
-    const flux_jobid_t *id1 = key1;
-    const flux_jobid_t *id2 = key2;
-
-    return NUMCMP (*id1, *id2);
-}
 
 /* Compare items for sorting in list, priority first, t_submit second
  * N.B. zlistx_comparator_fn signature
@@ -118,13 +99,9 @@ struct job_state_ctx *job_state_create (flux_t *h)
      * contain desired sort of jobs.
      */
 
-    if (!(jsctx->index = zhashx_new ()))
+    if (!(jsctx->index = job_hash_create ()))
         goto error;
     zhashx_set_destructor (jsctx->index, job_destroy_wrapper);
-    zhashx_set_key_hasher (jsctx->index, job_hasher);
-    zhashx_set_key_comparator (jsctx->index, job_hash_key_cmp);
-    zhashx_set_key_duplicator (jsctx->index, NULL);
-    zhashx_set_key_destructor (jsctx->index, NULL);
 
     if (!(jsctx->pending = zlistx_new ()))
         goto error;

@@ -16,17 +16,13 @@
 #include <jansson.h>
 
 #include "job.h"
-#include "alloc.h"
-#include "start.h"
-
-struct event_ctx;
-struct alloc_ctx;
+#include "job-manager.h"
 
 /* Take any action for 'job' currently needed based on its internal state.
  * Returns 0 on success, -1 on failure with errno set.
  * This function is idempotent.
  */
-int event_job_action (struct event_ctx *ctx, struct job *job);
+int event_job_action (struct event *event, struct job *job);
 
 /* Call to update 'job' internal state based on 'event'.
  * Returns 0 on success, -1 on failure with errno set.
@@ -36,7 +32,7 @@ int event_job_update (struct job *job, json_t *event);
 /* Add notification of job's state transition to its current state
  * to batch for publication.
  */
-int event_batch_pub_state (struct event_ctx *ctx, struct job *job);
+int event_batch_pub_state (struct event *event, struct job *job);
 
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
@@ -44,16 +40,14 @@ int event_batch_pub_state (struct event_ctx *ctx, struct job *job);
  * The future passed in as an argument should not be destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int event_job_post_pack (struct event_ctx *ctx, struct job *job,
-                         const char *name, const char *context_fmt, ...);
+int event_job_post_pack (struct event *event,
+                         struct job *job,
+                         const char *name,
+                         const char *context_fmt,
+                         ...);
 
-void event_ctx_set_alloc_ctx (struct event_ctx *ctx,
-                              struct alloc_ctx *alloc_ctx);
-void event_ctx_set_start_ctx (struct event_ctx *ctx,
-                              struct start_ctx *start_ctx);
-
-void event_ctx_destroy (struct event_ctx *ctx);
-struct event_ctx *event_ctx_create (flux_t *h, struct queue *queue);
+void event_ctx_destroy (struct event *event);
+struct event *event_ctx_create (struct job_manager *ctx);
 
 #endif /* _FLUX_JOB_MANAGER_EVENT_H */
 

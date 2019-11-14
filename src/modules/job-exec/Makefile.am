@@ -38,6 +38,7 @@ job_exec_la_LDFLAGS = \
 
 job_exec_la_LIBADD = \
 	$(fluxmod_libadd) \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	libbulk-exec.la \

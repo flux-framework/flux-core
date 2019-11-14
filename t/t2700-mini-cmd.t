@@ -8,6 +8,7 @@ test_under_flux 4
 
 jq=$(which jq 2>/dev/null)
 test -z "$jq" || test_set_prereq HAVE_JQ
+test $(nproc) -gt 1 && test_set_prereq HAVE_MULTICORE
 
 # Set CLIMain log level to logging.DEBUG (10), to enable stack traces
 export FLUX_PYCLI_LOGLEVEL=10
@@ -40,7 +41,7 @@ test_expect_success 'flux mini run --ntasks=2 --label-io works' '
 	EOT
 	test_cmp run2l.exp run2l.out
 '
-test_expect_success 'flux mini submit --ntasks=2 --cores-per-task=2 works' '
+test_expect_success HAVE_MULTICORE 'flux mini submit --ntasks=2 --cores-per-task=2 works' '
 	jobid=$(flux mini submit --ntasks=2 --cores-per-task=2 hostname) &&
 	flux job attach $jobid
 '

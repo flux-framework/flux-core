@@ -13,34 +13,35 @@ AM_CPPFLAGS = \
 
 fluxmod_LTLIBRARIES = job-manager.la
 
-job_manager_la_SOURCES = job-manager.c \
-			 job.c \
-			 job.h \
-			 submit.c \
-			 submit.h \
-			 drain.c \
-			 drain.h \
-			 queue.c \
-			 queue.h \
-			 event.h \
-			 event.c \
-			 restart.h \
-			 restart.c \
-			 raise.h \
-			 raise.c \
-			 kill.h \
-			 kill.c \
-			 alloc.h \
-			 alloc.c \
-			 start.h \
-			 start.c \
-			 list.h \
-			 list.c \
-			 priority.h \
-			 priority.c
+job_manager_la_SOURCES = \
+	job-manager.c \
+	job-manager.h \
+	job.c \
+	job.h \
+	submit.c \
+	submit.h \
+	drain.c \
+	drain.h \
+	event.h \
+	event.c \
+	restart.h \
+	restart.c \
+	raise.h \
+	raise.c \
+	kill.h \
+	kill.c \
+	alloc.h \
+	alloc.c \
+	start.h \
+	start.c \
+	list.h \
+	list.c \
+	priority.h \
+	priority.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = $(fluxmod_libadd) \
+		    $(top_builddir)/src/common/libjob/libjob.la \
 		    $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la \
 		    $(top_builddir)/src/common/libflux-optparse.la \
@@ -48,7 +49,6 @@ job_manager_la_LIBADD = $(fluxmod_libadd) \
 
 TESTS = \
 	test_job.t \
-	test_queue.t \
 	test_list.t \
 	test_raise.t \
 	test_restart.t \
@@ -56,11 +56,13 @@ TESTS = \
 
 test_ldadd = \
         $(top_builddir)/src/modules/job-manager/event.o \
-        $(top_builddir)/src/modules/job-manager/queue.o \
         $(top_builddir)/src/modules/job-manager/job.o \
         $(top_builddir)/src/modules/job-manager/alloc.o \
         $(top_builddir)/src/modules/job-manager/start.o \
+        $(top_builddir)/src/modules/job-manager/drain.o \
+        $(top_builddir)/src/modules/job-manager/submit.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(JANSSON_LIBS)
@@ -77,11 +79,6 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
 test_job_t_LDADD = \
-        $(test_ldadd)
-
-test_queue_t_SOURCES = test/queue.c
-test_queue_t_CPPFLAGS = $(test_cppflags)
-test_queue_t_LDADD = \
         $(test_ldadd)
 
 test_list_t_SOURCES = test/list.c
@@ -105,5 +102,4 @@ test_restart_t_LDADD = \
 test_submit_t_SOURCES = test/submit.c
 test_submit_t_CPPFLAGS = $(test_cppflags)
 test_submit_t_LDADD = \
-        $(top_builddir)/src/modules/job-manager/submit.o \
         $(test_ldadd)

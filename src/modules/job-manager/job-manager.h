@@ -8,20 +8,21 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_MANAGER_DRAIN_H
-#define _FLUX_JOB_MANAGER_DRAIN_H
+#ifndef _FLUX_JOB_MANAGER_H
+#define _FLUX_JOB_MANAGER_H
 
-#include <stdbool.h>
-#include <flux/core.h>
+struct job_manager {
+    flux_t *h;
+    flux_msg_handler_t **handlers;
+    zhashx_t *active_jobs;
+    struct start *start;
+    struct alloc *alloc;
+    struct event *event;
+    struct submit *submit;
+    struct drain *drain;
+};
 
-#include "job-manager.h"
-
-void drain_empty_notify (struct drain *drain);
-
-struct drain *drain_ctx_create (struct job_manager *ctx);
-void drain_ctx_destroy (struct drain *drain);
-
-#endif /* ! _FLUX_JOB_MANAGER_DRAIN_H */
+#endif /* !_FLUX_JOB_MANAGER_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

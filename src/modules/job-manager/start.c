@@ -85,25 +85,22 @@
 #include <flux/core.h>
 #include <assert.h>
 
-#include "queue.h"
 #include "job.h"
-#include "queue.h"
 #include "event.h"
 
 #include "start.h"
 
-struct start_ctx {
-    flux_t *h;
+struct start {
+    struct job_manager *ctx;
     flux_msg_handler_t **handlers;
-    struct queue *queue;    // main active job queue
-    struct event_ctx *event_ctx;
-    char *start_topic;
+    char *topic;
 };
 
 static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct start_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
+    struct start *start = ctx->start;
     struct job *job;
     const char *service_name;
 
@@ -112,32 +109,32 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     /* If existing exec service is loaded, ensure it is idle before
      * allowing new exec service to override.
      */
-    if (ctx->start_topic) {
-        job = queue_first (ctx->queue);
+    if (start->topic) {
+        job = zhashx_first (ctx->active_jobs);
         while (job) {
             if (job->start_pending) {
                 errno = EINVAL;
                 goto error;
             }
-            job = queue_next (ctx->queue);
+            job = zhashx_next (ctx->active_jobs);
         }
-        free (ctx->start_topic);
-        ctx->start_topic = NULL;
+        free (start->topic);
+        start->topic = NULL;
     }
-    if (asprintf (&ctx->start_topic, "%s.start", service_name) < 0)
+    if (asprintf (&start->topic, "%s.start", service_name) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     /* Response has been sent, now take action on jobs in run state.
      */
-    job = queue_first (ctx->queue);
+    job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->state == FLUX_JOB_RUN) {
-            if (event_job_action (ctx->event_ctx, job) < 0)
+            if (event_job_action (ctx->event, job) < 0)
                 flux_log_error (h, "%s: event_job_action id=%llu", __FUNCTION__,
                                 (unsigned long long)job->id);
         }
-        job = queue_next (ctx->queue);
+        job = zhashx_next (ctx->active_jobs);
     }
     return;
 error:
@@ -145,27 +142,28 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void interface_teardown (struct start_ctx *ctx, char *s, int errnum)
+static void interface_teardown (struct start *start, char *s, int errnum)
 {
-    if (ctx->start_topic) {
+    if (start->topic) {
+        struct job_manager *ctx = start->ctx;
         struct job *job;
 
         flux_log (ctx->h, LOG_DEBUG, "start: stop due to %s: %s",
                   s, flux_strerror (errnum));
 
-        free (ctx->start_topic);
-        ctx->start_topic = NULL;
+        free (start->topic);
+        start->topic = NULL;
 
-        job = queue_first (ctx->queue);
+        job = zhashx_first (ctx->active_jobs);
         while (job) {
             if (job->start_pending) {
                 if ((job->flags & FLUX_JOB_DEBUG))
-                    (void)event_job_post_pack (ctx->event_ctx, job,
+                    (void)event_job_post_pack (ctx->event, job,
                                                "debug.start-lost",
                                                "{ s:s }", "note", s);
                 job->start_pending = 0;
             }
-            job = queue_next (ctx->queue);
+            job = zhashx_next (ctx->active_jobs);
         }
     }
 }
@@ -173,7 +171,8 @@ static void interface_teardown (struct start_ctx *ctx, char *s, int errnum)
 static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    struct start_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
+    struct start *start = ctx->start;
     const char *topic;
     flux_jobid_t id;
     const char *type;
@@ -182,7 +181,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_response_decode (msg, &topic, NULL) < 0)
         goto teardown; // e.g. ENOSYS
-    if (!ctx->start_topic || strcmp (ctx->start_topic, topic) != 0) {
+    if (!start->topic || strcmp (start->topic, topic) != 0) {
         flux_log_error (h, "start: topic=%s not registered", topic);
         goto error;
     }
@@ -192,13 +191,13 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "start response payload");
         goto error;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log_error (h, "start response: id=%llu not active",
                         (unsigned long long)id);
         goto error;
     }
     if (!strcmp (type, "start")) {
-        if (event_job_post_pack (ctx->event_ctx, job, "start", NULL) < 0)
+        if (event_job_post_pack (ctx->event, job, "start", NULL) < 0)
             goto error_post;
     }
     else if (!strcmp (type, "release")) {
@@ -212,7 +211,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         if (final) // final release is end-of-stream
             job->start_pending = 0;
-        if (event_job_post_pack (ctx->event_ctx, job, "release",
+        if (event_job_post_pack (ctx->event, job, "release",
                                  "{ s:s s:b }",
                                  "ranks", idset,
                                  "final", final) < 0)
@@ -229,7 +228,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "start: exception response: malformed data");
             goto error;
         }
-        if (event_job_post_pack (ctx->event_ctx, job, "exception",
+        if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", xtype,
                                  "severity", xseverity,
@@ -244,7 +243,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "start: finish response: malformed data");
             goto error;
         }
-        if (event_job_post_pack (ctx->event_ctx, job, "finish",
+        if (event_job_post_pack (ctx->event, job, "finish",
                                  "{ s:i }", "status", status) < 0)
             goto error_post;
     }
@@ -258,19 +257,20 @@ error_post:
 error:
     return;
 teardown:
-    interface_teardown (ctx, "start response error", errno);
+    interface_teardown (start, "start response error", errno);
 }
 
 /* Send <exec_service>.start request for job.
  * Idempotent.
  */
-int start_send_request (struct start_ctx *ctx, struct job *job)
+int start_send_request (struct start *start, struct job *job)
 {
+    struct job_manager *ctx = start->ctx;
     flux_msg_t *msg;
 
     assert (job->state == FLUX_JOB_RUN);
-    if (!job->start_pending && ctx->start_topic != NULL) {
-        if (!(msg = flux_request_encode (ctx->start_topic, NULL)))
+    if (!job->start_pending && start->topic != NULL) {
+        if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
         if (flux_msg_pack (msg, "{s:I s:i}",
                                 "id", job->id,
@@ -281,7 +281,7 @@ int start_send_request (struct start_ctx *ctx, struct job *job)
         flux_msg_destroy (msg);
         job->start_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event_ctx, job,
+            (void)event_job_post_pack (ctx->event, job,
                                        "debug.start-request", NULL);
     }
     return 0;
@@ -290,13 +290,13 @@ error:
     return -1;
 }
 
-void start_ctx_destroy (struct start_ctx *ctx)
+void start_ctx_destroy (struct start *start)
 {
-    if (ctx) {
+    if (start) {
         int saved_errno = errno;;
-        flux_msg_handler_delvec (ctx->handlers);
-        free (ctx->start_topic);
-        free (ctx);
+        flux_msg_handler_delvec (start->handlers);
+        free (start->topic);
+        free (start);
         errno = saved_errno;
     }
 }
@@ -307,22 +307,18 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct start_ctx *start_ctx_create (flux_t *h, struct queue *queue,
-                                    struct event_ctx *event_ctx)
+struct start *start_ctx_create (struct job_manager *ctx)
 {
-    struct start_ctx *ctx;
+    struct start *start;
 
-    if (!(ctx = calloc (1, sizeof (*ctx))))
+    if (!(start = calloc (1, sizeof (*start))))
         return NULL;
-    ctx->h = h;
-    ctx->queue = queue;
-    ctx->event_ctx = event_ctx;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+    start->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &start->handlers) < 0)
         goto error;
-    event_ctx_set_start_ctx (event_ctx, ctx);
-    return ctx;
+    return start;
 error:
-    start_ctx_destroy (ctx);
+    start_ctx_destroy (start);
     return NULL;
 }
 

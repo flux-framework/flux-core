@@ -18,7 +18,6 @@
 #include <flux/core.h>
 
 #include "job.h"
-#include "queue.h"
 #include "alloc.h"
 #include "event.h"
 
@@ -26,18 +25,16 @@
 
 #include "src/common/libeventlog/eventlog.h"
 
-struct submit_ctx {
-    flux_t *h;
+struct submit {
+    struct job_manager *ctx;
     bool submit_disable;
     flux_msg_handler_t **handlers;
-    struct queue *queue;
-    struct event_ctx *event_ctx;
 };
 
-/* Decode 'o' into a struct job, then add it to the queue.
+/* Decode 'o' into a struct job, then add it to the active_job hash.
  * Also record the job in 'newjobs'.
  */
-int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
+int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
 {
     struct job *job;
 
@@ -53,14 +50,16 @@ int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
         job_decref (job);
         return -1;
     }
-    if (queue_insert (queue, job, &job->queue_handle) < 0) {
+    if (zhashx_insert (active_jobs, &job->id, job) < 0) {
         job_decref (job);
-        // EEXIST is not an error - there is a window for restart_from_kvs()
-        // to pick up a job that also has a submit request in flight.
-        return (errno == EEXIST ? 0 : -1);
+        /* zhashx_insert() fails if hash item already exists.
+         * This is not an error - there is a window for restart_from_kvs()
+         * to pick up a job that also has a submit request in flight.
+         */
+        return 0;
     }
     if (zlist_push (newjobs, job) < 0) {
-        queue_delete (queue, job, job->queue_handle);
+        zhashx_delete (active_jobs, &job->id);
         job_decref (job);
         errno = ENOMEM;
         return -1;
@@ -71,13 +70,13 @@ int submit_enqueue_one_job (struct queue *queue, zlist_t *newjobs, json_t *o)
 /* The submit request has failed.  Dequeue jobs recorded in 'newjobs',
  * then destroy the newjobs list.
  */
-void submit_enqueue_jobs_cleanup (struct queue *queue, zlist_t *newjobs)
+void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlist_t *newjobs)
 {
     if (newjobs) {
         int saved_errno = errno;
         struct job *job;
         while ((job = zlist_pop (newjobs))) {
-            queue_delete (queue, job, job->queue_handle);
+            zhashx_delete (active_jobs, &job->id);
             job_decref (job);
         }
         zlist_destroy (&newjobs);
@@ -85,11 +84,11 @@ void submit_enqueue_jobs_cleanup (struct queue *queue, zlist_t *newjobs)
     }
 }
 
-/* Enqueue jobs from 'jobs' array in queue.
+/* Add jobs from 'jobs' array to 'active_jobs' hash.
  * On success, return a list of struct job's.
- * On failure, return NULL with errno set (no jobs enqueued).
+ * On failure, return NULL with errno set (no jobs added).
  */
-zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs)
+zlist_t *submit_add_jobs (zhashx_t *active_jobs, json_t *jobs)
 {
     size_t index;
     json_t *el;
@@ -100,12 +99,12 @@ zlist_t *submit_enqueue_jobs (struct queue *queue, json_t *jobs)
         return NULL;
     }
     json_array_foreach (jobs, index, el) {
-        if (submit_enqueue_one_job (queue, newjobs, el) < 0)
+        if (submit_add_one_job (active_jobs, newjobs, el) < 0)
             goto error;
     }
     return newjobs;
 error:
-    submit_enqueue_jobs_cleanup (queue, newjobs);
+    submit_add_jobs_cleanup (active_jobs, newjobs);
     return NULL;
 }
 
@@ -115,7 +114,7 @@ error:
  * We instead re-create the event and run it directly through
  * event_job_update() and event_job_action().
  */
-int submit_post_event (struct event_ctx *event_ctx, struct job *job)
+int submit_post_event (struct event *event, struct job *job)
 {
     json_t *entry = NULL;
     int rv = -1;
@@ -130,9 +129,9 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
         goto error;
     if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
         goto error;
-    if (event_batch_pub_state (event_ctx, job) < 0)
+    if (event_batch_pub_state (event, job) < 0)
         goto error;
-    if (event_job_action (event_ctx, job) < 0)
+    if (event_job_action (event, job) < 0)
         goto error;
     rv = 0;
  error:
@@ -148,7 +147,7 @@ int submit_post_event (struct event_ctx *event_ctx, struct job *job)
 static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
-    struct submit_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     json_t *jobs;
     zlist_t *newjobs;
     struct job *job;
@@ -158,12 +157,12 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s", __FUNCTION__);
         goto error;
     }
-    if (ctx->submit_disable) {
+    if (ctx->submit->submit_disable) {
         errno = EINVAL;
         errmsg = "job submission is disabled";
         goto error;
     }
-    if (!(newjobs = submit_enqueue_jobs (ctx->queue, jobs))) {
+    if (!(newjobs = submit_add_jobs (ctx->active_jobs, jobs))) {
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
@@ -176,7 +175,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      * Now walk the list of new jobs and advance their state.
      */
     while ((job = zlist_pop (newjobs))) {
-        if (submit_post_event (ctx->event_ctx, job) < 0)
+        if (submit_post_event (ctx->event, job) < 0)
             flux_log_error (h, "%s: submit_post_event id=%llu",
                             __FUNCTION__, (unsigned long long)job->id);
         job_decref (job);
@@ -188,22 +187,22 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-void submit_enable (struct submit_ctx *ctx)
+void submit_enable (struct submit *submit)
 {
-    ctx->submit_disable = false;
+    submit->submit_disable = false;
 }
 
-void submit_disable (struct submit_ctx *ctx)
+void submit_disable (struct submit *submit)
 {
-    ctx->submit_disable = true;
+    submit->submit_disable = true;
 }
 
-void submit_ctx_destroy (struct submit_ctx *ctx)
+void submit_ctx_destroy (struct submit *submit)
 {
-    if (ctx) {
+    if (submit) {
         int saved_errno = errno;
-        flux_msg_handler_delvec (ctx->handlers);
-        free (ctx);
+        flux_msg_handler_delvec (submit->handlers);
+        free (submit);
         errno = saved_errno;
     }
 }
@@ -213,22 +212,18 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct submit_ctx *submit_ctx_create (flux_t *h,
-                                      struct queue *queue,
-                                      struct event_ctx *event_ctx)
+struct submit *submit_ctx_create (struct job_manager *ctx)
 {
-    struct submit_ctx *ctx;
+    struct submit *submit;
 
-    if (!(ctx = calloc (1, sizeof (*ctx))))
+    if (!(submit = calloc (1, sizeof (*submit))))
         return NULL;
-    ctx->h = h;
-    ctx->queue = queue;
-    ctx->event_ctx = event_ctx;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+    submit->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &submit->handlers) < 0)
         goto error;
-    return ctx;
+    return submit;
 error:
-    submit_ctx_destroy (ctx);
+    submit_ctx_destroy (submit);
     return NULL;
 }
 

@@ -12,16 +12,16 @@
 #define _FLUX_JOB_MANAGER_LIST_H
 
 #include <jansson.h>
-#include "queue.h"
 
 /* Handle a 'list' request - to list the queue.
  */
-void list_handle_request (flux_t *h, struct queue *queue,
-                          const flux_msg_t *msg);
+void list_handle_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg);
 
 /* exposed for unit testing only */
-json_t *list_one_job (struct job *job, json_t *attrs);
-json_t *list_job_array (struct queue *queue, int max_entries, json_t *attrs);
+int list_append_job (json_t *jobs, struct job *job);
 
 #endif /* ! _FLUX_JOB_MANAGER_LIST_H */
 /*

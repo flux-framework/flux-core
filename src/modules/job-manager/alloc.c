@@ -80,13 +80,12 @@
 #include "config.h"
 #endif
 #include <jansson.h>
+#include <czmq.h>
 #include <flux/core.h>
 #include <assert.h>
 
-#include "queue.h"
 #include "job.h"
 #include "alloc.h"
-#include "queue.h"
 #include "event.h"
 
 typedef enum {
@@ -94,12 +93,10 @@ typedef enum {
     SCHED_UNLIMITED,    // send all sched.alloc requests immediately
 } sched_interface_t;
 
-struct alloc_ctx {
-    flux_t *h;
+struct alloc {
+    struct job_manager *ctx;
     flux_msg_handler_t **handlers;
-    struct queue *queue;    // main active job queue
-    struct event_ctx *event_ctx;
-    struct queue *inqueue;  // secondary queue of jobs to be scheduled
+    zlistx_t *pending;  // queue of jobs to be scheduled
     sched_interface_t mode;
     bool ready;
     flux_watcher_t *prep;
@@ -111,23 +108,26 @@ struct alloc_ctx {
 /* Initiate teardown.  Clear any alloc/free requests, and clear
  * the alloc->ready flag to stop prep/check from allocating.
  */
-static void interface_teardown (struct alloc_ctx *ctx, char *s, int errnum)
+static void interface_teardown (struct alloc *alloc, char *s, int errnum)
 {
-    if (ctx->ready) {
+    if (alloc->ready) {
         struct job *job;
+        struct job_manager *ctx = alloc->ctx;
 
         flux_log (ctx->h, LOG_DEBUG, "alloc: stop due to %s: %s",
                   s, flux_strerror (errnum));
 
-        job = queue_first (ctx->queue);
+        job = zhashx_first (ctx->active_jobs);
         while (job) {
             /* jobs with alloc pending need to go back in the queue
              * so they will automatically send alloc again.
              */
             if (job->alloc_pending) {
-                assert (job->aux_queue_handle == NULL);
-                if (queue_insert (ctx->inqueue, job,
-                                                &job->aux_queue_handle) < 0)
+                bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true
+                                                                     : false;
+
+                assert (job->handle == NULL);
+                if (!(job->handle = zlistx_insert (alloc->pending, job, fwd)))
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
@@ -136,10 +136,10 @@ static void interface_teardown (struct alloc_ctx *ctx, char *s, int errnum)
              * need to be picked up again after 'hello'.
              */
             job->free_pending = 0;
-            job = queue_next (ctx->queue);
+            job = zhashx_next (ctx->active_jobs);
         }
-        ctx->ready = false;
-        ctx->active_alloc_count = 0;
+        alloc->ready = false;
+        alloc->active_alloc_count = 0;
     }
 }
 
@@ -148,7 +148,7 @@ static void interface_teardown (struct alloc_ctx *ctx, char *s, int errnum)
 static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    struct alloc_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     flux_jobid_t id = 0;
     struct job *job;
 
@@ -156,7 +156,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
         goto teardown;
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log_error (h, "sched.free-response: id=%llu not active",
                         (unsigned long long)id);
         goto teardown;
@@ -168,17 +168,17 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     job->free_pending = 0;
-    if (event_job_post_pack (ctx->event_ctx, job, "free", NULL) < 0)
+    if (event_job_post_pack (ctx->event, job, "free", NULL) < 0)
         goto teardown;
     return;
 teardown:
-    interface_teardown (ctx, "free response error", errno);
+    interface_teardown (ctx->alloc, "free response error", errno);
 }
 
 /* Send sched.free request for job.
  * Update flags.
  */
-int free_request (struct alloc_ctx *ctx, struct job *job)
+int free_request (struct alloc *alloc, struct job *job)
 {
     flux_msg_t *msg;
 
@@ -186,7 +186,7 @@ int free_request (struct alloc_ctx *ctx, struct job *job)
         return -1;
     if (flux_msg_pack (msg, "{s:I}", "id", job->id) < 0)
         goto error;
-    if (flux_send (ctx->h, msg, 0) < 0)
+    if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
     flux_msg_destroy (msg);
     return 0;
@@ -201,7 +201,8 @@ error:
 static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    struct alloc_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
+    struct alloc *alloc = ctx->alloc;
     flux_jobid_t id = 0;
     int type = -1;
     const char *note = NULL;
@@ -218,7 +219,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto teardown;
     }
-    if (!(job = queue_lookup_by_id (ctx->queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log_error (h, "sched.alloc-response: id=%llu not active",
                         (unsigned long long)id);
         goto teardown;
@@ -238,14 +239,14 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    ctx->active_alloc_count--;
+    alloc->active_alloc_count--;
     job->alloc_pending = 0;
 
     /* Handle alloc error.
      * Raise alloc exception and transition to CLEANUP state.
      */
     if (type == 2) { // error: alloc was rejected
-        if (event_job_post_pack (ctx->event_ctx, job, "exception",
+        if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
                                  "severity", 0,
@@ -265,19 +266,19 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
 
-    if (event_job_post_pack (ctx->event_ctx, job, "alloc",
+    if (event_job_post_pack (ctx->event, job, "alloc",
                              "{ s:s }",
                              "note", note ? note : "") < 0)
         goto teardown;
     return;
 teardown:
-    interface_teardown (ctx, "alloc response error", errno);
+    interface_teardown (alloc, "alloc response error", errno);
 }
 
 /* Send sched.alloc request for job.
  * Update flags.
  */
-int alloc_request (struct alloc_ctx *ctx, struct job *job)
+int alloc_request (struct alloc *alloc, struct job *job)
 {
     flux_msg_t *msg;
 
@@ -289,7 +290,7 @@ int alloc_request (struct alloc_ctx *ctx, struct job *job)
                             "userid", job->userid,
                             "t_submit", job->t_submit) < 0)
         goto error;
-    if (flux_send (ctx->h, msg, 0) < 0)
+    if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
     flux_msg_destroy (msg);
     return 0;
@@ -304,7 +305,7 @@ error:
 static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct alloc_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     struct job *job;
     json_t *o = NULL;
     json_t *entry;
@@ -314,7 +315,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_log (h, LOG_DEBUG, "scheduler: hello");
     if (!(o = json_array ()))
         goto nomem;
-    job = queue_first (ctx->queue);
+    job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources) {
             if (!(entry = json_pack ("{s:I s:i s:i s:f}",
@@ -328,18 +329,23 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
                 goto nomem;
             }
         }
-        job = queue_next (ctx->queue);
+        job = zhashx_next (ctx->active_jobs);
     }
     if (flux_respond_pack (h, msg, "{s:O}", "alloc", o) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     /* Restart any free requests that might have been interrupted
      * when scheduler was last unloaded.
      */
-    job = queue_first (ctx->queue);
+    job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if (event_job_action (ctx->event_ctx, job) < 0)
-            flux_log_error (h, "%s: event_job_action", __FUNCTION__);
-        job = queue_next (ctx->queue);
+        /* N.B. first/next are NOT deletion safe but event_job_action()
+         * won't call zhashx_delete() for jobs in FLUX_JOB_CLEANUP state.
+         */
+        if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
+            if (event_job_action (ctx->event, job) < 0)
+                flux_log_error (h, "%s: event_job_action", __FUNCTION__);
+        }
+        job = zhashx_next (ctx->active_jobs);
     }
     json_decref (o);
     return;
@@ -359,23 +365,23 @@ error:
 static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
-    struct alloc_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
     const char *mode;
     int count;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "mode", &mode) < 0)
         goto error;
     if (!strcmp (mode, "single"))
-        ctx->mode = SCHED_SINGLE;
+        ctx->alloc->mode = SCHED_SINGLE;
     else if (!strcmp (mode, "unlimited"))
-        ctx->mode = SCHED_UNLIMITED;
+        ctx->alloc->mode = SCHED_UNLIMITED;
     else {
         errno = EPROTO;
         goto error;
     }
-    ctx->ready = true;
+    ctx->alloc->ready = true;
     flux_log (h, LOG_DEBUG, "scheduler: ready %s", mode);
-    count = queue_size (ctx->inqueue);
+    count = zlistx_size (ctx->alloc->pending);
     if (flux_respond_pack (h, msg, "{s:i}", "count", count) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
@@ -391,13 +397,15 @@ error:
 static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
-    struct alloc_ctx *ctx = arg;
-    if (!ctx->ready)
+    struct job_manager *ctx = arg;
+    struct alloc *alloc = ctx->alloc;
+
+    if (!alloc->ready)
         return;
-    if (ctx->mode == SCHED_SINGLE && ctx->active_alloc_count > 0)
+    if (alloc->mode == SCHED_SINGLE && alloc->active_alloc_count > 0)
         return;
-    if (queue_first (ctx->inqueue))
-        flux_watcher_start (ctx->idle);
+    if (zlistx_first (alloc->pending))
+        flux_watcher_start (alloc->idle);
 }
 
 /* check:
@@ -407,78 +415,97 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
                       int revents, void *arg)
 {
-    struct alloc_ctx *ctx = arg;
+    struct job_manager *ctx = arg;
+    struct alloc *alloc = ctx->alloc;
     struct job *job;
 
-    flux_watcher_stop (ctx->idle);
-    if (!ctx->ready)
+    flux_watcher_stop (alloc->idle);
+    if (!alloc->ready)
         return;
-    if (ctx->mode == SCHED_SINGLE && ctx->active_alloc_count > 0)
+    if (alloc->mode == SCHED_SINGLE && alloc->active_alloc_count > 0)
         return;
-    if ((job = queue_first (ctx->inqueue))) {
-        if (alloc_request (ctx, job) < 0) {
+    if ((job = zlistx_first (alloc->pending))) {
+        if (alloc_request (alloc, job) < 0) {
             flux_log_error (ctx->h, "alloc_request fatal error");
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
             return;
         }
-        queue_delete (ctx->inqueue, job, job->aux_queue_handle);
-        job->aux_queue_handle = NULL;
+        zlistx_delete (alloc->pending, job->handle);
+        job->handle = NULL;
         job->alloc_pending = 1;
         job->alloc_queued = 0;
-        ctx->active_alloc_count++;
+        alloc->active_alloc_count++;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event_ctx, job,
+            (void)event_job_post_pack (ctx->event, job,
                                        "debug.alloc-request", NULL);
 
     }
 }
 
-int alloc_send_free_request (struct alloc_ctx *ctx, struct job *job)
+int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_CLEANUP);
     if (!job->free_pending) {
-        if (free_request (ctx, job) < 0)
+        if (free_request (alloc, job) < 0)
             return -1;
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event_ctx, job,
+            (void)event_job_post_pack (alloc->ctx->event, job,
                                        "debug.free-request", NULL);
     }
     return 0;
 }
 
-int alloc_enqueue_alloc_request (struct alloc_ctx *ctx, struct job *job)
+int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_SCHED);
     if (!job->alloc_queued && !job->alloc_pending) {
-        assert (job->aux_queue_handle == NULL);
-        if (queue_insert (ctx->inqueue, job, &job->aux_queue_handle) < 0)
+    bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true : false;
+        assert (job->handle == NULL);
+        if (!(job->handle = zlistx_insert (alloc->pending, job, fwd)))
             return -1;
         job->alloc_queued = 1;
     }
     return 0;
 }
 
-void alloc_dequeue_alloc_request (struct alloc_ctx *ctx, struct job *job)
+void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
 {
     if (job->alloc_queued) {
-        queue_delete (ctx->inqueue, job, job->aux_queue_handle);
-        job->aux_queue_handle = NULL;
+        zlistx_delete (alloc->pending, job->handle);
+        job->handle = NULL;
         job->alloc_queued = 0;
-        ctx->active_alloc_count--;
+        alloc->active_alloc_count--;
     }
 }
 
-void alloc_ctx_destroy (struct alloc_ctx *ctx)
+struct job *alloc_pending_first (struct alloc *alloc)
 {
-    if (ctx) {
+    return zlistx_first (alloc->pending);
+}
+
+struct job *alloc_pending_next (struct alloc *alloc)
+{
+    return zlistx_next (alloc->pending);
+}
+
+void alloc_pending_reorder (struct alloc *alloc, struct job *job)
+{
+    bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true : false;
+
+    zlistx_reorder (alloc->pending, job->handle, fwd);
+}
+
+void alloc_ctx_destroy (struct alloc *alloc)
+{
+    if (alloc) {
         int saved_errno = errno;;
-        flux_msg_handler_delvec (ctx->handlers);
-        flux_watcher_destroy (ctx->prep);
-        flux_watcher_destroy (ctx->check);
-        flux_watcher_destroy (ctx->idle);
-        queue_destroy (ctx->inqueue);
-        free (ctx);
+        flux_msg_handler_delvec (alloc->handlers);
+        flux_watcher_destroy (alloc->prep);
+        flux_watcher_destroy (alloc->check);
+        flux_watcher_destroy (alloc->idle);
+        zlistx_destroy (&alloc->pending);
+        free (alloc);
         errno = saved_errno;
     }
 }
@@ -491,34 +518,34 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct alloc_ctx *alloc_ctx_create (flux_t *h, struct queue *queue,
-                                    struct event_ctx *event_ctx)
+struct alloc *alloc_ctx_create (struct job_manager *ctx)
 {
-    struct alloc_ctx *ctx;
-    flux_reactor_t *r = flux_get_reactor (h);
+    struct alloc *alloc;
+    flux_reactor_t *r = flux_get_reactor (ctx->h);
 
-    if (!(ctx = calloc (1, sizeof (*ctx))))
+    if (!(alloc = calloc (1, sizeof (*alloc))))
         return NULL;
-    ctx->h = h;
-    ctx->queue = queue;
-    ctx->event_ctx = event_ctx;
-    if (!(ctx->inqueue = queue_create (false)))
+    alloc->ctx = ctx;
+    if (!(alloc->pending = zlistx_new()))
         goto error;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
+    zlistx_set_destructor (alloc->pending, job_destructor);
+    zlistx_set_comparator (alloc->pending, job_pending_cmp);
+    zlistx_set_duplicator (alloc->pending, job_duplicator);
+
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &alloc->handlers) < 0)
         goto error;
-    ctx->prep = flux_prepare_watcher_create (r, prep_cb, ctx);
-    ctx->check = flux_check_watcher_create (r, check_cb, ctx);
-    ctx->idle = flux_idle_watcher_create (r, NULL, NULL);
-    if (!ctx->prep || !ctx->check || !ctx->idle) {
+    alloc->prep = flux_prepare_watcher_create (r, prep_cb, ctx);
+    alloc->check = flux_check_watcher_create (r, check_cb, ctx);
+    alloc->idle = flux_idle_watcher_create (r, NULL, NULL);
+    if (!alloc->prep || !alloc->check || !alloc->idle) {
         errno = ENOMEM;
         goto error;
     }
-    flux_watcher_start (ctx->prep);
-    flux_watcher_start (ctx->check);
-    event_ctx_set_alloc_ctx (event_ctx, ctx);
-    return ctx;
+    flux_watcher_start (alloc->prep);
+    flux_watcher_start (alloc->check);
+    return alloc;
 error:
-    alloc_ctx_destroy (ctx);
+    alloc_ctx_destroy (alloc);
     return NULL;
 }
 

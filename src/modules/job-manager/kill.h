@@ -12,14 +12,15 @@
 #define _FLUX_JOB_MANAGER_KILL_H
 
 #include <stdint.h>
-#include "queue.h"
-#include "alloc.h"
+#include "job-manager.h"
 
-/* Hande a request to raise an exception on job.
+/* Handle a request to raise an exception on job.
  */
-void kill_handle_request (flux_t *h, struct queue *queue,
-                          struct event_ctx *event_ctx,
-                          const flux_msg_t *msg);
+void kill_handle_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg);
+
 
 /* exposed for unit testing only */
 int kill_check_signal (int signum);

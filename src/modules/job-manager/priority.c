@@ -32,16 +32,20 @@
 #include <flux/core.h>
 
 #include "job.h"
-#include "queue.h"
 #include "event.h"
+#include "alloc.h"
+#include "job-manager.h"
+
 #include "priority.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
 
-void priority_handle_request (flux_t *h, struct queue *queue,
-                              struct event_ctx *event_ctx,
-                              const flux_msg_t *msg)
+void priority_handle_request (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
+    struct job_manager *ctx = arg;
     uint32_t userid;
     uint32_t rolemask;
     flux_jobid_t id;
@@ -60,7 +64,7 @@ void priority_handle_request (flux_t *h, struct queue *queue,
         errno = EINVAL;
         goto error;
     }
-    if (!(job = queue_lookup_by_id (queue, id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job";
         goto error;
     }
@@ -81,13 +85,13 @@ void priority_handle_request (flux_t *h, struct queue *queue,
     }
     /* Post event, change job's queue position, and respond.
      */
-    if (event_job_post_pack (event_ctx, job,
+    if (event_job_post_pack (ctx->event, job,
                              "priority",
                              "{ s:i s:i }",
                              "userid", userid,
                              "priority", priority) < 0)
         goto error;
-    queue_reorder (queue, job, job->queue_handle);
+    alloc_pending_reorder (ctx->alloc, job);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

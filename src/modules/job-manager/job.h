@@ -12,6 +12,7 @@
 #define _FLUX_JOB_MANAGER_JOB_H
 
 #include <stdint.h>
+#include <czmq.h>
 #include "src/common/libjob/job.h"
 
 struct job {
@@ -22,15 +23,14 @@ struct job {
     int flags;
     flux_job_state_t state;
 
-    uint8_t alloc_queued:1;
-    uint8_t alloc_pending:1;
-    uint8_t free_pending:1;
+    uint8_t alloc_queued:1; // queued for alloc, but alloc request not sent
+    uint8_t alloc_pending:1;// alloc request sent to sched
+    uint8_t free_pending:1; // free request sent to sched
     uint8_t has_resources:1;
-    uint8_t start_pending:1;
+    uint8_t start_pending:1;// start request sent to job-exec
 
-    void *aux_queue_handle;
-    void *queue_handle; // primary queue handle (for listing all active jobs)
-    int refcount;       // private to job.c
+    void *handle;           // zlistx_t handle
+    int refcount;           // private to job.c
 };
 
 void job_decref (struct job *job);
@@ -39,6 +39,13 @@ struct job *job_incref (struct job *job);
 struct job *job_create (void);
 
 struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
+
+/* Helpers for maintaining czmq containers of 'struct job'.
+ * The comparator sorts by (1) priority, then (2) t_submit.
+ */
+void job_destructor (void **item);
+void *job_duplicator (const void *item);
+int job_pending_cmp (const void *a1, const void *a2);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
