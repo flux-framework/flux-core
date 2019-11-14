@@ -111,8 +111,9 @@ timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     flux_t *h = ev->h;
     double timeout = ev->commit_timeout;
     flux_future_t *f = NULL;
+    int flags = FLUX_KVS_TXN_COMPACT;
 
-    if (!(f = flux_kvs_commit (h, NULL, 0, batch->txn))
+    if (!(f = flux_kvs_commit (h, NULL, flags, batch->txn))
         || flux_future_then (f, timeout, commit_cb, batch) < 0) {
         eventlog_batch_error (batch, errno);
         return;
@@ -267,11 +268,12 @@ int eventlogger_flush (struct eventlogger *ev)
     int rc = -1;
     flux_future_t *f = NULL;
     struct eventlog_batch *batch;
+    int flags = FLUX_KVS_TXN_COMPACT;
 
     if (!(batch = eventlog_batch_get (ev)))
         return -1;
 
-    if (!(f = flux_kvs_commit (ev->h, NULL, 0, ev->current->txn))
+    if (!(f = flux_kvs_commit (ev->h, NULL, flags, ev->current->txn))
         || flux_future_wait_for (f, ev->commit_timeout) < 0)
         goto out;
     if ((rc = flux_future_get (f, NULL)) < 0)
