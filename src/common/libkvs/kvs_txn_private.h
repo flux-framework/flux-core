@@ -11,6 +11,10 @@
 #ifndef _KVS_TXN_PRIVATE_H
 #define _KVS_TXN_PRIVATE_H
 
+struct flux_kvs_txn {
+    json_t *ops;
+};
+
 int txn_get_op_count (flux_kvs_txn_t *txn);
 
 json_t *txn_get_ops (flux_kvs_txn_t *txn);
