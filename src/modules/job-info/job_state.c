@@ -80,6 +80,7 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
         return NULL;
     job->ctx = ctx;
     job->id = id;
+    job->state = FLUX_JOB_NEW;
     return job;
 }
 
@@ -472,7 +473,6 @@ static struct job *eventlog_parse (struct info_ctx *ctx,
 
     if (!(job = job_create (ctx, id)))
         goto error;
-    job->state = FLUX_JOB_NEW;
 
     if (!(a = eventlog_decode (eventlog))) {
         flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
