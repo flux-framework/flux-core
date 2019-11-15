@@ -21,6 +21,7 @@ libkvs_la_SOURCES = \
 	kvs_dir_private.h \
 	kvs_commit.c \
 	kvs_txn.c \
+	kvs_txn_compact.c \
 	kvs_txn_private.h \
 	treeobj.h \
 	treeobj.c \
@@ -40,6 +41,7 @@ fluxcoreinclude_HEADERS = \
 TESTS = \
 	test_kvs.t \
 	test_kvs_txn.t \
+	test_kvs_txn_compact.t \
 	test_kvs_lookup.t \
 	test_kvs_dir.t \
 	test_kvs_commit.t \
@@ -73,6 +75,10 @@ test_kvs_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_txn_t_SOURCES = test/kvs_txn.c
 test_kvs_txn_t_CPPFLAGS = $(test_cppflags)
 test_kvs_txn_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_txn_compact_t_SOURCES = test/kvs_txn_compact.c
+test_kvs_txn_compact_t_CPPFLAGS = $(test_cppflags)
+test_kvs_txn_compact_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_kvs_lookup_t_SOURCES = test/kvs_lookup.c
 test_kvs_lookup_t_CPPFLAGS = $(test_cppflags)

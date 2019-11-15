@@ -53,7 +53,14 @@ int eventlogger_append (struct eventlogger *ev,
                         const char *name,
                         const char *context);
 
+int eventlogger_append_entry (struct eventlogger *ev,
+                              int flags,
+                              const char *path,
+                              json_t *entry);
+
 int eventlogger_set_commit_timeout (struct eventlogger *ev, double timeout);
+
+int eventlogger_flush (struct eventlogger *ev);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-/************************************************************\
+/************************************************************   \
  * Copyright 2014 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
  *
@@ -114,6 +114,21 @@ int check_string_value (json_t *dirent, const char *expected)
     }
     json_decref (val);
     return 0;
+}
+
+int check_raw_value (json_t *dirent, const char *expected, int expected_len)
+{
+    char *data;
+    int len;
+
+    if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
+        diag ("%s: initial base64 decode failed", __FUNCTION__);
+        return -1;
+    }
+    if (len == expected_len
+        && memcmp (data, expected, len) == 0)
+        return 0;
+    return -1;
 }
 
 void basic (void)

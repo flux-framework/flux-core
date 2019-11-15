@@ -62,6 +62,12 @@ flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
             return NULL;
     }
 
+    if (flags & FLUX_KVS_TXN_COMPACT) {
+        if (txn_compact (txn) < 0)
+            return NULL;
+        flags &= ~FLUX_KVS_TXN_COMPACT;
+    }
+
     if (!(ops = txn_get_ops (txn))) {
         errno = EINVAL;
         return NULL;
@@ -106,6 +112,12 @@ flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
     if (!ns) {
         if (!(ns = kvs_get_namespace ()))
             return NULL;
+    }
+
+    if (flags & FLUX_KVS_TXN_COMPACT) {
+        if (txn_compact (txn) < 0)
+            return NULL;
+        flags &= ~FLUX_KVS_TXN_COMPACT;
     }
 
     if (!(ops = txn_get_ops (txn))) {

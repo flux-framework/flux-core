@@ -13,6 +13,7 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <czmq.h>
 #include <string.h>
 
 #include "kvs_txn_private.h"
@@ -35,9 +36,6 @@
  * flux_kvs_txn_put (value=NULL) or flux_kvs_txn_put_raw (data=NULL,len=0).
  * A NULL format string passed to flux_kvs_txn_pack() is invalid.
  */
-struct flux_kvs_txn {
-    json_t *ops;
-};
 
 void flux_kvs_txn_destroy (flux_kvs_txn_t *txn)
 {

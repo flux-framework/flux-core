@@ -15,8 +15,19 @@
 extern "C" {
 #endif
 
+/* FLUX_KVS_TXN_COMPACT will currently consolidate appends to the same
+ * key.  For example, an append of "A" to the key "foo" and the append
+ * "B" to the key "foo" maybe consolidated into a single append of
+ * "AB".
+ *
+ * Compacting transactions means that certain ordered lists of
+ * operations will be illegal to compact and result in an error.  Most
+ * notably, if a key has data appended to it, then is overwritten in
+ * the same transaction, a compaction of appends is not possible.
+ */
 enum kvs_commit_flags {
     FLUX_KVS_NO_MERGE = 1, /* disallow commits to be mergeable with others */
+    FLUX_KVS_TXN_COMPACT = 2, /* try to combine ops on same key within txn */
 };
 
 flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,

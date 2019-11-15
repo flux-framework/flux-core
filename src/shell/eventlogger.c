@@ -111,8 +111,9 @@ timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     flux_t *h = ev->h;
     double timeout = ev->commit_timeout;
     flux_future_t *f = NULL;
+    int flags = FLUX_KVS_TXN_COMPACT;
 
-    if (!(f = flux_kvs_commit (h, NULL, 0, batch->txn))
+    if (!(f = flux_kvs_commit (h, NULL, flags, batch->txn))
         || flux_future_then (f, timeout, commit_cb, batch) < 0) {
         eventlog_batch_error (batch, errno);
         return;
@@ -188,9 +189,6 @@ static int append_wait (struct eventlogger *ev,
                         const char *path,
                         const char *entrystr)
 {
-    int rc = -1;
-    flux_future_t *f = NULL;
-
     /*  append_wait also appends all pending transactions synchronously  */
     struct eventlog_batch *batch = eventlog_batch_get (ev);
     if (!batch)
@@ -201,17 +199,7 @@ static int append_wait (struct eventlogger *ev,
                           path, entrystr) < 0)
         return -1;
 
-    if (!(f = flux_kvs_commit (ev->h, NULL, 0, ev->current->txn))
-        || flux_future_wait_for (f, ev->commit_timeout) < 0)
-        goto out;
-    if ((rc = flux_future_get (f, NULL)) < 0)
-        eventlog_batch_error (batch, errno);
-
-    eventlogger_batch_complete (ev, ev->current);
-    ev->current = NULL;
-out:
-    flux_future_destroy (f);
-    return rc;
+    return eventlogger_flush (ev);
 }
 
 static int append_async (struct eventlogger *ev,
@@ -239,6 +227,25 @@ static int append_async (struct eventlogger *ev,
     return 0;
 }
 
+int eventlogger_append_entry (struct eventlogger *ev,
+                              int flags,
+                              const char *path,
+                              json_t *entry)
+{
+    char *entrystr = NULL;
+    int rc = -1;
+
+    if (!(entrystr = eventlog_entry_encode (entry)))
+        return -1;
+
+    if (flags & EVENTLOGGER_FLAG_WAIT)
+        rc = append_wait (ev, path, entrystr);
+    else
+        rc = append_async (ev, path, entry, entrystr);
+    free (entrystr);
+    return rc;
+}
+
 int eventlogger_append (struct eventlogger *ev,
                         int flags,
                         const char *path,
@@ -246,24 +253,36 @@ int eventlogger_append (struct eventlogger *ev,
                         const char *context)
 {
     int rc = -1;
-    char *entrystr = NULL;
-    int wait = 0;
-    json_t *entry;
+    json_t *entry = NULL;
 
-    if (flags & EVENTLOGGER_FLAG_WAIT)
-        wait = 1;
-
-    if (!(entry = eventlog_entry_create (0., name, context))
-        || !(entrystr = eventlog_entry_encode (entry)))
+    if (!(entry = eventlog_entry_create (0., name, context)))
         goto out;
-
-    if (wait)
-        rc = append_wait (ev, path, entrystr);
-    else
-        rc = append_async (ev, path, entry, entrystr);
+    rc = eventlogger_append_entry (ev, flags, path, entry);
 out:
     json_decref (entry);
-    free (entrystr);
+    return rc;
+}
+
+int eventlogger_flush (struct eventlogger *ev)
+{
+    int rc = -1;
+    flux_future_t *f = NULL;
+    struct eventlog_batch *batch;
+    int flags = FLUX_KVS_TXN_COMPACT;
+
+    if (!(batch = eventlog_batch_get (ev)))
+        return -1;
+
+    if (!(f = flux_kvs_commit (ev->h, NULL, flags, ev->current->txn))
+        || flux_future_wait_for (f, ev->commit_timeout) < 0)
+        goto out;
+    if ((rc = flux_future_get (f, NULL)) < 0)
+        eventlog_batch_error (batch, errno);
+
+    eventlogger_batch_complete (ev, ev->current);
+    ev->current = NULL;
+out:
+    flux_future_destroy (f);
     return rc;
 }
 
