@@ -55,12 +55,13 @@ make_local_socket_path() {
 }
 
 # Usage: make_remote_socket_path local_socket
+#  N.B. avoid using $TMPDIR since it may not exist remotely
 make_remote_socket_path() {
-         local local_socket=$1
+    local local_socket=$1
 
     # Embed hostname + local socket path in remote path
     # This somewhat uniquely identifies which socket is being forwarded
-    echo "${TMPDIR:-/tmp}/$(hostname)$(echo ${local_socket} | sed -e 's!/!-!g')"
+    echo "/tmp/$(hostname)$(echo ${local_socket} | sed -e 's!/!-!g')"
 }
 
 
