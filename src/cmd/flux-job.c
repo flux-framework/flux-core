@@ -1177,12 +1177,12 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "input-ready")) {
+    if (!strcmp (name, "shell.init")) {
         flux_watcher_t *w;
 
         if (json_unpack (context, "{s:i}",
                          "leader-rank", &ctx->leader_rank) < 0)
-            log_err_exit ("error decoding input-ready context");
+            log_err_exit ("error decoding shell.init context");
 
         /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
          * stdin */
@@ -1208,8 +1208,6 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
         ctx->stdin_w = w;
         flux_watcher_start (ctx->stdin_w);
-    }
-    else if (!strcmp (name, "shell.init")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
                                                     "guest.output",
