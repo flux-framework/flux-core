@@ -1153,7 +1153,7 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
- * On the output-ready event, start watching the guest.output eventlog.
+ * On the shell.init event, start watching the guest.output eventlog.
  * It is guaranteed to exist when guest.output is emitted.
  * If --show-exec was specified, print all events on stderr.
  */
@@ -1209,7 +1209,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         ctx->stdin_w = w;
         flux_watcher_start (ctx->stdin_w);
     }
-    else if (!strcmp (name, "output-ready")) {
+    else if (!strcmp (name, "shell.init")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
                                                     "guest.output",
