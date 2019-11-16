@@ -855,6 +855,23 @@ static void shell_log_info (flux_shell_t *shell)
     }
 }
 
+/*  Add default event context for standard shell emitted events -
+ *   shell.init and shell.start.
+ */
+static int shell_register_event_context (flux_shell_t *shell)
+{
+    if (shell->standalone || shell->info->shell_rank != 0)
+        return 0;
+    if (flux_shell_add_event_context (shell, "shell.init", 0,
+                                      "{s:i s:i}",
+                                      "leader-rank",
+                                      shell->info->rankinfo.rank,
+                                      "size",
+                                      shell->info->shell_size) < 0)
+        return -1;
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -875,6 +892,9 @@ int main (int argc, char *argv[])
      */
     shell_connect_flux (&shell);
 
+    if (!(shell.ev = shell_eventlogger_create (&shell)))
+        shell_die_errno (1, "shell_eventlogger_create");
+
     /* Subscribe to shell-<id>.* events. (no-op on loopback connector)
      */
     shell_events_subscribe (&shell);
@@ -884,6 +904,9 @@ int main (int argc, char *argv[])
      */
     if (!(shell.info = shell_info_create (&shell)))
         exit (1);
+
+    if (shell_register_event_context (&shell) < 0)
+        shell_die (1, "failed to add standard shell event context");
 
     /* Set verbose flag if set in attributes.system.shell.verbose */
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
@@ -910,6 +933,14 @@ int main (int argc, char *argv[])
      */
     if (shell_barrier (&shell, "init") < 0)
         shell_die_errno (1, "shell_barrier");
+
+    /*  Emit an event after barrier completion from rank 0 if not in
+     *   standalone mode.
+     */
+    if (shell.info->shell_rank == 0
+        && !shell.standalone
+        && shell_eventlogger_emit_event (shell.ev, 0, "shell.init") < 0)
+            shell_die_errno (1, "failed to emit event shell.init");
 
     /* Create tasks
      */
