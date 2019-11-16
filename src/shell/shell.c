@@ -869,6 +869,11 @@ static int shell_register_event_context (flux_shell_t *shell)
                                       "size",
                                       shell->info->shell_size) < 0)
         return -1;
+    if (flux_shell_add_event_context (shell, "shell.start", 0,
+                                      "{s:i}",
+                                      "task-count",
+                                      shell->info->jobspec->task_count) < 0)
+        return -1;
     return 0;
 }
 
@@ -978,6 +983,17 @@ int main (int argc, char *argv[])
     /*  Reset current task since we've left task-specific context:
      */
     shell.current_task = NULL;
+
+    if (shell_barrier (&shell, "start") < 0)
+        shell_die_errno (1, "shell_barrier");
+
+    /*  Emit an event after barrier completion from rank 0 if not in
+     *   standalone mode.
+     */
+    if (shell.info->shell_rank == 0
+        && !shell.standalone
+        && shell_eventlogger_emit_event (shell.ev, 0, "shell.start") < 0)
+            shell_die_errno (1, "failed to emit event shell.start");
 
     /* Main reactor loop
      * Exits when all completion references released
