@@ -679,12 +679,12 @@ test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventl
 #
 
 test_expect_success 'job-info stats works' '
-        flux module stats job-info | grep "lookups" &&
-        flux module stats job-info | grep "watchers" &&
-        flux module stats job-info | grep "guest_watchers" &&
-        flux module stats job-info | grep "pending" &&
-        flux module stats job-info | grep "running" &&
-        flux module stats job-info | grep "inactive"
+        flux module stats --parse lookups job-info &&
+        flux module stats --parse watchers job-info &&
+        flux module stats --parse guest_watchers job-info &&
+        flux module stats --parse jobs.pending job-info &&
+        flux module stats --parse jobs.running job-info &&
+        flux module stats --parse jobs.inactive job-info
 '
 
 test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
