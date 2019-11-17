@@ -113,6 +113,7 @@ TESTSCRIPTS = \
 	t2606-job-shell-output-redirection.t \
 	t2607-job-shell-input.t \
 	t2608-job-shell-log.t \
+	t2609-job-shell-events.t \
 	t2700-mini-cmd.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
@@ -243,7 +244,8 @@ check_LTLIBRARIES = \
 	shell/plugins/conftest.la \
 	shell/plugins/invalid-args.la \
 	shell/plugins/getopt.la \
-	shell/plugins/log.la
+	shell/plugins/log.la \
+	shell/plugins/test-event.la
 
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
@@ -501,4 +503,10 @@ shell_plugins_log_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_log_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_log_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
+        $(top_builddir)/src/common/libflux-core.la
+
+shell_plugins_test_event_la_SOURCES = shell/plugins/test-event.c
+shell_plugins_test_event_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_test_event_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_test_event_la_LIBADD = \
         $(top_builddir)/src/common/libflux-core.la
