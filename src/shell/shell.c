@@ -644,6 +644,26 @@ out:
     return (rc);
 }
 
+/*  Public shell interface to request additional context in one of
+ *   the emitted shell events.
+ */
+int flux_shell_add_event_context (flux_shell_t *shell,
+                                  const char *name,
+                                  int flags,
+                                  const char *fmt,
+                                  ...)
+{
+    va_list ap;
+    if (!shell || !name || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
+    va_start (ap, fmt);
+    int rc = shell_eventlogger_context_vpack (shell->ev, name, 0, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 static void eventlog_cb (flux_future_t *f, void *arg)
 {
     json_t *o = NULL;
