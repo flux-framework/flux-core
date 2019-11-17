@@ -521,6 +521,7 @@ static void shell_finalize (flux_shell_t *shell)
     plugstack_destroy (shell->plugstack);
     shell->plugstack = NULL;
 
+    shell_eventlogger_destroy (shell->ev);
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
