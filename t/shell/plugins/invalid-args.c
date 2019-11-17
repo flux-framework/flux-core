@@ -140,6 +140,16 @@ static int shell_cb (flux_plugin_t *p,
     ok (flux_shell_remove_completion_ref (shell, NULL) < 0 && errno == EINVAL,
         "flux_shell_remove_completion_ref with NULL name returns EINVAL");
 
+    ok (flux_shell_add_event_context (NULL, NULL, 0, NULL) < 0
+        && errno == EINVAL,
+        "flux_shell_add_event_context with NULL args returns EINVAL");
+    ok (flux_shell_add_event_context (shell, NULL, 0, "{}") < 0
+        && errno == EINVAL,
+        "flux_shell_add_event_context with NULL name returns EINVAL");
+    ok (flux_shell_add_event_context (shell, "main", 0, NULL) < 0
+        && errno == EINVAL,
+        "flux_shell_add_event_context with NULL fmt returns EINVAL");
+
     if (strcmp (topic, "shell.init") == 0) {
         ok (flux_shell_current_task (NULL) == NULL && errno == EINVAL,
             "flux_shell_current_task with NULL shell returns EINVAL");
@@ -147,7 +157,6 @@ static int shell_cb (flux_plugin_t *p,
         ok (flux_shell_current_task (shell) == NULL && errno == 0,
             "flux_shell_current_task returns no task in shell.init");
     }
-
     if (strcmp (topic, "shell.exit") == 0)
         return exit_status () == 0 ? 0 : -1;
     return 0;
