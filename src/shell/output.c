@@ -173,36 +173,6 @@ static int shell_output_term (struct shell_output *out)
     return 0;
 }
 
-/* log entry to exec.eventlog that we've created the output directory */
-static int shell_output_ready (struct shell_output *out, flux_kvs_txn_t *txn)
-{
-    json_t *entry = NULL;
-    char *entrystr = NULL;
-    const char *key = "exec.eventlog";
-    int saved_errno, rc = -1;
-
-    if (!(entry = eventlog_entry_create (0., "output-ready", NULL))) {
-        shell_log_errno ("eventlog_entry_create");
-        goto error;
-    }
-    if (!(entrystr = eventlog_entry_encode (entry))) {
-        shell_log_errno ("eventlog_entry_encode");
-        goto error;
-    }
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0) {
-        shell_log_errno ("flux_kvs_txn_put");
-        goto error;
-    }
-    rc = 0;
-error:
-    /* on error, future destroyed via shell_output destroy */
-    saved_errno = errno;
-    json_decref (entry);
-    free (entrystr);
-    errno = saved_errno;
-    return rc;
-}
-
 static int shell_output_redirect_stream (struct shell_output *out,
                                          flux_kvs_txn_t *txn,
                                          const char *stream,
@@ -289,8 +259,6 @@ static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
     struct shell_output *out = arg;
 
     if (flux_future_get (f, NULL) < 0)
-        /* failng to commit output-ready or header is a fatal
-         * error.  Should be cleaner in future. Issue #2378 */
         shell_die_errno (1, "shell_output_kvs_init");
     flux_future_destroy (f);
 
@@ -311,8 +279,6 @@ static int shell_output_kvs_init (struct shell_output *out, json_t *header)
     if (!(txn = flux_kvs_txn_create ()))
         goto error;
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "output", headerstr) < 0)
-        goto error;
-    if (shell_output_ready (out, txn) < 0)
         goto error;
     if (shell_output_redirect (out, txn) < 0)
         goto error;
@@ -873,7 +839,7 @@ static int shell_output_header (struct shell_output *out)
         if (shell_output_term_init (out, o) < 0)
             shell_log_errno ("shell_output_term_init");
     }
-    /* will also emit output-ready event and any other initial events.
+    /* emit initial output events.
      * Call this as long as we're not standalone.
      */
     if (!out->shell->standalone) {

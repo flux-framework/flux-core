@@ -325,7 +325,6 @@ void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
     if (h && job->req) {
         va_list ap;
         va_start (ap, fmt);
-        jobinfo_emit_event_vpack_nowait (job, "running", fmt, ap);
         job->running = 1;
         va_end (ap);
         if (jobinfo_respond (h, job, "start", 0) < 0)

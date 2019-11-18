@@ -45,7 +45,6 @@ enum {
 };
 
 struct shell_task_input_kvs {
-    flux_future_t *exec_f;
     flux_future_t *input_f;
     bool input_header_parsed;
     bool eof_reached;
@@ -76,7 +75,6 @@ struct shell_input {
 
 static void shell_task_input_kvs_cleanup (struct shell_task_input_kvs *kp)
 {
-    flux_future_destroy (kp->exec_f);
     flux_future_destroy (kp->input_f);
 }
 
@@ -229,40 +227,6 @@ static int shell_input_parse_type (struct shell_input *in)
     return 0;
 }
 
-/* log entry to exec.eventlog that we've created the input eventlog /
- * started stdin service */
-static int shell_input_ready (struct shell_input *in, flux_kvs_txn_t *txn)
-{
-    json_t *entry = NULL;
-    char *entrystr = NULL;
-    const char *key = "exec.eventlog";
-    int rank = in->shell->info->rankinfo.rank;
-    int saved_errno, rc = -1;
-
-    if (!(entry = eventlog_entry_pack (0., "input-ready",
-                                       "{s:i}",
-                                       "leader-rank", rank))) {
-        shell_log_errno ("eventlog_entry_create");
-        goto error;
-    }
-    if (!(entrystr = eventlog_entry_encode (entry))) {
-        shell_log_errno ("eventlog_entry_encode");
-        goto error;
-    }
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, key, entrystr) < 0) {
-        shell_log_errno ("flux_kvs_txn_put");
-        goto error;
-    }
-    rc = 0;
- error:
-    /* on error, future destroyed via shell_input destroy */
-    saved_errno = errno;
-    json_decref (entry);
-    free (entrystr);
-    errno = saved_errno;
-    return rc;
-}
-
 static void shell_input_kvs_init_completion (flux_future_t *f, void *arg)
 {
     struct shell_input *in = arg;
@@ -293,8 +257,6 @@ static int shell_input_kvs_init (struct shell_input *in, json_t *header)
     if (!(txn = flux_kvs_txn_create ()))
         goto error;
     if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, "input", headerstr) < 0)
-        goto error;
-    if (shell_input_ready (in, txn) < 0)
         goto error;
     if (!(f = flux_kvs_commit (in->shell->h, NULL, 0, txn)))
         goto error;
@@ -500,9 +462,6 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
     const char *name;
     json_t *context;
 
-    /* Failure to read stdin in a fatal error.  Should be cleaner in
-     * future.  Issue #2378 */
-
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
             goto done;
@@ -573,85 +532,26 @@ done:
     kp->input_f = NULL;
 }
 
-static void shell_task_input_kvs_exec_cb (flux_future_t *f, void *arg)
+static int shell_task_input_kvs_start (struct shell_task_input *ti)
 {
-    struct shell_task_input *task_input = arg;
-    struct shell_task_input_kvs *kp = &(task_input->input_kvs);
-    flux_future_t *input_f = NULL;
-    const char *entry;
-    json_t *o;
-    const char *name;
-
-    /* Failure to read stdin in a fatal error.  Should be cleaner in
-     * future.  Issue #2378 */
-
-    if (flux_job_event_watch_get (f, &entry) < 0) {
-        if (errno == ENODATA)
-            goto done;
-        shell_die (1, "flux_job_event_watch_get: %s",
-                   future_strerror (f, errno));
-    }
-    if (!(o = eventlog_entry_decode (entry)))
-        shell_die_errno (1, "eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, NULL) < 0)
-        shell_die_errno (1, "eventlog_entry_parse");
-
-    if (!strcmp (name, "input-ready")) {
-        if (!(input_f = flux_job_event_watch (task_input->in->shell->h,
-                                              task_input->in->shell->info->jobid,
-                                              "guest.input",
-                                              0)))
+    struct shell_task_input_kvs *kp = &(ti->input_kvs);
+    flux_future_t *f = NULL;
+    /*  Start watching kvs guest.input eventlog.
+     *  Since this function is called after shell initialization
+     *   barrier, we are guaranteed that input eventlog exists.
+     */
+    if (!(f = flux_job_event_watch (ti->in->shell->h,
+                                    ti->in->shell->info->jobid,
+                                    "guest.input",
+                                    0)))
             shell_die_errno (1, "flux_job_event_watch");
 
-        if (flux_future_then (input_f,
-                              -1.,
-                              shell_task_input_kvs_input_cb,
-                              arg) < 0) {
-            flux_future_destroy (input_f);
-            shell_die_errno (1, "flux_future_then");
-        }
-
-        kp->input_f = input_f;
+    if (flux_future_then (f, -1., shell_task_input_kvs_input_cb, ti) < 0) {
+        flux_future_destroy (f);
+        shell_die_errno (1, "flux_future_then");
     }
-
-    json_decref (o);
-    flux_future_reset (f);
-    return;
- done:
-    flux_future_destroy (f);
-    kp->exec_f = NULL;
-}
-
-static int shell_task_input_kvs_setup (struct shell_task_input *task_input)
-{
-    /* Watch "guest.exec.eventlog" to determine when "guest.input" is ready */
-    struct shell_task_input_kvs *kp = &(task_input->input_kvs);
-    flux_future_t *f = NULL;
-    int saved_errno;
-
-    if (!(f = flux_job_event_watch (task_input->in->shell->h,
-                                    task_input->in->shell->info->jobid,
-                                    "guest.exec.eventlog",
-                                    0))) {
-        shell_log_errno ("flux_job_event_watch");
-        goto error;
-    }
-
-    if (flux_future_then (f,
-                          -1,
-                          shell_task_input_kvs_exec_cb,
-                          task_input) < 0) {
-        shell_log_errno ("flux_future_then");
-        goto error;
-    }
-
-    kp->exec_f = f;
+    kp->input_f = f;
     return 0;
- error:
-    saved_errno = errno;
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return -1;
 }
 
 static int shell_input_task_init (flux_plugin_t *p,
@@ -673,12 +573,10 @@ static int shell_input_task_init (flux_plugin_t *p,
 
     if (task_input->type == FLUX_TASK_INPUT_KVS) {
         /* can't read stdin in standalone mode, no KVS to read from */
-        if (!task_input->in->shell->standalone) {
-            if (shell_task_input_kvs_setup (task_input) < 0)
-                return -1;
-        }
+        if (!task_input->in->shell->standalone
+            && shell_task_input_kvs_start (task_input) < 0)
+            shell_die_errno (1, "shell_input_start_task_watch");
     }
-
     in->task_inputs_count++;
     return 0;
 }

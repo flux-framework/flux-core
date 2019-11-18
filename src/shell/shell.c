@@ -521,6 +521,7 @@ static void shell_finalize (flux_shell_t *shell)
     plugstack_destroy (shell->plugstack);
     shell->plugstack = NULL;
 
+    shell_eventlogger_destroy (shell->ev);
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
 
@@ -642,6 +643,26 @@ out:
     free (ref);
     va_end (ap);
     return (rc);
+}
+
+/*  Public shell interface to request additional context in one of
+ *   the emitted shell events.
+ */
+int flux_shell_add_event_context (flux_shell_t *shell,
+                                  const char *name,
+                                  int flags,
+                                  const char *fmt,
+                                  ...)
+{
+    va_list ap;
+    if (!shell || !name || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
+    va_start (ap, fmt);
+    int rc = shell_eventlogger_context_vpack (shell->ev, name, 0, fmt, ap);
+    va_end (ap);
+    return rc;
 }
 
 static void eventlog_cb (flux_future_t *f, void *arg)
@@ -834,6 +855,28 @@ static void shell_log_info (flux_shell_t *shell)
     }
 }
 
+/*  Add default event context for standard shell emitted events -
+ *   shell.init and shell.start.
+ */
+static int shell_register_event_context (flux_shell_t *shell)
+{
+    if (shell->standalone || shell->info->shell_rank != 0)
+        return 0;
+    if (flux_shell_add_event_context (shell, "shell.init", 0,
+                                      "{s:i s:i}",
+                                      "leader-rank",
+                                      shell->info->rankinfo.rank,
+                                      "size",
+                                      shell->info->shell_size) < 0)
+        return -1;
+    if (flux_shell_add_event_context (shell, "shell.start", 0,
+                                      "{s:i}",
+                                      "task-count",
+                                      shell->info->jobspec->task_count) < 0)
+        return -1;
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -854,6 +897,9 @@ int main (int argc, char *argv[])
      */
     shell_connect_flux (&shell);
 
+    if (!(shell.ev = shell_eventlogger_create (&shell)))
+        shell_die_errno (1, "shell_eventlogger_create");
+
     /* Subscribe to shell-<id>.* events. (no-op on loopback connector)
      */
     shell_events_subscribe (&shell);
@@ -863,6 +909,9 @@ int main (int argc, char *argv[])
      */
     if (!(shell.info = shell_info_create (&shell)))
         exit (1);
+
+    if (shell_register_event_context (&shell) < 0)
+        shell_die (1, "failed to add standard shell event context");
 
     /* Set verbose flag if set in attributes.system.shell.verbose */
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
@@ -889,6 +938,14 @@ int main (int argc, char *argv[])
      */
     if (shell_barrier (&shell, "init") < 0)
         shell_die_errno (1, "shell_barrier");
+
+    /*  Emit an event after barrier completion from rank 0 if not in
+     *   standalone mode.
+     */
+    if (shell.info->shell_rank == 0
+        && !shell.standalone
+        && shell_eventlogger_emit_event (shell.ev, 0, "shell.init") < 0)
+            shell_die_errno (1, "failed to emit event shell.init");
 
     /* Create tasks
      */
@@ -926,6 +983,17 @@ int main (int argc, char *argv[])
     /*  Reset current task since we've left task-specific context:
      */
     shell.current_task = NULL;
+
+    if (shell_barrier (&shell, "start") < 0)
+        shell_die_errno (1, "shell_barrier");
+
+    /*  Emit an event after barrier completion from rank 0 if not in
+     *   standalone mode.
+     */
+    if (shell.info->shell_rank == 0
+        && !shell.standalone
+        && shell_eventlogger_emit_event (shell.ev, 0, "shell.start") < 0)
+            shell_die_errno (1, "failed to emit event shell.start");
 
     /* Main reactor loop
      * Exits when all completion references released

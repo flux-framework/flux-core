@@ -1153,7 +1153,7 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
- * On the output-ready event, start watching the guest.output eventlog.
+ * On the shell.init event, start watching the guest.output eventlog.
  * It is guaranteed to exist when guest.output is emitted.
  * If --show-exec was specified, print all events on stderr.
  */
@@ -1177,12 +1177,12 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "input-ready")) {
+    if (!strcmp (name, "shell.init")) {
         flux_watcher_t *w;
 
         if (json_unpack (context, "{s:i}",
                          "leader-rank", &ctx->leader_rank) < 0)
-            log_err_exit ("error decoding input-ready context");
+            log_err_exit ("error decoding shell.init context");
 
         /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
          * stdin */
@@ -1208,8 +1208,6 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
         ctx->stdin_w = w;
         flux_watcher_start (ctx->stdin_w);
-    }
-    else if (!strcmp (name, "output-ready")) {
         if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                     ctx->id,
                                                     "guest.output",

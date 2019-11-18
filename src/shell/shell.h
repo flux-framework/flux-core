@@ -177,6 +177,13 @@ int flux_shell_plugstack_call (flux_shell_t *shell,
                                const char *topic,
                                flux_plugin_arg_t *args);
 
+/*  Add context information for standard shell events
+ */
+int flux_shell_add_event_context (flux_shell_t *shell,
+                                  const char *name,
+                                  int flags,
+                                  const char *fmt, ...);
+
 /*  flux_shell_task_t API:
  */
 
