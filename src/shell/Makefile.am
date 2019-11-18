@@ -76,7 +76,8 @@ flux_shell_SOURCES = \
 	affinity.c \
 	gpubind.c \
 	evlog.c \
-	mpir/mpir.c
+	mpir/mpir.c \
+	mpir/ptrace.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
