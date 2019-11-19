@@ -68,6 +68,14 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
  */
 int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 
+/* Wait for jobid to enter INACTIVE state.
+ */
+flux_future_t *flux_job_wait (flux_t *h, flux_jobid_t id);
+int flux_job_wait_get_status (flux_future_t *f,
+                              bool *success,
+                              const char **errstr);
+int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
+
 /* Request a list of jobs.
  * If 'max_entries' > 0, fetch at most that many jobs.
  * 'json_str' is an encoded JSON array of attribute strings, e.g.
