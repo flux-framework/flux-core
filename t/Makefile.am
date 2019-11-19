@@ -227,7 +227,8 @@ check_PROGRAMS = \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
-	shell/lptest
+	shell/lptest \
+	shell/mpir
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -420,6 +421,12 @@ shell_rcalc_LDADD = \
 shell_lptest_SOURCES = shell/lptest.c
 shell_lptest_CPPFLAGS = $(test_cppflags)
 shell_lptest_LDADD = \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+shell_mpir_SOURCES = shell/mpir.c
+shell_mpir_CPPFLAGS = $(test_cppflags)
+shell_mpir_LDADD = \
+	$(top_builddir)/src/shell/libmpir.la \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
