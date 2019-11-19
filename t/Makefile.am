@@ -114,6 +114,7 @@ TESTSCRIPTS = \
 	t2607-job-shell-input.t \
 	t2608-job-shell-log.t \
 	t2609-job-shell-events.t \
+	t2610-job-shell-mpir.t \
 	t2700-mini-cmd.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
