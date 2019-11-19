@@ -56,6 +56,7 @@ int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_drain (optparse_t *p, int argc, char **argv);
 int cmd_undrain (optparse_t *p, int argc, char **argv);
+int cmd_wait (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -301,6 +302,13 @@ static struct optparse_subcommand subcommands[] = {
       "[id ...]",
       "Convert job ids to job guest kvs namespace names",
       cmd_namespace,
+      0,
+      NULL
+    },
+    { "wait",
+      "[id]",
+      "Wait for job to complete.",
+      cmd_wait,
       0,
       NULL
     },
@@ -1993,6 +2001,39 @@ int cmd_undrain (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_rpc");
     if (flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("undrain: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    flux_close (h);
+    return (0);
+}
+
+int cmd_wait (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    flux_jobid_t id = FLUX_JOBID_ANY;
+    bool success;
+    const char *errstr;
+
+    if ((argc - optindex) > 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (optindex < argc)
+        id = parse_arg_unsigned (argv[optindex++], "jobid");
+    if (!(f = flux_job_wait (h, id)))
+        log_err_exit ("flux_job_wait");
+    if (flux_job_wait_get_status (f, &success, &errstr) < 0)
+        log_msg_exit ("%s", flux_future_error_string (f));
+    if (id == FLUX_JOBID_ANY) {
+        if (flux_job_wait_get_id (f, &id) < 0)
+            log_err_exit ("flux_job_wait_get_id");
+        printf ("%ju\n", (uintmax_t)id);
+    }
+    if (!success)
+        log_msg_exit ("%s", errstr);
     flux_future_destroy (f);
     flux_close (h);
     return (0);
