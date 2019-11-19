@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include <czmq.h>
+#include <jansson.h>
 #include "src/common/libjob/job.h"
 
 struct job {
@@ -22,6 +23,7 @@ struct job {
     double t_submit;
     int flags;
     flux_job_state_t state;
+    json_t *end_event;      // event that caused transition to CLEANUP state
 
     uint8_t alloc_queued:1; // queued for alloc, but alloc request not sent
     uint8_t alloc_pending:1;// alloc request sent to sched
