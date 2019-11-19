@@ -69,6 +69,33 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
+                          const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    int total = ctx->jsctx->depend_count + ctx->jsctx->sched_count +
+        ctx->jsctx->run_count + ctx->jsctx->cleanup_count +
+        ctx->jsctx->inactive_count;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:{s:i s:i s:i s:i s:i s:i}}",
+                           "job_states",
+                           "depend", ctx->jsctx->depend_count,
+                           "sched", ctx->jsctx->sched_count,
+                           "run", ctx->jsctx->run_count,
+                           "cleanup", ctx->jsctx->cleanup_count,
+                           "inactive", ctx->jsctx->inactive_count,
+                           "total", total) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.lookup",
@@ -103,6 +130,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.list-attrs",
       .cb           = list_attrs_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.job-stats",
+      .cb           = job_stats_cb,
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
