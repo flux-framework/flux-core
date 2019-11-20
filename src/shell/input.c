@@ -47,7 +47,6 @@ enum {
 struct shell_task_input_kvs {
     flux_future_t *input_f;
     bool input_header_parsed;
-    bool eof_reached;
 };
 
 struct shell_task_input {
@@ -500,10 +499,6 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
             char *data = NULL;
             int len;
             bool eof;
-            if (kp->eof_reached) {
-                shell_die (1, "stream data after EOF");
-                goto out;
-            }
             if (iodecode (context, &stream, NULL, &data, &len, &eof) < 0)
                 shell_die (1, "malformed event context");
             if (len > 0) {
