@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -x
+
+# Test job wait
+
+id=$(flux mini submit --flags waitable /bin/true)
+flux job wait ${id}
+
+# No leaks if zombie persists
+id=$(flux mini submit --flags waitable /bin/true)
+flux job wait-event ${id} clean

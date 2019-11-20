@@ -98,6 +98,7 @@ TESTSCRIPTS = \
 	t2204-job-info.t \
 	t2205-job-info-security.t \
 	t2206-job-manager-bulk-state.t \
+	t2207-job-manager-wait.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
 	t2400-job-exec-test.t \
@@ -191,6 +192,10 @@ dist_check_SCRIPTS = \
 	job-manager/drain-cancel.py \
 	job-manager/drain-undrain.py \
 	job-manager/bulk-state.py \
+	job-manager/submit-wait.py \
+	job-manager/submit-waitany.py \
+	job-manager/submit-sliding-window.py \
+	job-manager/wait-interrupted.py \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	schedutil/req_and_unload.py \
