@@ -31,6 +31,7 @@
 #include "job.h"
 #include "list.h"
 #include "alloc.h"
+#include "wait.h"
 #include "job-manager.h"
 
 
@@ -84,7 +85,8 @@ void list_handle_request (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
-    /* First list the scheduler inqueue, where order is significant.
+    /* First list pending jobs - SCHED (S)
+     * (priority, then t_submit order).
      */
     job = alloc_pending_first (ctx->alloc);
     while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {
@@ -92,8 +94,8 @@ void list_handle_request (flux_t *h,
             goto error;
         job = alloc_pending_next (ctx->alloc);
     }
-    /* Then list jobs in the active_jobs hash (omitting those in the scheduler
-     * inqueue), in no particular order.
+    /* Then list non-pending active jobs - DEPEND (D), RUN (R), CLEANUP (C)
+     * (random order).
      */
     job = zhashx_first (ctx->active_jobs);
     while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {
@@ -102,6 +104,15 @@ void list_handle_request (flux_t *h,
                 goto error;
         }
         job = zhashx_next (ctx->active_jobs);
+    }
+    /* Finally list any zombies - INACTIVE (I)
+     * (random order)
+     */
+    job = wait_zombie_first (ctx->wait);
+    while (job) {
+        if (list_append_job (jobs, job) < 0)
+            goto error;
+        job = wait_zombie_next (ctx->wait);
     }
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)

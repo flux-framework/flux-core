@@ -43,6 +43,7 @@
 #include "alloc.h"
 #include "start.h"
 #include "drain.h"
+#include "wait.h"
 
 #include "event.h"
 
@@ -306,6 +307,8 @@ int event_job_action (struct event *event, struct job *job)
             }
             break;
         case FLUX_JOB_INACTIVE:
+            if ((job->flags & FLUX_JOB_WAITABLE))
+                wait_notify_inactive (ctx->wait, job);
             zhashx_delete (ctx->active_jobs, &job->id);
             if (zhashx_size (ctx->active_jobs) == 0)
                 drain_empty_notify (ctx->drain);
