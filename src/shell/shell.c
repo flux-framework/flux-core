@@ -510,6 +510,8 @@ static int shell_max_task_exit (flux_shell_t *shell)
 
 static void shell_finalize (flux_shell_t *shell)
 {
+    struct plugstack *plugstack = shell->plugstack;
+
     if (shell->tasks) {
         struct shell_task *task;
         while ((task = zlist_pop (shell->tasks)))
@@ -518,8 +520,12 @@ static void shell_finalize (flux_shell_t *shell)
     }
     aux_destroy (&shell->aux);
 
-    plugstack_destroy (shell->plugstack);
+    /*  Set shell->plugstack to NULL *before* calling plugstack_destroy()
+     *   to notify shell components that the plugin stack is no longer
+     *   safe to use.
+     */
     shell->plugstack = NULL;
+    plugstack_destroy (plugstack);
 
     shell_eventlogger_destroy (shell->ev);
     shell_svc_destroy (shell->svc);
