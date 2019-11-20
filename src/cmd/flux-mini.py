@@ -316,6 +316,9 @@ class SubmitCmd:
         )
         parser.add_argument("--debug", action="store_true", help="Set job debug flag")
         parser.add_argument(
+            "--waitable", action="store_true", help="Set job waitable flag"
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Don't actually submit job, just emit jobspec",
@@ -390,7 +393,9 @@ class SubmitCmd:
         h = flux.Flux()
         flags = 0
         if args.debug:
-            flags = flux.constants.FLUX_JOB_DEBUG
+            flags = flags | flux.constants.FLUX_JOB_DEBUG
+        if args.waitable:
+            flags = flags | flux.constants.FLUX_JOB_WAITABLE
         return job.submit(h, jobspec.dumps(), priority=args.priority, flags=flags)
 
     def main(self, args):
