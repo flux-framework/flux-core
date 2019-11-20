@@ -452,6 +452,22 @@ static int shell_input_init (flux_plugin_t *p,
     return 0;
 }
 
+/*  Return 1 if idset string 'set' contains the integer id.
+ *  O/w, return 0, or -1 on failure to decode 'set'.
+ */
+static int idset_string_contains (const char *set, uint32_t id)
+{
+    int rc;
+    struct idset *idset;
+    if (strcmp (set, "all") == 0)
+        return 1;
+    if (!(idset = idset_decode (set)))
+        return shell_log_errno ("idset_decode (%s)", set);
+    rc = idset_test (idset, id);
+    idset_destroy (idset);
+    return rc;
+}
+
 static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
 {
     struct shell_task_input *task_input = arg;
@@ -477,24 +493,13 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
         kp->input_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
+        flux_shell_task_t *task = task_input->task;
         const char *rank = NULL;
-        bool data_ok = false;
         if (!kp->input_header_parsed)
             shell_die (1, "stream data read before header");
         if (iodecode (context, NULL, &rank, NULL, NULL, NULL) < 0)
             shell_die (1, "malformed event context");
-        if (!strcmp (rank, "all"))
-            data_ok = true;
-        else {
-            struct idset *idset;
-            if (!(idset = idset_decode (rank))) {
-                shell_log_errno ("idset_decode '%s'", rank);
-                goto out;
-            }
-            data_ok = idset_test (idset, task_input->task->rank);
-            idset_destroy (idset);
-        }
-        if (data_ok) {
+        if (idset_string_contains (rank, task->rank) == 1) {
             const char *stream;
             char *data = NULL;
             int len;
@@ -502,14 +507,14 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
             if (iodecode (context, &stream, NULL, &data, &len, &eof) < 0)
                 shell_die (1, "malformed event context");
             if (len > 0) {
-                if (flux_subprocess_write (task_input->task->proc,
+                if (flux_subprocess_write (task->proc,
                                            stream,
                                            data,
                                            len) < 0)
                     shell_die_errno (1, "flux_subprocess_write");
             }
             if (eof) {
-                if (flux_subprocess_close (task_input->task->proc, stream) < 0)
+                if (flux_subprocess_close (task->proc, stream) < 0)
                     shell_die_errno (1, "flux_subprocess_close");
                 if (flux_job_event_watch_cancel (f) < 0)
                     shell_die_errno (1, "flux_job_event_watch_cancel");
@@ -517,8 +522,6 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
             free (data);
         }
     }
-
-out:
     json_decref (o);
     flux_future_reset (f);
     return;
