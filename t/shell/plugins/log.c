@@ -77,10 +77,19 @@ static int check_shell_log (flux_plugin_t *p,
     return 0;
 }
 
+static void destructor (void *arg)
+{
+    shell_log_error ("destructor: using log from plugin destructor works");
+}
+
 int flux_plugin_init (flux_plugin_t *p)
 {
     plan (NO_PLAN);
     flux_plugin_set_name (p, "log");
+
+    /*  Set a dummy aux item to force our destructor to be called */
+    flux_plugin_aux_set (p, NULL, p, destructor);
+
     ok (flux_plugin_add_handler (p, "*", check_shell_log, NULL) == 0,
         "flux_plugin_add_handler works");
     return 0;
