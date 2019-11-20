@@ -1017,8 +1017,13 @@ int main (int argc, char *argv[])
     if (shell_rc_close ())
         shell_log_errno ("shell_rc_close");
 
-    shell_log_fini ();
     shell_finalize (&shell);
+
+    /* Always close shell log after shell_finalize() in case shell
+     *  components attempt to log during cleanup
+     *  (e.g. plugin destructors)
+     */
+    shell_log_fini ();
     exit (shell.rc);
 }
 
