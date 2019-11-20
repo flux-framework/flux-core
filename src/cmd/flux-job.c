@@ -109,7 +109,7 @@ static struct optparse_option submit_opts[] =  {
     },
     { .name = "flags", .key = 'f', .has_arg = 3,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
-      .usage = "Set submit comma-separated flags (e.g. debug)",
+      .usage = "Set submit comma-separated flags (e.g. debug, waitable)",
     },
 #if HAVE_FLUX_SECURITY
     { .name = "security-config", .key = 'c', .has_arg = 1, .arginfo = "pattern",
@@ -744,6 +744,8 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
         while ((name = optparse_getopt_next (p, "flags"))) {
             if (!strcmp (name, "debug"))
                 flags |= FLUX_JOB_DEBUG;
+            else if (!strcmp (name, "waitable"))
+                flags |= FLUX_JOB_WAITABLE;
             else
                 log_msg_exit ("unknown flag: %s", name);
         }
