@@ -9,6 +9,7 @@
 ###############################################################
 
 import errno
+import collections
 
 import six
 
@@ -52,3 +53,29 @@ def submit_get_id(future):
 def submit(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
     future = submit_async(flux_handle, jobspec, priority, flags)
     return submit_get_id(future)
+
+
+def wait_async(flux_handle, jobid=lib.FLUX_JOBID_ANY):
+    future_handle = RAW.wait(flux_handle, jobid)
+    return Future(future_handle)
+
+
+JobWaitResult = collections.namedtuple("JobWaitResult", "jobid, success, errstr")
+
+
+@check_future_error
+def wait_get_status(future):
+    if future is None or future == ffi.NULL:
+        raise EnvironmentError(errno.EINVAL, "future must not be None/NULL")
+    future.wait_for()  # ensure the future is fulfilled
+    success = ffi.new("bool[1]")
+    errstr = ffi.new("const char *[1]")
+    jobid = ffi.new("flux_jobid_t[1]")
+    RAW.wait_get_id(future, jobid)
+    RAW.wait_get_status(future, success, errstr)
+    return JobWaitResult(int(jobid[0]), bool(success[0]), ffi.string(errstr[0]))
+
+
+def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
+    future = wait_async(flux_handle, jobid)
+    return wait_get_status(future)
