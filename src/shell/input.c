@@ -67,7 +67,6 @@ struct shell_input {
     flux_shell_t *shell;
     int stdin_type;
     struct shell_task_input *task_inputs;
-    int task_inputs_count;
     int ntasks;
     struct shell_input_type_file stdin_file;
 };
@@ -556,6 +555,12 @@ static int shell_task_input_kvs_start (struct shell_task_input *ti)
     return 0;
 }
 
+static struct shell_task_input *get_task_input (struct shell_input *in,
+                                                flux_shell_task_t *task)
+{
+    return &in->task_inputs[task->index];
+}
+
 static int shell_input_task_init (flux_plugin_t *p,
                                   const char *topic,
                                   flux_plugin_arg_t *args,
@@ -569,7 +574,7 @@ static int shell_input_task_init (flux_plugin_t *p,
     if (!shell || !in || !(task = flux_shell_current_task (shell)))
         return -1;
 
-    task_input = &(in->task_inputs[in->task_inputs_count]);
+    task_input = get_task_input (in, task);
     task_input->in = in;
     task_input->task = task;
 
@@ -579,7 +584,6 @@ static int shell_input_task_init (flux_plugin_t *p,
             && shell_task_input_kvs_start (task_input) < 0)
             shell_die_errno (1, "shell_input_start_task_watch");
     }
-    in->task_inputs_count++;
     return 0;
 }
 
