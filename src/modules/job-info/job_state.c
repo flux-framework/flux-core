@@ -80,6 +80,7 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
         return NULL;
     job->ctx = ctx;
     job->id = id;
+    job->state = FLUX_JOB_NEW;
     return job;
 }
 
@@ -181,6 +182,44 @@ static bool search_direction (struct job *job)
         return true;
     else
         return false;
+}
+
+static int *state_counter (struct info_ctx *ctx,
+                           struct job *job,
+                           flux_job_state_t state)
+{
+    if (state == FLUX_JOB_NEW)
+        return NULL;
+    else if (state == FLUX_JOB_DEPEND)
+        return &ctx->jsctx->depend_count;
+    else if (state == FLUX_JOB_SCHED)
+        return &ctx->jsctx->sched_count;
+    else if (state == FLUX_JOB_RUN)
+        return &ctx->jsctx->run_count;
+    else if (state == FLUX_JOB_CLEANUP)
+        return &ctx->jsctx->cleanup_count;
+    else if (state == FLUX_JOB_INACTIVE)
+        return &ctx->jsctx->inactive_count;
+
+    flux_log_error (ctx->h, "illegal state transition for job %llu: %d",
+                    (unsigned long long)job->id, state);
+    return NULL;
+}
+
+static void state_transition (struct info_ctx *ctx,
+                              struct job *job,
+                              flux_job_state_t new_state)
+{
+    int *decrement;
+    int *increment;
+
+    decrement = state_counter (ctx, job, job->state);
+    increment = state_counter (ctx, job, new_state);
+    job->state = new_state;
+    if (decrement)
+        (*decrement)--;
+    if (increment)
+        (*increment)++;
 }
 
 static void job_insert_list (struct job_state_ctx *jsctx,
@@ -335,14 +374,16 @@ static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
         return jsctx->inactive;
 }
 
-static void update_job_state (struct job *job, flux_job_state_t newstate)
+static void update_job_state (struct info_ctx *ctx,
+                              struct job *job,
+                              flux_job_state_t newstate)
 {
     struct job_state_ctx *jsctx = job->ctx->jsctx;
 
     if (!job->job_info_retrieved) {
         /* job info still not retrieved, we can update the job
          * state but can't put it on a different list yet */
-        job->state = newstate;
+        state_transition (ctx, job, newstate);
     }
     else {
         if (job->state == FLUX_JOB_INACTIVE) {
@@ -358,7 +399,7 @@ static void update_job_state (struct job *job, flux_job_state_t newstate)
 
             if (oldlist != newlist)
                 job_change_list (jsctx, job, oldlist, newstate);
-            job->state = newstate;
+            state_transition (ctx, job, newstate);
         }
     }
 }
@@ -435,10 +476,10 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
                 flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
                 return;
             }
-            job->state = state;
+            state_transition (ctx, job, state);
         }
         else
-            update_job_state (job, state);
+            update_job_state (ctx, job, state);
     }
 
 }
@@ -472,7 +513,6 @@ static struct job *eventlog_parse (struct info_ctx *ctx,
 
     if (!(job = job_create (ctx, id)))
         goto error;
-    job->state = FLUX_JOB_NEW;
 
     if (!(a = eventlog_decode (eventlog))) {
         flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
@@ -508,10 +548,10 @@ static struct job *eventlog_parse (struct info_ctx *ctx,
             }
             job->t_submit = timestamp;
             job->job_info_retrieved = true;
-            job->state = FLUX_JOB_DEPEND;
+            state_transition (ctx, job, FLUX_JOB_DEPEND);
         }
         else if (!strcmp (name, "depend")) {
-            job->state = FLUX_JOB_SCHED;
+            state_transition (ctx, job, FLUX_JOB_SCHED);
         }
         else if (!strcmp (name, "priority")) {
             if (json_unpack (context, "{ s:i }",
@@ -529,22 +569,22 @@ static struct job *eventlog_parse (struct info_ctx *ctx,
                 goto error;
             }
             if (severity == 0) {
-                job->state = FLUX_JOB_CLEANUP;
+                state_transition (ctx, job, FLUX_JOB_CLEANUP);
                 job->t_inactive = timestamp;
             }
         }
         else if (!strcmp (name, "alloc")) {
             if (job->state == FLUX_JOB_SCHED) {
-                job->state = FLUX_JOB_RUN;
+                state_transition (ctx, job, FLUX_JOB_RUN);
                 job->t_running = timestamp;
             }
         }
         else if (!strcmp (name, "finish")) {
             if (job->state == FLUX_JOB_RUN)
-                job->state = FLUX_JOB_CLEANUP;
+                state_transition (ctx, job, FLUX_JOB_CLEANUP);
         }
         else if (!strcmp (name, "clean")) {
-            job->state = FLUX_JOB_INACTIVE;
+            state_transition (ctx, job, FLUX_JOB_INACTIVE);
             job->t_inactive = timestamp;
         }
     }

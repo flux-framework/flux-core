@@ -234,6 +234,15 @@ test_expect_success 'flux job list all jobs works' '
         test_cmp list_all_jobids.exp list_all_jobids.out
 '
 
+test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
+        flux job stats | jq -e ".job_states.depend == 0" &&
+        flux job stats | jq -e ".job_states.sched == 4" &&
+        flux job stats | jq -e ".job_states.run == 8" &&
+        flux job stats | jq -e ".job_states.cleanup == 0" &&
+        flux job stats | jq -e ".job_states.inactive == 4" &&
+        flux job stats | jq -e ".job_states.total == 16"
+'
+
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat job_ids_pending.out`; do \
             flux job cancel $jobid; \
@@ -262,6 +271,15 @@ test_expect_success 'job-info: list successfully reconstructed' '
         cat job_ids_inactive.out >> list_reload_ids.exp &&
         cat list_reload.out | cut -f1 > list_reload_ids.out &&
         test_cmp list_reload_ids.exp list_reload_ids.out
+'
+
+test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive)' '
+        flux job stats | jq -e ".job_states.depend == 0" &&
+        flux job stats | jq -e ".job_states.sched == 0" &&
+        flux job stats | jq -e ".job_states.run == 0" &&
+        flux job stats | jq -e ".job_states.cleanup == 0" &&
+        flux job stats | jq -e ".job_states.inactive == 16" &&
+        flux job stats | jq -e ".job_states.total == 16"
 '
 
 #
@@ -679,12 +697,12 @@ test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventl
 #
 
 test_expect_success 'job-info stats works' '
-        flux module stats job-info | grep "lookups" &&
-        flux module stats job-info | grep "watchers" &&
-        flux module stats job-info | grep "guest_watchers" &&
-        flux module stats job-info | grep "pending" &&
-        flux module stats job-info | grep "running" &&
-        flux module stats job-info | grep "inactive"
+        flux module stats --parse lookups job-info &&
+        flux module stats --parse watchers job-info &&
+        flux module stats --parse guest_watchers job-info &&
+        flux module stats --parse jobs.pending job-info &&
+        flux module stats --parse jobs.running job-info &&
+        flux module stats --parse jobs.inactive job-info
 '
 
 test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '

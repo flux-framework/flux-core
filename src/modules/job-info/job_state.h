@@ -39,6 +39,13 @@ struct job_state_ctx {
     zlistx_t *inactive;
     zlistx_t *processing;
     zlistx_t *futures;
+
+    /* count current jobs in what states */
+    int depend_count;
+    int sched_count;
+    int run_count;
+    int cleanup_count;
+    int inactive_count;
 };
 
 struct job {
