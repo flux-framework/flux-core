@@ -510,8 +510,12 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
                 if (flux_subprocess_write (task->proc,
                                            stream,
                                            data,
-                                           len) < 0)
-                    shell_die_errno (1, "flux_subprocess_write");
+                                           len) < 0) {
+                    if (errno != EPIPE)
+                        shell_die_errno (1, "flux_subprocess_write");
+                    else
+                        eof = true; /* Pretend that we got eof */
+                }
             }
             if (eof) {
                 if (flux_subprocess_close (task->proc, stream) < 0)
