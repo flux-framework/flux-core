@@ -131,8 +131,8 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     while (job) {
         if (job->state == FLUX_JOB_RUN) {
             if (event_job_action (ctx->event, job) < 0)
-                flux_log_error (h, "%s: event_job_action id=%llu", __FUNCTION__,
-                                (unsigned long long)job->id);
+                flux_log_error (h, "%s: event_job_action id=%ju", __FUNCTION__,
+                                (uintmax_t)job->id);
         }
         job = zhashx_next (ctx->active_jobs);
     }
@@ -192,8 +192,8 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "start response: id=%llu not active",
-                  (unsigned long long)id);
+        flux_log (h, LOG_ERR, "start response: id=%ju not active",
+                  (uintmax_t)id);
         errno = EINVAL;
         goto error;
     }

@@ -157,14 +157,14 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.free-response: id=%llu not active",
-                  (unsigned long long)id);
+        flux_log (h, LOG_ERR, "sched.free-response: id=%ju not active",
+                  (uintmax_t)id);
         errno = EINVAL;
         goto teardown;
     }
     if (!job->has_resources) {
-        flux_log (h, LOG_ERR, "sched.free-response: id=%lld not allocated",
-                  (unsigned long long)id);
+        flux_log (h, LOG_ERR, "sched.free-response: id=%ju not allocated",
+                  (uintmax_t)id);
         errno = EINVAL;
         goto teardown;
     }
@@ -221,14 +221,14 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%llu not active",
-                  (unsigned long long)id);
+        flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not active",
+                  (uintmax_t)id);
         errno = EINVAL;
         goto teardown;
     }
     if (!job->alloc_pending) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%lld not requested",
-                  (unsigned long long)id);
+        flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not requested",
+                  (uintmax_t)id);
         errno = EINVAL;
         goto teardown;
     }
@@ -262,8 +262,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
      * Log alloc event and transtion to RUN state.
      */
     if (job->has_resources) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%lld already allocated",
-                  (unsigned long long)id);
+        flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju already allocated",
+                  (uintmax_t)id);
         errno = EEXIST;
         goto teardown;
     }

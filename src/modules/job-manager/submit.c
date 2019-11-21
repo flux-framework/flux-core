@@ -176,8 +176,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     while ((job = zlist_pop (newjobs))) {
         if (submit_post_event (ctx->event, job) < 0)
-            flux_log_error (h, "%s: submit_post_event id=%llu",
-                            __FUNCTION__, (unsigned long long)job->id);
+            flux_log_error (h, "%s: submit_post_event id=%ju",
+                            __FUNCTION__, (uintmax_t)job->id);
         job_decref (job);
     }
     zlist_destroy (&newjobs);
