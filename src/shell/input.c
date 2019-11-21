@@ -587,10 +587,33 @@ static int shell_input_task_init (flux_plugin_t *p,
     return 0;
 }
 
+static int shell_input_task_exit (flux_plugin_t *p,
+                                  const char *topic,
+                                  flux_plugin_arg_t *args,
+                                  void *data)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    flux_shell_task_t *task = flux_shell_current_task (shell);
+    struct shell_input *in = flux_plugin_aux_get (p, "builtin.input");
+    struct shell_task_input *task_input;
+
+    if (!shell || !in || !task)
+        return -1;
+
+    task_input = get_task_input (in, task);
+    if (task_input->type == FLUX_TASK_INPUT_KVS
+        && task_input->input_kvs.input_f) {
+        if (flux_job_event_watch_cancel (task_input->input_kvs.input_f) < 0)
+            shell_log_errno ("flux_job_event_watch_cancel");
+    }
+    return 0;
+}
+
 struct shell_builtin builtin_input = {
     .name = "input",
     .init = shell_input_init,
-    .task_init = shell_input_task_init
+    .task_init = shell_input_task_init,
+    .task_exit = shell_input_task_exit
 };
 
 /*
