@@ -74,6 +74,7 @@ struct shell_input {
 static void shell_task_input_kvs_cleanup (struct shell_task_input_kvs *kp)
 {
     flux_future_destroy (kp->input_f);
+    kp->input_f = NULL;
 }
 
 static void shell_task_input_cleanup (struct shell_task_input *tp)
@@ -529,8 +530,7 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
     return;
 done:
-    flux_future_destroy (f);
-    kp->input_f = NULL;
+    shell_task_input_kvs_cleanup (kp);
 }
 
 static int shell_task_input_kvs_start (struct shell_task_input *ti)
