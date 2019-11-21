@@ -176,6 +176,19 @@ void check_corner_case (void)
     ok (flux_job_event_watch_cancel (NULL) < 0
         && errno == EINVAL,
         "flux_job_event_watch_cancel fails with EINVAL on bad input");
+
+    /* flux_job_wait */
+    errno = 0;
+    ok (flux_job_wait (NULL, 0) == NULL && errno == EINVAL,
+        "flux_job_wait h=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_job_wait_get_status (NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_job_wait_get_status f=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_job_wait_get_id (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_job_wait_get_id f=NULL fails with EINVAL");
 }
 
 struct ss {
