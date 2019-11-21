@@ -192,8 +192,9 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log_error (h, "start response: id=%llu not active",
-                        (unsigned long long)id);
+        flux_log (h, LOG_ERR, "start response: id=%llu not active",
+                  (unsigned long long)id);
+        errno = EINVAL;
         goto error;
     }
     if (!strcmp (type, "start")) {
