@@ -38,6 +38,10 @@ enum job_priority {
     FLUX_JOB_PRIORITY_MAX = 31,
 };
 
+enum {
+    FLUX_JOBID_ANY = 0xFFFFFFFFFFFFFFFF, // ~(uint64_t)0
+};
+
 typedef enum {
     FLUX_JOB_NEW                    = 1,
     FLUX_JOB_DEPEND                 = 2,
@@ -69,6 +73,8 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
 int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
 
 /* Wait for jobid to enter INACTIVE state.
+ * If jobid=FLUX_JOBID_ANY, wait for the next waitable job.
+ * Fails with ECHILD if there is nothing to wait for.
  */
 flux_future_t *flux_job_wait (flux_t *h, flux_jobid_t id);
 int flux_job_wait_get_status (flux_future_t *f,
