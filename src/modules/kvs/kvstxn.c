@@ -54,6 +54,8 @@ struct kvstxn {
     json_t *names;
     int flags;
     json_t *rootcpy;   /* working copy of root dir */
+    const json_t *rootdir;      /* source of rootcpy above */
+    struct cache_entry *entry;  /* for reference counting rootdir above */
     char newroot[BLOBREF_MAX_STRING_SIZE];
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
@@ -76,6 +78,7 @@ static void kvstxn_destroy (kvstxn_t *kt)
         json_decref (kt->keys);
         json_decref (kt->names);
         json_decref (kt->rootcpy);
+        cache_entry_decref (kt->entry);
         if (kt->missing_refs_list)
             zlist_destroy (&kt->missing_refs_list);
         if (kt->dirty_cache_entries_list)
@@ -431,7 +434,7 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt, int current_epoch,
 }
 
 static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
-                          json_t *dir, const char *final_name)
+                          json_t *dir, const char *final_name, bool *append)
 {
     json_t *entry;
 
@@ -489,6 +492,7 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
         }
 
         json_decref (cpy);
+        (*append) = true;
     }
     else if (treeobj_is_val (entry)) {
         json_t *ktmp;
@@ -522,6 +526,7 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
         }
 
         json_decref (ktmp);
+        (*append) = true;
     }
     else if (treeobj_is_symlink (entry)) {
         /* Could use EPERM - operation not permitted, but want to
@@ -551,7 +556,8 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
 static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                                json_t *rootdir, const char *key,
                                json_t *dirent, int flags,
-                               const char **missing_ref)
+                               const char **missing_ref,
+                               bool *append)
 {
     char *cpy = NULL;
     char *next, *name;
@@ -673,7 +679,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                                     nkey,
                                     dirent,
                                     flags,
-                                    missing_ref) < 0) {
+                                    missing_ref,
+                                    append) < 0) {
                 saved_errno = errno;
                 free (nkey);
                 goto done;
@@ -702,7 +709,12 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
      */
     if (!json_is_null (dirent)) {
         if (flags & FLUX_KVS_APPEND) {
-            if (kvstxn_append (kt, current_epoch, dirent, dir, name) < 0) {
+            if (kvstxn_append (kt,
+                               current_epoch,
+                               dirent,
+                               dir,
+                               name,
+                               append) < 0) {
                 saved_errno = errno;
                 goto done;
             }
@@ -836,7 +848,6 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
         /* Make a copy of the root directory.
          */
         struct cache_entry *entry;
-        const json_t *rootdir;
 
         /* Caller didn't call kvstxn_iter_missing_refs() */
         if (zlist_first (kt->missing_refs_list))
@@ -856,12 +867,16 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
             goto stall_load;
         }
 
-        if (!(rootdir = cache_entry_get_treeobj (entry))) {
+        if (!(kt->rootdir = cache_entry_get_treeobj (entry))) {
             kt->errnum = ENOTRECOVERABLE;
             return KVSTXN_PROCESS_ERROR;
         }
 
-        if (!(kt->rootcpy = treeobj_deep_copy (rootdir))) {
+        /* take reference because we're storing rootdir */
+        cache_entry_incref (entry);
+        kt->entry = entry;
+
+        if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
             kt->errnum = errno;
             return KVSTXN_PROCESS_ERROR;
         }
@@ -886,6 +901,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
         int i, len = json_array_size (kt->ops);
         const char *key;
         int flags;
+        bool append = false;
 
         /* Caller didn't call kvstxn_iter_missing_refs() */
         if (zlist_first (kt->missing_refs_list))
@@ -905,7 +921,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                     key,
                                     dirent,
                                     flags,
-                                    &missing_ref) < 0) {
+                                    &missing_ref,
+                                    &append) < 0) {
                 kt->errnum = errno;
                 break;
             }
@@ -925,8 +942,21 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
             return KVSTXN_PROCESS_ERROR;
         }
 
-        if (zlist_first (kt->missing_refs_list))
+        if (zlist_first (kt->missing_refs_list)) {
+            /* if we are stalling and an append has been done on the
+             * rootcpy, we cannot re-apply the operations on the
+             * replay of this transaction.  It would result in
+             * duplicate appends on a key.  We'll start over with a
+             * fresh rootcpy on the replay. */
+            if (append) {
+                json_decref (kt->rootcpy);
+                if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
+                    kt->errnum = errno;
+                    return KVSTXN_PROCESS_ERROR;
+                }
+            }
             goto stall_load;
+        }
 
         kt->state = KVSTXN_STATE_STORE;
         /* fallthrough */
