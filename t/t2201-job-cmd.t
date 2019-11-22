@@ -203,6 +203,10 @@ test_expect_success 'flux-job: cancel fails with bad FLUX_URI' '
 	! FLUX_URI=/wrong flux job cancel ${validjob}
 '
 
+test_expect_success 'flux-job: cancel fails with unknown job id' '
+	test_must_fail flux job cancel 0
+'
+
 test_expect_success 'flux-job: cancel fails with no args' '
 	test_must_fail flux job cancel
 '
