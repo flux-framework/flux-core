@@ -134,8 +134,8 @@ static int restart_map_cb (struct job *job, void *arg)
     if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0)
         return -1;
     if (event_job_action (ctx->event, job) < 0) {
-        flux_log_error (ctx->h, "%s: event_job_action id=%llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: event_job_action id=%ju",
+                        __FUNCTION__, (uintmax_t)job->id);
     }
     return 0;
 }

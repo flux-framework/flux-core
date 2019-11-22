@@ -66,6 +66,7 @@ void priority_handle_request (flux_t *h,
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job";
+        errno = EINVAL;
         goto error;
     }
     /* Security: guests can only adjust jobs that they submitted.

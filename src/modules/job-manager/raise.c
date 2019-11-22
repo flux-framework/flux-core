@@ -98,6 +98,7 @@ void raise_handle_request (flux_t *h,
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job id";
+        errno = EINVAL;
         goto error;
     }
     if (raise_allow (rolemask, userid, job->userid) < 0) {
