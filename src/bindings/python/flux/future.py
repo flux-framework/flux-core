@@ -115,6 +115,9 @@ class Future(WrapperPimpl):
         # For example `f.rpc('topic').then(cb).wait_for(-1)
         return self
 
+    def destroy(self):
+        self.pimpl.destroy()
+
     def reset(self):
         self.pimpl.reset()
 

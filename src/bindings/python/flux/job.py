@@ -51,4 +51,6 @@ def submit_get_id(future):
 
 def submit(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
     future = submit_async(flux_handle, jobspec, priority, flags)
-    return submit_get_id(future)
+    jid = submit_get_id(future)
+    future.destroy()
+    return jid
