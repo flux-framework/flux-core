@@ -26,7 +26,9 @@ dist_shelllua_SCRIPTS = \
 	lua.d/openmpi.lua \
 	lua.d/spectrum.lua
 
-noinst_LTLIBRARIES = libshell.la
+noinst_LTLIBRARIES = \
+	libshell.la \
+	libmpir.la
 
 libshell_la_SOURCES = \
 	plugstack.c \
@@ -37,6 +39,14 @@ libshell_la_SOURCES = \
 	eventlogger.h \
 	rcalc.c \
 	rcalc.h
+
+libmpir_la_SOURCES = \
+	mpir/rangelist.c \
+	mpir/rangelist.h \
+	mpir/nodelist.c \
+	mpir/nodelist.h \
+	mpir/proctable.c \
+	mpir/proctable.h
 
 fluxlibexec_PROGRAMS = flux-shell
 
@@ -65,10 +75,13 @@ flux_shell_SOURCES = \
 	signals.c \
 	affinity.c \
 	gpubind.c \
-	evlog.c
+	evlog.c \
+	mpir/mpir.c \
+	mpir/ptrace.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
+	$(builddir)/libmpir.la \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
@@ -86,10 +99,12 @@ EXTRA_DIST = \
 
 TESTS = \
 	test_jobspec.t \
-	test_plugstack.t
+	test_plugstack.t \
+	mpir/test_rangelist.t \
+	mpir/test_nodelist.t \
+	mpir/test_proctable.t
 
 test_ldadd = \
-	$(builddir)/libshell.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libflux-internal.la \
@@ -113,11 +128,15 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 
 test_jobspec_t_SOURCES = test/jobspec.c
 test_jobspec_t_CPPFLAGS = $(test_cppflags)
-test_jobspec_t_LDADD = $(test_ldadd)
+test_jobspec_t_LDADD = \
+	$(builddir)/libshell.la \
+	$(test_ldadd)
 
 test_plugstack_t_SOURCES = plugstack.c test/plugstack.c
 test_plugstack_t_CPPFLAGS = $(test_cppflags) -DPLUGSTACK_STANDALONE
-test_plugstack_t_LDADD = $(test_ldadd)
+test_plugstack_t_LDADD = \
+	$(builddir)/libshell.la \
+	$(test_ldadd)
 
 test_a_plugin_la_SOURCES = test/plugin_test.c
 test_a_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"A\"
@@ -130,3 +149,21 @@ test_b_plugin_la_LDFLAGS = -module -rpath /nowhere
 test_c_plugin_la_SOURCES = test/plugin_test.c
 test_c_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"C\"
 test_c_plugin_la_LDFLAGS = -module -rpath /nowhere
+
+mpir_test_rangelist_t_SOURCES = mpir/test/rangelist.c
+mpir_test_rangelist_t_CPPFLAGS = $(test_cppflags)
+mpir_test_rangelist_t_LDADD = \
+	$(builddir)/libmpir.la \
+	$(test_ldadd)
+
+mpir_test_nodelist_t_SOURCES = mpir/test/nodelist.c
+mpir_test_nodelist_t_CPPFLAGS = $(test_cppflags)
+mpir_test_nodelist_t_LDADD = \
+	$(builddir)/libmpir.la \
+	$(test_ldadd)
+
+mpir_test_proctable_t_SOURCES = mpir/test/proctable.c
+mpir_test_proctable_t_CPPFLAGS = $(test_cppflags)
+mpir_test_proctable_t_LDADD = \
+	$(builddir)/libmpir.la \
+	$(test_ldadd)

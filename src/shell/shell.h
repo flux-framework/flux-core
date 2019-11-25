@@ -193,6 +193,11 @@ int flux_shell_add_event_context (flux_shell_t *shell,
  */
 flux_shell_task_t * flux_shell_current_task (flux_shell_t *shell);
 
+/*  Iterate over all shell tasks:
+ */
+flux_shell_task_t *flux_shell_task_first (flux_shell_t *shell);
+flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell);
+
 /*  Return task general information as JSON string:
  *  {
  *    "localid":i,

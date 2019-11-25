@@ -150,12 +150,21 @@ static int shell_cb (flux_plugin_t *p,
         && errno == EINVAL,
         "flux_shell_add_event_context with NULL fmt returns EINVAL");
 
+    ok (flux_shell_task_first (NULL) == NULL && errno == EINVAL,
+        "flux_shell_task_first (NULL) returns EINVAL");
+    ok (flux_shell_task_next (NULL) == NULL && errno == EINVAL,
+        "flux_shell_task_next (NULL) returns EINVAL");
+
     if (strcmp (topic, "shell.init") == 0) {
         ok (flux_shell_current_task (NULL) == NULL && errno == EINVAL,
             "flux_shell_current_task with NULL shell returns EINVAL");
         errno = 0;
         ok (flux_shell_current_task (shell) == NULL && errno == 0,
             "flux_shell_current_task returns no task in shell.init");
+        ok (flux_shell_task_first (shell) == NULL && errno == EAGAIN,
+            "flux_shell_task_first (shell) in shell.init returns EAGAIN");
+        ok (flux_shell_task_next (shell) == NULL && errno == EAGAIN,
+            "flux_shell_task_next (shell) in shell.init returns EAGAIN");
     }
     if (strcmp (topic, "shell.exit") == 0)
         return exit_status () == 0 ? 0 : -1;

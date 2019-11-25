@@ -474,6 +474,32 @@ flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell)
     return shell->current_task;
 }
 
+flux_shell_task_t *flux_shell_task_first (flux_shell_t *shell)
+{
+    if (!shell) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!shell->tasks) {
+        errno = EAGAIN;
+        return NULL;
+    }
+    return zlist_first (shell->tasks);
+}
+
+flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell)
+{
+    if (!shell) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!shell->tasks) {
+        errno = EAGAIN;
+        return NULL;
+    }
+    return zlist_next (shell->tasks);
+}
+
 static void shell_events_subscribe (flux_shell_t *shell)
 {
     if (shell->h) {
@@ -829,6 +855,11 @@ static int shell_task_forked (flux_shell_t *shell)
     return plugstack_call (shell->plugstack, "task.fork", NULL);
 }
 
+static int shell_start (flux_shell_t *shell)
+{
+    return plugstack_call (shell->plugstack, "shell.start", NULL);
+}
+
 static int shell_exit (flux_shell_t *shell)
 {
     return plugstack_call (shell->plugstack, "shell.exit", NULL);
@@ -989,6 +1020,9 @@ int main (int argc, char *argv[])
     /*  Reset current task since we've left task-specific context:
      */
     shell.current_task = NULL;
+
+    if (shell_start (&shell) < 0)
+        shell_die_errno (1, "shell.start callback(s) failed");
 
     if (shell_barrier (&shell, "start") < 0)
         shell_die_errno (1, "shell_barrier");
