@@ -47,7 +47,6 @@ enum {
 struct shell_task_input_kvs {
     flux_future_t *input_f;
     bool input_header_parsed;
-    bool eof_reached;
 };
 
 struct shell_task_input {
@@ -68,7 +67,6 @@ struct shell_input {
     flux_shell_t *shell;
     int stdin_type;
     struct shell_task_input *task_inputs;
-    int task_inputs_count;
     int ntasks;
     struct shell_input_type_file stdin_file;
 };
@@ -76,6 +74,7 @@ struct shell_input {
 static void shell_task_input_kvs_cleanup (struct shell_task_input_kvs *kp)
 {
     flux_future_destroy (kp->input_f);
+    kp->input_f = NULL;
 }
 
 static void shell_task_input_cleanup (struct shell_task_input *tp)
@@ -453,6 +452,22 @@ static int shell_input_init (flux_plugin_t *p,
     return 0;
 }
 
+/*  Return 1 if idset string 'set' contains the integer id.
+ *  O/w, return 0, or -1 on failure to decode 'set'.
+ */
+static int idset_string_contains (const char *set, uint32_t id)
+{
+    int rc;
+    struct idset *idset;
+    if (strcmp (set, "all") == 0)
+        return 1;
+    if (!(idset = idset_decode (set)))
+        return shell_log_errno ("idset_decode (%s)", set);
+    rc = idset_test (idset, id);
+    idset_destroy (idset);
+    return rc;
+}
+
 static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
 {
     struct shell_task_input *task_input = arg;
@@ -478,43 +493,32 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
         kp->input_header_parsed = true;
     }
     else if (!strcmp (name, "data")) {
+        flux_shell_task_t *task = task_input->task;
         const char *rank = NULL;
-        bool data_ok = false;
         if (!kp->input_header_parsed)
             shell_die (1, "stream data read before header");
         if (iodecode (context, NULL, &rank, NULL, NULL, NULL) < 0)
             shell_die (1, "malformed event context");
-        if (!strcmp (rank, "all"))
-            data_ok = true;
-        else {
-            struct idset *idset;
-            if (!(idset = idset_decode (rank))) {
-                shell_log_errno ("idset_decode '%s'", rank);
-                goto out;
-            }
-            data_ok = idset_test (idset, task_input->task->rank);
-            idset_destroy (idset);
-        }
-        if (data_ok) {
+        if (idset_string_contains (rank, task->rank) == 1) {
             const char *stream;
             char *data = NULL;
             int len;
             bool eof;
-            if (kp->eof_reached) {
-                shell_die (1, "stream data after EOF");
-                goto out;
-            }
             if (iodecode (context, &stream, NULL, &data, &len, &eof) < 0)
                 shell_die (1, "malformed event context");
             if (len > 0) {
-                if (flux_subprocess_write (task_input->task->proc,
+                if (flux_subprocess_write (task->proc,
                                            stream,
                                            data,
-                                           len) < 0)
-                    shell_die_errno (1, "flux_subprocess_write");
+                                           len) < 0) {
+                    if (errno != EPIPE)
+                        shell_die_errno (1, "flux_subprocess_write");
+                    else
+                        eof = true; /* Pretend that we got eof */
+                }
             }
             if (eof) {
-                if (flux_subprocess_close (task_input->task->proc, stream) < 0)
+                if (flux_subprocess_close (task->proc, stream) < 0)
                     shell_die_errno (1, "flux_subprocess_close");
                 if (flux_job_event_watch_cancel (f) < 0)
                     shell_die_errno (1, "flux_job_event_watch_cancel");
@@ -522,14 +526,11 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
             free (data);
         }
     }
-
-out:
     json_decref (o);
     flux_future_reset (f);
     return;
 done:
-    flux_future_destroy (f);
-    kp->input_f = NULL;
+    shell_task_input_kvs_cleanup (kp);
 }
 
 static int shell_task_input_kvs_start (struct shell_task_input *ti)
@@ -554,6 +555,12 @@ static int shell_task_input_kvs_start (struct shell_task_input *ti)
     return 0;
 }
 
+static struct shell_task_input *get_task_input (struct shell_input *in,
+                                                flux_shell_task_t *task)
+{
+    return &in->task_inputs[task->index];
+}
+
 static int shell_input_task_init (flux_plugin_t *p,
                                   const char *topic,
                                   flux_plugin_arg_t *args,
@@ -567,7 +574,7 @@ static int shell_input_task_init (flux_plugin_t *p,
     if (!shell || !in || !(task = flux_shell_current_task (shell)))
         return -1;
 
-    task_input = &(in->task_inputs[in->task_inputs_count]);
+    task_input = get_task_input (in, task);
     task_input->in = in;
     task_input->task = task;
 
@@ -577,14 +584,36 @@ static int shell_input_task_init (flux_plugin_t *p,
             && shell_task_input_kvs_start (task_input) < 0)
             shell_die_errno (1, "shell_input_start_task_watch");
     }
-    in->task_inputs_count++;
+    return 0;
+}
+
+static int shell_input_task_exit (flux_plugin_t *p,
+                                  const char *topic,
+                                  flux_plugin_arg_t *args,
+                                  void *data)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    flux_shell_task_t *task = flux_shell_current_task (shell);
+    struct shell_input *in = flux_plugin_aux_get (p, "builtin.input");
+    struct shell_task_input *task_input;
+
+    if (!shell || !in || !task)
+        return -1;
+
+    task_input = get_task_input (in, task);
+    if (task_input->type == FLUX_TASK_INPUT_KVS
+        && task_input->input_kvs.input_f) {
+        if (flux_job_event_watch_cancel (task_input->input_kvs.input_f) < 0)
+            shell_log_errno ("flux_job_event_watch_cancel");
+    }
     return 0;
 }
 
 struct shell_builtin builtin_input = {
     .name = "input",
     .init = shell_input_init,
-    .task_init = shell_input_task_init
+    .task_init = shell_input_task_init,
+    .task_exit = shell_input_task_exit
 };
 
 /*

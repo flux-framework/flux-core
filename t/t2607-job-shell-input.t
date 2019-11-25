@@ -240,10 +240,28 @@ test_expect_success 'flux-shell: error on no path with file output' '
         test_must_fail flux job attach $id
 '
 
+test_expect_success 'flux-shell: no fatal exception after stdin sent to exited task' '
+	name="rankzeroexit" &&
+	cat <<-EOF >${name}.sh &&
+	#!/bin/sh
+	unset FLUX_KVS_NAMESPACE
+	flux kvs put ${name}.\${FLUX_TASK_RANK}.started=1
+	if test \$FLUX_TASK_RANK -ne 0; then cat; fi
+	EOF
+	chmod +x ${name}.sh &&
+	id=$(flux mini submit -n2 -o verbose ./${name}.sh) &&
+	flux job wait-event -v -p guest.exec.eventlog ${id} shell.start &&
+	flux kvs get --watch --waitcreate --count=1 ${name}.0.started &&
+	flux kvs get --watch --waitcreate --count=1 ${name}.1.started &&
+	echo | flux job attach -XE ${id} &&
+	flux job wait-event -t 5 -v ${id} clean
+'
+
 test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
         flux module remove -r 0 job-exec &&
         flux module remove -r 0 sched-simple &&
         flux module remove barrier
 '
+
 
 test_done
