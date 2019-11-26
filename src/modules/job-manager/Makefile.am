@@ -22,6 +22,8 @@ job_manager_la_SOURCES = \
 	submit.h \
 	drain.c \
 	drain.h \
+	wait.c \
+	wait.h \
 	event.h \
 	event.c \
 	restart.h \
@@ -61,6 +63,7 @@ test_ldadd = \
         $(top_builddir)/src/modules/job-manager/start.o \
         $(top_builddir)/src/modules/job-manager/drain.o \
         $(top_builddir)/src/modules/job-manager/submit.o \
+        $(top_builddir)/src/modules/job-manager/wait.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \

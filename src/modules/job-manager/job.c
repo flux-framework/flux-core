@@ -25,6 +25,8 @@ void job_decref (struct job *job)
 {
     if (job && --job->refcount == 0) {
         int saved_errno = errno;
+        json_decref (job->end_event);
+        flux_msg_decref (job->waiter);
         free (job);
         errno = saved_errno;
     }

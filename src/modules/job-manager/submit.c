@@ -20,6 +20,7 @@
 #include "job.h"
 #include "alloc.h"
 #include "event.h"
+#include "wait.h"
 
 #include "submit.h"
 
@@ -178,6 +179,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         if (submit_post_event (ctx->event, job) < 0)
             flux_log_error (h, "%s: submit_post_event id=%ju",
                             __FUNCTION__, (uintmax_t)job->id);
+
+        if ((job->flags & FLUX_JOB_WAITABLE))
+            wait_notify_active (ctx->wait, job);
         job_decref (job);
     }
     zlist_destroy (&newjobs);

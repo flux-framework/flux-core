@@ -22,6 +22,7 @@ extern "C" {
 enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
     FLUX_JOB_DEBUG = 2,
+    FLUX_JOB_WAITABLE = 4,      // flux_job_wait() will be used on this job
 };
 
 enum job_list_flags {
@@ -35,6 +36,10 @@ enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,
     FLUX_JOB_PRIORITY_MAX = 31,
+};
+
+enum {
+    FLUX_JOBID_ANY = 0xFFFFFFFFFFFFFFFF, // ~(uint64_t)0
 };
 
 typedef enum {
@@ -66,6 +71,16 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
  * error message may be available with flux_future_error_string().
  */
 int flux_job_submit_get_id (flux_future_t *f, flux_jobid_t *id);
+
+/* Wait for jobid to enter INACTIVE state.
+ * If jobid=FLUX_JOBID_ANY, wait for the next waitable job.
+ * Fails with ECHILD if there is nothing to wait for.
+ */
+flux_future_t *flux_job_wait (flux_t *h, flux_jobid_t id);
+int flux_job_wait_get_status (flux_future_t *f,
+                              bool *success,
+                              const char **errstr);
+int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
 
 /* Request a list of jobs.
  * If 'max_entries' > 0, fetch at most that many jobs.

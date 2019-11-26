@@ -20,6 +20,7 @@ struct job_manager {
     struct event *event;
     struct submit *submit;
     struct drain *drain;
+    struct waitjob *wait;
 };
 
 #endif /* !_FLUX_JOB_MANAGER_H */

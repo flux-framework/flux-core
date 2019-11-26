@@ -28,6 +28,7 @@ import six
 import flux
 from flux import job
 from flux import util
+from flux import constants
 from datetime import timedelta
 
 
@@ -314,7 +315,13 @@ class SubmitCmd:
             action="store_true",
             help="Add rank labels to stdout, stderr lines",
         )
-        parser.add_argument("--debug", action="store_true", help="Set job debug flag")
+        parser.add_argument(
+            "--flags",
+            action="append",
+            help="Set comma separated list of job submission flags. Possible "
+            + "flags:  debug, waitable",
+            metavar="FLAGS",
+        )
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -383,14 +390,22 @@ class SubmitCmd:
                     val = tmp[1]
                 jobspec.setattr(key, val)
 
+        flags = 0
+        if args.flags is not None:
+            for tmp in args.flags:
+                for flag in tmp.split(","):
+                    if flag == "debug":
+                        flags |= flux.constants.FLUX_JOB_DEBUG
+                    elif flag == "waitable":
+                        flags |= flux.constants.FLUX_JOB_WAITABLE
+                    else:
+                        raise ValueError("--flags: Unknown flag " + flag)
+
         if args.dry_run:
             print(jobspec.dumps(), file=sys.stdout)
             sys.exit(0)
 
         h = flux.Flux()
-        flags = 0
-        if args.debug:
-            flags = flux.constants.FLUX_JOB_DEBUG
         return job.submit(h, jobspec.dumps(), priority=args.priority, flags=flags)
 
     def main(self, args):

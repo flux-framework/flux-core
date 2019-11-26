@@ -469,6 +469,16 @@ error:
     flux_future_destroy (f);
 }
 
+static int valid_flags (int flags)
+{
+    int allowed = FLUX_JOB_DEBUG | FLUX_JOB_WAITABLE;
+    if ((flags & ~allowed)) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
 /* Handle "job-ingest.submit" request to add a new job.
  */
 static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -488,10 +498,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     /* Validate submit flags.
      */
-    if (job->flags != 0 && job->flags != FLUX_JOB_DEBUG) {
-        errno = EPROTO;
+    if (valid_flags (job->flags) < 0)
         goto error;
-    }
     /* Validate requested job priority.
      */
     if (job->priority < FLUX_JOB_PRIORITY_MIN
@@ -507,6 +515,17 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         snprintf (errbuf, sizeof (errbuf),
                   "only the instance owner can submit with priority >%d",
                   FLUX_JOB_PRIORITY_DEFAULT);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
+    /* Only owner can set FLUX_JOB_WAITABLE.
+     */
+    if (!(job->rolemask & FLUX_ROLE_OWNER)
+            && (job->flags & FLUX_JOB_WAITABLE)) {
+        snprintf (errbuf,
+                  sizeof (errbuf),
+                  "only the instance onwer can submit with FLUX_JOB_WAITABLE");
         errmsg = errbuf;
         errno = EINVAL;
         goto error;

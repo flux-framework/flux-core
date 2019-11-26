@@ -43,6 +43,7 @@
 #include "alloc.h"
 #include "start.h"
 #include "drain.h"
+#include "wait.h"
 
 #include "event.h"
 
@@ -306,6 +307,8 @@ int event_job_action (struct event *event, struct job *job)
             }
             break;
         case FLUX_JOB_INACTIVE:
+            if ((job->flags & FLUX_JOB_WAITABLE))
+                wait_notify_inactive (ctx->wait, job);
             zhashx_delete (ctx->active_jobs, &job->id);
             if (zhashx_size (ctx->active_jobs) == 0)
                 drain_empty_notify (ctx->drain);
@@ -365,6 +368,10 @@ int event_release_context_decode (json_t *context,
     return 0;
 }
 
+/* This function implements state transitions per RFC 21.
+ * If FLUX_JOB_WAITABLE flag is set, then on a fatal exception or
+ * cleanup event, capture the event in job->end_event for flux_job_wait().
+ */
 int event_job_update (struct job *job, json_t *event)
 {
     double timestamp;
@@ -400,8 +407,12 @@ int event_job_update (struct job *job, json_t *event)
             goto inval;
         if (event_exception_context_decode (context, &severity) < 0)
             goto error;
-        if (severity == 0)
+        if (severity == 0) {
+            if ((job->flags & FLUX_JOB_WAITABLE) && !job->end_event)
+                job->end_event = json_incref (event);
+
             job->state = FLUX_JOB_CLEANUP;
+        }
     }
     else if (!strcmp (name, "alloc")) {
         if (job->state != FLUX_JOB_SCHED && job->state != FLUX_JOB_CLEANUP)
@@ -418,8 +429,12 @@ int event_job_update (struct job *job, json_t *event)
     else if (!strcmp (name, "finish")) {
         if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
             goto inval;
-        if (job->state == FLUX_JOB_RUN)
+        if (job->state == FLUX_JOB_RUN) {
+            if ((job->flags & FLUX_JOB_WAITABLE) && !job->end_event)
+                job->end_event = json_incref (event);
+
             job->state = FLUX_JOB_CLEANUP;
+        }
     }
     else if (!strcmp (name, "release")) {
         int final;

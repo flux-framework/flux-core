@@ -229,7 +229,12 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
                         && flux_msg_get_matchtag (msg, &matchtag) == 0
                         && matchtag != FLUX_MATCHTAG_NONE) {
-            (void)flux_respond_error (mh->d->h, msg, EPERM, NULL);
+            const char *errmsg;
+            if (mh->rolemask == 0 || mh->rolemask == FLUX_ROLE_OWNER)
+                errmsg = "Request requires owner credentals";
+            else
+                errmsg = "Request rejected due to insufficient privilege";
+            (void)flux_respond_error (mh->d->h, msg, EPERM, errmsg);
         }
         return;
     }
@@ -401,7 +406,10 @@ static void handle_cb (flux_reactor_t *r,
         else {
             switch (type) {
                 case FLUX_MSGTYPE_REQUEST:
-                    if (flux_respond_error (d->h, msg, ENOSYS, NULL))
+                    if (flux_respond_error (d->h,
+                                            msg,
+                                            ENOSYS,
+                                            "Unknown service method"))
                         goto done;
                     break;
                 case FLUX_MSGTYPE_EVENT:
