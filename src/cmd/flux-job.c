@@ -201,7 +201,7 @@ static struct optparse_option drain_opts[] =  {
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
-      "List active jobs",
+      "List jobs",
       cmd_list,
       0,
       list_opts
