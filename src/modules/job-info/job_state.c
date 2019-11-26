@@ -266,26 +266,19 @@ static void job_change_list (struct job_state_ctx *jsctx,
     job_insert_list (jsctx, job, newstate);
 }
 
-static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
+static int eventlog_lookup_parse (struct info_ctx *ctx,
+                                  struct job *job,
+                                  const char *s)
 {
-    struct job *job = arg;
-    struct info_ctx *ctx = job->ctx;
-    const char *s;
     json_t *a = NULL;
     size_t index;
     json_t *value;
-    void *handle;
-
-    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
-        return;
-    }
+    int rc = -1;
 
     if (!(a = eventlog_decode (s))) {
         flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
                         __FUNCTION__, (unsigned long long)job->id);
-        return;
+        goto out;
     }
 
     json_array_foreach (a, index, value) {
@@ -316,25 +309,46 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
             }
             job->t_submit = timestamp;
             job->job_info_retrieved = true;
-
-            /* move from processing to appropriate list */
-            job_change_list (ctx->jsctx,
-                             job,
-                             ctx->jsctx->processing,
-                             job->state);
             break;
         }
     }
 
+    rc = 0;
 out:
     json_decref (a);
+    return rc;
+}
+
+static void job_data_lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct job *job = arg;
+    struct info_ctx *ctx = job->ctx;
+    const char *s;
+    void *handle;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
+        flux_log_error (ctx->h, "%s: error eventlog for %llu",
+                        __FUNCTION__, (unsigned long long)job->id);
+        goto out;
+    }
+
+    if (eventlog_lookup_parse (ctx, job, s) < 0)
+        goto out;
+
+    /* move from processing to appropriate list */
+    job_change_list (ctx->jsctx,
+                     job,
+                     ctx->jsctx->processing,
+                     job->state);
+
+out:
     handle = zlistx_find (ctx->jsctx->futures, f);
     if (handle)
         zlistx_detach (ctx->jsctx->futures, handle);
     flux_future_destroy (f);
 }
 
-static flux_future_t *eventlog_lookup (struct job_state_ctx *jsctx,
+static flux_future_t *job_data_lookup (struct job_state_ctx *jsctx,
                                        struct job *job)
 {
     flux_future_t *f = NULL;
@@ -349,7 +363,7 @@ static flux_future_t *eventlog_lookup (struct job_state_ctx *jsctx,
         goto error;
     }
 
-    if (flux_future_then (f, -1, eventlog_lookup_continuation, job) < 0) {
+    if (flux_future_then (f, -1, job_data_lookup_continuation, job) < 0) {
         flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
     }
@@ -462,8 +476,8 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
             /* initial state transition does not provide information
              * like userid, priority, t_submit, and flags.  We have to
              * go get this information from the eventlog */
-            if (!(f = eventlog_lookup (jsctx, job))) {
-                flux_log_error (jsctx->h, "%s: eventlog_lookup", __FUNCTION__);
+            if (!(f = job_data_lookup (jsctx, job))) {
+                flux_log_error (jsctx->h, "%s: job_data_lookup", __FUNCTION__);
                 return;
             }
 
@@ -503,9 +517,9 @@ void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 }
 
-static struct job *eventlog_parse (struct info_ctx *ctx,
-                                   const char *eventlog,
-                                   flux_jobid_t id)
+static struct job *eventlog_restart_parse (struct info_ctx *ctx,
+                                           const char *eventlog,
+                                           flux_jobid_t id)
 {
     struct job *job = NULL;
     json_t *a = NULL;
@@ -640,7 +654,7 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
     if (flux_kvs_lookup_get (f, &eventlog) < 0)
         goto done;
 
-    if ((job = eventlog_parse (ctx, eventlog, id))) {
+    if ((job = eventlog_restart_parse (ctx, eventlog, id))) {
         if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
             flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
             job_destroy (job);
