@@ -67,6 +67,9 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         else if (!strcmp (attr, "state")) {
             val = json_integer (job->state);
         }
+        else if (!strcmp (attr, "job-name")) {
+            val = json_string (job->job_name);
+        }
         else {
             errno = EINVAL;
             goto error;
@@ -234,12 +237,13 @@ error:
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    if (flux_respond_pack (h, msg, "{s:[s,s,s,s]}",
+    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s]}",
                            "attrs",
                            "userid",
                            "priority",
                            "t_submit",
-                           "state") < 0) {
+                           "state",
+                           "job-name") < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
