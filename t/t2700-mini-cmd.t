@@ -61,9 +61,17 @@ test_expect_success 'flux mini submit --priority=6 works' '
 	jobid=$(flux mini submit --priority=6 hostname) &&
 	flux job eventlog $jobid | grep submit | grep priority=6
 '
-test_expect_success 'flux mini submit --debug works' '
-	jobid=$(flux mini submit --debug hostname) &&
+test_expect_success 'flux mini submit --flags debug works' '
+	jobid=$(flux mini submit --flags debug hostname) &&
 	flux job eventlog $jobid | grep submit | grep flags=2
+'
+test_expect_success 'flux mini submit --flags waitable works' '
+	jobid=$(flux mini submit --flags waitable hostname) &&
+	flux job eventlog $jobid | grep submit | grep flags=4
+'
+test_expect_success 'flux mini submit --flags debug,waitable works' '
+	jobid=$(flux mini submit --flags debug,waitable hostname) &&
+	flux job eventlog $jobid | grep submit | grep flags=6
 '
 test_expect_success 'flux mini run -v produces jobid on stderr' '
 	flux mini run -v hostname 2>v.err &&
