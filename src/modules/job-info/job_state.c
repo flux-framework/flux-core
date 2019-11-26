@@ -322,6 +322,7 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
                              job,
                              ctx->jsctx->processing,
                              job->state);
+            break;
         }
     }
 
