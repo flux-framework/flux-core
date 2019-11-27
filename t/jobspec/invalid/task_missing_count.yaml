@@ -7,6 +7,6 @@ resources:
       - type: node
         count: 1
 tasks:
-  - command: app
+  - command: [ "app" ]
     slot: foo
 attributes:

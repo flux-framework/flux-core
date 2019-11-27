@@ -22,11 +22,11 @@ resources:
             count: 24
             unit: GB
 tasks:
-  - command: read-db
+  - command: [ "read-db" ]
     slot: read-db
     count:
       per_slot: 1
-  - command: db
+  - command: [ "db" ]
     slot: db
     count:
       per_slot: 1

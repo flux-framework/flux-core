@@ -7,7 +7,7 @@ resources:
       - type: node
         count: 1
 tasks:
-  - command: hostname
+  - command: [ "hostname" ]
     slot: default
     count:
       per_slot: 5

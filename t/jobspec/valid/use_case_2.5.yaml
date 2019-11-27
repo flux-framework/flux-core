@@ -11,7 +11,7 @@ resources:
     - type: core
       count: 1
 tasks:
-  - command: app
+  - command: [ "app" ]
     slot: default
     count:
       per_slot: 1
