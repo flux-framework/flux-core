@@ -49,6 +49,12 @@ static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
 {
     struct ev_flux *fw = (struct ev_flux *)((char *)w
                             - offsetof (struct ev_flux, check_w));
+
+    if (ev_is_pending (&fw->io_w)
+            && ev_clear_pending (loop, &fw->io_w) & EV_ERROR) {
+        fw->cb (loop, fw, EV_ERROR);
+        return;
+    }
     int events = get_pollevents (fw->h);
 
     ev_io_stop (loop, &fw->io_w);
