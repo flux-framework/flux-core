@@ -326,7 +326,7 @@ class Wrapper(WrapperBase):
         setattr(self, name, new_method)
         return new_method
 
-    def __clear(self):
+    def _clear(self):
         # avoid recursion
         if hasattr(self, "_handle") and self._handle is not None:
             handle = self._handle
@@ -354,14 +354,14 @@ class Wrapper(WrapperBase):
                     )
                 )
         if self._handle is not None:
-            self.__clear()
+            self._clear()
         self._handle = h
 
     def __del__(self):
-        self.__clear()
+        self._clear()
 
     def __enter__(self):
         return self
 
     def __exit__(self, type_arg, value, unused):
-        self.__clear()
+        self._clear()
