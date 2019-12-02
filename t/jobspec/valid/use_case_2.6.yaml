@@ -12,7 +12,7 @@ resources:
             min: 4
           unit: GB
 tasks:
-  - command: app
+  - command: [ "app" ]
     slot: 4GB-node
     count:
       total: 10

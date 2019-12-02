@@ -116,7 +116,7 @@
         "required": ["command", "slot", "count" ],
         "properties": {
           "command": {
-            "type": ["string", "array"],
+            "type": "array",
             "minItems": 1,
             "items": { "type": "string" }
           },

@@ -8,7 +8,7 @@ resources:
         count: 1
         exclusive: blah
 tasks:
-  - command: app
+  - command: [ "app" ]
     slot: foo
     count:
       per_slot: 1

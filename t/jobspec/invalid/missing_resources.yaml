@@ -1,6 +1,6 @@
 version: 1
 tasks:
-  - command: app
+  - command: [ "app" ]
     slot: foo
     count:
       per_slot: 1

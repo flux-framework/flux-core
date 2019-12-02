@@ -10,7 +10,7 @@ resources:
           - type: core
             count: 1
 tasks:
-  - command: hostname
+  - command: [ "hostname" ]
     slot: myslot
     count:
       total: 5
