@@ -52,7 +52,10 @@ def submit_get_id(future):
 
 def submit(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
     future = submit_async(flux_handle, jobspec, priority, flags)
-    return submit_get_id(future)
+    jid = submit_get_id(future)
+    # pylint: disable=protected-access
+    future.pimpl._clear()
+    return jid
 
 
 def wait_async(flux_handle, jobid=lib.FLUX_JOBID_ANY):
@@ -78,4 +81,7 @@ def wait_get_status(future):
 
 def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     future = wait_async(flux_handle, jobid)
-    return wait_get_status(future)
+    status = wait_get_status(future)
+    # pylint: disable=protected-access
+    future.pimpl._clear()
+    return status
