@@ -64,6 +64,9 @@ static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
 
     if (handle == NULL)
         zw->cb (loop, zw, EV_ERROR);
+    else if (ev_is_pending (&zw->io_w)
+            && ev_clear_pending (loop, &zw->io_w) & EV_ERROR)
+        zw->cb (loop, zw, EV_ERROR);
     else if (zmq_getsockopt (handle, ZMQ_EVENTS, &zevents, &zevents_size) < 0)
         zw->cb (loop, zw, EV_ERROR);
     else if ((revents = ztoe (zevents) & zw->events))
