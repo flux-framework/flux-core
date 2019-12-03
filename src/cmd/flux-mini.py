@@ -279,6 +279,12 @@ class SubmitCmd:
             default=16,
         )
         parser.add_argument(
+            "--job-name",
+            type=str,
+            help="Set an optional name for job to NAME",
+            metavar="NAME",
+        )
+        parser.add_argument(
             "-o",
             "--setopt",
             action="append",
@@ -351,6 +357,9 @@ class SubmitCmd:
         jobspec.set_environment(dict(os.environ))
         if args.time_limit is not None:
             jobspec.set_duration(args.time_limit)
+
+        if args.job_name is not None:
+            jobspec.setattr("system.job.name", args.job_name)
 
         if args.input is not None:
             jobspec.setattr_shopt("input.stdin.type", "file")
