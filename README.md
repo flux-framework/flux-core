@@ -48,11 +48,11 @@ sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
 lua               | lua5.1            | >= 5.1, < 5.3     |
 lua-devel         | liblua5.1-dev     | >= 5.1, < 5.3     |
 lua-posix         | lua-posix         |                   | *1*
-python-devel      | python-dev        | >= 2.7            |
-python-cffi       | python-cffi       | >= 1.1            |
-python-six        | python-six        | >= 1.9            |
-python-yaml       | python-yaml       | >= 3.10.0         |
-python-jsonschema | python-jsonschema | >= 2.3.0          |
+python36-devel    | python3-dev       | >= 2.7            |
+python36-cffi     | python3-cffi      | >= 1.1            |
+python36-six      | python3-six       | >= 1.9            |
+python36-yaml     | python3-yaml      | >= 3.10.0         |
+python36-jsonschema | python3-jsonschema | >= 2.3.0       |
 asciidoc          | asciidoc          |                   | *2*
 asciidoctor       | asciidoctor       | >= 1.5.7          | *2*
 aspell            | aspell            |                   | *3*
@@ -73,25 +73,34 @@ of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
 
 ##### Installing RedHat/CentOS Packages
 ```
-yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python-devel python-cffi python-six python-yaml python-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
 ```
 
 ##### Installing Ubuntu Packages
 ```
-apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python-dev python-cffi python-six python-yaml python-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
 ```
 
 ##### Building from Source
 ```
 ./autogen.sh   # skip if building from a release tarball
-./configure
+PYTHON_VERSION=3.6 ./configure
 make
 make check
 ```
+Note: the `PYTHON_VERSION` environment variable adds a suffix to the
+python interpreter executable.  Configure would look for `python3.6` in
+the example above.  If unset, `python` is used, which is often Python 2.
+
+If you want Flux to use Python 2 and generate (only) Python 2 bindings,
+alter the prerequisite package names above, and set (or don't set)
+`PYTHON_VERSION` accordingly.  Python 2 support should be considered
+deprecated, although it continues to work for now.
+
 #### Bootstrapping a Flux instance
 
 A Flux instance is composed of a set of `flux-broker` processes
-that boostrap via PMI (e.g. under another resource manager), or locally
+that bootstrap via PMI (e.g. under another resource manager), or locally
 via the `flux start` command.
 
 No administrator privilege is required to start a Flux instance
