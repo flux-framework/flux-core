@@ -173,6 +173,12 @@ test_expect_success 'flux mini submit --gpus-per-task adds gpus to task slot' '
 	test $(jq ".resources[0].with[1].type" gpu.out) = "\"gpu\"" &&
 	test $(jq ".resources[0].with[1].count" gpu.out) = "2"
 '
+test_expect_success 'flux mini --jobname works' '
+	jobid=$(flux mini submit hostname) &&
+        flux job list --pending --running --inactive | grep $jobid | grep hostname &&
+	jobid=$(flux mini submit --job-name=foobar hostname) &&
+        flux job list --pending --running --inactive | grep $jobid | grep foobar
+'
 
 
 test_done

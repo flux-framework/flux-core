@@ -62,8 +62,11 @@ static int job_inactive_cmp (const void *a1, const void *a2)
 static void job_destroy (void *data)
 {
     struct job *job = data;
-    if (job)
+    if (job) {
+        json_decref (job->jobspec_job);
+        json_decref (job->jobspec_cmd);
         free (job);
+    }
 }
 
 static void job_destroy_wrapper (void **data)
@@ -266,26 +269,19 @@ static void job_change_list (struct job_state_ctx *jsctx,
     job_insert_list (jsctx, job, newstate);
 }
 
-static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
+static int eventlog_lookup_parse (struct info_ctx *ctx,
+                                  struct job *job,
+                                  const char *s)
 {
-    struct job *job = arg;
-    struct info_ctx *ctx = job->ctx;
-    const char *s;
     json_t *a = NULL;
     size_t index;
     json_t *value;
-    void *handle;
-
-    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
-        return;
-    }
+    int rc = -1;
 
     if (!(a = eventlog_decode (s))) {
         flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
                         __FUNCTION__, (unsigned long long)job->id);
-        return;
+        goto out;
     }
 
     json_array_foreach (a, index, value) {
@@ -316,40 +312,164 @@ static void eventlog_lookup_continuation (flux_future_t *f, void *arg)
             }
             job->t_submit = timestamp;
             job->job_info_retrieved = true;
-
-            /* move from processing to appropriate list */
-            job_change_list (ctx->jsctx,
-                             job,
-                             ctx->jsctx->processing,
-                             job->state);
             break;
         }
     }
 
+    rc = 0;
 out:
     json_decref (a);
+    return rc;
+}
+
+static int jobspec_parse (struct info_ctx *ctx,
+                          struct job *job,
+                          const char *s)
+{
+    json_error_t error;
+    json_t *jobspec = NULL;
+    json_t *tasks, *command, *jobspec_job = NULL;
+    int rc = -1;
+
+    if (!(jobspec = json_loads (s, 0, &error))) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+
+    if (json_unpack_ex (jobspec, &error, 0,
+                        "{s:{s:{s?:o}}}",
+                        "attributes",
+                        "system",
+                        "job",
+                        &jobspec_job) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+
+    if (jobspec_job) {
+        if (!json_is_object (jobspec_job)) {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu invalid jobspec",
+                      __FUNCTION__, (unsigned long long)job->id);
+            goto error;
+        }
+        job->jobspec_job = json_incref (jobspec_job);
+    }
+
+    if (json_unpack_ex (jobspec, &error, 0,
+                        "{s:o}",
+                        "tasks", &tasks) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+    if (json_unpack_ex (tasks, &error, 0,
+                        "[{s:o}]",
+                        "command", &command) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+
+    if (!json_is_array (command)) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec",
+                  __FUNCTION__, (unsigned long long)job->id);
+        goto error;
+    }
+
+    job->jobspec_cmd = json_incref (command);
+
+    if (job->jobspec_job) {
+        if (json_unpack_ex (job->jobspec_job, &error, 0,
+                            "{s?:s}",
+                            "name", &job->job_name) < 0) {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu invalid job dictionary: %s",
+                      __FUNCTION__, (unsigned long long)job->id, error.text);
+            goto error;
+        }
+    }
+
+    /* If user did not specify job.name, we treat arg 0 of the command
+     * as the job name */
+    if (!job->job_name) {
+        json_t *arg0 = json_array_get (job->jobspec_cmd, 0);
+        if (!arg0 || !json_is_string (arg0)) {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu invalid job command",
+                      __FUNCTION__, (unsigned long long)job->id);
+            goto error;
+        }
+        job->job_name = json_string_value (arg0);
+        assert (job->job_name);
+    }
+
+    rc = 0;
+error:
+    json_decref (jobspec);
+    return rc;
+}
+
+static void job_data_lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct job *job = arg;
+    struct info_ctx *ctx = job->ctx;
+    const char *s;
+    void *handle;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
+        flux_log_error (ctx->h, "%s: error eventlog for %llu",
+                        __FUNCTION__, (unsigned long long)job->id);
+        goto out;
+    }
+
+    if (eventlog_lookup_parse (ctx, job, s) < 0)
+        goto out;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
+        flux_log_error (ctx->h, "%s: error jobspec for %llu",
+                        __FUNCTION__, (unsigned long long)job->id);
+        goto out;
+    }
+
+    if (jobspec_parse (ctx, job, s) < 0)
+        goto out;
+
+    /* move from processing to appropriate list */
+    job_change_list (ctx->jsctx,
+                     job,
+                     ctx->jsctx->processing,
+                     job->state);
+out:
     handle = zlistx_find (ctx->jsctx->futures, f);
     if (handle)
         zlistx_detach (ctx->jsctx->futures, handle);
     flux_future_destroy (f);
 }
 
-static flux_future_t *eventlog_lookup (struct job_state_ctx *jsctx,
+static flux_future_t *job_data_lookup (struct job_state_ctx *jsctx,
                                        struct job *job)
 {
     flux_future_t *f = NULL;
     int saved_errno;
 
     if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
-                             "{s:I s:[s] s:i}",
+                             "{s:I s:[ss] s:i}",
                              "id", job->id,
-                             "keys", "eventlog",
+                             "keys", "eventlog", "jobspec",
                              "flags", 0))) {
         flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
         goto error;
     }
 
-    if (flux_future_then (f, -1, eventlog_lookup_continuation, job) < 0) {
+    if (flux_future_then (f, -1, job_data_lookup_continuation, job) < 0) {
         flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
     }
@@ -462,8 +582,8 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
             /* initial state transition does not provide information
              * like userid, priority, t_submit, and flags.  We have to
              * go get this information from the eventlog */
-            if (!(f = eventlog_lookup (jsctx, job))) {
-                flux_log_error (jsctx->h, "%s: eventlog_lookup", __FUNCTION__);
+            if (!(f = job_data_lookup (jsctx, job))) {
+                flux_log_error (jsctx->h, "%s: job_data_lookup", __FUNCTION__);
                 return;
             }
 
@@ -503,9 +623,9 @@ void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 }
 
-static struct job *eventlog_parse (struct info_ctx *ctx,
-                                   const char *eventlog,
-                                   flux_jobid_t id)
+static struct job *eventlog_restart_parse (struct info_ctx *ctx,
+                                           const char *eventlog,
+                                           flux_jobid_t id)
 {
     struct job *job = NULL;
     json_t *a = NULL;
@@ -620,8 +740,9 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
 {
     struct job *job = NULL;
     flux_jobid_t id;
-    flux_future_t *f;
-    const char *eventlog;
+    flux_future_t *f1 = NULL;
+    flux_future_t *f2 = NULL;
+    const char *eventlog, *jobspec;
     char path[64];
     int rc = -1;
 
@@ -635,22 +756,38 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+    if (!(f1 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
         goto done;
-    if (flux_kvs_lookup_get (f, &eventlog) < 0)
+    if (flux_kvs_lookup_get (f1, &eventlog) < 0)
         goto done;
 
-    if ((job = eventlog_parse (ctx, eventlog, id))) {
-        if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
-            flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
-            job_destroy (job);
-            goto done;
-        }
-        job_insert_list (ctx->jsctx, job, job->state);
+    if (!(job = eventlog_restart_parse (ctx, eventlog, id)))
+        goto done;
+
+    if (flux_job_kvs_key (path, sizeof (path), id, "jobspec") < 0) {
+        errno = EINVAL;
+        return -1;
     }
+    if (!(f2 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+        goto done;
+    if (flux_kvs_lookup_get (f2, &jobspec) < 0)
+        goto done;
+
+    if (jobspec_parse (ctx, job, jobspec) < 0)
+        goto done;
+
+    if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
+        flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
+        goto done;
+    }
+    job_insert_list (ctx->jsctx, job, job->state);
+
     rc = 1;
 done:
-    flux_future_destroy (f);
+    if (rc < 0)
+        job_destroy (job);
+    flux_future_destroy (f1);
+    flux_future_destroy (f2);
     return rc;
 }
 

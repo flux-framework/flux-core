@@ -12,6 +12,7 @@
 #define _FLUX_JOB_INFO_JOB_STATE_H
 
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "info.h"
 
@@ -57,6 +58,11 @@ struct job {
     double t_submit;
     int flags;
     flux_job_state_t state;
+    const char *job_name;
+
+    /* cache of job information */
+    json_t *jobspec_job;
+    json_t *jobspec_cmd;
 
     /* if userid, priority, t_submit, and flags have been set */
     bool job_info_retrieved;

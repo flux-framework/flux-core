@@ -283,6 +283,36 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
 '
 
 #
+# job names
+#
+
+test_expect_success 'flux job list outputs user job-name' '
+        jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
+        echo $jobid > jobname1.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        flux job list --inactive | grep $jobid | grep foobar
+'
+
+test_expect_success 'flux job lists first argument for job-name' '
+        jobid=`flux mini submit mycmd arg1 arg2` &&
+        echo $jobid > jobname2.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        flux job list --inactive | grep $jobid | grep mycmd
+'
+
+test_expect_success 'reload the job-info module' '
+        flux module remove -r all job-info &&
+        flux module load -r all job-info
+'
+
+test_expect_success 'verify job names preserved across restart' '
+        jobid1=`cat jobname1.id` &&
+        jobid2=`cat jobname2.id` &&
+        flux job list --inactive | grep ${jobid1} | grep foobar &&
+        flux job list --inactive | grep ${jobid2} | grep mycmd
+'
+
+#
 # job list special cases
 #
 
@@ -293,7 +323,8 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "userid" list_empty_attrs.out &&
         test_must_fail grep "priority" list_empty_attrs.out &&
         test_must_fail grep "t_submit" list_empty_attrs.out &&
-        test_must_fail grep "state" list_empty_attrs.out
+        test_must_fail grep "state" list_empty_attrs.out &&
+        test_must_fail grep "job-name" list_empty_attrs.out
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
@@ -305,7 +336,8 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep userid list_attrs.out &&
         grep priority list_attrs.out &&
         grep t_submit list_attrs.out &&
-        grep state list_attrs.out
+        grep state list_attrs.out &&
+        grep job-name list_attrs.out
 '
 
 #
