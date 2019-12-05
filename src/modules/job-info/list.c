@@ -61,8 +61,21 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         else if (!strcmp (attr, "priority")) {
             val = json_integer (job->priority);
         }
-        else if (!strcmp (attr, "t_submit")) {
+        else if (!strcmp (attr, "t_submit")
+                 || !strcmp (attr, "t_depend")) {
             val = json_real (job->t_submit);
+        }
+        else if (!strcmp (attr, "t_sched")) {
+            val = json_real (job->t_sched);
+        }
+        else if (!strcmp (attr, "t_run")) {
+            val = json_real (job->t_run);
+        }
+        else if (!strcmp (attr, "t_cleanup")) {
+            val = json_real (job->t_cleanup);
+        }
+        else if (!strcmp (attr, "t_inactive")) {
+            val = json_real (job->t_inactive);
         }
         else if (!strcmp (attr, "state")) {
             val = json_integer (job->state);
@@ -237,11 +250,16 @@ error:
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s]}",
+    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s,s,s,s,s,s]}",
                            "attrs",
                            "userid",
                            "priority",
                            "t_submit",
+                           "t_depend",
+                           "t_sched",
+                           "t_run",
+                           "t_cleanup",
+                           "t_inactive",
                            "state",
                            "job-name") < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
