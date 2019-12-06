@@ -84,7 +84,8 @@ void flux_close (flux_t *h);
 
 /* Increment internal reference count on 'h'.
  */
-void flux_incref (flux_t *h);
+flux_t *flux_incref (flux_t *h);
+void flux_decref(flux_t *h);
 
 /* Create a new handle that is an alias for 'orig' in all respects
  * except it adds FLUX_O_CLONE to flags and has its own 'aux' hash

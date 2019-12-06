@@ -372,10 +372,9 @@ flux_t *flux_clone (flux_t *orig)
     flux_t *h = calloc (1, sizeof (*h));
     if (!h)
         goto nomem;
-    h->parent = orig;
+    h->parent = flux_incref (orig);
     h->usecount = 1;
     h->flags = orig->flags | FLUX_O_CLONE;
-    flux_incref (orig);
     return h;
 nomem:
     free (h);
@@ -420,9 +419,16 @@ void flux_handle_destroy (flux_t *h)
     }
 }
 
-void flux_incref (flux_t *h)
+flux_t *flux_incref (flux_t *h)
 {
-    h->usecount++;
+    if (h)
+        h->usecount++;
+    return h;
+}
+
+void flux_decref (flux_t *h)
+{
+    flux_handle_destroy (h);
 }
 
 void flux_flags_set (flux_t *h, int flags)
