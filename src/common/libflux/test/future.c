@@ -14,8 +14,10 @@
 
 #include "future.h"
 #include "reactor.h"
+#include "response.h"
 
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libtestutil/util.h"
 #include "src/common/libtap/tap.h"
 
 int aux_destroy_called;
@@ -1215,6 +1217,187 @@ void test_fulfill_with_async (void)
     flux_reactor_destroy (r);
 }
 
+/* 'struct thing' simluates convoluted pattern of refs between
+ * objects used by flux_rpc_t.
+ *
+ * The object handed to users is a future.  The future has an aux
+ * reference on 'struct thing' so destroy future destroys thing.
+ *
+ * Check that we can destroy future before or after flux_t handle as a normal
+ * course of unit testing.  It used to be that destroying flux_t before future
+ * caused a segfault when thing tried to return matchtag to flux_t.  Now the
+ * future holds a reference on flux_t for its lifetime to allow destroy in
+ * either order.
+ */
+struct thing {
+    flux_t *h;
+    flux_future_t *f;
+    uint32_t matchtag;
+};
+
+void thing_destroy (struct thing *t)
+{
+    if (t) {
+        flux_matchtag_free (t->h, t->matchtag);
+        free (t);
+    }
+}
+
+void thing_response (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    diag ("thing_response");
+
+    flux_future_t *f = arg;
+    flux_future_fulfill (f, NULL, NULL);
+}
+
+void thing_initialize (flux_future_t *f, void *arg)
+{
+    diag ("thing_initialize");
+
+    struct thing *t = flux_future_aux_get (f, "thing");
+    flux_t *h = flux_future_get_flux (f);
+    struct flux_match m = FLUX_MATCH_RESPONSE;
+    flux_msg_handler_t *mh;
+
+    m.matchtag = t->matchtag;
+    if (!(mh = flux_msg_handler_create (h, m, thing_response, f)))
+        BAIL_OUT ("flux_msg_handler_create failed");
+    /* XXX revisit, why not rpc->mh? */
+    if (flux_future_aux_set (f,
+                             NULL,
+                             mh,
+                             (flux_free_f)flux_msg_handler_destroy ) < 0)
+        BAIL_OUT ("flux_future_aux_set failed");
+    flux_msg_handler_start (mh);
+}
+
+void thing_continuation (flux_future_t *f, void *arg)
+{
+    diag ("thing_continuation");
+}
+
+struct thing *thing_create (flux_t *h)
+{
+    struct thing *t;
+    if (!(t = calloc (1, sizeof (*t))))
+        BAIL_OUT ("malloc failed");
+    if (!(t->f = flux_future_create (thing_initialize, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_flux (t->f, h);
+    if (flux_future_aux_set (t->f, "thing", t, (flux_free_f)thing_destroy) < 0)
+        BAIL_OUT ("flux_future_aux_set failed");
+    t->matchtag = flux_matchtag_alloc (h, 0);
+    if (t->matchtag == FLUX_MATCHTAG_NONE)
+        BAIL_OUT ("flux_matchatg_alloc failed");
+    t->h = h;
+    return t;
+}
+
+void test_rpc_like_thing_async (bool reverse_destroy_order)
+{
+    flux_t *h;
+    flux_msg_t *msg;
+    struct thing *t;
+    flux_reactor_t *r;
+
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("could not create loopback handle");
+    if (!(r = flux_get_reactor (h)))
+        BAIL_OUT ("flux_get_reactor failed");
+
+    /* This registers and starts message handler
+     */
+    t = thing_create (h);
+    if (flux_future_then (t->f, -1, thing_continuation, t) < 0)
+        BAIL_OUT ("flux_future_then failed");
+
+    /* Send response to message handler.
+     */
+    if (!(msg = flux_response_encode ("foo", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+    if (flux_msg_set_matchtag (msg, t->matchtag) < 0)
+        BAIL_OUT ("flux_msg_set_matchtag failed");
+    if (flux_send (h, msg, 0) < 0)
+        BAIL_OUT ("flux_send failed");
+    flux_msg_destroy (msg);
+
+    /* Run reactor to allow progress.
+     * First loop calls message handler.
+     * Second loop calls future continuation (remember prep/check/idle).
+     */
+    ok (flux_reactor_run (r, FLUX_REACTOR_ONCE) >= 0,
+        "async handle test: reactor ran once");
+    ok (flux_reactor_run (r, FLUX_REACTOR_ONCE) >= 0,
+        "async handle test: reactor ran twice");
+
+    if (reverse_destroy_order) {
+        flux_close (h);
+        flux_future_destroy (t->f);
+    }
+    else {
+        flux_future_destroy (t->f);
+        flux_close (h);
+    }
+}
+
+void test_rpc_like_thing (bool reverse_destroy_order)
+{
+    flux_t *h;
+    flux_msg_t *msg;
+    struct thing *t;
+
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("could not create loopback handle");
+
+    t = thing_create (h);
+
+    /* Send response to message handler.
+     */
+    if (!(msg = flux_response_encode ("foo", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+    if (flux_msg_set_matchtag (msg, t->matchtag) < 0)
+        BAIL_OUT ("flux_msg_set_matchtag failed");
+    if (flux_send (h, msg, 0) < 0)
+        BAIL_OUT ("flux_send failed");
+    flux_msg_destroy (msg);
+
+    ok (flux_future_get (t->f, NULL) == 0,
+        "handle test: flux_future_get worked");
+
+    if (reverse_destroy_order) {
+        flux_close (h);
+        flux_future_destroy (t->f);
+    }
+    else {
+        flux_future_destroy (t->f);
+        flux_close (h);
+    }
+}
+
+void test_rpc_like_thing_unfulfilled (bool reverse_destroy_order)
+{
+    flux_t *h;
+    struct thing *t;
+
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("could not create loopback handle");
+
+    t = thing_create (h);
+
+    if (reverse_destroy_order) {
+        flux_close (h);
+        flux_future_destroy (t->f);
+    }
+    else {
+        flux_future_destroy (t->f);
+        flux_close (h);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1243,6 +1426,15 @@ int main (int argc, char *argv[])
 
     test_fulfill_with ();
     test_fulfill_with_async ();
+
+    test_rpc_like_thing_async (false);
+    test_rpc_like_thing_async (true);
+
+    test_rpc_like_thing (false);
+    test_rpc_like_thing (true);
+
+    test_rpc_like_thing_unfulfilled (false);
+    test_rpc_like_thing_unfulfilled (true);
 
     done_testing();
     return (0);
