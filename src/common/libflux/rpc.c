@@ -33,7 +33,6 @@
 #include "flog.h"
 
 struct flux_rpc {
-    flux_t *h;
     uint32_t matchtag;
     int flags;
     flux_future_t *f;
@@ -72,7 +71,7 @@ static int rpc_finalize (struct flux_rpc *rpc)
     }
     return -1;
 out_free:
-    flux_matchtag_free (rpc->h, rpc->matchtag);
+    flux_matchtag_free (flux_future_get_flux (rpc->f), rpc->matchtag);
     rpc->matchtag = FLUX_MATCHTAG_NONE;
 out:
     return 0;
@@ -82,9 +81,10 @@ static void rpc_destroy (struct flux_rpc *rpc)
 {
     if (rpc) {
         if (rpc_finalize (rpc) < 0)
-            log_matchtag_leak (rpc->h, (rpc->flags & FLUX_RPC_STREAMING)
-                               ? "unterminated streaming RPC"
-                               : "unfulfilled RPC",
+            log_matchtag_leak (flux_future_get_flux (rpc->f),
+                               (rpc->flags & FLUX_RPC_STREAMING)
+                                    ? "unterminated streaming RPC"
+                                    : "unfulfilled RPC",
                                rpc->matchtag);
         free (rpc);
     }
@@ -98,7 +98,6 @@ static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
         errno = ENOMEM;
         goto error;
     }
-    rpc->h = h;
     rpc->f = f;
     rpc->flags = flags;
     if ((flags & FLUX_RPC_NORESPONSE)) {
@@ -109,6 +108,7 @@ static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
         if (rpc->matchtag == FLUX_MATCHTAG_NONE)
             goto error;
     }
+    flux_future_set_flux (f, h);
     return rpc;
 error:
     free (rpc);
@@ -250,7 +250,6 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
     }
     if (flux_msg_set_matchtag (msg, rpc->matchtag) < 0)
         goto error;
-    flux_future_set_flux (f, h);
     if (flux_msg_get_flags (msg, &msgflags) < 0)
         goto error;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
