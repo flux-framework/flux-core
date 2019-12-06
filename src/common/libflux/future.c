@@ -303,6 +303,7 @@ void flux_future_destroy (flux_future_t *f)
         now_context_destroy (f->now);
         then_context_destroy (f->then);
         zlist_destroy (&f->queue);
+        flux_decref (f->h);
         free (f);
         errno = saved_errno;
     }
@@ -411,7 +412,8 @@ inval:
 void flux_future_set_flux (flux_future_t *f, flux_t *h)
 {
     if (f) {
-        f->h = h;
+        flux_decref (f->h);
+        f->h = flux_incref (h);
         if (h && !f->r)
             f->r = flux_get_reactor (h);
     }
