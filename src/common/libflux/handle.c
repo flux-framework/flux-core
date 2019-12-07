@@ -408,8 +408,10 @@ void flux_handle_destroy (flux_t *h)
             if ((h->flags & FLUX_O_MATCHDEBUG))
                 report_leaked_matchtags (h->tagpool);
             tagpool_destroy (h->tagpool);
+#ifndef __SANITIZE_ADDRESS__
             if (h->dso)
                 dlclose (h->dso);
+#endif
             msglist_destroy (h->queue);
             if (h->pollfd >= 0)
                 (void)close (h->pollfd);

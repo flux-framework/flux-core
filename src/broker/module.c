@@ -358,7 +358,9 @@ static void module_destroy (module_t *p)
     flux_watcher_destroy (p->broker_w);
     zsock_destroy (&p->sock);
 
+#ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
+#endif
     zuuid_destroy (&p->uuid);
     free (p->digest);
     free (p->argz);

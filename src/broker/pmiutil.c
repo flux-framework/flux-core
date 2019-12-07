@@ -48,8 +48,10 @@ struct pmi_handle {
 static void broker_pmi_dlclose (struct pmi_dso *dso)
 {
     if (dso) {
+#ifndef __SANITIZE_ADDRESS__
         if (dso->dso)
             dlclose (dso->dso);
+#endif
         free (dso);
     }
 }
