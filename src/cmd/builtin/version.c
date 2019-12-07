@@ -47,7 +47,17 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 # endif
 #endif
     print_broker_version (p);
-
+    printf ("build-options:\t\t");
+#if __SANITIZE_ADDRESS__
+    printf ("+asan");
+#endif
+#if __SANITIZE_THREAD__
+    printf ("+tsan");
+#endif
+#if HAVE_CALIPER
+    printf ("+caliper");
+#endif
+    printf ("\n");
     return (0);
 }
 
