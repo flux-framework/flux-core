@@ -112,7 +112,11 @@ test_under_flux() {
         valgrind="$valgrind,--leak-resolution=med,--error-exitcode=1"
         valgrind="$valgrind,--suppressions=${VALGRIND_SUPPRESSIONS}"
     fi
-
+    # Extend timeouts when running under AddressSanitizer
+    if test_have_prereq ASAN; then
+        gracetime="-o,-g,10"
+        timeout="-o -Sinit.rc2_timeout=800"
+    fi
     logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
@@ -121,6 +125,7 @@ test_under_flux() {
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
                       ${logopts} \
                       ${timeout} \
+                      ${gracetime} \
                       ${valgrind} \
                      "sh $0 ${flags}"
 }
@@ -161,6 +166,13 @@ test "$chain_lint" = "t" || test_set_prereq NO_CHAIN_LINT
 #  Set LONGTEST prereq
 if test "$TEST_LONG" = "t" || test "$LONGTEST" = "t"; then
     test_set_prereq LONGTEST
+fi
+
+#  Set ASAN or NO_ASAN prereq
+if flux version | grep -q +asan; then
+    test_set_prereq ASAN
+else
+    test_set_prereq NO_ASAN
 fi
 
 
