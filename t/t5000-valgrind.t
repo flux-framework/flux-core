@@ -10,6 +10,10 @@ if ! which valgrind >/dev/null; then
     skip_all='skipping valgrind tests since no valgrind executable found'
     test_done
 fi
+if ! test_have_prereq NO_ASAN; then
+    skip_all='skipping valgrind tests since AddressSanitizer is active'
+    test_done
+fi
 
 # Do not run test by default unless valgrind/valgrind.h was found, since
 #  this has been known to introduce false positives (#1097). However, allow

@@ -108,13 +108,13 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '
 	test_expect_code 68 run_timeout 2 flux exec -n -r 1000 ./nosuchprocess
 '
-test_expect_success 'flux exec passes non-zero exit status' '
+test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec -n sh -c "exit 2" &&
 	test_expect_code 3 flux exec -n sh -c "exit 3" &&
 	test_expect_code 139 flux exec -n sh -c "kill -11 \$\$"
 '
 
-test_expect_success 'flux exec outputs tasks with errors' '
+test_expect_success NO_ASAN 'flux exec outputs tasks with errors' '
 	! flux exec -n sh -c "exit 2" > 2.out 2>&1 &&
         grep "\[0-3\]: Exit 2" 2.out &&
 	! flux exec -n sh -c "exit 3" > 3.out 2>&1 &&
