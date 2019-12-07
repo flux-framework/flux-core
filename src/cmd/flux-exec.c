@@ -450,6 +450,7 @@ int main (int argc, char *argv[])
      */
     idset_destroy (ns);
     free (cwd);
+    flux_cmd_destroy(cmd);
     flux_close (h);
     optparse_destroy (opts);
     log_fini ();
