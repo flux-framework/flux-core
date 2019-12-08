@@ -116,6 +116,8 @@ test_under_flux() {
     if test_have_prereq ASAN; then
         gracetime="-o,-g,10"
         timeout="-o -Sinit.rc2_timeout=800"
+        # Set log_path for ASan o/w errors from broker may be lost
+        ASAN_OPTIONS=${ASAN_OPTIONS}:log_path=${TEST_NAME}.asan
     fi
     logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
