@@ -29,10 +29,11 @@ int event_job_action (struct event *event, struct job *job);
  */
 int event_job_update (struct job *job, json_t *event);
 
-/* Add notification of job's state transition to its current state
- * to batch for publication.
+/* Add notification of job's state transition to its current state and
+ * the timestamp of the change to batch for publication.
  */
-int event_batch_pub_state (struct event *event, struct job *job);
+int event_batch_pub_state (struct event *event, struct job *job,
+                           double timestamp);
 
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
