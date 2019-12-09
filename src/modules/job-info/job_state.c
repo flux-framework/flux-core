@@ -689,10 +689,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                                 __FUNCTION__, (unsigned long long)job->id);
                 goto error;
             }
-            if (severity == 0) {
+            if (severity == 0)
                 state_transition (ctx, job, FLUX_JOB_CLEANUP);
-                job->t_inactive = timestamp;
-            }
         }
         else if (!strcmp (name, "alloc")) {
             if (job->state == FLUX_JOB_SCHED) {
