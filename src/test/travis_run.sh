@@ -40,7 +40,8 @@ fi
 
 ARGS="$@"
 JOBS=${JOBS:-2}
-MAKECMDS="${MAKE} -k -j ${JOBS} ${DISTCHECK:+dist}check"
+MAKECMDS="${MAKE} -j ${JOBS}"
+CHECKCMDS="${MAKE} -k -j ${JOBS} ${DISTCHECK:+dist}check"
 
 # Add non-standard path for libfaketime to LD_LIBRARY_PATH:
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"
@@ -76,20 +77,19 @@ sudo sh -c "mkdir -p /usr/include/flux \
 # We can't use distcheck here, it doesn't play well with coverage testing:
 if test "$COVERAGE" = "t"; then
     ARGS="$ARGS --enable-code-coverage"
-    MAKECMDS="${MAKE} -j $JOBS && \
-              ${MAKE} -j $JOBS check-code-coverage && \
+    CHECKCMDS="${MAKE} -j $JOBS check-code-coverage && \
               lcov -l flux*-coverage.info"
 
 # Use make install for T_INSTALL:
 elif test "$TEST_INSTALL" = "t"; then
     ARGS="$ARGS --prefix=/usr --sysconfdir=/etc"
-    MAKECMDS="${MAKE} -j $JOBS && sudo make install && \
+    CHECKCMDS="sudo make install && \
               /usr/bin/flux keygen --force && \
               FLUX_TEST_INSTALLED_PATH=/usr/bin ${MAKE} -j $JOBS check"
 fi
 
 if test -n "$PRELOAD" ; then
-  MAKECMDS="/usr/bin/env 'LD_PRELOAD=$PRELOAD' ${MAKECMDS}"
+  CHECKCMDS="/usr/bin/env 'LD_PRELOAD=$PRELOAD' ${CHECKCMDS}"
 fi
 
 # Travis has limited resources, even though number of processors might
@@ -127,4 +127,6 @@ travis_fold "configure"  "/usr/src/configure ${ARGS}..." /usr/src/configure ${AR
 travis_fold "make_clean" "make clean..." make clean
 
 echo running: ${MAKECMDS}
-eval ${MAKECMDS}
+travis_fold "build" "${MAKECMDS}" eval ${MAKECMDS}
+echo running: ${CHECKCMDS}
+travis_fold "check" "${CHECKCMDS}" eval ${CHECKCMDS}
