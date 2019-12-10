@@ -9,9 +9,11 @@
 ###############################################################
 from __future__ import print_function
 
+import os
 import math
 import json
 import errno
+import datetime
 import collections
 
 import six
@@ -276,14 +278,17 @@ class Jobspec(object):
         Assign a time limit to the job.  The duration may be:
         - a float in seconds
         - a string in Flux Standard Duration
+        - a python datetime.timedelta
         A duration of zero is interpreted as "not set".
         """
         if isinstance(duration, six.string_types):
             time = parse_fsd(duration)
+        elif isinstance(duration, datetime.timedelta):
+            time = duration.total_seconds()
         elif isinstance(duration, float):
             time = duration
         else:
-            raise ValueError("duration must be a float or string")
+            raise ValueError("duration must be a float, string, or timedelta")
         if time < 0:
             raise ValueError("duration must not be negative")
         if math.isnan(time) or math.isinf(time):
@@ -303,11 +308,15 @@ class Jobspec(object):
     @cwd.setter
     def cwd(self, cwd):
         """
-        Set working directory of job.
+        Set working directory of job. The cwd may be:
+        - a pathlib object (if py 3.6+)
+        - a string
         """
+        if six.PY3 and isinstance(cwd, os.PathLike):
+            cwd = os.fspath(cwd)
         if not isinstance(cwd, six.string_types):
             raise ValueError("cwd must be a string")
-        self.jobspec["attributes"]["system"]["cwd"] = cwd
+        self.setattr("system.cwd", cwd)
 
     @property
     def environment(self):
@@ -323,6 +332,9 @@ class Jobspec(object):
     def environment(self, environ):
         """
         Set (entire) environment of job.
+
+        Does a direct assignment (i.e., no deep copy), so future modifications
+        to the `environ` will be reflected in the jobspec.
         """
         if not isinstance(environ, collectionsAbc.Mapping):
             raise ValueError("environment must be a mapping")
