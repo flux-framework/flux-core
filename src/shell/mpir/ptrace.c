@@ -46,17 +46,11 @@ static int ptrace_traceme (flux_plugin_t *p,
 
 int current_task_pid (flux_shell_t *shell)
 {
-    json_t *o = NULL;
     long pid = -1;
-    char *s = NULL;
-
-    if (flux_shell_task_get_info (flux_shell_current_task (shell), &s) < 0
-        || !(o = json_loads (s, 0, NULL))
-        || json_unpack (o, "{s:I}", "pid", &pid) < 0)
-        goto out;
-out:
-    json_decref (o);
-    free (s);
+    if (flux_shell_task_info_unpack (flux_shell_current_task (shell),
+                                     "{s:I}",
+                                     "pid", &pid) < 0)
+        return -1;
     return (int) pid;
 }
 

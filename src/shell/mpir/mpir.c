@@ -47,49 +47,25 @@ static char hostname [1024] = "";
 
 static int shell_task_rank (flux_shell_task_t *task)
 {
-    json_t *o = NULL;
     int rank = -1;
-    char *s = NULL;
-
-    if (flux_shell_task_get_info (task, &s) < 0
-        || !(o = json_loads (s, 0, NULL))
-        || json_unpack (o, "{s:i}", "rank", &rank) < 0)
-        goto out;
-out:
-    json_decref (o);
-    free (s);
+    if (flux_shell_task_info_unpack (task, "{s:i}", "rank", &rank) < 0)
+        return -1;
     return rank;
 }
 
 static int shell_size (flux_shell_t *shell)
 {
-    json_t *o = NULL;
     int size = -1;
-    char *s = NULL;
-
-    if (flux_shell_get_info (shell, &s) < 0
-        || !(o = json_loads (s, 0, NULL))
-        || json_unpack (o, "{s:i}", "size", &size) < 0)
-        goto out;
-out:
-    json_decref (o);
-    free (s);
+    if (flux_shell_info_unpack (shell, "{s:i}", "size", &size) < 0)
+        return -1;
     return size;
 }
 
 static int shell_rank (flux_shell_t *shell)
 {
-    json_t *o = NULL;
     int rank = -1;
-    char *s = NULL;
-
-    if (flux_shell_get_info (shell, &s) < 0
-        || !(o = json_loads (s, 0, NULL))
-        || json_unpack (o, "{s:i}", "rank", &rank) < 0)
-        goto out;
-out:
-    json_decref (o);
-    free (s);
+    if (flux_shell_info_unpack (shell, "{s:i}", "rank", &rank) < 0)
+        return -1;
     return rank;
 }
 
