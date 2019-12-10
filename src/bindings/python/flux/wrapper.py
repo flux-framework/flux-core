@@ -17,6 +17,8 @@ import re
 import os
 import errno
 import inspect
+import weakref
+
 import six
 
 
@@ -319,7 +321,7 @@ class Wrapper(WrapperBase):
             return fun
 
         new_fun = self.check_wrap(fun, name)
-        new_method = six.create_bound_method(new_fun, self)
+        new_method = six.create_bound_method(new_fun, weakref.proxy(self))
 
         # Store the wrapper function into the instance
         # to prevent a second lookup
