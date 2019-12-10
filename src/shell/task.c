@@ -63,6 +63,7 @@ void shell_task_destroy (struct shell_task *task)
 {
     if (task) {
         int saved_errno = errno;
+        aux_destroy (&task->aux);
         flux_cmd_destroy (task->cmd);
         flux_subprocess_destroy (task->proc);
         zhashx_destroy (&task->subscribers);
