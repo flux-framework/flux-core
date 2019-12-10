@@ -206,6 +206,11 @@ static int task_cb (flux_plugin_t *p,
     ok (flux_shell_task_get_info (task, NULL) < 0 && errno == EINVAL,
         "flux_shell_task_get_info with NULL task returns EINVAL");
 
+    ok (flux_shell_task_info_unpack (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_task_info_unpack with NULL args returns EINVAL");
+    ok (flux_shell_task_info_unpack (task, NULL) < 0 && errno == EINVAL,
+        "flux_shell_task_info_unpack with NULL fmt returns EINVAL");
+
     ok (!flux_shell_task_subprocess (NULL) && errno == EINVAL,
         "flux_shell_task_subprocess with NULL task returns EINVAL");
 
