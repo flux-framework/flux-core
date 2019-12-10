@@ -15,8 +15,6 @@
 #endif
 
 #include <hwloc.h>
-#include <jansson.h>
-
 #include <flux/core.h>
 #include <flux/shell.h>
 
@@ -25,7 +23,6 @@
 struct shell_affinity {
     hwloc_topology_t topo;
     int ntasks;
-    json_t *rankinfo;
     const char *cores;
     hwloc_cpuset_t cpuset;
     hwloc_cpuset_t *pertask;
@@ -140,20 +137,6 @@ err:
     return NULL;
 }
 
-/*  Get shell rankinfo json_t object from the shell API.
- */
-static json_t *shell_rankinfo (flux_shell_t *shell)
-{
-    char *json_str = NULL;
-    json_t *o = NULL;
-    if (flux_shell_get_rank_info (shell, -1, &json_str) < 0)
-        shell_log_errno ("flux_shell_get_rank_info");
-    else if (!(o = json_loads (json_str, 0, NULL)))
-        shell_log_errno ("json_loads");
-    free (json_str);
-    return o;
-}
-
 static void shell_affinity_destroy (void *arg)
 {
     struct shell_affinity *sa = arg;
@@ -168,7 +151,6 @@ static void shell_affinity_destroy (void *arg)
         }
         free (sa->pertask);
     }
-    json_decref (sa->rankinfo);
     free (sa);
 }
 
@@ -196,13 +178,13 @@ static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
         return NULL;
     if (shell_affinity_topology_init (sa) < 0)
         goto err;
-    if (!(sa->rankinfo = shell_rankinfo (shell)))
-        goto err;
-    if (json_unpack (sa->rankinfo, "{ s:i s:{s:s} }",
-                                   "ntasks", &sa->ntasks,
-                                   "resources",
-                                     "cores", &sa->cores) < 0) {
-        shell_log_errno ("json_unpack");
+    if (flux_shell_rank_info_unpack (shell,
+                                     -1,
+                                     "{ s:i s:{s:s} }",
+                                     "ntasks", &sa->ntasks,
+                                     "resources",
+                                       "cores", &sa->cores) < 0) {
+        shell_log_errno ("flux_shell_rank_info_unpack");
         goto err;
     }
     return sa;
@@ -239,18 +221,8 @@ static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
 static int flux_shell_task_getid (flux_shell_task_t *task)
 {
     int id = -1;
-    char *s = NULL;
-    json_t *o = NULL;
-
-    if (flux_shell_task_get_info (task, &s) < 0)
+    if (flux_shell_task_info_unpack (task, "{ s:i }", "localid", &id) < 0)
         return -1;
-    if (!(o = json_loads (s, 0, NULL)))
-        goto out;
-    if (json_unpack (o, "{ s:i }", "localid", &id) < 0)
-        goto out;
-out:
-    json_decref (o);
-    free (s);
     return id;
 }
 
