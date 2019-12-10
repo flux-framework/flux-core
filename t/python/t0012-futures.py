@@ -33,16 +33,15 @@ class TestHandle(unittest.TestCase):
     def setUpClass(self):
         """Create a handle, connect to flux"""
         self.f = flux.Flux()
+        self.ping_payload = {"seq": 1, "pad": "stuff"}
 
     def test_01_rpc_get(self):
-        payload = {"seq": 1, "pad": "stuff"}
-        future = self.f.rpc("cmb.ping", payload)
+        future = self.f.rpc("cmb.ping", self.ping_payload)
         resp_payload = future.get()
-        self.assertDictContainsSubset(payload, resp_payload)
+        self.assertDictContainsSubset(self.ping_payload, resp_payload)
 
     def test_02_future_wait_for(self):
-        payload = {"seq": 1, "pad": "stuff"}
-        future = self.f.rpc("cmb.ping", payload)
+        future = self.f.rpc("cmb.ping", self.ping_payload)
         try:
             future.wait_for(5)
             resp_payload = future.get()
@@ -51,7 +50,7 @@ class TestHandle(unittest.TestCase):
                 self.fail(msg="future fulfillment timed out")
             else:
                 raise
-        self.assertDictContainsSubset(payload, resp_payload)
+        self.assertDictContainsSubset(self.ping_payload, resp_payload)
 
     def test_03_future_then(self):
         """Register a 'then' cb and run the reactor to ensure it runs"""
@@ -68,8 +67,7 @@ class TestHandle(unittest.TestCase):
                 # ensure that reactor is always stopped, avoiding a hung test
                 flux_handle.reactor_stop(reactor)
 
-        payload = {"seq": 1, "pad": "stuff"}
-        self.f.rpc(b"cmb.ping", payload).then(then_cb, arg=payload)
+        self.f.rpc(b"cmb.ping", self.ping_payload).then(then_cb, arg=self.ping_payload)
         # force a full garbage collection pass to test that our anonymous RPC doesn't disappear
         gc.collect(2)
         ret = self.f.reactor_run(self.f.get_reactor(), 0)
