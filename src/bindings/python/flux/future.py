@@ -88,7 +88,11 @@ class Future(WrapperPimpl):
         flux_handle = self.pimpl.get_flux()
         if flux_handle == ffi.NULL:
             return None
-        return flux.core.handle.Flux(handle=flux_handle)
+        handle = flux.core.handle.Flux(handle=flux_handle)
+        # increment reference count to prevent destruction of the underlying handle
+        # (which is owned by the future) when the flux handle is garbage collected
+        handle.incref()
+        return handle
 
     def get_reactor(self):
         return self.pimpl.get_reactor()

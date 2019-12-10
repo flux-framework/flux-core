@@ -40,6 +40,14 @@ class TestHandle(unittest.TestCase):
         resp_payload = future.get()
         self.assertDictContainsSubset(self.ping_payload, resp_payload)
 
+    def test_02_get_flux(self):
+        future = self.f.rpc("cmb.ping", self.ping_payload)
+        future.get_flux()
+        # force a full garbage collection pass to test that the handle is not destructed
+        gc.collect(2)
+        resp_payload = future.get()
+        self.assertDictContainsSubset(self.ping_payload, resp_payload)
+
     def test_02_future_wait_for(self):
         future = self.f.rpc("cmb.ping", self.ping_payload)
         try:
