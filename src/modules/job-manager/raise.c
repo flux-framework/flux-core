@@ -114,10 +114,14 @@ void raise_handle_request (flux_t *h,
                              "userid", userid,
                              "note", note ? note : "") < 0)
         goto error;
+    /* NB: job object may be destroyed in event_job_post_pack().
+     * Do not reference the object after this point:
+     */
+    job = NULL;
     if (!(f = flux_event_publish_pack (h, "job-exception",
                                        FLUX_MSGFLAG_PRIVATE,
                                        "{s:I s:s s:i}",
-                                       "id", job->id,
+                                       "id", id,
                                        "type", type,
                                        "severity", severity)))
         goto error;

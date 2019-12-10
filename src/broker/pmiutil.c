@@ -48,8 +48,10 @@ struct pmi_handle {
 static void broker_pmi_dlclose (struct pmi_dso *dso)
 {
     if (dso) {
+#ifndef __SANITIZE_ADDRESS__
         if (dso->dso)
             dlclose (dso->dso);
+#endif
         free (dso);
     }
 }
@@ -91,6 +93,8 @@ static struct pmi_dso *broker_pmi_dlopen (const char *pmi_library, int debug)
                 log_msg ("dlopen %s", name);
         }
     }
+    liblist_destroy (libs);
+    libs = NULL;
     if (!dso->dso)
         goto error;
     dso->init = dlsym (dso->dso, "PMI_Init");
@@ -112,7 +116,8 @@ static struct pmi_dso *broker_pmi_dlopen (const char *pmi_library, int debug)
     return dso;
 error:
     broker_pmi_dlclose (dso);
-    zlist_destroy (&libs);
+    if (libs)
+        liblist_destroy (libs);
     return NULL;
 }
 

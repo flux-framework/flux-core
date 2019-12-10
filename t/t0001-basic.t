@@ -133,7 +133,8 @@ test_expect_success 'flux-start dies gracefully when run from removed dir' '
 '
 
 
-test_expect_success 'test_under_flux works' '
+# too slow under ASAN
+test_expect_success NO_ASAN 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
         mkdir -p test-under-flux && (
         cd test-under-flux &&

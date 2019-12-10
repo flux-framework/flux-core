@@ -5,6 +5,12 @@ test_description='Stress test KVS in flux session'
 
 . `dirname $0`/sharness.sh
 
+# kvs-stress takes too long with ASAN
+if ! test_have_prereq NO_ASAN; then
+    skip_all='skipping kvs-stress tests since AddressSanitizer is active'
+    test_done
+fi
+
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs

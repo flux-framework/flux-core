@@ -175,9 +175,11 @@ test_expect_success 'flux mini submit --gpus-per-task adds gpus to task slot' '
 '
 test_expect_success 'flux mini --jobname works' '
 	jobid=$(flux mini submit hostname) &&
-        flux job list --pending --running --inactive | grep $jobid | grep hostname &&
+	flux job wait-event $jobid submit &&
+	flux job list --pending --running --inactive | grep $jobid | grep hostname &&
 	jobid=$(flux mini submit --job-name=foobar hostname) &&
-        flux job list --pending --running --inactive | grep $jobid | grep foobar
+	flux job wait-event $jobid submit &&
+	flux job list --pending --running --inactive | grep $jobid | grep foobar
 '
 
 

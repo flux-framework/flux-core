@@ -44,8 +44,8 @@ void basic (void)
         "iodecode success");
     ok (!strcmp (stream, "stdout")
         && !strcmp (rank, "1")
-        && !strcmp (data, "foo")
         && len == 3
+        && !strncmp (data, "foo", len)
         && eof == false,
         "iodecode returned correct info");
     free (data);
@@ -57,8 +57,8 @@ void basic (void)
         "iodecode success");
     ok (!strcmp (stream, "stdout")
         && !strcmp (rank, "[0-8]")
-        && !strcmp (data, "bar")
         && len == 3
+        && !strncmp (data, "bar", len)
         && eof == true,
         "iodecode returned correct info");
     free (data);

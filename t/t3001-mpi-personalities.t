@@ -51,7 +51,7 @@ test_expect_success "intel mpi only rewrites when necessary" '
    test "$(wc -l intel-mpi.unset | cut -f 1 -d " ")" = "0"
 '
 
-test_expect_success HAVE_JQ "spectrum mpi only enabled with option" '
+test_expect_success NO_ASAN,HAVE_JQ "spectrum mpi only enabled with option" '
   LD_PRELOAD_saved=${LD_PRELOAD} &&
   unset LD_PRELOAD &&
   test_when_finished "export LD_PRELOAD=${LD_PRELOAD_saved}" &&

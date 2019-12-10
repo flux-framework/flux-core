@@ -17,9 +17,9 @@ AC_DEFUN([X_AC_ENABLE_SANITIZER], [
     AC_MSG_RESULT($san_enabled)
 
     if test "x$san_enabled" = "xaddress" -o "x$san_enabled" = "xthread" ; then 
-        CFLAGS="$CFLAGS -fsanitize=$san_enabled -fno-omit-frame-pointer"
+        CFLAGS="$CFLAGS -fsanitize=$san_enabled -fno-omit-frame-pointer -fsanitize-recover=all"
         LDFLAGS="$LDFLAGS -fsanitize=$san_enabled"
-        AC_MSG_CHECKING([whether CC supports -fsanitizer=$san_enabled])
+        AC_MSG_CHECKING([whether CC supports -fsanitizer=$san_enabled and -fsanitize-recover=all])
             AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
             [AC_MSG_RESULT([yes])],
             [AC_MSG_RESULT([no]) 

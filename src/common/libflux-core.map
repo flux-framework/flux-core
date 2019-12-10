@@ -1,6 +1,7 @@
 { global:
     flux_*;
     JSC_*;
+    __asan*;
     local: *;
 };
 

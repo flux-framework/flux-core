@@ -3,6 +3,10 @@
 test_description='Test flux cron service'
 
 . $(dirname $0)/sharness.sh
+if ! test_have_prereq NO_ASAN; then
+    skip_all='skipping faketime tests since AddressSanitizer is active'
+    test_done
+fi
 
 #  Check for libfaketimeMT using known epoch with /bin/date:
 t=$(LD_PRELOAD=libfaketimeMT.so.1 FAKETIME="1973-11-29 21:33:09 UTC" date +%s)

@@ -108,8 +108,10 @@ void flux_plugin_destroy (flux_plugin_t *p)
         free (p->path);
         free (p->name);
         aux_destroy (&p->aux);
+#ifndef __SANITIZE_ADDRESS__
         if (p->dso)
             dlclose (p->dso);
+#endif
         free (p);
         errno = saved_errno;
     }
