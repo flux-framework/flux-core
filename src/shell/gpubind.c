@@ -19,7 +19,6 @@
 #endif
 #include <stdio.h>
 #include <string.h>
-#include <jansson.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 #include <flux/idset.h>
@@ -33,23 +32,16 @@ int get_shell_gpus (flux_shell_t *shell,
                     struct idset **ids)
 {
     int rc = -1;
-    char *s = NULL;
     const char *gpu_list = NULL;
-    json_t *o = NULL;
-    json_error_t err;
     struct idset *gpus = NULL;
 
-    if (flux_shell_get_rank_info (shell, -1, &s) < 0)
-        return shell_log_errno ("flux_shell_get_rank_info");
-    if (!(o = json_loads (s, 0, NULL))) {
-        shell_log_errno ("json_loads");
-        goto out;
-    }
-    if (json_unpack_ex (o, &err, 0, "{s:i s:{s?:s}}",
-                                   "ntasks", ntasks,
-                                   "resources",
-                                     "gpus", &gpu_list) < 0) {
-        shell_log_error ("json_unpack: %s", err.text);
+    if (flux_shell_rank_info_unpack (shell,
+                                     -1,
+                                     "{s:i s:{s?:s}}",
+                                     "ntasks", ntasks,
+                                     "resources",
+                                       "gpus", &gpu_list) < 0) {
+        shell_log_errno ("flux_shell_rank_info_unpack");
         goto out;
     }
     if (!(gpus = idset_decode (gpu_list ? gpu_list : ""))) {
@@ -58,8 +50,6 @@ int get_shell_gpus (flux_shell_t *shell,
     }
     rc = 0;
 out:
-    free (s);
-    json_decref (o);
     *ids = gpus;
     return rc;
 }
