@@ -224,6 +224,11 @@ flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell);
  */
 int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str);
 
+/*  Get shell task info with unpack-style args.
+ */
+int flux_shell_task_info_unpack (flux_shell_task_t *task,
+                                 const char *fmt, ...);
+
 /*
  *  Return the cmd structure for a shell task.
  */
