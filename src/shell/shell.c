@@ -331,60 +331,155 @@ int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
     return json_object_del (shell->info->jobspec->environment, name);
 }
 
-int flux_shell_get_info (flux_shell_t *shell, char **json_str)
+static json_t *flux_shell_get_info_object (flux_shell_t *shell)
 {
     json_error_t err;
+    json_t *o = NULL;
+
+    if (!shell->info)
+        return NULL;
+
+    if ((o = flux_shell_aux_get (shell, "shell::info")))
+        return o;
+
+    if (!(o = json_pack_ex (&err, 0,
+                            "{ s:I s:i s:i s:i s:O s:{ s:i s:b }}",
+                            "jobid", shell->info->jobid,
+                            "rank",  shell->info->shell_rank,
+                            "size",  shell->info->shell_size,
+                            "ntasks", shell->info->rankinfo.ntasks,
+                            "jobspec", shell->info->jobspec->jobspec,
+                            "options",
+                               "verbose", shell->verbose,
+                               "standalone", shell->standalone)))
+        return NULL;
+    if (flux_shell_aux_set (shell,
+                            "shell::info",
+                            o,
+                            (flux_free_f) json_decref) < 0) {
+        json_decref (o);
+        o = NULL;
+    }
+    return o;
+}
+
+int flux_shell_get_info (flux_shell_t *shell, char **json_str)
+{
     json_t *o;
     if (!shell || !json_str) {
         errno = EINVAL;
         return -1;
     }
-    if (!(o = json_pack_ex (&err, 0, "{ s:I s:i s:i s:i s:O s:{ s:i s:b }}",
-                           "jobid", shell->info->jobid,
-                           "rank",  shell->info->shell_rank,
-                           "size",  shell->info->shell_size,
-                           "ntasks", shell->info->rankinfo.ntasks,
-                           "jobspec", shell->info->jobspec->jobspec,
-                           "options",
-                              "verbose", shell->verbose,
-                              "standalone", shell->standalone)))
+    if (!(o = flux_shell_get_info_object (shell)))
         return -1;
     *json_str = json_dumps (o, JSON_COMPACT);
-    json_decref (o);
     return (*json_str ? 0 : -1);
+}
+
+int flux_shell_info_vunpack (flux_shell_t *shell, const char *fmt, va_list ap)
+{
+    json_t *o;
+    json_error_t err;
+    if (!shell || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = flux_shell_get_info_object (shell)))
+        return -1;
+    return json_vunpack_ex (o, &err, 0, fmt, ap);
+}
+
+int flux_shell_info_unpack (flux_shell_t *shell, const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, fmt);
+    rc = flux_shell_info_vunpack (shell, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
+static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
+{
+    json_t *o;
+    char key [128];
+    struct rcalc_rankinfo ri;
+
+    if (!shell->info)
+        return NULL;
+
+    if (rank == -1)
+        rank = shell->info->shell_rank;
+    if (rcalc_get_nth (shell->info->rcalc, rank, &ri) < 0)
+        return NULL;
+
+    if (snprintf (key, sizeof (key), "shell::rinfo%d", rank) >= sizeof (key))
+        return NULL;
+
+    if ((o = flux_shell_aux_get (shell, key)))
+        return o;
+
+    if (!(o = json_pack ("{ s:i s:i s:{s:s s:s?}}",
+                         "broker_rank", ri.rank,
+                         "ntasks", ri.ntasks,
+                         "resources",
+                           "cores", shell->info->rankinfo.cores,
+                           "gpus",  shell->info->rankinfo.gpus)))
+        return NULL;
+
+    if (flux_shell_aux_set (shell, key, o, (flux_free_f) json_decref) < 0) {
+        json_decref (o);
+        return NULL;
+    }
+
+    return o;
 }
 
 int flux_shell_get_rank_info (flux_shell_t *shell,
                               int shell_rank,
                               char **json_str)
 {
-    struct rcalc_rankinfo ri;
     json_t *o = NULL;
 
     if (!shell || !json_str || shell_rank < -1) {
         errno = EINVAL;
         return -1;
     }
-
-    if (shell_rank == -1)
-        shell_rank = shell->info->shell_rank;
-
-    if (rcalc_get_nth (shell->info->rcalc, shell_rank, &ri) < 0)
-        return -1;
-
-    o = json_pack ("{ s:i s:i s:{s:s s:s?}}",
-                   "broker_rank", ri.rank,
-                   "ntasks", ri.ntasks,
-                   "resources",
-                     "cores", shell->info->rankinfo.cores,
-                     "gpus",  shell->info->rankinfo.gpus);
-    if (!o)
+    if (!(o = flux_shell_get_rank_info_object (shell, shell_rank)))
         return -1;
     *json_str = json_dumps (o, JSON_COMPACT);
-    json_decref (o);
     return (*json_str ? 0 : -1);
 }
 
+int flux_shell_rank_info_vunpack (flux_shell_t *shell,
+                                  int shell_rank,
+                                  const char *fmt,
+                                  va_list ap)
+{
+    json_t *o;
+    json_error_t err;
+    if (!shell || !fmt || shell_rank < -1) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = flux_shell_get_rank_info_object (shell, shell_rank)))
+        return -1;
+    return json_vunpack_ex (o, &err, 0, fmt, ap);
+}
+
+int flux_shell_rank_info_unpack (flux_shell_t *shell,
+                                 int shell_rank,
+                                 const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, fmt);
+    rc = flux_shell_rank_info_vunpack (shell, shell_rank, fmt, ap);
+    va_end (ap);
+    return rc;
+}
 
 
 int flux_shell_add_event_handler (flux_shell_t *shell,

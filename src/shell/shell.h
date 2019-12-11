@@ -109,6 +109,11 @@ int flux_shell_unsetenv (flux_shell_t *shell, const char *name);
 int flux_shell_get_info (flux_shell_t *shell, char **json_str);
 
 
+/*  Access shell info object with Jansson-style unpack args.
+ */
+int flux_shell_info_unpack (flux_shell_t *shell,
+                            const char *fmt, ...);
+
 /*  Return rank and task info for given shell rank as JSON string.
  *  {
  *   "broker_rank":i,
@@ -119,6 +124,12 @@ int flux_shell_get_info (flux_shell_t *shell, char **json_str);
 int flux_shell_get_rank_info (flux_shell_t *shell,
                               int shell_rank,
                               char **json_str);
+
+/*  Access shell rank info object with Jansson-style unpack args.
+ */
+int flux_shell_rank_info_unpack (flux_shell_t *shell,
+                                 int shell_rank,
+                                 const char *fmt, ...);
 
 /*
  *  Take a "completion reference" on the shell object `shell`.
@@ -212,6 +223,11 @@ flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell);
  *  'exitcode' and 'signaled' are only valid when task has exited.
  */
 int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str);
+
+/*  Get shell task info with unpack-style args.
+ */
+int flux_shell_task_info_unpack (flux_shell_task_t *task,
+                                 const char *fmt, ...);
 
 /*
  *  Return the cmd structure for a shell task.

@@ -91,6 +91,11 @@ static int shell_cb (flux_plugin_t *p,
     ok (flux_shell_get_info (shell, NULL) < 0 && errno == EINVAL,
         "flux_shell_get_info with NUll json_str returns EINVAL");
 
+    ok (flux_shell_info_unpack (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_info_unpack with NUll arg returns EINVAL");
+    ok (flux_shell_info_unpack (shell, NULL) < 0 && errno == EINVAL,
+        "flux_shell_info_unpack with NULL fmt returns EINVAL");
+
     ok (flux_shell_get_rank_info (NULL, -1, NULL) < 0 && errno == EINVAL,
         "flux_shell_get_rank_info (NULL, ..) returns EINVAL");
     ok (flux_shell_get_rank_info (shell, -1, NULL) < 0 && errno == EINVAL,
@@ -102,6 +107,19 @@ static int shell_cb (flux_plugin_t *p,
         "flux_shell_get_rank_info with invalid rank returns EINVAL");
     ok (flux_shell_get_rank_info (shell, -2, &json_str) < 0 && errno == EINVAL,
         "flux_shell_get_rank_info with rank < -1 returns EINVAL");
+
+    ok (flux_shell_rank_info_unpack (NULL, -1, NULL) < 0 && errno == EINVAL,
+        "flux_shell_rank_info_unpack (NULL, ..) returns EINVAL");
+    ok (flux_shell_get_rank_info (shell, -1, NULL) < 0 && errno == EINVAL,
+        "flux_shell_rank_info_unpack (NULL, ..) returns EINVAL");
+
+    int n;
+    ok (flux_shell_rank_info_unpack (shell, 12, "{s:i}", "ntasks", &n) < 0
+        && errno == EINVAL,
+        "flux_shell_rank_info_unpack with invalid rank returns EINVAL");
+    ok (flux_shell_rank_info_unpack (shell, -2, "{s:i}", "ntasks", &n) < 0
+        && errno == EINVAL,
+        "flux_shell_rank_info_unpack with rank < -1 returns EINVAL");
 
     ok (flux_shell_add_event_handler (NULL, NULL, NULL, NULL) < 0
         && errno == EINVAL,
@@ -187,6 +205,11 @@ static int task_cb (flux_plugin_t *p,
         "flux_shell_task_get_info with NULL args returns EINVAL");
     ok (flux_shell_task_get_info (task, NULL) < 0 && errno == EINVAL,
         "flux_shell_task_get_info with NULL task returns EINVAL");
+
+    ok (flux_shell_task_info_unpack (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_task_info_unpack with NULL args returns EINVAL");
+    ok (flux_shell_task_info_unpack (task, NULL) < 0 && errno == EINVAL,
+        "flux_shell_task_info_unpack with NULL fmt returns EINVAL");
 
     ok (!flux_shell_task_subprocess (NULL) && errno == EINVAL,
         "flux_shell_task_subprocess with NULL task returns EINVAL");

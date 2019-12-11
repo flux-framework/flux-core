@@ -12,9 +12,11 @@
 #define SHELL_TASK_H
 
 #include <flux/core.h>
+#include <czmq.h>
+
+#include "src/common/libutil/aux.h"
 #include "info.h"
 
-#include <czmq.h>
 
 struct shell_task;
 
@@ -45,6 +47,8 @@ struct shell_task {
 
     shell_task_io_ready_f io_cb;
     void *io_cb_arg;
+
+    struct aux_item *aux;
 };
 
 void shell_task_destroy (struct shell_task *task);

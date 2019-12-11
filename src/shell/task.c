@@ -63,6 +63,7 @@ void shell_task_destroy (struct shell_task *task)
 {
     if (task) {
         int saved_errno = errno;
+        aux_destroy (&task->aux);
         flux_cmd_destroy (task->cmd);
         flux_subprocess_destroy (task->proc);
         zhashx_destroy (&task->subscribers);
@@ -337,26 +338,78 @@ static const char * task_state (flux_shell_task_t *task)
         return "Init";
 }
 
-int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str)
+static json_t *get_task_object (flux_shell_task_t *task)
 {
     json_error_t err;
+    json_t *o;
+    char key [128];
+
+    if (!task)
+        return NULL;
+
+    /* Save one copy of object per task "state", since the information
+     *  and available fields may be different as the task state evolves.
+     */
+    if (snprintf (key,
+                  sizeof (key),
+                  "shell::task:%s",
+                  task_state (task)) >= sizeof (key))
+        return NULL;
+    if ((o = aux_get (task->aux, key)))
+        return o;
+
+    if (!(o = json_pack_ex (&err, 0, "{ s:i s:i s:s }",
+                                     "localid", task->index,
+                                     "rank", task->rank,
+                                     "state", task_state (task))))
+        return NULL;
+
+    if ((task->proc && add_process_info_to_json (task->proc, o) < 0)
+        || aux_set (&task->aux, key, o, (flux_free_f) json_decref) < 0) {
+        json_decref (o);
+        return NULL;
+    }
+    return o;
+}
+
+int flux_shell_task_get_info (flux_shell_task_t *task, char **json_str)
+{
     json_t *o = NULL;
     if (!task || !json_str) {
         errno = EINVAL;
         return -1;
     }
-    if (!(o = json_pack_ex (&err, 0, "{ s:i s:i s:s }",
-                                     "localid", task->index,
-                                     "rank", task->rank,
-                                     "state", task_state (task))))
+    if (!(o = get_task_object (task)))
         return -1;
-    if (task->proc && add_process_info_to_json (task->proc, o) < 0) {
-        json_decref (o);
+    *json_str = json_dumps (o, JSON_COMPACT);
+    return (*json_str ? 0 : -1);
+}
+
+int flux_shell_task_info_vunpack (flux_shell_task_t *task,
+                                  const char *fmt,
+                                  va_list ap)
+{
+    json_t *o;
+    json_error_t err;
+    if (!task || !fmt) {
+        errno = EINVAL;
         return -1;
     }
-    *json_str = json_dumps (o, JSON_COMPACT);
-    json_decref (o);
-    return (*json_str ? 0 : -1);
+    if (!(o = get_task_object (task)))
+        return -1;
+    return json_vunpack_ex (o, &err, 0, fmt, ap);
+}
+
+int flux_shell_task_info_unpack (flux_shell_task_t *task,
+                                 const char *fmt,
+                                 ...)
+{
+    int rc;
+    va_list ap;
+    va_start (ap, fmt);
+    rc = flux_shell_task_info_vunpack (task, fmt, ap);
+    va_end (ap);
+    return rc;
 }
 
 /*
