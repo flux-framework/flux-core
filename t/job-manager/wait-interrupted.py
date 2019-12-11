@@ -16,19 +16,9 @@
 
 import flux
 from flux import job
+from flux.job import JobspecV1
 import sys
 import subprocess
-
-
-# Return jobspec for a simple job
-def make_jobspec(cmd):
-    out = subprocess.Popen(
-        ["flux", "jobspec", "srun", cmd],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    stdout, stderr = out.communicate()
-    return stdout
 
 
 if len(sys.argv) != 2:
@@ -40,7 +30,7 @@ else:
 h = flux.Flux()
 
 # Submit njobs test jobs
-jobspec = make_jobspec("/bin/true")
+jobspec = JobspecV1.from_command(["/bin/true"])
 jobs = []
 flags = flux.constants.FLUX_JOB_WAITABLE
 for i in range(njobs):

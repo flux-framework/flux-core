@@ -15,19 +15,9 @@
 
 import flux
 from flux import job
+from flux.job import JobspecV1
 import sys
 import subprocess
-
-
-# Return jobspec for a simple job
-def make_jobspec(cmd):
-    out = subprocess.Popen(
-        ["flux", "jobspec", "srun", cmd],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    stdout, stderr = out.communicate()
-    return stdout
 
 
 njobs = 10
@@ -40,7 +30,7 @@ if len(sys.argv) == 3:
 # Open connection to broker
 h = flux.Flux()
 
-jobspec = make_jobspec("/bin/true")
+jobspec = JobspecV1.from_command(["/bin/true"])
 flags = flux.constants.FLUX_JOB_WAITABLE
 done = 0
 running = 0

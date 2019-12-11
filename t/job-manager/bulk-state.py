@@ -17,21 +17,11 @@
 
 import flux
 from flux import job
+from flux.job import JobspecV1
 import sys
 import subprocess
 
 expected_states = ["NEW", "DEPEND", "SCHED", "RUN", "CLEANUP", "INACTIVE"]
-
-# Return jobspec for a simple job
-def make_jobspec():
-    out = subprocess.Popen(
-        ["flux", "jobspec", "srun", "hostname"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    stdout, stderr = out.communicate()
-    return stdout
-
 
 # Return True if all jobs in the jobs dictionary have reached 'INACTIVE' state
 def all_inactive(jobs):
@@ -70,7 +60,7 @@ h.event_subscribe("job-state")
 # Submit several test jobs, building dictionary by jobid,
 # where each entry contains a list of job states
 # N.B. no notification is provided for the NEW state
-jobspec = make_jobspec()
+jobspec = JobspecV1.from_command(["hostname"])
 jobs = {}
 for i in range(njobs):
     jobid = job.submit(h, jobspec)
