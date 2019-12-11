@@ -357,7 +357,7 @@ class Jobspec(object):
         """
         self._set_treedict(self.jobspec, "attributes." + key, val)
 
-    def setattr_shopt(self, key, val):
+    def setattr_shell_option(self, key, val):
         """
         set job attribute: shell option
         """

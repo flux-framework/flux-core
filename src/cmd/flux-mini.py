@@ -205,20 +205,20 @@ class SubmitCmd:
             jobspec.setattr("system.job.name", args.job_name)
 
         if args.input is not None:
-            jobspec.setattr_shopt("input.stdin.type", "file")
-            jobspec.setattr_shopt("input.stdin.path", args.input)
+            jobspec.setattr_shell_option("input.stdin.type", "file")
+            jobspec.setattr_shell_option("input.stdin.path", args.input)
 
         if args.output is not None:
-            jobspec.setattr_shopt("output.stdout.type", "file")
-            jobspec.setattr_shopt("output.stdout.path", args.output)
+            jobspec.setattr_shell_option("output.stdout.type", "file")
+            jobspec.setattr_shell_option("output.stdout.path", args.output)
             if args.label_io:
-                jobspec.setattr_shopt("output.stdout.label", True)
+                jobspec.setattr_shell_option("output.stdout.label", True)
 
         if args.error is not None:
-            jobspec.setattr_shopt("output.stderr.type", "file")
-            jobspec.setattr_shopt("output.stderr.path", args.error)
+            jobspec.setattr_shell_option("output.stderr.type", "file")
+            jobspec.setattr_shell_option("output.stderr.path", args.error)
             if args.label_io:
-                jobspec.setattr_shopt("output.stderr.label", True)
+                jobspec.setattr_shell_option("output.stderr.label", True)
 
         if args.setopt is not None:
             for kv in args.setopt:
@@ -228,7 +228,7 @@ class SubmitCmd:
                     val = json.loads(val)
                 except:
                     pass
-                jobspec.setattr_shopt(key, val)
+                jobspec.setattr_shell_option(key, val)
 
         if args.setattr is not None:
             for kv in args.setattr:
