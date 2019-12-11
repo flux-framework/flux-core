@@ -114,7 +114,32 @@ def _validate_keys(expected, given, keys_optional=False, allow_additional=False)
 class Jobspec(object):
     top_level_keys = set(["resources", "tasks", "version", "attributes"])
 
-    def __init__(self, resources, tasks, version, attributes=None):
+    def __init__(self, resources, tasks, **kwargs):
+        """
+        Constructor for Canonical Jobspec, as described in RFC 14
+
+        :param resources:  dictionary following the specification in RFC14 for
+                           the `resources` top-level key
+        :param tasks: dictionary following the specification in RFC14 for the
+                      `tasks` top-level key
+        :param attributes: dictionary following the specification in RFC14 for
+                           the `attributes` top-level key
+        :param version: included to allow for usage like JobspecV1(**jobspec)
+        """
+
+        # ensure that no unknown keyword arguments are used
+        _validate_keys(
+            ["attributes", "version"],
+            kwargs,
+            keys_optional=True,
+            allow_additional=False,
+        )
+
+        if "version" not in kwargs:
+            raise ValueError("version must be set")
+        version = kwargs["version"]
+        attributes = kwargs.get("attributes", None)
+
         if not isinstance(resources, collectionsAbc.Sequence):
             raise TypeError("resources must be a sequence")
         if not isinstance(tasks, collectionsAbc.Sequence):
@@ -466,17 +491,33 @@ class Jobspec(object):
 
 
 class JobspecV1(Jobspec):
-    def __init__(self, resources, tasks, attributes=None, version=1):
+    def __init__(self, resources, tasks, **kwargs):
         """
         Constructor for Version 1 of the Jobspec
 
-        :param version: included to allow for usage like JobspecV1(**jobspec)
+        :param resources:  dictionary following the specification in RFC14 for
+                           the `resources` top-level key
+        :param tasks: dictionary following the specification in RFC14 for the
+                      `tasks` top-level key
+        :param attributes: dictionary following the specification in RFC14 for
+                           the `attributes` top-level key
+        :param version: must be 1, included to allow for usage like
+                        JobspecV1(**jobspec)
         """
-        if version != 1:
-            raise ValueError("version must be 1")
-        super(JobspecV1, self).__init__(
-            resources, tasks, version=version, attributes=attributes
+
+        # ensure that no unknown keyword arguments are used
+        _validate_keys(
+            ["attributes", "version"],
+            kwargs,
+            keys_optional=True,
+            allow_additional=False,
         )
+
+        if "version" not in kwargs:
+            kwargs["version"] = 1
+        elif kwargs["version"] != 1:
+            raise ValueError("version must be 1")
+        super(JobspecV1, self).__init__(resources, tasks, **kwargs)
 
     @classmethod
     def from_command(
