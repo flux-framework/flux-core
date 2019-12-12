@@ -14,13 +14,16 @@ import os
 import errno
 import sys
 import json
-import yaml
-
 import unittest
+import datetime
+from glob import glob
+
+import yaml
+import six
 
 import flux
 from flux import job
-from flux.job import ffi
+from flux.job import Jobspec, JobspecV1, ffi
 
 
 def __flux_size():
@@ -37,19 +40,19 @@ class TestJob(unittest.TestCase):
     def setUpClass(self):
         self.fh = flux.Flux()
 
-        jobspec_dir = os.path.abspath(
+        self.jobspec_dir = os.path.abspath(
             os.path.join(os.environ["FLUX_SOURCE_DIR"], "t", "jobspec")
         )
 
         # get a valid jobspec
-        basic_jobspec_fname = os.path.join(jobspec_dir, "valid", "basic_v1.yaml")
+        basic_jobspec_fname = os.path.join(self.jobspec_dir, "valid", "basic_v1.yaml")
         with open(basic_jobspec_fname, "rb") as infile:
             basic_yaml = infile.read()
-        self.jobspec = yaml_to_json(basic_yaml)
+        self.basic_jobspec = yaml_to_json(basic_yaml)
 
     def test_00_null_submit(self):
         with self.assertRaises(EnvironmentError) as error:
-            job.submit(ffi.NULL, self.jobspec)
+            job.submit(ffi.NULL, self.basic_jobspec)
         self.assertEqual(error.exception.errno, errno.EINVAL)
 
         with self.assertRaises(EnvironmentError) as error:
@@ -65,8 +68,74 @@ class TestJob(unittest.TestCase):
             job.submit(self.fh, 0)
 
     def test_02_sync_submit(self):
-        jobid = job.submit(self.fh, self.jobspec)
+        jobid = job.submit(self.fh, self.basic_jobspec)
         self.assertGreater(jobid, 0)
+
+    def test_03_invalid_construction(self):
+        for cls in [Jobspec, JobspecV1]:
+            for invalid_jobspec_filepath in glob(
+                os.path.join(self.jobspec_dir, "invalid", "*.yaml")
+            ):
+                with self.assertRaises(
+                    (ValueError, TypeError, yaml.scanner.ScannerError)
+                ) as cm:
+                    cls.from_yaml_file(invalid_jobspec_filepath)
+
+    def test_04_valid_construction(self):
+        for jobspec_filepath in glob(os.path.join(self.jobspec_dir, "valid", "*.yaml")):
+            Jobspec.from_yaml_file(jobspec_filepath)
+
+    def test_05_valid_v1_construction(self):
+        for jobspec_filepath in glob(
+            os.path.join(self.jobspec_dir, "valid_v1", "*.yaml")
+        ):
+            JobspecV1.from_yaml_file(jobspec_filepath)
+
+    def test_06_iter(self):
+        jobspec_fname = os.path.join(self.jobspec_dir, "valid", "use_case_2.4.yaml")
+        jobspec = Jobspec.from_yaml_file(jobspec_fname)
+        self.assertEqual(len(list(jobspec)), 7)
+        self.assertEqual(len(list([x for x in jobspec if x["type"] == "core"])), 2)
+        self.assertEqual(len(list([x for x in jobspec if x["type"] == "slot"])), 2)
+
+    def test_07_count(self):
+        jobspec_fname = os.path.join(self.jobspec_dir, "valid", "use_case_2.4.yaml")
+        jobspec = Jobspec.from_yaml_file(jobspec_fname)
+        count_dict = jobspec.resource_counts()
+        self.assertEqual(count_dict["node"], 1)
+        self.assertEqual(count_dict["slot"], 11)
+        self.assertEqual(count_dict["core"], 16)
+        self.assertEqual(count_dict["memory"], 64)
+
+    def test_08_jobspec_submit(self):
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        jobid = job.submit(self.fh, jobspec)
+        self.assertGreater(jobid, 0)
+
+    def test_09_duration_timedelta(self):
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        duration = 100.5
+        delta = datetime.timedelta(seconds=duration)
+        for x in [duration, delta, "{}s".format(duration)]:
+            jobspec.duration = delta
+            self.assertEqual(jobspec.duration, duration)
+
+    def test_10_cwd_pathlib(self):
+        if six.PY2:
+            return
+        import pathlib
+
+        jobspec_path = pathlib.PosixPath(self.jobspec_dir) / "valid" / "basic_v1.yaml"
+        jobspec = Jobspec.from_yaml_file(jobspec_path)
+        cwd = pathlib.PosixPath("/tmp")
+        jobspec.cwd = cwd
+        self.assertEqual(jobspec.cwd, os.fspath(cwd))
+
+    def test_11_environment(self):
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        new_env = {"HOME": "foo", "foo": "bar"}
+        jobspec.environment = new_env
+        self.assertEqual(jobspec.environment, new_env)
 
 
 if __name__ == "__main__":

@@ -8,17 +8,26 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import re
 import sys
 import errno
 import json
 import logging
 import os
+import math
+from datetime import timedelta
 
 import six
 
 from flux.core.inner import ffi, raw
 
-__all__ = ["check_future_error", "encode_payload", "encode_topic", "CLIMain"]
+__all__ = [
+    "check_future_error",
+    "encode_payload",
+    "encode_topic",
+    "CLIMain",
+    "parse_fsd",
+]
 
 
 def check_future_error(func):
@@ -91,3 +100,24 @@ class CLIMain(object):
         finally:
             logging.shutdown()
             sys.exit(exit_code)
+
+
+def parse_fsd(fsd_string):
+    match = re.match(r".*([smhd])$", fsd_string)
+    try:
+        value = float(fsd_string[:-1] if match else fsd_string)
+    except:
+        raise ValueError("invalid Flux standard duration")
+    unit = match.group(1) if match else "s"
+
+    if unit == "m":
+        seconds = timedelta(minutes=value).total_seconds()
+    elif unit == "h":
+        seconds = timedelta(hours=value).total_seconds()
+    elif unit == "d":
+        seconds = timedelta(days=value).total_seconds()
+    else:
+        seconds = value
+    if seconds < 0 or math.isnan(seconds) or math.isinf(seconds):
+        raise ValueError("invalid Flux standard duration")
+    return seconds
