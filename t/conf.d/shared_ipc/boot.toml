@@ -1,5 +1,0 @@
-[bootstrap]
-
-tbon-endpoints = [
-    "ipc://@flux-testipc-1-0",
-]

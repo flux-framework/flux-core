@@ -1,0 +1,9 @@
+#
+# This bootstrap configuration is for a single-node
+# (i.e. workstation) Flux system configuration.
+#
+# See flux-config-bootstrap(5) for more information on this
+# configuration section.
+#
+
+[bootstrap]

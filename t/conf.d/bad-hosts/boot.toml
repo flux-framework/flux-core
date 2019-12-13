@@ -1,5 +1,5 @@
 [bootstrap]
 
-tbon-endpoints = [
+hosts = [
     42
 ]

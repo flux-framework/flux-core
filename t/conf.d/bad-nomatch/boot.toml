@@ -1,0 +1,8 @@
+[bootstrap]
+
+default_bind = "ipc://@flux-testipc-1-0"
+default_connect = "ipc://@flux-testipc-1-0"
+
+hosts = [
+    { host = "matchnobody" },
+]

@@ -14,226 +14,470 @@
 #include "config.h"
 #endif
 #include <unistd.h>
-#include <limits.h>
 #include <stdbool.h>
-#include <argz.h>
-#include <fnmatch.h>
+#include <assert.h>
 #include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libidset/idset.h"
 
 #include "attr.h"
 #include "overlay.h"
 #include "boot_config.h"
 
-/* Attributes that may not be set for this boot method.
+
+/* Copy 'fmt' into 'buf', substuting the following tokens:
+ * - %h  host
+ * - %p  port
+ * Returns 0 on success, or -1 on overflow.
  */
-static const char *broker_attr_blacklist[] = {
-    "tbon.endpoint",
-    NULL,
+int boot_config_format_uri (char *buf,
+                            int bufsz,
+                            const char *fmt,
+                            const char *host,
+                            int port)
+{
+    const char *cp;
+    int len = 0;
+    bool tok_flag = false;
+    int n;
+
+    cp = fmt;
+    while (*cp) {
+        if (tok_flag) {
+            switch (*cp) {
+            case 'h': /* %h - host */
+                if (host) {
+                    n = snprintf (&buf[len], bufsz - len, "%s", host);
+                    if (n >= bufsz - len)
+                        goto overflow;
+                    len += n;
+                }
+                else {
+                    buf[len++] = '%';
+                    buf[len++] = 'h';
+                }
+                break;
+            case 'p': /* %p - port */
+                n = snprintf (&buf[len], bufsz - len, "%d", port);
+                if (n >= bufsz - len)
+                    goto overflow;
+                len += n;
+                break;
+            case '%': /* %% - literal % */
+                buf[len++] = '%';
+                break;
+            default:
+                buf[len++] = '%';
+                buf[len++] = *cp;
+                break;
+            }
+            tok_flag = false;
+        }
+        else {
+            if (*cp == '%')
+                tok_flag = true;
+            else
+                buf[len++] = *cp;
+        }
+        if (len >= bufsz)
+            goto overflow;
+        cp++;
+    }
+    buf[len] = '\0';
+    return 0;
+overflow:
+    return -1;
+}
+
+struct map_arg {
+    json_t *hosts;
+    json_t *entry;
 };
 
-static int parse_endpoint_by_rank (const json_t *endpoints,
-                                   int rank,
-                                   const char **entry)
-{
-    const json_t *value;
-    const char *s;
-
-    if (!(value = json_array_get (endpoints, rank))) {
-        log_msg ("Config file error [bootstrap]: rank out of range");
-        return -1;
-    }
-    if (!(s = json_string_value (value))) {
-        log_msg ("Config file error [bootstrap]: malformed tbon-endpoints");
-        log_msg ("Hint: all array entries must be strings");
-        return -1;
-    }
-    *entry = s;
-    return 0;
-}
-
-/* Search array of configured endpoints, ordered by rank, for one that
- * matches a local address.  For testing support, greedily match any ipc://
- * or tcp://127.0.0.0 address.  On success, array index (rank) is returned.
- * On failure, -1 is returned with diagnostics on stderr.
+/* Add a host entry to maparg->hosts for the formatted hostname in 's',
+ * cloned from the original host entry object in maparg->entry.
+ * N.B. idset_map_f footprint
  */
-static int find_local_endpoint (const json_t *endpoints)
+static int boot_config_map_hosts (const char *s, bool *stop, void *arg)
 {
-    char *addrs = NULL;
-    size_t addrs_len = 0;
-    char error[200];
-    int rank;
-    const json_t *value;
+    struct map_arg *maparg = arg;
+    json_t *nentry;
+    json_t *o;
 
-    if (ipaddr_getall (&addrs, &addrs_len, error, sizeof (error)) < 0) {
-        log_msg ("%s", error);
-        return -1;
+    if (!(nentry = json_deep_copy (maparg->entry)))
+        goto nomem;
+    if (!(o = json_string (s)))
+        goto nomem;
+    if (json_object_set_new (nentry, "host", o) < 0) {
+        json_decref (o);
+        goto nomem;
     }
-    json_array_foreach (endpoints, rank, value) {
-        const char *s = json_string_value (value);
-        const char *entry = NULL;
-
-        if (!s) // array element is not a string
-            break;
-        if (fnmatch ("tcp://127.0.0.*:*", s, 0) == 0)
-            break;
-        if (fnmatch("ipc://*", s, 0) == 0)
-            break;
-        while ((entry = argz_next (addrs, addrs_len, entry))) {
-            char pat[128];
-            snprintf (pat, sizeof (pat), "tcp://%s:*", entry);
-            if (fnmatch (pat, s, 0) == 0)
-                break;
-        }
-        if (entry != NULL) // found a match in 'addrs'
-            break;
-    }
-    free (addrs);
-    if (rank == json_array_size (endpoints))
-        return -1;
-
-    return rank;
+    if (json_array_append_new (maparg->hosts, nentry) < 0)
+        goto nomem;
+    return 0;
+nomem:
+    json_decref (nentry);
+    errno = ENOMEM;
+    return -1;
 }
 
-static int parse_config_file (flux_t *h,
-                              int *rankp,
-                              int *sizep,
-                              const json_t **endpointsp)
+/* Build a new hosts array, expanding any entries "compressed" with
+ * embedded idsets, so that json_array_size() is the number of hosts,
+ * and json_array_get() can be used to fetch an entry by rank.
+ * Caller must free.
+ */
+static json_t *boot_config_expand_hosts (json_t *hosts)
 {
-    const flux_conf_t *conf;
-    int size = INT_MAX; // optional in config file
-    int rank = INT_MAX; // optional in config file
-    const json_t *endpoints;
+    json_t *nhosts;
+    size_t index;
+    json_t *value;
+
+    if (!(nhosts = json_array ())) {
+        log_msg ("Config file error [bootstrap]: out of memory");
+        return NULL;
+    }
+    json_array_foreach (hosts, index, value) {
+        struct map_arg maparg = { .hosts = nhosts, .entry = value};
+        const char *host;
+
+        if (json_unpack (value, "{s:s}", "host", &host) < 0) {
+            log_msg ("Config file error [bootstrap]: missing host field");
+            log_msg ("Hint: hosts entries must be table containing a host key");
+            goto error;
+        }
+        if (idset_format_map (host, boot_config_map_hosts, &maparg) < 0) {
+            log_err ("Config file error [bootstrap]");
+            log_msg ("Hint: text enclosed by square brackets must be an idset");
+            goto error;
+        }
+    }
+    return nhosts;
+error:
+    json_decref (nhosts);
+    return NULL;
+}
+
+/* Parse the [bootstrap] configuration.
+ * Capture the portion that is owned by the flux_t handle in 'conf'.
+ * Post-process conf->hosts to expand any embedded idsets and return
+ * a new hosts JSON array on success.  On failure, log a human readable
+ * message and return NULL.
+ */
+int boot_config_parse (flux_t *h, struct boot_conf *conf, json_t **hostsp)
+{
     flux_conf_error_t error;
+    const char *default_bind = NULL;
+    const char *default_connect = NULL;
+    json_t *hosts = NULL;
 
-    /* N.B. the broker parses config early, and treats missing/malformed
-     * TOML as a fatal error.  The checks that we make here are specific
-     * to the [bootstrap] section.
-     */
-    conf = flux_get_conf (h, NULL);
-
-    if (flux_conf_unpack (conf,
+    memset (conf, 0, sizeof (*conf));
+    if (flux_conf_unpack (flux_get_conf (h, NULL),
                           &error,
-                          "{s:{s?:i s?:i s:o}}",
+                          "{s:{s?:i s?:s s?:s s?:o}}",
                           "bootstrap",
-                            "size", &size,
-                            "rank", &rank,
-                            "tbon-endpoints", &endpoints) < 0) {
+                            "default_port", &conf->default_port,
+                            "default_bind", &default_bind,
+                            "default_connect", &default_connect,
+                            "hosts", &conf->hosts) < 0) {
         log_msg ("Config file error [bootstrap]: %s", error.errbuf);
         return -1;
     }
-    if (json_array_size (endpoints) == 0) { // returns 0 if non-array
-        log_msg ("Config file error [bootstrap]: malformed tbon-endpoints");
-        log_msg ("Hint: must be an array with at least one element.");
-        return -1;
-    }
-    /* If size and/or rank were unspecified, infer them by looking at the
-     * size of the tbon-endpoints array, and/or by scanning the array for
-     * an address that matches a local interface.
+
+    /* Take care of %p substitution in the default bind/connect URI's
+     * If %h occurs in these values, it is preserved (since host=NULL here).
      */
-    if (size == INT_MAX)
-        size = json_array_size (endpoints);
-    if (rank == INT_MAX) {
-        if ((rank = find_local_endpoint (endpoints)) < 0) {
-            log_msg ("Config file error [bootstrap]: could not determine rank");
-            log_msg ("Hint: set rank in config file or ensure tbon-endpoints");
-            log_msg ("  contains a local address");
+    if (default_bind) {
+        if (boot_config_format_uri (conf->default_bind,
+                                    sizeof (conf->default_bind),
+                                    default_bind,
+                                    NULL,
+                                    conf->default_port) < 0) {
+            log_msg ("Config file error [bootstrap] %s",
+                     "buffer overflow building default bind URI");
             return -1;
         }
     }
-    if (rank < 0 || rank > size - 1) {
-        log_msg ("Config file error [bootstrap]: invalid rank %d for size %d",
-                 rank,
-                 size);
-        return -1;
+    if (default_connect) {
+        if (boot_config_format_uri (conf->default_connect,
+                                    sizeof (conf->default_connect),
+                                    default_connect,
+                                    NULL,
+                                    conf->default_port) < 0) {
+            log_msg ("Config file error [bootstrap] %s",
+                     "buffer overflow building default connect URI");
+            return -1;
+        }
     }
-    *rankp = rank;
-    *sizep = size;
-    *endpointsp = endpoints;
+
+    /* Expand any embedded idsets in hosts entries.
+     */
+    if (conf->hosts) {
+        if (!json_is_array (conf->hosts)) {
+            log_msg ("Config file error [bootstrap] hosts must be array type");
+            return -1;
+        }
+        if (json_array_size (conf->hosts) > 0) {
+            if (!(hosts = boot_config_expand_hosts (conf->hosts)))
+                return -1;
+        }
+    }
+
+    *hostsp = hosts;
     return 0;
 }
 
-/* Find attributes that, if set, should cause a fatal error.  Unlike PMI boot,
- * this method has no mechanism to share info with other ranks before
- * bootstrap/wireup completes.  Therefore, all bootstrap info has to come
- * from the shared config file.  Return 0 on success (no bad attrs),
- * or -1 on failure (one or more), with diagnostics on stderr.
+/* Find host 'name' in hosts array, and set 'rank' to its array index.
+ * Return 0 on success, -1 on failure.
  */
-static int find_blacklist_attrs (attr_t *attrs)
+int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
 {
-    int errors = 0;
-    const char **cp;
+    size_t index;
+    json_t *entry;
 
-    for (cp = &broker_attr_blacklist[0]; *cp != NULL; cp++) {
-        if (attr_get (attrs, *cp, NULL, NULL) == 0) {
-            log_msg ("attribute %s may not be set with boot_method=config",
-                     *cp);
-            errors++;
+    json_array_foreach (hosts, index, entry) {
+        const char *host;
+
+        /* N.B. missing host key already detected by boot_config_parse().
+         */
+        if (json_unpack (entry, "{s:s}", "host", &host) == 0
+                    && !strcmp (name, host)) {
+            *rank = index;
+            return 0;
         }
     }
-    if (errors > 0)
+    log_msg ("Config file error [bootstrap]: %s not found in hosts", name);
+    return -1;
+}
+
+static int gethostentry (json_t *hosts,
+                         struct boot_conf *conf,
+                         uint32_t rank,
+                         const char **host,
+                         const char **bind,
+                         const char **uri)
+{
+    json_t *entry;
+
+    if (!(entry = json_array_get (hosts, rank))) {
+        log_msg ("Config file error [bootstrap] rank %u not found in hosts",
+                 (unsigned int)rank);
         return -1;
+    }
+    /* N.B. missing host key already detected by boot_config_parse().
+     */
+    if (json_unpack (entry,
+                     "{s:s s?:s s?:s}",
+                     "host",
+                     host,
+                     "bind",
+                     bind,
+                     "connect",
+                     uri) < 0) {
+        log_msg ("Config file error [bootstrap]: rank %u bad hosts entry",
+                 (unsigned int)rank);
+        log_msg ("Hint: bind and connect keys, if present, are type string");
+        return -1;
+    }
+    return 0;
+}
+
+/* Look up the host entry for 'rank', then copy that entry's bind address
+ * into 'buf'.  If the entry doesn't provide an explicit bind address,
+ * use the default.  Perform any host or port substitutions while copying.
+ * Return 0 on success, -1 on failure.
+ */
+int boot_config_getbindbyrank (json_t *hosts,
+                               struct boot_conf *conf,
+                               uint32_t rank,
+                               char *buf,
+                               int bufsz)
+{
+    const char *uri = NULL;
+    const char *bind = NULL;
+    const char *host = NULL;
+
+    if (gethostentry (hosts, conf, rank, &host, &bind, &uri) < 0)
+        return -1;
+    if (!bind)
+        bind = conf->default_bind;
+    if (strlen (bind) == 0) {
+        log_msg ("Config file error [bootstrap]: rank %u missing bind URI",
+                 (unsigned int)rank);
+        return -1;
+    }
+    if (boot_config_format_uri (buf,
+                                bufsz,
+                                bind,
+                                host,
+                                conf->default_port) < 0) {
+        log_msg ("Config file error [bootstrap]: buffer overflow");
+        return -1;
+    }
+    return 0;
+}
+
+/* Look up the host entry for 'rank', then copy that entry's connect address
+ * into 'buf'.  If the entry doesn't provide an explicit connect address,
+ * use the default.  Perform any host or port substitutions while copying.
+ * Return 0 on success, -1 on failure.
+ */
+int boot_config_geturibyrank (json_t *hosts,
+                              struct boot_conf *conf,
+                              uint32_t rank,
+                              char *buf,
+                              int bufsz)
+{
+    const char *uri = NULL;
+    const char *bind = NULL;
+    const char *host = NULL;
+
+    if (gethostentry (hosts, conf, rank, &host, &bind, &uri) < 0)
+        return -1;
+    if (!uri)
+        uri = conf->default_connect;
+    if (strlen (uri) == 0) {
+        log_msg ("Config file error [bootstrap]: rank %u missing connect URI",
+                 (unsigned int)rank);
+        return -1;
+    }
+    if (boot_config_format_uri (buf,
+                                bufsz,
+                                uri,
+                                host,
+                                conf->default_port) < 0) {
+        log_msg ("Config file error [bootstrap]: buffer overflow");
+        return -1;
+    }
     return 0;
 }
 
 int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k)
 {
-    int size;
-    int rank;
-    const json_t *endpoints;
-    const char *this_endpoint;
+    struct boot_conf conf;
+    uint32_t rank;
+    uint32_t size;
+    json_t *hosts = NULL;
 
-    if (find_blacklist_attrs (attrs) < 0)
-        return -1;
-    if (parse_config_file (h, &rank, &size, &endpoints) < 0)
-        return -1;
-
-    /* Initialize overlay network parameters.
+    /* Throw an error if 'tbon.endpoint' attribute is already set.
+     * flux-start sets this, and it's not compatible with the
+     * config boot method as it would be overwritten below.
      */
-    if (overlay_init (overlay, size, rank, tbon_k) < 0)
-        return -1;
-    if (parse_endpoint_by_rank (endpoints, rank, &this_endpoint) < 0)
-        return -1;
-    if (overlay_set_child (overlay, this_endpoint) < 0) {
-        log_err ("overlay_set_child %s", this_endpoint);
+    if (attr_get (attrs, "tbon.endpoint", NULL, NULL) == 0) {
+        log_msg ("attr tbon.endpoint may not be set with boot_method=config");
         return -1;
     }
-    if (rank > 0) {
-        int parent_rank = kary_parentof (tbon_k, rank);
-        const char *parent_endpoint;
 
-        if (parse_endpoint_by_rank (endpoints,
-                                    parent_rank,
-                                    &parent_endpoint) < 0)
-            return -1;
-        if (overlay_set_parent (overlay, parent_endpoint) < 0) {
-            log_err ("overlay_set_parent %s", parent_endpoint);
-            return -1;
+    /* Ingest the [bootstrap] stanza.
+     */
+    if (boot_config_parse (h, &conf, &hosts) < 0)
+        return -1;
+
+    /* If hosts array was specified, match hostname to determine rank,
+     * and size is the length of the hosts array.  O/w rank=0, size=1.
+     */
+    if (hosts != NULL) {
+        const char *fakehost = getenv ("FLUX_FAKE_HOSTNAME"); // for testing;
+        char hostname[MAXHOSTNAMELEN + 1];
+
+        if (gethostname (hostname, sizeof (hostname)) < 0) {
+            log_err ("gethostbyname");
+            goto error;
+        }
+        if (boot_config_getrankbyname (hosts,
+                                      fakehost ? fakehost : hostname,
+                                      &rank) < 0)
+            goto error;
+        size = json_array_size (hosts);
+    }
+    else {
+        size = 1;
+        rank = 0;
+    }
+
+    /* Tell overlay network this broker's rank, size, and branching factor.
+     */
+    if (overlay_init (overlay, size, rank, tbon_k) < 0)
+        goto error;
+
+    /* If broker has "downstream" peers, determine the URI to bind to
+     * from the config and tell overlay.  Also, set the tbon.endpoint
+     * attribute to the URI peers will connect to.  If broker has no
+     * downstream peers, set tbon.endpoint to NULL.
+     */
+    if (kary_childof (tbon_k, size, rank, 0) != KARY_NONE) {
+        char bind_uri[MAX_URI + 1];
+        char my_uri[MAX_URI + 1];
+
+        assert (hosts != NULL);
+
+        if (boot_config_getbindbyrank (hosts,
+                                       &conf,
+                                       rank,
+                                       bind_uri,
+                                       sizeof (bind_uri)) < 0)
+            goto error;
+        if (overlay_set_child (overlay, bind_uri) < 0) {
+            log_err ("overlay_set_child %s", bind_uri);
+            goto error;
+        }
+        if (boot_config_geturibyrank (hosts,
+                                      &conf,
+                                      rank,
+                                      my_uri,
+                                      sizeof (my_uri)) < 0)
+            goto error;
+        if (attr_add (attrs,
+                      "tbon.endpoint",
+                      my_uri,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("setattr tbon.endpoint %s", my_uri);
+            goto error;
+        }
+    }
+    else {
+        if (attr_add (attrs,
+                      "tbon.endpoint",
+                      NULL,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("setattr tbon.endpoint NULL");
+            goto error;
         }
     }
 
-    /* Update attributes.
+    /* If broker has an "upstream" peer, determine its URI and tell overlay.
      */
-    if (attr_add (attrs,
-                  "tbon.endpoint",
-                  this_endpoint,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("setattr tbon.endpoint %s", this_endpoint);
-        return -1;
+    if (rank > 0) {
+        char parent_uri[MAX_URI + 1];
+        if (boot_config_geturibyrank (hosts,
+                                      &conf,
+                                      kary_parentof (tbon_k, rank),
+                                      parent_uri,
+                                      sizeof (parent_uri)) < 0)
+            goto error;
+        if (overlay_set_parent (overlay, parent_uri) < 0) {
+            log_err ("overlay_set_parent %s", parent_uri);
+            goto error;
+        }
     }
+
+    /* instance-level (position in instance hierarchy) is always zero here.
+     */
     if (attr_add (attrs,
                   "instance-level",
                   "0",
                   FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("setattr instance-level 0");
-        return -1;
+        goto error;
     }
-
+    json_decref (hosts);
     return 0;
+error:
+    ERRNO_SAFE_WRAP (json_decref, hosts);
+    return -1;
 }
 
 /*
