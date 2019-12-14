@@ -130,7 +130,7 @@ int submit_post_event (struct event *event, struct job *job)
         goto error;
     if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
         goto error;
-    if (event_batch_pub_state (event, job) < 0)
+    if (event_batch_pub_state (event, job, job->t_submit) < 0)
         goto error;
     if (event_job_action (event, job) < 0)
         goto error;

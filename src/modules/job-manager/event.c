@@ -243,14 +243,17 @@ static int event_batch_commit_event (struct event *event,
     return 0;
 }
 
-int event_batch_pub_state (struct event *event, struct job *job)
+int event_batch_pub_state (struct event *event, struct job *job,
+                           double timestamp)
 {
     json_t *o;
 
     if (event_batch_start (event) < 0)
         goto error;
-    if (!(o = json_pack ("[I,s]", job->id,
-                         flux_job_statetostr (job->state, false))))
+    if (!(o = json_pack ("[I,s,f]",
+                         job->id,
+                         flux_job_statetostr (job->state, false),
+                         timestamp)))
         goto nomem;
     if (json_array_append_new (event->batch->state_trans, o)) {
         json_decref (o);
@@ -457,6 +460,15 @@ error:
     return -1;
 }
 
+static int get_timestamp_now (double *timestamp)
+{
+    struct timespec ts;
+    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
+        return -1;
+    *timestamp = (1E-9 * ts.tv_nsec) + ts.tv_sec;
+    return 0;
+}
+
 int event_job_post_pack (struct event *event,
                          struct job *job,
                          const char *name,
@@ -466,17 +478,20 @@ int event_job_post_pack (struct event *event,
     va_list ap;
     json_t *entry = NULL;
     int saved_errno;
+    double timestamp;
     flux_job_state_t old_state = job->state;
 
     va_start (ap, context_fmt);
-    if (!(entry = eventlog_entry_vpack (0., name, context_fmt, ap)))
+    if (get_timestamp_now (&timestamp) < 0)
+        goto error;
+    if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
         return -1;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
     if (event_batch_commit_event (event, job, entry) < 0)
         goto error;
     if (job->state != old_state) {
-        if (event_batch_pub_state (event, job) < 0)
+        if (event_batch_pub_state (event, job, timestamp) < 0)
             goto error;
     }
     if (event_job_action (event, job) < 0)

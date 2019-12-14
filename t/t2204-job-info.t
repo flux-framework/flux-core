@@ -283,6 +283,42 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
 '
 
 #
+# job list timing
+#
+
+# simply test that value in timestamp increases through job states
+test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job inactive)' '
+        jobid=$(flux mini submit hostname) &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list --inactive --json | grep $jobid) &&
+        ret=$(echo $obj | jq '.t_depend < .t_sched') &&
+        test "${ret}" == "true" &&
+        ret=$(echo $obj | jq '.t_sched < .t_run') &&
+        test "${ret}" == "true" &&
+        ret=$(echo $obj | jq '.t_run < .t_cleanup') &&
+        test "${ret}" == "true" &&
+        ret=$(echo $obj | jq '.t_cleanup < .t_inactive') &&
+        test "${ret}" == "true"
+'
+
+# since job is running, make sure latter states are 0.0000
+test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job running)' '
+        jobid=$(flux mini submit sleep 60) &&
+        flux job wait-event $jobid start >/dev/null &&
+        obj=$(flux job list --running --json | grep $jobid) &&
+        ret=$(echo $obj | jq '.t_depend < .t_sched') &&
+        test "${ret}" == "true" &&
+        ret=$(echo $obj | jq '.t_sched < .t_run') &&
+        test "${ret}" == "true" &&
+        ret=$(echo $obj | jq '.t_cleanup == 0.0') &&
+        test "${ret}" == "true" &&
+        ret=$(echo $obj | jq '.t_inactive == 0.0') &&
+        test "${ret}" == "true" &&
+        flux job cancel $jobid &&
+        flux job wait-event $jobid clean >/dev/null
+'
+
+#
 # job names
 #
 
@@ -324,7 +360,12 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "priority" list_empty_attrs.out &&
         test_must_fail grep "t_submit" list_empty_attrs.out &&
         test_must_fail grep "state" list_empty_attrs.out &&
-        test_must_fail grep "job-name" list_empty_attrs.out
+        test_must_fail grep "job-name" list_empty_attrs.out &&
+        test_must_fail grep "t_depend" list_empty_attrs.out &&
+        test_must_fail grep "t_sched" list_empty_attrs.out &&
+        test_must_fail grep "t_run" list_empty_attrs.out &&
+        test_must_fail grep "t_cleanup" list_empty_attrs.out &&
+        test_must_fail grep "t_inactive" list_empty_attrs.out
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
@@ -337,7 +378,12 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep priority list_attrs.out &&
         grep t_submit list_attrs.out &&
         grep state list_attrs.out &&
-        grep job-name list_attrs.out
+        grep job-name list_attrs.out &&
+        grep t_depend list_attrs.out &&
+        grep t_sched list_attrs.out &&
+        grep t_run list_attrs.out &&
+        grep t_cleanup list_attrs.out &&
+        grep t_inactive list_attrs.out
 '
 
 #

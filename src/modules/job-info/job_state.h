@@ -67,8 +67,23 @@ struct job {
     /* if userid, priority, t_submit, and flags have been set */
     bool job_info_retrieved;
     void *list_handle;
-    double t_running;           /* for sorting */
-    double t_inactive;          /* for sorting */
+
+    /* timestamp of when we enter the state
+     *
+     * associated eventlog entries when restarting
+     *
+     * depend - "submit"
+     * sched - "depend"
+     * run - "alloc"
+     * cleanup - "finish" or "exception" w/ severity == 0
+     * inactive - "clean"
+     */
+    // t_depend is identical to t_submit above, use that
+    // double t_depend;
+    double t_sched;
+    double t_run;
+    double t_cleanup;
+    double t_inactive;
 };
 
 struct job_state_ctx *job_state_create (flux_t *h);
