@@ -52,6 +52,11 @@ char *idset_encode (const struct idset *idset, int flags);
  */
 struct idset *idset_decode (const char *s);
 
+/* Decode 'len' chars of string 's' to an idset.
+ * Returns idset on success, or NULL on failure with errno set.
+ */
+struct idset *idset_ndecode (const char *s, size_t len);
+
 /* Add id (or range [lo-hi]) to idset.
  * Return 0 on success, -1 on failure with errno set.
  */

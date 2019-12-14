@@ -61,7 +61,7 @@ static char *trim_brackets (char *s)
     return p;
 }
 
-struct idset *idset_decode (const char *str)
+struct idset *idset_ndecode (const char *str, size_t size)
 {
     struct idset *idset;
     char *cpy = NULL;
@@ -74,7 +74,7 @@ struct idset *idset_decode (const char *str)
     }
     if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
         return NULL;
-    if (!(cpy = strdup (str)))
+    if (!(cpy = strndup (str, size)))
         goto error;
     a1 = trim_brackets (cpy);
     saveptr = NULL;
@@ -102,6 +102,11 @@ error:
     free (cpy);
     errno = saved_errno;
     return NULL;
+}
+
+struct idset *idset_decode (const char *str)
+{
+    return idset_ndecode (str, str ? strlen (str) : 0);
 }
 
 /*
