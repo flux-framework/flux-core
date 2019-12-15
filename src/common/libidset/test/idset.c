@@ -8,9 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <czmq.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libidset/idset.h"
@@ -523,6 +527,183 @@ void test_autogrow (void)
     idset_destroy (idset);
 }
 
+/* N.B. internal function */
+void test_format_first (void)
+{
+    char buf[64];
+
+    ok (format_first (buf, sizeof (buf), "[]xyz", 42) == 0
+        && !strcmp (buf, "42xyz"),
+        "format_first works with leading idset");
+    ok (format_first (buf, sizeof (buf), "abc[]xyz", 42) == 0
+        && !strcmp (buf, "abc42xyz"),
+        "format_first works with mid idset");
+    ok (format_first (buf, sizeof (buf), "abc[]", 42) == 0
+        && !strcmp (buf, "abc42"),
+        "format_first works with end idset");
+
+    errno = 0;
+    ok (format_first (buf, sizeof (buf), "abc", 42) < 0
+        && errno == EINVAL,
+        "format_first fails with EINVAL no brackets");
+
+    errno = 0;
+    ok (format_first (buf, sizeof (buf), "abc[", 42) < 0
+        && errno == EINVAL,
+        "format_first fails with EINVAL with no close bracket");
+
+    errno = 0;
+    ok (format_first (buf, sizeof (buf), "abc]", 42) < 0
+        && errno == EINVAL,
+        "format_first fails with EINVAL with no open bracket");
+
+    errno = 0;
+    ok (format_first (buf, sizeof (buf), "abc][", 42) < 0
+        && errno == EINVAL,
+        "format_first fails with EINVAL with backwards brackets");
+
+    errno = 0;
+    ok (format_first (buf, 4, "abc[]", 1) < 0
+        && errno == EOVERFLOW,
+        "format_first fails with EOVERFLOW when buffer exhausted");
+}
+
+bool verify_map (zlist_t *list, const char **expected, int count)
+{
+    char *s;
+    int i;
+
+    s = zlist_first (list);
+    for (i = 0; i < count; i++) {
+        if (strcmp (s, expected[i]) != 0) {
+            diag ("map called with %s, expected %s", s, expected[i]);
+            return false;
+        }
+        s = zlist_next (list);
+    }
+    return true;
+}
+
+void empty_list (zlist_t *list)
+{
+    char *s;
+    while ((s = zlist_pop (list)))
+        free (s);
+}
+
+int mapfun (const char *s, bool *stop, void *arg)
+{
+    zlist_t *list = arg;
+    char *cpy;
+
+    if (!(cpy = strdup (s)))
+        BAIL_OUT ("strdup failed");
+    if (zlist_append (list, cpy) < 0)
+        BAIL_OUT ("zlist_append failed");
+
+    return 0;
+}
+
+int mapfun_err3 (const char *s, bool *stop, void *arg)
+{
+    zlist_t *list = arg;
+    char *cpy;
+
+    if (zlist_size (list) == 3) {
+        errno = EPERM; // arbitrary
+        return -1;
+    }
+    if (!(cpy = strdup (s)))
+        BAIL_OUT ("strdup failed");
+    if (zlist_append (list, cpy) < 0)
+        BAIL_OUT ("zlist_append failed");
+    return 0;
+}
+
+int mapfun_stop3 (const char *s, bool *stop, void *arg)
+{
+    zlist_t *list = arg;
+    char *cpy;
+
+    if (!(cpy = strdup (s)))
+        BAIL_OUT ("strdup failed");
+    if (zlist_append (list, cpy) < 0)
+        BAIL_OUT ("zlist_append failed");
+    if (zlist_size (list) == 3)
+        *stop = true;
+    return 0;
+}
+struct maptest {
+    const char *input;
+    const char *expected[16];
+    int count;
+};
+
+struct maptest maptests[] = {
+    { "n[0-3]", { "n0", "n1", "n2", "n3" }, 4 },
+    { "r[0-1]n[0-1]", { "r0n0", "r0n1", "r1n0", "r1n1" }, 4 },
+    { "[0-1][0-1][0-2]", { "000", "001", "002", "010", "011", "012",
+                           "100", "101", "102", "110", "111", "112"}, 12 },
+    { "n[0,99-100]x", { "n0x", "n99x", "n100x" }, 3 },
+    { "foo", { "foo" }, 1 },
+    { "foo[", { "foo[" }, 1 },
+    { "foo]", { "foo]" }, 1 },
+    { "foo][", { "foo][" }, 1 },
+    { "foo[]", { }, 0 },
+    { "", { "" }, 1 },
+    { NULL, {}, 0 },
+};
+
+void test_format_map (void)
+{
+    zlist_t *list;
+    int i;
+    int rc;
+
+    if (!(list = zlist_new ()))
+        BAIL_OUT ("zlist_new failed");
+
+    /* bad params */
+    errno = 0;
+    ok (idset_format_map (NULL, mapfun, NULL) < 0
+        && errno == EINVAL,
+        "idset_format_map input=NULL fails with EINVAL");
+
+    /* bad idset, but correctly embedded */
+    errno = 0;
+    ok (idset_format_map ("[foo]", mapfun, NULL) < 0
+        && errno == EINVAL,
+        "idset_format_map input=[foo] fails with EINVAL");
+
+    /* check for expected expansion */
+    for (i = 0; maptests[i].input != NULL; i++) {
+        rc = idset_format_map (maptests[i].input, mapfun, list);
+        ok (rc == maptests[i].count
+            && verify_map (list, maptests[i].expected, maptests[i].count),
+            "idset_format_map input='%s' works",
+            maptests[i].input);
+
+        empty_list (list);
+    }
+
+    /* map() returns -1 with errno == EPERM on 4th call */
+    errno = 0;
+    ok (idset_format_map ("h[0-15]", mapfun_err3, list) < 0
+        && errno == EPERM
+        && zlist_size (list) == 3,
+        "idset_format_map input handles map() failure OK");
+    empty_list (list);
+
+    /* map() pokes *stop on 4th call */
+    errno = 0;
+    ok (idset_format_map ("h[0-15]", mapfun_stop3, list) == 3
+        && zlist_size (list) == 3,
+        "idset_format_map input handles *stop = true OK");
+    empty_list (list);
+
+    zlist_destroy (&list);
+}
+
 void issue_1974(void)
 {
     struct idset *idset;
@@ -579,6 +760,8 @@ int main (int argc, char *argv[])
     test_equal ();
     test_copy ();
     test_autogrow ();
+    test_format_first ();
+    test_format_map ();
     issue_1974 ();
     issue_2336 ();
 
