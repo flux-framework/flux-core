@@ -100,6 +100,25 @@ size_t idset_count (const struct idset *idset);
  */
 bool idset_equal (const struct idset *set1, const struct idset *set2);
 
+/* Expand bracketed idset string(s) in 's', calling 'fun()' for each
+ * expanded string.  'fun()' should return 0 on success, or -1 on failure
+ * with errno set.  A fun() failure causes idset_format_map () to immediately
+ * return -1.  'fun()' may may halt iteration without triggering an error
+ * by setting *stop = true.
+ *
+ * idset_format_map () returns the number of times the map function was called
+ * (including the stopping one, if any), or -1 on failure with errno set.
+ *
+ * This function recursively expands multiple bracketed idset strings from
+ * left to right, so for example, "r[0-1]n[0-1]" expands to "r0n0", "r0n1",
+ * "r1n0", "r1n1".
+ *
+ */
+typedef int (*idset_format_map_f)(const char *s, bool *stop, void *arg);
+
+int idset_format_map (const char *s, idset_format_map_f fun, void *arg);
+
+
 #endif /* !FLUX_IDSET_H */
 
 /*

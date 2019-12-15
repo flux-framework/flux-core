@@ -16,7 +16,8 @@ fluxinclude_HEADERS = idset.h
 libidset_la_SOURCES = idset.c \
 		      idset_private.h \
 		      idset_decode.c \
-		      idset_encode.c
+		      idset_encode.c \
+		      idset_format.c
 
 libidset_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
