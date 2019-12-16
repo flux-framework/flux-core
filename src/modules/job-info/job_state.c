@@ -336,13 +336,44 @@ out:
     return rc;
 }
 
+struct res_level {
+    const char *type;
+    int count;
+    json_t *with;
+};
+
+static int parse_res_level (struct info_ctx *ctx,
+                            struct job *job,
+                            json_t *o,
+                            struct res_level *resp)
+{
+    json_error_t error;
+    struct res_level res;
+
+    res.with = NULL;
+    /* For jobspec version 1, expect exactly one array element per level.
+     */
+    if (json_unpack_ex (o, &error, 0,
+                        "[{s:s s:i s?o}]",
+                        "type", &res.type,
+                        "count", &res.count,
+                        "with", &res.with) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        return -1;
+    }
+    *resp = res;
+    return 0;
+}
+
 static int jobspec_parse (struct info_ctx *ctx,
                           struct job *job,
                           const char *s)
 {
     json_error_t error;
     json_t *jobspec = NULL;
-    json_t *tasks, *command, *jobspec_job = NULL;
+    json_t *tasks, *resources, *command, *jobspec_job = NULL;
     int rc = -1;
 
     if (!(jobspec = json_loads (s, 0, &error))) {
@@ -423,6 +454,75 @@ static int jobspec_parse (struct info_ctx *ctx,
         }
         job->job_name = json_string_value (arg0);
         assert (job->job_name);
+    }
+
+    if (json_unpack_ex (jobspec, &error, 0,
+                        "{s:o}",
+                        "resources", &resources) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid jobspec: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+
+    /* Set job->task_count
+     */
+    if (json_unpack_ex (tasks, NULL, 0,
+                        "[{s:{s:i}}]",
+                        "count", "total", &job->task_count) < 0) {
+        int per_slot, slot_count = 0;
+        struct res_level res[3];
+
+        if (json_unpack_ex (tasks, NULL, 0,
+                            "[{s:{s:i}}]",
+                            "count", "per_slot", &per_slot) < 0) {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu invalid jobspec: %s",
+                      __FUNCTION__, (unsigned long long)job->id, error.text);
+            goto error;
+        }
+        if (per_slot != 1) {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu: per_slot count: expected 1 got %d: %s",
+                      __FUNCTION__, (unsigned long long)job->id, per_slot,
+                      error.text);
+            goto error;
+        }
+        /* For jobspec version 1, expect either:
+         * - node->slot->core->NIL
+         * - slot->core->NIL
+         * Set job->slot_count and job->cores_per_slot.
+         */
+        memset (res, 0, sizeof (res));
+        if (parse_res_level (ctx, job, resources, &res[0]) < 0)
+            goto error;
+        if (res[0].with && parse_res_level (ctx, job, res[0].with, &res[1]) < 0)
+            goto error;
+        if (res[1].with && parse_res_level (ctx, job, res[1].with, &res[2]) < 0)
+            goto error;
+        if (res[0].type != NULL && !strcmp (res[0].type, "slot")
+            && res[1].type != NULL && !strcmp (res[1].type, "core")
+            && res[1].with == NULL) {
+            slot_count = res[0].count;
+        }
+        else if (res[0].type != NULL && !strcmp (res[0].type, "node")
+                 && res[1].type != NULL && !strcmp (res[1].type, "slot")
+                 && res[2].type != NULL && !strcmp (res[2].type, "core")
+                 && res[2].with == NULL) {
+            slot_count = res[0].count * res[1].count;
+        }
+        else {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu: Unexpected resources: %s->%s->%s%s",
+                      __FUNCTION__,
+                      (unsigned long long)job->id,
+                      res[0].type ? res[0].type : "NULL",
+                      res[1].type ? res[1].type : "NULL",
+                      res[2].type ? res[2].type : "NULL",
+                      res[2].with ? "->..." : NULL);
+            goto error;
+        }
+        job->task_count = slot_count;
     }
 
     rc = 0;
