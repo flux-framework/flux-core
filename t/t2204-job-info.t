@@ -291,14 +291,10 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
         jobid=$(flux mini submit hostname) &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list --inactive --json | grep $jobid) &&
-        ret=$(echo $obj | jq '.t_depend < .t_sched') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_sched < .t_run') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_run < .t_cleanup') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_cleanup < .t_inactive') &&
-        test "${ret}" == "true"
+        echo $obj | jq -e ".t_depend < .t_sched" &&
+        echo $obj | jq ".t_sched < .t_run" &&
+        echo $obj | jq ".t_run < .t_cleanup" &&
+        echo $obj | jq ".t_cleanup < .t_inactive"
 '
 
 # since job is running, make sure latter states are 0.0000
@@ -306,14 +302,10 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
         jobid=$(flux mini submit sleep 60) &&
         flux job wait-event $jobid start >/dev/null &&
         obj=$(flux job list --running --json | grep $jobid) &&
-        ret=$(echo $obj | jq '.t_depend < .t_sched') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_sched < .t_run') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_cleanup == 0.0') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_inactive == 0.0') &&
-        test "${ret}" == "true" &&
+        echo $obj | jq -e ".t_depend < .t_sched" &&
+        echo $obj | jq -e ".t_sched < .t_run" &&
+        echo $obj | jq -e ".t_cleanup == 0.0" &&
+        echo $obj | jq -e ".t_inactive == 0.0" &&
         flux job cancel $jobid &&
         flux job wait-event $jobid clean >/dev/null
 '
