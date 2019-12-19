@@ -680,6 +680,8 @@ int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
     logbuf_t *logbuf = logbuf_create ();
     if (!logbuf)
         goto error;
+    logbuf->h = h;
+    logbuf->rank = rank;
     if (logbuf_register_attrs (logbuf, attrs) < 0)
         goto error;
     if (fake_rank (h, rank) < 0)
@@ -688,8 +690,6 @@ int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
         goto error;
     flux_log_set_appname (h, "broker");
     flux_log_set_redirect (h, logbuf_append_redirect, logbuf);
-    logbuf->h = h;
-    logbuf->rank = rank;
     flux_aux_set (h, "flux::logbuf", logbuf, logbuf_finalize);
     return 0;
 error:
