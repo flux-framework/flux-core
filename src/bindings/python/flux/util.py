@@ -53,26 +53,23 @@ def check_future_error(func):
 
 
 def encode_payload(payload):
+    # Convert payload to ffi.NULL or utf-8 string
     if payload is None or payload == ffi.NULL:
-        payload = ffi.NULL
-    elif isinstance(payload, six.text_type):
-        payload = payload.encode("UTF-8")
-    elif not isinstance(payload, six.binary_type):
-        payload = json.dumps(payload, ensure_ascii=False).encode("UTF-8")
-    return payload
-
+        return ffi.NULL
+    try:
+        return six.ensure_binary(payload)
+    except TypeError:
+        return json.dumps(payload, ensure_ascii=False).encode("UTF-8")
 
 def encode_topic(topic):
-    # Convert topic to utf-8 binary string
+    # Convert topic to utf-8 string
     if topic is None or topic == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "Topic must not be None/NULL")
-    elif isinstance(topic, six.text_type):
-        topic = topic.encode("UTF-8")
-    elif not isinstance(topic, six.binary_type):
-        errmsg = "Topic must be a string, not {}".format(type(topic))
-        raise TypeError(errno.EINVAL, errmsg)
-    return topic
-
+    try:
+        return six.ensure_binary(topic)
+    except TypeError:
+        errmsg = "Topic must be a string, not {}".format(topic, type(topic))
+        raise EnvironmentError(errno.EINVAL, errmsg)
 
 class CLIMain(object):
     def __init__(self, logger=None):
