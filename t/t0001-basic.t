@@ -161,24 +161,28 @@ test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes'
 	test $ATTR_VAL -eq 42
 '
 test_expect_success 'tbon.endpoint can be read' '
-	ATTR_VAL=`flux start flux getattr tbon.endpoint` &&
-        echo $ATTR_VAL | grep "^tcp"
+	ATTR_VAL=`flux start -s2 flux getattr tbon.endpoint` &&
+	echo $ATTR_VAL | grep "://"
 '
 test_expect_success 'tbon.endpoint can be set and %h works' '
-	ATTR_VAL=`flux start -o,--setattr=tbon.endpoint='tcp://%h:*' flux getattr tbon.endpoint` &&
-        echo $ATTR_VAL | grep "^tcp" &&
-        ! echo $ATTR_VAL | grep "%h"
+	flux start -s2 -o,--setattr=tbon.endpoint=tcp://%h:* \
+		flux getattr tbon.endpoint >pct_h.out &&
+	grep "^tcp" pct_h.out &&
+	test_must_fail grep "%h" pct_h.out
 '
 test_expect_success 'tbon.endpoint with %B works' '
-	ATTR_VAL=`flux start -o,--setattr=tbon.endpoint='ipc://%B/req' flux getattr tbon.endpoint` &&
-        echo $ATTR_VAL | grep "^ipc" &&
-        ! echo $ATTR_VAL | grep "%B"
+	flux start -s2 -o,--setattr=tbon.endpoint=ipc://%B/req \
+		flux getattr tbon.endpoint >pct_B.out &&
+	grep "^ipc" pct_B.out &&
+	test_must_fail grep "%B" pct_B.out
 '
+# N.B. rank 1 has to be killed in this test after rank 0 fails gracefully
+# so test_must_fail won't work here
 test_expect_success 'tbon.endpoint fails on bad endpoint' '
-	! flux start -o,--setattr=tbon.endpoint='foo://bar' flux getattr tbon.endpoint
+	! flux start -s2 -o,--setattr=tbon.endpoint=foo://bar /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
-       ! flux start flux getattr tbon.parent-endpoint
+	test_must_fail flux start -s2 flux getattr tbon.parent-endpoint
 '
 test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
        NUM=`flux start --size 4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
