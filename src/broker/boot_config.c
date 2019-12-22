@@ -424,6 +424,10 @@ int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k)
             log_err ("overlay_set_child %s", bind_uri);
             goto error;
         }
+        if (overlay_bind (overlay) < 0) { /* idempotent */
+            log_err ("overlay_bind");
+            goto error;
+        }
         if (boot_config_geturibyrank (hosts,
                                       &conf,
                                       rank,

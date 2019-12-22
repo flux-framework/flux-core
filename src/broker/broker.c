@@ -595,15 +595,13 @@ int main (int argc, char *argv[])
 
     /* Wire up the overlay.
      */
-    if (ctx.verbose)
-        log_msg ("initializing overlay sockets");
-    if (overlay_bind (ctx.overlay) < 0) { /* idempotent */
-        log_err ("overlay_bind");
-        goto cleanup;
-    }
-    if (overlay_connect (ctx.overlay) < 0) {
-        log_err ("overlay_connect");
-        goto cleanup;
+    if (rank > 0) {
+        if (ctx.verbose)
+            log_msg ("initializing overlay connect");
+        if (overlay_connect (ctx.overlay) < 0) {
+            log_err ("overlay_connect");
+            goto cleanup;
+        }
     }
 
     if (shutdown_set_flux (ctx.shutdown, ctx.h) < 0) {
