@@ -55,6 +55,7 @@
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -2001,6 +2002,8 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     int rc = -1;
     char *uuid = NULL;
     uint32_t parent;
+    uint32_t rank;
+    uint32_t size;
     char puuid[16];
 
     if (flux_msg_get_route_last (msg, &uuid) < 0)
@@ -2013,7 +2016,9 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    parent = kary_parentof (ctx->tbon_k, overlay_get_rank (ctx->overlay));
+    rank = overlay_get_rank (ctx->overlay);
+    size = overlay_get_size (ctx->overlay);
+    parent = kary_parentof (ctx->tbon_k, rank);
     snprintf (puuid, sizeof (puuid), "%"PRIu32, parent);
 
     /* See if it should go to the parent (backwards!)
@@ -2026,13 +2031,16 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Try to deliver to a module.
      * If modhash didn't match next hop, route to child.
+     * If no child, silently drop (module unloaded?)
      */
     rc = module_response_sendmsg (ctx->modhash, msg);
-    if (rc < 0 && errno == ENOSYS)
-        rc = overlay_sendmsg_child (ctx->overlay, msg);
+    if (rc < 0 && errno == ENOSYS) {
+        rc = 0;
+        if (kary_childof (ctx->tbon_k, size, rank, 0) != KARY_NONE)
+            rc = overlay_sendmsg_child (ctx->overlay, msg);
+    }
 done:
-    if (uuid)
-        free (uuid);
+    ERRNO_SAFE_WRAP (free, uuid);
     return rc;
 }
 
