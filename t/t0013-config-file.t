@@ -36,84 +36,70 @@ test_expect_success 'broker startup with invalid TOML fails' "
 		flux broker ${ARGS} /bin/true
 "
 
-test_expect_success 'bootstrap config with missing bootstrap table fails' "
+test_expect_success '[bootstrap] config with missing bootstrap table fails' "
 	! FLUX_CONF_DIR=${TCONFDIR}/bad-nobootstrap \
 		flux broker ${ARGS} -Sboot.method=config /bin/true
 "
 
-test_expect_success 'bootstrap config with missing endpoints array fails' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-noendpoints \
+test_expect_success '[bootstrap] config with bad hosts array' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-hosts2 \
 		flux broker ${ARGS} -Sboot.method=config /bin/true
 "
 
-test_expect_success 'bootstrap config with bad endpoints array' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-intendpoints2 \
+test_expect_success '[bootstrap] config with bad hosts array element' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-hosts \
 		flux broker ${ARGS} -Sboot.method=config /bin/true
 "
 
-test_expect_success 'bootstrap config with bad endpoints array element' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-intendpoints \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
-"
-
-test_expect_success 'bootstrap config with negative rank fails' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-rank \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
-"
-
-test_expect_success 'bootstrap config with >= size rank fails' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-rank2 \
+test_expect_success '[bootstrap] config with hostname not found' "
+	! FLUX_CONF_DIR=${TCONFDIR}/bad-nomatch \
 		flux broker ${ARGS} -Sboot.method=config /bin/true
 "
 
 # N.B. set short shutdown grace to speed up test, as in t0001-basic
 
-#
-# size=1 boot from config file
-# N.B. "private" config sets rank and optionally size, while "shared"
-# config requires broker to infer rank from position of a local interface's
-# IP address in the tbon-endpoints array (which only works for size=1 in
-# a single-node test).
-#
-
-test_expect_success 'start size=1 with shared config file, expected attrs set' "
-	FLUX_CONF_DIR=${TCONFDIR}/shared \
+test_expect_success 'start instance with missing hosts' "
+	FLUX_CONF_DIR=${TCONFDIR}/good-nohosts \
 		flux broker ${ARGS} -Sboot.method=config \
 		--shutdown-grace=0.1 \
-		flux lsattr -v >1s.out &&
-	grep -q 'tbon.endpoint[ ]*tcp://127.0.0.1:8500$' 1s.out
+		flux lsattr -v >attr.out &&
+	grep 'tbon.endpoint.*-$' attr.out
 "
 
-test_expect_success 'start size=1 with shared config file, ipc endpoint' "
-	FLUX_CONF_DIR=${TCONFDIR}/shared_ipc \
+test_expect_success 'start instance with empty hosts' "
+	FLUX_CONF_DIR=${TCONFDIR}/good-emptyhosts \
 		flux broker ${ARGS} -Sboot.method=config \
 		--shutdown-grace=0.1 \
-		/bin/true
+		flux lsattr -v >attr.out &&
+	grep 'tbon.endpoint.*-$' attr.out
 "
 
-test_expect_success 'start size=1 with shared config file, no endpoint' "
-	! FLUX_CONF_DIR=${TCONFDIR}/shared_none \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
+# Usage: start_broker config hostname cmd ...
+start_broker() {
+	local dir=$1; shift
+	local host=$1; shift
+	FLUX_CONF_DIR=$dir FLUX_FAKE_HOSTNAME=$host \
+		flux broker ${ARGS} -Sboot.method=config "$@" &
+}
+
+test_expect_success 'start size=2 instance with ipc://' "
+	start_broker ${TCONFDIR}/good-ipc2 fake0 flux getattr size >ipc.out &&
+	start_broker ${TCONFDIR}/good-ipc2 fake1 &&
+	wait &&
+	wait &&
+	echo 2 >ipc.exp &&
+	test_cmp ipc.exp ipc.out
 "
 
-test_expect_success 'start size=1 with private config file' "
-	FLUX_CONF_DIR=${TCONFDIR}/private \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
+test_expect_success 'start size=4 instance with tcp://' "
+	start_broker ${TCONFDIR}/good-tcp4 fake0 flux getattr size >tcp.out &&
+	start_broker ${TCONFDIR}/good-tcp4 fake1 &&
+	start_broker ${TCONFDIR}/good-tcp4 fake2 &&
+	start_broker ${TCONFDIR}/good-tcp4 fake3 &&
+	wait && wait && wait && wait &&
+	echo 4 >tcp.exp &&
+	test_cmp tcp.exp tcp.out
 "
 
-#
-# size=2 boot from config file
-#
-
-test_expect_success NO_CHAIN_LINT 'start size=2 with private config files' '
-	FLUX_CONF_DIR=${TCONFDIR}/priv2-1 \
-		flux broker ${ARGS} -Sboot.method=config &
-	FLUX_CONF_DIR=${TCONFDIR}/priv2-0 \
-		flux broker ${ARGS} -Sboot.method=config \
-		--shutdown-grace=0.1 \
-		flux getattr size >2p.out &&
-	echo 2 >2p.exp &&
-	test_cmp 2p.exp 2p.out
-'
 
 test_done

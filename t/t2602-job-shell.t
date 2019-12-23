@@ -72,7 +72,7 @@ test_expect_success 'job-shell: PMI works' '
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
         id=$(flux jobspec srun -N4 -n4 ${PMI_INFO} -c | flux job submit) &&
-	flux job attach $id >pmi_clique1.raw 2>pmi_clique1.err &&
+	flux job attach $id >pmi_clique1.raw &&
 	sort -snk1 <pmi_clique1.raw >pmi_clique1.out &&
 	sort >pmi_clique1.exp <<-EOT &&
 	0: clique=0
@@ -84,7 +84,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for 2 ppn' '
         id=$(flux jobspec srun -N2 -n4 ${PMI_INFO} -c | flux job submit) &&
-	flux job attach $id >pmi_clique2.raw 2>pmi_clique2.err &&
+	flux job attach $id >pmi_clique2.raw &&
 	sort -snk1 <pmi_clique2.raw >pmi_clique2.out &&
 	sort >pmi_clique2.exp <<-EOT &&
 	0: clique=0,1
@@ -96,7 +96,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for 2 ppn' '
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for irregular ppn' '
         id=$(flux jobspec srun -N4 -n5 ${PMI_INFO} -c | flux job submit) &&
-	flux job attach $id >pmi_cliquex.raw 2>pmi_cliquex.err &&
+	flux job attach $id >pmi_cliquex.raw &&
 	sort -snk1 <pmi_cliquex.raw >pmi_cliquex.out &&
 	sort >pmi_cliquex.exp <<-EOT &&
 	0: clique=0,1
@@ -109,7 +109,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for irregular ppn' '
 '
 test_expect_success 'job-shell: PMI KVS works' '
         id=$(flux jobspec srun -N4 ${KVSTEST} | flux job submit) &&
-	flux job attach $id >kvstest.out 2>kvstest.err &&
+	flux job attach $id >kvstest.out &&
 	grep "t phase" kvstest.out
 '
 test_expect_success 'job-exec: decrease kill timeout for tests' '

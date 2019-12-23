@@ -51,16 +51,31 @@ test_expect_success "flux --parent --parent works in subinstance" '
 	test_cmp guest2.test.exp guest2.test
 '
 
-test_expect_success "flux sets instance-level attribute" '
-        level=$(flux mini run flux start ${ARGS} \
-                flux getattr instance-level) &&
-        level2=$(flux mini run flux start \
-                 flux mini run flux start ${ARGS} \
-                 flux getattr instance-level) &&
-	level0=$(flux start ${ARGS} flux getattr instance-level) &&
-        test "$level" = "1" &&
-        test "$level2" = "2" &&
-        test "$level0" = "0"
+test_expect_success "instance-level attribute = 0 in new stanalone instance" '
+	flux start ${ARGS} flux getattr instance-level >level_new.out &&
+	echo 0 >level_new.exp &&
+	test_cmp level_new.exp level_new.out
+'
+
+test_expect_success "instance-level attribute = 0 in test instance" '
+	flux getattr instance-level >level0.out &&
+	echo 0 >level0.exp &&
+	test_cmp level0.exp level0.out
+'
+
+test_expect_success "instance-level attribute = 1 in first subinstance" '
+        flux mini run flux start ${ARGS} \
+            flux getattr instance-level >level1.out &&
+	echo 1 >level1.exp &&
+	test_cmp level1.exp level1.out
+'
+
+test_expect_success "instance-level attribute = 2 in second subinstance" '
+        flux mini run flux start \
+	    flux mini run flux start ${ARGS} \
+		flux getattr instance-level >level2.out &&
+	echo 2 >level2.exp &&
+	test_cmp level2.exp level2.out
 '
 
 test_expect_success "flux sets jobid attribute" '

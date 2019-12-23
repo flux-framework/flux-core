@@ -668,28 +668,19 @@ static void logbuf_finalize (void *arg)
     /* FIXME: need logbuf_unregister_attrs() */
 }
 
-static int fake_rank (flux_t *h, uint32_t rank)
-{
-    char buf[16];
-    snprintf (buf, sizeof (buf), "%u", rank);
-    return flux_attr_set_cacheonly (h, "rank", buf);
-}
-
 int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
 {
     logbuf_t *logbuf = logbuf_create ();
     if (!logbuf)
         goto error;
+    logbuf->h = h;
+    logbuf->rank = rank;
     if (logbuf_register_attrs (logbuf, attrs) < 0)
-        goto error;
-    if (fake_rank (h, rank) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, logbuf, &logbuf->handlers) < 0)
         goto error;
     flux_log_set_appname (h, "broker");
     flux_log_set_redirect (h, logbuf_append_redirect, logbuf);
-    logbuf->h = h;
-    logbuf->rank = rank;
     flux_aux_set (h, "flux::logbuf", logbuf, logbuf_finalize);
     return 0;
 error:

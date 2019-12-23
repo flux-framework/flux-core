@@ -13,33 +13,6 @@
 
 /* boot_config - bootstrap broker/overlay from config file */
 
-/* Usage: flux broker -Sboot.method=config
- *
- * Example config file (TOML):
- *
- *   [bootstrap]
-
- *   # tbon-endpoints array is ordered by rank (zeromq URI format)
- *   tbon-endpoints = [
- *       "tcp://192.168.1.100:8020",  # rank 0
- *       "tcp://192.168.1.101:8020",  # rank 1
- *       "tcp://192.168.1.102:8020",  # rank 2
- *   ]
- *
- *   # if commented out, rank is determined by scanning tbon-endpoints
- *   # for a local address
- *   rank = 2
- *
- *   # if commented out, instance size is the size of tbon-endpoints.
- *   size = 3
- *
- * Caveat: the tbon-endpoints array entries specify a ZMQ endpoint used
- * in both "bind" and "connect" API calls.  ZMQ "bind" endpoints accept
- * an IP address or an interface name.  ZMQ "connect" endpoints accept
- * an IP address or hostname.  Therefore only IPs -- not hostnames, and not
- * interface names -- may be used here.
- */
-
 #include "attr.h"
 #include "overlay.h"
 
@@ -47,8 +20,38 @@
  *   tbon.endpoint (w)
  *   instance-level (w)
  */
-
 int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k);
+
+/* The following is exported for unit testing.
+ */
+#define MAX_URI 2048
+
+struct boot_conf {
+    int default_port;
+    char default_bind[MAX_URI + 1];
+    char default_connect[MAX_URI + 1];
+    json_t *hosts;
+};
+
+int boot_config_geturibyrank (json_t *hosts,
+                              struct boot_conf *conf,
+                              uint32_t rank,
+                              char *buf,
+                              int bufsz);
+int boot_config_getbindbyrank (json_t *hosts,
+                               struct boot_conf *conf,
+                               uint32_t rank,
+                               char *buf,
+                               int bufsz);
+int boot_config_getrankbyname (json_t *hosts,
+                               const char *name,
+                               uint32_t *rank);
+int boot_config_parse (flux_t *h, struct boot_conf *conf, json_t **hosts);
+int boot_config_format_uri (char *buf,
+                            int bufsz,
+                            const char *fmt,
+                            const char *host,
+                            int port);
 
 #endif /* BROKER_BOOT_CONFIG_H */
 

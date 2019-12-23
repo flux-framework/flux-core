@@ -27,6 +27,11 @@ struct idset {
 
 int validate_idset_flags (int flags, int allowed);
 
+int format_first (char *buf,
+                  size_t bufsz,
+                  const char *fmt,
+                  unsigned int id);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

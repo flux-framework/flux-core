@@ -16,7 +16,8 @@ fluxinclude_HEADERS = idset.h
 libidset_la_SOURCES = idset.c \
 		      idset_private.h \
 		      idset_decode.c \
-		      idset_encode.c
+		      idset_encode.c \
+		      idset_format.c
 
 libidset_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
@@ -38,4 +39,5 @@ test_idset_t_CPPFLAGS = $(AM_CPPFLAGS)
 test_idset_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
-	$(top_builddir)/src/common/libutil/libutil.la
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(ZMQ_LIBS)

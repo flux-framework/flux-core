@@ -194,7 +194,6 @@ int main (int argc, char *argv[])
         if (bootstrap != BOOTSTRAP_SELFPMI) {
             if (!optparse_hasopt (ctx.opts, "bootstrap")) {
                 bootstrap = BOOTSTRAP_SELFPMI;
-                log_msg("warning: setting --bootstrap=selfpmi due to --size option");
             } else {
                 log_errn_exit(EINVAL, "--size can only be used with --bootstrap=selfpmi");
             }

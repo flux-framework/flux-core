@@ -207,33 +207,38 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
         log_err ("set_instance_level_attr");
         goto error;
     }
-    if (overlay_init (overlay,
-                      (uint32_t)pmi_params.size,
-                      (uint32_t)pmi_params.rank,
-                      tbon_k)< 0)
+    if (overlay_init (overlay, pmi_params.size, pmi_params.rank, tbon_k) < 0)
         goto error;
 
-    if (update_endpoint_attr (attrs, "tbon.endpoint", &tbonendpoint,
-                                                        "tcp://%h:*") < 0)
-        goto error;
-
-    if (overlay_set_child (overlay, tbonendpoint) < 0) {
-        log_err ("overlay_set_child");
-        goto error;
-    }
-
-    /* Bind to addresses to expand URI wildcards, so we can exchange
-     * the real addresses.
+    /* If there are to be downstream peers, then bind to socket and share the
+     * concretized URI with other ranks via PMI KVS key=cmbd.<rank>.uri.
+     * N.B. there are no downstream peers if the 0th child of this rank
+     * in k-ary tree does not exist.
      */
-    if (overlay_bind (overlay) < 0) {
-        log_err ("overlay_bind failed");   /* function is idempotent */
-        goto error;
-    }
+    if (kary_childof (tbon_k,
+                      pmi_params.size,
+                      pmi_params.rank,
+                      0) != KARY_NONE) {
 
-    /* Write the URI of downstream facing socket under the rank (if any).
-     */
-    if ((child_uri = overlay_get_child (overlay))) {
-
+        if (update_endpoint_attr (attrs,
+                                  "tbon.endpoint",
+                                  &tbonendpoint,
+                                  "tcp://%h:*") < 0) {
+            log_msg ("update_endpoint_attr failed");
+            goto error;
+        }
+        if (overlay_set_child (overlay, tbonendpoint) < 0) {
+            log_err ("overlay_set_child");
+            goto error;
+        }
+        if (overlay_bind (overlay) < 0) {
+            log_err ("overlay_bind failed");   /* function is idempotent */
+            goto error;
+        }
+        if (!(child_uri = overlay_get_child (overlay))) {
+            log_msg ("overlay_get_child returned NULL");
+            goto error;
+        }
         if (snprintf (key, sizeof (key),
                       "cmbd.%d.uri", pmi_params.rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
@@ -248,25 +253,37 @@ int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
             log_msg ("broker_pmi_kvs_put: %s", pmi_strerror (result));
             goto error;
         }
+        result = broker_pmi_kvs_commit (pmi, pmi_params.kvsname);
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_commit: %s", pmi_strerror (result));
+            goto error;
+        }
+    }
+    else {
+        (void)attr_delete (attrs, "tbon.endpoint", true);
+        if (attr_add (attrs,
+                     "tbon.endpoint",
+                     NULL,
+                     FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("setattr tbon.endpoint");
+            goto error;
+        }
     }
 
-    /* Puts are complete, now we synchronize and begin our gets.
+    /* The PMI barrier (which is implicitly over 'size' ranks) ensures that
+     * all KVS puts are complete before any PMI gets.
      */
-    result = broker_pmi_kvs_commit (pmi, pmi_params.kvsname);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_kvs_commit: %s", pmi_strerror (result));
-        goto error;
-    }
     result = broker_pmi_barrier (pmi);
     if (result != PMI_SUCCESS) {
         log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
         goto error;
     }
 
-    /* Read the uri of our parent, after computing its rank
+    /* If there is to be an upstream peer, fetch its URI from PMI KVS.
+     * N.B. only rank 0 has no upstream peer.
      */
     if (pmi_params.rank > 0) {
-        parent_rank = kary_parentof (tbon_k, (uint32_t)pmi_params.rank);
+        parent_rank = kary_parentof (tbon_k, pmi_params.rank);
         if (snprintf (key, sizeof (key),
                       "cmbd.%d.uri", parent_rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");

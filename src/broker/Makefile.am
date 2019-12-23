@@ -76,7 +76,8 @@ TESTS = test_shutdown.t \
 	test_service.t \
 	test_reduce.t \
 	test_liblist.t \
-	test_pmiutil.t
+	test_pmiutil.t \
+	test_boot_config.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
@@ -127,3 +128,7 @@ test_liblist_t_LDADD = $(test_ldadd)
 test_pmiutil_t_SOURCES = test/pmiutil.c
 test_pmiutil_t_CPPFLAGS = $(test_cppflags)
 test_pmiutil_t_LDADD = $(test_ldadd)
+
+test_boot_config_t_SOURCES = test/boot_config.c
+test_boot_config_t_CPPFLAGS = $(test_cppflags)
+test_boot_config_t_LDADD = $(test_ldadd)
