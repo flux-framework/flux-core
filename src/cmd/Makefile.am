@@ -87,6 +87,12 @@ flux_start_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(LIBUTIL)
 
+flux_job_LDADD = \
+	$(fluxcmd_ldadd) \
+	$(top_builddir)/src/shell/libmpir.la \
+	$(top_builddir)/src/common/libdebugged/libdebugged.la \
+	$(LIBUTIL)
+
 #
 # Automatically build list of flux(1) builtins from
 #  builtin/*.c:
