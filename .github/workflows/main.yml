@@ -1,0 +1,12 @@
+on: pull_request
+jobs:
+  check-pr:
+    name: validate commits
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - run: git fetch origin master
+    - uses: flux-framework/pr-validator@master
