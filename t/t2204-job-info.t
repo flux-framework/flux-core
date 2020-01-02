@@ -378,6 +378,13 @@ test_expect_success 'verify job names preserved across restart' '
 # job list special cases
 #
 
+test_expect_success 'list count / max_entries works' '
+        count=`flux job list --inactive -s -c 0 | wc -l` &&
+        test $count -gt 5 &&
+        count=`flux job list --inactive -s -c 5 | wc -l` &&
+        test $count -eq 5
+'
+
 test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[]}" \
