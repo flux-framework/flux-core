@@ -22,10 +22,6 @@
 #include "list.h"
 #include "job_state.h"
 
-/* To avoid denial of service, the maxinum number of entries that can
- * be returned to the user will be capped */
-#define MAX_ENTRIES_CAP 1024
-
 /* For a given job, create a JSON object containing the jobid and any
  * additional requested attributes and their values.  Returns JSON
  * object which the caller must free.  On error, return NULL with
@@ -225,9 +221,6 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-
-    if (max_entries > MAX_ENTRIES_CAP)
-        max_entries = MAX_ENTRIES_CAP;
 
     /* If user sets no flags, assume they want all information */
     if (!flags)
