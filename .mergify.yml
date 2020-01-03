@@ -3,6 +3,7 @@ pull_request_rules:
     conditions:
       - base=master
       - status-success=continuous-integration/travis-ci/pr
+      - status-success="validate commits"
       - label="merge-when-passing"
       - label!="work-in-progress"
       - "approved-reviews-by=@flux-framework/core"
