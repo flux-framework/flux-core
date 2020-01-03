@@ -48,7 +48,7 @@ struct kvstxn_mgr {
 struct kvstxn {
     int errnum;
     int aux_errnum;
-    int blocked:1;
+    unsigned int blocked:1;
     json_t *ops;
     json_t *keys;
     json_t *names;
