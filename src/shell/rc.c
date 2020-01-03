@@ -44,7 +44,7 @@ struct lua_plugin {
 
 /*  Global Lua state
  */
-static lua_State *L = NULL;
+static lua_State *global_L = NULL;
 
 /*
  *  Global copy of flux_shell_t object
@@ -87,8 +87,8 @@ static void lua_plugref_destroy (struct lua_plugref *ref)
 {
     if (ref) {
         free (ref->topic);
-        if (L)
-            luaL_unref (L, LUA_REGISTRYINDEX, ref->lua_ref);
+        if (global_L)
+            luaL_unref (global_L, LUA_REGISTRYINDEX, ref->lua_ref);
         free (ref);
     }
 }
@@ -148,6 +148,7 @@ static int lua_plugin_cb (flux_plugin_t *p,
 {
     struct lua_plugin *lp = flux_plugin_aux_get (p, "lua.plugin");
     struct lua_plugref *ref = data;
+    lua_State *L = global_L;
     if (!ref) {
         shell_log_error ("lua plugin: %s: no ref for topic %s", lp->name, topic);
         return 0;
@@ -731,17 +732,19 @@ static const struct luaL_Reg task_methods [] = {
 
 int shell_rc (flux_shell_t *shell, const char *rcfile)
 {
+    lua_State *L = NULL;
     char *copy = NULL;
 
     if (!shell || !rcfile)
         return -1;
     if (!(copy = strdup (rcfile)))
         return -1;
-    if (!(L = luaL_newstate ()))
+    if (!(global_L = luaL_newstate ()))
         return -1;
     if (!(file_stack = zlistx_new ()))
         return -1;
 
+    L = global_L;
     luaL_openlibs (L);
 
     /*  Push "plugin" table and set metatable to itself.
@@ -791,9 +794,9 @@ int shell_rc (flux_shell_t *shell, const char *rcfile)
 int shell_rc_close (void)
 {
     rc_shell = NULL;
-    if (L)
-        lua_close (L);
-    L = NULL;
+    if (global_L)
+        lua_close (global_L);
+    global_L = NULL;
 
     /*  Destroy file stack
      */
