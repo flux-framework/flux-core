@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef HAVE_LIBAGGREGATE_AGGREGATE_H
+#define HAVE_LIBAGGREGATE_AGGREGATE_H 1
+
 /*
  *  Push single json object `o` to local aggregator module via RPC.
  *   Steals the reference to `o`. If fwd_count > 0, then set local
@@ -38,3 +41,5 @@ int aggregate_wait_get_unpack (flux_future_t *f, const char *fmt, ...);
  *  The original aggregate key is removed.
  */
 int aggregate_unpack_to_kvs (flux_future_t *f, const char *path);
+
+#endif /* !HAVE_LIBAGGREGATE_AGGREGATE_H */
