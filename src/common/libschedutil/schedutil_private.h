@@ -8,10 +8,14 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef HAVE_SCHEDUTIL_PRIVATE_H
+#define HAVE_SCHEDUTIL_PRIVATE_H 1
+
 #include <czmq.h>
 #include <flux/core.h>
 
 #include "init.h"
+
 
 struct schedutil_ctx {
     flux_t *h;
@@ -45,3 +49,5 @@ void schedutil_ops_unregister (schedutil_t *util);
  * that responses should hang, forcing outstanding requests to exist.
  */
 bool schedutil_hang_responses (const schedutil_t *util);
+
+#endif /* HAVE_SCHEDUTIL_PRIVATE_H */
