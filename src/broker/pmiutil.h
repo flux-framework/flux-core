@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef HAVE_BROKER_PMIUTIL_H
+#define HAVE_BROKER_PMIUTIL_H 1
+
 struct pmi_params {
     int rank;
     int size;
@@ -40,6 +43,8 @@ int broker_pmi_finalize (struct pmi_handle *pmi);
 void broker_pmi_destroy (struct pmi_handle *pmi);
 
 struct pmi_handle *broker_pmi_create (void);
+
+#endif /* !HAVE_BROKER_PMIUTIL_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
