@@ -328,6 +328,21 @@ test_expect_success 'flux job lists first argument for job-name' '
         flux job list --inactive | grep $jobid | grep mycmd
 '
 
+test_expect_success 'flux job lists basename of first argument for job-name' '
+        jobid=`flux mini submit /foo/bar arg1 arg2` &&
+        echo $jobid > jobname3.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        flux job list --inactive | grep $jobid | grep bar &&
+        flux job list --inactive | grep $jobid | grep -v foo
+'
+
+test_expect_success 'flux job lists full path for job-name if first argument not ok' '
+        jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
+        echo $jobid > jobname4.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        flux job list --inactive | grep $jobid | grep "\/foo\/bar\/"
+'
+
 test_expect_success 'reload the job-info module' '
         flux module remove -r all job-info &&
         flux module load -r all job-info
@@ -336,8 +351,12 @@ test_expect_success 'reload the job-info module' '
 test_expect_success 'verify job names preserved across restart' '
         jobid1=`cat jobname1.id` &&
         jobid2=`cat jobname2.id` &&
+        jobid3=`cat jobname3.id` &&
+        jobid4=`cat jobname4.id` &&
         flux job list --inactive | grep ${jobid1} | grep foobar &&
-        flux job list --inactive | grep ${jobid2} | grep mycmd
+        flux job list --inactive | grep ${jobid2} | grep mycmd &&
+        flux job list --inactive | grep ${jobid3} | grep bar &&
+        flux job list --inactive | grep ${jobid4} | grep "\/foo\/bar\/"
 '
 
 #
