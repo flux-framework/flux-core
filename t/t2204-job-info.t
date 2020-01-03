@@ -291,14 +291,10 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
         jobid=$(flux mini submit hostname) &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list --inactive --json | grep $jobid) &&
-        ret=$(echo $obj | jq '.t_depend < .t_sched') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_sched < .t_run') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_run < .t_cleanup') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_cleanup < .t_inactive') &&
-        test "${ret}" == "true"
+        echo $obj | jq -e ".t_depend < .t_sched" &&
+        echo $obj | jq ".t_sched < .t_run" &&
+        echo $obj | jq ".t_run < .t_cleanup" &&
+        echo $obj | jq ".t_cleanup < .t_inactive"
 '
 
 # since job is running, make sure latter states are 0.0000
@@ -306,14 +302,10 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
         jobid=$(flux mini submit sleep 60) &&
         flux job wait-event $jobid start >/dev/null &&
         obj=$(flux job list --running --json | grep $jobid) &&
-        ret=$(echo $obj | jq '.t_depend < .t_sched') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_sched < .t_run') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_cleanup == 0.0') &&
-        test "${ret}" == "true" &&
-        ret=$(echo $obj | jq '.t_inactive == 0.0') &&
-        test "${ret}" == "true" &&
+        echo $obj | jq -e ".t_depend < .t_sched" &&
+        echo $obj | jq -e ".t_sched < .t_run" &&
+        echo $obj | jq -e ".t_cleanup == 0.0" &&
+        echo $obj | jq -e ".t_inactive == 0.0" &&
         flux job cancel $jobid &&
         flux job wait-event $jobid clean >/dev/null
 '
@@ -349,6 +341,40 @@ test_expect_success 'verify job names preserved across restart' '
 '
 
 #
+# job task count
+#
+
+test_expect_success 'flux job list outputs task-count correctly (1 task)' '
+        jobid=`flux mini submit hostname` &&
+        echo $jobid > taskcount1.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list --inactive --json | grep $jobid) &&
+        echo $obj | jq -e ".[\"task-count\"] == 1"
+'
+
+test_expect_success 'flux job list outputs task-count correctly (4 tasks)' '
+        jobid=`flux mini submit -n4 hostname` &&
+        echo $jobid > taskcount2.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list --inactive --json | grep $jobid) &&
+        echo $obj | jq -e ".[\"task-count\"] == 4"
+'
+
+test_expect_success 'reload the job-info module' '
+        flux module remove -r all job-info &&
+        flux module load -r all job-info
+'
+
+test_expect_success 'verify job names preserved across restart' '
+        jobid1=`cat taskcount1.id` &&
+        jobid2=`cat taskcount2.id` &&
+        obj=$(flux job list --inactive --json | grep ${jobid1}) &&
+        echo $obj | jq -e ".[\"task-count\"] == 1" &&
+        obj=$(flux job list --inactive --json | grep ${jobid2}) &&
+        echo $obj | jq -e ".[\"task-count\"] == 4"
+'
+
+#
 # job list special cases
 #
 
@@ -361,6 +387,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "t_submit" list_empty_attrs.out &&
         test_must_fail grep "state" list_empty_attrs.out &&
         test_must_fail grep "job-name" list_empty_attrs.out &&
+        test_must_fail grep "task-count" list_empty_attrs.out &&
         test_must_fail grep "t_depend" list_empty_attrs.out &&
         test_must_fail grep "t_sched" list_empty_attrs.out &&
         test_must_fail grep "t_run" list_empty_attrs.out &&
@@ -379,6 +406,7 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep t_submit list_attrs.out &&
         grep state list_attrs.out &&
         grep job-name list_attrs.out &&
+        grep task-count list_attrs.out &&
         grep t_depend list_attrs.out &&
         grep t_sched list_attrs.out &&
         grep t_run list_attrs.out &&
