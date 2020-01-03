@@ -33,7 +33,7 @@
 struct flux_reactor {
     struct ev_loop *loop;
     int usecount;
-    int errflag:1;
+    unsigned int errflag:1;
 };
 
 struct flux_watcher {
