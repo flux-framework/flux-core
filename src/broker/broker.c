@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <sys/signalfd.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
@@ -281,6 +282,26 @@ static int setup_profiling (const char *program, int rank)
     return (0);
 }
 
+static int increase_rlimits (void)
+{
+    struct rlimit rlim;
+
+    /*  Increase number of open files to max to prevent potential failures
+     *   due to file descriptor exhaustion (e.g. zuuid_new() failure to
+     *   open /dev/urandom)
+     */
+    if (getrlimit (RLIMIT_NOFILE, &rlim) < 0) {
+        log_err ("getrlimit");
+        return -1;
+    }
+    rlim.rlim_cur = rlim.rlim_max;
+    if (setrlimit (RLIMIT_NOFILE, &rlim) < 0) {
+        log_err ("Failed to increase nofile limit");
+        return -1;
+    }
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     broker_ctx_t ctx;
@@ -373,6 +394,9 @@ int main (int argc, char *argv[])
         log_err ("flux_set_reactor");
         goto cleanup;
     }
+
+    if (increase_rlimits () < 0)
+        goto cleanup;
 
     /* Parse config file(s).  The result is cached in ctx.h.
      */
