@@ -17,7 +17,6 @@ import flux
 from flux import job
 from flux.job import JobspecV1
 import sys
-import subprocess
 
 
 njobs = 10
