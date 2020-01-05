@@ -22,6 +22,9 @@
 
 */
 
+#ifndef HAVE_LIBUTIL_MNEMONIC_H
+#define HAVE_LIBUTIL_MNEMONIC_H 1
+
 #define MN_BASE		1626		/* cubic root of 2^32, rounded up */
 #define MN_REMAINDER	7		/* extra words for 24 bit remainders */
 #define MN_WORDS (MN_BASE+MN_REMAINDER)	/* total number of words */
@@ -66,4 +69,4 @@ mn_index 	mn_next_word_index (char **ptr);
 int 		mn_decode_word_index (mn_index index, void *dest, 
 				     int destsize, int *offset);
 
-
+#endif /* !HAVE_LIBUTIL_MNEMONIC_H */

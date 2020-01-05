@@ -19,7 +19,6 @@ import flux
 from flux import job
 from flux.job import JobspecV1
 import sys
-import subprocess
 
 expected_states = ["NEW", "DEPEND", "SCHED", "RUN", "CLEANUP", "INACTIVE"]
 

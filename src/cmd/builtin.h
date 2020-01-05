@@ -13,6 +13,9 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
+#ifndef HAVE_CMD_BUILTIN_H
+#define HAVE_CMD_BUILTIN_H 1
+
 typedef int (*register_cmd_f) (optparse_t *p);
 
 struct builtin_cmd {
@@ -22,3 +25,5 @@ struct builtin_cmd {
 
 void usage (optparse_t *p);
 flux_t *builtin_get_flux_handle (optparse_t *p);
+
+#endif /* !HAVE_CMD_BUILTIN_H */

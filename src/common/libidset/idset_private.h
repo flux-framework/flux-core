@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef HAVE_LIBIDSET_PRIVATE_H
+#define HAVE_LIBIDSET_PRIVATE_H 1
+
 /* Implemented as a Van Emde Boas tree using code.google.com/p/libveb.
  * T.D is data; T.M is size
  * All ops are O(log m), for key bitsize m: 2^m == T.M.
@@ -31,6 +34,8 @@ int format_first (char *buf,
                   size_t bufsz,
                   const char *fmt,
                   unsigned int id);
+
+#endif /* !HAVE_LIBIDSET_PRIVATE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef HAVE_SHELL_MPIR_RANGELIST_H
+#define HAVE_SHELL_MPIR_RANGELIST_H 1
+
 #include <stdint.h>
 #include <jansson.h>
 
@@ -28,6 +31,8 @@ int64_t rangelist_next (struct rangelist *rl);
 
 json_t *rangelist_to_json (struct rangelist *rl);
 struct rangelist *rangelist_from_json (json_t *o);
+
+#endif /* !HAVE_SHELL_MPIR_RANGELIST_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
