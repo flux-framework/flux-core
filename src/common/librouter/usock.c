@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <czmq.h>
+#include <uuid.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/aux.h"
@@ -55,6 +56,11 @@
 #include "sendfd.h"
 
 #define LISTEN_BACKLOG 5
+
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
+
 
 struct usock_server {
     int fd;
@@ -83,7 +89,8 @@ struct usock_conn {
     usock_conn_recv_f recv_cb;
     void *recv_arg;
 
-    zuuid_t *uuid;
+    uuid_t uuid;
+    char uuid_str[UUID_STR_LEN];
 
     struct aux_item *aux;
     struct usock_server *server;
@@ -105,7 +112,7 @@ const struct auth_cred *usock_conn_get_cred (struct usock_conn *conn)
 
 const char *usock_conn_get_uuid (struct usock_conn *conn)
 {
-    return conn ? zuuid_str (conn->uuid) : NULL;
+    return conn ? conn->uuid_str : NULL;
 }
 
 void usock_conn_set_error_cb (struct usock_conn *conn,
@@ -304,7 +311,6 @@ void usock_conn_destroy (struct usock_conn *conn)
             if (conn->out.fd != conn->in.fd && conn->out.fd >= 0)
                 (void)close (conn->out.fd);
         }
-        zuuid_destroy (&conn->uuid);
         free (conn);
         errno = saved_errno;
     }
@@ -395,8 +401,10 @@ struct usock_conn *usock_conn_create (flux_reactor_t *r, int infd, int outfd)
                                                 conn)))
         goto error;
     iobuf_init (&conn->out.iobuf);
+    uuid_generate (conn->uuid);
+    uuid_unparse (conn->uuid, conn->uuid_str);
 
-    if (!(conn->outqueue = zlist_new ()) || !(conn->uuid = zuuid_new ())) {
+    if (!(conn->outqueue = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
