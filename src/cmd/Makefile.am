@@ -9,7 +9,10 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(FLUX_SECURITY_CFLAGS) $(LIBSODIUM_CFLAGS)
+	$(FLUX_SECURITY_CFLAGS) \
+	$(ZMQ_CFLAGS) \
+	$(LIBUUID_CFLAGS) \
+	$(LIBSODIUM_CFLAGS)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -18,7 +21,12 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(FLUX_SECURITY_LIBS) \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL) $(HWLOC_LIBS) $(LIBSODIUM_LIBS)
+	$(ZMQ_LIBS) \
+	$(LIBUUID_LIBS) \
+	$(LIBPTHREAD) \
+	$(LIBDL) \
+	$(HWLOC_LIBS) \
+	$(LIBSODIUM_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 

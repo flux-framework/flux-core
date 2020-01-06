@@ -2,6 +2,7 @@ AM_CFLAGS = \
 	$(WARNING_CFLAGS) \
 	$(CODE_COVERAGE_CFLAGS) \
 	$(ZMQ_CFLAGS) \
+	$(LIBUUID_CFLAGS) \
 	-Wno-strict-aliasing -Wno-error=strict-aliasing \
 	-Wno-parentheses -Wno-error=parentheses
 
@@ -127,7 +128,11 @@ test_ldadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT) $(JANSSON_LIBS)
+	$(ZMQ_LIBS) \
+	$(LIBUUID_LIBS) \
+	$(LIBPTHREAD) \
+	$(LIBRT) \
+	$(JANSSON_LIBS)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
