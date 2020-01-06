@@ -27,6 +27,7 @@
 #include <inttypes.h>
 #include <argz.h>
 #include <czmq.h>
+#include <uuid.h>
 #include <flux/core.h>
 #include <jansson.h>
 #if HAVE_CALIPER
@@ -40,6 +41,10 @@
 #include "heartbeat.h"
 #include "module.h"
 #include "modservice.h"
+
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 
 
 #define MODULE_MAGIC    0xfeefbe01
@@ -57,7 +62,9 @@ struct module_struct {
     uint32_t userid;        /* creds of connection */
     uint32_t rolemask;
 
-    zuuid_t *uuid;          /* uuid for unique request sender identity */
+
+    uuid_t uuid;            /* uuid for unique request sender identity */
+    char uuid_str[UUID_STR_LEN];
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
@@ -117,7 +124,7 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    if (asprintf (&uri, "shmem://%s", zuuid_str (p->uuid)) < 0) {
+    if (asprintf (&uri, "shmem://%s", p->uuid_str) < 0) {
         log_err ("asprintf");
         goto done;
     }
@@ -201,7 +208,7 @@ const char *module_get_name (module_t *p)
 
 const char *module_get_uuid (module_t *p)
 {
-    return zuuid_str (p->uuid);
+    return p->uuid_str;
 }
 
 static int module_get_idle (module_t *p)
@@ -228,7 +235,7 @@ flux_msg_t *module_recvmsg (module_t *p)
             break;
         case FLUX_MSGTYPE_REQUEST:
         case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_push_route (msg, zuuid_str (p->uuid)) < 0)
+            if (flux_msg_push_route (msg, p->uuid_str) < 0)
                 goto error;
             break;
         default:
@@ -361,7 +368,6 @@ static void module_destroy (module_t *p)
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
 #endif
-    zuuid_destroy (&p->uuid);
     free (p->digest);
     free (p->argz);
     free (p->name);
@@ -575,10 +581,8 @@ module_t *module_add (modhash_t *mh, const char *path)
     }
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
-    if (!(p->uuid = zuuid_new ())) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+    uuid_generate (p->uuid);
+    uuid_unparse (p->uuid, p->uuid_str);
     if (!(p->rmmod = zlist_new ())) {
         errno = ENOMEM;
         goto cleanup;
