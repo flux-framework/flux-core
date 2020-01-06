@@ -42,6 +42,7 @@ libsodium-devel   | libsodium-dev     | >= 1.0.14         |
 zeromq4-devel     | libzmq3-dev       | >= 4.0.4          |
 czmq-devel        | libczmq-dev       | >= 3.0.1          |
 jansson-devel     | libjansson-dev    | >= 2.6            |
+libuuid-devel     | uuid-dev          |                   |
 lz4-devel         | liblz4-dev        |                   |
 hwloc-devel       | libhwloc-dev      | >= v1.11.1, < 2.0 |
 sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
@@ -73,12 +74,12 @@ of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
 
 ##### Installing RedHat/CentOS Packages
 ```
-yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
 ```
 
 ##### Installing Ubuntu Packages
 ```
-apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
 ```
 
 ##### Building from Source
