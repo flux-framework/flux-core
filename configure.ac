@@ -313,6 +313,7 @@ PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 PKG_CHECK_MODULES([LIBSODIUM], [libsodium >= 1.0.14], [], [])
+PKG_CHECK_MODULES([LIBUUID], [uuid], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_VALGRIND_H

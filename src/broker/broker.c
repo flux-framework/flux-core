@@ -287,8 +287,7 @@ static int increase_rlimits (void)
     struct rlimit rlim;
 
     /*  Increase number of open files to max to prevent potential failures
-     *   due to file descriptor exhaustion (e.g. zuuid_new() failure to
-     *   open /dev/urandom)
+     *   due to file descriptor exhaustion (e.g. failure to open /dev/urandom)
      */
     if (getrlimit (RLIMIT_NOFILE, &rlim) < 0) {
         log_err ("getrlimit");

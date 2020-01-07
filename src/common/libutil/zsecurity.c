@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <czmq.h>
+#include <uuid.h>
 
 #include "zsecurity.h"
 
@@ -26,6 +27,9 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 
 #define FLUX_ZAP_DOMAIN "flux"
 
@@ -448,12 +452,13 @@ static int genpasswd (zsecurity_t *c, const char *user)
 {
     struct stat sb;
     zhash_t *passwds = NULL;
-    zuuid_t *uuid;
+    uuid_t uuid;
+    char uuid_str[UUID_STR_LEN];
     mode_t old_mask;
     int rc = -1;
 
-    if (!(uuid = zuuid_new ()))
-        oom ();
+    uuid_generate (uuid);
+    uuid_unparse (uuid, uuid_str);
     if ((c->typemask & ZSECURITY_KEYGEN_FORCE))
         (void)unlink (c->passwd_file);
     if (stat (c->passwd_file, &sb) == 0) {
@@ -463,7 +468,7 @@ static int genpasswd (zsecurity_t *c, const char *user)
     }
     if (!(passwds = zhash_new ()))
         oom ();
-    zhash_update (passwds, user, (char *)zuuid_str (uuid));
+    zhash_update (passwds, user, uuid_str);
     if ((c->typemask & ZSECURITY_VERBOSE))
         printf ("Saving %s\n", c->passwd_file);
     old_mask = umask (077);
@@ -478,8 +483,6 @@ static int genpasswd (zsecurity_t *c, const char *user)
 done:
     if (passwds)
         zhash_destroy (&passwds);
-    if (uuid)
-        zuuid_destroy (&uuid);
     return rc;
 }
 

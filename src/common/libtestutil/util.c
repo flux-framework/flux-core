@@ -13,12 +13,18 @@
 #endif
 #include <flux/core.h>
 #include <czmq.h>
+#include <uuid.h>
 #include <pthread.h>
 
 #include "util.h"
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/msglist.h"
+
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
+
 
 struct test_server {
     flux_t *c;
@@ -29,7 +35,8 @@ struct test_server {
     void *arg;
     pthread_t thread;
     int rc;
-    zuuid_t *uuid;
+    uuid_t uuid;
+    char uuid_str[UUID_STR_LEN];
 };
 
 static flux_t *test_connector_create (const char *shmem_name,
@@ -110,7 +117,6 @@ static void test_server_destroy (struct test_server *a)
         flux_msg_handler_destroy (a->shutdown_mh);
         flux_msg_handler_destroy (a->diag_mh);
         flux_close (a->s);
-        zuuid_destroy (&a->uuid);
         free (a);
     }
 }
@@ -127,17 +133,17 @@ flux_t *test_server_create (test_server_f cb, void *arg)
     a->cb = cb;
     a->arg = arg;
 
-    if (!(a->uuid = zuuid_new ()))
-        BAIL_OUT ("zuuid_new failed");
+    uuid_generate (a->uuid);
+    uuid_unparse (a->uuid, a->uuid_str);
 
     if (getenv ("FLUX_HANDLE_TRACE"))
         cflags |= FLUX_O_TRACE;
 
     /* Create back-to-back wired flux_t handles
      */
-    if (!(a->s = test_connector_create (zuuid_str (a->uuid), true, sflags)))
+    if (!(a->s = test_connector_create (a->uuid_str, true, sflags)))
         BAIL_OUT ("test_connector_create server");
-    if (!(a->c = test_connector_create (zuuid_str (a->uuid), false, cflags)))
+    if (!(a->c = test_connector_create (a->uuid_str, false, cflags)))
         BAIL_OUT ("test_connector_create client");
 
     /* If no callback, register watcher for all messages so we can log them.
@@ -185,7 +191,6 @@ void test_server_environment_init (const char *test_name)
 struct test_connector {
     zsock_t *sock;
     flux_t *h;
-    char *uuid;
     uint32_t userid;
     uint32_t rolemask;
 };

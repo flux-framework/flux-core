@@ -3,7 +3,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
+	$(ZMQ_CFLAGS) $(LIBUUID_CFLAGS) $(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
@@ -16,7 +16,7 @@ SUFFIXES = _build.py
 
 common_libs = $(top_builddir)/src/common/libflux-core.la \
 	      $(top_builddir)/src/common/libflux-internal.la \
-	      $(ZMQ_LIBS) \
+	      $(ZMQ_LIBS) $(LIBUUID_LIBS) \
 	      $(PYTHON_LDFLAGS)
 
 _build.py.c:

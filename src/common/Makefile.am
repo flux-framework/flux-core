@@ -36,8 +36,15 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libeventlog/libeventlog.la \
 	$(builddir)/libioencode/libioencode.la \
 	$(builddir)/librouter/librouter.la \
-	$(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL) $(LIBRT) $(FLUX_SECURITY_LIBS) $(LIBSODIUM_LIBS)
+	$(JANSSON_LIBS) \
+	$(ZMQ_LIBS) \
+	$(LIBUUID_LIBS) \
+	$(LIBPTHREAD) \
+	$(LIBUTIL) \
+	$(LIBDL) \
+	$(LIBRT) \
+	$(FLUX_SECURITY_LIBS) \
+	$(LIBSODIUM_LIBS)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la \
@@ -65,7 +72,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/liboptparse/liboptparse.la \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/fsd.lo \
-	$(ZMQ_LIBS) $(LIBPTHREAD)
+	$(ZMQ_LIBS) $(LIBUUID_LIBS) $(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-optparse.map \
 	-version-info @LIBFLUX_OPTPARSE_VERSION_INFO@ \

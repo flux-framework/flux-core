@@ -9,7 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS) \
+	$(LIBUUID_CFLAGS)
 
 noinst_LTLIBRARIES = libkvs.la
 
@@ -62,7 +63,12 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL)
+	$(ZMQ_LIBS) \
+	$(LIBUUID_LIBS) \
+	$(JANSSON_LIBS) \
+	$(LIBPTHREAD) \
+	$(LIBRT) \
+	$(LIBDL)
 
 test_cppflags = \
 	$(AM_CPPFLAGS) \
