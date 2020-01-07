@@ -59,7 +59,7 @@ test_expect_success 'module API: lsmod does not show test module' '
 '
 
 test_expect_success 'module: load test module (all ranks)' '
-	flux module load -r all \
+	flux exec -r all flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
 '
 
@@ -70,13 +70,13 @@ test_expect_success 'module: load submodule with invalid args (this rank)' '
 '
 
 test_expect_success 'module: load submodule (all ranks)' '
-	flux module load -r all \
+	flux exec -r all flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/child.so \
 		foo=42 bar=abcd
 '
 
 test_expect_success 'module: lsmod shows submodule (all ranks)' '
-	flux module list -r all parent | grep parent.child
+	flux exec -r all flux module list parent | grep parent.child
 '
 
 #
@@ -87,7 +87,7 @@ test_expect_success 'module: lsmod shows submodule (all ranks)' '
 #  parent.child         1113944 2517539    0  I         1 rank1,test1,test2
 #
 test_expect_success 'module: lsmod -r all parent works' '
-	flux module list -r all parent | grep child >child.lsmod.out
+	flux exec -r all flux module list parent | grep child >child.lsmod.out
 '
 test_expect_success 'module: hardwired test1,test2 services are listed in sorted order' '
 	grep -q test1,test2 child.lsmod.out
@@ -102,65 +102,21 @@ test_expect_success "module: there are size=$SIZE lines of output due to unique 
 '
 
 test_expect_success 'module: unload submodule (all ranks)' '
-	flux module remove -r all parent.child
+	flux exec -r all flux module remove parent.child
 '
 
 test_expect_success 'module: lsmod does not show submodule (all ranks)' '
-	! flux module list -r all parent | grep parent.child
+	flux exec -r all flux module list parent >noshow.out &&
+	test_must_fail grep parent.child noshow.out
 '
 
 test_expect_success 'module: unload test module (all ranks)' '
-	flux module remove -r all parent
+	flux exec -r all flux module remove parent
 '
 
 test_expect_success 'module: insmod returns initialization error' '
 	test_must_fail flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
-'
-
-test_expect_success 'module: list works with exclusion' '
-	flux module list -r all -x [0-1] >listx.out &&
-	grep -q [2-3] listx.out
-'
-
-test_expect_success 'module: list fails on invalid rank' '
-	flux module list -r $(invalid_rank) 2> stderr &&
-	grep "No route to host" stderr
-'
-
-test_expect_success 'module: load fails on invalid rank' '
-	test_must_fail flux module load -r $(invalid_rank) \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so 2> stderr &&
-	grep "No route to host" stderr
-'
-
-test_expect_success 'module: remove fails on invalid rank' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so &&
-	flux module remove -r $(invalid_rank) parent 2> stderr &&
-	flux module remove parent &&
-	grep "No route to host" stderr
-'
-
-test_expect_success 'module: load works on valid and invalid rank' '
-	test_must_fail flux module load -r 0,$(invalid_rank) \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so >stdout 2>stderr &&
-	flux module list -r 0 | grep parent &&
-	grep "No route to host" stderr
-'
-
-test_expect_success 'module: list works on valid and invalid rank' '
-	flux module list -r 0,$(invalid_rank) 1> stdout 2> stderr &&
-	grep "parent" stdout &&
-	grep "No route to host" stderr
-'
-
-test_expect_success 'module: remove works on valid and invalid rank' '
-	! flux module load -r 0,$(invalid_rank) \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so &&
-	flux module remove -r 0,$(invalid_rank) parent 2> stderr &&
-	! flux module list -r 0 | grep parent &&
-	grep "No route to host" stderr
 '
 
 test_expect_success 'module: load fails on invalid module' '
@@ -297,14 +253,5 @@ test_expect_success 'flux module load "noexist" fails' '
 	! flux module load noexist 2>noexist.out &&
 	grep -q "not found" noexist.out
 '
-
-test_expect_success 'flux module detects bad nodeset' '
-	! flux module load -r smurf kvs 2>badns-load.out &&
-	grep -q "could not parse" badns-load.out &&
-	! flux module list -x smurf 2>badns-list.out &&
-	grep -q "could not parse" badns-list.out
-'
-
-
 
 test_done

@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-flux module remove -r all kvs-watch
-flux module remove -r all -x 0 kvs
-flux module remove -r 0 kvs
-flux module remove -r 0  content-sqlite
+flux exec -r all flux module remove kvs-watch
+flux exec -r all -x 0 flux module remove kvs
+flux module remove kvs
+flux module remove content-sqlite

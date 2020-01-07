@@ -25,8 +25,8 @@ list_R() {
 }
 
 test_expect_success 'sched-simple: reload ingest module with lax validator' '
-        flux module remove -r all job-ingest &&
-	flux module load -r all job-ingest schema=${SCHEMA}
+        flux exec -r all flux module remove job-ingest &&
+	flux exec -r all flux module load job-ingest schema=${SCHEMA}
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
@@ -36,7 +36,7 @@ test_expect_success 'sched-simple: load default by_rank' '
 	flux kvs get resource.hwloc.by_rank
 '
 test_expect_success 'sched-simple: load sched-simple' '
-	flux module load -r 0 sched-simple &&
+	flux module load sched-simple &&
 	flux dmesg 2>&1 | grep "ready:.*rank\[0-1\]/core\[0-1\]" &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
@@ -100,8 +100,8 @@ test_expect_success 'sched-simple: cancel all jobs' '
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
 test_expect_success 'sched-simple: reload in best-fit mode' '
-	flux module remove -r 0 sched-simple &&
-	flux module load -r 0 sched-simple mode=best-fit
+	flux module remove sched-simple &&
+	flux module load sched-simple mode=best-fit
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '
 	flux job submit basic.json >job6.id &&
@@ -136,9 +136,9 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 	flux job wait-event --timeout=5.0 $(cat job9.id) free
 '
 test_expect_success 'sched-simple: reload in first-fit mode' '
-        flux module remove -r 0 sched-simple &&
+        flux module remove sched-simple &&
 	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank_first_fit)" &&
-        flux module load -r 0 sched-simple mode=first-fit &&
+        flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '
 test_expect_success 'sched-simple: submit 3 more jobs' '
@@ -158,13 +158,13 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 	test_cmp first-fit-allocs.expected first-fit-allocs.out
 '
 test_expect_success 'sched-simple: reload with outstanding allocations' '
-	flux module remove -r 0 sched-simple &&
+	flux module remove sched-simple &&
 	flux module load sched-simple &&
 	flux dmesg | grep "hello: alloc rank0/core0" &&
 	test "$($query)" = ""
 '
 test_expect_success 'sched-simple: remove sched-simple' '
-	flux module remove -r 0 sched-simple
+	flux module remove sched-simple
 '
 
 test_done

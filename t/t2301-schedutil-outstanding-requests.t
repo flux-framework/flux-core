@@ -12,7 +12,7 @@ SCHED_DUMMY=${FLUX_BUILD_DIR}/t/job-manager/.libs/sched-dummy.so
 REQ_AND_UNLOAD="flux python ${SHARNESS_TEST_SRCDIR}/schedutil/req_and_unload.py"
 
 test_expect_success 'schedutil: load sched-dummy --cores=2' '
-	flux module load -r 0 ${SCHED_DUMMY} --cores=2
+	flux module load ${SCHED_DUMMY} --cores=2
 '
 
 test_expect_success 'schedutil: set bit to hang alloc/free requests' '
@@ -29,7 +29,7 @@ test_expect_success 'schedutil: load default by_rank' '
 '
 
 test_expect_success 'schedutil: successfully loaded sched-simple' '
-	flux module load -r 0 sched-simple
+	flux module load sched-simple
 '
 
 test_expect_success 'schedutil: set bit to hang alloc/free requests' '

@@ -71,9 +71,9 @@ hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 test_expect_success 'load job-exec,sched-simple modules' '
         #  Add fake by_rank configuration to kvs:
         flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module load -r all barrier &&
-        flux module load -r 0 sched-simple &&
-        flux module load -r 0 job-exec
+        flux exec -r all flux module load barrier &&
+        flux module load sched-simple &&
+        flux module load job-exec
 '
 
 #
@@ -253,8 +253,8 @@ test_expect_success 'cleanup job listing jobs ' '
 '
 
 test_expect_success 'reload the job-info module' '
-        flux module remove -r all job-info &&
-        flux module load -r all job-info
+        flux exec -r all flux module remove job-info &&
+        flux exec -r all flux module load job-info
 '
 
 # inactive jobs are listed by most recently completed first, so must
@@ -344,8 +344,8 @@ test_expect_success 'flux job lists full path for job-name if first argument not
 '
 
 test_expect_success 'reload the job-info module' '
-        flux module remove -r all job-info &&
-        flux module load -r all job-info
+        flux exec -r all flux module remove job-info &&
+        flux exec -r all flux module load job-info
 '
 
 test_expect_success 'verify job names preserved across restart' '
@@ -380,8 +380,8 @@ test_expect_success 'flux job list outputs task-count correctly (4 tasks)' '
 '
 
 test_expect_success 'reload the job-info module' '
-        flux module remove -r all job-info &&
-        flux module load -r all job-info
+        flux exec -r all flux module remove job-info &&
+        flux exec -r all flux module load job-info
 '
 
 test_expect_success 'verify job names preserved across restart' '
@@ -869,9 +869,9 @@ test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(2
 # cleanup
 #
 test_expect_success 'remove sched-simple,job-exec modules' '
-        flux module remove -r all barrier &&
-        flux module remove -r 0 sched-simple &&
-        flux module remove -r 0 job-exec
+        flux exec -r all flux module remove barrier &&
+        flux module remove sched-simple &&
+        flux module remove job-exec
 '
 
 test_done
