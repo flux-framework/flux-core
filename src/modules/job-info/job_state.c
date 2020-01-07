@@ -367,6 +367,23 @@ static int parse_res_level (struct info_ctx *ctx,
     return 0;
 }
 
+/* Return basename of path if there is a '/' in path.  Otherwise return
+ * full path */
+const char *
+parse_job_name (const char *path)
+{
+    char *p = strrchr (path, '/');
+    if (p) {
+        p++;
+        /* user mistake, specified a directory with trailing '/',
+         * return full path */
+        if (*p == '\0')
+            return path;
+        return p;
+    }
+    return path;
+}
+
 static int jobspec_parse (struct info_ctx *ctx,
                           struct job *job,
                           const char *s)
@@ -452,7 +469,7 @@ static int jobspec_parse (struct info_ctx *ctx,
                       __FUNCTION__, (unsigned long long)job->id);
             goto error;
         }
-        job->job_name = json_string_value (arg0);
+        job->job_name = parse_job_name (json_string_value (arg0));
         assert (job->job_name);
     }
 
