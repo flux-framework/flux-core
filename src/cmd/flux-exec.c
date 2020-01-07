@@ -26,8 +26,10 @@
 #include "src/common/libutil/log.h"
 
 static struct optparse_option cmdopts[] = {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET",
-      .usage = "Specify specific target ranks.  Default is \"all\"" },
+    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "IDSET",
+      .usage = "Specify target ranks.  Default is \"all\"" },
+    { .name = "exclude", .key = 'x', .has_arg = 1, .arginfo = "IDSET",
+      .usage = "Exclude ranks from target." },
     { .name = "dir", .key = 'd', .has_arg = 1, .arginfo = "PATH",
       .usage = "Set the working directory to PATH" },
     { .name = "labelio", .key = 'l', .has_arg = 0,
@@ -360,6 +362,16 @@ int main (int argc, char *argv[])
         if (idset_range_set (ns, 0, rank_range - 1) < 0)
             log_err_exit ("idset_range_set");
         rank_count = rank_range;
+    }
+
+    if (optparse_hasopt (opts, "exclude")) {
+        struct idset *xset;
+
+        if (!(xset = idset_decode (optparse_get_str (opts, "exclude", NULL))))
+            log_err_exit ("error decoding --exclude idset");
+        if (idset_range_clear (ns, idset_first (xset), idset_last (xset)) < 0)
+            log_err_exit ("error apply --exclude idset");
+        idset_destroy (xset);
     }
 
     if (!(hanging = idset_copy (ns)))
