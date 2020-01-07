@@ -225,7 +225,7 @@ AC_CHECK_LIB(m, floor)
 saved_PATH=$PATH
 export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
 
-AX_PYTHON_DEVEL([>='2.7'])
+AX_PYTHON_DEVEL([>='3.6'])
 
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
@@ -501,6 +501,14 @@ AC_CONFIG_FILES( \
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \
 ])
+
+AC_ARG_WITH([python2], AS_HELP_STRING([--with-python2],
+             [Build python2 bindings along with the required python3]))
+
+AS_IF([test "x$with_python2" = "xyes"], [
+  AC_CONFIG_SUBDIRS([src/bindings/python-2])
+])
+AM_CONDITIONAL([BUILD_WITH_PYTHON2], [test "x$with_python2" = "xyes"])
 
 AC_OUTPUT
 
