@@ -26,17 +26,26 @@
  */
 void send_watch_requests (flux_t *h, const char *key)
 {
-    flux_mrpc_t *r;
+    uint32_t size, rank;
+    flux_future_t *f;
 
-    if (!(r = flux_mrpc_pack (h, "kvs-watch.lookup", "all",
-                              FLUX_RPC_STREAMING,
-                              "{s:s s:s s:i}",
-                              "key", key,
-                              "namespace", KVS_PRIMARY_NAMESPACE,
-                              "flags", FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE)))
-        log_err_exit ("flux_mrpc kvs-watch.lookup");
-
-    flux_mrpc_destroy (r);
+    if (flux_get_size (h, &size) < 0)
+        log_err_exit ("flux_get_size");
+    for (rank = 0; rank < size; rank++) {
+        if (!(f = flux_rpc_pack (h,
+                                 "kvs-watch.lookup",
+                                 rank,
+                                 FLUX_RPC_STREAMING,
+                                 "{s:s s:s s:i}",
+                                 "key",
+                                 key,
+                                 "namespace",
+                                 KVS_PRIMARY_NAMESPACE,
+                                 "flags",
+                                 FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE)))
+            log_err_exit ("flux_rpc kvs-watch.lookup");
+        flux_future_destroy (f);
+    }
 }
 
 /* Sum #watchers over all ranks.
@@ -44,16 +53,19 @@ void send_watch_requests (flux_t *h, const char *key)
 int count_watchers (flux_t *h)
 {
     int n, count = 0;
-    flux_mrpc_t *r;
+    uint32_t rank, size;
+    flux_future_t *f;
 
-    if (!(r = flux_mrpc (h, "kvs-watch.stats.get", NULL, "all", 0)))
-        log_err_exit ("flux_mrpc kvs-watch.stats.get");
-    do {
-        if (flux_mrpc_get_unpack (r, "{ s:i }", "watchers", &n) < 0)
+    if (flux_get_size (h, &size) < 0)
+        log_err_exit ("flux_get_size");
+    for (rank = 0; rank < size; rank++) {
+        if (!(f = flux_rpc (h, "kvs-watch.stats.get", NULL, rank, 0)))
+            log_err_exit ("flux_rpc kvs-watch.stats.get");
+        if (flux_rpc_get_unpack (f, "{ s:i }", "watchers", &n) < 0)
             log_err_exit ("kvs-watch.stats.get");
         count += n;
-    } while (flux_mrpc_next (r) == 0);
-    flux_mrpc_destroy (r);
+        flux_future_destroy (f);
+    }
     return count;
 }
 
