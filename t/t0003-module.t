@@ -125,8 +125,8 @@ test_expect_success 'module: load fails on invalid module' '
 '
 
 test_expect_success 'module: remove fails on invalid module' '
-	flux module remove nosuchmodule 2> stderr &&
-	grep "nosuchmodule: No such file or directory" stderr
+	test_must_fail flux module remove nosuchmodule 2>nosuch.err &&
+	grep "nosuchmodule: No such file or directory" nosuch.err
 '
 
 test_expect_success 'module: info works' '
