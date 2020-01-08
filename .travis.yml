@@ -88,12 +88,12 @@ jobs:
        - IMG=centos7
        - DOCKER_TAG=t
        - PYTHON_VERSION=2.7
-    - name: "Centos 7: py3.6 --with-flux-security"
+    - name: "Centos 8: py3.6 --with-flux-security"
       stage: test
       compiler: gcc
       env:
        - ARGS="--with-flux-security --prefix=/usr"
-       - IMG=centos7
+       - IMG=centos8
        - PYTHON_VERSION=3.6
 
 stages:
