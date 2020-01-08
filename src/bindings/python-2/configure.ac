@@ -150,6 +150,7 @@ AC_CONFIG_FILES([Makefile
   flux/Makefile
   flux/core/Makefile
   _flux/Makefile
+  t/Makefile
   ])
 AC_OUTPUT
 

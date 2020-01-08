@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+
+###############################################################
+# Copyright 2014 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+###############################################################
+
+from __future__ import print_function
+
+import sys
+print(sys.path)
+
+
+import unittest
+import syslog
+import six
+
+import flux
+from subflux import rerun_under_flux
+
+
+def __flux_size():
+    return 2
+
+
+class TestHandle(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        """Create a handle, connect to flux"""
+        self.f = flux.Flux()
+
+    def test_create_handle(self):
+        """Successfully connected to flux"""
+        self.assertIsNotNone(self.f)
+
+    def test_log(self):
+        """Successfully connected to flux"""
+        self.f.log(syslog.LOG_INFO, u"hello")
+        self.f.log(syslog.LOG_INFO, b"world")
+
+    def test_rpc_ping(self):
+        """Sending a ping"""
+        # python 3 json doesn't support bytes, but python 2 will treat them as str (i.e., bytes)
+        r = self.f.rpc(b"cmb.ping", {"seq": 1, "pad": "stuff"}).get()
+        self.assertEqual(r["seq"], 1)
+        self.assertEqual(r["pad"], u"stuff")
+        self.assertTrue(isinstance(r["pad"], six.text_type))
+
+    def test_anonymous_handle_rpc_ping(self):
+        """Send a ping using an anonymous/unnamed flux handle"""
+        r = flux.Flux().rpc(b"cmb.ping", {"seq": 1, "pad": "stuff"}).get()
+        self.assertIsNotNone(r)
+        self.assertEqual(r["seq"], 1)
+        self.assertEqual(r["pad"], u"stuff")
+
+    def test_rpc_ping_unicode(self):
+        """Sending a ping"""
+        r = self.f.rpc(
+            u"cmb.ping", {u"\xa3": u"value", u"key": u"\u32db \u263a \u32e1"}
+        ).get()
+        self.assertEqual(r[u"\xa3"], u"value")
+        self.assertEqual(r["key"], u"\u32db \u263a \u32e1")
+        self.assertTrue(isinstance(r["key"], six.text_type))
+
+    def test_rpc_with(self):
+        """Sending a ping"""
+        with self.f.rpc("cmb.ping", {"seq": 1, "pad": "stuff"}) as r:
+            j = r.get()
+            self.assertEqual(j["seq"], 1)
+            self.assertEqual(j["pad"], "stuff")
+
+    def test_rpc_null_payload(self):
+        """Sending a request that receives a NULL response"""
+        resp = self.f.rpc(
+            "attr.set", {"name": "attr-that-doesnt-exist", "value": "foo"}
+        ).get()
+        self.assertIsNone(resp)
+
+    def test_get_rank(self):
+        """Get flux rank"""
+        rank = self.f.get_rank()
+        self.assertEqual(rank, 0)
+
+
+if __name__ == "__main__":
+    if rerun_under_flux(__flux_size()):
+        from pycotap import TAPTestRunner
+
+        unittest.main(testRunner=TAPTestRunner())
