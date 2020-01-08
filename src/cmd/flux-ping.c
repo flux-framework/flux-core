@@ -20,14 +20,12 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libidset/idset.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 
 struct ping_ctx {
     double interval;    /* interval between sends, in seconds */
-    const char *rank;   /* target rank(s) if multiple or NULL */
-    uint32_t rank_count;/* number of ranks in rank */
+    uint32_t nodeid;    /* target rank or FLUX_NODEID_ANY */
     char *topic;        /* target topic string */
     char *pad;          /* pad string */
     int count;          /* number of pings to send */
@@ -35,7 +33,7 @@ struct ping_ctx {
     bool batch;         /* begin receiving only after count sent */
     flux_t *h;
     flux_reactor_t *reactor;
-    bool userid;        /* include userid/rolemask in output */
+    bool userid_flag;   /* include userid/rolemask in output */
 };
 
 struct ping_data {
@@ -46,8 +44,8 @@ struct ping_data {
 };
 
 static struct optparse_option cmdopts[] = {
-    { .name = "rank",     .key = 'r', .has_arg = 1, .arginfo = "NODESET",
-      .usage = "Find target on a specific broker rank(s)",
+    { .name = "rank",     .key = 'r', .has_arg = 1, .arginfo = "RANK",
+      .usage = "Find target on a specific broker rank",
     },
     { .name = "pad",      .key = 'p', .has_arg = 1, .arginfo = "N",
       .usage = "Include in the payload a string of length N bytes",
@@ -71,43 +69,77 @@ void ping_data_free (void *ctx)
 {
     struct ping_data *pdata = ctx;
     if (pdata) {
-        if (pdata->tstat)
-            free (pdata->tstat);
-        if (pdata->route)
-            free (pdata->route);
+        free (pdata->tstat);
+        free (pdata->route);
         free (pdata);
+    }
+}
+
+char *cred_str (uint32_t userid, uint32_t rolemask, char *buf, int bufsz)
+{
+    if (snprintf (buf,
+                  bufsz,
+                  " userid=%" PRIu32 " rolemask=0x%" PRIx32,
+                  userid,
+                  rolemask) >= bufsz)
+        return "";
+    return buf;
+}
+
+char *rank_bang_str (uint32_t rank, char *buf, int bufsz)
+{
+    switch (rank) {
+    case FLUX_NODEID_ANY:
+        return "";
+    case FLUX_NODEID_UPSTREAM:
+        return "upstream!";
+    default:
+        if (snprintf (buf, bufsz, "%" PRIu32 "!", rank) >= bufsz)
+            return "";
+        return buf;
     }
 }
 
 /* Handle responses
  */
-void ping_continuation (flux_mrpc_t *mrpc, void *arg)
+void ping_continuation (flux_future_t *f, void *arg)
 {
     struct ping_ctx *ctx = arg;
     const char *route, *pad;
     int64_t sec, nsec;
     struct timespec t0;
     int seq;
-    struct ping_data *pdata = flux_mrpc_aux_get (mrpc, "ping");
+    struct ping_data *pdata = flux_future_aux_get (f, "ping");
     tstat_t *tstat = pdata->tstat;
     uint32_t rolemask, userid;
+    char ubuf[32];
+    char rbuf[32];
 
-    if (flux_mrpc_get_unpack (mrpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
-                              "seq", &seq,
-                              "time.tv_sec", &sec,
-                              "time.tv_nsec", &nsec,
-                              "pad", &pad,
-                              "route", &route,
-                              "userid", &userid,
-                              "rolemask", &rolemask) < 0) {
-        log_err_exit ("%s!%s", ctx->rank, ctx->topic);
-        goto done;
-    }
+    if (flux_rpc_get_unpack (f,
+                             "{ s:i s:I s:I s:s s:s s:i s:i !}",
+                             "seq",
+                             &seq,
+                             "time.tv_sec",
+                             &sec,
+                             "time.tv_nsec",
+                             &nsec,
+                             "pad",
+                             &pad,
+                             "route",
+                             &route,
+                             "userid",
+                             &userid,
+                             "rolemask",
+                             &rolemask) < 0)
+        log_err_exit ("%s%s",
+                      rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
+                      ctx->topic);
 
-    if (strcmp (ctx->pad, pad) != 0) {
-        log_err ("error in ping pad");
-        goto done;
-    }
+    if (strcmp (ctx->pad, pad) != 0)
+        log_msg_exit ("%s%s: padding contents invalid",
+                      rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
+                      ctx->topic);
+
 
     t0.tv_sec = sec;
     t0.tv_nsec = nsec;
@@ -119,37 +151,23 @@ void ping_continuation (flux_mrpc_t *mrpc, void *arg)
     pdata->route = xstrdup (route);
     pdata->rpc_count++;
 
-done:
-    if (flux_mrpc_next (mrpc) < 0) {
-        if (pdata->rpc_count) {
-            if (ctx->rank_count > 1) {
-                printf ("%s!%s pad=%zu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
-                        "stddev %0.3f\n",
-                        ctx->rank, ctx->topic, strlen (ctx->pad), pdata->seq,
-                        tstat_min (tstat), tstat_mean (tstat),
-                        tstat_max (tstat), tstat_stddev (tstat));
-            } else {
-                char s[16] = {0};
-                char u[32] = {0};
-                if (strcmp (ctx->rank, "any"))
-                    snprintf (s, sizeof (s), "%s!", ctx->rank);
-                if (ctx->userid)
-                    snprintf (u, sizeof (u),
-                              " userid=%" PRIu32 " rolemask=0x%" PRIx32,
-                              userid, rolemask);
-                printf ("%s%s pad=%zu%s seq=%d time=%0.3f ms (%s)\n",
-                        s, ctx->topic, strlen (ctx->pad), u, pdata->seq,
-                        tstat_mean (tstat), pdata->route);
-            }
-        }
-        flux_mrpc_destroy (mrpc);
-    }
+    printf ("%s%s pad=%zu%s seq=%d time=%0.3f ms (%s)\n",
+            rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
+            ctx->topic,
+            strlen (ctx->pad),
+            ctx->userid_flag
+                ? cred_str (userid, rolemask, ubuf, sizeof (ubuf)) : "",
+            pdata->seq,
+            tstat_mean (tstat),
+            pdata->route);
+
+    flux_future_destroy (f);
 }
 
 void send_ping (struct ping_ctx *ctx)
 {
     struct timespec t0;
-    flux_mrpc_t *mrpc;
+    flux_future_t *f;
     struct ping_data *pdata = xzmalloc (sizeof (*pdata));
 
     pdata->tstat = xzmalloc (sizeof (*(pdata->tstat)));
@@ -159,18 +177,23 @@ void send_ping (struct ping_ctx *ctx)
 
     monotime (&t0);
 
-    mrpc = flux_mrpc_pack (ctx->h, ctx->topic, ctx->rank, 0,
-                           "{s:i s:I s:I s:s}",
-                           "seq", ctx->send_count,
-                           "time.tv_sec", (uint64_t)t0.tv_sec,
-                           "time.tv_nsec", (uint64_t)t0.tv_nsec,
-                           "pad", ctx->pad);
-    if (!mrpc)
-        log_err_exit ("flux_mrpc_pack");
-    if (flux_mrpc_aux_set (mrpc, "ping", pdata, ping_data_free) < 0)
-        log_err_exit ("flux_mrpc_aux_set");
-    if (flux_mrpc_then (mrpc, ping_continuation, ctx) < 0)
-        log_err_exit ("flux_mrpc_then");
+    if (!(f = flux_rpc_pack (ctx->h,
+                             ctx->topic, ctx->nodeid,
+                             0,
+                             "{s:i s:I s:I s:s}",
+                             "seq",
+                             ctx->send_count,
+                             "time.tv_sec",
+                             (uint64_t)t0.tv_sec,
+                             "time.tv_nsec",
+                             (uint64_t)t0.tv_nsec,
+                             "pad",
+                             ctx->pad)))
+        log_err_exit ("flux_rpc_pack");
+    if (flux_future_aux_set (f, "ping", pdata, ping_data_free) < 0)
+        log_err_exit ("flux_future_aux_set");
+    if (flux_future_then (f, -1., ping_continuation, ctx) < 0)
+        log_err_exit ("flux_future_then");
 
     ctx->send_count++;
 }
@@ -191,12 +214,55 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     }
 }
 
+int parse_nodeid (const char *s, uint32_t *np)
+{
+    uint32_t n;
+    char *endptr;
+
+    errno = 0;
+    n = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        return -1;
+    *np = n;
+    return 0;
+}
+
+/* Parse 's' to obtain the ping topic string and (optionally) nodeid.
+ * If nodeid is non-NULL, then try to parse a nodeid from 's'
+ * looking for nodeid!service expressions (including nodeid=any and upstream),
+ * or just a number in which case the service is assumed to be "cmb".
+ */
+void parse_service (const char *s, uint32_t *nodeid, char **topic)
+{
+
+    char *cpy = NULL;
+    char *service = NULL;
+
+    if (nodeid) {
+        if (!(cpy = strdup (s)))
+            log_err_exit ("strdup");
+        if ((service = strchr (cpy, '!')))
+            *service++ = '\0';
+        else
+            service = "cmb";
+        if (!strcmp (cpy, "any"))
+            *nodeid = FLUX_NODEID_ANY;
+        else if (!strcmp (cpy, "upstream"))
+            *nodeid = FLUX_NODEID_UPSTREAM;
+        else if (parse_nodeid (cpy, nodeid) < 0) {
+            *nodeid = FLUX_NODEID_ANY; // back where we started
+            service = NULL;
+        }
+    }
+    if (asprintf (topic, "%s.ping", service ? service : s) < 0)
+        log_err_exit ("asprintf");
+    free (cpy);
+}
+
 int main (int argc, char *argv[])
 {
     int pad_bytes;
-    char *target;
     flux_watcher_t *tw = NULL;
-    struct idset *ns = NULL;
     optparse_t *opts;
     struct ping_ctx ctx;
     int optindex;
@@ -215,7 +281,23 @@ int main (int argc, char *argv[])
     if (pad_bytes < 0)
         log_msg_exit ("pad must be >= 0");
 
-    ctx.rank = optparse_get_str (opts, "rank", NULL);
+    ctx.nodeid = FLUX_NODEID_ANY;
+    if (optparse_hasopt (opts, "rank")) {
+        const char *s = optparse_get_str (opts, "rank", NULL);
+        if (!s)
+            log_msg_exit ("error parsing --rank option");
+        if (!strcmp (s, "any"))
+            ctx.nodeid = FLUX_NODEID_ANY;
+        else if (!strcmp (s, "upstream"))
+            ctx.nodeid = FLUX_NODEID_UPSTREAM;
+        else {
+            char *endptr;
+            errno = 0;
+            ctx.nodeid = strtoul (s, &endptr, 10);
+            if (errno != 0 || *endptr != '\0')
+                log_msg_exit ("error parsing --rank option");
+        }
+    }
 
     ctx.interval = optparse_get_duration (opts, "interval", 1.0);
     if (ctx.interval < 0.)
@@ -226,7 +308,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("count must be >= 0");
 
     ctx.batch = optparse_hasopt (opts, "batch");
-    ctx.userid = optparse_hasopt (opts, "userid");
+    ctx.userid_flag = optparse_hasopt (opts, "userid");
 
     if (ctx.batch && ctx.count == 0)
         log_msg_exit ("--batch should only be used with --count");
@@ -235,8 +317,9 @@ int main (int argc, char *argv[])
         optparse_print_usage (opts);
         exit (1);
     }
-
-    target = argv[optindex++];
+    parse_service (argv[optindex++],
+                   optparse_hasopt (opts, "rank") ? NULL : &ctx.nodeid,
+                   &ctx.topic);
 
     /* Create null terminated pad string for reuse in each message.
      * By default it's the empty string.
@@ -244,51 +327,11 @@ int main (int argc, char *argv[])
     ctx.pad = xzmalloc (pad_bytes + 1);
     memset (ctx.pad, 'p', pad_bytes);
 
-    /* If "rank!" is prepended to the target, and there is no --rank
-     * argument, snip it off and set the rank.  If it's just the bare
-     * rank, assume the target is "cmb".
-     */
-    if (ctx.rank == NULL) {
-        char *p;
-        if ((p = strchr (target, '!'))) {
-            *p++ = '\0';
-            ctx.rank = target;
-            target = p;
-        } else if ((ns = idset_decode (target)) != NULL) {
-            ctx.rank = target;
-            target = "cmb";
-            idset_destroy (ns);
-        } else if (!strcmp (target, "all")
-                   || !strcmp (target, "any")
-                   || !strcmp (target, "upstream")) {
-            ctx.rank = target;
-            target = "cmb";
-        }
-        else
-            ctx.rank = "any";
-    }
-
-    ctx.topic = xasprintf ("%s.ping", target);
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     if (!(ctx.reactor = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
-
-    /* Determine number of ranks for output logic
-     */
-    if ((ns = idset_decode (ctx.rank))) {
-        ctx.rank_count = idset_count (ns);
-        idset_destroy (ns);
-    }
-    else {
-        if (!strcmp (ctx.rank, "all")) {
-            if (flux_get_size (ctx.h, &ctx.rank_count) < 0)
-                log_err_exit ("flux_get_size");
-        }
-        else
-            ctx.rank_count = 1;
-    }
 
     /* In batch mode, requests are sent before reactor is started
      * to process responses.  o/w requests are set in a timer watcher.
