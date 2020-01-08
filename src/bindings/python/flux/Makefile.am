@@ -6,7 +6,6 @@ fluxpy_PYTHON=\
 	      message.py\
 	      constants.py\
 	      job.py \
-	      mrpc.py \
 	      util.py \
 	      future.py
 
