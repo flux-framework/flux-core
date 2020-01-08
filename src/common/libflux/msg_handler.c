@@ -180,10 +180,6 @@ static int matchtag_cmp (const void *key1, const void *key2)
     uint32_t m1 = *(uint32_t *)key1;
     uint32_t m2 = *(uint32_t *)key2;
 
-    if ((m1 & FLUX_MATCHTAG_GROUP_MASK))
-        m1 &= FLUX_MATCHTAG_GROUP_MASK;
-    if ((m2 & FLUX_MATCHTAG_GROUP_MASK))
-        m2 &= FLUX_MATCHTAG_GROUP_MASK;
     if (m1 < m2)
         return -1;
     if (m1 > m2)
@@ -192,16 +188,10 @@ static int matchtag_cmp (const void *key1, const void *key2)
 }
 
 /* zhashx_hash_fn to map response matchtags to handlers
- * 12 high order bits are for group matchtags (mrpc).
- * If group bits are set, we must ignore the low order bits when
- * mapping to the handler.
  */
 static size_t matchtag_hasher (const void *key)
 {
     uint32_t matchtag = *(uint32_t *)key;
-
-    if ((matchtag & FLUX_MATCHTAG_GROUP_MASK))
-        matchtag &= FLUX_MATCHTAG_GROUP_MASK;
 
     return matchtag;
 }
@@ -310,8 +300,6 @@ static void handle_late_response (struct dispatch *d, const flux_msg_t *msg)
         return; // foreign matchtag domain (or error getting count)
     if (matchtag == FLUX_MATCHTAG_NONE)
         return; // no matchtag was allocated
-    if (flux_matchtag_group (matchtag))
-        return; // no way to tell here if an mrpc is complete
     if (flux_msg_is_streaming (msg)) {
         if (flux_msg_get_errnum (msg, &errnum) < 0 || errnum == 0)
             return; // streaming RPC is only terminated with an error response

@@ -412,11 +412,6 @@ void check_matchtag (void)
     ok (flux_msg_cmp_matchtag (msg, 42) && !flux_msg_cmp_matchtag (msg, 0),
         "flux_msg_cmp_matchtag works");
 
-    ok (flux_msg_set_matchtag (msg, (1<<FLUX_MATCHTAG_GROUP_SHIFT) | 55) == 0,
-        "flux_msg_set_matchtag (group part nonzero) works ");
-    ok (flux_msg_cmp_matchtag (msg, (1<<FLUX_MATCHTAG_GROUP_SHIFT | 69))
-        && !flux_msg_cmp_matchtag (msg, (3<<FLUX_MATCHTAG_GROUP_SHIFT)),
-        "flux_msg_cmp_matchtag compares only group part if nonzero");
     flux_msg_destroy (msg);
 }
 

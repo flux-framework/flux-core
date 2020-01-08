@@ -261,18 +261,9 @@ int main (int argc, char *argv[])
        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
     /* matchtags */
-    matchtag = flux_matchtag_alloc (h, 0);
+    matchtag = flux_matchtag_alloc (h);
     ok (matchtag != FLUX_MATCHTAG_NONE,
-        "flux_matchtag_alloc (regular) works");
-    ok (flux_matchtag_group (matchtag) == false,
-        "matchtag is regular type");
-    flux_matchtag_free (h, matchtag);
-
-    matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
-    ok (matchtag != FLUX_MATCHTAG_NONE,
-        "flux_matchtag_alloc (group) works");
-    ok (flux_matchtag_group (matchtag) == true,
-        "matchtag is group type");
+        "flux_matchtag_alloc works");
     flux_matchtag_free (h, matchtag);
 
     flux_close (h);

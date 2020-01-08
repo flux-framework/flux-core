@@ -241,8 +241,6 @@ int flux_msg_get_status (const flux_msg_t *msg, int *status);
  */
 enum {
     FLUX_MATCHTAG_NONE = 0,
-    FLUX_MATCHTAG_GROUP_SHIFT = 20,
-    FLUX_MATCHTAG_GROUP_MASK = 0xfff00000
 };
 int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t matchtag);
 int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag);

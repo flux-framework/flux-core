@@ -1290,7 +1290,7 @@ struct thing *thing_create (flux_t *h)
     flux_future_set_flux (t->f, h);
     if (flux_future_aux_set (t->f, "thing", t, (flux_free_f)thing_destroy) < 0)
         BAIL_OUT ("flux_future_aux_set failed");
-    t->matchtag = flux_matchtag_alloc (h, 0);
+    t->matchtag = flux_matchtag_alloc (h);
     if (t->matchtag == FLUX_MATCHTAG_NONE)
         BAIL_OUT ("flux_matchatg_alloc failed");
     t->h = h;

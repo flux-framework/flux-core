@@ -87,7 +87,7 @@ static flux_t *lookup_clone_ancestor (flux_t *h)
     return h;
 }
 
-void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags);
+void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new);
 
 #if HAVE_CALIPER
 void profiling_context_init (struct profiling_context* prof)
@@ -384,14 +384,11 @@ nomem:
 
 static void report_leaked_matchtags (struct tagpool *tp)
 {
-    uint32_t reg = tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_SIZE) -
-                   tagpool_getattr (tp, TAGPOOL_ATTR_REGULAR_AVAIL);
-    uint32_t grp = tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_SIZE) -
-                   tagpool_getattr (tp, TAGPOOL_ATTR_GROUP_AVAIL);
-    if (reg > 0 || grp > 0)
+    uint32_t count = tagpool_getattr (tp, TAGPOOL_ATTR_SIZE) -
+                     tagpool_getattr (tp, TAGPOOL_ATTR_AVAIL);
+    if (count > 0)
         fprintf (stderr,
-                 "MATCHDEBUG: pool destroy with reg=%d grp=%d allocated\n",
-                 reg, grp);
+                 "MATCHDEBUG: pool destroy with %d allocated\n", count);
 }
 
 void flux_handle_destroy (flux_t *h)
@@ -525,25 +522,20 @@ void flux_clr_msgcounters (flux_t *h)
     memset (&h->msgcounters, 0, sizeof (h->msgcounters));
 }
 
-void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags)
+void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new)
 {
     flux_t *h = arg;
-    flux_log (h, LOG_INFO, "tagpool-%s expanded from %u to %u entries",
-              (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal", old, new);
+    flux_log (h, LOG_INFO, "tagpool expanded from %u to %u entries", old, new);
 }
 
-uint32_t flux_matchtag_alloc (flux_t *h, int flags)
+uint32_t flux_matchtag_alloc (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
     uint32_t tag;
-    int tpflags = 0;
 
-    if ((flags & FLUX_MATCHTAG_GROUP))
-        tpflags |= TAGPOOL_FLAG_GROUP;
-    tag = tagpool_alloc (h->tagpool, tpflags);
+    tag = tagpool_alloc (h->tagpool);
     if (tag == FLUX_MATCHTAG_NONE) {
-        flux_log (h, LOG_ERR, "tagpool-%s temporarily out of tags",
-                  (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal");
+        flux_log (h, LOG_ERR, "tagpool temporarily out of tags");
         errno = EBUSY; /* appropriate error? */
     }
     return tag;
@@ -570,18 +562,10 @@ void flux_matchtag_free (flux_t *h, uint32_t matchtag)
     tagpool_free (h->tagpool, matchtag);
 }
 
-bool flux_matchtag_group (uint32_t matchtag)
-{
-    return tagpool_group (matchtag);
-}
-
-uint32_t flux_matchtag_avail (flux_t *h, int flags)
+uint32_t flux_matchtag_avail (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
-    if ((flags & FLUX_MATCHTAG_GROUP))
-        return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_GROUP_AVAIL);
-    else
-        return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_REGULAR_AVAIL);
+    return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_AVAIL);
 }
 
 static void update_tx_stats (flux_t *h, const flux_msg_t *msg)

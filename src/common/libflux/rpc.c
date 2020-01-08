@@ -104,7 +104,7 @@ static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
         rpc->matchtag = FLUX_MATCHTAG_NONE;
     }
     else {
-        rpc->matchtag = flux_matchtag_alloc (h, 0);
+        rpc->matchtag = flux_matchtag_alloc (h);
         if (rpc->matchtag == FLUX_MATCHTAG_NONE)
             goto error;
     }
