@@ -61,6 +61,7 @@ jobs:
        - CXX=clang++-6.0
        - chain_lint=t
        - ARGS="--with-flux-security --with-python2"
+       - PYTHON2_VERSION=2.7
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
       stage: test
       compiler: gcc
