@@ -225,6 +225,9 @@ AC_CHECK_LIB(m, floor)
 saved_PATH=$PATH
 export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
 
+if test -z "$PYTHON_VERSION" ; then
+  PYTHON_VERSION=3
+fi
 AX_PYTHON_DEVEL([>='3.6'])
 
 AM_PATH_PYTHON([$ac_python_version])
