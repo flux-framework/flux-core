@@ -36,6 +36,12 @@ int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
 
+static struct optparse_option legacy_opts[] =  {
+    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
+      .usage = "Send RPC to specified rank",
+    },
+    OPTPARSE_TABLE_END,
+};
 
 static struct optparse_option stats_opts[] =  {
     { .name = "parse", .key = 'p', .has_arg = 1, .arginfo = "OBJNAME",
@@ -83,14 +89,14 @@ static struct optparse_subcommand subcommands[] = {
       "Unload module",
       cmd_remove,
       0,
-      NULL,
+      legacy_opts,
     },
     { "load",
       "[OPTIONS] module",
       "Load module",
       cmd_load,
       0,
-      NULL,
+      legacy_opts,
     },
     { "info",
       "[OPTIONS] module",
@@ -279,7 +285,7 @@ int cmd_load (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (!(f = flux_rpc_pack (h,
                              topic,
-                             FLUX_NODEID_ANY,
+                             optparse_get_int (p, "rank", FLUX_NODEID_ANY),
                              0,
                              "{s:s s:O}",
                              "path",
@@ -322,7 +328,7 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (!(f = flux_rpc_pack (h,
                              topic,
-                             FLUX_NODEID_ANY,
+                             optparse_get_int (p, "rank", FLUX_NODEID_ANY),
                              0,
                              "{s:s}",
                              "name",
