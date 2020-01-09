@@ -32,11 +32,7 @@ typedef void PyObject;
 #endif
 
 PyObject * py_unicode_or_string(const char *str) {
-#if PY_MAJOR_VERSION >= 3
     return PyUnicode_FromString(str);
-#else
-    return PyString_FromString(str);
-#endif
 }
 
 void add_if_not_present(PyObject *list, const char* path){
@@ -134,11 +130,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     const char * module_name = argv[option_index];
 
-#if PY_MAJOR_VERSION >= 3
     wchar_t *program = L"pymod";
-#else
-    char *program = "pymod";
-#endif
     Py_SetProgramName(program);
     Py_Initialize();
 
