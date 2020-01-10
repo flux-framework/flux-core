@@ -153,7 +153,7 @@ class Jobspec(object):
         _validate_keys(
             ["attributes", "version"],
             kwargs,
-            keys_optional=True,
+            keys_optional=False,
             allow_additional=False,
         )
 
