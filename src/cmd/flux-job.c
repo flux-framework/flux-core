@@ -1300,6 +1300,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
             goto done;
+        if (errno == ENOENT)
+            log_msg_exit ("Failed to attach to %ju: No such job", ctx->id);
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
