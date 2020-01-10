@@ -21,7 +21,8 @@ Y2J="flux python ${JOBSPEC}/y2j.py"
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
-PY_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
+BINDINGS_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-jobspec.py
+JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 FAKE_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/fake-validate.sh
 
 DUMMY_EVENTLOG=test.ingest.eventlog
@@ -66,7 +67,7 @@ test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
 
 test_expect_success 'job-ingest: load job-ingest && job-info' '
 	flux exec -r all flux module load job-ingest \
-		validator-args=--schema,${SCHEMA} validator=${PY_VALIDATOR} &&
+		validator=${BINDINGS_VALIDATOR} &&
 	flux exec -r all flux module load job-info
 '
 
@@ -149,6 +150,16 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 	${RPC} job-ingest.submit 71 </dev/null
 '
 
+test_expect_success 'job-ingest: test validator with version 1 enforced' '
+	flux exec -r all flux module remove job-ingest &&
+	flux exec -r all flux module load job-ingest \
+		validator=${BINDINGS_VALIDATOR} validator-args="--require-version,1"
+'
+
+test_expect_success 'job-ingest: v1 jobspecs accepted with v1 requirement' '
+	test_valid ${JOBSPEC}/valid_v1/*
+'
+
 test_expect_success 'job-ingest: test non-python validator' '
 	flux exec -r all flux module remove job-ingest &&
 	flux exec -r all flux module load job-ingest \
@@ -157,6 +168,24 @@ test_expect_success 'job-ingest: test non-python validator' '
 
 test_expect_success 'job-ingest: submit succeeds with non-python validator' '
     flux job submit basic.json
+'
+
+test_expect_success 'job-ingest: test python jsonschema validator' '
+	flux exec -r all flux module remove job-ingest &&
+	flux exec -r all flux module load job-ingest \
+		validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${SCHEMA}
+'
+
+test_expect_success 'job-ingest: YAML jobspec is rejected by jsonschema validator' '
+	test_must_fail flux job submit ${JOBSPEC}/valid/basic.yaml
+'
+
+test_expect_success 'job-ingest: valid jobspecs accepted by jsonschema validator' '
+	test_valid ${JOBSPEC}/valid/*
+'
+
+test_expect_success 'job-ingest: invalid jobs rejected by jsonschema validator' '
+	test_invalid ${JOBSPEC}/invalid/*
 '
 
 test_expect_success 'job-ingest: remove modules' '
