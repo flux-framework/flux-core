@@ -110,22 +110,22 @@ AC_DEFUN([AM_PATH_PYTHON],
   # Just factor out some code duplication.
   am_python_setup_sysconfig="\
 import sys
-from distutils import dist
-import distutils.command.install as dist_install
-def get_install_mod_dir(prefix):
-    distribution = dist.Distribution()
-    install_cmd = dist_install.install(distribution)
-    install_cmd.prefix = prefix
-    install_cmd.finalize_options()
-    return install_cmd.install_platlib
-def get_install_script_dir(prefix):
-    distribution = dist.Distribution()
-    install_cmd = dist_install.install(distribution)
-    install_cmd.prefix = prefix
-    install_cmd.finalize_options()
-    return install_cmd.install_scripts
-
-"
+# Prefer sysconfig over distutils.sysconfig, for better compatibility
+# with python 3.x.  See automake bug#10227.
+try:
+    import sysconfig
+except ImportError:
+    can_use_sysconfig = 0
+else:
+    can_use_sysconfig = 1
+# Can't use sysconfig in CPython 2.7, since it's broken in virtualenvs:
+# <https://github.com/pypa/virtualenv/issues/118>
+try:
+    from platform import python_implementation
+    if python_implementation() == 'CPython' and sys.version[[:3]] == '2.7':
+        can_use_sysconfig = 0
+except ImportError:
+    pass"
 
   dnl Set up 4 directories:
 
@@ -144,7 +144,11 @@ def get_install_script_dir(prefix):
      fi
      am_cv_python_pythondir=`$PYTHON -c "
 $am_python_setup_sysconfig
-sitedir = get_install_script_dir('/usr')
+if can_use_sysconfig:
+    sitedir = sysconfig.get_path('purelib', vars={'base':'$am_py_prefix'})
+else:
+    from distutils import sysconfig
+    sitedir = sysconfig.get_python_lib(0, 0, prefix='$am_py_prefix')
 sys.stdout.write(sitedir)"`
      case $am_cv_python_pythondir in
      $am_py_prefix*)
@@ -180,10 +184,18 @@ sys.stdout.write(sitedir)"`
      else
        am_py_exec_prefix=$exec_prefix
      fi
+     if test "x$PYTHON_SITE_PKG" = x ; then
      am_cv_python_pyexecdir=`$PYTHON -c "
 $am_python_setup_sysconfig
-sitedir = get_install_mod_dir('/usr')
+if can_use_sysconfig:
+    sitedir = sysconfig.get_path('platlib', vars={'platbase':'$am_py_prefix'})
+else:
+    from distutils import sysconfig
+    sitedir = sysconfig.get_python_lib(1, 0, prefix='$am_py_prefix')
 sys.stdout.write(sitedir)"`
+     else
+     am_cv_python_pyexecdir=$PYTHON_SITE_PKG
+     fi
      case $am_cv_python_pyexecdir in
      $am_py_exec_prefix*)
        am__strip_prefix=`echo "$am_py_exec_prefix" | sed 's|.|.|g'`
