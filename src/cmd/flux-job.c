@@ -1103,14 +1103,10 @@ static void attach_send_shell_completion (flux_future_t *f, void *arg)
          * - stdin stream already closed due to prior pipe in
          */
         if (errno == ENOSYS) {
-            /* If the user only closes stdin, such as by redirecting
-             * /dev/null to stdin, consider it a warning and not an
-             * error.
+            /* Only generate an error if an attempt to send stdin failed.
              */
             if (ctx->stdin_data_sent)
                 log_msg_exit ("stdin not accepted by job");
-            else
-                log_msg ("stdin EOF could not be sent");
         }
         else
             log_err_exit ("attach_send_shell");
