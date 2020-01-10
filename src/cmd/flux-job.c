@@ -1103,14 +1103,10 @@ static void attach_send_shell_completion (flux_future_t *f, void *arg)
          * - stdin stream already closed due to prior pipe in
          */
         if (errno == ENOSYS) {
-            /* If the user only closes stdin, such as by redirecting
-             * /dev/null to stdin, consider it a warning and not an
-             * error.
+            /* Only generate an error if an attempt to send stdin failed.
              */
             if (ctx->stdin_data_sent)
                 log_msg_exit ("stdin not accepted by job");
-            else
-                log_msg ("stdin EOF could not be sent");
         }
         else
             log_err_exit ("attach_send_shell");
@@ -1300,6 +1296,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
             goto done;
+        if (errno == ENOENT)
+            log_msg_exit ("Failed to attach to %ju: No such job", ctx->id);
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
@@ -1410,6 +1408,23 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_future_then");
 
     ctx.eventlog_watch_count++;
+
+    /*  Ignore SIGTTIN, SIGTTOU.
+     *
+     *  SIGTTIN is ignored to avoid flux-job attach being stopped while
+     *   in the background. Normally, background flux-job attach doesn't
+     *   register activity on stdin, so this is not necessary. However,
+     *   in some cases (e.g. docker run -ti), activity on the terminal
+     *   does seem to wakeup epoll on background processes, and ignoring
+     *   SIGTTIN is a workaround in those cases.
+     *   (https://github.com/flux-framework/flux-core/issues/2599)
+     *
+     *  SIGTTOU is ignored so that flux-job attach can still write to
+     *   stderr/out even when in the background on a terminal with the
+     *   TOSTOP output mode set (also rare, but possible)
+     */
+    signal (SIGTTIN, SIG_IGN);
+    signal (SIGTTOU, SIG_IGN);
 
     ctx.sigint_w = flux_signal_watcher_create (r,
                                                SIGINT,
