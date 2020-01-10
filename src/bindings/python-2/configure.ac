@@ -154,21 +154,3 @@ AC_CONFIG_FILES([Makefile
   t/Makefile
   ])
 AC_OUTPUT
-
-echo "
-  $PACKAGE_NAME version $PACKAGE_VERSION
-  Prefix...........: $prefix
-  Debug Build......: $debug
-  C Compiler.......: $CC
-  C++ Compiler.....: $CXX
-  CFLAGS...........: $CFLAGS
-  CPPFLAGS.......... $CPPFLAGS
-  CXXFLAGS.......... $CXXFLAGS
-  FLUX.............: $FLUX
-  FLUX_CORE_CFLAGS.: $FLUX_CORE_CFLAGS
-  FLUX_CORE_LIBS...: $FLUX_CORE_LIBS
-  FLUX_PREFIX......: $FLUX_PREFIX
-  LDFLAGS..........: $LDFLAGS
-  LIBS.............: $LIBS
-  Linker...........: $LD
-"
