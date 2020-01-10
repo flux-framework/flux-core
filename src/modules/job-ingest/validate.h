@@ -22,7 +22,7 @@ flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len);
 
 struct validate *validate_create (flux_t *h,
                                   const char *validate_path,
-                                  const char *schema_path);
+                                  const char *validator_args);
 
 void validate_destroy (struct validate *v);
 

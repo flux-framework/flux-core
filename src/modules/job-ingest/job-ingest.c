@@ -596,7 +596,7 @@ static const struct flux_msg_handler_spec htab[] = {
 };
 
 /* Configure the validator.
- * Use compiled in paths for validator program and schema,
+ * Use compiled in path and string for validator program and args,
  * unless overridden with validator=path or schema=path on module load
  * command line.
  */
@@ -606,21 +606,17 @@ int validate_initialize (flux_t *h,
                          struct validate **validate)
 {
     const char *usage_message = "Usage: flux module load [OPTIONS] job-ingest "
-                                " [schema=PATH] [validator=PATH]";
+                                " [validator-args=ARGS] [validator=PATH]";
     const char *valpath;
-    const char *schpath;
+    const char *valargs;
     struct validate *v;
     int i;
 
     valpath = flux_conf_builtin_get ("jobspec_validate_path", FLUX_CONF_AUTO);
-    schpath = flux_conf_builtin_get ("jobspec_schema_path", FLUX_CONF_AUTO);
+    valargs = flux_conf_builtin_get ("jobspec_validator_args", FLUX_CONF_AUTO);
     for (i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "schema=", 7)) {
-            schpath = argv[i] + 7;
-            if (access (schpath, R_OK) < 0) {
-                flux_log_error (h, "schema %s", schpath);
-                return -1;
-            }
+        if (!strncmp (argv[i], "validator-args=", 15)) {
+            valargs = argv[i] + 15;
         }
         else if (!strncmp (argv[i], "validator=", 10)) {
             valpath = argv[i] + 10;
@@ -636,7 +632,7 @@ int validate_initialize (flux_t *h,
             return -1;
         }
     }
-    if (!(v = validate_create (h, valpath, schpath))) {
+    if (!(v = validate_create (h, valpath, valargs))) {
         flux_log_error (h, "validate_create");
         return -1;
     }

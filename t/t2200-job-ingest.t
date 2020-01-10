@@ -59,16 +59,14 @@ test_expect_success 'job-ingest: submit fails without job-ingest' '
 test_expect_success 'job-ingest: job-ingest fails with bad option' '
 	test_must_fail flux module load job-ingest badopt=xyz
 '
+
 test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
 	test_must_fail flux module load job-ingest validator=/noexist
-'
-test_expect_success 'job-ingest: job-ingest fails with bad schema path' '
-	test_must_fail flux module load job-ingest schema=/noexist
 '
 
 test_expect_success 'job-ingest: load job-ingest && job-info' '
 	flux exec -r all flux module load job-ingest \
-		schema=${SCHEMA} validator=${PY_VALIDATOR} &&
+		validator-args=--schema,${SCHEMA} validator=${PY_VALIDATOR} &&
 	flux exec -r all flux module load job-info
 '
 
@@ -154,7 +152,7 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 test_expect_success 'job-ingest: test non-python validator' '
 	flux exec -r all flux module remove job-ingest &&
 	flux exec -r all flux module load job-ingest \
-		schema=${SCHEMA} validator=${FAKE_VALIDATOR}
+		validator=${FAKE_VALIDATOR}
 '
 
 test_expect_success 'job-ingest: submit succeeds with non-python validator' '
