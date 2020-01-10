@@ -1,5 +1,5 @@
 # tomlc99
-TOML in c99; v0.4.0 compliant.
+TOML in c99; v0.5.0 compliant.
 
 
 # Usage
@@ -9,7 +9,7 @@ parses this config file:
 
 ```
 [server]
-    host = www.example.com
+    host = "www.example.com"
     port = 80
 ```
 
@@ -28,47 +28,33 @@ convert it to a string or integer depending on context.
 
     /* open file and parse */
     if (0 == (fp = fopen(FNAME, "r"))) {
-        perror("fopen");
-	exit(1);
+	return handle_error();
     }
     conf = toml_parse_file(fp, errbuf, sizeof(errbuf));
     fclose(fp);
     if (0 == conf) {
-        fprintf(stderr, "ERROR: %s\n", errbuf);
-	exit(1);
+	return handle_error();
     }
 
     /* locate the [server] table */
     if (0 == (server = toml_table_in(conf, "server"))) {
-        fprintf(stderr, "ERROR: missing [server]\n");
-	toml_free(conf);
-	exit(1);
+	return handle_error();
     }
 
     /* extract host config value */
     if (0 == (raw = toml_raw_in(server, "host"))) {
-        fprintf(stderr, "ERROR: missing 'host' in [server]\n");
-	toml_free(conf);
-	exit(1);
+	return handle_error();
     }
     if (toml_rtos(raw, &host)) {
-        fprintf(stderr, "ERROR: bad value in 'host'\n");
-	toml_free(conf);
-	exit(1);
+	return handle_error();
     }
 
     /* extract port config value */
     if (0 == (raw = toml_raw_in(server, "port"))) {
-        fprintf(stderr, "ERROR: missing 'port' in [server]\n");
-	free(host);
-	toml_free(conf);
-	exit(1);
+	return handle_error();
     }
     if (toml_rtoi(raw, &port)) {
-        fprintf(stderr, "ERROR: bad value in 'port'\n");
-        free(host);			
-	toml_free(conf);
-	exit(1);
+	return handle_error();
     }
 
     /* done with conf */
@@ -92,10 +78,18 @@ A normal *make* suffices. Alternately, you can also simply include the
 To test against the standard test set provided by BurntSushi/toml-test:
 
 ```
-    % make
-    % cd test
-    % bash build.sh   # do this once
-    % bash run.sh      # this will run the test suite
- ```
+   % make
+   % cd test1
+   % bash build.sh   # do this once
+   % bash run.sh     # this will run the test suite
+```
 
 
+To test against the standard test set provided by iarna/toml:
+
+```
+   % make
+   % cd test2
+   % bash build.sh   # do this once
+   % bash run.sh     # this will run the test suite
+```
