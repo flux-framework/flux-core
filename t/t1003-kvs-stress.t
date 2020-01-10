@@ -126,8 +126,8 @@ test_expect_success 'kvs: test that KVS_NO_MERGE works with kvs_commit()' '
 # transaction-merge option test
 test_expect_success 'kvs: transaction-merge disabling works' '
         THREADS=64 &&
-        flux module remove -r 0 kvs &&
-        flux module load -r 0 kvs transaction-merge=0 &&
+        flux module remove kvs &&
+        flux module load kvs transaction-merge=0 &&
         OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/transactionmerge ${THREADS} $(basename ${SHARNESS_TEST_FILE})` &&
 	test "$OUTPUT" = "${THREADS}"
 '

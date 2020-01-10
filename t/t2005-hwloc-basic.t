@@ -23,7 +23,7 @@ test_debug '
 '
 
 test_expect_success 'hwloc: load aggregator module' '
-    flux module load -r all aggregator
+    flux exec -r all flux module load aggregator
 '
 test_expect_success 'hwloc: load hwloc xml' '
     flux hwloc reload -v
@@ -182,7 +182,7 @@ test_expect_success HAVE_LSTOPO 'hwloc: test failure of lstopo command' '
 '
 
 test_expect_success 'hwloc: unload aggregator' '
-    flux module remove -r all aggregator
+    flux exec -r all flux module remove aggregator
 '
 
 test_done

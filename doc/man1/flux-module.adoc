@@ -23,24 +23,24 @@ Flux services that support dynamic module extensions.
 
 COMMANDS
 --------
-*info* ['OPTIONS'] ['name']::
+*info* ['name']::
 Display information about module 'name'.
 If 'name' includes a slash '/' character, it is interpreted as a
 file path, and the module name is then determined by reading the
 *mod_name* symbol.  Otherwise, FLUX_MODULE_PATH is searched for a module
 with *mod_name* equal to 'name'.
 
-*load* ['OPTIONS'] 'name' ['module-arguments' ...]::
+*load* 'name' ['module-arguments' ...]::
 Load module 'name',  interpreted as described above.
 The service that will load the module is inferred
 from the module name.  When the load command completes successfully,
 the new module is ready to accept messages on all targeted ranks.
 
-*remove* ['OPTIONS'] 'name'::
+*remove* 'name'::
 Remove module 'name'.  The service that will unload the module is
 inferred from the name specified on the command line.
 
-*list* ['OPTIONS'] ['service']::
+*list* ['service']::
 List modules loaded by 'service', or by flux-broker(1) if 'service' is unspecified.
 
 *stats* ['OPTIONS'] ['name']::
@@ -51,18 +51,6 @@ the object may be customized on a module basis.
 *debug* ['OPTIONS'] ['name']::
 Manipulate debug flags in module 'name'.  The interpretation of debug
 flag bits is private to the module and its test drivers.
-
-OPTIONS
--------
-*-r, --rank*'=NODESET'::
-Specify which ranks to apply the command to.  See NODESET FORMAT below
-for more information.  The 'stats' and 'debug' commands accept only
-a single rank here.
-
-*-x, --exclude*'=NODESET'::
-Specify ranks to exclude the command from.  See NODESET FORMAT below
-for more information.  This option is not accepted by the 'stats'
-and 'debug' commands.
 
 STATS OPTIONS
 -------------
@@ -127,11 +115,7 @@ the module .so file.
 Idle times are defined for flux-broker(1) comms modules as the number of
 heartbeats since the module last sent a request or response message.
 The idle time may be defined differently for other services, or have no
-meaning.  When a set of results from multiple ranks is reduced to one
-line, the lowest idle time in the set is reported.
-
-*Nodeset*::
-The set of ranks that this line applies to.
+meaning.
 
 
 MODULE SYMBOLS
@@ -146,11 +130,6 @@ If there is no prefix, the module is loaded by flux-broker(1).
 
 *int mod_main (void *context, int argc, char **argv);*::
 An entry function.
-
-
-NODESET FORMAT
---------------
-include::NODESET.adoc[]
 
 
 AUTHOR

@@ -224,10 +224,7 @@ NORESPONSE
 rpc
 str
 trpc
-tmrpc
-mrpcf
 bool
-mrpc
 topen
 tevent
 tsend

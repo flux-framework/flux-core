@@ -666,16 +666,13 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
 
 bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
 {
-    uint32_t tag, matchgroup;
+    uint32_t tag;
 
     if (flux_msg_get_route_count (msg) > 0)
         return false; /* don't match in foreign matchtag domain */
     if (flux_msg_get_matchtag (msg, &tag) < 0)
         return false;
-    matchgroup = matchtag>>FLUX_MATCHTAG_GROUP_SHIFT;
-    if (matchgroup > 0 && (tag>>FLUX_MATCHTAG_GROUP_SHIFT) != matchgroup)
-        return false;
-    if (matchgroup == 0 && tag != matchtag)
+    if (tag != matchtag)
         return false;
     return true;
 }

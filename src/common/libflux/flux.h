@@ -21,7 +21,6 @@
 #include "response.h"
 #include "keepalive.h"
 #include "rpc.h"
-#include "mrpc.h"
 #include "panic.h"
 #include "event.h"
 #include "module.h"

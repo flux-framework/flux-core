@@ -28,10 +28,8 @@ DESCRIPTION
 If _match.typemask_ is nonzero, the type of the message must match
 one of the types in the mask.
 
-If _match.matchtag_ is not FLUX_MATCHTAG_NONE, and the message
-matchtag group is nonzero, match on the group bits only (as defined by
-FLUX_MATCHTAG_GROUP_MASK).  If the matchtag group is zero, match on
-non-group bits only.
+If _match.matchtag_ is not FLUX_MATCHTAG_NONE, the message matchtag
+must match _match.matchtag_.
 
 If _match.topic_glob_ is not NULL or an empty string, then the message topic
 string must match _match.topic_glob_ according to the rules of shell wildcards.

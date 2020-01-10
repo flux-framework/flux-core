@@ -34,8 +34,8 @@ test_expect_success 'job-exec: generate jobspec for simple test job' '
 test_expect_success 'job-exec: load job-exec,sched-simple modules' '
 	#  Add fake by_rank configuration to kvs:
 	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module load -r 0 sched-simple &&
-	flux module load -r 0 job-exec
+	flux module load sched-simple &&
+	flux module load job-exec
 '
 test_expect_success 'job-exec: basic job runs in simulated mode' '
 	jobid=$(flux job submit basic.json) &&
@@ -122,8 +122,8 @@ test_expect_success 'start request with empty payload fails with EPROTO(71)' '
 	${RPC} job-exec.start 71 </dev/null
 '
 test_expect_success 'job-exec: remove sched-simple,job-exec modules' '
-	flux module remove -r 0 sched-simple &&
-	flux module remove -r 0 job-exec
+	flux module remove sched-simple &&
+	flux module remove job-exec
 '
 
 test_done

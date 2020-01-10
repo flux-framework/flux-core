@@ -16,9 +16,9 @@ hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 test_expect_success 'job-shell: load barrier,job-exec,sched-simple modules' '
         #  Add fake by_rank configuration to kvs:
         flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module load barrier &&
-        flux module load -r 0 sched-simple &&
-        flux module load -r 0 job-exec
+        flux exec -r all flux module load barrier &&
+        flux module load sched-simple &&
+        flux module load job-exec
 '
 
 test_expect_success 'flux-shell: generate input for stdin input tests' '
@@ -258,9 +258,9 @@ test_expect_success 'flux-shell: no fatal exception after stdin sent to exited t
 '
 
 test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
-        flux module remove -r 0 job-exec &&
-        flux module remove -r 0 sched-simple &&
-        flux module remove barrier
+        flux module remove job-exec &&
+        flux module remove sched-simple &&
+        flux exec -r all flux module remove barrier
 '
 
 

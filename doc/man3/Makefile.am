@@ -13,7 +13,6 @@ MAN3_FILES_PRIMARY = \
 	flux_pollevents.3 \
 	flux_msg_encode.3 \
 	flux_rpc.3 \
-	flux_mrpc.3 \
 	flux_get_rank.3 \
 	flux_attr_get.3 \
 	flux_get_reactor.3 \
@@ -321,7 +320,6 @@ flux_recv.3: trecv.c
 flux_event_subscribe.3: tevent.c
 flux_rpc.3: trpc.c
 flux_rpc.3: trpc_then.c
-flux_mrpc.3: tmrpc_then.c
 flux_get_rank.3: tinfo.c
 
 
@@ -355,5 +353,4 @@ check_PROGRAMS = \
 	tevent \
 	trpc \
 	trpc_then \
-	tmrpc_then \
 	tinfo

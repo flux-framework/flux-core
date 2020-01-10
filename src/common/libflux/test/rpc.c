@@ -290,11 +290,11 @@ void test_service (flux_t *h)
     ok (r == NULL && errno == EINVAL,
         "flux_rpc with NULL topic fails with EINVAL");
 
-    count = flux_matchtag_avail (h, 0);
+    count = flux_matchtag_avail (h);
     r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0);
     ok (r != NULL,
         "flux_rpc sent request to rpctest.hello service");
-    ok (flux_matchtag_avail (h, 0) == count - 1,
+    ok (flux_matchtag_avail (h) == count - 1,
         "flux_rpc allocated one matchtag");
     msg = flux_recv (h, FLUX_MATCH_RESPONSE, 0);
     ok (msg != NULL,
@@ -316,7 +316,7 @@ void test_service (flux_t *h)
     ok ((rc == -1 && errno == EINVAL) || (rc == 0),
         "response has no residual route stack");
     flux_future_destroy (r);
-    ok (flux_matchtag_avail (h, 0) == count - 1,
+    ok (flux_matchtag_avail (h) == count - 1,
         "flux_future_destroy did not free matchtag");
     // requeue "lost" response so matchtag can be reclaimed
     ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
@@ -591,9 +591,9 @@ void test_multi_response (flux_t *h)
         "multi-now: MSGFLAG_STREAMING was set in the response");
 
 
-    t1 = flux_matchtag_avail (h, 0);
+    t1 = flux_matchtag_avail (h);
     flux_future_destroy (f);
-    t2 = flux_matchtag_avail (h, 0);
+    t2 = flux_matchtag_avail (h);
     cmp_ok (t1, "<", t2,
         "multi-now: stream terminated w/ ENODATA, matchtag retired");
 }
@@ -613,9 +613,9 @@ void test_multi_response_noterm (flux_t *h)
     ok (flux_rpc_get_unpack (f, "{s:i}", "seq", &seq) == 0,
         "mutil-now-noterm: got valid response");
     // destroy should leak matchtag since ENODATA is unconsumed
-    t1 = flux_matchtag_avail (h, 0);
+    t1 = flux_matchtag_avail (h);
     flux_future_destroy (f);
-    t2 = flux_matchtag_avail (h, 0);
+    t2 = flux_matchtag_avail (h);
     cmp_ok (t1, "==", t2,
         "multi-now-noterm: unterminated stream leaked matchtag");
     ok (reclaim_matchtag (h, 1, 1.) == 0,

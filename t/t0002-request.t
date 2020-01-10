@@ -25,18 +25,14 @@ test_expect_success 'flux_rpc_then(3) example runs' '
 	${FLUX_BUILD_DIR}/doc/man3/trpc_then
 '
 
-test_expect_success 'flux_mrpc(3) example runs' '
-	${FLUX_BUILD_DIR}/doc/man3/tmrpc_then
-'
-
 test_expect_success 'request: load req module on rank 0' '
-	flux module load --rank=0 \
+	flux module load \
 		${FLUX_BUILD_DIR}/t/request/.libs/req.so
 '
 
 # FIXME: uses rank-addressed requests which we test below
 test_expect_success 'request: load req module on rank 1' '
-	flux module load --rank=1 \
+	flux exec -r 1 flux module load \
 		${FLUX_BUILD_DIR}/t/request/.libs/req.so
 '
 
@@ -98,11 +94,11 @@ test_expect_success 'request: proxy ping upstream from 1 is 4 hop' '
 #'
 
 test_expect_success 'request: unloaded req module on rank 1' '
-	flux module remove --rank=1 req
+	flux exec -r 1 flux module remove req
 '
 
 test_expect_success 'request: unloaded req module on rank 0' '
-	flux module remove --rank=0 req
+	flux module remove req
 '
 
 test_expect_success 'request: rpc test client works with no request payload' '

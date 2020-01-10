@@ -21,7 +21,7 @@ kvs_json_check() {
 }
 
 test_expect_success 'have aggregator module' '
-    flux module list -r all | grep aggregator
+    flux exec -r all flux module list | grep aggregator
 '
 
 test_expect_success 'flux-aggreagate: works' '

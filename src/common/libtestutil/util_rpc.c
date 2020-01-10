@@ -38,7 +38,7 @@ int reclaim_matchtag (flux_t *h, int count, double timeout)
     flux_msg_handler_t *mh;
     flux_reactor_t *r = flux_get_reactor (h);
     flux_watcher_t *timer;
-    int orig_count = flux_matchtag_avail (h, 0);
+    int orig_count = flux_matchtag_avail (h);
     int expired = 0;
 
     if (!(mh = flux_msg_handler_create (h, match, reclaim_fake_cb, NULL)))
@@ -50,7 +50,7 @@ int reclaim_matchtag (flux_t *h, int count, double timeout)
         BAIL_OUT ("flux_timer_watcher_create failed");
     flux_watcher_start (timer);
 
-    while (!expired && flux_matchtag_avail (h, 0) - orig_count < count) {
+    while (!expired && flux_matchtag_avail (h) - orig_count < count) {
         if (flux_reactor_run (r, FLUX_REACTOR_ONCE) < 0)
             BAIL_OUT ("flux_reactor_run failed");
     }

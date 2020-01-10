@@ -31,6 +31,14 @@ test_expect_success 'exec to subset of ranks' '
 	flux exec -n -r 2-3 /bin/true
 '
 
+test_expect_success 'exec to all except a set of ranks' '
+	flux exec -n -x 2-3 flux getattr rank | sort -n >ranks_x.out &&
+	cat >ranks_x.exp <<-EOT
+	0
+	1
+	EOT
+'
+
 test_expect_success 'exec to non-existent rank is an error' '
 	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
 '

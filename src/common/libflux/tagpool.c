@@ -11,15 +11,8 @@
 /* tagpool.c - allocator for 32-bit matchtags */
 
 /* Matchtags are used to match requests and responses in RPC's.
- * The lower 20 bits are a "tag"; the upper 12 bits are a "group".
  *
  * Requests that receive no response use FLUX_MATCHTAG_NONE (0).
- * Requests that receive one response use a tag.
- * Requests that receive multiple responses use a group.
- *
- * If the group is nonzero, only the group bits are relevant for matching,
- * and the tag bits can be appropriated for user-defined data.
- * For example, flux_rpc_multi() stores the nodeid.
  */
 
 #if HAVE_CONFIG_H
@@ -37,17 +30,14 @@
 #include "src/common/libutil/veb.h"
 #include "src/common/libutil/log.h"
 
-#define TAGPOOL_COUNT_REGULAR (1UL<<20)
-#define TAGPOOL_COUNT_GROUP (1UL<<12)
+#define TAGPOOL_COUNT (1UL<<20)
 #define TAGPOOL_START (1UL<<10)
 
 #define TAGPOOL_MAGIC   0x34447ff2
 struct tagpool {
     int             magic;
-    Veb             R;
-    int             reg_avail;
-    Veb             G;
-    int             group_avail;
+    Veb             veb;
+    int             avail;
     tagpool_grow_f  grow_cb;
     void            *grow_arg;
     int             grow_depth;
@@ -70,14 +60,11 @@ struct tagpool *tagpool_create (void)
     if (!t)
         goto nomem;
     t->magic = TAGPOOL_MAGIC;
-    t->R = vebnew (TAGPOOL_START, 1);
-    t->G = vebnew (TAGPOOL_START, 1);
-    if (!t->R.D || !t->G.D)
+    t->veb = vebnew (TAGPOOL_START, 1);
+    if (!t->veb.D)
         goto nomem;
-    vebdel (t->R, FLUX_MATCHTAG_NONE); /* allocate reserved value */
-    vebdel (t->G, 0); /* zero group bits means regular tag */
-    t->reg_avail = TAGPOOL_COUNT_REGULAR - 1;
-    t->group_avail = TAGPOOL_COUNT_GROUP - 1;
+    vebdel (t->veb, FLUX_MATCHTAG_NONE); /* allocate reserved value */
+    t->avail = TAGPOOL_COUNT - 1;
     return t;
 nomem:
     tagpool_destroy (t);
@@ -89,10 +76,7 @@ void tagpool_destroy (struct tagpool *t)
 {
     if (t) {
         assert (t->magic == TAGPOOL_MAGIC);
-        if (t->R.D)
-            free (t->R.D);
-        if (t->G.D)
-            free (t->G.D);
+        free (t->veb.D);
         t->magic = ~TAGPOOL_MAGIC;
         free (t);
     }
@@ -104,83 +88,55 @@ void tagpool_set_grow_cb (struct tagpool *t, tagpool_grow_f cb, void *arg)
     t->grow_arg = arg;
 }
 
-static uint32_t alloc_with_resize (struct tagpool *t, int flags)
+static uint32_t alloc_with_resize (struct tagpool *t)
 {
-    Veb *veb = &t->R;
-    uint32_t max = TAGPOOL_COUNT_REGULAR;
+    uint32_t max = TAGPOOL_COUNT;
     uint32_t oldsize, newsize, tag;
 
-    if ((flags & TAGPOOL_FLAG_GROUP)) {
-        veb = &t->G;
-        max = TAGPOOL_COUNT_GROUP;
-    }
-    oldsize = veb->M;
+    oldsize = t->veb.M;
     newsize = oldsize << 1;
-    tag = vebsucc (*veb, 0);
+    tag = vebsucc (t->veb, 0);
 
-    if (tag == veb->M && newsize <= max) {
+    if (tag == t->veb.M && newsize <= max) {
         if (t->grow_cb && t->grow_depth == 0) {
             t->grow_depth++;
-            t->grow_cb (t->grow_arg, oldsize, newsize, flags);
+            t->grow_cb (t->grow_arg, oldsize, newsize);
             t->grow_depth--;
         }
         Veb new = vebnew (newsize, 0);
         if (new.D) {
             pool_set (new, oldsize, newsize, 1);
-            free (veb->D);
-            *veb = new;
-            tag = vebsucc (*veb, oldsize);
+            free (t->veb.D);
+            t->veb = new;
+            tag = vebsucc (t->veb, oldsize);
             assert (tag == oldsize);
         }
     }
-    if (tag < veb->M)
-        vebdel (*veb, tag);
+    if (tag < t->veb.M)
+        vebdel (t->veb, tag);
     return tag;
 }
 
-uint32_t tagpool_alloc (struct tagpool *t, int flags)
+uint32_t tagpool_alloc (struct tagpool *t)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     uint32_t tag;
 
-    if ((flags & TAGPOOL_FLAG_GROUP)) {
-        tag = alloc_with_resize (t, TAGPOOL_FLAG_GROUP);
-        if (tag < t->G.M) {
-            t->group_avail--;
-            return tag<<FLUX_MATCHTAG_GROUP_SHIFT;
-        }
-    } else {
-        tag = alloc_with_resize (t, 0);
-        if (tag < t->R.M) {
-            t->reg_avail--;
-            return tag;
-        }
+    tag = alloc_with_resize (t);
+    if (tag < t->veb.M) {
+        t->avail--;
+        return tag;
     }
     return FLUX_MATCHTAG_NONE;
-}
-
-bool tagpool_group (uint32_t tag)
-{
-    if (tag != FLUX_MATCHTAG_NONE && (tag >> FLUX_MATCHTAG_GROUP_SHIFT) > 0)
-        return true;
-    return false;
 }
 
 void tagpool_free (struct tagpool *t, uint32_t tag)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     if (tag != FLUX_MATCHTAG_NONE) {
-        uint32_t group = tag>>FLUX_MATCHTAG_GROUP_SHIFT;
-        if (group > 0) {
-            if (group < t->G.M) {
-                vebput (t->G, group);
-                t->group_avail++;
-            }
-        } else {
-            if (tag < t->R.M) {
-                vebput (t->R, tag);
-                t->reg_avail++;
-            }
+        if (tag < t->veb.M) {
+            vebput (t->veb, tag);
+            t->avail++;
         }
     }
 }
@@ -189,14 +145,10 @@ uint32_t tagpool_getattr (struct tagpool *t, int attr)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     switch (attr) {
-        case TAGPOOL_ATTR_REGULAR_SIZE:
-            return TAGPOOL_COUNT_REGULAR - 1;
-        case TAGPOOL_ATTR_REGULAR_AVAIL:
-            return t->reg_avail;
-        case TAGPOOL_ATTR_GROUP_SIZE:
-            return TAGPOOL_COUNT_GROUP - 1;
-        case TAGPOOL_ATTR_GROUP_AVAIL:
-            return t->group_avail;
+        case TAGPOOL_ATTR_SIZE:
+            return TAGPOOL_COUNT - 1;
+        case TAGPOOL_ATTR_AVAIL:
+            return t->avail;
     }
     return 0;
 }

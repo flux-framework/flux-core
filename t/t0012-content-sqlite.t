@@ -24,7 +24,7 @@ store_junk() {
 }
 
 test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load --rank 0 content-sqlite
+	flux module load content-sqlite
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
@@ -121,7 +121,7 @@ test_expect_success 'drop rank 0 cache' '
 '
 
 test_expect_success 'unload content-sqlite module' '
-	flux module remove --rank 0 content-sqlite
+	flux module remove content-sqlite
 '
 
 test_expect_success 'check that content returned dirty' '
@@ -152,7 +152,7 @@ test_expect_success 'load 1m blob' '
 # Verify content is transferred to store
 
 test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load --rank 0 content-sqlite
+	flux module load content-sqlite
 '
 
 test_expect_success 'flush rank 0 cache' '
@@ -189,18 +189,18 @@ test_expect_success 'exercise batching of synchronous flush to backing store' '
 
 test_expect_success 'exercise batching of asynchronous flush to backing store' '
         OLD_COUNT=`flux module stats --type int --parse count content` &&
-	flux module remove --rank 0 content-sqlite &&
-	flux module load --rank 0 content-sqlite &&
-	flux module remove --rank 0 content-sqlite &&
-	flux module load --rank 0 content-sqlite &&
-	flux module remove --rank 0 content-sqlite &&
-	flux module load --rank 0 content-sqlite &&
+	flux module remove content-sqlite &&
+	flux module load content-sqlite &&
+	flux module remove content-sqlite &&
+	flux module load content-sqlite &&
+	flux module remove content-sqlite &&
+	flux module load content-sqlite &&
         NEW_COUNT=`flux module stats --type int --parse count content` &&
 	test $OLD_COUNT -le $NEW_COUNT
 '
 
 test_expect_success 'remove content-sqlite module on rank 0' '
-	flux module remove --rank 0 content-sqlite
+	flux module remove content-sqlite
 '
 
 

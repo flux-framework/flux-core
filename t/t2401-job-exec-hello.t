@@ -15,7 +15,7 @@ lastevent() { flux job eventlog $1 | awk 'END{print $2}'; }
 test_expect_success 'exec hello: load sched-simple module' '
 	#  Add fake by_rank configuration to kvs:
 	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module load -r 0 sched-simple
+	flux module load sched-simple
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: start exec server-in-a-script' '
 	${execservice} test-exec > server1.log &
@@ -66,7 +66,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: terminate all jobs and servers' '
 	kill ${SERVER3}
 '
 test_expect_success 'job-exec: remove sched-simple module' '
-	flux module remove -r 0 sched-simple
+	flux module remove sched-simple
 '
 
 test_done

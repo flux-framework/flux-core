@@ -67,9 +67,9 @@ test_expect_success 'job-ingest: job-ingest fails with bad schema path' '
 '
 
 test_expect_success 'job-ingest: load job-ingest && job-info' '
-	flux module load -r all job-ingest \
+	flux exec -r all flux module load job-ingest \
 		schema=${SCHEMA} validator=${PY_VALIDATOR} &&
-	flux module load -r all job-info
+	flux exec -r all flux module load job-info
 '
 
 test_expect_success 'job-ingest: submit fails without job-manager' '
@@ -77,7 +77,7 @@ test_expect_success 'job-ingest: submit fails without job-manager' '
 '
 
 test_expect_success 'job-ingest: load job-manager-dummy module' '
-	flux module load -r 0 \
+	flux module load \
 		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
 '
 
@@ -152,8 +152,8 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success 'job-ingest: test non-python validator' '
-	flux module remove -r all job-ingest &&
-	flux module load -r all job-ingest \
+	flux exec -r all flux module remove job-ingest &&
+	flux exec -r all flux module load job-ingest \
 		schema=${SCHEMA} validator=${FAKE_VALIDATOR}
 '
 
@@ -162,9 +162,9 @@ test_expect_success 'job-ingest: submit succeeds with non-python validator' '
 '
 
 test_expect_success 'job-ingest: remove modules' '
-	flux module remove -r 0 job-manager &&
-	flux module remove -r all job-info &&
-	flux module remove -r all job-ingest
+	flux module remove job-manager &&
+	flux exec -r all flux module remove job-info &&
+	flux exec -r all flux module remove job-ingest
 '
 
 test_done

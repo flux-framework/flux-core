@@ -314,7 +314,7 @@ static int l_flux_send (lua_State *L)
     if (nargs >= 3)
         nodeid = lua_tointeger (L, 4);
 
-    matchtag = flux_matchtag_alloc (f, 0);
+    matchtag = flux_matchtag_alloc (f);
     if (matchtag == FLUX_MATCHTAG_NONE)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 

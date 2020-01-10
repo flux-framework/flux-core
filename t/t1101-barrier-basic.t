@@ -17,7 +17,7 @@ test "$verbose" = "t" || tbarrier="${tbarrier} -q"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'barrier: load barrier module' '
-	flux module load -r all barrier
+	flux exec -r all flux module load barrier
 '
 
 test_expect_success 'barrier: returns when complete' '
@@ -83,7 +83,7 @@ test_expect_success 'barrier: double entry by one client fails with EEXIST' '
 '
 
 test_expect_success 'barrier: remove barrier module' '
-	flux module remove -r all barrier
+	flux exec -r all flux module remove barrier
 '
 
 

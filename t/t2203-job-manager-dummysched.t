@@ -32,9 +32,9 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
 '
 
 test_expect_success 'job-manager: load job-ingest, job-manager' '
-	flux module load -r all job-ingest &&
-	flux module load -r all job-info &&
-	flux module load -r 0 job-manager
+	flux exec -r all flux module load job-ingest &&
+	flux exec -r all flux module load job-info &&
+	flux module load job-manager
 '
 
 test_expect_success 'job-manager: submit 5 jobs' '
@@ -55,7 +55,7 @@ test_expect_success 'job-manager: job state SSSSS (no scheduler)' '
 '
 
 test_expect_success 'job-manager: load sched-dummy --cores=2' '
-	flux module load -r 0 ${SCHED_DUMMY} --cores=2
+	flux module load ${SCHED_DUMMY} --cores=2
 '
 
 test_expect_success 'job-manager: job state RRSSS' '
@@ -94,8 +94,8 @@ test_expect_success 'job-manager: canceled job has exception, free events' '
 
 test_expect_success 'job-manager: reload sched-dummy --cores=4' '
 	flux dmesg -C &&
-	flux module remove -r 0 sched-dummy &&
-	flux module load -r 0 ${SCHED_DUMMY} --cores=4 &&
+	flux module remove sched-dummy &&
+	flux module load ${SCHED_DUMMY} --cores=4 &&
 	flux dmesg | grep "hello_cb:" >hello.dmesg
 '
 
@@ -156,13 +156,13 @@ test_expect_success 'job-manager: simulate alloc failure' '
 '
 
 test_expect_success 'job-manager: remove sched-dummy' '
-	flux module remove -r 0 sched-dummy
+	flux module remove sched-dummy
 '
 
 test_expect_success 'job-manager: remove job-manager, job-ingest' '
-	flux module remove -r 0 job-manager &&
-	flux module remove -r all job-info &&
-	flux module remove -r all job-ingest
+	flux module remove job-manager &&
+	flux exec -r all flux module remove job-info &&
+	flux exec -r all flux module remove job-ingest
 '
 
 test_done

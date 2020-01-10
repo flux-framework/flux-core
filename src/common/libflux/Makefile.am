@@ -74,7 +74,6 @@ fluxcoreinclude_HEADERS = \
 	keepalive.h \
 	response.h \
 	rpc.h \
-	mrpc.h \
 	panic.h \
 	event.h \
 	module.h \
@@ -105,7 +104,6 @@ libflux_la_SOURCES = \
 	request.c \
 	response.c \
 	rpc.c \
-	mrpc.c \
 	panic.c \
 	event.c \
 	module.c \
@@ -148,7 +146,6 @@ TESTS = test_message.t \
 	test_buffer.t \
 	test_conf.t \
 	test_rpc.t \
-	test_mrpc.t \
 	test_rpc_chained.t \
 	test_handle.t \
 	test_msg_handler.t \
@@ -249,10 +246,6 @@ test_version_t_LDADD = $(test_ldadd) $(LIBDL)
 test_rpc_t_SOURCES = test/rpc.c
 test_rpc_t_CPPFLAGS = $(test_cppflags)
 test_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-test_mrpc_t_SOURCES = test/mrpc.c
-test_mrpc_t_CPPFLAGS = $(test_cppflags)
-test_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_rpc_chained_t_SOURCES = test/rpc_chained.c
 test_rpc_chained_t_CPPFLAGS = $(test_cppflags)

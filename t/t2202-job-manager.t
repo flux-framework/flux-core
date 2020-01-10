@@ -18,9 +18,9 @@ test_expect_success 'job-manager: generate jobspec for simple test job' '
 '
 
 test_expect_success 'job-manager: load job-ingest, job-info, job-manager' '
-	flux module load -r all job-ingest &&
-	flux module load -r all job-info &&
-	flux module load -r 0 job-manager
+	flux exec -r all flux module load job-ingest &&
+	flux exec -r all flux module load job-info &&
+	flux module load job-manager
 '
 
 test_expect_success 'job-manager: submit one job' '
@@ -305,9 +305,9 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success 'job-manager: remove job-manager, job-info, job-ingest' '
-	flux module remove -r 0 job-manager &&
-	flux module remove -r all job-info &&
-	flux module remove -r all job-ingest
+	flux module remove job-manager &&
+	flux exec -r all flux module remove job-info &&
+	flux exec -r all flux module remove job-ingest
 '
 
 test_done

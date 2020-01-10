@@ -88,7 +88,7 @@ void test_fastpath (flux_t *h)
     flux_msg_t *msg;
     int rc;
 
-    ok ((m.matchtag = flux_matchtag_alloc (h, 0)) != FLUX_MATCHTAG_NONE,
+    ok ((m.matchtag = flux_matchtag_alloc (h)) != FLUX_MATCHTAG_NONE,
         "allocated matchtag");
     ok ((mh = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
@@ -235,7 +235,7 @@ void test_response_catchall (flux_t *h)
     int rc;
 
     /* craft response message with valid matchtag */
-    if ((mtag = flux_matchtag_alloc (h, 0)) == FLUX_MATCHTAG_NONE)
+    if ((mtag = flux_matchtag_alloc (h)) == FLUX_MATCHTAG_NONE)
         BAIL_OUT ("flux_matchtag_alloc failed");
     msg = flux_response_encode ("foo.bar", NULL);
     ok (msg != NULL,
@@ -290,7 +290,7 @@ void test_response_with_routes (flux_t *h)
     int rc;
 
     /* craft response message with valid matchtag + routes*/
-    if ((mtag = flux_matchtag_alloc (h, 0)) == FLUX_MATCHTAG_NONE)
+    if ((mtag = flux_matchtag_alloc (h)) == FLUX_MATCHTAG_NONE)
         BAIL_OUT ("flux_matchtag_alloc failed");
     msg = flux_response_encode ("foo.bar", NULL);
     ok (msg != NULL,
@@ -370,7 +370,7 @@ void test_cloned_dispatch (flux_t *orig)
     diag ("started event handler");
 
     /* response (matched) */
-    m.matchtag = flux_matchtag_alloc (h, 0);
+    m.matchtag = flux_matchtag_alloc (h);
     ok (m.matchtag != FLUX_MATCHTAG_NONE,
         "allocated matchtag (%d)", m.matchtag); // 1
     ok ((mh2 = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
@@ -386,7 +386,7 @@ void test_cloned_dispatch (flux_t *orig)
     diag ("started response handler");
 
     /* response (unmatched) */
-    m2.matchtag = flux_matchtag_alloc (h, 0);
+    m2.matchtag = flux_matchtag_alloc (h);
     ok (m2.matchtag != FLUX_MATCHTAG_NONE,
         "allocated matchtag (%d)", m2.matchtag); // 2
     ok ((msg = flux_response_encode ("bar", NULL)) != NULL,

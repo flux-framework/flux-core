@@ -22,8 +22,8 @@ exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 test_expect_success 'job-exec: load job-exec,sched-simple modules' '
 	#  Add fake by_rank configuration to kvs:
 	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module load -r 0 sched-simple &&
-	flux module load -r 0 job-exec
+	flux module load sched-simple &&
+	flux module load job-exec
 '
 test_expect_success 'job-exec: set dummy test job shell' '
 	flux setattr job-exec.job-shell $SHARNESS_TEST_SRCDIR/job-exec/dummy.sh
