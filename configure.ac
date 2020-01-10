@@ -508,9 +508,7 @@ AC_CONFIG_LINKS([ \
 AC_ARG_WITH([python2], AS_HELP_STRING([--with-python2],
              [Build python2 bindings along with the required python3]))
 
-AS_IF([test "x$with_python2" = "xyes"], [
-  AC_CONFIG_SUBDIRS([src/bindings/python-2])
-])
+AC_CONFIG_SUBDIRS([src/bindings/python-2])
 AM_CONDITIONAL([BUILD_WITH_PYTHON2], [test "x$with_python2" = "xyes"])
 
 AC_OUTPUT

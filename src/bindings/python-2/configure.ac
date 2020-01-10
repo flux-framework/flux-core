@@ -41,10 +41,17 @@ PKG_PROG_PKG_CONFIG
 saved_PATH=$PATH
 export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
 
+AC_ARG_WITH([python2], AS_HELP_STRING([--with-python2],
+             [Build python2 bindings along with the required python3]))
+
+AS_IF([test "x$with_python2" = "xyes"], [
+  export PYTHON_NOVERSIONCHECK=yes
+])
+AM_CONDITIONAL([BUILD_WITH_PYTHON2], [test "x$with_python2" = "xyes"])
 # avoid pollution from outer env vars
 PYTHON=$PYTHON2
 PYTHON_VERSION=$PYTHON2_VERSION
-AX_PYTHON_DEVEL([<'2.8'])
+AX_PYTHON_DEVEL([>='2.7'])
 
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
