@@ -24,7 +24,7 @@ AM_TESTS_ENVIRONMENT = \
 	export LUA_PATH="$(builddir)/?.lua;$$LUA_PATH;;;";\
 	test -n "$$FLUX_TEST_INSTALLED_PATH" && \
 	export LUA_CPATH="$(abs_top_builddir)/src/bindings/lua/.libs/?.so;$$LUA_CPATH;;"; \
-	export PYTHONPATH="$(abs_top_builddir)/src/bindings/python-2:$(abs_top_srcdir)/src/bindings/python-2:$(top_srcdir)/t/python/tap:$(PYTHON_SITE_PKG):$$PYTHONPATH";
+	export PYTHONPATH="$(abs_top_builddir):$(abs_top_srcdir):$(top_srcdir)/t/python/tap:$(PYTHON_SITE_PKG):$$PYTHONPATH";
 
 TEST_EXTENSIONS = .t .py
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
