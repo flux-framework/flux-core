@@ -396,7 +396,6 @@ void check_utf8_to_ucs (void)
     ok (toml_utf8_to_ucs ("\x7f", 1, &code) == 1 && code == 0x7f,
         "utf8_to_ucs: 0x7f converted from 1-char UTF8");
 
-    todo ("https://github.com/cktan/tomlc99/issues/7");
     ok (toml_utf8_to_ucs ("\xc2\x80", 2, &code) == 2 && code == 0x80,
         "utf8_to_ucs: 0x80 converted from 2-char UTF8");
     ok (toml_utf8_to_ucs ("\xdf\xbf", 2, &code) == 2 && code == 0x7ff,
@@ -421,7 +420,6 @@ void check_utf8_to_ucs (void)
         "utf8_to_ucs: 0x4000000 converted from 6-char UTF8");
     ok (toml_utf8_to_ucs ("\xfd\xbf\xbf\xbf\xbf\xbf", 6, &code) == 6 && code == 0x7fffffff,
         "utf8_to_ucs: 0x7fffffff converted from 6-char UTF8");
-    end_todo;
 }
 
 int main (int argc, char *argv[])
