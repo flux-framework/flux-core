@@ -1,0 +1,100 @@
+// flux-help-include: true
+FLUX-JOBS(1)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux-jobs - list jobs submitted to Flux
+
+
+SYNOPSIS
+--------
+*flux* *jobs* ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+flux-jobs(1) is used to list jobs run under Flux.  By default only
+pending and running jobs for the current user are listed.  Additional
+jobs and information can be listed using options listed below.
+
+
+OPTIONS
+-------
+*-a*::
+List all jobs of the current user, including inactive jobs.
+Equivalent to specifying '--state=pending,running,inactive'.
+
+*-A*::
+List all jobs from all users, including inactive jobs.  Equivalent to
+specifying '--state=pending,running,inactive --user=all'.
+
+*--suppress-header*::
+For default output, do not output column headers.
+
+*-u, --user*'=[USERNAME|UID]'::
+List jobs for a specific username or userid.  Specify 'all' for all users.
+
+*-c, --count*'=N'::
+Limit output to N jobs (default 1000)
+
+*-s, --states*'=STATES'::
+List jobs in specific states.  States can be 'pending', 'running', or
+'inactive'.  Multiple states can be listed separated by comma.
+Defaults to 'pending,running'.
+
+*-o, --format*'=FORMAT
+Specify output format using Python's string format syntax.  See OUTPUT
+FORMAT below for field names.
+
+OUTPUT FORMAT
+-------------
+
+The '--format' option can be used to specify an output format to
+flux-jobs(1) using Python's string format syntax.  For example, the
+following is the format used for the default format:
+
+  {id:>18} {username:<8.8} {job_name:<10.10} {state:<8.8} {task_count:>6} {runtime_fsd}
+
+The field names that can be specified are:
+
+[horizontal]
+id:: job ID
+userid:: job submitter's userid
+username:: job submitter's username
+priority:: job priority
+state:: job state
+state_single:: job state as a single character
+job_name:: job name
+task_count:: job task count
+t_submit:: time job was submitted
+t_depend:: time job entered depend state
+t_sched:: time job entered sched state
+t_run:: time job entered run state
+t_cleanup:: time job entered cleanup state
+t_inactive:: time job entered inactive state
+runtime:: job runtime
+runtime_fsd:: job runtime in Flux standard duration format
+runtime_fsd_hyphen:: same as runtime_fsd, but '-' if runtime is 0s
+runtime_hms:: job runtime in H:M:S format
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+syslog(3)

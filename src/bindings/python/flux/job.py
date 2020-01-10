@@ -98,6 +98,28 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     return status
 
 
+# Due to subtleties in the python bindings and this call, this binding
+# is more of a reimplementation of flux_job_list() instead of calling
+# the flux_job_list() C function directly.  Some reasons:
+#
+# - Desire to return a Python RPC class and use its get() method
+# - Desired return value is json array, not a single value
+#
+# pylint: disable=dangerous-default-value
+def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), flags=0):
+    payload = {
+        "max_entries": max_entries,
+        "attrs": attrs,
+        "userid": userid,
+        "flags": flags,
+    }
+    return flux_handle.rpc("job-info.list", payload)
+
+
+def job_list_get(rpc_handle):
+    return rpc_handle.get()["jobs"]
+
+
 def _validate_keys(expected, given, keys_optional=False, allow_additional=False):
     if not isinstance(expected, set):
         expected = set(expected)
