@@ -80,7 +80,7 @@ jobs:
        - TEST_INSTALL=t
        - DOCKER_TAG=t
        - PYTHON_VERSION=2.7
-    - name: "Centos 7: --with-flux-security --enable-caliper docker-deploy"
+    - name: "Centos 7: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
@@ -88,12 +88,13 @@ jobs:
        - IMG=centos7
        - DOCKER_TAG=t
        - PYTHON_VERSION=2.7
-    - name: "Centos 8: py3.6 --with-flux-security"
+    - name: "Centos 8: py3.6,security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --prefix=/usr"
+       - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
        - IMG=centos8
+       - DOCKER_TAG=t
        - PYTHON_VERSION=3.6
 
 stages:
