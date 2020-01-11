@@ -40,7 +40,15 @@ class JobWrapper(Wrapper):
 RAW = JobWrapper()
 
 
-def submit_async(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
+def _convert_jobspec_arg_to_string(jobspec):
+    """
+    Convert a jobspec argument into a string.  A valid jobspec argument is:
+    - An instance of the Jobspec class
+    - A string (i.e., bytes, str, or unicode)
+
+    :raises EnvironmentError: jobspec is None or NULL
+    :raises TypeError: jobspec is neither a Jobspec nor a string
+    """
     if isinstance(jobspec, Jobspec):
         jobspec = jobspec.dumps()
     elif isinstance(jobspec, six.text_type):
@@ -49,8 +57,14 @@ def submit_async(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, f
         # catch this here rather than in C for a better error message
         raise EnvironmentError(errno.EINVAL, "jobspec must not be None/NULL")
     elif not isinstance(jobspec, six.binary_type):
-        raise TypeError("jobpsec must be a string (either binary or unicode)")
+        raise TypeError(
+            "jobpsec must be a Jobspec or string (either binary or unicode)"
+        )
+    return jobspec
 
+
+def submit_async(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
+    jobspec = _convert_jobspec_arg_to_string(jobspec)
     future_handle = RAW.submit(flux_handle, jobspec, priority, flags)
     return Future(future_handle)
 
@@ -133,6 +147,37 @@ def _validate_keys(expected, given, keys_optional=False, allow_additional=False)
             raise ValueError("Extraneous key ({})".format(extraneous_key))
 
 
+def validate_jobspec(jobspec, require_version=None):
+    """
+    Validates the jobspec by attempting to construct a Jobspec object.  If no
+    exceptions are thrown during construction, then the jobspec is assumed to be
+    valid and this function returns True.  If the jobspec is invalid, the
+    relevant exception is thrown (i.e., TypeError, ValueError, EnvironmentError)
+
+    By default, the validation function will read the `version` key in the
+    jobspec to determine which Jobspec object to instantiate. An optional
+    `require_version` is included to override this behavior and force a
+    particular class to be used.
+
+    :param jobspec: a Jobspec object or JSON string
+    :param require_version: jobspec version to use, if not provided,
+                            the value of jobspec['version'] is used
+    :raises ValueError:
+    :raises TypeError:
+    :raises EnvironmentError:
+    """
+    jobspec_str = _convert_jobspec_arg_to_string(jobspec)
+    jobspec_obj = json.loads(jobspec_str)
+    if jobspec_obj is None:
+        return (1, "Unable to parse JSON")
+    _validate_keys(Jobspec.top_level_keys, jobspec_obj.keys())
+    if require_version == 1 or jobspec_obj.get("version", 0) == 1:
+        JobspecV1(**jobspec_obj)
+    else:
+        Jobspec(**jobspec_obj)
+    return True
+
+
 class Jobspec(object):
     top_level_keys = set(["resources", "tasks", "version", "attributes"])
 
@@ -147,13 +192,15 @@ class Jobspec(object):
         :param attributes: dictionary following the specification in RFC14 for
                            the `attributes` top-level key
         :param version: included to allow for usage like JobspecV1(**jobspec)
+        :raises ValueError:
+        :raises TypeError:
         """
 
         # ensure that no unknown keyword arguments are used
         _validate_keys(
             ["attributes", "version"],
             kwargs,
-            keys_optional=True,
+            keys_optional=False,
             allow_additional=False,
         )
 

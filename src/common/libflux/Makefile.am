@@ -35,8 +35,8 @@ installed_conf_cppflags = \
 	-DINSTALLED_NO_DOCS_PATH=\"${datadir}/flux/.nodocs\" \
 	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\" \
 	-DINSTALLED_BINDIR=\"$(fluxcmddir)\" \
-	-DINSTALLED_JOBSPEC_VALIDATE_PATH=\"${fluxlibexecdir}/validate-schema.py\" \
-	-DINSTALLED_JOBSPEC_SCHEMA_PATH=\"${datadir}/flux/schema/jobspec/jobspec_v1.jsonschema\"
+	-DINSTALLED_JOBSPEC_VALIDATE_PATH=\"${fluxlibexecdir}/validate-jobspec.py\" \
+	-DINSTALLED_JOBSPEC_VALIDATOR_ARGS=\"\"
 
 intree_conf_cppflags = \
 	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules\" \
@@ -58,8 +58,8 @@ intree_conf_cppflags = \
 	-DINTREE_KEYDIR=\"${abs_top_builddir}/etc/flux\" \
 	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\" \
 	-DINTREE_BINDIR=\"${abs_top_builddir}/src/cmd\" \
-	-DINTREE_JOBSPEC_VALIDATE_PATH=\"${abs_top_srcdir}/src/modules/job-ingest/validators/validate-schema.py\" \
-	-DINTREE_JOBSPEC_SCHEMA_PATH=\"${abs_top_srcdir}/src/modules/job-ingest/schemas/jobspec_v1.jsonschema\"
+	-DINTREE_JOBSPEC_VALIDATE_PATH=\"${abs_top_srcdir}/src/modules/job-ingest/validators/validate-jobspec.py\" \
+	-DINTREE_JOBSPEC_VALIDATOR_ARGS=\"\"
 
 
 fluxcoreinclude_HEADERS = \

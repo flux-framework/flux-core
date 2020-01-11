@@ -31,7 +31,8 @@ job_ingest_la_LIBADD = $(fluxmod_libadd) \
 		    $(ZMQ_LIBS)
 
 dist_fluxlibexec_SCRIPTS = \
-	validators/validate-schema.py
+	validators/validate-schema.py \
+	validators/validate-jobspec.py
 
 fluxschemadir = $(datadir)/flux/schema/jobspec/
 dist_fluxschema_DATA = \

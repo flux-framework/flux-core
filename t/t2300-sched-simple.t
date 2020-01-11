@@ -13,7 +13,9 @@ query=${FLUX_BUILD_DIR}/src/modules/sched-simple/rlist-query
 hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-1"}}'
 hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
 
+
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
+JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 
 kvs_job_dir() {
 	flux job id --to=kvs $1
@@ -26,7 +28,8 @@ list_R() {
 
 test_expect_success 'sched-simple: reload ingest module with lax validator' '
         flux exec -r all flux module remove job-ingest &&
-	flux exec -r all flux module load job-ingest schema=${SCHEMA}
+	flux exec -r all flux module load job-ingest validator-args="--schema,${SCHEMA}" \
+         validator=${JSONSCHEMA_VALIDATOR}
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json

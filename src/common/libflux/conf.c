@@ -63,8 +63,8 @@ static struct builtin builtin_tab[] = {
     { "bindir",         INSTALLED_BINDIR,           INTREE_BINDIR },
     { "jobspec_validate_path", INSTALLED_JOBSPEC_VALIDATE_PATH,
                                             INTREE_JOBSPEC_VALIDATE_PATH },
-    { "jobspec_schema_path", INSTALLED_JOBSPEC_SCHEMA_PATH,
-                                            INTREE_JOBSPEC_SCHEMA_PATH },
+    { "jobspec_validator_args", INSTALLED_JOBSPEC_VALIDATOR_ARGS,
+                                            INTREE_JOBSPEC_VALIDATOR_ARGS },
     { NULL, NULL, NULL },
 };
 
