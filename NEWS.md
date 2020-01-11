@@ -1,3 +1,105 @@
+flux-core version 0.14.0 - 2020-01-12
+-------------------------------------
+
+## Summary:
+
+This version of flux-core improves the reliability and performance
+of the new execution system, and fills gaps in the previous release.
+Some highlights are:
+
+ * support for jobs reading standard input
+ * improved job listing tool - see flux-jobs(1)
+ * improved python support for building jobspec and waiting for job completion
+ * ability to override job names displayed in listing output
+
+### New features
+
+ * Add porcelain `flux jobs` command (#2582)
+ * job-info: use basename of arg0 for job-name (#2598)
+ * job-info: honor `max_entries` option in job-info.list (#2596)
+ * job-info: Support task-count in listing service (#2580)
+ * Support job state times in job listing service (#2568)
+ * python: add jobspec classes to main bindings (#2534)
+ * initial job-name support (#2562)
+ * job-manager: add `flux_job_wait()` (#2546)
+ * shell: add support for debugger synchronization and `MPIR_proctable` gather
+   (#2542)
+ * job-info: Add stats for number of jobs in each state (#2540)
+ * job-info: re-load job state from KVS (#2502)
+ * libflux: add `flux_get_conf()` (#2501)
+ * job-info: Store full job-history, allow users to query pending, running,
+   and inactive jobs (#2471)
+ * Initial shell stdin support (#2448)
+
+### Improvements
+
+ * libflux/mrpc: drop the mrpc class (#2612)
+ * docker: add image and travis tests on CentOS 8 (#2610)
+ * mergify: do not auto-merge PRs with invalid commits (#2603)
+ * broker: new format for [bootstrap] configuration (#2578)
+ * broker/boot_config: use new config file interfaces (#2524)
+ * shell: add unpack-style helpers for get_info shell plugin api calls
+   (#2573)
+ * testing/asan: enable asan in test framework and travis-ci (#2466)
+ * README.md: update build docs for Python 3 (#2565)
+ * Update jobspec command key per RFC 14 changes (#2564)
+ * replace exec "running" event with "shell.init" and "shell.start" (#2541)
+ * shell: improve stdout/stderr performance (#2531)
+ * modules/job-manager:  [cleanup] simplify queue listing and refactor
+   internal context (#2536)
+ * kvs: improve append performance (#2526)
+ * shell: generate job exception on `MPI_Abort` (#2510)
+ * `msg_handler`: make `topic_glob` `const char *`, fix fallout (#2496)
+ * libflux: fall back to builtin connector search path (#2489)
+ * README: minor source cleanup (#2509)
+ * shell: implement shell-specific log facility, add support for log events
+   to output eventlog (#2477)
+ * flux-mini: improve handling of `--setattr` and `--setopt` (#2495)
+ * bindings/python: reinstate python2 support (#2482)
+ * bindings/python: change minimum python version to 3.6 (#2452)
+ * libutil: replace fdwalk with version that uses getdents64 (#2479)
+ * flux-shell: handle jobspec command as bare string (#2484)
+ * librouter: factor common code from connector-local, flux-proxy (#2354)
+ * mergify: fix rule that prevents merging of "WIP" PRs (#2453)
+ * buffer: start buffer at 4K and grow to 4M as necessary (#2449)
+ * libioencode: make rank parameters strings (#2441)
+ * flux-kvs: Add eventlog namespace option (#2439)
+ * testsuite: fix LONGTEST and other small improvements (#2444)
+ * job-ingest: switch to v1 schema (#2433)
+ * libtomlc99: update for TOML v0.5.0 support #2619
+ * job-ingest: switch to a py bindings based jobspec validator (#2615)
+
+### Fixes
+
+ * flux-job: misc fixes for attach (#2618)
+ * fix minor issues found by lgtm scan (#2605)
+ * broker: increase nofile limit to avoid assertion failure in `zuuid_new()`
+   (#2602)
+ * use libuuid instead of zuuid (#2606)
+ * github: enable a workflow to validate commits in a PR (#2586)
+ * python: fix circular reference in `Future` class (#2570)
+ * have future take a ref on `flux_t` handle (#2569)
+ * bindings/python and libev: work around future leak (#2563)
+ * kvs: Fix duplicate append corner case (#2555)
+ * shell: stdin write to exited task should not cause fatal job exception
+   (#2550)
+ * job-manager: fix internal job hash lookup error handling (#2552)
+ * shell: fix segfault if logging function is called in or after
+   `shell_finalize()` (#2544)
+ * kvs: fix memory use-after-free corner case (#2525)
+ * t: fix tests prone to races or timeouts on constrained systems (#2523)
+ * job-exec: fix memory errors detected by valgrind (#2521)
+ * test: fix random cronodate test failure (#2520)
+ * t1004-statwatcher: fix test on Ubuntu 19.10 (#2513)
+ * job-ingest: launch `.py` validators with configured python (#2506)
+ * doc: `flux_respond_raw` doesn't take an errnum (#2504)
+ * Fix infinite recursion when wrapper.Wrapper object initialized with
+   incorrect args (#2485)
+ * sched-simple: fix `rlist_alloc_nnodes()` algorithm (#2474)
+ * fix crash in `is_intree()` with EACCESS or ENOENT from builddir (#2468)
+ * testsuite: extend some testing timeouts  (#2451)
+
+
 flux-core version 0.13.0 - 2019-10-01
 -------------------------------------
 
