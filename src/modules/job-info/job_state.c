@@ -280,6 +280,49 @@ static void job_change_list (struct job_state_ctx *jsctx,
     job_insert_list (jsctx, job, newstate);
 }
 
+static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
+{
+    if (state == FLUX_JOB_DEPEND
+        || state == FLUX_JOB_SCHED)
+        return jsctx->pending;
+    else if (state == FLUX_JOB_RUN
+             || state == FLUX_JOB_CLEANUP)
+        return jsctx->running;
+    else /* state == FLUX_JOB_INACTIVE */
+        return jsctx->inactive;
+}
+
+static void update_job_state_and_list (struct info_ctx *ctx,
+                                       struct job *job,
+                                       flux_job_state_t newstate,
+                                       double timestamp)
+{
+    struct job_state_ctx *jsctx = job->ctx->jsctx;
+
+    if (!job->job_info_retrieved) {
+        /* job info still not retrieved, we can update the job
+         * state but can't put it on a different list yet */
+        update_job_state (ctx, job, newstate, timestamp);
+    }
+    else {
+        if (job->state == FLUX_JOB_INACTIVE) {
+            flux_log_error (jsctx->h,
+                            "%s: illegal transition: id=%llu state=%d",
+                            __FUNCTION__, (unsigned long long)job->id, newstate);
+        }
+        else {
+            zlistx_t *oldlist, *newlist;
+
+            oldlist = get_list (jsctx, job->state);
+            newlist = get_list (jsctx, newstate);
+
+            if (oldlist != newlist)
+                job_change_list (jsctx, job, oldlist, newstate);
+            update_job_state (ctx, job, newstate, timestamp);
+        }
+    }
+}
+
 static int eventlog_lookup_parse (struct info_ctx *ctx,
                                   struct job *job,
                                   const char *s)
@@ -612,49 +655,6 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
     flux_future_destroy (f);
     errno = saved_errno;
     return NULL;
-}
-
-static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
-{
-    if (state == FLUX_JOB_DEPEND
-        || state == FLUX_JOB_SCHED)
-        return jsctx->pending;
-    else if (state == FLUX_JOB_RUN
-             || state == FLUX_JOB_CLEANUP)
-        return jsctx->running;
-    else /* state == FLUX_JOB_INACTIVE */
-        return jsctx->inactive;
-}
-
-static void update_job_state_and_list (struct info_ctx *ctx,
-                                       struct job *job,
-                                       flux_job_state_t newstate,
-                                       double timestamp)
-{
-    struct job_state_ctx *jsctx = job->ctx->jsctx;
-
-    if (!job->job_info_retrieved) {
-        /* job info still not retrieved, we can update the job
-         * state but can't put it on a different list yet */
-        update_job_state (ctx, job, newstate, timestamp);
-    }
-    else {
-        if (job->state == FLUX_JOB_INACTIVE) {
-            flux_log_error (jsctx->h,
-                            "%s: illegal transition: id=%llu state=%d",
-                            __FUNCTION__, (unsigned long long)job->id, newstate);
-        }
-        else {
-            zlistx_t *oldlist, *newlist;
-
-            oldlist = get_list (jsctx, job->state);
-            newlist = get_list (jsctx, newstate);
-
-            if (oldlist != newlist)
-                job_change_list (jsctx, job, oldlist, newstate);
-            update_job_state (ctx, job, newstate, timestamp);
-        }
-    }
 }
 
 static void update_jobs (struct info_ctx *ctx, json_t *transitions)
