@@ -88,55 +88,7 @@ def output_format(fmt, jobs):
         )
         print(s)
 
-
-@flux.util.CLIMain(logger)
-def main():
-    parser = argparse.ArgumentParser()
-    # -a equivalent to -s "pending,running,inactive" and -u set to userid
-    parser.add_argument(
-        "-a", action="store_true", help="List all jobs for current user"
-    )
-    # -A equivalent to -s "pending,running,inactive" and -u set to "all"
-    parser.add_argument("-A", action="store_true", help="List all jobs for all users")
-    parser.add_argument(
-        "-c",
-        "--count",
-        type=int,
-        metavar="N",
-        default=1000,
-        help="Limit output to N jobs(default 1000)",
-    )
-    parser.add_argument(
-        "-s",
-        "--states",
-        type=str,
-        metavar="STATES",
-        default="pending,running",
-        help="List jobs in specific states(pending,running,inactive)",
-    )
-    parser.add_argument(
-        "--suppress-header",
-        action="store_true",
-        help="Suppress printing of header line",
-    )
-    parser.add_argument(
-        "-u",
-        "--user",
-        type=str,
-        metavar="[USERNAME|UID]",
-        default=str(os.geteuid()),
-        help='Limit output to specific username or userid (Specify "all" for all users)',
-    )
-    parser.add_argument(
-        "-o",
-        "--format",
-        type=str,
-        metavar="FORMAT",
-        help="Specify output format using Python's string format syntax",
-    )
-
-    args = parser.parse_args()
-
+def fetch_jobs(args):
     h = flux.Flux()
 
     # Future optimization, reduce attrs based on what is in output
@@ -196,6 +148,61 @@ def main():
     except EnvironmentError as e:
         print("{}: {}".format("rpc", e.strerror), file=sys.stderr)
         sys.exit(1)
+
+    return jobs
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    # -a equivalent to -s "pending,running,inactive" and -u set to userid
+    parser.add_argument(
+        "-a", action="store_true", help="List all jobs for current user"
+    )
+    # -A equivalent to -s "pending,running,inactive" and -u set to "all"
+    parser.add_argument("-A", action="store_true", help="List all jobs for all users")
+    parser.add_argument(
+        "-c",
+        "--count",
+        type=int,
+        metavar="N",
+        default=1000,
+        help="Limit output to N jobs(default 1000)",
+    )
+    parser.add_argument(
+        "-s",
+        "--states",
+        type=str,
+        metavar="STATES",
+        default="pending,running",
+        help="List jobs in specific states(pending,running,inactive)",
+    )
+    parser.add_argument(
+        "--suppress-header",
+        action="store_true",
+        help="Suppress printing of header line",
+    )
+    parser.add_argument(
+        "-u",
+        "--user",
+        type=str,
+        metavar="[USERNAME|UID]",
+        default=str(os.geteuid()),
+        help='Limit output to specific username or userid (Specify "all" for all users)',
+    )
+    parser.add_argument(
+        "-o",
+        "--format",
+        type=str,
+        metavar="FORMAT",
+        help="Specify output format using Python's string format syntax",
+    )
+
+    return parser.parse_args()
+
+
+@flux.util.CLIMain(logger)
+def main():
+    args = parse_args()
+    jobs = fetch_jobs(args)
 
     if args.format:
         output_format(args.format, jobs)
