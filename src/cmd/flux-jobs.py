@@ -183,7 +183,9 @@ def fetch_jobs(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog="flux-jobs", formatter_class=flux.util.help_formatter()
+    )
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
     parser.add_argument(
         "-a", action="store_true", help="List all jobs for current user"
