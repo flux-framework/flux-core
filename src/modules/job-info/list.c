@@ -59,18 +59,28 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         }
         else if (!strcmp (attr, "t_submit")
                  || !strcmp (attr, "t_depend")) {
+            if (!(job->states_mask & FLUX_JOB_DEPEND))
+                continue;
             val = json_real (job->t_submit);
         }
         else if (!strcmp (attr, "t_sched")) {
+            if (!(job->states_mask & FLUX_JOB_SCHED))
+                continue;
             val = json_real (job->t_sched);
         }
         else if (!strcmp (attr, "t_run")) {
+            if (!(job->states_mask & FLUX_JOB_RUN))
+                continue;
             val = json_real (job->t_run);
         }
         else if (!strcmp (attr, "t_cleanup")) {
+            if (!(job->states_mask & FLUX_JOB_CLEANUP))
+                continue;
             val = json_real (job->t_cleanup);
         }
         else if (!strcmp (attr, "t_inactive")) {
+            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+                continue;
             val = json_real (job->t_inactive);
         }
         else if (!strcmp (attr, "state")) {
