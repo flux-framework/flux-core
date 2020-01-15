@@ -88,7 +88,31 @@ def output_format(fmt, jobs):
         )
         print(s)
 
-def fetch_jobs(args):
+
+def fetch_jobs_stdin(args):
+    """
+    Return a list of jobs gathered from a series of JSON objects, one per
+    line, presented on stdin. This function is used for testing of the
+    flux-jobs utility, and thus, all filtering options are currently
+    ignored.
+    """
+    import fileinput
+    import json
+
+    jobs = []
+    for line in fileinput.input("-"):
+        try:
+            job = json.loads(line)
+        except ValueError as err:
+            logger.error(
+                "JSON input error: line {}: {}".format(fileinput.lineno(), err)
+            )
+            sys.exit(1)
+        jobs.append(job)
+    return jobs
+
+
+def fetch_jobs_flux(args):
     h = flux.Flux()
 
     # Future optimization, reduce attrs based on what is in output
@@ -151,6 +175,13 @@ def fetch_jobs(args):
 
     return jobs
 
+
+def fetch_jobs(args):
+    if args.from_stdin:
+        return fetch_jobs_stdin(args)
+    return fetch_jobs_flux(args)
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
@@ -195,7 +226,10 @@ def parse_args():
         metavar="FORMAT",
         help="Specify output format using Python's string format syntax",
     )
-
+    # Hidden '--from-stdin' option for testing only.
+    parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS,
+    )
     return parser.parse_args()
 
 
