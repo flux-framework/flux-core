@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import math
+import argparse
 from datetime import timedelta
 
 import six
@@ -72,6 +73,50 @@ def encode_topic(topic):
         errmsg = "Topic must be a string, not {}".format(type(topic))
         raise TypeError(errno.EINVAL, errmsg)
     return topic
+
+
+def help_formatter(argwidth=40):
+    """
+    Return our 'clean' HelpFormatter, if possible, with a wider default
+     for the max width allowed for options.
+    """
+
+    class FluxHelpFormatter(argparse.HelpFormatter):
+        def _format_action_invocation(self, action):
+            if not action.option_strings:
+                (metavar,) = self._metavar_formatter(action, action.dest)(1)
+                return metavar
+
+            opts = list(action.option_strings)
+
+            #  Default optstring is `-l, --long-opt`
+            optstring = ", ".join(opts)
+
+            #  If only a long option is supported, then prefix with
+            #   whitepsace by the width of a short option so that all
+            #   long opts start in the same column:
+            if len(opts) == 1 and len(opts[0]) > 2:
+                optstring = "    " + opts[0]
+
+            #  We're done if no argument supported
+            if action.nargs == 0:
+                return optstring
+
+            #  Append option argument string after `=`
+            default = action.dest.upper()
+            args_string = self._format_args(action, default)
+            return optstring + "=" + args_string
+
+    try:
+        # https://stackoverflow.com/a/5464440
+        # beware: "Only the name of this class is considered a public API."
+        # https://stackoverflow.com/questions/44333577
+        return lambda prog: FluxHelpFormatter(prog, max_help_position=argwidth)
+    except TypeError:
+        import warnings
+
+        warnings.warn("argparse help formatter failed, falling back.")
+        return argparse.HelpFormatter
 
 
 class CLIMain(object):
