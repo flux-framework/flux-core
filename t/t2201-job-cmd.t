@@ -227,13 +227,6 @@ test_expect_success 'flux-job: list fails with wrong number of arguments' '
 	test_must_fail flux job list foo
 '
 
-test_expect_success 'flux-job: list -s suppresses header' '
-	flux job list >list.out &&
-	grep -q JOBID list.out &&
-	flux job list -s >list_s.out &&
-	test_must_fail grep -q JOBID list_s.out
-'
-
 test_expect_success 'flux-job: id works with spaces in input' '
 	(echo "42"; echo "42") >despace.exp &&
 	(echo "42 "; echo " 42") | flux job id >despace.out &&
