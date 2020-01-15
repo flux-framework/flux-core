@@ -294,9 +294,9 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".t_depend < .t_sched" &&
-        echo $obj | jq ".t_sched < .t_run" &&
-        echo $obj | jq ".t_run < .t_cleanup" &&
-        echo $obj | jq ".t_cleanup < .t_inactive"
+        echo $obj | jq -e ".t_sched < .t_run" &&
+        echo $obj | jq -e ".t_run < .t_cleanup" &&
+        echo $obj | jq -e ".t_cleanup < .t_inactive"
 '
 
 # since job is running, make sure latter states are 0.0000
