@@ -68,9 +68,6 @@ static struct optparse_option list_opts[] =  {
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
       .usage = "Limit output to N jobs",
     },
-    { .name = "suppress-header", .key = 's', .has_arg = 0,
-      .usage = "Suppress printing of header line",
-    },
     { .name = "pending", .key = 'p', .has_arg = 0,
       .usage = "List pending jobs",
     },
@@ -83,9 +80,6 @@ static struct optparse_option list_opts[] =  {
     { .name = "userid", .key = 'u', .has_arg = 1, .arginfo = "UID",
       .usage = "Limit output to specific userid. " \
                "Specify \"all\" for all users.",
-    },
-    { .name = "json", .key = 'j', .has_arg = 0,
-      .usage = "Output raw JSON job list objects",
     },
     OPTPARSE_TABLE_END
 };
@@ -609,21 +603,6 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
-/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
- * with second precision
- */
-static int iso_timestr (double timestamp, char *buf, size_t size)
-{
-    time_t sec = timestamp;
-    struct tm tm;
-
-    if (!gmtime_r (&sec, &tm))
-        return -1;
-    if (strftime (buf, size, "%FT%TZ", &tm) == 0)
-        return -1;
-    return 0;
-}
-
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -674,46 +653,14 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_list");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");
-    if (!optparse_hasopt (p, "json")) {
-        if (!optparse_hasopt (p, "suppress-header")) {
-            printf ("%s\t\t%s\t%s\t%s\t%s\t\t%s\n",
-                    "JOBID", "STATE", "USERID", "PRI", "NAME", "T_SUBMIT");
-        }
-    }
     json_array_foreach (jobs, index, value) {
-        flux_jobid_t id;
-        int priority;
-        uint32_t userid;
-        double t_submit;
-        char timestr[80];
-        flux_job_state_t state;
-        const char *job_name;
+        char *str;
 
-        if (optparse_hasopt (p, "json")) {
-            char *str = json_dumps (value, 0);
-            if (!str)
-                log_msg_exit ("json_dumps");
-            printf ("%s\n", str);
-            free (str);
-        }
-        else {
-            if (json_unpack (value, "{s:I s:i s:i s:f s:i s:s}",
-                                    "id", &id,
-                                    "priority", &priority,
-                                    "userid", &userid,
-                                    "t_submit", &t_submit,
-                                    "state", &state,
-                                    "job-name", &job_name) < 0)
-                log_msg_exit ("error parsing job data");
-            if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
-                log_err_exit ("time conversion error");
-            printf ("%llu\t%s\t%lu\t%d\t%-15.15s\t%s\n", (unsigned long long)id,
-                                           flux_job_statetostr (state, true),
-                                           (unsigned long)userid,
-                                           priority,
-                                           job_name,
-                                           timestr);
-        }
+        str = json_dumps (value, 0);
+        if (!str)
+            log_msg_exit ("json_dumps");
+        printf ("%s\n", str);
+        free (str);
     }
     flux_future_destroy (f);
     flux_close (h);

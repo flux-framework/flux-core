@@ -7,12 +7,13 @@ test_description='Test flux job manager service with dummy scheduler'
 test_under_flux 4 kvs
 
 SCHED_DUMMY=${FLUX_BUILD_DIR}/t/job-manager/.libs/sched-dummy.so
+LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 
 flux setattr log-stderr-level 1
 
 get_state() {
 	local id=$1
-	local state=$(flux job list -s | awk '$1 == "'${id}'" { print $2; }')
+	local state=$(${LIST_JOBS} | awk '$1 == "'${id}'" { print $2; }')
 	test -z "$state" \
 		&& flux job wait-event --timeout=5 ${id} clean >/dev/null \
 		&& state=I
