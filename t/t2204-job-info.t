@@ -187,7 +187,7 @@ test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
         for count in `seq 1 16`; do \
             id -u >> list_userid.exp; \
         done &&
-        flux job list -s pending,running,inactive | jq .userid > list_userid.out &&
+        flux job list -a | jq .userid > list_userid.out &&
         test_cmp list_userid.out list_userid.exp
 '
 
@@ -215,7 +215,7 @@ test_expect_success 'flux job list --userid=all works' '
 '
 
 test_expect_success HAVE_JQ 'flux job list --count works' '
-        flux job list -s pending,running,inactive --count=8 > list_count.out &&
+        flux job list -s active,inactive --count=8 > list_count.out &&
         count=$(wc -l < list_count.out) &&
         test "$count" = "8" &&
         head -n 4 list_count.out | jq .id > list_count_pending.out &&
@@ -226,7 +226,7 @@ test_expect_success HAVE_JQ 'flux job list --count works' '
 '
 
 test_expect_success HAVE_JQ 'flux job list all jobs works' '
-        flux job list -s pending,running,inactive > list_all.out &&
+        flux job list -a > list_all.out &&
         cat list_all.out | jq .id > list_all_jobids.out &&
         cat job_ids_pending.out >> list_all_jobids.exp &&
         cat job_ids_running.out >> list_all_jobids.exp &&
@@ -260,7 +260,7 @@ test_expect_success 'reload the job-info module' '
 # inactive jobs are listed by most recently completed first, so must
 # construct order based on order of jobs canceled above
 test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
-        flux job list -s pending,running,inactive > list_reload.out &&
+        flux job list -a > list_reload.out &&
         for count in `seq 1 16`; do \
             echo "32" >> list_reload_state.exp; \
         done &&
