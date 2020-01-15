@@ -76,6 +76,12 @@ static struct optparse_option list_opts[] =  {
       .usage = "Limit output to specific userid. " \
                "Specify \"all\" for all users.",
     },
+    { .name = "all-user", .key = 'a', .has_arg = 0,
+      .usage = "List my jobs, regardless of state",
+    },
+    { .name = "all", .key = 'A', .has_arg = 0,
+      .usage = "List jobs for all users, regardless of state",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -637,6 +643,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         else
             log_msg_exit ("error parsing --states: %s is unknown", arg);
     }
+    if (optparse_hasopt (p, "all-user") || optparse_hasopt (p, "all"))
+        state_mask = FLUX_JOB_ACTIVE | FLUX_JOB_INACTIVE;
     if ((state_mask & FLUX_JOB_PENDING) != 0)
         flags |= FLUX_JOB_LIST_PENDING;
     if ((state_mask & FLUX_JOB_RUNNING) != 0)
@@ -661,6 +669,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
                 log_msg_exit ("error parsing userid: \"%s\"", arg);
         }
     }
+    if (optparse_hasopt (p, "all"))
+        userid = FLUX_USERID_UNKNOWN;
 
     if (!(f = flux_job_list (h, max_entries, attrs, userid, flags)))
         log_err_exit ("flux_job_list");
