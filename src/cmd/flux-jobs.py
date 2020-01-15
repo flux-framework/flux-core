@@ -27,11 +27,11 @@ logger = logging.getLogger("flux-jobs")
 
 
 def runtime(job, roundup):
-    if job["t_cleanup"] > 0.0 and job["t_run"] > 0.0:
+    if "t_cleanup" in job and "t_run" in job:
         t = job["t_cleanup"] - job["t_run"]
         if roundup:
             t = round(t + 0.5)
-    elif job["t_run"] > 0.0:
+    elif "t_run" in job:
         t = time.time() - job["t_run"]
         if roundup:
             t = round(t + 0.5)
@@ -89,10 +89,10 @@ def output_format(fmt, jobs):
             ntasks=job["ntasks"],
             t_submit=job["t_submit"],
             t_depend=job["t_depend"],
-            t_sched=job["t_sched"],
-            t_run=job["t_run"],
-            t_cleanup=job["t_cleanup"],
-            t_inactive=job["t_inactive"],
+            t_sched=job.get("t_sched", 0.0),
+            t_run=job.get("t_run", 0.0),
+            t_cleanup=job.get("t_cleanup", 0.0),
+            t_inactive=job.get("t_inactive", 0.0),
             runtime=runtime(job, False),
             runtime_fsd=runtime_fsd(job, False),
             runtime_fsd_hyphen=runtime_fsd(job, True),
