@@ -72,8 +72,11 @@ struct job {
      * has been seen, we don't immediately place it on the `pending`
      * list.  We wait until we've retrieved data such as userid,
      * priority, etc.
+     *
+     * Track which states we've seen via the states_mask;
      */
     zlist_t *next_states;
+    unsigned int states_mask;
     void *list_handle;
 
     /* timestamp of when we enter the state

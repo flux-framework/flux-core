@@ -246,6 +246,7 @@ static void update_job_state (struct info_ctx *ctx,
         job->t_cleanup = timestamp;
     else if (job->state == FLUX_JOB_INACTIVE)
         job->t_inactive = timestamp;
+    job->states_mask |= job->state;
     if (decrement)
         (*decrement)--;
     if (increment)
