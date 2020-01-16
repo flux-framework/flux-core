@@ -271,6 +271,7 @@ test_expect_success 'flux-jobs --format with illegal field is an error' '
 #
 ISSUES_DIR=$SHARNESS_TEST_SRCDIR/flux-jobs/tests
 for d in ${ISSUES_DIR}/*; do
+	issue=$(basename $d)
 	for f in ${d}/input ${d}/output; do
 		test -f ${f}  || error "Missing required file ${f}"
 	done

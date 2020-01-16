@@ -167,6 +167,7 @@ EXTRA_DIST= \
 	shell/input \
 	shell/output \
 	shell/initrc/tests \
+	flux-jobs/tests \
 	jobspec
 
 dist_check_SCRIPTS = \
