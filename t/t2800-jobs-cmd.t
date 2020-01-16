@@ -191,8 +191,8 @@ test_expect_success 'flux-jobs --format={job_name} works' '
         test_cmp jobnameI.out jobnameI.exp
 '
 
-test_expect_success 'flux-jobs --format={task_count} works' '
-        flux jobs --suppress-header -a --format="{task_count}" > taskcount.out &&
+test_expect_success 'flux-jobs --format={ntasks} works' '
+        flux jobs --suppress-header -a --format="{ntasks}" > taskcount.out &&
         for i in `seq 1 18`; do echo "1" >> taskcount.exp; done &&
         test_cmp taskcount.out taskcount.exp
 '

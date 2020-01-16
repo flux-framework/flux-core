@@ -482,11 +482,11 @@ static int jobspec_parse (struct info_ctx *ctx,
         goto error;
     }
 
-    /* Set job->task_count
+    /* Set job->ntasks
      */
     if (json_unpack_ex (tasks, NULL, 0,
                         "[{s:{s:i}}]",
-                        "count", "total", &job->task_count) < 0) {
+                        "count", "total", &job->ntasks) < 0) {
         int per_slot, slot_count = 0;
         struct res_level res[3];
 
@@ -539,7 +539,7 @@ static int jobspec_parse (struct info_ctx *ctx,
                       res[2].with ? "->..." : NULL);
             goto error;
         }
-        job->task_count = slot_count;
+        job->ntasks = slot_count;
     }
 
     rc = 0;

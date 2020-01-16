@@ -74,7 +74,7 @@ def output_format(fmt, jobs):
             state=statetostr(job, False),
             state_single=statetostr(job, True),
             job_name=job["job-name"],
-            task_count=job["task-count"],
+            ntasks=job["ntasks"],
             t_submit=job["t_submit"],
             t_depend=job["t_depend"],
             t_sched=job["t_sched"],
@@ -146,7 +146,7 @@ def main():
         "priority",
         "state",
         "job-name",
-        "task-count",
+        "ntasks",
         "t_submit",
         "t_depend",
         "t_sched",
@@ -202,7 +202,7 @@ def main():
     else:
         fmt = (
             "{id:>18} {username:<8.8} {job_name:<10.10} {state:<8.8} "
-            "{task_count:>6} {runtime_fsd_hyphen}"
+            "{ntasks:>6} {runtime_fsd_hyphen}"
         )
         if not args.suppress_header:
             s = fmt.format(
@@ -210,7 +210,7 @@ def main():
                 username="USER",
                 job_name="NAME",
                 state="STATE",
-                task_count="NTASKS",
+                ntasks="NTASKS",
                 runtime_fsd_hyphen="TIME",
             )
             print(s)

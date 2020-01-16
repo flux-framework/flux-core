@@ -79,8 +79,8 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         else if (!strcmp (attr, "job-name")) {
             val = json_string (job->job_name);
         }
-        else if (!strcmp (attr, "task-count")) {
-            val = json_integer (job->task_count);
+        else if (!strcmp (attr, "ntasks")) {
+            val = json_integer (job->ntasks);
         }
         else {
             errno = EINVAL;
@@ -258,7 +258,7 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                            "t_inactive",
                            "state",
                            "job-name",
-                           "task-count") < 0) {
+                           "ntasks") < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }

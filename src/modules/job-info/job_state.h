@@ -59,7 +59,7 @@ struct job {
     int flags;
     flux_job_state_t state;
     const char *job_name;
-    int task_count;
+    int ntasks;
 
     /* cache of job information */
     json_t *jobspec_job;
