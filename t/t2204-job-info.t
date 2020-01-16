@@ -134,7 +134,7 @@ test_expect_success 'submit jobs for job list testing' '
 #
 
 test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
-        flux job list --running | jq .id > list_started.out &&
+        flux job list -s running | jq .id > list_started.out &&
         test_cmp list_started.out job_ids_running.out
 '
 
@@ -142,12 +142,12 @@ test_expect_success HAVE_JQ 'flux job list running jobs with correct state' '
         for count in `seq 1 8`; do \
             echo "8" >> list_state_R.exp; \
         done &&
-        flux job list --running | jq .state > list_state_R.out &&
+        flux job list -s running | jq .state > list_state_R.out &&
         test_cmp list_state_R.out list_state_R.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
-        flux job list --inactive | jq .id > list_inactive.out &&
+        flux job list -s inactive | jq .id > list_inactive.out &&
         test_cmp list_inactive.out job_ids_inactive.out
 '
 
@@ -155,12 +155,12 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         for count in `seq 1 4`; do \
             echo "32" >> list_state_I.exp; \
         done &&
-        flux job list --inactive | jq .state > list_state_I.out &&
+        flux job list -s inactive | jq .state > list_state_I.out &&
         test_cmp list_state_I.out list_state_I.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
-        flux job list --pending | jq .id > list_pending.out &&
+        flux job list -s pending | jq .id > list_pending.out &&
         test_cmp list_pending.out job_ids_pending.out
 '
 
@@ -171,7 +171,7 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 16
 0
 EOT
-        flux job list --pending | jq .priority > list_priority.out &&
+        flux job list -s pending | jq .priority > list_priority.out &&
         test_cmp list_priority.out list_priority.exp
 '
 
@@ -179,7 +179,7 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
         for count in `seq 1 4`; do \
             echo "4" >> list_state_S.exp; \
         done &&
-        flux job list --pending | jq .state > list_state_S.out &&
+        flux job list -s pending | jq .state > list_state_S.out &&
         test_cmp list_state_S.out list_state_S.exp
 '
 
@@ -187,7 +187,7 @@ test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
         for count in `seq 1 16`; do \
             id -u >> list_userid.exp; \
         done &&
-        flux job list --pending --running --inactive | jq .userid > list_userid.out &&
+        flux job list -a | jq .userid > list_userid.out &&
         test_cmp list_userid.out list_userid.exp
 '
 
@@ -215,7 +215,7 @@ test_expect_success 'flux job list --userid=all works' '
 '
 
 test_expect_success HAVE_JQ 'flux job list --count works' '
-        flux job list --pending --running --inactive --count=8 > list_count.out &&
+        flux job list -s active,inactive --count=8 > list_count.out &&
         count=$(wc -l < list_count.out) &&
         test "$count" = "8" &&
         head -n 4 list_count.out | jq .id > list_count_pending.out &&
@@ -226,7 +226,7 @@ test_expect_success HAVE_JQ 'flux job list --count works' '
 '
 
 test_expect_success HAVE_JQ 'flux job list all jobs works' '
-        flux job list --pending --running --inactive > list_all.out &&
+        flux job list -a > list_all.out &&
         cat list_all.out | jq .id > list_all_jobids.out &&
         cat job_ids_pending.out >> list_all_jobids.exp &&
         cat job_ids_running.out >> list_all_jobids.exp &&
@@ -260,7 +260,7 @@ test_expect_success 'reload the job-info module' '
 # inactive jobs are listed by most recently completed first, so must
 # construct order based on order of jobs canceled above
 test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
-        flux job list --pending --running --inactive > list_reload.out &&
+        flux job list -a > list_reload.out &&
         for count in `seq 1 16`; do \
             echo "32" >> list_reload_state.exp; \
         done &&
@@ -290,7 +290,7 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
 test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job inactive)' '
         jobid=$(flux mini submit hostname) &&
         flux job wait-event $jobid clean >/dev/null &&
-        obj=$(flux job list --inactive | grep $jobid) &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".t_depend < .t_sched" &&
         echo $obj | jq ".t_sched < .t_run" &&
         echo $obj | jq ".t_run < .t_cleanup" &&
@@ -301,7 +301,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
 test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job running)' '
         jobid=$(flux mini submit sleep 60) &&
         flux job wait-event $jobid start >/dev/null &&
-        obj=$(flux job list --running | grep $jobid) &&
+        obj=$(flux job list -s running | grep $jobid) &&
         echo $obj | jq -e ".t_depend < .t_sched" &&
         echo $obj | jq -e ".t_sched < .t_run" &&
         echo $obj | jq -e ".t_cleanup == 0.0" &&
@@ -318,29 +318,29 @@ test_expect_success 'flux job list outputs user job-name' '
         jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
         echo $jobid > jobname1.id &&
         flux job wait-event $jobid clean >/dev/null &&
-        flux job list --inactive | grep $jobid | grep foobar
+        flux job list -s inactive | grep $jobid | grep foobar
 '
 
 test_expect_success 'flux job lists first argument for job-name' '
         jobid=`flux mini submit mycmd arg1 arg2` &&
         echo $jobid > jobname2.id &&
         flux job wait-event $jobid clean >/dev/null &&
-        flux job list --inactive | grep $jobid | grep mycmd
+        flux job list -s inactive | grep $jobid | grep mycmd
 '
 
 test_expect_success 'flux job lists basename of first argument for job-name' '
         jobid=`flux mini submit /foo/bar arg1 arg2` &&
         echo $jobid > jobname3.id &&
         flux job wait-event $jobid clean >/dev/null &&
-        flux job list --inactive | grep $jobid | grep bar &&
-        flux job list --inactive | grep $jobid | grep -v foo
+        flux job list -s inactive | grep $jobid | grep bar &&
+        flux job list -s inactive | grep $jobid | grep -v foo
 '
 
 test_expect_success 'flux job lists full path for job-name if first argument not ok' '
         jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
         echo $jobid > jobname4.id &&
         flux job wait-event $jobid clean >/dev/null &&
-        flux job list --inactive | grep $jobid | grep "\/foo\/bar\/"
+        flux job list -s inactive | grep $jobid | grep "\/foo\/bar\/"
 '
 
 test_expect_success 'reload the job-info module' '
@@ -353,10 +353,10 @@ test_expect_success 'verify job names preserved across restart' '
         jobid2=`cat jobname2.id` &&
         jobid3=`cat jobname3.id` &&
         jobid4=`cat jobname4.id` &&
-        flux job list --inactive | grep ${jobid1} | grep foobar &&
-        flux job list --inactive | grep ${jobid2} | grep mycmd &&
-        flux job list --inactive | grep ${jobid3} | grep bar &&
-        flux job list --inactive | grep ${jobid4} | grep "\/foo\/bar\/"
+        flux job list -s inactive | grep ${jobid1} | grep foobar &&
+        flux job list -s inactive | grep ${jobid2} | grep mycmd &&
+        flux job list -s inactive | grep ${jobid3} | grep bar &&
+        flux job list -s inactive | grep ${jobid4} | grep "\/foo\/bar\/"
 '
 
 #
@@ -367,7 +367,7 @@ test_expect_success 'flux job list outputs task-count correctly (1 task)' '
         jobid=`flux mini submit hostname` &&
         echo $jobid > taskcount1.id &&
         flux job wait-event $jobid clean >/dev/null &&
-        obj=$(flux job list --inactive | grep $jobid) &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".[\"task-count\"] == 1"
 '
 
@@ -375,7 +375,7 @@ test_expect_success 'flux job list outputs task-count correctly (4 tasks)' '
         jobid=`flux mini submit -n4 hostname` &&
         echo $jobid > taskcount2.id &&
         flux job wait-event $jobid clean >/dev/null &&
-        obj=$(flux job list --inactive | grep $jobid) &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".[\"task-count\"] == 4"
 '
 
@@ -387,9 +387,9 @@ test_expect_success 'reload the job-info module' '
 test_expect_success 'verify job names preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
-        obj=$(flux job list --inactive | grep ${jobid1}) &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".[\"task-count\"] == 1" &&
-        obj=$(flux job list --inactive | grep ${jobid2}) &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
         echo $obj | jq -e ".[\"task-count\"] == 4"
 '
 
@@ -398,9 +398,9 @@ test_expect_success 'verify job names preserved across restart' '
 #
 
 test_expect_success 'list count / max_entries works' '
-        count=`flux job list --inactive -c 0 | wc -l` &&
+        count=`flux job list -s inactive -c 0 | wc -l` &&
         test $count -gt 5 &&
-        count=`flux job list --inactive -c 5 | wc -l` &&
+        count=`flux job list -s inactive -c 5 | wc -l` &&
         test $count -eq 5
 '
 

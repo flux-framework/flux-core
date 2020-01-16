@@ -51,6 +51,14 @@ typedef enum {
     FLUX_JOB_INACTIVE               = 32,   // captive end state
 } flux_job_state_t;
 
+/* Virtual states, for convenience.
+ */
+enum {
+    FLUX_JOB_PENDING    = 6,    // (FLUX_JOB_DEPEND | FLUX_JOB_SCHED)
+    FLUX_JOB_RUNNING    = 24,   // (FLUX_JOB_RUN | FLUX_JOB_CLEANUP)
+    FLUX_JOB_ACTIVE     = 30,   // (FLUX_JOB_PENDING | FLUX_JOB_RUNNING)
+};
+
 typedef uint64_t flux_jobid_t;
 
 const char *flux_job_statetostr (flux_job_state_t state, bool single_char);

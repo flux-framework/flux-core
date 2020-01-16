@@ -68,18 +68,19 @@ static struct optparse_option list_opts[] =  {
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
       .usage = "Limit output to N jobs",
     },
-    { .name = "pending", .key = 'p', .has_arg = 0,
-      .usage = "List pending jobs",
-    },
-    { .name = "running", .key = 'r', .has_arg = 0,
-      .usage = "List running jobs",
-    },
-    { .name = "inactive", .key = 'i', .has_arg = 0,
-      .usage = "List inactive jobs",
+    { .name = "states", .key = 's', .has_arg = 1, .arginfo = "STATES",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "List jobs in specific states",
     },
     { .name = "userid", .key = 'u', .has_arg = 1, .arginfo = "UID",
       .usage = "Limit output to specific userid. " \
                "Specify \"all\" for all users.",
+    },
+    { .name = "all-user", .key = 'a', .has_arg = 0,
+      .usage = "List my jobs, regardless of state",
+    },
+    { .name = "all", .key = 'A', .has_arg = 0,
+      .usage = "List jobs for all users, regardless of state",
     },
     OPTPARSE_TABLE_END
 };
@@ -616,8 +617,9 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     size_t index;
     json_t *value;
     uint32_t userid = geteuid ();
-    const char *userid_str;
+    const char *arg;
     int flags = 0;
+    int state_mask = 0;
 
     if (optindex != argc) {
         optparse_print_usage (p);
@@ -626,28 +628,49 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (optparse_hasopt (p, "pending"))
+    optparse_getopt_iterator_reset (p, "states");
+    while ((arg = optparse_getopt_next (p, "states"))) {
+        flux_job_state_t state;
+
+        if (flux_job_strtostate (arg, &state) == 0)
+            state_mask |= state;
+        else if (!strcasecmp (arg, "pending"))
+            state_mask |= FLUX_JOB_PENDING;
+        else if (!strcasecmp (arg, "running"))
+            state_mask |= FLUX_JOB_RUNNING;
+        else if (!strcasecmp (arg, "active"))
+            state_mask |= FLUX_JOB_ACTIVE;
+        else
+            log_msg_exit ("error parsing --states: %s is unknown", arg);
+    }
+    if (optparse_hasopt (p, "all-user") || optparse_hasopt (p, "all"))
+        state_mask = FLUX_JOB_ACTIVE | FLUX_JOB_INACTIVE;
+    if ((state_mask & FLUX_JOB_PENDING) != 0)
         flags |= FLUX_JOB_LIST_PENDING;
-    if (optparse_hasopt (p, "running"))
+    if ((state_mask & FLUX_JOB_RUNNING) != 0)
         flags |= FLUX_JOB_LIST_RUNNING;
-    if (optparse_hasopt (p, "inactive"))
+    if ((state_mask & FLUX_JOB_INACTIVE) != 0)
         flags |= FLUX_JOB_LIST_INACTIVE;
     /* if no job listing specifics listed, default to listing pending
      * & running jobs */
-    if (!flags)
+    if (!flags) {
         flags = FLUX_JOB_LIST_PENDING | FLUX_JOB_LIST_RUNNING;
+        state_mask = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
+    }
 
-    if ((userid_str = optparse_get_str (p, "userid", NULL))) {
-        if (!strcmp (userid_str, "all"))
+    if ((arg = optparse_get_str (p, "userid", NULL))) {
+        if (!strcmp (arg, "all"))
             userid = FLUX_USERID_UNKNOWN;
         else {
             char *endptr;
             errno = 0;
-            userid = strtoul (userid_str, &endptr, 10);
+            userid = strtoul (arg, &endptr, 10);
             if (errno != 0 || (*endptr) != '\0')
-                log_msg_exit ("error parsing userid: \"%s\"", userid_str);
+                log_msg_exit ("error parsing userid: \"%s\"", arg);
         }
     }
+    if (optparse_hasopt (p, "all"))
+        userid = FLUX_USERID_UNKNOWN;
 
     if (!(f = flux_job_list (h, max_entries, attrs, userid, flags)))
         log_err_exit ("flux_job_list");
@@ -655,12 +678,16 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_list");
     json_array_foreach (jobs, index, value) {
         char *str;
-
-        str = json_dumps (value, 0);
-        if (!str)
-            log_msg_exit ("json_dumps");
-        printf ("%s\n", str);
-        free (str);
+        int state;
+        if (json_unpack (value, "{s:i}", "state", &state) < 0)
+            log_msg_exit ("error parsing list response (state is missing)");
+        if ((state & state_mask) != 0) {
+            str = json_dumps (value, 0);
+            if (!str)
+                log_msg_exit ("error parsing list response");
+            printf ("%s\n", str);
+            free (str);
+        }
     }
     flux_future_destroy (f);
     flux_close (h);
