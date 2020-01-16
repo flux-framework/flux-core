@@ -314,21 +314,21 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
 # job names
 #
 
-test_expect_success 'flux job list outputs user job-name' '
+test_expect_success 'flux job list outputs user job name' '
         jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
         echo $jobid > jobname1.id &&
         flux job wait-event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep foobar
 '
 
-test_expect_success 'flux job lists first argument for job-name' '
+test_expect_success 'flux job lists first argument for job name' '
         jobid=`flux mini submit mycmd arg1 arg2` &&
         echo $jobid > jobname2.id &&
         flux job wait-event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep mycmd
 '
 
-test_expect_success 'flux job lists basename of first argument for job-name' '
+test_expect_success 'flux job lists basename of first argument for job name' '
         jobid=`flux mini submit /foo/bar arg1 arg2` &&
         echo $jobid > jobname3.id &&
         flux job wait-event $jobid clean >/dev/null &&
@@ -336,7 +336,7 @@ test_expect_success 'flux job lists basename of first argument for job-name' '
         flux job list -s inactive | grep $jobid | grep -v foo
 '
 
-test_expect_success 'flux job lists full path for job-name if first argument not ok' '
+test_expect_success 'flux job lists full path for job name if first argument not ok' '
         jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
         echo $jobid > jobname4.id &&
         flux job wait-event $jobid clean >/dev/null &&
@@ -412,7 +412,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "priority" list_empty_attrs.out &&
         test_must_fail grep "t_submit" list_empty_attrs.out &&
         test_must_fail grep "state" list_empty_attrs.out &&
-        test_must_fail grep "job-name" list_empty_attrs.out &&
+        test_must_fail grep "name" list_empty_attrs.out &&
         test_must_fail grep "ntasks" list_empty_attrs.out &&
         test_must_fail grep "t_depend" list_empty_attrs.out &&
         test_must_fail grep "t_sched" list_empty_attrs.out &&
@@ -431,7 +431,7 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep priority list_attrs.out &&
         grep t_submit list_attrs.out &&
         grep state list_attrs.out &&
-        grep job-name list_attrs.out &&
+        grep name list_attrs.out &&
         grep ntasks list_attrs.out &&
         grep t_depend list_attrs.out &&
         grep t_sched list_attrs.out &&

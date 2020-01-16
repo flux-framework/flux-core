@@ -182,11 +182,11 @@ test_expect_success 'flux-jobs --format={state},{state_single} works' '
         test_cmp stateI.out stateI.exp
 '
 
-test_expect_success 'flux-jobs --format={job_name} works' '
-        flux jobs --suppress-header --state=pending,running --format="{job_name}" > jobnamePR.out &&
+test_expect_success 'flux-jobs --format={name} works' '
+        flux jobs --suppress-header --state=pending,running --format="{name}" > jobnamePR.out &&
         for i in `seq 1 14`; do echo "sleep" >> jobnamePR.exp; done &&
         test_cmp jobnamePR.out jobnamePR.exp &&
-        flux jobs --suppress-header --state=inactive --format="{job_name}" > jobnameI.out &&
+        flux jobs --suppress-header --state=inactive --format="{name}" > jobnameI.out &&
         for i in `seq 1 4`; do echo "hostname" >> jobnameI.exp; done &&
         test_cmp jobnameI.out jobnameI.exp
 '

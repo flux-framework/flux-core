@@ -58,7 +58,7 @@ struct job {
     double t_submit;
     int flags;
     flux_job_state_t state;
-    const char *job_name;
+    const char *name;
     int ntasks;
 
     /* cache of job information */
