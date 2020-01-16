@@ -314,21 +314,21 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
 # job names
 #
 
-test_expect_success 'flux job list outputs user job-name' '
+test_expect_success 'flux job list outputs user job name' '
         jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
         echo $jobid > jobname1.id &&
         flux job wait-event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep foobar
 '
 
-test_expect_success 'flux job lists first argument for job-name' '
+test_expect_success 'flux job lists first argument for job name' '
         jobid=`flux mini submit mycmd arg1 arg2` &&
         echo $jobid > jobname2.id &&
         flux job wait-event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep mycmd
 '
 
-test_expect_success 'flux job lists basename of first argument for job-name' '
+test_expect_success 'flux job lists basename of first argument for job name' '
         jobid=`flux mini submit /foo/bar arg1 arg2` &&
         echo $jobid > jobname3.id &&
         flux job wait-event $jobid clean >/dev/null &&
@@ -336,7 +336,7 @@ test_expect_success 'flux job lists basename of first argument for job-name' '
         flux job list -s inactive | grep $jobid | grep -v foo
 '
 
-test_expect_success 'flux job lists full path for job-name if first argument not ok' '
+test_expect_success 'flux job lists full path for job name if first argument not ok' '
         jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
         echo $jobid > jobname4.id &&
         flux job wait-event $jobid clean >/dev/null &&
@@ -363,20 +363,20 @@ test_expect_success 'verify job names preserved across restart' '
 # job task count
 #
 
-test_expect_success 'flux job list outputs task-count correctly (1 task)' '
+test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
         jobid=`flux mini submit hostname` &&
         echo $jobid > taskcount1.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".[\"task-count\"] == 1"
+        echo $obj | jq -e ".[\"ntasks\"] == 1"
 '
 
-test_expect_success 'flux job list outputs task-count correctly (4 tasks)' '
+test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
         jobid=`flux mini submit -n4 hostname` &&
         echo $jobid > taskcount2.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".[\"task-count\"] == 4"
+        echo $obj | jq -e ".[\"ntasks\"] == 4"
 '
 
 test_expect_success 'reload the job-info module' '
@@ -388,9 +388,9 @@ test_expect_success 'verify job names preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
-        echo $obj | jq -e ".[\"task-count\"] == 1" &&
+        echo $obj | jq -e ".[\"ntasks\"] == 1" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
-        echo $obj | jq -e ".[\"task-count\"] == 4"
+        echo $obj | jq -e ".[\"ntasks\"] == 4"
 '
 
 #
@@ -412,8 +412,8 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "priority" list_empty_attrs.out &&
         test_must_fail grep "t_submit" list_empty_attrs.out &&
         test_must_fail grep "state" list_empty_attrs.out &&
-        test_must_fail grep "job-name" list_empty_attrs.out &&
-        test_must_fail grep "task-count" list_empty_attrs.out &&
+        test_must_fail grep "name" list_empty_attrs.out &&
+        test_must_fail grep "ntasks" list_empty_attrs.out &&
         test_must_fail grep "t_depend" list_empty_attrs.out &&
         test_must_fail grep "t_sched" list_empty_attrs.out &&
         test_must_fail grep "t_run" list_empty_attrs.out &&
@@ -431,8 +431,8 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep priority list_attrs.out &&
         grep t_submit list_attrs.out &&
         grep state list_attrs.out &&
-        grep job-name list_attrs.out &&
-        grep task-count list_attrs.out &&
+        grep name list_attrs.out &&
+        grep ntasks list_attrs.out &&
         grep t_depend list_attrs.out &&
         grep t_sched list_attrs.out &&
         grep t_run list_attrs.out &&

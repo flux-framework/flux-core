@@ -451,7 +451,7 @@ static int jobspec_parse (struct info_ctx *ctx,
     if (job->jobspec_job) {
         if (json_unpack_ex (job->jobspec_job, &error, 0,
                             "{s?:s}",
-                            "name", &job->job_name) < 0) {
+                            "name", &job->name) < 0) {
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %llu invalid job dictionary: %s",
                       __FUNCTION__, (unsigned long long)job->id, error.text);
@@ -461,7 +461,7 @@ static int jobspec_parse (struct info_ctx *ctx,
 
     /* If user did not specify job.name, we treat arg 0 of the command
      * as the job name */
-    if (!job->job_name) {
+    if (!job->name) {
         json_t *arg0 = json_array_get (job->jobspec_cmd, 0);
         if (!arg0 || !json_is_string (arg0)) {
             flux_log (ctx->h, LOG_ERR,
@@ -469,8 +469,8 @@ static int jobspec_parse (struct info_ctx *ctx,
                       __FUNCTION__, (unsigned long long)job->id);
             goto error;
         }
-        job->job_name = parse_job_name (json_string_value (arg0));
-        assert (job->job_name);
+        job->name = parse_job_name (json_string_value (arg0));
+        assert (job->name);
     }
 
     if (json_unpack_ex (jobspec, &error, 0,
@@ -482,11 +482,11 @@ static int jobspec_parse (struct info_ctx *ctx,
         goto error;
     }
 
-    /* Set job->task_count
+    /* Set job->ntasks
      */
     if (json_unpack_ex (tasks, NULL, 0,
                         "[{s:{s:i}}]",
-                        "count", "total", &job->task_count) < 0) {
+                        "count", "total", &job->ntasks) < 0) {
         int per_slot, slot_count = 0;
         struct res_level res[3];
 
@@ -539,7 +539,7 @@ static int jobspec_parse (struct info_ctx *ctx,
                       res[2].with ? "->..." : NULL);
             goto error;
         }
-        job->task_count = slot_count;
+        job->ntasks = slot_count;
     }
 
     rc = 0;

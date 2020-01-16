@@ -56,7 +56,7 @@ The '--format' option can be used to specify an output format to
 flux-jobs(1) using Python's string format syntax.  For example, the
 following is the format used for the default format:
 
-  {id:>18} {username:<8.8} {job_name:<10.10} {state:<8.8} {task_count:>6} {runtime_fsd}
+  {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {runtime_fsd}
 
 The field names that can be specified are:
 
@@ -67,8 +67,8 @@ username:: job submitter's username
 priority:: job priority
 state:: job state
 state_single:: job state as a single character
-job_name:: job name
-task_count:: job task count
+name:: job name
+ntasks:: job task count
 t_submit:: time job was submitted
 t_depend:: time job entered depend state
 t_sched:: time job entered sched state

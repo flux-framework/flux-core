@@ -58,8 +58,8 @@ struct job {
     double t_submit;
     int flags;
     flux_job_state_t state;
-    const char *job_name;
-    int task_count;
+    const char *name;
+    int ntasks;
 
     /* cache of job information */
     json_t *jobspec_job;
