@@ -42,7 +42,12 @@ def runtime(job, roundup):
 
 def runtime_fsd(job, hyphenifzero):
     t = runtime(job, False)
-    if t < 60.0:
+    #  Round <1ms down to 0s for now
+    if t < 1.0e-3:
+        s = "0s"
+    elif t < 10.0:
+        s = "%.03fs" % t
+    elif t < 60.0:
         s = "%.2gs" % t
     elif t < (60.0 * 60.0):
         s = "%.2gm" % t
