@@ -27,7 +27,7 @@ logger = logging.getLogger("flux-jobs")
 
 
 def runtime(job, roundup):
-    if job["t_cleanup"] > 0.0:
+    if job["t_cleanup"] > 0.0 and job["t_run"] > 0.0:
         t = job["t_cleanup"] - job["t_run"]
         if roundup:
             t = round(t + 0.5)
