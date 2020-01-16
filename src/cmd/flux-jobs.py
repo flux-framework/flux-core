@@ -266,7 +266,7 @@ def main():
                 name="NAME",
                 state="STATE",
                 ntasks="NTASKS",
-                runtime_fsd_hyphen="TIME",
+                runtime_fsd_hyphen="RUNTIME",
             )
             print(s)
         output_format(fmt, jobs)
