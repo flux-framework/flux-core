@@ -60,10 +60,12 @@ struct job {
     flux_job_state_t state;
     const char *name;
     int ntasks;
+    int nnodes;
 
     /* cache of job information */
     json_t *jobspec_job;
     json_t *jobspec_cmd;
+    json_t *R;
 
     /* Track which states we have seen and have completed transition
      * to.  We do not immediately update to the new state and place
