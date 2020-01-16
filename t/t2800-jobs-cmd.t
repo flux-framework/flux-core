@@ -259,6 +259,37 @@ test_expect_success 'flux-jobs --format with illegal field is an error' '
 '
 
 #
+# regression tests
+#
+#  Iterate over flux-job tests dirs in t/flux-jobs/tests/*
+#  Each directory should have the following files:
+#
+#   - input:        input to be read by flux jobs --from-stdin
+#   - output:       expected output
+#   - format:       (optional) alternate --format arg to flux-jobs
+#   - description:  (optional) informational description of this test
+#
+ISSUES_DIR=$SHARNESS_TEST_SRCDIR/flux-jobs/tests
+for d in ${ISSUES_DIR}/*; do
+	for f in ${d}/input ${d}/output; do
+		test -f ${f}  || error "Missing required file ${f}"
+	done
+	desc=$(basename ${d})
+	if test -f ${d}/description; then
+		desc="${desc}: $(cat ${d}/description)"
+        fi
+	if test -f ${d}/format; then
+		fmt=$(cat ${d}/format)
+        else
+		fmt=""
+        fi
+	test_expect_success "${desc}" '
+		flux jobs --from-stdin ${fmt:+--format="$fmt"} < ${d}/input >${issue}.output &&
+		test_cmp ${d}/output ${issue}.output
+	'
+done
+
+#
 # cleanup
 #
 test_expect_success 'cleanup job listing jobs ' '
