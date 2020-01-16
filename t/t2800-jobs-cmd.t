@@ -258,6 +258,14 @@ test_expect_success 'flux-jobs --format with illegal field is an error' '
         test_must_fail flux jobs --format="{foobar}"
 '
 
+test_expect_success 'flux-jobs --from-stdin works with no input' '
+	flux jobs --from-stdin </dev/null
+'
+
+test_expect_success 'flux-jobs --from-stdin fails with invalid input' '
+	echo foo | test_must_fail flux jobs --from-stdin
+'
+
 #
 # regression tests
 #
