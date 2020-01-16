@@ -191,9 +191,25 @@ def get_slurm_common_parser():
     [SLURM repository](https://github.com/SchedMD/slurm.git) as reference
     """
     slurm_parser = argparse.ArgumentParser(add_help=False)
-    slurm_parser.add_argument("-N", "--nodes", type=int, default=0)
-    slurm_parser.add_argument("-n", "--ntasks", type=int)
-    slurm_parser.add_argument("-c", "--cpus-per-task", type=int, default=1)
+    slurm_parser.add_argument(
+        "-N",
+        "--nodes",
+        help="Set the number of requested nodes to N",
+        type=int,
+        metavar="N",
+        default=0,
+    )
+    slurm_parser.add_argument(
+        "-n", "--ntasks", help="Set the number of tasks to N", type=int, metavar="N"
+    )
+    slurm_parser.add_argument(
+        "-c",
+        "--cpus-per-task",
+        help="Set number of cores per task to N",
+        type=int,
+        metavar="N",
+        default=1,
+    )
     slurm_parser.add_argument(
         "-t",
         "--time",
@@ -218,13 +234,16 @@ logger = logging.getLogger("flux-jobspec")
 
 @util.CLIMain(logger)
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="flux-jobspec")
     parser.add_argument("--format", choices=["json", "yaml"], default="json")
 
     subparsers = parser.add_subparsers()
     slurm_parser = get_slurm_common_parser()
     srun_parser = subparsers.add_parser(
-        "srun", parents=[slurm_parser], help="subcommand for SLURM-style CLI arguments"
+        "srun",
+        parents=[slurm_parser],
+        help="subcommand for SLURM-style CLI arguments",
+        formatter_class=util.help_formatter(),
     )
     srun_parser.set_defaults(func=slurm_jobspec)
 
