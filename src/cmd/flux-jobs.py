@@ -64,12 +64,19 @@ def statetostr(job, singlechar):
     return raw.flux_job_statetostr(job["state"], singlechar).decode("utf-8")
 
 
+def job_username(job):
+    try:
+        return pwd.getpwuid(job["userid"]).pw_name
+    except KeyError:
+        return str(job["userid"])
+
+
 def output_format(fmt, jobs):
     for job in jobs:
         s = fmt.format(
             id=job["id"],
             userid=job["userid"],
-            username=pwd.getpwuid(job["userid"]).pw_name,
+            username=job_username(job),
             priority=job["priority"],
             state=statetostr(job, False),
             state_single=statetostr(job, True),
