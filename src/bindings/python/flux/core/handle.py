@@ -38,7 +38,12 @@ class Flux(Wrapper):
         )
 
         if handle is None:
-            self.handle = raw.flux_open(url, flags)
+            try:
+                self.handle = raw.flux_open(url, flags)
+            except EnvironmentError as err:
+                raise EnvironmentError(
+                    err.errno, "Unable to connect to Flux: {}".format(err.strerror)
+                )
 
         self.aux_txn = None
 
