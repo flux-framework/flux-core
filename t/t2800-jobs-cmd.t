@@ -4,6 +4,11 @@ test_description='Test flux jobs command'
 
 . $(dirname $0)/sharness.sh
 
+#  Set path to jq(1)
+#
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
+
 test_under_flux 4 job
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
@@ -264,6 +269,22 @@ test_expect_success 'flux-jobs --from-stdin works with no input' '
 
 test_expect_success 'flux-jobs --from-stdin fails with invalid input' '
 	echo foo | test_must_fail flux jobs --from-stdin
+'
+
+find_invalid_userid() {
+	python -c 'import pwd; \
+                   ids = [e.pw_uid for e in pwd.getpwall()]; \
+                   print (next(i for i in range(65536) if not i in ids));'
+}
+
+test_expect_success HAVE_JQ 'flux-jobs reverts username to userid for invalid ids' '
+	id=$(find_invalid_userid) &&
+	test_debug "echo first invalid userid is ${id}" &&
+	printf "%s\n" $id > invalid_userid.expected &&
+	flux job list -a -c 1 | $jq -c ".userid = ${id}" |
+	  flux jobs --from-stdin --suppress-header --format="{username}" \
+		> invalid_userid.output  &&
+	test_cmp invalid_userid.expected invalid_userid.output
 '
 
 #
