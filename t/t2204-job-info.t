@@ -424,6 +424,62 @@ test_expect_success 'verify task count preserved across restart' '
 '
 
 #
+# job node count
+#
+
+test_expect_success 'flux job list outputs nnodes correctly (1 task / 1 node)' '
+        jobid=`flux mini submit -n1 hostname` &&
+        echo $jobid > nodecount1.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".nnodes == 1"
+'
+
+test_expect_success 'flux job list outputs nnodes correctly (2 tasks, / 1 node)' '
+        jobid=`flux mini submit -n2 hostname` &&
+        echo $jobid > nodecount2.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".nnodes == 1"
+'
+
+test_expect_success 'flux job list outputs nnodes correctly (3 tasks, / 2 nodes)' '
+        jobid=`flux mini submit -n3 hostname` &&
+        echo $jobid > nodecount3.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".nnodes == 2"
+'
+
+test_expect_success 'flux job list outputs nnodes correctly (5 tasks, / 3 nodes)' '
+        jobid=`flux mini submit -n5 hostname` &&
+        echo $jobid > nodecount4.id &&
+        flux job wait-event $jobid clean >/dev/null &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".nnodes == 3"
+'
+
+test_expect_success 'reload the job-info module' '
+        flux exec -r all flux module remove job-info &&
+        flux exec -r all flux module load job-info
+'
+
+test_expect_success 'verify nnodes preserved across restart' '
+        jobid1=`cat nodecount1.id` &&
+        jobid2=`cat nodecount2.id` &&
+        jobid3=`cat nodecount3.id` &&
+        jobid4=`cat nodecount4.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
+        echo $obj | jq -e ".nnodes == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".nnodes == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid3}) &&
+        echo $obj | jq -e ".nnodes == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid4}) &&
+        echo $obj | jq -e ".nnodes == 3"
+'
+
+#
 # job list special cases
 #
 
@@ -444,6 +500,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "state" list_empty_attrs.out &&
         test_must_fail grep "name" list_empty_attrs.out &&
         test_must_fail grep "ntasks" list_empty_attrs.out &&
+        test_must_fail grep "nnodes" list_empty_attrs.out &&
         test_must_fail grep "t_depend" list_empty_attrs.out &&
         test_must_fail grep "t_sched" list_empty_attrs.out &&
         test_must_fail grep "t_run" list_empty_attrs.out &&
@@ -463,6 +520,7 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep state list_attrs.out &&
         grep name list_attrs.out &&
         grep ntasks list_attrs.out &&
+        grep nnodes list_attrs.out &&
         grep t_depend list_attrs.out &&
         grep t_sched list_attrs.out &&
         grep t_run list_attrs.out &&
