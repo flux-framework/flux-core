@@ -206,6 +206,15 @@ test_expect_success 'flux-jobs --format={ntasks} works' '
         test_cmp taskcount.out taskcount.exp
 '
 
+test_expect_success 'flux-jobs --format={nnodes},{nnodes_hyphen} works' '
+        flux jobs --suppress-header --state=pending --format="{nnodes},{nnodes_hyphen}" > nodecountP.out &&
+        for i in `seq 1 6`; do echo ",-" >> nodecountP.exp; done &&
+        test_cmp nodecountP.out nodecountP.exp &&
+        flux jobs --suppress-header --state=running,inactive --format="{nnodes},{nnodes_hyphen}" > nodecountRI.out &&
+        for i in `seq 1 12`; do echo "1,1" >> nodecountRI.exp; done &&
+        test_cmp nodecountRI.out nodecountRI.exp
+'
+
 # test just make sure numbers are zero or non-zero given state of job
 test_expect_success 'flux-jobs --format={t_XXX} works' '
         flux jobs --suppress-header -a --format="{t_submit}" > t_submit.out &&
