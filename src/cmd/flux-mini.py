@@ -21,6 +21,7 @@ import flux
 from flux import job
 from flux.job import JobspecV1
 from flux import util
+from flux import debugged
 
 
 class SubmitCmd:
@@ -135,6 +136,9 @@ class SubmitCmd:
             help="Don't actually submit job, just emit jobspec",
         )
         parser.add_argument(
+            "--debug-emulate", action="store_true", help=argparse.SUPPRESS
+        )
+        parser.add_argument(
             "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )
         return parser
@@ -188,6 +192,13 @@ class SubmitCmd:
                 except (json.JSONDecodeError, TypeError):
                     pass
                 jobspec.setattr_shell_option(key, val)
+
+        if args.debug_emulate:
+            debugged.set_mpir_being_debugged(1)
+
+        if debugged.get_mpir_being_debugged() == 1:
+            # if stop-tasks-in-exec is present, overwrite
+            jobspec.setattr_shell_option("stop-tasks-in-exec", json.loads("1"))
 
         if args.setattr is not None:
             for keyval in args.setattr:
@@ -271,6 +282,8 @@ class RunCmd(SubmitCmd):
             attach_args.append("--show-events")
         if args.verbose > 2:
             attach_args.append("--show-exec")
+        if args.debug_emulate:
+            attach_args.append("--debug-emulate")
         attach_args.append(str(jobid))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
