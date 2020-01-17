@@ -370,7 +370,7 @@ test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
         echo $jobid > taskcount1.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".[\"ntasks\"] == 1"
+        echo $obj | jq -e ".ntasks == 1"
 '
 
 test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
@@ -378,7 +378,7 @@ test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
         echo $jobid > taskcount2.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".[\"ntasks\"] == 4"
+        echo $obj | jq -e ".ntasks == 4"
 '
 
 test_expect_success 'reload the job-info module' '
@@ -390,9 +390,9 @@ test_expect_success 'verify task count preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
-        echo $obj | jq -e ".[\"ntasks\"] == 1" &&
+        echo $obj | jq -e ".ntasks == 1" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
-        echo $obj | jq -e ".[\"ntasks\"] == 4"
+        echo $obj | jq -e ".ntasks == 4"
 '
 
 #
