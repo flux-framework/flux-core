@@ -386,7 +386,7 @@ test_expect_success 'reload the job-info module' '
         flux exec -r all flux module load job-info
 '
 
-test_expect_success 'verify job names preserved across restart' '
+test_expect_success 'verify task count preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
