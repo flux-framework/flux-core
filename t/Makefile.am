@@ -123,6 +123,7 @@ TESTSCRIPTS = \
 	t2608-job-shell-log.t \
 	t2609-job-shell-events.t \
 	t2610-job-shell-mpir.t \
+	t2611-debug-emulate.t \
 	t2700-mini-cmd.t \
 	t2800-jobs-cmd.t \
 	t3000-mpi-basic.t \
@@ -250,7 +251,8 @@ check_PROGRAMS = \
 	sched-simple/jj-reader \
 	shell/rcalc \
 	shell/lptest \
-	shell/mpir
+	shell/mpir \
+	debug/stall
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -456,6 +458,9 @@ shell_mpir_CPPFLAGS = $(test_cppflags)
 shell_mpir_LDADD = \
 	$(top_builddir)/src/shell/libmpir.la \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+debug_stall_SOURCES = debug/stall.c
+debug_stall_CPPFLAGS = $(test_cppflags)
 
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
