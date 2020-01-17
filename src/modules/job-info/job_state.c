@@ -901,7 +901,7 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
 
     if (flux_job_kvs_key (path, sizeof (path), id, "jobspec") < 0) {
         errno = EINVAL;
-        return -1;
+        goto done;
     }
     if (!(f2 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
         goto done;
