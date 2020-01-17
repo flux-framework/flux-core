@@ -81,6 +81,13 @@ def help_formatter(argwidth=40):
      for the max width allowed for options.
     """
 
+    required = ("_format_action_invocation", "_metavar_formatter", "_format_args")
+    if not all(hasattr(argparse.HelpFormatter, name) for name in required):
+        logging.getLogger(__name__).warning(
+            "required argparse methods missing, falling back to HelpFormatter."
+        )
+        return lambda prog: argparse.HelpFormatter(prog, max_help_position=argwidth)
+
     class FluxHelpFormatter(argparse.HelpFormatter):
         def _format_action_invocation(self, action):
             if not action.option_strings:
@@ -107,16 +114,7 @@ def help_formatter(argwidth=40):
             args_string = self._format_args(action, default)
             return optstring + "=" + args_string
 
-    try:
-        # https://stackoverflow.com/a/5464440
-        # beware: "Only the name of this class is considered a public API."
-        # https://stackoverflow.com/questions/44333577
-        return lambda prog: FluxHelpFormatter(prog, max_help_position=argwidth)
-    except TypeError:
-        import warnings
-
-        warnings.warn("argparse help formatter failed, falling back.")
-        return argparse.HelpFormatter
+    return lambda prog: FluxHelpFormatter(prog, max_help_position=argwidth)
 
 
 class CLIMain(object):
