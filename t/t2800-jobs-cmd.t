@@ -78,11 +78,11 @@ test_expect_success 'submit jobs for job list testing' '
 test_expect_success 'flux-jobs default output works' '
         count=`flux jobs | wc -l` &&
         test $count -eq 15 &&
-        count=`flux jobs | grep SCHED | wc -l` &&
+        count=`flux jobs | grep " SCHED " | wc -l` &&
         test $count -eq 6 &&
-        count=`flux jobs | grep RUN | wc -l` &&
+        count=`flux jobs | grep " RUN " | wc -l` &&
         test $count -eq 8 &&
-        count=`flux jobs | grep INACTIVE | wc -l` &&
+        count=`flux jobs | grep " INACTIVE " | wc -l` &&
         test $count -eq 0
 '
 
