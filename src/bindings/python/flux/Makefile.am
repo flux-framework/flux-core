@@ -8,7 +8,8 @@ fluxpy_PYTHON=\
 	      job.py \
 	      util.py \
 	      future.py \
-	      memoized_property.py
+	      memoized_property.py \
+	      debugged.py
 
 if HAVE_FLUX_SECURITY
 fluxpy_PYTHON += security.py
