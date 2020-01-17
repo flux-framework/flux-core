@@ -601,7 +601,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     int max_entries = optparse_get_int (p, "count", 0);
     char *attrs = "[\"userid\",\"priority\",\"t_submit\",\"state\"," \
-        "\"name\",\"ntasks\",\"t_depend\",\"t_sched\",\"t_run\"," \
+        "\"name\",\"ntasks\",\"nnodes\",\"t_depend\",\"t_sched\",\"t_run\"," \
         "\"t_cleanup\",\"t_inactive\"]";
     flux_t *h;
     flux_future_t *f;
