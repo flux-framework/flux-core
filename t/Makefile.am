@@ -192,7 +192,6 @@ dist_check_SCRIPTS = \
 	kvs/kvs-helper.sh \
 	job-manager/exec-service.lua \
 	job-manager/drain-cancel.py \
-	job-manager/drain-undrain.py \
 	job-manager/bulk-state.py \
 	job-manager/submit-wait.py \
 	job-manager/submit-waitany.py \
