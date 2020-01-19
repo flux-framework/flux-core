@@ -1,8 +1,8 @@
 MAN5_FILES = \
 	flux-config-bootstrap.5
 
-ADOC_FILES  = $(MAN5_FILES:%.7=%.adoc)
-XML_FILES   = $(MAN5_FILES:%.7=%.xml)
+ADOC_FILES  = $(MAN5_FILES:%.5=%.adoc)
+XML_FILES   = $(MAN5_FILES:%.5=%.xml)
 
 if ENABLE_DOCS
 dist_man_MANS = $(MAN5_FILES)
