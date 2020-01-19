@@ -237,11 +237,20 @@ test_expect_success 'job-manager: still no jobs in the queue' '
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
-test_expect_success 'job-manager: flux job drain works' '
-	run_timeout 5 flux job drain
+test_expect_success 'job-manager: flux queue disable works' '
+	flux queue disable system is fubar
 '
 
-test_expect_success 'job-manager: flux job submit one job' '
+test_expect_success 'job-manager: flux job submit receives custom error' '
+	! flux job submit basic.json 2>disabled_submit.err &&
+	grep fubar disabled_submit.err
+'
+
+test_expect_success 'job-manager: flux queue enable works' '
+	flux queue enable
+'
+
+test_expect_success 'job-manager: flux job submit works after queue enable' '
 	flux job submit basic.json
 '
 
