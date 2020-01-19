@@ -29,6 +29,7 @@
 struct submit {
     struct job_manager *ctx;
     bool submit_disable;
+    char *disable_errmsg;
     flux_msg_handler_t **handlers;
 };
 
@@ -160,7 +161,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (ctx->submit->submit_disable) {
         errno = EINVAL;
-        errmsg = "job submission is disabled";
+        errmsg = ctx->submit->disable_errmsg;
         goto error;
     }
     if (!(newjobs = submit_add_jobs (ctx->active_jobs, jobs))) {
@@ -191,14 +192,49 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-void submit_enable (struct submit *submit)
+static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,
+                             const flux_msg_t *msg, void *arg)
 {
-    submit->submit_disable = false;
-}
+    struct job_manager *ctx = arg;
+    const char *error_prefix = "job submission is disabled: ";
+    int enable;
+    int query_only;
+    const char *reason;
 
-void submit_disable (struct submit *submit)
-{
-    submit->submit_disable = true;
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:b s:b s:s}",
+                             "query_only",
+                             &query_only,
+                             "enable",
+                             &enable,
+                             "reason",
+                             &reason) < 0)
+        goto error;
+    if (!query_only) {
+        if (!enable) {
+            char *errmsg;
+            if (asprintf (&errmsg, "%s%s", error_prefix, reason) < 0)
+                goto error;
+            free (ctx->submit->disable_errmsg);
+            ctx->submit->disable_errmsg = errmsg;
+        }
+        ctx->submit->submit_disable = enable ? false : true;
+    }
+    if (ctx->submit->submit_disable)
+        reason = ctx->submit->disable_errmsg + strlen (error_prefix);
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:b s:s}",
+                           "enable",
+                           ctx->submit->submit_disable ? 0 : 1,
+                           "reason",
+                           ctx->submit->submit_disable ? reason : "") < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 void submit_ctx_destroy (struct submit *submit)
@@ -206,6 +242,7 @@ void submit_ctx_destroy (struct submit *submit)
     if (submit) {
         int saved_errno = errno;
         flux_msg_handler_delvec (submit->handlers);
+        free (submit->disable_errmsg);
         free (submit);
         errno = saved_errno;
     }
@@ -213,6 +250,7 @@ void submit_ctx_destroy (struct submit *submit)
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
+    { FLUX_MSGTYPE_REQUEST, "job-manager.submit-admin", submit_admin_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
