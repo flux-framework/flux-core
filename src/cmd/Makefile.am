@@ -79,6 +79,7 @@ fluxcmd_PROGRAMS = \
 	flux-kvs \
 	flux-start \
 	flux-job \
+	flux-queue \
 	flux-exec
 
 flux_start_LDADD = \
