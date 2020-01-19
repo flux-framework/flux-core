@@ -50,11 +50,11 @@ def runtime_fsd(job, hyphenifzero):
     elif t < 60.0:
         s = "%.2gs" % t
     elif t < (60.0 * 60.0):
-        s = "%.2gm" % t
+        s = "%.2gm" % (t / 60.0)
     elif t < (60.0 * 60.0 * 24.0):
-        s = "%.2gh" % t
+        s = "%.2gh" % (t / (60.0 * 60.0))
     else:
-        s = "%.2gd" % t
+        s = "%.2gd" % (t / (60.0 * 60.0 * 24.0))
     if hyphenifzero and s == "0s":
         return "-"
     return s
