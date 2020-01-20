@@ -47,6 +47,10 @@ int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,
 int schedutil_alloc_respond_R (schedutil_t *util, const flux_msg_t *msg,
                                const char *R, const char *note);
 
+/* Respond to an alloc request message - canceled.
+ * N.B. 'msg' is the alloc request, not the cancel request.
+ */
+int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg);
 
 #endif /* !_FLUX_SCHEDUTIL_ALLOC_H */
 
