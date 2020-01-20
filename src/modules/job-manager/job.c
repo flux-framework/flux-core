@@ -109,7 +109,7 @@ void *job_duplicator (const void *item)
 /* Compare jobs, ordering by (1) priority, (2) t_submit.
  * N.B. zlistx_comparator_fn signature
  */
-int job_pending_cmp (const void *a1, const void *a2)
+int job_comparator (const void *a1, const void *a2)
 {
     const struct job *j1 = a1;
     const struct job *j2 = a2;
