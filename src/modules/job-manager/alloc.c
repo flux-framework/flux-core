@@ -31,12 +31,20 @@
  * Job manager sends sched.alloc request:
  *   {"id":I, "priority":i, "userid":i, "t_submit":f}
  * Scheduler responds with:
-*    {"id":I, "type":i, "note"?:s}
+ *   {"id":I, "type":i, "note"?:s}
  * Where type is one of:
  * 0 - resources allocated (sched commits R to KVS before responding)
  * 1 - annotation (just updates note, see below)
  * 2 - job cannot run (note is set to error string)
- * Type 0 or 2 are taken as final responses, type 1 is not.
+ * 3 - alloc was canceled
+ * Type 0, 2, 3 are taken as final responses, type 1 is not.
+ *
+ * CANCELLATION
+ *
+ * Job manager sends sched.cancel request:
+ *   {"id":I}
+ * Scheduler does not respond to the cancellation, but does respond to
+ * the alloc request for 'id' if still pending (see ALLOCATION above).
  *
  * DE-ALLOCATION (see notes 3-4 below):
  *
@@ -99,10 +107,13 @@ struct alloc {
     zlistx_t *queue;
     sched_interface_t mode;
     bool ready;
+    bool disable;
+    char *disable_reason;
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
     unsigned int alloc_pending_count; // for mode=single, max of 1
+    unsigned int free_pending_count;
 };
 
 /* Initiate teardown.  Clear any alloc/free requests, and clear
@@ -140,6 +151,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
         }
         alloc->ready = false;
         alloc->alloc_pending_count = 0;
+        alloc->free_pending_count = 0;
     }
 }
 
@@ -169,6 +181,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     job->free_pending = 0;
+    ctx->alloc->free_pending_count--;
     if (event_job_post_pack (ctx->event, job, "free", NULL) < 0)
         goto teardown;
     return;
@@ -196,6 +209,27 @@ error:
     return -1;
 }
 
+/* Send sched.cancel request for job.
+*/
+int cancel_request (struct alloc *alloc, struct job *job)
+{
+    flux_future_t *f;
+    flux_t *h = alloc->ctx->h;
+
+    if (!(f = flux_rpc_pack (h,
+                             "sched.cancel",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:I}",
+                             "id",
+                             job->id))) {
+        flux_log_error (h, "sending sched.cancel id=%ju", (uintmax_t)job->id);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 /* Handle a sched.alloc response.
  * Update flags.
  */
@@ -216,7 +250,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                               "type", &type,
                               "note", &note) < 0)
         goto teardown;
-    if (type != 0 && type != 1 && type != 2) {
+    if (type != 0 && type != 1 && type != 2 && type != 3) {
         errno = EPROTO;
         goto teardown;
     }
@@ -255,6 +289,21 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "userid", FLUX_USERID_UNKNOWN,
                                  "note", note ? note : "") < 0)
             goto teardown;
+        return;
+    }
+
+    /* Alloc request was canceled.
+     * Run event_job_action() which will take action depending on job state:
+     * - SCHED: re-enqueue the job in alloc->queue.
+     * - CLEANUP: post the clean event to advance to INACTIVE state
+     */
+    if (type == 3) {
+        if (event_job_action (ctx->event, job) < 0) {
+            flux_log_error (h,
+                            "event_job_action id=%ju on alloc cancel",
+                            (uintmax_t)id);
+            goto teardown;
+        }
         return;
     }
 
@@ -402,7 +451,7 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
 
-    if (!alloc->ready)
+    if (!alloc->ready || alloc->disable)
         return;
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
@@ -422,7 +471,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct job *job;
 
     flux_watcher_stop (alloc->idle);
-    if (!alloc->ready)
+    if (!alloc->ready || alloc->disable)
         return;
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
@@ -454,6 +503,7 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (alloc->ctx->event, job,
                                        "debug.free-request", NULL);
+        alloc->free_pending_count++;
     }
     return 0;
 }
@@ -501,6 +551,105 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }
 
+/* Cancel all pending alloc requests in preparation for disabling
+ * resource allocation.
+ */
+static void cancel_all_pending (struct alloc *alloc)
+{
+    if (alloc->alloc_pending_count > 0) {
+        struct job *job;
+
+        job = zhashx_first (alloc->ctx->active_jobs);
+        while (job) {
+            if (job->alloc_pending)
+                cancel_request (alloc, job);
+            job = zhashx_next (alloc->ctx->active_jobs);
+        }
+    }
+}
+
+/* Control resource allocation (query/start/stop).
+ * If 'query_only' is true, report allocaction status without altering it.
+ * Otherwise update the alloc->disable flag, and for disable only,
+ * optionally set alloc->disable_reason.
+ *
+ * What it means to be administratively disabled:
+ * While allocation is disabled, the scheduler can remain loaded and handle
+ * requests, but the job manager won't send any more allocation requests.
+ * Pending alloc requests are canceled (jobs remain in SCHED state and
+ * return to alloc->queue).  The job manager continues to send free requests
+ * to the scheduler as jobs relinquish resources.
+ *
+ * The response to this RPC is the current state, the reason (if disabled),
+ * and a count of canceled alloc requests (if applicable).
+ *
+ * If allocation is adminstratively enabled, but the scheduler is not loaded,
+ * the current state is reported as disabled with reason "Scheduler is offline".
+ */
+static void alloc_admin_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct job_manager *ctx = arg;
+    struct alloc *alloc = ctx->alloc;
+    int query_only;
+    int enable;
+    const char *reason = NULL;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:b s:b s?:s}",
+                             "query_only",
+                             &query_only,
+                             "enable",
+                             &enable,
+                             "reason",
+                             &reason) < 0)
+        goto error;
+    if (!query_only) {
+        if (!enable) {
+            char *cpy = NULL;
+            if (reason && strlen (reason) > 0 && !(cpy = strdup (reason)))
+                goto error;
+            free (alloc->disable_reason);
+            alloc->disable_reason = cpy;
+            cancel_all_pending (alloc);
+        }
+        alloc->disable = enable ? false : true;
+    }
+    if (alloc->disable) { // administratively disabled
+        enable = 0;
+        reason  = alloc->disable_reason;
+    }
+    else if (!alloc->ready) { // scheduler not loaded (waiting for hello)
+        enable = 0;
+        reason = "Scheduler is offline";
+    }
+    else { // condtion normal
+        enable = 1;
+        reason = NULL;
+    }
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:b s:s s:i s:i s:i}",
+                           "enable",
+                           enable,
+                           "reason",
+                           reason ? reason : "",
+                           "queue_length",
+                           zlistx_size (alloc->queue),
+                           "alloc_pending",
+                           alloc->alloc_pending_count,
+                           "free_pending",
+                           alloc->free_pending_count) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 void alloc_ctx_destroy (struct alloc *alloc)
 {
     if (alloc) {
@@ -510,6 +659,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->check);
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
+        free (alloc->disable_reason);
         free (alloc);
         errno = saved_errno;
     }
@@ -518,6 +668,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "job-manager.sched-hello", hello_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "job-manager.sched-ready", ready_cb, 0},
+    { FLUX_MSGTYPE_REQUEST,  "job-manager.alloc-admin", alloc_admin_cb, 0},
     { FLUX_MSGTYPE_RESPONSE, "sched.alloc", alloc_response_cb, 0},
     { FLUX_MSGTYPE_RESPONSE, "sched.free", free_response_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
