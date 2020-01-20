@@ -39,12 +39,6 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.raise",
-        raise_handle_request,
-        FLUX_ROLE_USER
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
         "job-manager.kill",
         kill_handle_request,
         FLUX_ROLE_USER
@@ -97,6 +91,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating wait interface");
         goto done;
     }
+    if (!(ctx.raise = raise_ctx_create (&ctx))) {
+        flux_log_error (h, "error creating raise interface");
+        goto done;
+    }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
@@ -112,6 +110,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    raise_ctx_destroy (ctx.raise);
     wait_ctx_destroy (ctx.wait);
     drain_ctx_destroy (ctx.drain);
     start_ctx_destroy (ctx.start);

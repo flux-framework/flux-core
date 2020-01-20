@@ -36,6 +36,11 @@
 #include "raise.h"
 #include "job-manager.h"
 
+struct raise {
+    struct job_manager *ctx;
+    flux_msg_handler_t **handlers;
+};
+
 int raise_check_type (const char *s)
 {
     const char *cp;
@@ -122,6 +127,41 @@ void raise_handle_request (flux_t *h,
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+void raise_ctx_destroy (struct raise *raise)
+{
+    if (raise) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (raise->handlers);
+        free (raise);
+        errno = saved_errno;
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.raise",
+        raise_handle_request,
+        FLUX_ROLE_USER
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct raise *raise_ctx_create (struct job_manager *ctx)
+{
+    struct raise *raise;
+
+    if (!(raise = calloc (1, sizeof (*raise))))
+        return NULL;
+    raise->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &raise->handlers) < 0)
+        goto error;
+    return raise;
+error:
+    raise_ctx_destroy (raise);
+    return NULL;
 }
 
 /*
