@@ -75,6 +75,7 @@ static void job_destroy (void *data)
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
+        free (job->ranks);
         zlist_destroy (&job->next_states);
         free (job);
     }
@@ -687,14 +688,15 @@ static int idset_set_string (struct idset *idset, const char *ids)
     return rc;
 }
 
-static int parse_nnodes (struct info_ctx *ctx,
-                         struct job *job,
-                         const json_t *R_lite)
+static int parse_rlite (struct info_ctx *ctx,
+                        struct job *job,
+                        const json_t *R_lite)
 {
     struct idset *idset = NULL;
     size_t index;
     json_t *value;
     int saved_errno, rc = -1;
+    int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
 
     if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
         return -1;
@@ -706,6 +708,9 @@ static int parse_nnodes (struct info_ctx *ctx,
     }
 
     job->nnodes = idset_count (idset);
+    if (!(job->ranks = idset_encode (idset, flags)))
+        goto err;
+
     rc = 0;
 err:
     saved_errno = errno;
@@ -746,9 +751,9 @@ static int R_lookup_parse (struct info_ctx *ctx,
                   __FUNCTION__, (unsigned long long)job->id, version);
         goto error;
     }
-    if (parse_nnodes (ctx, job, R_lite) < 0) {
+    if (parse_rlite (ctx, job, R_lite) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu parse_nnodes: %s",
+                  "%s: job %llu parse_rlite: %s",
                   __FUNCTION__, (unsigned long long)job->id, strerror (errno));
         goto error;
     }

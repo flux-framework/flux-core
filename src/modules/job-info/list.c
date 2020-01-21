@@ -97,6 +97,11 @@ json_t *list_one_job (struct job *job, json_t *attrs)
                 continue;
             val = json_integer (job->nnodes);
         }
+        else if (!strcmp (attr, "ranks")) {
+            if (!(job->states_mask & FLUX_JOB_RUN))
+                continue;
+            val = json_string (job->ranks);
+        }
         else {
             errno = EINVAL;
             goto error;
@@ -274,7 +279,8 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                            "state",
                            "name",
                            "ntasks",
-                           "nnodes") < 0) {
+                           "nnodes",
+                           "ranks") < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }

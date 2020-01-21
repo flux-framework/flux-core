@@ -61,6 +61,7 @@ struct job {
     const char *name;
     int ntasks;
     int nnodes;
+    char *ranks;
 
     /* cache of job information */
     json_t *jobspec_job;
