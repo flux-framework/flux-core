@@ -424,39 +424,43 @@ test_expect_success 'verify task count preserved across restart' '
 '
 
 #
-# job node count
+# job node count / rank list
 #
 
-test_expect_success 'flux job list outputs nnodes correctly (1 task / 1 node)' '
+test_expect_success 'flux job list outputs nnodes/ranks correctly (1 task / 1 node)' '
         jobid=`flux mini submit -n1 hostname` &&
         echo $jobid > nodecount1.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 1"
+        echo $obj | jq -e ".nnodes == 1" &&
+        echo $obj | jq -e ".ranks == \"0\""
 '
 
-test_expect_success 'flux job list outputs nnodes correctly (2 tasks, / 1 node)' '
+test_expect_success 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 node)' '
         jobid=`flux mini submit -n2 hostname` &&
         echo $jobid > nodecount2.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 1"
+        echo $obj | jq -e ".nnodes == 1" &&
+        echo $obj | jq -e ".ranks == \"0\""
 '
 
-test_expect_success 'flux job list outputs nnodes correctly (3 tasks, / 2 nodes)' '
+test_expect_success 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 nodes)' '
         jobid=`flux mini submit -n3 hostname` &&
         echo $jobid > nodecount3.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 2"
+        echo $obj | jq -e ".nnodes == 2" &&
+        echo $obj | jq -e ".ranks == \"[0-1]\""
 '
 
-test_expect_success 'flux job list outputs nnodes correctly (5 tasks, / 3 nodes)' '
+test_expect_success 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 nodes)' '
         jobid=`flux mini submit -n5 hostname` &&
         echo $jobid > nodecount4.id &&
         flux job wait-event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 3"
+        echo $obj | jq -e ".nnodes == 3" &&
+        echo $obj | jq -e ".ranks == \"[0-2]\""
 '
 
 test_expect_success 'reload the job-info module' '
@@ -471,12 +475,16 @@ test_expect_success 'verify nnodes preserved across restart' '
         jobid4=`cat nodecount4.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".nnodes == 1" &&
+        echo $obj | jq -e ".ranks == \"0\"" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
         echo $obj | jq -e ".nnodes == 1" &&
+        echo $obj | jq -e ".ranks == \"0\"" &&
         obj=$(flux job list -s inactive | grep ${jobid3}) &&
         echo $obj | jq -e ".nnodes == 2" &&
+        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
         obj=$(flux job list -s inactive | grep ${jobid4}) &&
-        echo $obj | jq -e ".nnodes == 3"
+        echo $obj | jq -e ".nnodes == 3" &&
+        echo $obj | jq -e ".ranks == \"[0-2]\""
 '
 
 #
