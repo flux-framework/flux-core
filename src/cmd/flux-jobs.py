@@ -27,7 +27,7 @@ logger = logging.getLogger("flux-jobs")
 
 
 def runtime(job, roundup):
-    if job["t_cleanup"] > 0.0:
+    if job["t_cleanup"] > 0.0 and job["t_run"] > 0.0:
         t = job["t_cleanup"] - job["t_run"]
         if roundup:
             t = round(t + 0.5)
@@ -42,14 +42,19 @@ def runtime(job, roundup):
 
 def runtime_fsd(job, hyphenifzero):
     t = runtime(job, False)
-    if t < 60.0:
+    #  Round <1ms down to 0s for now
+    if t < 1.0e-3:
+        s = "0s"
+    elif t < 10.0:
+        s = "%.03fs" % t
+    elif t < 60.0:
         s = "%.2gs" % t
     elif t < (60.0 * 60.0):
-        s = "%.2gm" % t
+        s = "%.2gm" % (t / 60.0)
     elif t < (60.0 * 60.0 * 24.0):
-        s = "%.2gh" % t
+        s = "%.2gh" % (t / (60.0 * 60.0))
     else:
-        s = "%.2gd" % t
+        s = "%.2gd" % (t / (60.0 * 60.0 * 24.0))
     if hyphenifzero and s == "0s":
         return "-"
     return s
@@ -64,12 +69,19 @@ def statetostr(job, singlechar):
     return raw.flux_job_statetostr(job["state"], singlechar).decode("utf-8")
 
 
+def job_username(job):
+    try:
+        return pwd.getpwuid(job["userid"]).pw_name
+    except KeyError:
+        return str(job["userid"])
+
+
 def output_format(fmt, jobs):
     for job in jobs:
         s = fmt.format(
             id=job["id"],
             userid=job["userid"],
-            username=pwd.getpwuid(job["userid"]).pw_name,
+            username=job_username(job),
             priority=job["priority"],
             state=statetostr(job, False),
             state_single=statetostr(job, True),
@@ -89,54 +101,30 @@ def output_format(fmt, jobs):
         print(s)
 
 
-@flux.util.CLIMain(logger)
-def main():
-    parser = argparse.ArgumentParser()
-    # -a equivalent to -s "pending,running,inactive" and -u set to userid
-    parser.add_argument(
-        "-a", action="store_true", help="List all jobs for current user"
-    )
-    # -A equivalent to -s "pending,running,inactive" and -u set to "all"
-    parser.add_argument("-A", action="store_true", help="List all jobs for all users")
-    parser.add_argument(
-        "-c",
-        "--count",
-        type=int,
-        metavar="N",
-        default=1000,
-        help="Limit output to N jobs(default 1000)",
-    )
-    parser.add_argument(
-        "-s",
-        "--states",
-        type=str,
-        metavar="STATES",
-        default="pending,running",
-        help="List jobs in specific states(pending,running,inactive)",
-    )
-    parser.add_argument(
-        "--suppress-header",
-        action="store_true",
-        help="Suppress printing of header line",
-    )
-    parser.add_argument(
-        "-u",
-        "--user",
-        type=str,
-        metavar="[USERNAME|UID]",
-        default=str(os.geteuid()),
-        help='Limit output to specific username or userid (Specify "all" for all users)',
-    )
-    parser.add_argument(
-        "-o",
-        "--format",
-        type=str,
-        metavar="FORMAT",
-        help="Specify output format using Python's string format syntax",
-    )
+def fetch_jobs_stdin(args):
+    """
+    Return a list of jobs gathered from a series of JSON objects, one per
+    line, presented on stdin. This function is used for testing of the
+    flux-jobs utility, and thus, all filtering options are currently
+    ignored.
+    """
+    import fileinput
+    import json
 
-    args = parser.parse_args()
+    jobs = []
+    for line in fileinput.input("-"):
+        try:
+            job = json.loads(line)
+        except ValueError as err:
+            logger.error(
+                "JSON input error: line {}: {}".format(fileinput.lineno(), err)
+            )
+            sys.exit(1)
+        jobs.append(job)
+    return jobs
 
+
+def fetch_jobs_flux(args):
     h = flux.Flux()
 
     # Future optimization, reduce attrs based on what is in output
@@ -197,6 +185,73 @@ def main():
         print("{}: {}".format("rpc", e.strerror), file=sys.stderr)
         sys.exit(1)
 
+    return jobs
+
+
+def fetch_jobs(args):
+    if args.from_stdin:
+        return fetch_jobs_stdin(args)
+    return fetch_jobs_flux(args)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="flux-jobs", formatter_class=flux.util.help_formatter()
+    )
+    # -a equivalent to -s "pending,running,inactive" and -u set to userid
+    parser.add_argument(
+        "-a", action="store_true", help="List all jobs for current user"
+    )
+    # -A equivalent to -s "pending,running,inactive" and -u set to "all"
+    parser.add_argument("-A", action="store_true", help="List all jobs for all users")
+    parser.add_argument(
+        "-c",
+        "--count",
+        type=int,
+        metavar="N",
+        default=1000,
+        help="Limit output to N jobs(default 1000)",
+    )
+    parser.add_argument(
+        "-s",
+        "--states",
+        type=str,
+        metavar="STATES",
+        default="pending,running",
+        help="List jobs in specific states(pending,running,inactive)",
+    )
+    parser.add_argument(
+        "--suppress-header",
+        action="store_true",
+        help="Suppress printing of header line",
+    )
+    parser.add_argument(
+        "-u",
+        "--user",
+        type=str,
+        metavar="[USERNAME|UID]",
+        default=str(os.geteuid()),
+        help='Limit output to specific username or userid (Specify "all" for all users)',
+    )
+    parser.add_argument(
+        "-o",
+        "--format",
+        type=str,
+        metavar="FORMAT",
+        help="Specify output format using Python's string format syntax",
+    )
+    # Hidden '--from-stdin' option for testing only.
+    parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS,
+    )
+    return parser.parse_args()
+
+
+@flux.util.CLIMain(logger)
+def main():
+    args = parse_args()
+    jobs = fetch_jobs(args)
+
     if args.format:
         output_format(args.format, jobs)
     else:
@@ -211,7 +266,7 @@ def main():
                 name="NAME",
                 state="STATE",
                 ntasks="NTASKS",
-                runtime_fsd_hyphen="TIME",
+                runtime_fsd_hyphen="RUNTIME",
             )
             print(s)
         output_format(fmt, jobs)

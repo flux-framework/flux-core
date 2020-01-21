@@ -4,6 +4,11 @@ test_description='Test flux jobs command'
 
 . $(dirname $0)/sharness.sh
 
+#  Set path to jq(1)
+#
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
+
 test_under_flux 4 job
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
@@ -78,11 +83,11 @@ test_expect_success 'submit jobs for job list testing' '
 test_expect_success 'flux-jobs default output works' '
         count=`flux jobs | wc -l` &&
         test $count -eq 15 &&
-        count=`flux jobs | grep SCHED | wc -l` &&
+        count=`flux jobs | grep " SCHED " | wc -l` &&
         test $count -eq 6 &&
-        count=`flux jobs | grep RUN | wc -l` &&
+        count=`flux jobs | grep " RUN " | wc -l` &&
         test $count -eq 8 &&
-        count=`flux jobs | grep INACTIVE | wc -l` &&
+        count=`flux jobs | grep " INACTIVE " | wc -l` &&
         test $count -eq 0
 '
 
@@ -257,6 +262,62 @@ test_expect_success 'flux-jobs illegal count leads to RPC error' '
 test_expect_success 'flux-jobs --format with illegal field is an error' '
         test_must_fail flux jobs --format="{foobar}"
 '
+
+test_expect_success 'flux-jobs --from-stdin works with no input' '
+	flux jobs --from-stdin </dev/null
+'
+
+test_expect_success 'flux-jobs --from-stdin fails with invalid input' '
+	echo foo | test_must_fail flux jobs --from-stdin
+'
+
+find_invalid_userid() {
+	python -c 'import pwd; \
+                   ids = [e.pw_uid for e in pwd.getpwall()]; \
+                   print (next(i for i in range(65536) if not i in ids));'
+}
+
+test_expect_success HAVE_JQ 'flux-jobs reverts username to userid for invalid ids' '
+	id=$(find_invalid_userid) &&
+	test_debug "echo first invalid userid is ${id}" &&
+	printf "%s\n" $id > invalid_userid.expected &&
+	flux job list -a -c 1 | $jq -c ".userid = ${id}" |
+	  flux jobs --from-stdin --suppress-header --format="{username}" \
+		> invalid_userid.output  &&
+	test_cmp invalid_userid.expected invalid_userid.output
+'
+
+#
+# regression tests
+#
+#  Iterate over flux-job tests dirs in t/flux-jobs/tests/*
+#  Each directory should have the following files:
+#
+#   - input:        input to be read by flux jobs --from-stdin
+#   - output:       expected output
+#   - format:       (optional) alternate --format arg to flux-jobs
+#   - description:  (optional) informational description of this test
+#
+ISSUES_DIR=$SHARNESS_TEST_SRCDIR/flux-jobs/tests
+for d in ${ISSUES_DIR}/*; do
+	issue=$(basename $d)
+	for f in ${d}/input ${d}/output; do
+		test -f ${f}  || error "Missing required file ${f}"
+	done
+	desc=$(basename ${d})
+	if test -f ${d}/description; then
+		desc="${desc}: $(cat ${d}/description)"
+        fi
+	if test -f ${d}/format; then
+		fmt=$(cat ${d}/format)
+        else
+		fmt=""
+        fi
+	test_expect_success "${desc}" '
+		flux jobs --from-stdin ${fmt:+--format="$fmt"} < ${d}/input >${issue}.output &&
+		test_cmp ${d}/output ${issue}.output
+	'
+done
 
 #
 # cleanup
