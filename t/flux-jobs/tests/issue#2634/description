@@ -1,1 +1,1 @@
-t_run is correct for jobs rejected by scheduler
+t_run is not listed for jobs rejected by scheduler
