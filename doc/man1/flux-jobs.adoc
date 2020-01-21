@@ -71,6 +71,8 @@ name:: job name
 ntasks:: job task count
 nnodes:: job node count (if job ran / is running), empty string otherwise
 nnodes_hyphen:: same as nnodes, but '-' if job has not run yet / never ran
+ranks:: job ranks (if job ran / is running), empty string otherwise
+ranks_hyphen:: same as ranks, but '-' if job has not run yet / never ran
 t_submit:: time job was submitted
 t_depend:: time job entered depend state
 t_sched:: time job entered sched state
