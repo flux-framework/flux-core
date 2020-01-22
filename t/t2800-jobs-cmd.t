@@ -35,12 +35,16 @@ test_expect_success 'load job-exec,sched-simple modules' '
 #
 # the job-info module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
-# until all of the pending jobs have reached SCHED state.
+# until all of the pending jobs have reached SCHED state, running jobs
+# have reached RUN state, and inactive jobs have reached INACTIVE
+# state.
 #
 
-wait_sched() {
+wait_states() {
         local i=0
-        while [ "$(flux jobs | grep SCHED | wc -l)" != "6" ]\
+        while ( [ "$(flux jobs -A | grep SCHED | wc -l)" != "6" ] \
+                || [ "$(flux jobs -A --suppress-header | grep RUN | wc -l)" != "8" ] \
+                || [ "$(flux jobs -A | grep INACTIVE | wc -l)" != "4" ]) \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -72,7 +76,7 @@ test_expect_success 'submit jobs for job list testing' '
         flux mini submit --priority=15 sleep 600 >> job_ids_pending.out &&
         flux mini submit --priority=10 sleep 600 >> job_ids_pending.out &&
         flux mini submit --priority=5 sleep 600 >> job_ids_pending.out &&
-        wait_sched
+        wait_states
 '
 
 #
