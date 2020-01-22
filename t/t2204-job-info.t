@@ -102,6 +102,29 @@ test_expect_success 'load job-exec,sched-simple modules' '
 #   unordered fashion.  However, issues exist that do not allow for
 #   such testing at this moment.  See Issue #2470.
 # - alternate userid job listing
+#
+# the job-info module has eventual consistency with the jobs stored in
+# the job-manager's queue.  To ensure no raciness in tests, we spin
+# until all of the pending jobs have reached SCHED state, running jobs
+# have reached RUN state, and inactive jobs have reached INACTIVE
+# state.
+
+wait_states() {
+        local i=0
+        while ( [ "$(flux job list --states=sched | wc -l)" != "4" ] \
+                || [ "$(flux job list --states=run | wc -l)" != "8" ] \
+                || [ "$(flux job list --states=inactive | wc -l)" != "4" ]) \
+               && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
+}
 
 test_expect_success 'submit jobs for job list testing' '
         for i in `seq 1 4`; do \
@@ -121,17 +144,9 @@ test_expect_success 'submit jobs for job list testing' '
         echo $id1 >> job_ids_pending.out &&
         echo $id2 >> job_ids_pending.out &&
         echo $id3 >> job_ids_pending.out &&
-        echo $id4 >> job_ids_pending.out
+        echo $id4 >> job_ids_pending.out &&
+        wait_states
 '
-
-#
-# the job-info module has eventual consistency with the jobs stored in
-# the job-manager's queue.  We can't be 100% sure that the pending
-# jobs have been updated in the job-info module by the time these
-# tests have started.  To reduce the chances of that happening, all
-# tests related to pending jobs are done after the running / inactive
-# tests.
-#
 
 test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
         flux job list -s running | jq .id > list_started.out &&
@@ -254,9 +269,25 @@ test_expect_success 'cleanup job listing jobs ' '
         done
 '
 
+wait_inactive() {
+        local i=0
+        while [ "$(flux job list --states=inactive | wc -l)" != "16" ] \
+               && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
 test_expect_success 'reload the job-info module' '
         flux exec -r all flux module remove job-info &&
-        flux exec -r all flux module load job-info
+        flux exec -r all flux module load job-info &&
+        wait_inactive
 '
 
 # inactive jobs are listed by most recently completed first, so must
