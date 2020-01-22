@@ -493,7 +493,7 @@ test_expect_success 'flux job eventlog works on multiple entries' '
 '
 
 test_expect_success 'flux job eventlog fails on bad id' '
-	! flux job eventlog 12345
+	test_must_fail flux job eventlog 12345
 '
 
 test_expect_success 'flux job eventlog --format=json works' '
@@ -512,7 +512,7 @@ test_expect_success 'flux job eventlog --format=text works' '
 
 test_expect_success 'flux job eventlog --format=invalid fails' '
         jobid=$(submit_job) &&
-	! flux job eventlog --format=invalid $jobid
+	test_must_fail flux job eventlog --format=invalid $jobid
 '
 
 test_expect_success 'flux job eventlog --time-format=raw works' '
@@ -536,7 +536,7 @@ test_expect_success 'flux job eventlog --time-format=offset works' '
 
 test_expect_success 'flux job eventlog --time-format=invalid fails works' '
         jobid=$(submit_job) &&
-	! flux job eventlog --time-format=invalid $jobid
+	test_must_fail flux job eventlog --time-format=invalid $jobid
 '
 
 test_expect_success 'flux job eventlog -p works' '
@@ -553,7 +553,7 @@ test_expect_success 'flux job eventlog -p works (guest.exec.eventlog)' '
 
 test_expect_success 'flux job eventlog -p fails on invalid path' '
         jobid=$(submit_job) &&
-        ! flux job eventlog -p "foobar" $jobid
+        test_must_fail flux job eventlog -p "foobar" $jobid
 '
 
 #
@@ -568,7 +568,7 @@ test_expect_success 'flux job wait-event works' '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event errors on non-event' '
         jobid=$(submit_job) &&
-        ! flux job wait-event $jobid foobar 2> wait_event2.err &&
+        test_must_fail flux job wait-event $jobid foobar 2> wait_event2.err &&
         grep "never received" wait_event2.err
 '
 
@@ -576,12 +576,12 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event does not see event after 
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        ! flux job wait-event -v $jobid foobar 2> wait_event3.err &&
+        test_must_fail flux job wait-event -v $jobid foobar 2> wait_event3.err &&
         grep "never received" wait_event3.err
 '
 
 test_expect_success 'flux job wait-event fails on bad id' '
-	! flux job wait-event 12345 foobar
+	test_must_fail flux job wait-event 12345 foobar
 '
 
 test_expect_success 'flux job wait-event --quiet works' '
@@ -608,7 +608,7 @@ test_expect_success 'flux job wait-event --verbose doesnt show events after wait
 
 test_expect_success 'flux job wait-event --timeout works' '
         jobid=$(submit_job_live sleeplong.json) &&
-        ! flux job wait-event --timeout=0.2 $jobid clean 2> wait_event7.err &&
+        test_must_fail flux job wait-event --timeout=0.2 $jobid clean 2> wait_event7.err &&
         flux job cancel $jobid &&
         grep "wait-event timeout" wait_event7.err
 '
@@ -629,7 +629,7 @@ test_expect_success 'flux job wait-event --format=text works' '
 
 test_expect_success 'flux job wait-event --format=invalid fails' '
         jobid=$(submit_job) &&
-	! flux job wait-event --format=invalid $jobid submit
+	test_must_fail flux job wait-event --format=invalid $jobid submit
 '
 
 test_expect_success 'flux job wait-event --time-format=raw works' '
@@ -654,7 +654,7 @@ test_expect_success 'flux job wait-event --time-format=offset works' '
 
 test_expect_success 'flux job wait-event --time-format=invalid fails works' '
         jobid=$(submit_job) &&
-	! flux job wait-event --time-format=invalid $jobid submit
+	test_must_fail flux job wait-event --time-format=invalid $jobid submit
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (string w/ quotes)' '
@@ -690,7 +690,7 @@ test_expect_success 'flux job wait-event w/ bad match-context fails (invalid val
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid input)' '
         jobid=$(submit_job) &&
-        ! flux job wait-event --match-context=foo $jobid exception
+        test_must_fail flux job wait-event --match-context=foo $jobid exception
 '
 
 test_expect_success 'flux job wait-event -p works (eventlog)' '
@@ -715,12 +715,12 @@ test_expect_success 'flux job wait-event -p works (non-guest eventlog)' '
 
 test_expect_success 'flux job wait-event -p fails on invalid path' '
         jobid=$(submit_job) &&
-        ! flux job wait-event -p "foobar" $jobid submit
+        test_must_fail flux job wait-event -p "foobar" $jobid submit
 '
 
 test_expect_success 'flux job wait-event -p fails on path "guest."' '
         jobid=$(submit_job) &&
-        ! flux job wait-event -p "guest." $jobid submit
+        test_must_fail flux job wait-event -p "guest." $jobid submit
 '
 
 test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
@@ -810,7 +810,7 @@ test_expect_success 'flux job info eventlog works' '
 '
 
 test_expect_success 'flux job info eventlog fails on bad id' '
-	! flux job info 12345 eventlog
+	test_must_fail flux job info 12345 eventlog
 '
 
 test_expect_success 'flux job info jobspec works' '
@@ -820,7 +820,7 @@ test_expect_success 'flux job info jobspec works' '
 '
 
 test_expect_success 'flux job info jobspec fails on bad id' '
-	! flux job info 12345 jobspec
+	test_must_fail flux job info 12345 jobspec
 '
 
 #
@@ -835,21 +835,21 @@ test_expect_success 'flux job info multiple keys works' '
 '
 
 test_expect_success 'flux job info multiple keys fails on bad id' '
-	! flux job info 12345 eventlog jobspec J
+	test_must_fail flux job info 12345 eventlog jobspec J
 '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (include eventlog)' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
         flux kvs unlink ${kvsdir}.jobspec &&
-	! flux job info $jobid eventlog jobspec J > all_info_b.out
+	test_must_fail flux job info $jobid eventlog jobspec J > all_info_b.out
 '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventlog)' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
         flux kvs unlink ${kvsdir}.jobspec &&
-	! flux job info $jobid jobspec J > all_info_b.out
+	test_must_fail flux job info $jobid jobspec J > all_info_b.out
 '
 
 #
