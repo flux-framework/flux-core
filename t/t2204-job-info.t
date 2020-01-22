@@ -246,9 +246,11 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat job_ids_pending.out`; do \
             flux job cancel $jobid; \
+            flux job wait-event $jobid clean; \
         done &&
         for jobid in `cat job_ids_running.out`; do \
             flux job cancel $jobid; \
+            flux job wait-event $jobid clean; \
         done
 '
 
