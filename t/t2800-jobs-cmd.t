@@ -35,7 +35,7 @@ test_expect_success 'load job-exec,sched-simple modules' '
 #
 # the job-info module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
-# until all of the pending jobs have rached SCHED state.
+# until all of the pending jobs have reached SCHED state.
 #
 
 wait_sched() {
