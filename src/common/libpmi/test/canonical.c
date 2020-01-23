@@ -30,7 +30,6 @@ int main (int argc, char *argv[])
     int universe_size;
     char *kvsname;
     char *val;
-    char pmi_fd[16];
     char pmi_rank[16];
     char pmi_size[16];
     int result;
@@ -49,18 +48,20 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    srv = pmi_server_create (cfd, 1);
-
-    snprintf (pmi_fd, sizeof (pmi_fd), "%d", cfd[0]);
+    /* Modify environment before spawning server thread to avoid
+     *  racing with getenv() in libev during reactor initialization
+     */
     snprintf (pmi_rank, sizeof (pmi_rank), "%d", 0);
     snprintf (pmi_size, sizeof (pmi_size), "%d", 1);
 
-    setenv ("PMI_FD", pmi_fd, 1);
     setenv ("PMI_RANK", pmi_rank, 1);
     setenv ("PMI_SIZE", pmi_size, 1);
 
     setenv ("PMI_DEBUG", "1", 1);
     setenv ("PMI_SPAWNED", "0", 1);
+
+    /* PMI_FD exported in pmi_server_create */
+    srv = pmi_server_create (cfd, 1);
 
     /* Elicit PMI_ERR_INIT error by calling functions before PMI_Init()
      */

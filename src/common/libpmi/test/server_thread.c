@@ -165,6 +165,7 @@ void s_trace (void *arg, const char *buf)
 
 struct pmi_server_context *pmi_server_create (int *cfd, int size)
 {
+    char pmi_fd[16];
     struct pmi_simple_ops server_ops = {
         .kvs_put = s_kvs_put,
         .kvs_get = s_kvs_get,
@@ -207,6 +208,9 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
                                          ctx);
     if (!ctx->pmi)
         BAIL_OUT ("pmi_simple_server_create failed");
+
+    snprintf (pmi_fd, sizeof (pmi_fd), "%d", cfd[0]);
+    setenv ("PMI_FD", pmi_fd, 1);
 
     if (pthread_create (&ctx->t, NULL, server_thread, ctx) != 0)
         BAIL_OUT ("pthread_create failed");
