@@ -48,6 +48,7 @@ int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_namespace (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
+int cmd_raiseall (optparse_t *p, int argc, char **argv);
 int cmd_kill (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
 int cmd_eventlog (optparse_t *p, int argc, char **argv);
@@ -90,6 +91,23 @@ static struct optparse_option raise_opts[] =  {
     },
     { .name = "type", .key = 't', .has_arg = 1, .arginfo = "TYPE",
       .usage = "Set exception type (default=cancel)",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option raiseall_opts[] =  {
+    { .name = "severity", .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Set exception severity [0-7] (0 is fatal, default=7)",
+    },
+    { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
+      .usage = "Set target user or 'all' (instance owner only)",
+    },
+    { .name = "states", .key = 'S', .has_arg = 1, .arginfo = "STATES",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Set target job states (default=ACTIVE)",
+    },
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "Confirm the command",
     },
     OPTPARSE_TABLE_END
 };
@@ -225,6 +243,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_raise,
       0,
       raise_opts,
+    },
+    { "raiseall",
+      "OPTIONS type [message ...]",
+      "Raise an exception on multiple jobs.",
+      cmd_raiseall,
+      0,
+      raiseall_opts,
     },
     { "kill",
       "[OPTIONS] id",
@@ -398,6 +423,59 @@ static char *parse_arg_message (char **argv, const char *name)
     return argz;
 }
 
+/* Parse an OPTPARSE_OPT_AUTOSPLIT list of state names, returning a
+ * mask of states.  Exit with error if unknown state encountered.
+ */
+int parse_arg_states (optparse_t *p, const char *optname)
+{
+    int state_mask = 0;
+    const char *arg;
+
+    assert (optparse_hasopt (p, optname) == true);
+
+    optparse_getopt_iterator_reset (p, optname);
+    while ((arg = optparse_getopt_next (p, optname))) {
+        flux_job_state_t state;
+
+        if (flux_job_strtostate (arg, &state) == 0)
+            state_mask |= state;
+        else if (!strcasecmp (arg, "pending"))
+            state_mask |= FLUX_JOB_PENDING;
+        else if (!strcasecmp (arg, "running"))
+            state_mask |= FLUX_JOB_RUNNING;
+        else if (!strcasecmp (arg, "active"))
+            state_mask |= FLUX_JOB_ACTIVE;
+        else
+            log_msg_exit ("error parsing --%s: %s is unknown", optname, arg);
+    }
+    if (state_mask == 0)
+        log_msg_exit ("no states specified");
+    return state_mask;
+}
+
+/* Parse user argument, which may be a username, a user id, or "all".
+ * Print an error and exit if there is a problem.
+ * Return numeric userid (all -> FLUX_USERID_UNKNOWN).
+ */
+uint32_t parse_arg_userid (optparse_t *p, const char *optname)
+{
+    uint32_t userid;
+    const char *s = optparse_get_str (p, optname, NULL);
+    struct passwd *pw;
+    char *endptr;
+
+    assert (s != NULL);
+    if (!strcmp (s, "all"))
+        return FLUX_USERID_UNKNOWN;
+    if ((pw = getpwnam (s)))
+        return pw->pw_uid;
+    errno = 0;
+    userid = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || !isdigit (*s))
+        log_msg_exit ("unknown user %s", s);
+    return userid;
+}
+
 int cmd_priority (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -453,6 +531,105 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
         log_msg_exit ("%llu: %s", (unsigned long long)id,
                       future_strerror (f, errno));
     flux_future_destroy (f);
+    flux_close (h);
+    free (note);
+    return 0;
+}
+
+static int raiseall (flux_t *h,
+                     int dry_run,
+                     uint32_t userid,
+                     int state_mask,
+                     int severity,
+                     const char *type,
+                     const char *note,
+                     int *errorsp)
+{
+    flux_future_t *f;
+    int count;
+    int errors;
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.raiseall",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:b s:i s:i s:i s:s s:s}",
+                             "dry_run",
+                             dry_run,
+                             "userid",
+                             userid,
+                             "states",
+                             state_mask,
+                             "severity",
+                             severity,
+                             "type",
+                             type,
+                             "note",
+                             note ? note : "")))
+        log_err_exit ("error sending raiseall request");
+    if (flux_rpc_get_unpack (f,
+                             "{s:i s:i}",
+                             "count",
+                             &count,
+                             "errors",
+                             &errors) < 0)
+        log_msg_exit ("raiseall: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    if (errorsp)
+        *errorsp = errors;
+    return count;
+}
+
+int cmd_raiseall (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    int severity = optparse_get_int (p, "severity", 7);
+    const char *type;
+    uint32_t userid;
+    int state_mask;
+    flux_t *h;
+    char *note = NULL;
+    int count;
+    int errors;
+    int dry_run = 1;
+
+    if (optindex == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    type = argv[optindex++];
+    if (optindex < argc)
+        note = parse_arg_message (argv + optindex, "message");
+    if (optparse_hasopt (p, "states")) {
+        state_mask = parse_arg_states (p, "states");
+        if ((state_mask & FLUX_JOB_INACTIVE))
+            log_msg_exit ("Exceptions cannot be raised on inactive jobs");
+    }
+    else
+        state_mask = FLUX_JOB_ACTIVE;
+    if (optparse_hasopt (p, "user"))
+        userid = parse_arg_userid (p, "user");
+    else
+        userid = geteuid ();
+    if (optparse_hasopt (p, "force"))
+        dry_run = 0;
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    count = raiseall (h,
+                      dry_run,
+                      userid,
+                      state_mask,
+                      severity,
+                      type,
+                      note,
+                      &errors);
+    if (count > 0 && dry_run)
+        log_msg ("Command matched %d jobs (-f to confirm)", count);
+    else if (count > 0 && !dry_run)
+        log_msg ("Raised exception on %d jobs (%d errors)", count, errors);
+    else
+        log_msg ("Command matched 0 jobs");
+
     flux_close (h);
     free (note);
     return 0;
