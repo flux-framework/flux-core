@@ -65,8 +65,7 @@ struct lookup {
 
     flux_t *h;
 
-    uint32_t rolemask;
-    uint32_t userid;
+    struct flux_msg_cred cred;
 
     int flags;
 
@@ -251,10 +250,7 @@ static lookup_process_t symlink_check_namespace (lookup_t *lh,
         goto done;
     }
 
-    if (kvsroot_check_user (lh->krm,
-                            root,
-                            lh->rolemask,
-                            lh->userid) < 0) {
+    if (kvsroot_check_user (lh->krm, root, lh->cred) < 0) {
         lh->errnum = EPERM;
         goto done;
     }
@@ -521,8 +517,7 @@ lookup_t *lookup_create (struct cache *cache,
                          const char *root_ref,
                          int root_seq,
                          const char *path,
-                         uint32_t rolemask,
-                         uint32_t userid,
+                         struct flux_msg_cred cred,
                          int flags,
                          flux_t *h)
 {
@@ -573,8 +568,7 @@ lookup_t *lookup_create (struct cache *cache,
 
     lh->h = h;
 
-    lh->rolemask = rolemask;
-    lh->userid = userid;
+    lh->cred = cred;
     lh->flags = flags;
 
     lh->val = NULL;
@@ -758,10 +752,7 @@ static int namespace_still_valid (lookup_t *lh)
     /* Small chance root removed, then re-inserted, check security
      * checks again */
 
-    if (kvsroot_check_user (lh->krm,
-                            root,
-                            lh->rolemask,
-                            lh->userid) < 0) {
+    if (kvsroot_check_user (lh->krm, root, lh->cred) < 0) {
         lh->errnum = errno;
         return -1;
     }
@@ -955,10 +946,7 @@ lookup_process_t lookup (lookup_t *lh)
                     return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
                 }
 
-                if (kvsroot_check_user (lh->krm,
-                                        root,
-                                        lh->rolemask,
-                                        lh->userid) < 0) {
+                if (kvsroot_check_user (lh->krm, root, lh->cred) < 0) {
                     lh->errnum = errno;
                     goto error;
                 }

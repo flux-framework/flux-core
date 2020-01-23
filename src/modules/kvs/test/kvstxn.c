@@ -639,6 +639,7 @@ void verify_value (struct cache *cache,
 {
     lookup_t *lh;
     json_t *test, *o;
+    struct flux_msg_cred cred = { .rolemask = FLUX_ROLE_OWNER, .userid = 0 };
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -647,8 +648,7 @@ void verify_value (struct cache *cache,
                              root_ref,
                              0,
                              key,
-                             FLUX_ROLE_OWNER,
-                             0,
+                             cred,
                              0,
                              NULL)) != NULL,
         "lookup_create key %s", key);

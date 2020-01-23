@@ -258,23 +258,15 @@ void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
 }
 
 int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
-                        uint32_t rolemask, uint32_t userid)
+                        struct flux_msg_cred cred)
 {
     if (!root) {
         errno = EINVAL;
         return -1;
     }
-
-    if (rolemask & FLUX_ROLE_OWNER)
-        return 0;
-
-    if (rolemask & FLUX_ROLE_USER) {
-        if (userid == root->owner)
-            return 0;
-    }
-
-    errno = EPERM;
-    return -1;
+    if (flux_msg_cred_authorize (cred, root->owner) < 0)
+        return -1;
+    return 0;
 }
 
 /*
