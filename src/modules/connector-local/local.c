@@ -56,7 +56,7 @@ static const char *route_auxkey = "flux::route";
 static int client_authenticate (flux_t *h,
                                 uint32_t instance_owner,
                                 uid_t cuid,
-                                struct auth_cred *cred)
+                                struct flux_msg_cred *cred)
 {
     uint32_t rolemask;
     flux_future_t *f;
@@ -110,7 +110,7 @@ static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
     struct connector_local *ctx = arg;
 
     if (errnum != EPIPE && errnum != EPROTO && errnum != ECONNRESET) {
-        const struct auth_cred *cred = usock_conn_get_cred (uconn);
+        const struct flux_msg_cred *cred = usock_conn_get_cred (uconn);
         errno = errnum;
         flux_log_error (ctx->h,
                         "client=%.5s userid=%u",
@@ -135,7 +135,7 @@ static void uconn_recv (struct usock_conn *uconn, flux_msg_t *msg, void *arg)
 static int uconn_send (const flux_msg_t *msg, void *arg)
 {
     struct usock_conn *uconn = arg;
-    const struct auth_cred *cred;
+    const struct flux_msg_cred *cred;
     int type;
 
     if (flux_msg_get_type (msg, &type) < 0)
@@ -158,8 +158,8 @@ static int uconn_send (const flux_msg_t *msg, void *arg)
 static void acceptor_cb (struct usock_conn *uconn, void *arg)
 {
     struct connector_local *ctx = arg;
-    const struct auth_cred *initial_cred;
-    struct auth_cred cred;
+    const struct flux_msg_cred *initial_cred;
+    struct flux_msg_cred cred;
     struct router_entry *entry;
 
     initial_cred = usock_conn_get_cred (uconn);

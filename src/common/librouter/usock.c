@@ -78,7 +78,7 @@ struct usock_io {
 };
 
 struct usock_conn {
-    struct auth_cred cred;
+    struct flux_msg_cred cred;
     struct usock_io in;
     struct usock_io out;
     zlist_t *outqueue;
@@ -105,7 +105,7 @@ struct usock_client {
     struct iobuf out_iobuf;
 };
 
-const struct auth_cred *usock_conn_get_cred (struct usock_conn *conn)
+const struct flux_msg_cred *usock_conn_get_cred (struct usock_conn *conn)
 {
     return conn ? &conn->cred : NULL;
 }
@@ -256,7 +256,7 @@ static int write_char (int fd, unsigned char c)
  * then put the fd in nonblocking mode and start the recv watcher.
  */
 void usock_conn_accept (struct usock_conn *conn,
-                        const struct auth_cred *cred)
+                        const struct flux_msg_cred *cred)
 {
     if (conn && cred) {
         conn->cred = *cred;
@@ -349,7 +349,7 @@ void usock_server_destroy (struct usock_server *server)
     }
 }
 
-static int get_socket_peercred (int fd, struct auth_cred *cred)
+static int get_socket_peercred (int fd, struct flux_msg_cred *cred)
 {
     struct ucred ucred;
     socklen_t crlen;
