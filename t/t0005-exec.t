@@ -15,6 +15,8 @@ invalid_rank() {
        echo $((${SIZE} + 1))
 }
 
+TMPDIR=$(cd /tmp && $(which pwd))
+
 test_expect_success 'basic exec functionality' '
 	flux exec -n /bin/true
 '
@@ -79,12 +81,12 @@ test_expect_success 'flux exec does not pass FLUX_URI' '
 '
 
 test_expect_success 'flux exec passes cwd' '
-	(cd /tmp &&
-	flux exec -n sh -c "test \`pwd\` = \"/tmp\"")
+	(cd ${TMPDIR} &&
+	flux exec -n sh -c "test \`pwd\` = \"${TMPDIR}\"")
 '
 
 test_expect_success 'flux exec -d option works' '
-	flux exec -n -d /tmp sh -c "test \`pwd\` = \"/tmp\""
+	flux exec -n -d ${TMPDIR} sh -c "test \`pwd\` = \"${TMPDIR}\""
 '
 
 # Run a script on ranks 0-3 simultaneously with each rank writing the

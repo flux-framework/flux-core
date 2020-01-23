@@ -22,9 +22,11 @@ test_expect_success 'basic rexec functionality (process fail)' '
 '
 
 test_expect_success 'basic rexec - cwd correct' '
-	(cd /tmp &&
-         cwd=`${FLUX_BUILD_DIR}/t/rexec/rexec pwd` &&
-         test "$cwd" = "/tmp")
+	pwd=$(which pwd) &&
+	tmpdir=$(cd /tmp && $pwd) &&
+	(cd ${tmpdir} &&
+         cwd=`${FLUX_BUILD_DIR}/t/rexec/rexec $pwd` &&
+         test "$cwd" = "$tmpdir")
 '
 
 test_expect_success 'basic rexec - env passed through' '
