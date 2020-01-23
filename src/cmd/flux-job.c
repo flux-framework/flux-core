@@ -73,8 +73,8 @@ static struct optparse_option list_opts[] =  {
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "List jobs in specific states",
     },
-    { .name = "userid", .key = 'u', .has_arg = 1, .arginfo = "UID",
-      .usage = "Limit output to specific userid. " \
+    { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
+      .usage = "Limit output to specific user. " \
                "Specify \"all\" for all users.",
     },
     { .name = "all-user", .key = 'a', .has_arg = 0,
@@ -856,10 +856,9 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     json_t *jobs;
     size_t index;
     json_t *value;
-    uint32_t userid = geteuid ();
-    const char *arg;
+    uint32_t userid;
     int flags = 0;
-    int state_mask = 0;
+    int state_mask;
 
     if (optindex != argc) {
         optparse_print_usage (p);
@@ -868,49 +867,30 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    optparse_getopt_iterator_reset (p, "states");
-    while ((arg = optparse_getopt_next (p, "states"))) {
-        flux_job_state_t state;
-
-        if (flux_job_strtostate (arg, &state) == 0)
-            state_mask |= state;
-        else if (!strcasecmp (arg, "pending"))
-            state_mask |= FLUX_JOB_PENDING;
-        else if (!strcasecmp (arg, "running"))
-            state_mask |= FLUX_JOB_RUNNING;
-        else if (!strcasecmp (arg, "active"))
-            state_mask |= FLUX_JOB_ACTIVE;
-        else
-            log_msg_exit ("error parsing --states: %s is unknown", arg);
-    }
     if (optparse_hasopt (p, "all-user") || optparse_hasopt (p, "all"))
         state_mask = FLUX_JOB_ACTIVE | FLUX_JOB_INACTIVE;
+    else if (optparse_hasopt (p, "states"))
+        state_mask = parse_arg_states (p, "states");
+    else
+        state_mask = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
+
+    /* Set request flags based on state mask.
+     * The returned list may need to be filtered down since the state_mask
+     * has a finer granularity than the flags.
+     */
     if ((state_mask & FLUX_JOB_PENDING) != 0)
         flags |= FLUX_JOB_LIST_PENDING;
     if ((state_mask & FLUX_JOB_RUNNING) != 0)
         flags |= FLUX_JOB_LIST_RUNNING;
     if ((state_mask & FLUX_JOB_INACTIVE) != 0)
         flags |= FLUX_JOB_LIST_INACTIVE;
-    /* if no job listing specifics listed, default to listing pending
-     * & running jobs */
-    if (!flags) {
-        flags = FLUX_JOB_LIST_PENDING | FLUX_JOB_LIST_RUNNING;
-        state_mask = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
-    }
 
-    if ((arg = optparse_get_str (p, "userid", NULL))) {
-        if (!strcmp (arg, "all"))
-            userid = FLUX_USERID_UNKNOWN;
-        else {
-            char *endptr;
-            errno = 0;
-            userid = strtoul (arg, &endptr, 10);
-            if (errno != 0 || (*endptr) != '\0')
-                log_msg_exit ("error parsing userid: \"%s\"", arg);
-        }
-    }
     if (optparse_hasopt (p, "all"))
         userid = FLUX_USERID_UNKNOWN;
+    else if (optparse_hasopt (p, "user"))
+        userid = parse_arg_userid (p, "user");
+    else
+        userid = geteuid ();
 
     if (!(f = flux_job_list (h, max_entries, attrs, userid, flags)))
         log_err_exit ("flux_job_list");

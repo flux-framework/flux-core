@@ -213,15 +213,15 @@ test_expect_success HAVE_JQ 'flux job list defaults to listing pending & running
         test_cmp list_default_pending.out job_ids_pending.out
 '
 
-test_expect_success 'flux job list --userid=userid works' '
+test_expect_success 'flux job list --user=userid works' '
         uid=$(id -u) &&
-        flux job list --userid=$uid> list_userid.out &&
+        flux job list --user=$uid> list_userid.out &&
         count=$(wc -l < list_userid.out) &&
         test "$count" = "12"
 '
 
-test_expect_success 'flux job list --userid=all works' '
-        flux job list --userid=all > list_all.out &&
+test_expect_success 'flux job list --user=all works' '
+        flux job list --user=all > list_all.out &&
         count=$(wc -l < list_all.out) &&
         test "$count" = "12"
 '
