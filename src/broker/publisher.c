@@ -68,7 +68,7 @@ struct publisher *publisher_create (void)
 }
 
 static flux_msg_t *encode_event (const char *topic, int flags,
-                                 uint32_t rolemask, uint32_t userid,
+                                 struct flux_msg_cred cred,
                                  uint32_t seq, const char *src)
 {
     flux_msg_t *msg;
@@ -79,9 +79,7 @@ static flux_msg_t *encode_event (const char *topic, int flags,
         goto error;
     if (flux_msg_set_topic (msg, topic) < 0)
         goto error;
-    if (flux_msg_set_userid (msg, userid) < 0)
-        goto error;
-    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+    if (flux_msg_set_cred (msg, cred) < 0)
         goto error;
     if (flux_msg_set_seq (msg, seq) < 0)
         goto error;
@@ -140,7 +138,7 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *topic;
     const char *payload = NULL; // optional
     int flags;
-    uint32_t rolemask, userid;
+    struct flux_msg_cred cred;
     flux_msg_t *event = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:i s?:s}",
@@ -152,12 +150,9 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+    if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
-    if (flux_msg_get_userid (msg, &userid) < 0)
-        goto error;
-    if (!(event = encode_event (topic, flags, rolemask, userid,
-                                ++pub->seq, payload)))
+    if (!(event = encode_event (topic, flags, cred, ++pub->seq, payload)))
         goto error_restore_seq;
     send_event (pub, event);
     if (flux_respond_pack (h, msg, "{s:i}", "seq", pub->seq) < 0)

@@ -97,8 +97,7 @@ typedef struct {
     /* Session parameters
      */
     attr_t *attrs;
-    uint32_t userid;            /* instance owner */
-    uint32_t rolemask;
+    struct flux_msg_cred cred;  /* instance owner */
 
     /* Modules
      */
@@ -340,10 +339,10 @@ int main (int argc, char *argv[])
 
     ctx.tbon_k = 2; /* binary TBON is default */
     /* Record the instance owner: the effective uid of the broker. */
-    ctx.userid = geteuid ();
+    ctx.cred.userid = geteuid ();
     /* Set default rolemask for messages sent with flux_send()
      * on the broker's internal handle. */
-    ctx.rolemask = FLUX_ROLE_OWNER;
+    ctx.cred.rolemask = FLUX_ROLE_OWNER;
     ctx.heartbeat_rate = 2;
     ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
 
@@ -2103,7 +2102,7 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     broker_ctx_t *ctx = impl;
     int type;
-    uint32_t userid, rolemask;
+    struct flux_msg_cred cred;
     flux_msg_t *cpy = NULL;
     int rc = -1;
 
@@ -2111,17 +2110,13 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     if (flux_msg_get_type (cpy, &type) < 0)
         goto done;
-    if (flux_msg_get_userid (cpy, &userid) < 0)
+    if (flux_msg_get_cred (cpy, &cred) < 0)
         goto done;
-    if (flux_msg_get_rolemask (cpy, &rolemask) < 0)
-        goto done;
-    if (userid == FLUX_USERID_UNKNOWN)
-        userid = ctx->userid;
-    if (rolemask == FLUX_ROLE_NONE)
-        rolemask = ctx->rolemask;
-    if (flux_msg_set_userid (cpy, userid) < 0)
-        goto done;
-    if (flux_msg_set_rolemask (cpy, rolemask) < 0)
+    if (cred.userid == FLUX_USERID_UNKNOWN)
+        cred.userid = ctx->cred.userid;
+    if (cred.rolemask == FLUX_ROLE_NONE)
+        cred.rolemask = ctx->cred.rolemask;
+    if (flux_msg_set_cred (cpy, cred) < 0)
         goto done;
 
     switch (type) {

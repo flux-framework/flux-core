@@ -59,9 +59,7 @@ struct module_struct {
     heartbeat_t *heartbeat;
 
     zsock_t *sock;          /* broker end of PAIR socket */
-    uint32_t userid;        /* creds of connection */
-    uint32_t rolemask;
-
+    struct flux_msg_cred cred; /* cred of connection */
 
     uuid_t uuid;            /* uuid for unique request sender identity */
     char uuid_str[UUID_STR_LEN];
@@ -220,7 +218,7 @@ flux_msg_t *module_recvmsg (module_t *p)
 {
     flux_msg_t *msg = NULL;
     int type;
-    uint32_t userid, rolemask;
+    struct flux_msg_cred cred;
 
     assert (p->magic == MODULE_MAGIC);
 
@@ -247,18 +245,14 @@ flux_msg_t *module_recvmsg (module_t *p)
      * sending on behalf of other users.  This is necessary for connectors
      * implemented as comms modules.
      */
-    assert ((p->rolemask & FLUX_ROLE_OWNER));
-    if (flux_msg_get_userid (msg, &userid) < 0)
+    assert ((p->cred.rolemask & FLUX_ROLE_OWNER));
+    if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
-        goto error;
-    if (userid == FLUX_USERID_UNKNOWN)
-        userid = p->userid;
-    if (rolemask == FLUX_ROLE_NONE)
-        rolemask = p->rolemask;
-    if (flux_msg_set_userid (msg, userid) < 0)
-        goto error;
-    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+    if (cred.userid == FLUX_USERID_UNKNOWN)
+        cred.userid = p->cred.userid;
+    if (cred.rolemask == FLUX_ROLE_NONE)
+        cred.rolemask = p->cred.rolemask;
+    if (flux_msg_set_cred (msg, cred) < 0)
         goto error;
     return msg;
 error:
@@ -616,8 +610,8 @@ module_t *module_add (modhash_t *mh, const char *path)
      * Since this is a point to point connection between broker threads,
      * credentials are always those of the instance owner.
      */
-    p->userid = geteuid ();
-    p->rolemask = FLUX_ROLE_OWNER;
+    p->cred.userid = geteuid ();
+    p->cred.rolemask = FLUX_ROLE_OWNER;
 
     /* Update the modhash.
      */

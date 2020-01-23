@@ -21,7 +21,7 @@ struct ping_context {
 
 static char *make_json_response_payload (const char *request_payload,
                                          const char *route,
-                                         uint32_t userid, uint32_t rolemask)
+                                         struct flux_msg_cred cred)
 {
     json_t *o = NULL;
     json_t *add = NULL;
@@ -32,8 +32,8 @@ static char *make_json_response_payload (const char *request_payload,
         goto done;
     }
     if (!(add = json_pack ("{s:s s:i s:i}", "route", route,
-                                            "userid", userid,
-                                            "rolemask", rolemask))) {
+                                            "userid", cred.userid,
+                                            "rolemask", cred.rolemask))) {
         errno = ENOMEM;
         goto done;
     }
@@ -58,13 +58,12 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
     char *route_str = NULL;
     char *full_route_str = NULL;
     char *resp_str = NULL;
-    uint32_t rank, userid, rolemask;
+    uint32_t rank;
+    struct flux_msg_cred cred;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
-        goto error;
-    if (flux_msg_get_userid (msg, &userid) < 0)
+    if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (!(route_str = flux_msg_get_route_string (msg)))
         goto error;
@@ -75,7 +74,7 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(resp_str = make_json_response_payload (json_str, full_route_str,
-                                                 userid, rolemask))) {
+                                                 cred))) {
         goto error;
     }
     if (flux_respond (h, msg, resp_str) < 0)
