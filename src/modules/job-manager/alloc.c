@@ -477,7 +477,6 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
         zlistx_delete (alloc->pending, job->handle);
         job->handle = NULL;
         job->alloc_queued = 0;
-        alloc->active_alloc_count--;
     }
 }
 
