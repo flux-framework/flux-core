@@ -127,10 +127,11 @@ test_expect_success '--preserve-env option works' '
     flux dmesg | grep "cron-${id}.*command=\"printenv FOO\": \"bar\""
 '
 test_expect_success '--working-dir option works' '
+    tmpdir=$(cd /tmp && $(which pwd)) &&
     id=$(flux_cron interval -c1 -d /tmp .01s pwd) &&
     sleep .1 &&
     cron_entry_check ${id} stopped true &&
-    flux dmesg | grep "cron-${id}.*command=\"pwd\": \"/tmp\""
+    flux dmesg | grep "cron-${id}.*command=\"pwd\": \"${tmpdir}\""
 '
 
 test_expect_success 'cron entry exec failure is recorded' '
