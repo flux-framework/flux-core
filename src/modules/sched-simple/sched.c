@@ -192,6 +192,7 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
 
     if (ss->job) {
         flux_log (h, LOG_ERR, "alloc received before previous one handled");
+        errno = EINVAL;
         goto err;
     }
     if (!(ss->job = jobreq_create (msg, jobspec))) {
