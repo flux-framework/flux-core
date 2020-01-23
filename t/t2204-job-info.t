@@ -98,9 +98,6 @@ test_expect_success 'load job-exec,sched-simple modules' '
 #   - inactive jobs - by completion time (most recent first)
 #
 # TODO
-# - in order to test sorting, jobs should be submitted below in an
-#   unordered fashion.  However, issues exist that do not allow for
-#   such testing at this moment.  See Issue #2470.
 # - alternate userid job listing
 #
 # the job-info module has eventual consistency with the jobs stored in
@@ -137,9 +134,9 @@ test_expect_success 'submit jobs for job list testing' '
             flux job wait-event `tail -n 1 job_ids2.out` start; \
         done &&
         tac job_ids2.out > job_ids_running.out &&
-        id1=$(flux job submit -p31 hostname.json) &&
         id2=$(flux job submit -p20 hostname.json) &&
         id3=$(flux job submit      hostname.json) &&
+        id1=$(flux job submit -p31 hostname.json) &&
         id4=$(flux job submit -p0  hostname.json) &&
         echo $id1 >> job_ids_pending.out &&
         echo $id2 >> job_ids_pending.out &&
