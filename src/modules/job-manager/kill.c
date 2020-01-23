@@ -46,13 +46,6 @@ int kill_check_signal (int signum)
     return 0;
 }
 
-int kill_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid)
-{
-    if (!(rolemask & FLUX_ROLE_OWNER) && userid != job_userid)
-        return -1;
-    return 0;
-}
-
 static int kill_event_topic_str (char *s, size_t len, flux_jobid_t id)
 {
     int n = snprintf (s, len, "shell-%ju.kill", (uintmax_t) id);
@@ -67,8 +60,6 @@ void kill_handle_request (flux_t *h,
                           void *arg)
 {
     struct job_manager *ctx = arg;
-    uint32_t userid;
-    uint32_t rolemask;
     flux_jobid_t id;
     struct job *job;
     int sig;
@@ -78,9 +69,7 @@ void kill_handle_request (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:I s:i}",
                                         "id", &id,
-                                        "signum", &sig) < 0
-                    || flux_msg_get_userid (msg, &userid) < 0
-                    || flux_msg_get_rolemask (msg, &rolemask) < 0)
+                                        "signum", &sig) < 0)
         goto error;
     if (kill_check_signal (sig) < 0) {
         errstr = "Invalid signal number";
@@ -92,9 +81,8 @@ void kill_handle_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (kill_allow (rolemask, userid, job->userid) < 0) {
+    if (flux_msg_authorize (msg, job->userid) < 0) {
         errstr = "guests may only send signals to their own jobs";
-        errno = EPERM;
         goto error;
     }
     if (job->state != FLUX_JOB_RUN) {

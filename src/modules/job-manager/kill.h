@@ -24,7 +24,6 @@ void kill_handle_request (flux_t *h,
 
 /* exposed for unit testing only */
 int kill_check_signal (int signum);
-int kill_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid);
 
 #endif /* ! _FLUX_JOB_MANAGER_RAISE_H */
 /*

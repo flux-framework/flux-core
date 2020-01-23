@@ -46,8 +46,7 @@ void priority_handle_request (flux_t *h,
                               void *arg)
 {
     struct job_manager *ctx = arg;
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
     flux_jobid_t id;
     struct job *job;
     int priority;
@@ -56,8 +55,7 @@ void priority_handle_request (flux_t *h,
     if (flux_request_unpack (msg, NULL, "{s:I s:i}",
                                         "id", &id,
                                         "priority", &priority) < 0
-                    || flux_msg_get_userid (msg, &userid) < 0
-                    || flux_msg_get_rolemask (msg, &rolemask) < 0)
+                    || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (priority < FLUX_JOB_PRIORITY_MIN || priority > FLUX_JOB_PRIORITY_MAX) {
         errstr = "priority value is out of range";
@@ -71,14 +69,13 @@ void priority_handle_request (flux_t *h,
     }
     /* Security: guests can only adjust jobs that they submitted.
      */
-    if (!(rolemask & FLUX_ROLE_OWNER) && userid != job->userid) {
+    if (flux_msg_cred_authorize (cred, job->userid) < 0) {
         errstr = "guests can only reprioritize their own jobs";
-        errno = EPERM;
         goto error;
     }
     /* Security: guests can only reduce priority, or increase up to default.
      */
-    if (!(rolemask & FLUX_ROLE_OWNER)
+    if (!(cred.rolemask & FLUX_ROLE_OWNER)
             && priority > MAXOF (FLUX_JOB_PRIORITY_DEFAULT, job->priority)) {
         errstr = "guests can only adjust priority <= default";
         errno = EPERM;
@@ -89,7 +86,7 @@ void priority_handle_request (flux_t *h,
     if (event_job_post_pack (ctx->event, job,
                              "priority",
                              "{ s:i s:i }",
-                             "userid", userid,
+                             "userid", cred.userid,
                              "priority", priority) < 0)
         goto error;
     alloc_pending_reorder (ctx->alloc, job);

@@ -53,6 +53,7 @@ TESTS = \
 	test_job.t \
 	test_list.t \
 	test_raise.t \
+	test_kill.t \
 	test_restart.t \
 	test_submit.t
 
@@ -94,6 +95,12 @@ test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
+        $(test_ldadd)
+
+test_kill_t_SOURCES = test/kill.c
+test_kill_t_CPPFLAGS = $(test_cppflags)
+test_kill_t_LDADD = \
+        $(top_builddir)/src/modules/job-manager/kill.o \
         $(test_ldadd)
 
 test_restart_t_SOURCES = test/restart.c

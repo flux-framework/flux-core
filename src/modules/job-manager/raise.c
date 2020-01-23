@@ -55,21 +55,13 @@ int raise_check_severity (int severity)
     return 0;
 }
 
-int raise_allow (uint32_t rolemask, uint32_t userid, uint32_t job_userid)
-{
-    if (!(rolemask & FLUX_ROLE_OWNER) && userid != job_userid)
-        return -1;
-    return 0;
-}
-
 void raise_handle_request (flux_t *h,
                            flux_msg_handler_t *mh,
                            const flux_msg_t *msg,
                            void *arg)
 {
     struct job_manager *ctx = arg;
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
     flux_jobid_t id;
     struct job *job;
     int severity;
@@ -83,8 +75,7 @@ void raise_handle_request (flux_t *h,
                                         "severity", &severity,
                                         "type", &type,
                                         "note", &note) < 0
-                    || flux_msg_get_userid (msg, &userid) < 0
-                    || flux_msg_get_rolemask (msg, &rolemask) < 0)
+                    || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (raise_check_severity (severity)) {
         errstr = "invalid exception severity";
@@ -101,9 +92,8 @@ void raise_handle_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (raise_allow (rolemask, userid, job->userid) < 0) {
+    if (flux_msg_cred_authorize (cred, job->userid) < 0) {
         errstr = "guests can only raise exceptions on their own jobs";
-        errno = EPERM;
         goto error;
     }
     if (event_job_post_pack (ctx->event, job,
@@ -111,7 +101,7 @@ void raise_handle_request (flux_t *h,
                              "{ s:s s:i s:i s:s }",
                              "type", type,
                              "severity", severity,
-                             "userid", userid,
+                             "userid", cred.userid,
                              "note", note ? note : "") < 0)
         goto error;
     /* NB: job object may be destroyed in event_job_post_pack().
