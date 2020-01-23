@@ -418,24 +418,126 @@ void check_matchtag (void)
 void check_security (void)
 {
     flux_msg_t *msg;
-    uint32_t userid, rolemask;
+    struct flux_msg_cred cred;
+    struct flux_msg_cred user_9 = { .rolemask = FLUX_ROLE_USER, .userid = 9 };
+    struct flux_msg_cred owner_2 = { .rolemask = FLUX_ROLE_OWNER, .userid = 2 };
+    struct flux_msg_cred user_unknown = { .rolemask = FLUX_ROLE_USER,
+                                          .userid = FLUX_USERID_UNKNOWN  };
+    struct flux_msg_cred none_9 = { .rolemask = FLUX_ROLE_NONE, .userid = 9 };
 
+    /* Accessors work
+     */
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "flux_msg_create works");
-    ok (flux_msg_get_userid (msg, &userid) == 0
-        && userid == FLUX_USERID_UNKNOWN,
+    ok (flux_msg_get_userid (msg, &cred.userid) == 0
+        && cred.userid == FLUX_USERID_UNKNOWN,
         "message created with userid=FLUX_USERID_UNKNOWN");
-    ok (flux_msg_get_rolemask (msg, &rolemask) == 0
-        && rolemask == FLUX_ROLE_NONE,
+    ok (flux_msg_get_rolemask (msg, &cred.rolemask) == 0
+        && cred.rolemask == FLUX_ROLE_NONE,
         "message created with rolemask=FLUX_ROLE_NONE");
     ok (flux_msg_set_userid (msg, 4242) == 0
-        && flux_msg_get_userid (msg, &userid) == 0
-        && userid == 4242,
+        && flux_msg_get_userid (msg, &cred.userid) == 0
+        && cred.userid == 4242,
         "flux_msg_set_userid 4242 works");
     ok (flux_msg_set_rolemask (msg, FLUX_ROLE_ALL) == 0
-        && flux_msg_get_rolemask (msg, &rolemask) == 0
-        && rolemask == FLUX_ROLE_ALL,
+        && flux_msg_get_rolemask (msg, &cred.rolemask) == 0
+        && cred.rolemask == FLUX_ROLE_ALL,
         "flux_msg_set_rolemask FLUX_ROLE_ALL works");
+
+    memset (&cred, 0, sizeof (cred));
+    ok (flux_msg_get_cred (msg, &cred) == 0
+        && cred.userid == 4242 && cred.rolemask == FLUX_ROLE_ALL,
+        "flux_msg_get_cred works");
+
+    ok (flux_msg_set_cred (msg, user_9) == 0
+        && flux_msg_get_cred (msg, &cred) == 0
+        && cred.userid == user_9.userid
+        && cred.rolemask == user_9.rolemask,
+        "flux_msg_set_cred works");
+
+    /* Simple authorization works
+     */
+    ok (flux_msg_cred_authorize (owner_2, 2) == 0,
+        "flux_msg_cred_authorize allows owner when userids match");
+    ok (flux_msg_cred_authorize (owner_2, 4) == 0,
+        "flux_msg_cred_authorize allows owner when userids mismatch");
+    ok (flux_msg_cred_authorize (user_9, 9) == 0,
+        "flux_msg_cred_authorize allows guest when userids match");
+    errno = 0;
+    ok (flux_msg_cred_authorize (user_9, 10) < 0
+        && errno == EPERM,
+        "flux_msg_cred_authorize denies guest (EPERM) when userids mismatch");
+    errno = 0;
+    ok (flux_msg_cred_authorize (user_unknown, FLUX_USERID_UNKNOWN) < 0
+        && errno == EPERM,
+        "flux_msg_cred_authorize denies guest (EPERM) when userids=UNKNOWN");
+    errno = 0;
+    ok (flux_msg_cred_authorize (none_9, 9) < 0
+        && errno == EPERM,
+        "flux_msg_cred_authorize denies guest (EPERM) when role=NONE");
+
+    /* Repeat with the message version
+     */
+    if (flux_msg_set_cred (msg, owner_2) < 0)
+        BAIL_OUT ("flux_msg_set_cred failed");
+    ok (flux_msg_authorize (msg, 2) == 0,
+        "flux_msg_authorize allows owner when userid's match");
+    ok (flux_msg_authorize (msg, 4) == 0,
+        "flux_msg_authorize allows owner when userid's mismatch");
+    if (flux_msg_set_cred (msg, user_9) < 0)
+        BAIL_OUT ("flux_msg_set_cred failed");
+    ok (flux_msg_authorize (msg, 9) == 0,
+        "flux_msg_authorize allows guest when userid's match");
+    errno = 0;
+    ok (flux_msg_authorize (msg, 10) < 0
+        && errno == EPERM,
+        "flux_msg_authorize denies guest (EPERM) when userid's mismatch");
+    if (flux_msg_set_cred (msg, user_unknown) < 0)
+        BAIL_OUT ("flux_msg_set_cred failed");
+    errno = 0;
+    ok (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0
+        && errno == EPERM,
+        "flux_msg_authorize denies guest (EPERM) when userids=UNKNOWN");
+    if (flux_msg_set_cred (msg, none_9) < 0)
+        BAIL_OUT ("flux_msg_set_cred failed");
+    errno = 0;
+    ok (flux_msg_authorize (msg, 9) < 0
+        && errno == EPERM,
+        "flux_msg_authorize denies guest (EPERM) when role=NONE");
+
+    /* Elicit EINVAL from bad args.
+     */
+    errno = 0;
+    ok (flux_msg_get_cred (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_cred cred=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_cred (NULL, &cred) < 0 && errno == EINVAL,
+        "flux_msg_get_cred msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_cred (NULL, cred) < 0 && errno == EINVAL,
+        "flux_msg_set_cred msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_userid (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_userid userid=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_userid (NULL, &cred.userid) < 0 && errno == EINVAL,
+        "flux_msg_get_userid msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_rolemask (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_rolemask rolemask=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_rolemask (NULL, &cred.rolemask) < 0 && errno == EINVAL,
+        "flux_msg_get_rolemask msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_rolemask (NULL, cred.rolemask) < 0 && errno == EINVAL,
+        "flux_msg_set_rolemask msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_userid (NULL, cred.userid) < 0 && errno == EINVAL,
+        "flux_msg_set_userid msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_authorize (NULL, 42) < 0 && errno == EINVAL,
+        "flux_msg_authorize msg=NULL fails with EINVAL");
+
     flux_msg_destroy (msg);
 }
 
