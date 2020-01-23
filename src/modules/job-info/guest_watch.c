@@ -23,7 +23,6 @@
 
 #include "info.h"
 #include "watch.h"
-#include "allow.h"
 
 /* The callback for job-info.guest-eventlog-watch handles all
  * of the tricky / racy things related to reading an eventlog from the
@@ -68,8 +67,7 @@
 struct guest_watch_ctx {
     struct info_ctx *ctx;
     const flux_msg_t *msg;
-    uint32_t msg_rolemask;
-    uint32_t msg_userid;
+    struct flux_msg_cred cred;
     flux_jobid_t id;
     char *path;
     int flags;
@@ -163,12 +161,8 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
 
     gw->msg = flux_msg_incref (msg);
 
-    if (flux_msg_get_rolemask (msg, &gw->msg_rolemask) < 0) {
-        flux_log_error (ctx->h, "%s: flux_msg_get_rolemask", __FUNCTION__);
-        goto error;
-    }
-    if (flux_msg_get_userid (msg, &gw->msg_userid) < 0) {
-        flux_log_error (ctx->h, "%s: flux_msg_get_userid", __FUNCTION__);
+    if (flux_msg_get_cred (msg, &gw->cred) < 0) {
+        flux_log_error (ctx->h, "%s: flux_msg_get_cred", __FUNCTION__);
         goto error;
     }
 
@@ -181,7 +175,7 @@ error:
     return NULL;
 }
 
-/* we want to copy rolemask, userid, etc. from the original
+/* we want to copy credentials, etc. from the original
  * message when we redirect to other job-info targets.
  */
 static flux_msg_t *guest_msg_pack (struct guest_watch_ctx *gw,
@@ -200,9 +194,7 @@ static flux_msg_t *guest_msg_pack (struct guest_watch_ctx *gw,
 
     if (!(newmsg = flux_request_encode (topic, NULL)))
         goto error;
-    if (flux_msg_set_rolemask (newmsg, gw->msg_rolemask) < 0)
-        goto error;
-    if (flux_msg_set_userid (newmsg, gw->msg_userid) < 0)
+    if (flux_msg_set_cred (newmsg, gw->cred) < 0)
         goto error;
     if (!(payload = json_vpack_ex (NULL, 0, fmt, ap)))
         goto error;
