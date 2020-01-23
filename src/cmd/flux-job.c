@@ -47,6 +47,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
 int cmd_namespace (optparse_t *p, int argc, char **argv);
 int cmd_cancel (optparse_t *p, int argc, char **argv);
+int cmd_cancelall (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_raiseall (optparse_t *p, int argc, char **argv);
 int cmd_kill (optparse_t *p, int argc, char **argv);
@@ -81,6 +82,20 @@ static struct optparse_option list_opts[] =  {
     },
     { .name = "all", .key = 'A', .has_arg = 0,
       .usage = "List jobs for all users, regardless of state",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option cancelall_opts[] =  {
+    { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
+      .usage = "Set target user or 'all' (instance owner only)",
+    },
+    { .name = "states", .key = 'S', .has_arg = 1, .arginfo = "STATES",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Set target job states (default=ACTIVE)",
+    },
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "Confirm the command",
     },
     OPTPARSE_TABLE_END
 };
@@ -236,6 +251,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_cancel,
       0,
       NULL,
+    },
+    { "cancelall",
+      "[OPTIONS] [message ...]",
+      "Cancel multiple jobs",
+      cmd_cancelall,
+      0,
+      cancelall_opts,
     },
     { "raise",
       "[OPTIONS] id [message ...]",
@@ -770,6 +792,53 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         log_msg_exit ("%llu: %s", (unsigned long long)id,
                       future_strerror (f, errno));
     flux_future_destroy (f);
+    flux_close (h);
+    free (note);
+    return 0;
+}
+
+int cmd_cancelall (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    uint32_t userid;
+    int state_mask;
+    flux_t *h;
+    char *note = NULL;
+    int dry_run = 1;
+    int count;
+    int errors;
+
+    if (optindex < argc)
+        note = parse_arg_message (argv + optindex, "message");
+    if (optparse_hasopt (p, "states")) {
+        state_mask = parse_arg_states (p, "states");
+        if ((state_mask & FLUX_JOB_INACTIVE))
+            log_msg_exit ("Inactive jobs cannot be cancelled");
+    }
+    else
+        state_mask = FLUX_JOB_ACTIVE;
+    if (optparse_hasopt (p, "user"))
+        userid = parse_arg_userid (p, "user");
+    else
+        userid = geteuid ();
+    if (optparse_hasopt (p, "force"))
+        dry_run = 0;
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    count = raiseall (h,
+                      dry_run,
+                      userid,
+                      state_mask,
+                      0,
+                      "cancel",
+                      note,
+                      &errors);
+    if (count > 0 && dry_run)
+        log_msg ("Command matched %d jobs (-f to confirm)", count);
+    else if (count > 0 && !dry_run)
+        log_msg ("Canceled %d jobs (%d errors)", count, errors);
+    else
+        log_msg ("Command matched 0 jobs");
     flux_close (h);
     free (note);
     return 0;
