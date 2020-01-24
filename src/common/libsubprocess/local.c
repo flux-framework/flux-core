@@ -409,6 +409,8 @@ static void closefd_child (void *arg, int fd)
  *   signal to proceed. This is done by writing 1 byte to child side of
  *   socketpair, and waiting for parent to write one byte back.
  *
+ * Call fprintf instead of flux_log_error(), errors in child should
+ *  go to parent error streams.
  */
 static int local_child_ready (flux_subprocess_t *p)
 {
@@ -417,11 +419,12 @@ static int local_child_ready (flux_subprocess_t *p)
     char c = 0;
 
     if (write (fd, &c, sizeof (c)) != 1) {
-        flux_log_error (p->h, "local_child_ready: write");
+        fprintf (stderr, "local_child_ready: write: %s\n", strerror (errno));
         return -1;
     }
     if ((n = read (fd, &c, sizeof (c))) != 1) {
-        flux_log_error (p->h, "local_child_ready: read (fd=%d): rc=%d", fd, n);
+        fprintf (stderr, "local_child_ready: read (fd=%d): rc=%d: %s\n",
+                 fd, n, strerror (errno));
         return -1;
     }
     return 0;
@@ -430,10 +433,13 @@ static int local_child_ready (flux_subprocess_t *p)
 static void local_child_report_exec_failed_errno (flux_subprocess_t *p, int e)
 {
     int fd = p->sync_fds[1];
+    /* Call fprintf instead of flux_log_error(), errors in child
+     * should go to parent error streams. */
     if (write (fd, &e, sizeof (e)) != sizeof (e))
-        flux_log_error (p->h, "local_child_report_exec_failed_errno");
+        fprintf (stderr, "local_child_report_exec_failed_errno: %s\n",
+                 strerror (errno));
 }
- 
+
 #if CODE_COVERAGE_ENABLED
 void __gcov_flush (void);
 #endif
@@ -446,24 +452,27 @@ static int local_child (flux_subprocess_t *p)
 
     /* Throughout this function use _exit() instead of exit(), to
      * avoid calling any atexit() routines of parent.
+     *
+     * Call fprintf instead of flux_log_error(), errors in child
+     * should go to parent error streams.
      */
 
     if (sigmask_unblock_all () < 0)
-        flux_log_error (p->h, "sigprocmask");
+        fprintf (stderr, "sigprocmask: %s\n", strerror (errno));
 
     close_parent_fds (p);
 
     if (!(p->flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
         if ((c = zhash_lookup (p->channels, "stdin"))) {
             if (dup2 (c->child_fd, STDIN_FILENO) < 0) {
-                flux_log_error (p->h, "dup2");
+                fprintf (stderr, "dup2: %s\n", strerror (errno));
                 _exit (1);
             }
         }
 
         if ((c = zhash_lookup (p->channels, "stdout"))) {
             if (dup2 (c->child_fd, STDOUT_FILENO) < 0) {
-                flux_log_error (p->h, "dup2");
+                fprintf (stderr, "dup2: %s\n", strerror (errno));
                 _exit (1);
             }
         }
@@ -472,7 +481,7 @@ static int local_child (flux_subprocess_t *p)
 
         if ((c = zhash_lookup (p->channels, "stderr"))) {
             if (dup2 (c->child_fd, STDERR_FILENO) < 0) {
-                flux_log_error (p->h, "dup2");
+                fprintf (stderr, "dup2: %s\n", strerror (errno));
                 _exit (1);
             }
         }
@@ -482,7 +491,9 @@ static int local_child (flux_subprocess_t *p)
 
     // Change working directory
     if ((cwd = flux_cmd_getcwd (p->cmd)) && chdir (cwd) < 0) {
-        flux_log_error (p->h, "Couldn't change dir to %s: going to /tmp instead", cwd);
+        fprintf (stderr,
+                 "Couldn't change dir to %s: going to /tmp instead: %s\n",
+                 cwd, strerror (errno));
         if (chdir ("/tmp") < 0)
             _exit (1);
     }
@@ -493,7 +504,7 @@ static int local_child (flux_subprocess_t *p)
 
     // Close fds
     if (fdwalk (closefd_child, (void *) p) < 0) {
-        flux_log_error (p->h, "Failed closing all fds");
+        fprintf (stderr, "Failed closing all fds: %s", strerror (errno));
         _exit (1);
     }
 
@@ -508,7 +519,7 @@ static int local_child (flux_subprocess_t *p)
 
     if (p->flags & FLUX_SUBPROCESS_FLAGS_SETPGRP) {
         if (setpgrp () < 0) {
-            flux_log_error (p->h, "setpgrp");
+            fprintf (stderr, "setpgrp: %s\n", strerror (errno));
             _exit (1);
         }
     }
