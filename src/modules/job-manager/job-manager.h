@@ -22,6 +22,7 @@ struct job_manager {
     struct drain *drain;
     struct waitjob *wait;
     struct raise *raise;
+    struct kill *kill;
 };
 
 #endif /* !_FLUX_JOB_MANAGER_H */

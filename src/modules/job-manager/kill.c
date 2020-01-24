@@ -39,6 +39,11 @@
 #  define SIGRTMAX 64
 #endif
 
+struct kill {
+    struct job_manager *ctx;
+    flux_msg_handler_t **handlers;
+};
+
 int kill_check_signal (int signum)
 {
     if (signum <= 0 || signum > SIGRTMAX)
@@ -103,6 +108,41 @@ void kill_handle_request (flux_t *h,
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+void kill_ctx_destroy (struct kill *kill)
+{
+    if (kill) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (kill->handlers);
+        free (kill);
+        errno = saved_errno;
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.kill",
+        kill_handle_request,
+        FLUX_ROLE_USER
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct kill *kill_ctx_create (struct job_manager *ctx)
+{
+    struct kill *kill;
+
+    if (!(kill = calloc (1, sizeof (*kill))))
+        return NULL;
+    kill->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &kill->handlers) < 0)
+        goto error;
+    return kill;
+error:
+    kill_ctx_destroy (kill);
+    return NULL;
 }
 
 /*
