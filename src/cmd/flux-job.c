@@ -51,6 +51,7 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv);
 int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_raiseall (optparse_t *p, int argc, char **argv);
 int cmd_kill (optparse_t *p, int argc, char **argv);
+int cmd_killall (optparse_t *p, int argc, char **argv);
 int cmd_priority (optparse_t *p, int argc, char **argv);
 int cmd_eventlog (optparse_t *p, int argc, char **argv);
 int cmd_wait_event (optparse_t *p, int argc, char **argv);
@@ -130,6 +131,19 @@ static struct optparse_option raiseall_opts[] =  {
 static struct optparse_option kill_opts[] = {
     { .name = "signal", .key = 's', .has_arg = 1, .arginfo = "SIG",
       .usage = "Send signal SIG (default SIGTERM)",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option killall_opts[] = {
+    { .name = "signal", .key = 's', .has_arg = 1, .arginfo = "SIG",
+      .usage = "Send signal SIG (default SIGTERM)",
+    },
+    { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
+      .usage = "Set target user or 'all' (instance owner only)",
+    },
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "Confirm the command",
     },
     OPTPARSE_TABLE_END
 };
@@ -279,6 +293,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_kill,
       0,
       kill_opts,
+    },
+    { "killall",
+      "[OPTIONS]",
+      "Send signal to multiple running jobs",
+      cmd_killall,
+      0,
+      killall_opts,
     },
     { "attach",
       "[OPTIONS] id",
@@ -763,6 +784,64 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
                       (uintmax_t) id,
                       future_strerror (f, errno));
     flux_future_destroy (f);
+    flux_close (h);
+    return 0;
+}
+
+int cmd_killall (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    flux_future_t *f;
+    int optindex = optparse_option_index (p);
+    const char *s;
+    int signum;
+    uint32_t userid;
+    int count;
+    int dry_run = 1;
+    int errors;
+
+    if (argc - optindex > 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    s = optparse_get_str (p, "signal", "SIGTERM");
+    if ((signum = str2signum (s))< 0)
+        log_msg_exit ("killall: Invalid signal %s", s);
+    if (optparse_hasopt (p, "user"))
+        userid = parse_arg_userid (p, "user");
+    else
+        userid = geteuid ();
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (optparse_hasopt (p, "force"))
+        dry_run = 0;
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.killall",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:b s:i s:i}",
+                             "dry_run",
+                             dry_run,
+                             "userid",
+                             userid,
+                             "signum",
+                             signum)))
+        log_err_exit ("error sending killall request");
+    if (flux_rpc_get_unpack (f,
+                             "{s:i s:i}",
+                             "count",
+                             &count,
+                             "errors",
+                             &errors) < 0)
+        log_msg_exit ("killall: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    if (count > 0 && dry_run)
+        log_msg ("Command matched %d jobs (-f to confirm)", count);
+    else if (count > 0 && !dry_run)
+        log_msg ("%s %d jobs (%d errors)", strsignal (signum), count, errors);
+    else
+        log_msg ("Command matched 0 jobs");
     flux_close (h);
     return 0;
 }
