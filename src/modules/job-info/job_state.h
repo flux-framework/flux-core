@@ -65,8 +65,18 @@ struct job {
     json_t *jobspec_job;
     json_t *jobspec_cmd;
 
-    /* if userid, priority, t_submit, and flags have been set */
-    bool job_info_retrieved;
+    /* Track which states we have seen and have completed transition
+     * to.  We do not immediately update to the new state and place
+     * onto a new list until we have retrieved any necessary data
+     * associated to that state.  For example, when the 'depend' state
+     * has been seen, we don't immediately place it on the `pending`
+     * list.  We wait until we've retrieved data such as userid,
+     * priority, etc.
+     *
+     * Track which states we've seen via the states_mask;
+     */
+    zlist_t *next_states;
+    unsigned int states_mask;
     void *list_handle;
 
     /* timestamp of when we enter the state
