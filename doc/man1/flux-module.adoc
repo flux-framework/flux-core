@@ -36,9 +36,10 @@ The service that will load the module is inferred
 from the module name.  When the load command completes successfully,
 the new module is ready to accept messages on all targeted ranks.
 
-*remove* 'name'::
+*remove* [--force] 'name'::
 Remove module 'name'.  The service that will unload the module is
-inferred from the name specified on the command line.
+inferred from the name specified on the command line. If '-f, --force'
+is used, then do not error if module 'name' is not loaded.
 
 *list* ['service']::
 List modules loaded by 'service', or by flux-broker(1) if 'service' is unspecified.
