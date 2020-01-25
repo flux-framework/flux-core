@@ -157,10 +157,14 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
     if (state == FLUX_SUBPROCESS_EXEC_FAILED
         || state == FLUX_SUBPROCESS_FAILED) {
+        flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
         int errnum = flux_subprocess_fail_errno (p);
         int ec = 1;
 
-        log_err ("Error: rank %d: %s", flux_subprocess_rank (p), strerror (errnum));
+        log_msg ("Error: rank %d: %s: %s",
+                 flux_subprocess_rank (p),
+                 flux_cmd_arg (cmd, 0),
+                 strerror (errnum));
 
         /* bash standard, 126 for permission/access denied, 127 for
          * command not found.  68 (EX_NOHOST) for No route to host.
