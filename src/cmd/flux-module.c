@@ -43,6 +43,16 @@ static struct optparse_option legacy_opts[] =  {
     OPTPARSE_TABLE_END,
 };
 
+static struct optparse_option remove_opts[] =  {
+    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
+      .usage = "Send RPC to specified rank",
+    },
+    { .name = "force", .key = 'f',
+      .usage = "Ignore nonexistent modules",
+    },
+    OPTPARSE_TABLE_END,
+};
+
 static struct optparse_option stats_opts[] =  {
     { .name = "parse", .key = 'p', .has_arg = 1, .arginfo = "OBJNAME",
       .usage = "Parse object period-delimited object name",
@@ -89,7 +99,7 @@ static struct optparse_subcommand subcommands[] = {
       "Unload module",
       cmd_remove,
       0,
-      legacy_opts,
+      remove_opts,
     },
     { "load",
       "[OPTIONS] module",
@@ -334,8 +344,10 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
                              "name",
                              modname)))
         log_err_exit ("%s %s", topic, modname);
-    if (flux_rpc_get (f, NULL) < 0)
-        log_err_exit ("%s %s", topic, modname);
+    if (flux_rpc_get (f, NULL) < 0) {
+        if (!(optparse_hasopt (p, "force") && errno == ENOENT))
+            log_err_exit ("%s %s", topic, modname);
+    }
     flux_future_destroy (f);
     free (topic);
     free (service);
