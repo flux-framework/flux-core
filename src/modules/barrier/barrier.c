@@ -361,23 +361,22 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     char *sender = NULL;
     const char *key;
     struct barrier *b;
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
 
-    if (flux_msg_get_userid (msg, &userid) < 0)
-        goto error;
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+    if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         goto error;
     FOREACH_ZHASH (ctx->barriers, key, b) {
         if (zhash_lookup (b->clients, sender)) {
-            if (!(rolemask & FLUX_ROLE_OWNER) && b->owner != userid) {
-                flux_log (h, LOG_ERR,
-                          "client userid mismatch %"PRIu32" != %"PRIu32,
-                          userid, b->owner);
+            if (flux_msg_cred_authorize (cred, b->owner) < 0) {
+                flux_log (h,
+                          LOG_ERR,
+                          "disconnect auth failure from user %" PRIu32,
+                          cred.userid);
+                continue;
             }
-            else if (exit_event_send (h, b->name, b->owner, ECONNABORTED) < 0)
+            if (exit_event_send (h, b->name, b->owner, ECONNABORTED) < 0)
                 flux_log_error (h, "exit_event_send");
         }
     }

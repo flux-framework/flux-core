@@ -24,8 +24,7 @@
 /* State for one watcher */
 struct watcher {
     const flux_msg_t *request;  // request message
-    uint32_t rolemask;          // request cred
-    uint32_t userid;            // request cred
+    struct flux_msg_cred cred;  // request cred
     int rootseq;                // last root sequence number sent
     bool cancelled;             // true if watcher has been cancelled
     bool mute;                  // true if response should be suppressed
@@ -107,8 +106,7 @@ static struct watcher *watcher_create (const flux_msg_t *msg, const char *key,
     if (!(w = calloc (1, sizeof (*w))))
         return NULL;
     w->request = flux_msg_incref (msg);
-    if (flux_msg_get_rolemask (msg, &w->rolemask) < 0
-            || flux_msg_get_userid (msg, &w->userid) < 0)
+    if (flux_msg_get_cred (msg, &w->cred) < 0)
         goto error;
     if (!(w->key = kvs_util_normalize_key (key, NULL)))
         goto error;
@@ -210,21 +208,6 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
 error:
     namespace_destroy (nsm);
     return NULL;
-}
-
-/* Verify that (userid, rolemask) credential is authorized to access 'nsm'.
- * The instance owner or namespace owner are permitted (return 0).
- * All others are denied (return -1, errno == EPERM).
- */
-static int check_authorization (struct ns_monitor *nsm,
-                                uint32_t rolemask, uint32_t userid)
-{
-    if ((rolemask & FLUX_ROLE_OWNER))
-        return 0;
-    if (nsm->owner != FLUX_USERID_UNKNOWN && userid == nsm->owner)
-        return 0;
-    errno = EPERM;
-    return -1;
 }
 
 /* Helper for watcher_respond - is key a member of array?
@@ -536,7 +519,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
  *   response
  * - blobref param replaces treeobj
  * - namespace param (ignores namespace associated with flux_t handle)
- * - userid, rolemask params (see N.B. below)
+ * - cred params (see N.B. below)
  * Use flux_rpc_get() not flux_kvs_lookup_get() to access the response.
  */
 static flux_future_t *lookupat (flux_t *h,
@@ -574,9 +557,7 @@ static flux_future_t *lookupat (flux_t *h,
      * in this request message, and not be overridden at the connector,
      * as would be the case if we were not sufficiently privileged.
      */
-    if (flux_msg_set_userid (msg, w->userid) < 0)
-        goto error;
-    if (flux_msg_set_rolemask (msg, w->rolemask) < 0)
+    if (flux_msg_set_cred (msg, w->cred) < 0)
         goto error;
     if (!(f = flux_rpc_message (h, msg, FLUX_NODEID_ANY, 0)))
         goto error;
@@ -663,7 +644,7 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
     assert (nsm->commit != NULL);
     if (nsm->commit->rootseq <= w->rootseq)
         return;
-    if (check_authorization (nsm, w->rolemask, w->userid) < 0) {
+    if (flux_msg_cred_authorize (w->cred, nsm->owner) < 0) {
         flux_log (nsm->ctx->h, LOG_DEBUG, "%s: auth failure", __FUNCTION__);
         goto error_respond;
     }

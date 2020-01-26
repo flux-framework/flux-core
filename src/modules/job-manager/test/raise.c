@@ -46,15 +46,6 @@ int main (int argc, char **argv)
     ok (raise_check_severity (-1) < 0,
         "raise_check_severity sev=-1 fails");
 
-    ok (raise_allow (FLUX_ROLE_OWNER, 42, 43) == 0,
-        "raise_allow permits instance owner");
-    ok (raise_allow (FLUX_ROLE_USER, 42, 42) == 0,
-        "raise_allow permits job owner");
-    ok (raise_allow (FLUX_ROLE_USER, 42, 43) < 0,
-        "raise_allow denies guest non-job owner");
-    ok (raise_allow (FLUX_ROLE_NONE, FLUX_USERID_UNKNOWN, 43) < 0,
-        "raise_allow denies default message creds");
-
     done_testing ();
 
     return 0;

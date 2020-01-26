@@ -448,9 +448,17 @@ bool flux_msg_is_streaming (const flux_msg_t *msg)
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_USERID, userid) < 0) {
+    zframe_t *zf;
+
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_set_u32 (zframe_data (zf),
+                              zframe_size (zf),
+                              PROTO_IND_USERID,
+                              userid) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -459,9 +467,17 @@ int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 
 int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_USERID, userid) < 0) {
+    zframe_t *zf;
+
+    if (!msg || !userid) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_get_u32 (zframe_data (zf),
+                              zframe_size (zf),
+                              PROTO_IND_USERID,
+                              userid) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -470,9 +486,17 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_set_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_ROLEMASK, rolemask) < 0) {
+    zframe_t *zf;
+
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_set_u32 (zframe_data (zf),
+                              zframe_size (zf),
+                              PROTO_IND_ROLEMASK,
+                              rolemask) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -481,12 +505,68 @@ int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 
 int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
-    if (!zf || proto_get_u32 (zframe_data (zf), zframe_size (zf),
-                              PROTO_IND_ROLEMASK, rolemask) < 0) {
+    zframe_t *zf;
+
+    if (!msg || !rolemask) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_get_u32 (zframe_data (zf),
+                              zframe_size (zf),
+                              PROTO_IND_ROLEMASK,
+                              rolemask) < 0) {
         errno = EPROTO;
         return -1;
     }
+    return 0;
+}
+
+int flux_msg_get_cred (const flux_msg_t *msg, struct flux_msg_cred *cred)
+{
+    if (!msg || !cred) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (flux_msg_get_rolemask (msg, &cred->rolemask) < 0)
+        return -1;
+    if (flux_msg_get_userid (msg, &cred->userid) < 0)
+        return -1;
+    return 0;
+}
+
+int flux_msg_set_cred (flux_msg_t *msg, struct flux_msg_cred cred)
+{
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (flux_msg_set_rolemask (msg, cred.rolemask) < 0)
+        return -1;
+    if (flux_msg_set_userid (msg, cred.userid) < 0)
+        return -1;
+    return 0;
+}
+
+int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid)
+{
+    if ((cred.rolemask & FLUX_ROLE_OWNER))
+        return 0;
+    if ((cred.rolemask & FLUX_ROLE_USER) && cred.userid != FLUX_USERID_UNKNOWN
+                                         && cred.userid == userid)
+        return 0;
+    errno = EPERM;
+    return -1;
+}
+
+int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid)
+{
+    struct flux_msg_cred cred;
+
+    if (flux_msg_get_cred (msg, &cred) < 0)
+        return -1;
+    if (flux_msg_cred_authorize (cred, userid) < 0)
+        return -1;
     return 0;
 }
 

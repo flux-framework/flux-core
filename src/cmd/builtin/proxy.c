@@ -141,7 +141,7 @@ static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
     struct proxy_command *ctx = arg;
 
     if (errnum != EPIPE && errnum != EPROTO && errnum != ECONNRESET) {
-        const struct auth_cred *cred = usock_conn_get_cred (uconn);
+        const struct flux_msg_cred *cred = usock_conn_get_cred (uconn);
         errno = errnum;
         flux_log_error (ctx->h,
                         "client=%.5s userid=%u",
@@ -167,7 +167,7 @@ static void uconn_recv (struct usock_conn *uconn, flux_msg_t *msg, void *arg)
 static int uconn_send (const flux_msg_t *msg, void *arg)
 {
     struct usock_conn *uconn = arg;
-    const struct auth_cred *cred;
+    const struct flux_msg_cred *cred;
     int type;
 
     if (flux_msg_get_type (msg, &type) < 0)
@@ -190,7 +190,7 @@ static int uconn_send (const flux_msg_t *msg, void *arg)
 static void acceptor_cb (struct usock_conn *uconn, void *arg)
 {
     struct proxy_command *ctx = arg;
-    const struct auth_cred *cred;
+    const struct flux_msg_cred *cred;
     struct router_entry *entry;
 
     /* Userid is the user running flux-proxy (else reject).

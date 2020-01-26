@@ -60,24 +60,22 @@ error:
     return rv;
 }
 
+/* Optimization:
+ * Avoid calling eventlog_get_userid() if message cred has OWNER role.
+ */
 int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
                     const char *s)
 {
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
     int job_user;
 
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+    if (flux_msg_get_cred (msg, &cred) < 0)
         return -1;
-    if (!(rolemask & FLUX_ROLE_OWNER)) {
-        if (flux_msg_get_userid (msg, &userid) < 0)
-            return -1;
+    if (!(cred.rolemask & FLUX_ROLE_OWNER)) {
         if (eventlog_get_userid (ctx, s, &job_user) < 0)
             return -1;
-        if (userid != job_user) {
-            errno = EPERM;
+        if (flux_msg_cred_authorize (cred, job_user) < 0)
             return -1;
-        }
     }
     return 0;
 }

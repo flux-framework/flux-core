@@ -16,12 +16,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 
-struct creds {
-    uint32_t userid;
-    uint32_t rolemask;
-};
-
-static int cred_get (flux_t *h, struct creds *cr)
+static int cred_get (flux_t *h, struct flux_msg_cred *cr)
 {
     if (flux_opt_get (h, FLUX_OPT_TESTING_USERID,
                        &cr->userid, sizeof (cr->userid)) < 0)
@@ -32,7 +27,7 @@ static int cred_get (flux_t *h, struct creds *cr)
     return 0;
 }
 
-static int cred_set (flux_t *h, struct creds *cr)
+static int cred_set (flux_t *h, struct flux_msg_cred *cr)
 {
     if (flux_opt_set (h, FLUX_OPT_TESTING_USERID,
                        &cr->userid, sizeof (cr->userid)) < 0)
@@ -47,7 +42,7 @@ static void check_rpc_oneway (flux_t *h)
 {
     flux_future_t *f = NULL;
     flux_msg_t *msg = NULL;
-    struct creds cr;
+    struct flux_msg_cred cr;
 
     f = flux_rpc (h, "testrpc0", NULL, FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
     ok (f != NULL,
@@ -59,12 +54,10 @@ static void check_rpc_oneway (flux_t *h)
     msg = flux_recv (h, FLUX_MATCH_ANY, 0);
     ok (msg != NULL,
         "received looped back request");
-    ok (flux_msg_get_userid (msg, &cr.userid) == 0
-        && cr.userid == geteuid (),
-        "request contains userid belonging to instance owner");
-    ok (flux_msg_get_rolemask (msg, &cr.rolemask) == 0
+    ok (flux_msg_get_cred (msg, &cr) == 0
+        && cr.userid == geteuid ()
         && cr.rolemask == FLUX_ROLE_OWNER,
-        "request contains rolemask set to FLUX_ROLE_OWNER");
+        "request contains userid=EUID, rolemask=OWNER");
     flux_msg_destroy (msg);
 }
 
@@ -72,7 +65,7 @@ static void check_rpc_oneway_faked (flux_t *h)
 {
     flux_future_t *f = NULL;
     flux_msg_t *msg = NULL;
-    struct creds saved, new, cr;
+    struct flux_msg_cred saved, new, cr;
 
     ok (cred_get (h, &saved) == 0
         && saved.userid == geteuid() && saved.rolemask == FLUX_ROLE_OWNER,
@@ -94,12 +87,10 @@ static void check_rpc_oneway_faked (flux_t *h)
     msg = flux_recv (h, FLUX_MATCH_ANY, 0);
     ok (msg != NULL,
         "received looped back request");
-    ok (flux_msg_get_userid (msg, &cr.userid) == 0
-        && cr.userid == new.userid,
-        "request contains test userid");
-    ok (flux_msg_get_rolemask (msg, &cr.rolemask) == 0
+    ok (flux_msg_get_cred (msg, &cr) == 0
+        && cr.userid == new.userid
         && cr.rolemask == new.rolemask,
-        "request contains test rolemask");
+        "request contains test userid and rolemask");
     flux_msg_destroy (msg);
 
     ok (cred_set (h, &saved) == 0,
@@ -132,7 +123,7 @@ static void check_rpc_default_policy (flux_t *h)
 {
     flux_future_t *f;
     flux_msg_handler_t *mh;
-    struct creds saved, new, cr;
+    struct flux_msg_cred saved, new, cr;
     int rc;
 
     ok ((mh = testrpc1_handler_create (h)) != NULL,
@@ -194,7 +185,7 @@ static void check_rpc_open_policy (flux_t *h)
 {
     flux_future_t *f;
     flux_msg_handler_t *mh;
-    struct creds saved, new, cr;
+    struct flux_msg_cred saved, new, cr;
     int rc;
 
     ok ((mh = testrpc1_handler_create (h)) != NULL,
@@ -248,7 +239,7 @@ static void check_rpc_targetted_policy (flux_t *h)
 {
     flux_future_t *f;
     flux_msg_handler_t *mh;
-    struct creds saved, new, cr;
+    struct flux_msg_cred saved, new, cr;
     uint32_t allow = 0x1000;
     int rc;
 

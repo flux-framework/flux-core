@@ -45,8 +45,7 @@ lookup_t *lookup_create (struct cache *cache,
                          const char *root_ref,
                          int root_seq,
                          const char *path,
-                         uint32_t rolemask,
-                         uint32_t userid,
+                         struct flux_msg_cred cred,
                          int flags,
                          flux_t *h);
 

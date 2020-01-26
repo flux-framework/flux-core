@@ -68,7 +68,7 @@ static void server_error_cb (struct usock_conn *conn, int errnum, void *arg)
 
 static void server_acceptor (struct usock_conn *conn, void *arg)
 {
-    const struct auth_cred *cred;
+    const struct flux_msg_cred *cred;
 
     cred = usock_conn_get_cred (conn);
 

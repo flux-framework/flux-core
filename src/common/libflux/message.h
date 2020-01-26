@@ -222,6 +222,28 @@ enum {
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask);
 int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask);
 
+/* Combined rolemask, userid access for convenience
+ */
+struct flux_msg_cred {
+    uint32_t userid;
+    uint32_t rolemask;
+};
+int flux_msg_get_cred (const flux_msg_t *msg, struct flux_msg_cred *cred);
+int flux_msg_set_cred (flux_msg_t *msg, struct flux_msg_cred cred);
+
+/* Simple authorization for service access:
+ * If cred rolemask includes OWNER, grant (return 0).
+ * If cred rolemask includes USER and userid matches 'userid',
+ * and userid is not FLUX_USERID_UNKNOWN, grant (return 0).
+ * Otherwise deny (return -1, errno = EPERM).
+ */
+int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid);
+
+/* Convenience functions that calls
+ * flux_msg_get_cred() + flux_msg_cred_authorize().
+ */
+int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid);
+
 /* Get/set errnum (response/keepalive only)
  */
 int flux_msg_set_errnum (flux_msg_t *msg, int errnum);

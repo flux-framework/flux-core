@@ -87,8 +87,7 @@ struct job {
 
     const flux_msg_t *msg; // submit request message
     const char *J;      // signed jobspec
-    uint32_t userid;    // submitting userid
-    uint32_t rolemask;  // submitting rolemask
+    struct flux_msg_cred cred;    // submitting user's creds
     int priority;       // requested job priority
     int flags;          // submit flags
 
@@ -142,9 +141,7 @@ static struct job *job_create (const flux_msg_t *msg,
                              "priority", &job->priority,
                              "flags", &job->flags) < 0)
         goto error;
-    if (flux_msg_get_userid (job->msg, &job->userid) < 0)
-        goto error;
-    if (flux_msg_get_rolemask (job->msg, &job->rolemask) < 0)
+    if (flux_msg_get_cred (job->msg, &job->cred) < 0)
         goto error;
     job->ctx = ctx;
     return job;
@@ -392,7 +389,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     entry = eventlog_entry_pack (0., "submit",
                                  "{ s:i s:i s:i }",
-                                 "userid", job->userid,
+                                 "userid", job->cred.userid,
                                  "priority", job->priority,
                                  "flags", job->flags);
     if (!entry)
@@ -408,7 +405,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i}",
                                 "id", job->id,
-                                "userid", job->userid,
+                                "userid", job->cred.userid,
                                 "priority", job->priority,
                                 "t_submit", t,
                                 "flags", job->flags)))
@@ -510,7 +507,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto error;
     }
-    if (!(job->rolemask & FLUX_ROLE_OWNER)
+    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
            && job->priority > FLUX_JOB_PRIORITY_DEFAULT) {
         snprintf (errbuf, sizeof (errbuf),
                   "only the instance owner can submit with priority >%d",
@@ -521,7 +518,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     /* Only owner can set FLUX_JOB_WAITABLE.
      */
-    if (!(job->rolemask & FLUX_ROLE_OWNER)
+    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
             && (job->flags & FLUX_JOB_WAITABLE)) {
         snprintf (errbuf,
                   sizeof (errbuf),
@@ -531,7 +528,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     /* Validate jobspec signature, and unwrap(J) -> jobspec,  jobspecsz.
-     * Userid claimed by signature must match authenticated job->userid.
+     * Userid claimed by signature must match authenticated job->cred.userid.
      * If not the instance owner, a strong signature is required
      * to give the IMP permission to launch processes on behalf of the user.
      */
@@ -560,15 +557,17 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     mech_type = "none";
     userid_signer = userid_signer_u32;
 #endif
-    if (userid_signer != job->userid) {
+    if (userid_signer != job->cred.userid) {
         snprintf (errbuf, sizeof (errbuf),
                   "signer=%lu != requestor=%lu",
-                  (unsigned long)userid_signer, (unsigned long)job->userid);
+                  (unsigned long)userid_signer,
+                  (unsigned long)job->cred.userid);
         errmsg = errbuf;
         errno = EPERM;
         goto error;
     }
-    if (!(job->rolemask & FLUX_ROLE_OWNER) && !strcmp (mech_type, "none")) {
+    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
+                                && !strcmp (mech_type, "none")) {
         snprintf (errbuf, sizeof (errbuf),
                   "only instance owner can use sign-type=none");
         errmsg = errbuf;

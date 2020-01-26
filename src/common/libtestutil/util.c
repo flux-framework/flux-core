@@ -191,8 +191,7 @@ void test_server_environment_init (const char *test_name)
 struct test_connector {
     zsock_t *sock;
     flux_t *h;
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
 };
 
 static int test_connector_pollevents (void *impl)
@@ -225,9 +224,7 @@ static int test_connector_send (void *impl, const flux_msg_t *msg, int flags)
 
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (flux_msg_set_userid (cpy, tcon->userid) < 0)
-        goto error;
-    if (flux_msg_set_rolemask (cpy, tcon->rolemask) < 0)
+    if (flux_msg_set_cred (cpy, tcon->cred) < 0)
         goto error;
     if (flux_msg_sendzsock (tcon->sock, cpy) < 0)
         goto error;
@@ -286,8 +283,8 @@ static flux_t *test_connector_create (const char *shmem_name,
 
     if (!(tcon = calloc (1, sizeof (*tcon))))
         BAIL_OUT ("calloc");
-    tcon->userid = geteuid ();
-    tcon->rolemask = FLUX_ROLE_OWNER;
+    tcon->cred.userid = geteuid ();
+    tcon->cred.rolemask = FLUX_ROLE_OWNER;
     if (!(tcon->sock = zsock_new_pair (NULL)))
         BAIL_OUT ("zsock_new_pair");
     zsock_set_unbounded (tcon->sock);
@@ -312,8 +309,7 @@ struct loopback_connector {
     flux_t *h;
     int pollfd;
     int pollevents;
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
 };
 
 static int loopback_connector_pollevents (void *impl)
@@ -345,22 +341,19 @@ static int loopback_connector_send (void *impl, const flux_msg_t *msg,
                                     int flags)
 {
     struct loopback_connector *lcon = impl;
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
     flux_msg_t *cpy;
 
-    if (flux_msg_get_userid (msg, &userid) < 0)
-        return -1;
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+    if (flux_msg_get_cred (msg, &cred) < 0)
         return -1;
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (userid == FLUX_USERID_UNKNOWN) {
-        if (flux_msg_set_userid (cpy, lcon->userid) < 0)
+    if (cred.userid == FLUX_USERID_UNKNOWN) {
+        if (flux_msg_set_userid (cpy, lcon->cred.userid) < 0)
             goto error;
     }
-    if (rolemask == FLUX_ROLE_NONE) {
-        if (flux_msg_set_rolemask (cpy, lcon->rolemask) < 0)
+    if (cred.rolemask == FLUX_ROLE_NONE) {
+        if (flux_msg_set_rolemask (cpy, lcon->cred.rolemask) < 0)
             goto error;
     }
     if (msglist_append (lcon->queue, cpy) < 0) // steals 'cpy'
@@ -389,14 +382,14 @@ static int loopback_connector_getopt (void *impl, const char *option,
     struct loopback_connector *lcon = impl;
 
     if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
-        if (size != sizeof (lcon->userid))
+        if (size != sizeof (lcon->cred.userid))
             goto error;
-        memcpy (val, &lcon->userid, size);
+        memcpy (val, &lcon->cred.userid, size);
     }
     else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
-        if (size != sizeof (lcon->rolemask))
+        if (size != sizeof (lcon->cred.rolemask))
             goto error;
-        memcpy (val, &lcon->rolemask, size);
+        memcpy (val, &lcon->cred.rolemask, size);
     }
     else
         goto error;
@@ -413,16 +406,16 @@ static int loopback_connector_setopt (void *impl, const char *option,
     size_t val_size;
 
     if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
-        val_size = sizeof (lcon->userid);
+        val_size = sizeof (lcon->cred.userid);
         if (size != val_size)
             goto error;
-        memcpy (&lcon->userid, val, val_size);
+        memcpy (&lcon->cred.userid, val, val_size);
     }
     else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
-        val_size = sizeof (lcon->rolemask);
+        val_size = sizeof (lcon->cred.rolemask);
         if (size != val_size)
             goto error;
-        memcpy (&lcon->rolemask, val, val_size);
+        memcpy (&lcon->cred.rolemask, val, val_size);
     }
     else
         goto error;
@@ -458,8 +451,8 @@ flux_t *loopback_create (int flags)
 
     if (!(lcon = calloc (1, sizeof (*lcon))))
         BAIL_OUT ("calloc");
-    lcon->userid = geteuid ();
-    lcon->rolemask = FLUX_ROLE_OWNER;
+    lcon->cred.userid = geteuid ();
+    lcon->cred.rolemask = FLUX_ROLE_OWNER;
     if (!(lcon->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         BAIL_OUT ("msglist_create");
 

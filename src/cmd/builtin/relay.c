@@ -88,7 +88,7 @@ static void relay (int infd, int outfd, flux_t *h)
     struct router *router;
     struct router_entry *entry;
     struct usock_conn *uconn;
-    struct auth_cred cred;
+    struct flux_msg_cred cred;
     flux_reactor_t *r;
 
     if (!(r = flux_get_reactor (h)))

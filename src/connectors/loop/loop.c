@@ -27,8 +27,7 @@ typedef struct {
     int magic;
     flux_t *h;
 
-    uint32_t userid;
-    uint32_t rolemask;
+    struct flux_msg_cred cred;
 
     msglist_t *queue;
 } loop_ctx_t;
@@ -65,22 +64,18 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_msg_t *cpy = NULL;
-    uint32_t userid, rolemask;
+    struct flux_msg_cred cred;
     int rc = -1;
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
-    if (flux_msg_get_userid (cpy, &userid) < 0)
+    if (flux_msg_get_cred (cpy, &cred) < 0)
         goto done;
-    if (flux_msg_get_rolemask (cpy, &rolemask) < 0)
-        goto done;
-    if (userid == FLUX_USERID_UNKNOWN)
-        userid = c->userid;
-    if (rolemask == FLUX_ROLE_NONE)
-        rolemask = c->rolemask;
-    if (flux_msg_set_userid (cpy, userid) < 0)
-        goto done;
-    if (flux_msg_set_rolemask (cpy, rolemask) < 0)
+    if (cred.userid == FLUX_USERID_UNKNOWN)
+        cred.userid = c->cred.userid;
+    if (cred.rolemask == FLUX_ROLE_NONE)
+        cred.rolemask = c->cred.rolemask;
+    if (flux_msg_set_cred (cpy, cred) < 0)
         goto done;
     if (msglist_append (c->queue, cpy) < 0)
         goto done;
@@ -131,8 +126,8 @@ flux_t *connector_init (const char *path, int flags)
                 || flux_attr_set_cacheonly (c->h, "size", "1") < 0
                 || flux_attr_set_cacheonly (c->h, "tbon-arity", "2") < 0)
         goto error;
-    c->userid = geteuid ();
-    c->rolemask = FLUX_ROLE_OWNER;
+    c->cred.userid = geteuid ();
+    c->cred.rolemask = FLUX_ROLE_OWNER;
     return c->h;
 error:
     if (c) {

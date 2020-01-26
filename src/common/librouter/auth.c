@@ -43,7 +43,7 @@ int auth_lookup_rolemask_get (flux_future_t *f, uint32_t *rolemask)
     return 0;
 }
 
-int auth_init_message (flux_msg_t *msg, const struct auth_cred *conn)
+int auth_init_message (flux_msg_t *msg, const struct flux_msg_cred *conn)
 {
     if (!msg || !conn) {
         errno = EINVAL;
@@ -65,7 +65,7 @@ int auth_init_message (flux_msg_t *msg, const struct auth_cred *conn)
      * If they have not been set, overwrite with connect creds, as above.
      */
     else {
-        struct auth_cred cred;
+        struct flux_msg_cred cred;
 
         if (flux_msg_get_userid (msg, &cred.userid) < 0)
             return -1;
@@ -85,7 +85,7 @@ int auth_init_message (flux_msg_t *msg, const struct auth_cred *conn)
 }
 
 int auth_check_event_privacy (const flux_msg_t *msg,
-                              const struct auth_cred *cred)
+                              const struct flux_msg_cred *cred)
 {
     if (!msg || !cred) {
         errno = EINVAL;

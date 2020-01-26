@@ -39,14 +39,12 @@ void lookup (void)
     flux_future_destroy (f);
 }
 
-int checkcred (const flux_msg_t *msg, struct auth_cred *cred)
+int checkcred (const flux_msg_t *msg, struct flux_msg_cred *cred)
 {
-    struct auth_cred msgcred;
+    struct flux_msg_cred msgcred;
 
-    if (flux_msg_get_rolemask (msg, &msgcred.rolemask) < 0)
-        BAIL_OUT ("flux_msg_get_rolemask faild");
-    if (flux_msg_get_userid (msg, &msgcred.userid) < 0)
-        BAIL_OUT ("flux_msg_get_userid faild");
+    if (flux_msg_get_cred (msg, &msgcred) < 0)
+        BAIL_OUT ("flux_msg_get_cred faild");
     if (msgcred.rolemask != cred->rolemask)
         return -1;
     if (msgcred.userid != cred->userid)
@@ -54,20 +52,18 @@ int checkcred (const flux_msg_t *msg, struct auth_cred *cred)
     return 0;
 }
 
-void setcred (flux_msg_t *msg, struct auth_cred *cred)
+void setcred (flux_msg_t *msg, struct flux_msg_cred cred)
 {
-    if (flux_msg_set_rolemask (msg, cred->rolemask) < 0)
-        BAIL_OUT ("flux_msg_set_rolemask failed");
-    if (flux_msg_set_userid (msg, cred->userid) < 0)
-        BAIL_OUT ("flux_msg_set_userid failed");
+    if (flux_msg_set_cred (msg, cred) < 0)
+        BAIL_OUT ("flux_msg_set_cred failed");
 }
 
 void init_message (void)
 {
-    struct auth_cred nocred = { .userid = FLUX_USERID_UNKNOWN,
+    struct flux_msg_cred nocred = { .userid = FLUX_USERID_UNKNOWN,
                                 .rolemask = FLUX_ROLE_NONE };
-    struct auth_cred ocred = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
-    struct auth_cred gcred = { .userid = 42, .rolemask = FLUX_ROLE_USER };
+    struct flux_msg_cred ocred = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
+    struct flux_msg_cred gcred = { .userid = 42, .rolemask = FLUX_ROLE_USER };
     flux_msg_t *msg;
 
     if (!(msg = flux_request_encode ("foo", NULL)))
@@ -75,21 +71,21 @@ void init_message (void)
 
     /* unint message gets connection creds (common case)
      */
-    setcred (msg, &nocred);
+    setcred (msg, nocred);
     ok (auth_init_message (msg, &ocred) == 0 && checkcred (msg, &ocred) == 0,
         "auth_init_message conn=owner uninit message cred set to owner");
 
-    setcred (msg, &nocred);
+    setcred (msg, nocred);
     ok (auth_init_message (msg, &gcred) == 0 && checkcred (msg, &gcred) == 0,
         "auth_init_message conn=guest uninit message cred set to guest");
 
     /* ability for connected owner message creds to pass through, not guest.
      */
-    setcred (msg, &gcred);
+    setcred (msg, gcred);
     ok (auth_init_message (msg, &ocred) == 0 && checkcred (msg, &gcred) == 0,
         "auth_init_message conn=owner init message creds pass through");
 
-    setcred (msg, &ocred);
+    setcred (msg, ocred);
     ok (auth_init_message (msg, &gcred) == 0 && checkcred (msg, &gcred) == 0,
         "auth_init_message conn=guest init message creds set to guest");
 
@@ -108,9 +104,9 @@ void init_message (void)
 
 void event_privacy (void)
 {
-    struct auth_cred ocred = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
-    struct auth_cred gcred = { .userid = 42, .rolemask = FLUX_ROLE_USER };
-    struct auth_cred g2cred = { .userid = 43, .rolemask = FLUX_ROLE_USER };
+    struct flux_msg_cred ocred = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
+    struct flux_msg_cred gcred = { .userid = 42, .rolemask = FLUX_ROLE_USER };
+    struct flux_msg_cred g2cred = { .userid = 43, .rolemask = FLUX_ROLE_USER };
     flux_msg_t *msg;
 
     if (!(msg = flux_event_encode ("foo", NULL)))
@@ -118,10 +114,10 @@ void event_privacy (void)
 
     /* public events visible to owner and guest
      */
-    setcred (msg, &ocred);
+    setcred (msg, ocred);
     ok (auth_check_event_privacy (msg, &ocred) == 0,
        "auth_check_event_privacy conn=owner can see owner public event");
-    setcred (msg, &gcred);
+    setcred (msg, gcred);
     ok (auth_check_event_privacy (msg, &ocred) == 0,
        "auth_check_event_privacy conn=owner can see guest public event");
 
@@ -130,26 +126,26 @@ void event_privacy (void)
 
     /* private events visible to owner
      */
-    setcred (msg, &ocred);
+    setcred (msg, ocred);
     ok (auth_check_event_privacy (msg, &ocred) == 0,
        "auth_check_event_privacy conn=owner can see owner private event");
-    setcred (msg, &gcred);
+    setcred (msg, gcred);
     ok (auth_check_event_privacy (msg, &ocred) == 0,
        "auth_check_event_privacy conn=owner can see guest private event");
 
     /* private event visibility to guests is limited to their own
      */
-    setcred (msg, &ocred);
+    setcred (msg, ocred);
     errno = 0;
     ok (auth_check_event_privacy (msg, &gcred) < 0 && errno == EPERM,
        "auth_check_event_privacy conn=guest cannot see owner private event");
 
-    setcred (msg, &g2cred);
+    setcred (msg, g2cred);
     errno = 0;
     ok (auth_check_event_privacy (msg, &gcred) < 0 && errno == EPERM,
        "auth_check_event_privacy conn=guest cannot see guest2 private event");
 
-    setcred (msg, &gcred);
+    setcred (msg, gcred);
     ok (auth_check_event_privacy (msg, &gcred) == 0,
        "auth_check_event_privacy conn=guest can see guest private event");
 

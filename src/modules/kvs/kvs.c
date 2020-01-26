@@ -281,34 +281,17 @@ cleanup:
  * security
  */
 
-static int get_msg_cred (kvs_ctx_t *ctx,
-                         const flux_msg_t *msg,
-                         uint32_t *rolemask,
-                         uint32_t *userid)
-{
-    if (flux_msg_get_rolemask (msg, rolemask) < 0) {
-        flux_log_error (ctx->h, "flux_msg_get_rolemask");
-        return -1;
-    }
-
-    if (flux_msg_get_userid (msg, userid) < 0) {
-        flux_log_error (ctx->h, "flux_msg_get_userid");
-        return -1;
-    }
-
-    return 0;
-}
-
 static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
                        const flux_msg_t *msg)
 {
-    uint32_t rolemask;
-    uint32_t userid;
+    struct flux_msg_cred cred;
 
-    if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
+    if (flux_msg_get_cred (msg, &cred) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_cred");
         return -1;
+    }
 
-    return kvsroot_check_user (ctx->krm, root, rolemask, userid);
+    return kvsroot_check_user (ctx->krm, root, cred);
 }
 
 /*
@@ -1316,7 +1299,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
     /* if lookup_handle exists in msg as aux data, is a replay */
     lh = flux_msg_aux_get (msg, "lookup_handle");
     if (!lh) {
-        uint32_t rolemask, userid;
+        struct flux_msg_cred cred;
         int root_seq = -1;
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
@@ -1356,8 +1339,10 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
             }
         }
 
-        if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
+        if (flux_msg_get_cred (msg, &cred) < 0) {
+            flux_log_error (ctx->h, "flux_msg_get_cred");
             goto done;
+        }
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->krm,
@@ -1366,8 +1351,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
                                   root_ref,
                                   root_seq,
                                   key,
-                                  rolemask,
-                                  userid,
+                                  cred,
                                   flags,
                                   h)))
             goto done;

@@ -282,7 +282,8 @@ void test_service (flux_t *h)
     flux_msg_t *msg;
     const char *topic;
     int count;
-    uint32_t rolemask, userid, matchtag;
+    uint32_t matchtag;
+    struct flux_msg_cred cred;
     int rc;
 
     errno = 0;
@@ -305,12 +306,11 @@ void test_service (flux_t *h)
     rc = flux_msg_get_matchtag (msg, &matchtag);
     ok (rc == 0 && matchtag == 1,
         "response has first matchtag", matchtag);
-    rc = flux_msg_get_userid (msg, &userid);
-    ok (rc == 0 && userid == geteuid (),
-        "response has userid equal to effective uid of test");
-    rc = flux_msg_get_rolemask (msg, &rolemask);
-    ok (rc == 0 && (rolemask & FLUX_ROLE_OWNER) != 0,
-        "response has rolemask including instance owner");
+    rc = flux_msg_get_cred (msg, &cred);
+    ok (rc == 0
+        && cred.userid == geteuid ()
+        && (cred.rolemask & FLUX_ROLE_OWNER),
+        "response has cred.userid=EUID, cred.rolemask including OWNER");
     errno = 0;
     rc = flux_msg_get_route_count (msg);
     ok ((rc == -1 && errno == EINVAL) || (rc == 0),
