@@ -99,6 +99,7 @@ TESTSCRIPTS = \
 	t2205-job-info-security.t \
 	t2206-job-manager-bulk-state.t \
 	t2207-job-manager-wait.t \
+	t2208-queue-cmd.t \
 	t2210-job-manager-bugs.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
@@ -192,7 +193,6 @@ dist_check_SCRIPTS = \
 	kvs/kvs-helper.sh \
 	job-manager/exec-service.lua \
 	job-manager/drain-cancel.py \
-	job-manager/drain-undrain.py \
 	job-manager/bulk-state.py \
 	job-manager/submit-wait.py \
 	job-manager/submit-waitany.py \

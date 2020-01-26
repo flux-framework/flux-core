@@ -22,9 +22,6 @@
 struct submit *submit_ctx_create (struct job_manager *ctx);
 void submit_ctx_destroy (struct submit *submit);
 
-void submit_enable (struct submit *submit);
-void submit_disable (struct submit *submit);
-
 /* exposed for unit testing only */
 int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o);
 void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlist_t *newjobs);

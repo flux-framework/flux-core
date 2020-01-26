@@ -85,16 +85,16 @@ void list_handle_request (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
-    /* First list pending jobs - SCHED (S)
+    /* First list jobs in SCHED (S) state
      * (priority, then t_submit order).
      */
-    job = alloc_pending_first (ctx->alloc);
+    job = alloc_queue_first (ctx->alloc);
     while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {
         if (list_append_job (jobs, job) < 0)
             goto error;
-        job = alloc_pending_next (ctx->alloc);
+        job = alloc_queue_next (ctx->alloc);
     }
-    /* Then list non-pending active jobs - DEPEND (D), RUN (R), CLEANUP (C)
+    /* Then list remaining active jobs - DEPEND (D), RUN (R), CLEANUP (C)
      * (random order).
      */
     job = zhashx_first (ctx->active_jobs);

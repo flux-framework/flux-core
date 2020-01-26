@@ -55,7 +55,6 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_drain (optparse_t *p, int argc, char **argv);
-int cmd_undrain (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
@@ -284,17 +283,10 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "drain",
       "[-t seconds]",
-      "Disable job submissions and wait for queue to empty.",
+      "Wait for queue to become empty.",
       cmd_drain,
       0,
       drain_opts
-    },
-    { "undrain",
-      NULL,
-      "Re-enable job submissions after drain.",
-      cmd_undrain,
-      0,
-      NULL
     },
     { "namespace",
       "[id ...]",
@@ -1989,27 +1981,6 @@ int cmd_drain (optparse_t *p, int argc, char **argv)
     if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("drain: %s", errno == ETIMEDOUT
                                    ? "timeout" : future_strerror (f, errno));
-    flux_future_destroy (f);
-    flux_close (h);
-    return (0);
-}
-
-int cmd_undrain (optparse_t *p, int argc, char **argv)
-{
-    flux_t *h;
-    int optindex = optparse_option_index (p);
-    flux_future_t *f;
-
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-    if (argc - optindex != 0) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    if (!(f = flux_rpc (h, "job-manager.undrain", NULL, FLUX_NODEID_ANY, 0)))
-        log_err_exit ("flux_rpc");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("undrain: %s", future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     return (0);

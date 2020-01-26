@@ -8,7 +8,6 @@ test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
 
-DRAIN_UNDRAIN="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-undrain.py"
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
@@ -238,41 +237,26 @@ test_expect_success 'job-manager: still no jobs in the queue' '
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
-test_expect_success 'job-manager: flux job drain works' '
-	run_timeout 5 flux job drain
+test_expect_success 'job-manager: flux queue disable works' '
+	flux queue disable system is fubar
 '
 
-test_expect_success 'job-manager: flux job drain (3x) works' '
-	flux job drain &&
-	flux job drain &&
-	flux job drain
+test_expect_success 'job-manager: flux job submit receives custom error' '
+	! flux job submit basic.json 2>disabled_submit.err &&
+	grep fubar disabled_submit.err
 '
 
-test_expect_success 'job-manager: flux job submit receives disabled error' '
-	! flux job submit basic.json 2>drain_submit.err &&
-	grep disabled drain_submit.err
+test_expect_success 'job-manager: flux queue enable works' '
+	flux queue enable
 '
 
-test_expect_success 'job-manager: flux job undrain works' '
-	flux job undrain
-'
-
-test_expect_success 'job-manager: flux job submit works after undrain' '
+test_expect_success 'job-manager: flux job submit works after queue enable' '
 	flux job submit basic.json
 '
 
 test_expect_success 'job-manager: flux job drain -t 0.01 receives timeout error' '
 	! flux job drain -t 0.01 2>drain.err &&
 	grep timeout drain.err
-'
-
-test_expect_success 'job-manager: flux job submit fails while drained' '
-	! flux job submit basic.json
-'
-
-test_expect_success 'job-manager: flux job drain canceled by undrain' '
-	${DRAIN_UNDRAIN} >drain_undrain.out &&
-	grep re-enabled drain_undrain.out
 '
 
 test_expect_success 'job-manager: there is still one job in the queue' '

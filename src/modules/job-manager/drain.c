@@ -8,15 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* drain.c - support queue drain/undrain
- *
- * The "flux job drain" command can be used to disable job submission,
- * then wait until the queue is empty.
- *
- * Use case:  initial program submits work, then calls "flux job drain"
- * before exiting.
- *
- * Job submission can be re-enabled using "flux job undrain".
+/* drain.c - wait for queue to become empty
  */
 
 #if HAVE_CONFIG_H
@@ -61,7 +53,6 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = ENOMEM;
         goto error;
     }
-    submit_disable (ctx->submit);
     /* N.B. If queue is empty, call drain_empty_notify() immediately
      * Otherwise it will be called when last job transitions to inactive.
      */
@@ -71,28 +62,6 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
-static void undrain_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
-{
-    struct job_manager *ctx = arg;
-    const flux_msg_t *req;
-
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        return;
-    }
-    submit_enable (ctx->submit);
-    while ((req = zlist_pop (ctx->drain->requests))) {
-        if (flux_respond_error (ctx->h, req, EINVAL,
-                                "queue was re-enabled") < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-        flux_msg_decref (req);
-    }
-    if (flux_respond (ctx->h, msg, NULL) < 0)
-        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
 }
 
 void drain_ctx_destroy (struct drain *drain)
@@ -118,7 +87,6 @@ void drain_ctx_destroy (struct drain *drain)
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.drain", drain_cb, 0},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.undrain", undrain_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

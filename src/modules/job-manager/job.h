@@ -48,7 +48,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
  */
 void job_destructor (void **item);
 void *job_duplicator (const void *item);
-int job_pending_cmp (const void *a1, const void *a2);
+int job_comparator (const void *a1, const void *a2);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
