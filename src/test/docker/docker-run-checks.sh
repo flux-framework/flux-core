@@ -17,7 +17,7 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only"
 declare -r short_opts="hqIdi:S:j:t:D:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -30,6 +30,7 @@ Options:\n\
  -h, --help                    Display this message\n\
      --no-cache                Disable docker caching\n\
      --no-home                 Skip mounting the host home directory\n\
+     --install-only            Skip make check, only make install\n\
  -q, --quiet                   Add --quiet to docker-build\n\
  -t, --tag=TAG                 If checks succeed, tag image as NAME\n\
  -i, --image=NAME              Use base docker image NAME (default=$IMAGE)\n\
@@ -65,6 +66,7 @@ while true; do
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
+      --install-only)              INSTALL_ONLY=t;             shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
       --)                          shift; break;                       ;;
       *)                           die "Invalid option '$1'\n$usage"   ;;
@@ -106,37 +108,49 @@ export DISTCHECK
 export BUILD_DIR
 export chain_lint
 
-docker run --rm \
-    --workdir=/usr/src \
-    --volume=$TOP:/usr/src \
-    $MOUNT_HOME_ARGS \
-    -e CC \
-    -e CXX \
-    -e LDFLAGS \
-    -e CFLAGS \
-    -e CPPFLAGS \
-    -e GCOV \
-    -e CCACHE_CPP2 \
-    -e CCACHE_READONLY \
-    -e COVERAGE \
-    -e TEST_INSTALL \
-    -e CPPCHECK \
-    -e DISTCHECK \
-    -e chain_lint \
-    -e JOBS \
-    -e USER \
-    -e TRAVIS \
-    -e TAP_DRIVER_QUIET \
-    -e PYTHON_VERSION \
-    -e PRELOAD \
-    -e ASAN_OPTIONS \
-    -e BUILD_DIR \
-    --cap-add SYS_PTRACE \
-    --tty \
-    ${INTERACTIVE:+--interactive} \
-    travis-builder:${IMAGE} \
-    ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \
+if [[ "$INSTALL_ONLY" == "t" ]]; then
+    docker run --rm \
+	--workdir=/usr/src \
+        --volume=$TOP:/usr/src \
+	travis-builder:${IMAGE} \
+	sh -c "./autogen.sh &&
+               ./configure --prefix=/usr &&
+               make clean && 
+               make -j${JOBS}" \
+	|| (docker rm tmp.$$; die "docker run of 'make install' failed")
+else
+    docker run --rm \
+        --workdir=/usr/src \
+        --volume=$TOP:/usr/src \
+        $MOUNT_HOME_ARGS \
+        -e CC \
+        -e CXX \
+        -e LDFLAGS \
+        -e CFLAGS \
+        -e CPPFLAGS \
+        -e GCOV \
+        -e CCACHE_CPP2 \
+        -e CCACHE_READONLY \
+        -e COVERAGE \
+        -e TEST_INSTALL \
+        -e CPPCHECK \
+        -e DISTCHECK \
+        -e chain_lint \
+        -e JOBS \
+        -e USER \
+        -e TRAVIS \
+        -e TAP_DRIVER_QUIET \
+        -e PYTHON_VERSION \
+        -e PRELOAD \
+        -e ASAN_OPTIONS \
+        -e BUILD_DIR \
+        --cap-add SYS_PTRACE \
+        --tty \
+        ${INTERACTIVE:+--interactive} \
+        travis-builder:${IMAGE} \
+        ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \
     || die "docker run failed"
+fi
 
 if test -n "$TAG"; then
     # Re-run 'make install' in fresh image, otherwise we get all
