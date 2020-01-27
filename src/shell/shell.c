@@ -1098,8 +1098,10 @@ int main (int argc, char *argv[])
         if (shell_task_init (&shell) < 0)
             shell_die (1, "failed to initialize taskid=%d", i);
 
-        if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0)
-            shell_die (1, "failed to start taskid=%d", i);
+        if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0) {
+            shell_die (1, "task %d: start failed: %s: %s",
+                       i, flux_cmd_arg (task->cmd, 0), strerror (errno));
+        }
 
         if (zlist_append (shell.tasks, task) < 0)
             shell_die (1, "zlist_append failed");

@@ -134,8 +134,9 @@ done
 
 test_expect_success 'flux-shell: missing command logs fatal error' '
 	test_expect_code 1 flux mini run nosuchcommand 2>missing.err &&
-	grep "flux-shell\[0\]: FATAL: failed to start taskid=0" missing.err &&
-	grep "job.exception type=exec severity=0 failed to start taskid=0" missing.err
+	grep "flux-shell\[0\]: FATAL: task 0: start failed" missing.err &&
+	grep "job.exception type=exec severity=0 task 0: start failed" missing.err &&
+        grep "No such file or directory" missing.err
 '
 
 test_expect_success 'job-exec: set kill-timeout to low value for testing' '

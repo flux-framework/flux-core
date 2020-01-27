@@ -111,6 +111,11 @@ test_expect_success 'flux exec exits with code 127 for file not found' '
 	test_expect_code 127 run_timeout 2 flux exec -n ./nosuchprocess
 '
 
+test_expect_success 'flux exec outputs appropriate error message for file not found' '
+	test_expect_code 127 flux exec -n ./nosuchprocess 2> exec.stderr &&
+        grep "No such file or directory" exec.stderr
+'
+
 test_expect_success 'flux exec exits with code 126 for non executable' '
 	test_expect_code 126 flux exec -n /dev/null
 '
