@@ -139,6 +139,11 @@ test_expect_success 'flux-shell: missing command logs fatal error' '
         grep "No such file or directory" missing.err
 '
 
+test_expect_success 'flux-shell: bad cwd emits message, but completes' '
+	flux mini run --setattr="system.cwd=/foo" pwd 2>badcwd.err &&
+        grep "Could not change dir to /foo: No such file or directory" badcwd.err
+'
+
 test_expect_success 'job-exec: set kill-timeout to low value for testing' '
 	flux setattr job-exec.kill_timeout 0.25
 '

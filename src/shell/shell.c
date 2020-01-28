@@ -929,6 +929,21 @@ static int shell_init (flux_shell_t *shell)
         }
     }
 
+    /* Change current working directory once before all tasks are
+     * created, so that each task does not need to chdir().
+     */
+    if (shell->info->jobspec->cwd) {
+        if (chdir (shell->info->jobspec->cwd) < 0) {
+            shell_log_error ("Could not change dir to %s: %s. "
+                             "Going to /tmp instead",
+                             shell->info->jobspec->cwd, strerror (errno));
+            if (chdir ("/tmp") < 0) {
+                shell_log_errno ("Could not change dir to /tmp");
+                return -1;
+            }
+        }
+    }
+
     return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 

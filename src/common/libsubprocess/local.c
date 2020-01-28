@@ -492,7 +492,7 @@ static int local_child (flux_subprocess_t *p)
     // Change working directory
     if ((cwd = flux_cmd_getcwd (p->cmd)) && chdir (cwd) < 0) {
         fprintf (stderr,
-                 "Couldn't change dir to %s: going to /tmp instead: %s\n",
+                 "Could not change dir to %s: %s. Going to /tmp instead\n",
                  cwd, strerror (errno));
         if (chdir ("/tmp") < 0)
             _exit (1);
