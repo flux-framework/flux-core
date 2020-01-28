@@ -29,6 +29,11 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job);
  */
 void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job);
 
+/* Send a request to cancel pending alloc request.
+ * This function is a no-op if job->alloc_pending is not set.
+ */
+int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job);
+
 /* Call from CLEANUP state to release resources.
  * This function is a no-op if job->free_pending is set.
  */

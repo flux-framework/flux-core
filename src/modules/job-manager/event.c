@@ -320,6 +320,8 @@ int event_job_action (struct event *event, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_CLEANUP:
+            if (job->alloc_pending)
+                alloc_cancel_alloc_request (ctx->alloc, job);
             if (job->alloc_queued)
                 alloc_dequeue_alloc_request (ctx->alloc, job);
 
@@ -328,7 +330,8 @@ int event_job_action (struct event *event, struct job *job)
              * response with final=true.  Thus once the flag is clear,
              * it is safe to release all resources to the scheduler.
              */
-            if (job->has_resources && !job->start_pending) {
+            if (job->has_resources && !job->start_pending
+                                   && !job->free_pending) {
                 if (alloc_send_free_request (ctx->alloc, job) < 0)
                     return -1;
             }

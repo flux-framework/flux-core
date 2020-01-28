@@ -17,7 +17,7 @@
  * - job id, severity, type, note (optional)
  *
  * Action:
- * - publish exception event (for e.g. scheduler to abort queued requests)
+ * - publish exception event
  * - update kvs event log
  * - transition state to CLEANUP for severity=0
  *

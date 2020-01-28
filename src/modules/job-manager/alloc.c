@@ -532,6 +532,16 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
     }
 }
 
+/* called from event_job_action() FLUX_JOB_CLEANUP */
+int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job)
+{
+    if (job->alloc_pending) {
+        if (cancel_request (alloc, job) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /* called from list_handle_request() */
 struct job *alloc_queue_first (struct alloc *alloc)
 {
