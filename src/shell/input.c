@@ -226,23 +226,6 @@ static int shell_input_parse_type (struct shell_input *in)
     return 0;
 }
 
-static void shell_input_kvs_init_completion (flux_future_t *f, void *arg)
-{
-    struct shell_input *in = arg;
-
-    if (flux_future_get (f, NULL) < 0)
-        /* failng to commit header is a fatal error.  Should be
-         * cleaner in future. Issue #2378 */
-        shell_die_errno (1, "shell_input_kvs_init");
-    flux_future_destroy (f);
-
-    if (flux_shell_remove_completion_ref (in->shell, "input.kvs-init") < 0)
-        shell_log_errno ("flux_shell_remove_completion_ref");
-
-    if (in->stdin_type == FLUX_INPUT_TYPE_FILE)
-        flux_watcher_start (in->stdin_file.w);
-}
-
 static int shell_input_kvs_init (struct shell_input *in, json_t *header)
 {
     flux_kvs_txn_t *txn = NULL;
@@ -259,15 +242,13 @@ static int shell_input_kvs_init (struct shell_input *in, json_t *header)
         goto error;
     if (!(f = flux_kvs_commit (in->shell->h, NULL, 0, txn)))
         goto error;
-    if (flux_future_then (f, -1, shell_input_kvs_init_completion, in) < 0)
-        goto error;
-    if (flux_shell_add_completion_ref (in->shell, "input.kvs-init") < 0) {
-        shell_log_errno ("flux_shell_remove_completion_ref");
-        goto error;
-    }
-    /* f memory responsibility of shell_input_kvs_init_completion()
-     * callback */
-    f = NULL;
+    /* Synchronously wait for kvs commit to complete to ensure
+     * guest.input exists before passing shell initialization barrier.
+     * This is required because tasks will immediately try to watch
+     * input eventlog on starting.
+     */
+    if (flux_future_get (f, NULL) < 0)
+        shell_die_errno (1, "failed to create input eventlog");
     rc = 0;
  error:
     saved_errno = errno;
@@ -425,6 +406,10 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
             if (in->stdin_type == FLUX_INPUT_TYPE_FILE) {
                 if (shell_input_type_file_setup (in) < 0)
                     goto error;
+                /* Ok to start fd watcher now since shell_input_header()
+                 *  synchronously write guest.input header.
+                 */
+                flux_watcher_start (in->stdin_file.w);
             }
         }
     }
