@@ -48,6 +48,10 @@ libmpir_la_SOURCES = \
 	mpir/proctable.c \
 	mpir/proctable.h
 
+
+fluxinclude_HEADERS = \
+	shell.h
+
 fluxlibexec_PROGRAMS = flux-shell
 
 flux_shell_SOURCES = \

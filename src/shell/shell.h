@@ -12,7 +12,6 @@
 #define FLUX_SHELL_H
 
 #include <flux/core.h>
-#include <flux/optparse.h>
 
 #ifdef __cplusplus
 extern "C" {
