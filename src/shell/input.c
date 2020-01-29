@@ -276,8 +276,10 @@ static int shell_input_header (struct shell_input *in)
         errno = ENOMEM;
         goto error;
     }
-    if (shell_input_kvs_init (in, o) < 0)
+    if (shell_input_kvs_init (in, o) < 0) {
         shell_log_errno ("shell_input_kvs_init");
+        goto error;
+    }
     rc = 0;
  error:
     json_decref (o);
