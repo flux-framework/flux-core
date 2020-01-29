@@ -95,4 +95,13 @@ test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
         ! grep after attach5.out
 '
 
+test_expect_success 'attach: output events processed after shell.init failure' '
+	jobid=$(flux mini submit -o initrc=noinitrc hostname) &&
+	flux job wait-event -v ${jobid} clean &&
+	flux job eventlog -p guest.output ${jobid} &&
+	(flux job attach ${jobid} >init-failure.output 2>&1 || true) &&
+	test_debug "cat init-failure.output" &&
+	grep "FATAL:.*noinitrc: No such file or directory" init-failure.output
+'
+
 test_done
