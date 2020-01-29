@@ -1079,7 +1079,7 @@ int main (int argc, char *argv[])
     /* Call shell initialization routines and "shell_init" plugins.
      */
     if (shell_init (&shell) < 0)
-        shell_die_errno (1, "shell_prepare");
+        shell_die_errno (1, "shell_init");
 
     /* Barrier to ensure initialization has completed across all shells.
      */

@@ -254,18 +254,6 @@ static int shell_output_redirect (struct shell_output *out, flux_kvs_txn_t *txn)
     return 0;
 }
 
-static void shell_output_kvs_init_completion (flux_future_t *f, void *arg)
-{
-    struct shell_output *out = arg;
-
-    if (flux_future_get (f, NULL) < 0)
-        shell_die_errno (1, "shell_output_kvs_init");
-    flux_future_destroy (f);
-
-    if (flux_shell_remove_completion_ref (out->shell, "output.kvs-init") < 0)
-        shell_log_errno ("flux_shell_remove_completion_ref");
-}
-
 static int shell_output_kvs_init (struct shell_output *out, json_t *header)
 {
     flux_kvs_txn_t *txn = NULL;
@@ -284,15 +272,12 @@ static int shell_output_kvs_init (struct shell_output *out, json_t *header)
         goto error;
     if (!(f = flux_kvs_commit (out->shell->h, NULL, 0, txn)))
         goto error;
-    if (flux_future_then (f, -1, shell_output_kvs_init_completion, out) < 0)
-        goto error;
-    if (flux_shell_add_completion_ref (out->shell, "output.kvs-init") < 0) {
-        shell_log_errno ("flux_shell_remove_completion_ref");
-        goto error;
-    }
-    /* f memory responsibility of shell_output_kvs_init_completion()
-     * callback */
-    f = NULL;
+    /* Wait synchronously for guest.output to be committed to kvs so
+     * that the output eventlog is guaranteed to exist before shell.init
+     * event is emitted to the exec.eventlog.
+     */
+    if (flux_future_get (f, NULL) < 0)
+        shell_die_errno (1, "failed to create header in output eventlog");
     rc = 0;
 error:
     saved_errno = errno;
@@ -843,8 +828,10 @@ static int shell_output_header (struct shell_output *out)
      * Call this as long as we're not standalone.
      */
     if (!out->shell->standalone) {
-        if (shell_output_kvs_init (out, o) < 0)
+        if (shell_output_kvs_init (out, o) < 0) {
             shell_log_errno ("shell_output_kvs_init");
+            goto error;
+        }
     }
     rc = 0;
 error:

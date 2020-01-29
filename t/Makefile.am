@@ -180,6 +180,7 @@ dist_check_SCRIPTS = \
 	issues/t1760-kvs-use-after-free.sh \
 	issues/t2281-service-add-crash.sh \
 	issues/t2284-initial-program-format-chars.sh \
+	issues/t2686-shell-input-race.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
