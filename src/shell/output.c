@@ -828,8 +828,10 @@ static int shell_output_header (struct shell_output *out)
      * Call this as long as we're not standalone.
      */
     if (!out->shell->standalone) {
-        if (shell_output_kvs_init (out, o) < 0)
+        if (shell_output_kvs_init (out, o) < 0) {
             shell_log_errno ("shell_output_kvs_init");
+            goto error;
+        }
     }
     rc = 0;
 error:
