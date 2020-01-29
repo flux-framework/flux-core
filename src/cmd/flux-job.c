@@ -130,6 +130,8 @@ static struct optparse_option attach_opts[] =  {
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
     },
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Increase verbosity" },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress warnings written to stderr from flux-job",
     },
@@ -935,6 +937,11 @@ static void handle_output_log (struct attach_ctx *ctx,
             fprintf (stderr, ": %s", label);
         if (component)
             fprintf (stderr, ": %s", component);
+        if (optparse_hasopt (ctx->p, "verbose") && file) {
+            fprintf (stderr, ": %s", file);
+            if (line > 0)
+                fprintf (stderr, ":%d", line);
+        }
         fprintf (stderr, ": %s\n", msg);
     }
 }
