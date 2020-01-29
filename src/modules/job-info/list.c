@@ -30,7 +30,7 @@
  * EPROTO - malformed attrs array
  * ENOMEM - out of memory
  */
-json_t *list_one_job (struct job *job, json_t *attrs)
+json_t *job_to_json (struct job *job, json_t *attrs)
 {
     size_t index;
     json_t *value;
@@ -127,11 +127,11 @@ json_t *list_one_job (struct job *job, json_t *attrs)
  *
  * ENOMEM - out of memory
  */
-int list_job_append (json_t *jobs,
-                     zlistx_t *list,
-                     int max_entries,
-                     json_t *attrs,
-                     uint32_t userid)
+int get_jobs_from_list (json_t *jobs,
+                        zlistx_t *list,
+                        int max_entries,
+                        json_t *attrs,
+                        uint32_t userid)
 {
     struct job *job;
 
@@ -139,7 +139,7 @@ int list_job_append (json_t *jobs,
     while (job) {
         if (userid == FLUX_USERID_UNKNOWN || job->userid == userid) {
             json_t *o;
-            if (!(o = list_one_job (job, attrs)))
+            if (!(o = job_to_json (job, attrs)))
                 return -1;
             if (json_array_append_new (jobs, o) < 0) {
                 json_decref (o);
@@ -162,11 +162,11 @@ int list_job_append (json_t *jobs,
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *list_jobs (struct info_ctx *ctx,
-                   int max_entries,
-                   json_t *attrs,
-                   uint32_t userid,
-                   int flags)
+json_t *get_jobs (struct info_ctx *ctx,
+                  int max_entries,
+                  json_t *attrs,
+                  uint32_t userid,
+                  int flags)
 {
     json_t *jobs = NULL;
     int saved_errno;
@@ -179,33 +179,33 @@ json_t *list_jobs (struct info_ctx *ctx,
      * inactive */
 
     if (flags & FLUX_JOB_LIST_PENDING) {
-        if ((ret = list_job_append (jobs,
-                                    ctx->jsctx->pending,
-                                    max_entries,
-                                    attrs,
-                                    userid)) < 0)
+        if ((ret = get_jobs_from_list (jobs,
+                                       ctx->jsctx->pending,
+                                       max_entries,
+                                       attrs,
+                                       userid)) < 0)
             goto error;
     }
 
     if (flags & FLUX_JOB_LIST_RUNNING) {
         if (!ret) {
-            if ((ret = list_job_append (jobs,
-                                        ctx->jsctx->running,
-                                        max_entries,
-                                        attrs,
-                                        userid)) < 0)
+            if ((ret = get_jobs_from_list (jobs,
+                                           ctx->jsctx->running,
+                                           max_entries,
+                                           attrs,
+                                           userid)) < 0)
                 goto error;
         }
     }
 
     if (flags & FLUX_JOB_LIST_INACTIVE) {
         if (!ret) {
-            if ((ret = list_job_append (jobs,
-                                        ctx->jsctx->inactive,
-                                        max_entries,
-                                        attrs,
-                                        userid)) < 0)
-                 goto error;
+            if ((ret = get_jobs_from_list (jobs,
+                                           ctx->jsctx->inactive,
+                                           max_entries,
+                                           attrs,
+                                           userid)) < 0)
+                goto error;
         }
     }
 
@@ -248,7 +248,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                  | FLUX_JOB_LIST_RUNNING
                  | FLUX_JOB_LIST_INACTIVE);
 
-    if (!(jobs = list_jobs (ctx, max_entries, attrs, userid, flags)))
+    if (!(jobs = get_jobs (ctx, max_entries, attrs, userid, flags)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
