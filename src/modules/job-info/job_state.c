@@ -20,6 +20,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libidset/idset.h"
 
 #include "job_state.h"
 
@@ -73,6 +74,8 @@ static void job_destroy (void *data)
     if (job) {
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
+        json_decref (job->R);
+        free (job->ranks);
         zlist_destroy (&job->next_states);
         free (job);
     }
@@ -659,6 +662,166 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
     return NULL;
 }
 
+static int idset_add_set (struct idset *set, struct idset *new)
+{
+    unsigned int i = idset_first (new);
+    while (i != IDSET_INVALID_ID) {
+        if (idset_test (set, i)) {
+            errno = EEXIST;
+            return -1;
+        }
+        if (idset_set (set, i) < 0)
+            return -1;
+        i = idset_next (new, i);
+    }
+    return 0;
+}
+
+static int idset_set_string (struct idset *idset, const char *ids)
+{
+    int rc;
+    struct idset *new = idset_decode (ids);
+    if (!new)
+        return -1;
+    rc = idset_add_set (idset, new);
+    idset_destroy (new);
+    return rc;
+}
+
+static int parse_rlite (struct info_ctx *ctx,
+                        struct job *job,
+                        const json_t *R_lite)
+{
+    struct idset *idset = NULL;
+    size_t index;
+    json_t *value;
+    int saved_errno, rc = -1;
+    int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
+
+    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return -1;
+    json_array_foreach (R_lite, index, value) {
+        const char *ranks = NULL;
+        if ((json_unpack_ex (value, NULL, 0, "{s:s}", "rank", &ranks) < 0)
+            || (idset_set_string (idset, ranks) < 0))
+            goto err;
+    }
+
+    job->nnodes = idset_count (idset);
+    if (!(job->ranks = idset_encode (idset, flags)))
+        goto err;
+
+    rc = 0;
+err:
+    saved_errno = errno;
+    idset_destroy (idset);
+    errno = saved_errno;
+    return rc;
+}
+
+static int R_lookup_parse (struct info_ctx *ctx,
+                           struct job *job,
+                           const char *s)
+{
+    json_error_t error;
+    json_t *R_lite = NULL;
+    int version;
+    int rc = -1;
+
+    if (!(job->R = json_loads (s, 0, &error))) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid R: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+
+    if (json_unpack_ex (job->R, &error, 0,
+                        "{s:i s:{s:o}}",
+                        "version", &version,
+                        "execution",
+                        "R_lite", &R_lite) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid R: %s",
+                  __FUNCTION__, (unsigned long long)job->id, error.text);
+        goto error;
+    }
+    if (version != 1) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu invalid R version: %d",
+                  __FUNCTION__, (unsigned long long)job->id, version);
+        goto error;
+    }
+    if (parse_rlite (ctx, job, R_lite) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu parse_rlite: %s",
+                  __FUNCTION__, (unsigned long long)job->id, strerror (errno));
+        goto error;
+    }
+
+    rc = 0;
+error:
+    return rc;
+}
+
+static void state_run_lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct job *job = arg;
+    struct info_ctx *ctx = job->ctx;
+    struct state_transition *st;
+    const char *s;
+    void *handle;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
+        flux_log_error (ctx->h, "%s: error eventlog for %llu",
+                        __FUNCTION__, (unsigned long long)job->id);
+        goto out;
+    }
+
+    if (R_lookup_parse (ctx, job, s) < 0)
+        goto out;
+
+    st = zlist_head (job->next_states);
+    assert (st);
+    update_job_state_and_list (ctx, job, st->state, st->timestamp);
+    zlist_remove (job->next_states, st);
+    process_next_state (ctx, job);
+
+out:
+    handle = zlistx_find (ctx->jsctx->futures, f);
+    if (handle)
+        zlistx_detach (ctx->jsctx->futures, handle);
+    flux_future_destroy (f);
+}
+
+static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
+                                           struct job *job)
+{
+    flux_future_t *f = NULL;
+    int saved_errno;
+
+    if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
+                             "{s:I s:[s] s:i}",
+                             "id", job->id,
+                             "keys", "R",
+                             "flags", 0))) {
+        flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
+        goto error;
+    }
+
+    if (flux_future_then (f, -1, state_run_lookup_continuation, job) < 0) {
+        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
+        goto error;
+    }
+
+    return f;
+
+ error:
+    saved_errno = errno;
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return NULL;
+}
+
 static void state_transition_destroy (void *data)
 {
     struct state_transition *st = data;
@@ -701,14 +864,24 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
 
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
-        if (st->state == FLUX_JOB_DEPEND) {
+        if (st->state == FLUX_JOB_DEPEND
+            || st->state == FLUX_JOB_RUN) {
             flux_future_t *f = NULL;
 
-            /* get initial job information, such as userid,
-             * priority, t_submit, flags, and jobspec info */
-            if (!(f = state_depend_lookup (jsctx, job))) {
-                flux_log_error (jsctx->h, "%s: state_depend_lookup", __FUNCTION__);
-                return;
+            if (st->state == FLUX_JOB_DEPEND) {
+                /* get initial job information, such as userid,
+                 * priority, t_submit, flags, and jobspec info */
+                if (!(f = state_depend_lookup (jsctx, job))) {
+                    flux_log_error (jsctx->h, "%s: state_depend_lookup", __FUNCTION__);
+                    return;
+                }
+            }
+            else { /* st->state == FLUX_JOB_RUN */
+                /* get R to get node count, etc. */
+                if (!(f = state_run_lookup (jsctx, job))) {
+                    flux_log_error (jsctx->h, "%s: state_run_lookup", __FUNCTION__);
+                    return;
+                }
             }
 
             if (!zlistx_add_end (jsctx->futures, f)) {
@@ -722,7 +895,6 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
         }
         else {
             /* FLUX_JOB_SCHED */
-            /* FLUX_JOB_RUN */
             /* FLUX_JOB_CLEANUP */
             /* FLUX_JOB_INACTIVE */
             update_job_state_and_list (ctx, job, st->state, st->timestamp);
@@ -939,7 +1111,8 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
     flux_jobid_t id;
     flux_future_t *f1 = NULL;
     flux_future_t *f2 = NULL;
-    const char *eventlog, *jobspec;
+    flux_future_t *f3 = NULL;
+    const char *eventlog, *jobspec, *R;
     char path[64];
     int rc = -1;
 
@@ -973,6 +1146,20 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
     if (jobspec_parse (ctx, job, jobspec) < 0)
         goto done;
 
+    if (job->states_mask & FLUX_JOB_RUN) {
+        if (flux_job_kvs_key (path, sizeof (path), id, "R") < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (!(f3 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+            goto done;
+        if (flux_kvs_lookup_get (f3, &R) < 0)
+            goto done;
+
+        if (R_lookup_parse (ctx, job, R) < 0)
+            goto done;
+    }
+
     if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
         flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
         goto done;
@@ -985,6 +1172,7 @@ done:
         job_destroy (job);
     flux_future_destroy (f1);
     flux_future_destroy (f2);
+    flux_future_destroy (f3);
     return rc;
 }
 

@@ -92,6 +92,16 @@ json_t *list_one_job (struct job *job, json_t *attrs)
         else if (!strcmp (attr, "ntasks")) {
             val = json_integer (job->ntasks);
         }
+        else if (!strcmp (attr, "nnodes")) {
+            if (!(job->states_mask & FLUX_JOB_RUN))
+                continue;
+            val = json_integer (job->nnodes);
+        }
+        else if (!strcmp (attr, "ranks")) {
+            if (!(job->states_mask & FLUX_JOB_RUN))
+                continue;
+            val = json_string (job->ranks);
+        }
         else {
             errno = EINVAL;
             goto error;
@@ -256,7 +266,7 @@ error:
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s,s,s,s,s,s,s]}",
+    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s,s,s,s,s,s,s,s]}",
                            "attrs",
                            "userid",
                            "priority",
@@ -268,7 +278,9 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                            "t_inactive",
                            "state",
                            "name",
-                           "ntasks") < 0) {
+                           "ntasks",
+                           "nnodes",
+                           "ranks") < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }

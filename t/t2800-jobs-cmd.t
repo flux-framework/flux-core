@@ -206,6 +206,34 @@ test_expect_success 'flux-jobs --format={ntasks} works' '
         test_cmp taskcount.out taskcount.exp
 '
 
+test_expect_success 'flux-jobs --format={nnodes},{nnodes_hyphen} works' '
+        flux jobs --suppress-header --state=pending --format="{nnodes},{nnodes_hyphen}" > nodecountP.out &&
+        for i in `seq 1 6`; do echo ",-" >> nodecountP.exp; done &&
+        test_cmp nodecountP.out nodecountP.exp &&
+        flux jobs --suppress-header --state=running,inactive --format="{nnodes},{nnodes_hyphen}" > nodecountRI.out &&
+        for i in `seq 1 12`; do echo "1,1" >> nodecountRI.exp; done &&
+        test_cmp nodecountRI.out nodecountRI.exp
+'
+
+# node ranks assumes sched-simple default of mode='worst-fit'
+test_expect_success 'flux-jobs --format={ranks},{ranks_hyphen} works' '
+        flux jobs --suppress-header --state=pending --format="{ranks},{ranks_hyphen}" > ranksP.out &&
+        for i in `seq 1 6`; do echo ",-" >> ranksP.exp; done &&
+        test_cmp ranksP.out ranksP.exp &&
+        flux jobs --suppress-header --state=running --format="{ranks},{ranks_hyphen}" > ranksR.out &&
+        for i in `seq 1 2`; \
+        do \
+            echo "3,3" >> ranksR.exp; \
+            echo "2,2" >> ranksR.exp; \
+            echo "1,1" >> ranksR.exp; \
+            echo "0,0" >> ranksR.exp; \
+        done &&
+        test_cmp ranksR.out ranksR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{ranks},{ranks_hyphen}" > ranksI.out &&
+        for i in `seq 1 4`; do echo "0,0" >> ranksI.exp; done &&
+        test_cmp ranksI.out ranksI.exp
+'
+
 # test just make sure numbers are zero or non-zero given state of job
 test_expect_success 'flux-jobs --format={t_XXX} works' '
         flux jobs --suppress-header -a --format="{t_submit}" > t_submit.out &&
