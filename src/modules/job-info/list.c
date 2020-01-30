@@ -271,6 +271,64 @@ error:
     json_decref (jobs);
 }
 
+/* Returns JSON object which the caller must free.  On error, return
+ * NULL with errno set:
+ *
+ * EPROTO - malformed or empty id or attrs array
+ * EINVAL - invalid id
+ * ENOMEM - out of memory
+ */
+json_t *get_job_by_id (struct info_ctx *ctx,
+                       flux_jobid_t id,
+                       json_t *attrs)
+{
+    struct job *job;
+
+    if (!(job = zhashx_lookup (ctx->jsctx->index, &id))
+        || job->state == FLUX_JOB_NEW) {
+        /* Issue #2592, deal with racy part later */
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return job_to_json (job, attrs);
+}
+
+void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
+                  const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    json_t *job = NULL;
+    flux_jobid_t id;
+    json_t *attrs;
+
+    if (flux_request_unpack (msg, NULL, "{s:I s:o}",
+                             "id", &id,
+                             "attrs", &attrs) < 0)
+        goto error;
+
+    if (!json_is_array (attrs)) {
+        errno = EPROTO;
+        goto error;
+    }
+
+    if (!(job = get_job_by_id (ctx, id, attrs)))
+        goto error;
+
+    if (flux_respond_pack (h, msg, "{s:O}", "job", job) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    json_decref (job);
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (job);
+}
+
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
