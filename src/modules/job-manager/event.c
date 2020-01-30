@@ -64,7 +64,8 @@ struct event_batch {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     json_t *state_trans;
-};
+    zlist_t *drain_requests; // completed drain requests:
+};                           //   defer responding until eventlogs committed
 
 struct event_batch *event_batch_create (struct event *event);
 void event_batch_destroy (struct event_batch *batch);
@@ -169,6 +170,10 @@ error:
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
 }
 
+/* Besides cleaning up, this function has the following side effects:
+ * - publish state transition event (if any)
+ * - respond to completed drain requests (if any)
+ */
 void event_batch_destroy (struct event_batch *batch)
 {
     if (batch) {
@@ -180,6 +185,16 @@ void event_batch_destroy (struct event_batch *batch)
         if (batch->state_trans) {
             event_publish_state (batch->event, batch->state_trans);
             json_decref (batch->state_trans);
+        }
+        if (batch->drain_requests) {
+            flux_msg_t *msg;
+            flux_t *h = batch->event->ctx->h;
+            while ((msg = zlist_pop (batch->drain_requests))) {
+                if (flux_respond (h, msg, NULL) < 0)
+                    flux_log_error (h, "error responding to drain request");
+                flux_msg_decref (msg);
+            }
+            zlist_destroy (&batch->drain_requests);
         }
         flux_future_destroy (batch->f);
         free (batch);
@@ -263,6 +278,25 @@ int event_batch_pub_state (struct event *event, struct job *job,
 nomem:
     errno = ENOMEM;
 error:
+    return -1;
+}
+
+int event_batch_drain_respond (struct event *event, const flux_msg_t *msg)
+{
+    if (event_batch_start (event) < 0)
+        return -1;
+    if (!event->batch->drain_requests) {
+        if (!(event->batch->drain_requests = zlist_new ()))
+            goto nomem;
+    }
+    if (zlist_append (event->batch->drain_requests,
+                      (void *)flux_msg_incref (msg)) < 0) {
+        flux_msg_decref (msg);
+        goto nomem;
+    }
+    return 0;
+nomem:
+    errno = ENOMEM;
     return -1;
 }
 
