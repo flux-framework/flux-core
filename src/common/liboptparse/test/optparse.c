@@ -80,8 +80,8 @@ void test_usage_output (void)
 
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
-  -T, --test2=N          Enable a test option N.\n\
   -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n\
   -t, --test             Enable a test option.\n",
         "Usage output as expected");
 
@@ -96,8 +96,8 @@ Usage: prog-foo [OPTIONS]\n\
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
-  -T, --test2=N          Enable a test option N.\n\
   -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n\
   -t, --test             Enable a test option.\n",
         "Usage output as expected");
 
@@ -108,8 +108,8 @@ Usage: prog-foo [OPTIONS]\n\
 
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
--T, --test2=N            Enable a test option N.\n\
 -h, --help               Display this message.\n\
+-T, --test2=N            Enable a test option N.\n\
 -t, --test               Enable a test option.\n",
         "Usage output as expected w/ left margin");
 
@@ -122,8 +122,8 @@ Usage: prog-foo [OPTIONS]\n\
 
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
-  -T, --test2=N          Enable a test option N.\n\
-  -h, --help             Display this message.\n",
+  -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n",
         "Usage output as expected after option removal");
 
     // Add doc sections
@@ -132,8 +132,8 @@ Usage: prog-foo [OPTIONS]\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N          Enable a test option N.\n\
-  -h, --help             Display this message.\n",
+  -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n",
         "Usage output as with doc");
 
     // Add a longer option in group 1:
@@ -148,8 +148,8 @@ This is some doc in header\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N          Enable a test option N.\n\
   -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n\
   -A, --long-option=ARGINFO\n\
                          Enable a long option with argument info ARGINFO.\n",
         "Usage output with option in group 1");
@@ -160,8 +160,8 @@ This is some doc in header\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N          Enable a test option N.\n\
   -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n\
 This is some doc for group 1\n\
   -A, --long-option=ARGINFO\n\
                          Enable a long option with argument info ARGINFO.\n",
@@ -174,8 +174,8 @@ This is some doc for group 1\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N               Enable a test option N.\n\
   -h, --help                  Display this message.\n\
+  -T, --test2=N               Enable a test option N.\n\
 This is some doc for group 1\n\
   -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n",
         "Usage output with increased option width");
@@ -191,8 +191,8 @@ This is some doc for group 1\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N               Enable a test option N.\n\
   -h, --help                  Display this message.\n\
+  -T, --test2=N               Enable a test option N.\n\
 This is some doc for group 1\n\
   -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
   -B, --option-B              This option has a very long description. It should\n\
@@ -210,8 +210,8 @@ This is some doc for group 1\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N               Enable a test option N.\n\
   -h, --help                  Display this message.\n\
+  -T, --test2=N               Enable a test option N.\n\
 This is some doc for group 1\n\
   -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
   -B, --option-B              This option has a very long description. It should\n\
@@ -224,8 +224,8 @@ This is some doc for group 1\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N               Enable a test option N.\n\
   -h, --help                  Display this message.\n\
+  -T, --test2=N               Enable a test option N.\n\
 This is some doc for group 1\n\
   -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
   -B, --option-B              This option has a very long description. It should be split across lines nicely.\n\
@@ -246,8 +246,8 @@ This is some doc for group 1\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 This is some doc in header\n\
-  -T, --test2=N               Enable a test option N.\n\
   -h, --help                  Display this message.\n\
+  -T, --test2=N               Enable a test option N.\n\
 This is some doc for group 1\n\
       --long-only             This option is long only\n\
   -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\

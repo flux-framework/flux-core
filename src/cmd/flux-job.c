@@ -130,6 +130,8 @@ static struct optparse_option attach_opts[] =  {
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
     },
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Increase verbosity" },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress warnings written to stderr from flux-job",
     },
@@ -935,6 +937,11 @@ static void handle_output_log (struct attach_ctx *ctx,
             fprintf (stderr, ": %s", label);
         if (component)
             fprintf (stderr, ": %s", component);
+        if (optparse_hasopt (ctx->p, "verbose") && file) {
+            fprintf (stderr, ": %s", file);
+            if (line > 0)
+                fprintf (stderr, ":%d", line);
+        }
         fprintf (stderr, ": %s\n", msg);
     }
 }
@@ -960,6 +967,10 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
             goto done;
+        if (errno == ENOENT) {
+            log_msg ("No job output found");
+            goto done;
+        }
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
@@ -1150,6 +1161,24 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+/*  Start the guest.output eventlog watcher
+ */
+void attach_output_start (struct attach_ctx *ctx)
+{
+    if (!(ctx->output_f = flux_job_event_watch (ctx->h,
+                                                ctx->id,
+                                                "guest.output",
+                                                0)))
+        log_err_exit ("flux_job_event_watch");
+
+    if (flux_future_then (ctx->output_f, -1.,
+                          attach_output_continuation,
+                          ctx) < 0)
+        log_err_exit ("flux_future_then");
+
+    ctx->eventlog_watch_count++;
+}
+
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -1208,20 +1237,16 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
         ctx->stdin_w = w;
         flux_watcher_start (ctx->stdin_w);
-        if (!(ctx->output_f = flux_job_event_watch (ctx->h,
-                                                    ctx->id,
-                                                    "guest.output",
-                                                    0)))
-            log_err_exit ("flux_job_event_watch");
 
-        if (flux_future_then (ctx->output_f,
-                              -1.,
-                              attach_output_continuation,
-                              ctx) < 0)
-            log_err_exit ("flux_future_then");
-
-        ctx->eventlog_watch_count++;
+        attach_output_start (ctx);
     }
+
+    /*  If job is complete, and we haven't started watching
+     *   output eventlog, then start now in case shell.init event
+     *   was never emitted (failure in iniitialization)
+     */
+    if (!strcmp (name, "complete") && !ctx->output_f)
+        attach_output_start (ctx);
 
     if (optparse_hasopt (ctx->p, "show-exec")) {
         print_eventlog_entry (stderr,

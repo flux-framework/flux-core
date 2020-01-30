@@ -95,4 +95,33 @@ test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
         ! grep after attach5.out
 '
 
+test_expect_success 'attach: output events processed after shell.init failure' '
+	jobid=$(flux mini submit -o initrc=noinitrc hostname) &&
+	flux job wait-event -v ${jobid} clean &&
+	flux job eventlog -p guest.output ${jobid} &&
+	(flux job attach ${jobid} >init-failure.output 2>&1 || true) &&
+	test_debug "cat init-failure.output" &&
+	grep "FATAL:.*noinitrc: No such file or directory" init-failure.output
+'
+
+which jq >/dev/null 2>&1 && test_set_prereq HAVE_JQ
+
+
+# use a shell function to make sane quoting possible
+filter_log_context() {
+    jq -c '. | select(.name == "log") | .context'
+}
+
+test_expect_success HAVE_JQ 'attach: -v option displays file and line info in logs' '
+	jobid=$(flux mini submit -o verbose=2 hostname) &&
+	flux job wait-event ${jobid} clean &&
+	flux job eventlog --format=json -p guest.output ${jobid} \
+	    | filter_log_context >verbose.json &&
+	file=$(head -1 verbose.json | jq -r .file) &&
+	line=$(head -1 verbose.json | jq -r .line) &&
+	msg=$(head -1 verbose.json | jq -r .message) &&
+	flux job attach -v $jobid >verbose.output 2>&1 &&
+	grep "$file:$line: $message" verbose.output
+'
+
 test_done
